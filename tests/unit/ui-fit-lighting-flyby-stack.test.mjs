@@ -45,14 +45,16 @@ test("stacked carve does not retarget camera or lower flyby tap floors", () => {
 });
 
 test("flyby tap-paint floors from #1774 still stand", () => {
-  assert.match(
-    css,
-    /#flyby-inner\[data-density="compact"\]\s*>\s*\.sheet-foot\s+button,[\s\S]*?min-height:\s*var\(--tap-paint\)/,
+  // Read as rules: a raw-text regex also matched a commented-out rule.
+  const D = '[data-density="compact"]';
+  assert.equal(
+    decl(rules, `#flyby-inner${D} > .sheet-foot button, #flyby-inner${D}[data-rail="on"] > .sheet-foot button`, "min-height"),
+    "var(--tap-paint)",
     "#1774 compact foot --tap-paint floor must remain",
   );
-  assert.match(
-    css,
-    /#flyby-inner\s+#fb-rows\s+select,[\s\S]*?min-height:\s*var\(--tap-paint\)/,
+  assert.equal(
+    decl(rules, /^#flyby-inner #fb-rows select, /, "min-height"),
+    "var(--tap-paint)",
     "#1774 pose-select --tap-paint floor must remain",
   );
 });

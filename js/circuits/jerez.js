@@ -75,11 +75,24 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the 13 strongest curvature peaks of THIS centreline in lap order,
-    // 13 being the researched real turn count. No researched sectors — consumers
-    // fall back to thirds.
+    // turns: ONE apex per real corner, in lap order. Jerez has 13 turns, 8 right
+    // and 5 left (Wikipedia "Circuito de Jerez"; racingcircuits.info). The built
+    // centreline has exactly 13 corner segments (smoothed |k| > 0.003 rad/m) and
+    // their signs read R R L L R R L L R R R R L (+k = LEFT; lap sum k ds = -2pi,
+    // net clockwise) — the sourced 8 R / 5 L. Each value is that segment's
+    // strongest |k| peak (within 4 m). Re-seated 2026-11-11 (#5316): the old list
+    // took the 13 strongest PEAKS, which doubled Sito Pons (0.3060 + 0.3398), the
+    // T8 left (0.6146 + 0.6249) and Lorenzo (0.9272 + 0.9395, 22 m past its peak)
+    // and missed the T4 left (0.2295), the T7 left (0.5592) and the T11 right
+    // (0.8005). Sourced names: T1 Curva Expo '92 and T2 Curva Michelin, directly
+    // after the main straight (Visordown, quoting Dani Pedrosa); T5 Sito Pons, the
+    // long right; T6 Curva Dani Pedrosa, ex-Dry Sack (Wikipedia, "sixth corner",
+    // renamed 2019); T7 Ezpeleta (GPone, 2024-04-11); T8 Aspar (2019); T9 Angel
+    // Nieto; T10 Peluqui; T13 Curva Jorge Lorenzo, the final corner (Wikipedia).
+    // T3, T4, T11, T12 carry no sourced name here.
+    // No researched sectors — consumers fall back to thirds.
     sectors: [0.370, 0.675],  // ~1/3 and ~2/3, each snapped to the nearest straight (re-snapped 2026-11-10 with the line, #5078) — not FIA-published splits
-    turns: [0.0872, 0.1385, 0.1667, 0.3060, 0.3398, 0.4955, 0.6146, 0.6249, 0.7004, 0.7342, 0.8488, 0.9272, 0.9395],
+    turns: [0.0872, 0.1385, 0.1667, 0.2295, 0.3398, 0.4955, 0.5592, 0.6249, 0.7004, 0.7342, 0.8005, 0.8488, 0.9262],
     // tree:"none" — the generic roadside scatter plants at 8–22 m (camera
     // corridor). Olive / pine scrub is hand-seated past the orbit wedge in
     // scenery/jerez.js (Circuit Yard r4 camera-clip fix).

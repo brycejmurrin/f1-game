@@ -1205,10 +1205,35 @@ test("a car stuck on the road is marshalled after STOP_RECOVER and the race goes
 });
 
 test("the stopped-car source respects CAUTIONS off", () => {
-  const G = makeCtx({ cars: [{ num: 9, s: 200, x: 0, speed: 0, finished: false }], track: { total: 3000 } }, false);
+  const G = makeCtx({ cars: [{ num: 9, s: 200, x: 0, speed: 0, finished: false, retired: true }], track: { total: 3000 } }, false);
   const rc = load({ active: () => false }, { Tracks: TRACKS_STUB, StoppedCars: stoppedCars() }).create(G);
   run(rc, 20);
   assert.equal(rc.level, 0);
+});
+
+// #5557: a standing grid is not a hazard. A car counts once it has moved since
+// the last reset; a red-flag restart (clearHold) starts every dwell afresh.
+test("#5557: a car that never left its grid box raises nothing; once it has moved, a stop counts", () => {
+  const me = { num: 44, s: 10, x: 0, speed: 0, finished: false, retired: false };
+  const { rc } = stopRace([runner(1, 100), me]);
+  run(rc, 20);
+  assert.equal(rc.level, 0, "sitting on the grid past STOP_VSC: still green");
+  me.speed = 30; me.s = 40; run(rc, 1);
+  me.speed = 0; run(rc, 4);
+  assert.equal(rc.level, 1, "it pulled away, then stopped on the road: a yellow");
+});
+
+test("#5557: a red-flag restart drops the stopped-car dwell the pile-up accrued", () => {
+  const car = { num: 16, s: 1500, x: 0, speed: 30, finished: false, retired: false };
+  const { rc } = stopRace([runner(1, 100), car]);
+  run(rc, 1);
+  car.speed = 0; car.s = 1530; run(rc, 2.5);
+  assert.equal(rc.level, 0, "2.5 s stood: not yet a hazard");
+  rc.clearHold();   // game.js consumes takeRestart() and re-grids
+  run(rc, 2);
+  assert.equal(rc.level, 0, "re-gridded at rest: the old 2.5 s must not make this a yellow");
+  car.s = 1560; run(rc, 3.5);
+  assert.equal(rc.level, 1, "after the restart a car that moves and stops is a hazard again");
 });
 
 test("W34: every race frame hands the RETIRED card a view of the player, and leaving the race tells it so", () => {

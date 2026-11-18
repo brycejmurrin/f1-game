@@ -69,3 +69,9 @@ where the parkland, the woods and most of the spectator banking live.
 | East Midlands Airport runway ~365 m east of track | **Sourced** | [Wikipedia — Donington Park](https://en.wikipedia.org/wiki/Donington_Park); OSM adjacency ([map](https://www.openstreetmap.org/#map=14/52.8305/-1.3700)) |
 | McLeans / Coppice under EMA departure path | **Sourced** | Spotter / forum reports (PPRuNe thread on EMA + Donington); airport CTR wraps the estate ([Donington airport guidelines](https://www.donington-park.co.uk/airport-guidelines)) |
 | Dunlop Bridge | **Removed** — Adroit 2010 rebuild left it out (MSA/FIA regs); do not re-add | Wikipedia — Donington Park |
+
+## Start line (2026-11-11, #5316 leftovers)
+
+Moved onto the real start/finish line from the driver61 circuit guide coordinate; derivation, source and the scenery fixes are in [START-LINES.md](START-LINES.md) "donington, brands_hatch — MOVED 2026-11-11".
+- Pit side **open**: driver61 puts the pit wall on the driver's LEFT approaching Redgate; the def builds the default +1 (right). Needs a frontage re-dress to flip.
+- Corner-name comments in `scenery/donington.js` look keyed to a v0-as-line reading ("Redgate" at authored 0.0663, "Goddards" at 0.9437); placement is by fraction, so nothing is misplaced, but the names need checking against a real map.

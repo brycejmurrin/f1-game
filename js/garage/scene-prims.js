@@ -322,7 +322,7 @@ try {
 function setLook(id) {
   if (LOOK_IDS.indexOf(id) < 0) return false;
   _look = id;
-  try { localStorage.setItem("apex26.garageLook", id); } catch (_) { /* private mode */ }
+  try { if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.rawSet("garageLook", id); else localStorage.setItem("apex26.garageLook", id); } catch (_) { /* private mode */ }
   return true;
 }
 const lookId = () => _look;

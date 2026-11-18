@@ -490,8 +490,11 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
 
   const mc = profile("monaco");
   const crest = mc.ext(0, 1, +1), low = mc.ext(0, 1, -1);
-  near(crest, mc.T(6), "Monaco high point = Casino");
-  near(low, mc.T(12), "Monaco low point = the harbour chicane");
+  // Official F1 numbering since 2026-11-11: Casino T4 (was def T6), the
+  // Nouvelle chicane T10-T11 (old def T12 0.6407 = T11). Same physical
+  // stations; no profile/tolerance change.
+  near(crest, mc.T(4), "Monaco high point = Casino");
+  near(low, mc.T(11), "Monaco low point = the harbour chicane");
   assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);
   assert.ok(mc.grade < 0.18, `Monaco grade ${(mc.grade * 100).toFixed(1)} %`);
 });

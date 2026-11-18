@@ -135,53 +135,60 @@ test("cloud-agent-install cures npm prefix=/ before any npm use (D·W14a)", () =
     "ensure_npm_prefix must run on the install path before install-browsers.sh");
 });
 
-test("cloud-agent-install --check-npm-prefix leaves npm prefix off /", () => {
-  const script = path.join(ROOT, "tools/env/cloud-agent-install.sh");
+test("cloud-agent-install --check-npm-prefix leaves npm prefix off /", (t) => {
+  // The script hard-codes /usr/local/cargo/bin (and /etc/npmrc, /usr/local/etc/npmrc) with no
+  // env or argument override, and this test used to unlink the REAL /usr/local/cargo/bin/node to
+  // reproduce the bug. Run a copy instead, with those machine paths pointed into a temp fixture,
+  // so the test never touches the host. The substitutions are asserted to hit, so a drift in the
+  // shipped script fails here rather than silently testing the real paths again.
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratch, "npm-prefix-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const cargoBin = path.join(dir, "cargo-bin");
+  fs.mkdirSync(cargoBin);
+  fs.mkdirSync(path.join(dir, "tools/env"), { recursive: true });
+  const REAL_CARGO = '"/usr/local/cargo/bin"';
+  const REAL_NPMRCS = '"$HOME/.npmrc" /etc/npmrc /usr/local/etc/npmrc';
+  const shipped = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
+  assert.ok(shipped.includes(`local cargo_bin=${REAL_CARGO}`), "fixture: cargo_bin assignment moved; update this test");
+  assert.ok(shipped.includes(`for npmrc in ${REAL_NPMRCS}; do`), "fixture: npmrc loop moved; update this test");
+  const script = path.join(dir, "tools/env/cloud-agent-install.sh");
+  fs.writeFileSync(script, shipped
+    .replace(`local cargo_bin=${REAL_CARGO}`, `local cargo_bin=${JSON.stringify(cargoBin)}`)
+    .replace(`for npmrc in ${REAL_NPMRCS}; do`,
+      `for npmrc in ${JSON.stringify(path.join(dir, "home.npmrc"))} ${JSON.stringify(path.join(dir, "etc.npmrc"))}; do`));
+  const cargoNode = path.join(cargoBin, "node");
   const rest = (process.env.PATH || "").split(path.delimiter)
-    .filter((p) => p && p !== "/usr/local/cargo/bin" && p !== "/exec-daemon");
+    .filter((p) => p && p !== "/usr/local/cargo/bin" && p !== cargoBin && p !== "/exec-daemon");
   // Pre-cure Cloud bug: /exec-daemon before nvm, no cargo node link on PATH.
   const brokenPath = ["/exec-daemon", ...rest].join(path.delimiter);
   // Post-cure Cloud PATH: cargo bin stays first (where the install links nvm's node).
-  const cloudPath = ["/usr/local/cargo/bin", "/exec-daemon", ...rest].join(path.delimiter);
+  const cloudPath = [cargoBin, "/exec-daemon", ...rest].join(path.delimiter);
   const scrub = { npm_config_prefix: undefined, npm_config_global_prefix: undefined };
-  // Drop a prior cure link so this host can reproduce the bug when /exec-daemon exists.
-  const cargoNode = "/usr/local/cargo/bin/node";
-  const hadLink = fs.existsSync(cargoNode);
-  let savedLink = null;
-  if (hadLink) {
-    savedLink = fs.readlinkSync(cargoNode);
-    fs.unlinkSync(cargoNode);
-  }
-  try {
-    const before = spawnSync("npm", ["config", "get", "prefix"], {
-      encoding: "utf8", env: { ...process.env, PATH: brokenPath, ...scrub },
-    });
-    const r = spawnSync("bash", [script, "--check-npm-prefix"], {
-      cwd: ROOT, encoding: "utf8", timeout: 30000,
-      env: { ...process.env, PATH: brokenPath, ...scrub },
-    });
-    assert.equal(r.status, 0, r.stdout + r.stderr);
-    const okLine = r.stdout.split("\n").find((line) => line.startsWith("npm prefix ok:"));
-    assert.ok(okLine, r.stdout + r.stderr);
-    const reported = okLine.replace(/^npm prefix ok:\s*/, "").split(/\s/)[0];
-    assert.notEqual(reported, "/", `cure reported prefix=/:\n${r.stdout}`);
-    assert.ok(reported.length > 1 && reported.startsWith("/"), `expected an absolute nvm prefix, got ${reported}`);
-    // Durable check: with Cloud's PATH (cargo bin first) the linked node keeps prefix off /.
-    const after = spawnSync("npm", ["config", "get", "prefix"], {
-      encoding: "utf8", env: { ...process.env, PATH: cloudPath, ...scrub },
-    });
-    assert.equal(after.status, 0, after.stderr);
-    assert.notEqual(after.stdout.trim(), "/",
-      `prefix still / after cure (before=${before.stdout.trim()})`);
-    if (fs.existsSync("/exec-daemon/node")) {
-      assert.equal(before.stdout.trim(), "/", "precondition: exec-daemon shadow yields prefix=/");
-      assert.ok(fs.existsSync(cargoNode), "cure must leave /usr/local/cargo/bin/node");
-    }
-  } finally {
-    if (savedLink) {
-      try { fs.unlinkSync(cargoNode); } catch { /* cure may not have recreated it */ }
-      fs.symlinkSync(savedLink, cargoNode);
-    }
+  const before = spawnSync("npm", ["config", "get", "prefix"], {
+    encoding: "utf8", env: { ...process.env, PATH: brokenPath, ...scrub },
+  });
+  const r = spawnSync("bash", [script, "--check-npm-prefix"], {
+    cwd: dir, encoding: "utf8", timeout: 30000,
+    env: { ...process.env, PATH: brokenPath, ...scrub },
+  });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const okLine = r.stdout.split("\n").find((line) => line.startsWith("npm prefix ok:"));
+  assert.ok(okLine, r.stdout + r.stderr);
+  const reported = okLine.replace(/^npm prefix ok:\s*/, "").split(/\s/)[0];
+  assert.notEqual(reported, "/", `cure reported prefix=/:\n${r.stdout}`);
+  assert.ok(reported.length > 1 && reported.startsWith("/"), `expected an absolute nvm prefix, got ${reported}`);
+  // Durable check: with Cloud's PATH (cargo bin first) the linked node keeps prefix off /.
+  const after = spawnSync("npm", ["config", "get", "prefix"], {
+    encoding: "utf8", env: { ...process.env, PATH: cloudPath, ...scrub },
+  });
+  assert.equal(after.status, 0, after.stderr);
+  assert.notEqual(after.stdout.trim(), "/",
+    `prefix still / after cure (before=${before.stdout.trim()})`);
+  if (fs.existsSync("/exec-daemon/node")) {
+    assert.equal(before.stdout.trim(), "/", "precondition: exec-daemon shadow yields prefix=/");
+    assert.ok(fs.existsSync(cargoNode), "cure must leave the cargo-bin node link");
   }
 });
 

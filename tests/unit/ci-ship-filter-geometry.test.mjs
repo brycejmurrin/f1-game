@@ -118,8 +118,8 @@ test("ci.yml runs on PRs into the deploy branch only, on four event types, with 
   const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
   assert.ok(reuse.includes('"Structural guards (tooling A)"') && !/run-ci|CI ignored/.test(reuse),
     "a green run whose tooling A did not run is never reused as the fast tier; the label vocabulary is gone");
-  assert.equal(wf.jobs.selected.if, "${{ needs.select.outputs.any == 'true' }}",
-    "the selected legs run on a draft too (one 5-min shard: the budget test below)");
+  assert.equal(wf.jobs.selected.if, "${{ needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}",
+    "the selected legs run on a draft too (one 5-min shard: the budget test below); a ready flip skips them only on a reused draft verdict (#5426)");
 });
 
 // EVERY PUSH RUNS (2026-11-03). Evaluated, not pattern-matched: every job's `if`, the group, the verdict name and

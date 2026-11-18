@@ -219,7 +219,11 @@ const STRIP = {
   //   ground is above the awning (-24 emitted); the street-panel skirt buries its
   //   bottom faces (buried 633 → 722, bottom 661 → 668). Emission on top of #5079 274383 → 274359,
   //   strip-after 255453 → 255333.
-  monaco: { before: 274359, after: 255333 },
+  // → #5511 official FIA turn list (2026-11-11): corner and braking boards
+  //   re-seat on the 19 official apexes (the hash-picked braking-board sets
+  //   key on the apex node). +432 emitted / +432 survive; the strip itself
+  //   is unchanged (19026). Emission 274359 → 274791, strip-after 255333 → 255765.
+  monaco: { before: 274791, after: 255765 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

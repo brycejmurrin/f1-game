@@ -290,7 +290,7 @@ const DataSchedule = (function () {
       bar.appendChild(button("ADD RACE WEEKEND", "weekend", next ? [next] : [], false));
       bar.appendChild(button("ADD WHOLE SEASON", "season", items, true));
       bar.appendChild(pick);
-      const note = el("div", null, "Times: Jolpica F1, unofficial. Reminders depend on your calendar app.");
+      const note = el("div", null, "Times: Jolpica F1 (CC BY-NC-SA 4.0), unofficial. Reminders depend on your calendar app.");
       note.setAttribute("data-ics", "note");
       bar.appendChild(note);
       return bar;

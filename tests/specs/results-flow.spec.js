@@ -346,18 +346,24 @@ test.describe("results-flow — desktop cooldown ownership", () => {
       (f) => window.__apex.ceremony().inputOwner === "player" || window.__apex.cameraState().renderFrame >= f + 8,
       fOwn, { polling: 100, timeout: 0 }));
     expect(await page.evaluate(() => window.__apex.ceremony().inputOwner), "cooldown hands input to the player").toBe("player");
-    const before = await page.evaluate(() => window.__apex.carAt());
-    // Gate on frames drawn, not wall time: a loaded software-GPU runner can draw no
-    // frame at all in 5 s (Pages #5084: 7-8 s a round trip), and dt is clamped to 1/4 s,
-    // so 8 frames are always enough sim time to move the car past +1 m.
-    const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    // ONE round trip for the baseline and the frame count, so no extra coasting frame lands between them.
+    const [before, f0] = await page.evaluate(() => [window.__apex.carAt(), window.__apex.cameraState().renderFrame]);
+    // THROTTLE, not coasting (#5445). Moving forward proves nothing: the car is still rolling (11.3 m/s in Pages
+    // #5084) and dt is clamped to 1/4 s, so one coasting frame moves it ~2.8 m. Under cooldown ownership the car is
+    // driven by cooldownDrive (js/game.js): +18 m/s² on throttle, -6 coasting, so only throttle can RAISE speed
+    // over the baseline. Each round trip coasts about a frame (-6·dt) before the key lands, and 8 throttled frames
+    // (+18·dt each, the same dt regime) outweigh them. Gate on frames drawn, not wall time: a loaded software-GPU
+    // runner can draw no frame at all in 5 s (Pages #5084: 7-8 s a round trip).
+    // `after` is read while the key is still held: a release first would let coasting frames eat the gain.
+    let after;
     await page.keyboard.down("ArrowUp");
     try {
-      await step("held ArrowUp advances the finished car", page.waitForFunction(
-        ([prog, f]) => window.__apex.carAt().prog > prog + 1 || window.__apex.cameraState().renderFrame >= f + 8,
-        [before.prog, f0], { polling: 100, timeout: 0 }));
+      await step("held ArrowUp accelerates the finished car", page.waitForFunction(
+        ([v, prog, f]) => { const c = window.__apex.carAt(); return (c.speed > v && c.prog > prog + 1) || window.__apex.cameraState().renderFrame >= f + 8; },
+        [before.speed, before.prog, f0], { polling: 100, timeout: 0 }));
+      after = await page.evaluate(() => window.__apex.carAt());
     } finally { await page.keyboard.up("ArrowUp"); }
-    const after = await page.evaluate(() => window.__apex.carAt());
+    expect(after.speed, `held ArrowUp accelerates the finished car (a coasting car only slows): ${before.speed} -> ${after.speed} m/s`).toBeGreaterThan(before.speed);
     expect(after.prog, "held ArrowUp advances the finished car").toBeGreaterThan(before.prog + 1);
     expect(after.finished).toBe(true);
     expect(after.finishT).toBe(before.finishT); expect(after.lap).toBe(before.lap);
@@ -373,7 +379,10 @@ test.describe("results-flow — desktop cooldown ownership", () => {
 // UI contract cells (#5153 gap 12, PR D; docs/notes/UI-CONTRACT-2026-11-06.md §3 rule 8 and §4.9; the numbers in
 // docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pinned podium's pin count comes from the pane, so the shortest window
 // still scrolls >= 2 rows of the classification. Windows A (the iOS Home Screen app), C (the Safari tab) and D (the spec
-// phone), seeded from Bryce's own export (TEXT large, UI 109 %), insets injected on :root as the shell does.
+// phone), seeded from Bryce's own export (TEXT large; it stores no UI SIZE, so a phone reads the shipped 70 %, #5358),
+// insets injected on :root as the shell does. #5580: at 0.7 the sheet has 515 own px in A and 534 in D, over the
+// generic --compact-at 380, so it went NORMAL there: two-line rows 73.7 / 74.4 painted px, YOU the only pin, 3.8 rows
+// in the pane. The short-touch gate in css/overlays.css holds it compact (probe 2026-11-16 at 0.7: 44 px rows; pins 4 / 1 / 4; 2.4-2.6 / 3.39 / 2.82 scrolling rows in A / C / D).
 const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
 const CONTRACT_WINDOWS = [
   { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
@@ -405,6 +414,9 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
       const sticky = rows.filter((r) => getComputedStyle(r).position === "sticky").map((r) => r.className.replace("res-row", "").trim());
       const rowOwnH = rows[0] ? rows[0].getBoundingClientRect().height / z(rows[0]) : 0;
       const sr = sheet.getBoundingClientRect(), you = rows.find((r) => r.classList.contains("you"));
+      // #5580: at open the list is only entering the pane (55 painted px at 0.7 in D) and YOU, bottom-stuck, sat under P1.
+      const over = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      const youOnRowAtOpen = you ? rows.filter((r) => r !== you).map((r) => +over(r.getBoundingClientRect(), you.getBoundingClientRect()).toFixed(1)).filter((v) => v > 1 && you.getBoundingClientRect().top < table.getBoundingClientRect().bottom) : [];
       // The story cards sit above the ranking list at open; the pins hold once the list is in the pane.
       const list = table.querySelector('[data-results-part="ranking"]');
       if (list) table.scrollTop = list.offsetTop;
@@ -413,10 +425,10 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
         sheet: { density: sheet.dataset.density, shape: sheet.dataset.shape, inScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 },
         pins: table.dataset.pins, sticky, rows: rows.length, paneOwnH: +table.clientHeight.toFixed(1), rowOwnH: +rowOwnH.toFixed(1), rowPaintedH: rows[0] ? +rows[0].getBoundingClientRect().height.toFixed(1) : 0,
         scrollingRows: rowOwnH ? +((table.clientHeight - sticky.length * rowOwnH) / rowOwnH).toFixed(2) : null,
-        youInPane: yr ? yr.top >= tr.top - 0.5 && yr.bottom <= tr.bottom + 0.5 : null, tableScrolls: table.scrollHeight > table.clientHeight + 1 };
+        youOnRowAtOpen, youInPane: yr ? yr.top >= tr.top - 0.5 && yr.bottom <= tr.bottom + 0.5 : null, tableScrolls: table.scrollHeight > table.clientHeight + 1 };
     });
     const tag = win.name + ": ";
-    expect({ ui: cell.ui, text: cell.text }, tag + "the owner's knobs").toEqual({ ui: "1.09", text: "large" });
+    expect({ ui: cell.ui, text: cell.text }, tag + "the owner's knobs").toEqual({ ui: "0.7", text: "large" });
     expect(cell.sheet, tag + "a compact wide results sheet inside the window").toMatchObject({ density: "compact", shape: "wide", inScreen: true });
     expect(cell.rows, tag + "a full classification").toBeGreaterThanOrEqual(10);
     expect(cell.rowPaintedH, tag + "one 44-painted-px line per row").toBeCloseTo(44, 0);
@@ -425,6 +437,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
     expect(cell.sticky, tag + "YOU is always pinned").toContain("you");
     if (cell.pins !== "1") expect(cell.sticky, tag + "P1 pins whenever more than YOU does").toContain("p1");
     expect(cell.scrollingRows, tag + "the classification keeps >= 2 scrolling rows under the pins").toBeGreaterThanOrEqual(2);
+    expect(cell.youOnRowAtOpen, tag + "at open your row lies on no other row (painted px of overlap)").toEqual([]);
     expect(cell.youInPane, tag + "your row is pinned inside the pane once the list is in view").toBe(true);
     expect(cell.tableScrolls, tag + "the classification is the one scroller").toBe(true);
   });

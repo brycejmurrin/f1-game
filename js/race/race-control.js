@@ -622,7 +622,7 @@ const RaceControl = (function () {
     // capHoldLevel 4 masked every lower level too, and — the countdown never
     // ticking update() — all 45 s of it landed on the green running after the
     // restart, where a lap-1 pile-up got no yellow, VSC or SC.
-    function clearHold() { capHoldT = 0; capHoldLevel = 0; }
+    function clearHold() { capHoldT = 0; capHoldLevel = 0; if (port.stoppedReset) port.stoppedReset(); stopQueryT = 0; stopPic = null; stopOwned = false; }   // the restart re-grids: stale dwell must not flag it (#5557)
     // game.js redFlagRestart rewound the leader's lap: a pending hold follows it.
     function rewound() { if (otHoldLap != null) otHoldLap -= 1; }
 

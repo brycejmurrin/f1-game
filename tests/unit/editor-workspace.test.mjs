@@ -14,10 +14,11 @@ function boot(withRail = false, withNested = false, withActions = false, withEnt
     el.prepend = (child) => el.insertBefore(child, el.children[0]);
     return el;
   };
-  let observe, resize;
+  let observe, resize, density, query;
   const media = { matches: true, addEventListener: (_, cb) => { resize = cb; } };
-  doc.defaultView = { matchMedia: () => media, MutationObserver: class {
-    constructor(cb) { observe = cb; } observe() {}
+  doc.defaultView = { matchMedia: (q) => { query = q; return media; }, MutationObserver: class {
+    constructor(cb) { this.cb = cb; }
+    observe(_, o) { if (o.attributeFilter.includes("data-density")) density = this.cb; else observe = this.cb; }
   } };
   const root = doc.createElement("div"), sheet = doc.createElement("div");
   sheet.className = "sheet"; root.append(sheet); root.hidden = true;
@@ -37,7 +38,7 @@ function boot(withRail = false, withNested = false, withActions = false, withEnt
   const ctx = vm.createContext({ document: doc });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/editor-workspace.js", import.meta.url), "utf8") + "\nglobalThis.api = EditorWorkspace;", ctx);
   const api = ctx.api.attach(root, { entry: withEntry ? "pc-toggle" : null, title: "Camera", note: "Per camera", done: withActions ? "ct-close" : null, rail: withRail ? "ct-rail" : null, launcher: "pm-camera", nav, nested: withNested ? "freecam" : null });
-  return { foot, action, nested, doc, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media };
+  return { foot, action, nested, doc, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media, density: () => density(), query: () => query };
 }
 
 test("preview furniture changes without closing the editor or taking over Escape", () => {
@@ -72,6 +73,23 @@ test("short screens collapse tools without dropping them; wide screens expand th
   assert.equal(tools.open, true);
   media.matches = true; resize();
   assert.equal(tools.open, false);
+});
+
+// #5562: css/tuner.css shows the summary on the sheet's OWN density (SheetShape, own px: UI SIZE moves it) or a narrow
+// window. A window-HEIGHT query closed the tools at UI SIZE 50-62 on a 390 px phone, where the sheet is not compact
+// and the summary is display:none: every tab, scope, RESET and COPY behind a door with no handle.
+test("tools fold on the sheet's own density, never on window height alone", () => {
+  const h = boot(true), tools = h.sheet.querySelector("details");
+  assert.equal(h.query(), "(max-width: 600px)", "the only window fact is the narrow width the CSS also reads");
+  h.media.matches = false; h.resize();
+  assert.equal(tools.open, true, "a short window whose sheet is not compact keeps its tools open");
+  h.sheet.dataset.density = "compact"; h.density();
+  assert.equal(tools.open, false, "the sheet going compact folds them (its summary is shown there)");
+  tools.open = true;
+  h.root.hidden = false; h.observe();
+  assert.equal(tools.open, false, "reopening a compact editor starts folded");
+  h.sheet.dataset.density = "normal"; h.density();
+  assert.equal(tools.open, true, "leaving compact hides the summary, so the tools must be open");
 });
 
 test("closing restores the captured Settings page after domain cleanup", () => {

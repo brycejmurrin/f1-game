@@ -1,17 +1,45 @@
 {
  "track": "monza",
- "warm": 600,
+ "warm": 3000,
  "windows": 6,
  "frames": 60,
- "meanKbPerFrame": 188,
+ "sampleInterval": 8,
+ "boxedSize": 16,
+ "objectsKbPerFrame": 9.4,
+ "boxedKbPerFrame": 60.9,
+ "meanKbPerFrame": 77.8,
  "windowKb": [
-  128.2,
-  149.3,
-  162.2,
-  232.7,
-  251.2,
-  204.6
+  {
+   "objectsKb": 15.9,
+   "boxedKb": 66.5,
+   "kbPerFrame": 86.6
+  },
+  {
+   "objectsKb": 10.1,
+   "boxedKb": 60.2,
+   "kbPerFrame": 78
+  },
+  {
+   "objectsKb": 7.5,
+   "boxedKb": 60.9,
+   "kbPerFrame": 76.8
+  },
+  {
+   "objectsKb": 7.8,
+   "boxedKb": 58.8,
+   "kbPerFrame": 74.4
+  },
+  {
+   "objectsKb": 7.9,
+   "boxedKb": 58.8,
+   "kbPerFrame": 74.8
+  },
+  {
+   "objectsKb": 7.5,
+   "boxedKb": 60.5,
+   "kbPerFrame": 76.3
+  }
  ],
- "node": "v22.22.0",
- "measured": "2026-10-24"
+ "node": "v22.23.4",
+ "measured": "2026-11-11"
 }

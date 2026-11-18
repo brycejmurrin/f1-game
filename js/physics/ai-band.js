@@ -50,18 +50,19 @@ const AiBand = (function () {
 
   /**
    * Scale vmax by the catch-up factor, capped so a banded easy car cannot beat
-   * the top of the DIFF ladder (BAND_CEIL). Returns { vmax, bandNow }.
+   * the top of the DIFF ladder (BAND_CEIL). Returns { vmax, bandNow }: `out`
+   * when given (the per-step caller's scratch, so no object per AI car), else a fresh one.
    */
-  function applyVmax(vmax, bandFactor, paceScale, bandCeil) {
+  function applyVmax(vmax, bandFactor, paceScale, bandCeil, out) {
+    const r = out || { vmax: 0, bandNow: 0 };
     const f = Math.max(0, bandFactor || 0);
-    if (f <= 0) return { vmax: vmax, bandNow: 0 };
+    if (f <= 0) { r.vmax = vmax; r.bandNow = 0; return r; }
     const scale = Math.max(1e-6, paceScale || 1);
     const ceil = Number.isFinite(bandCeil) ? bandCeil : 1;
     const bandCap = Math.max(1, ceil / scale);
-    return {
-      vmax: vmax * Math.min(1 + f, bandCap),
-      bandNow: f,
-    };
+    r.vmax = vmax * Math.min(1 + f, bandCap);
+    r.bandNow = f;
+    return r;
   }
 
   try { Log.info("game", "AiBand ready"); } catch (_) { /* Log absent in isolated VM */ }

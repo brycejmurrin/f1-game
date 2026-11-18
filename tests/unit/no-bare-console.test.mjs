@@ -7,17 +7,15 @@ import { fileURLToPath } from "node:url";
 // AGENTS.md: logging goes through Log (js/core/log.js), never bare console.* —
 // namespace first arg, console threshold warn, ring buffer info. Stated for
 // years, enforced never; a round-6 census found one live violation (fixed)
-// and one legitimate exception. This scan keeps it that way. The exception:
-// js/net/nostr.js does not LOG through console — it saves, replaces and
-// restores console.warn to intercept a Trystero vendor warning, the one seam
-// available ("Intercepting console.warn is not elegant. It is the ONLY
-// seam…"), so its console references are the interception mechanism itself.
+// and one legitimate exception. This scan keeps it that way. js/net/nostr.js
+// was once allowlisted for a console.warn interception seam (a Trystero vendor
+// warning); that seam is gone and the file has no console reference left, so the
+// entry was dropped, and the allowlist is now checked for stale entries.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const ALLOW = {
   "js/core/log.js": "the Log implementation itself",
-  "js/net/nostr.js": "console.warn interception seam for a Trystero vendor warning (save/replace/restore, not logging)",
 };
 
 function walk(dir, out = []) {
@@ -69,4 +67,15 @@ test("no bare console.* outside js/core/log.js (allowlisted seams excepted)", ()
     "bare console.* in js/ — route through Log (namespace first arg; " +
     "Log.enabled(ns, level) guards hot paths), or allowlist a genuine seam " +
     "with its reason: " + bad.join(", "));
+});
+
+test("every allowlisted seam exists and still references console in code (no stale entries)", () => {
+  // A stale entry is a silent hole: a file that later grows a real console.log
+  // would be skipped by the scan above. So each entry must name a file that is
+  // there and whose CODE (comments and strings masked) still touches console.
+  const stale = Object.keys(ALLOW).filter((rel) => {
+    const p = path.join(ROOT, rel);
+    return !fs.existsSync(p) || !/\bconsole\b/.test(codeMask(fs.readFileSync(p, "utf8")));
+  });
+  assert.deepEqual(stale, [], "allowlist entries naming a missing file or one with no console use: " + stale.join(", "));
 });

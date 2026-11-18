@@ -82,7 +82,28 @@ test("manifest keeps career-ui.js in LAZY_CAREER_UI and the boot stub on FULL", 
   const m = createRequire(import.meta.url)("../../tools/manifest.cjs");
   assert.ok(m.FULL.includes("js/career/career-ui-boot.js"));
   assert.ok(!m.FULL.includes("js/career/career-ui.js"));
-  assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-planning-ui.js", "js/career/career-ui.js"]);
+  assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-backup.js", "js/career/career-planning-ui.js", "js/career/career-ui.js"]);
+  assert.ok(!m.FULL.includes("js/career/career-backup.js"), "#4748: CareerBackup is off the eager boot");
+});
+
+test("#4748: CareerUI.ensureBackup injects the bundle once and resolves when CareerBackup is defined", async () => {
+  const loads = [];
+  const sb = {
+    Promise, Log: { info() {}, warn() {} },
+    ApexRoster: { LAZY_CAREER_UI: ["js/career/career-backup.js", "js/career/career-ui.js"], LAZY_CAREER_UI_EDGES: [] },
+    ScriptLoader: { create: () => ({ load: (files) => {
+      loads.push(files.slice());
+      sb.CareerScreen = { create: () => ({}) };
+      sb.CareerBackup = { FORMAT: "apex26-career-backup-v1" };
+      return Promise.resolve(true);
+    } }) },
+  };
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: absSrc("js/career/career-ui-boot.js") });
+  const [a, b] = await Promise.all([sb.CareerUI.ensureBackup(), sb.CareerUI.ensureBackup()]);
+  assert.equal(a, true); assert.equal(b, true);
+  assert.equal(loads.length, 1, "one inject for concurrent callers");
+  assert.equal(await sb.CareerUI.ensureBackup(), true);
+  assert.equal(loads.length, 1, "resident: no second inject");
 });
 
 function delayedCareer(writer) {

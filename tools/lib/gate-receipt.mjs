@@ -1,15 +1,19 @@
-// gate-receipt.mjs — the receipt a gate writes and a hook reads (2026-10-19).
-// @doc Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it.
+// gate-receipt.mjs — the receipt a gate writes (2026-10-19); since the 2026-11-03 hook reset no hook reads it.
+// @doc Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one as a local record; no hook reads it.
 // @skill steward
 //
 // Why: merging, arming and draft→ready were gated by a human word ("Level 3",
 // a re-granted AskUserQuestion per orchestrator rotation) while no hook checked
 // anything but the merge method. docs/plans/2026-10-19-fleet-redesign.md §2:
 // gate, don't grant. A gate (`merge-gate.mjs`, `ready-gate.mjs --pr`) proves the
-// PR's state and writes this receipt; the PreToolUse hook (10 s budget, no API)
-// only has to read it: fresh, `ok`, the same PR, and for a merge the same head
-// sha the call pins. `.claude/hooks/merge_policy.py` is the Python twin of
-// `receiptVerdict` — keep the two in step (tests/unit/merge-gate.test.mjs).
+// PR's state and writes this receipt; a PreToolUse hook (10 s budget, no API)
+// was to read it: fresh, `ok`, the same PR, and for a merge the same head sha.
+// That reader, `.claude/hooks/merge_policy.py`, left with the 2026-11-03 hook
+// reset: github-mcp-guard.sh allows the draft→ready flip and names no receipt
+// (tests/unit/agent-scope-hooks.test.mjs), so a receipt is a local record of the
+// gate's verdict, never a precondition of the flip (#5245 row 4). The
+// merge_policy.py mentions below describe that retired twin; receiptVerdict and
+// gateFilesCheck still judge a receipt for the tests and an old file on disk.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";

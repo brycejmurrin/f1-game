@@ -171,17 +171,10 @@
   animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
 }
-/* …BUT NEVER ON GEOMETRY THE TITLE FIT MEASURES (#5150). The brand carries
-   no transition of its own, so under the rule above its initial
-   `transition-property: all` gets the 0.01ms — and a transition returns its
-   PREVIOUS rectangle (and the previous value of every var() it reads, --tf
-   included) until the next frame, even at 0.01ms. js/ui/title-layout.js
-   fit() then read #menu-brand where the last layout had left it and pulled
-   it the wrong way (measured TITLE Y +50 % at 852x393: top 436 in a 393 box,
-   2026-11-06). css/hud.css documents the same trap for fitHud and cures it
-   the same way: paint-only properties keep their 0.01ms, geometry is instant.
-   #menu-buttons already transitions `filter` alone (css/title.css). */
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) {
+/* …BUT NEVER ON GEOMETRY THE TITLE FIT MEASURES (#5150,#5578). 0.01ms on `all` replays prior box/font one frame
+   (fit() mis-read doors; PRACTICE clipped); paint keeps 0.01ms, geometry instant. */
+:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons),
+:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) :is(*, *::before, *::after) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* #hud-restore's display:none lives in deferred touch-controls.css; until it
@@ -270,8 +263,16 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    everything else. The rows then fill the cluster instead of their per-shape
    shipped widths. */
 :root[data-title-btnw] #menu-buttons {
-  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
-  max-width: none; min-width: 0; justify-self: center;
+  --_tl-bw: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
+  width: var(--_tl-bw);
+  max-width: none; min-width: 0;
+  /* CENTRED ON ITS COLUMN even when wider than it (#4529 part 3). In portrait
+     the shipped width is already ~94 % of the screen, so a big WIDTH overran
+     the column and a centred grid item pinned to the start edge: measured
+     2026-11-11 at 393x852, WIDTH 100 painted 12..405px. A start-aligned item
+     with a symmetric margin stays centred whatever its width. */
+  justify-self: start;
+  margin-inline: calc((100% - var(--_tl-bw)) / 2);
 }
 /* THE FLOOR IS THE TRACK (#5167 part F, UI contract 2026-11-06 §4.1: "width
    as a share of the viewport without a floor" goes). On a landscape phone the
@@ -284,7 +285,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    request narrower than that fills the track exactly as AUTO does, and a
    wider request still widens the cluster, which the fit still contains. */
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
-  width: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
+  --_tl-bw: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min

@@ -398,7 +398,7 @@ for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v
 // UNKNOWN FLAGS EXIT 2, BEFORE CHROMIUM. arg() only answers the names it is
 // asked for, so `--dry-run`, `--bogus` or a typo (`--tema=redbull`) used to be
 // ignored and the tool booted a browser to render the default McLaren. Every
-// flag this file reads is listed here (tests/unit/tools-runnable.test.mjs pins
+// flag this file reads is listed here (tests/unit/tools-runnable-cli.test.mjs pins
 // that each arg('…') literal is in it).
 const RC_FLAGS = new Set(['az', 'bg', 'carsmooth', 'dist', 'el', 'exp', 'flap', 'gpu', 'h',
   'intensity', 'lightset', 'livery', 'look', 'lookx', 'looky', 'num', 'out', 'preset', 'refl',

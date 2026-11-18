@@ -92,3 +92,9 @@ Mexican GP signage/crowd, and paddock suite identity.
 Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
 Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in
 desert — the generic "Mexico = cacti" instinct should be resisted.
+
+## Turn numbers (2026-11-11, #5316 leftovers)
+
+Source: F1 live-timing circuit corner markers (`https://api.multiviewer.app/api/v1/circuits/65/2026`, the data FastF1 `get_circuit_info()` reads), fitted onto the built centreline by `tools/track/official-corners.cjs` (rms 4.9 m), checked against the FIA 2026 event circuit map (17 turns). Each `turns[k-1]` is the built curvature apex nearest official marker k (corner-frames: 0 turn offenders).
+
+T1-T14 were right. T15 (the Foro Sol left flick, 0.8909) was missing; old T15/T16 were official T16/T17; old T17 was the Peraltada's tail. Peraltada = T17, one apex. The Foro signage block was labelled 'Peraltada' but dresses T12-T13: relabelled.

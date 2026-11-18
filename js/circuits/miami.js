@@ -33,27 +33,31 @@
       { kinds: ["city", "foliage"], s0: 0.94, s1: 0.08 },
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
-      { kinds: ["city"], s0: 0.115, s1: 0.128 },   // T4 inside: retail boxes converge and interpenetrate
+      { kinds: ["city"], s0: 0.115, s1: 0.128 },   // unnumbered right kink (0.1188) between T3 and T4, inside: retail boxes converge and interpenetrate
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.34, 0.33, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     elevations: [
-      { s: 0.8605, halfM: 220, rise: 3.5 },   // T18 approach rise (peak y ~3.4 m); not sourced from a real survey — the real circuit is near-flat
+      { s: 0.8605, halfM: 220, rise: 3.5 },   // T17 approach rise (peak y ~3.4 m); not sourced from a real survey — the real circuit is near-flat
       { s: 0.662, halfM: 95, rise: 3.4 },   // Turnpike chicane crest (~11 ft under 2nd deck)
     ],
     bankZones: [
       { frac: 0.0816, angleDeg: 3.0, widthM: 240 },   // T3
-      { frac: 0.2783, angleDeg: 3.5, widthM: 240 },   // T11
-      { frac: 0.5793, angleDeg: 3.0, widthM: 130 },   // T14
-      { frac: 0.8796, angleDeg: 3.5, widthM: 200 },   // T18
-      { frac: 0.9504, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.2783, angleDeg: 3.5, widthM: 240 },   // T8
+      { frac: 0.5793, angleDeg: 3.0, widthM: 130 },   // T12
+      { frac: 0.8796, angleDeg: 3.5, widthM: 200 },   // T17
+      { frac: 0.9504, angleDeg: 3.0, widthM: 180 },   // T19
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
+    // turns: the OFFICIAL F1/FIA 2026 T1-T19 numbering (F1 live-timing corner
+    // markers, api.multiviewer.app circuits/151/2026, fitted onto this centreline;
+    // FIA 2026 Miami GP circuit map), each on its curvature apex nearest the marker.
+    // T9/T10 are sub-PEAK_K kinks (0.3770 kink; 0.4374 = max |k| of the long left).
     sectors: [0.3, 0.641],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0463, 0.0628, 0.0823, 0.1188, 0.1813, 0.2058, 0.2128, 0.2388, 0.2558, 0.2648, 0.2773, 0.5533, 0.5668, 0.5793, 0.5968, 0.6118, 0.6333, 0.8803, 0.9078],
+    turns: [0.0463, 0.0628, 0.0823, 0.1813, 0.2128, 0.2388, 0.2648, 0.2773, 0.3770, 0.4374, 0.5533, 0.5793, 0.5968, 0.6118, 0.6170, 0.6333, 0.8803, 0.9078, 0.9508],
     barrier: { a: [0.97, 0.32, 0.56], b: [0.08, 0.74, 0.78], c: [0.97, 0.80, 0.22], night: [0.30, 0.10, 0.32], tyre: [0.97, 0.32, 0.56] },  // vice pink/teal + sun gold
     furniture: { tree: "none",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
     kit: { marshal: "kiosk",     rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },

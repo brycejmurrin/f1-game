@@ -27,3 +27,6 @@ with: node tools/gen/voicepack.mjs --kokoro <dir with kokoro-js + ffmpeg-static>
 (after node tools/gen/voice-corpus.mjs refreshes what the channels say).
 Whole calls and circuit introductions retain sentence-level delivery;
 dynamic names and numbers can fall back to the channel's existing fragments.
+
+Rows (tests/unit/asset-credits.test.mjs reads them; * matches any name)
+file: *.bin | source: rendered offline by tools/gen/voicepack.mjs with Kokoro-82M v1.0 (hexgrad, ONNX export) | author: hexgrad (model and voices); renders by the project | licence: Apache-2.0

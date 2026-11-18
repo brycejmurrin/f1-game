@@ -1009,8 +1009,11 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
      already tightens, and its long help is already gone via the compact
      .adv-help rule — one ~24px row, and #lt-rows scrolls. Photo-mode still
      stands it down (setup vs framing, see the top of this file). */
+  /* Nor are #lt-preview and #lt-profile (#5562): the rail needs 640 own px and a docked phone sheet is 380, so
+     this tier IS the phone, and hiding them left no TIME / WEATHER chips and no "MONZA · DAY · DRY" label there.
+     Both sit in the folded tools disclosure, which scrolls: no slider height while it is closed. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(
-    #lt-profile, #lt-preview, #ct-profile, .lt-help-toggle
+    #ct-profile, .lt-help-toggle
   ) {
     display: none;
   }

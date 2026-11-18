@@ -140,6 +140,13 @@ export function legReport(path3, g, { hardware, cap = null }) {
       ? `${path3}: TLX is soft-blitting (GPU readback + putImageData every frame) on a hardware adapter with apex26.wgxCapture=0 pinned — the pin is no longer honoured, and every number on this leg timed the readback`
       : `${path3}: NO softBlit reported on a hardware TLX leg — the present-path check would pass vacuously`);
   }
+  // #4783 rows 4 and 6: TLX on WebGPU (Bryce's path). The WGX leg is its own renderer and labels nothing this way.
+  if (path3 === "webgpu") {
+    for (const r of [uploadGate(g, { hardware }), shadowGate(g, { hardware })]) {
+      rows.push(...r.rows);
+      bad.push(...r.bad.map((b) => `${path3}: ${b}`));
+    }
+  }
   if (path3 === "wgx") {
     rows.push(`${IND}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}` +
       (cap != null ? ` (apex26.wgxCapture=${cap} from the dispatch ls overrides the native pin — soft-present is not gated)` : ""));
@@ -155,6 +162,73 @@ export function legReport(path3, g, { hardware, cap = null }) {
         : `wgx: NO softPresent state reported for a bound WGX — the swapchain check would pass vacuously${gfx.wgxSoftPresentError ? " — " + String(gfx.wgxSoftPresentError).slice(0, 160) : ""}`);
     }
   }
+  return { rows, bad };
+}
+
+/** #4783 row 4: writeBuffer per uniform group on the TLX WebGPU leg. Three invariants, each one something the
+ *  renderer's design promises (tsl-lit.js SHARED_UNIFORMS, tlx.js backendState), checked against what the leg counted:
+ *    object   three refreshes an object-group block at most once per draw, so object writes a frame <= draws a frame.
+ *             (Not "== draws x stride": three skips an unchanged block, run 42943667972 wrote 33.66 a frame.)
+ *    render   the shared frame block is one buffer per program, written at most once per pass, so render-group writes
+ *             a frame <= programs x the most passes any frame encoded.
+ *    rUbo     three's uniform-buffer bytes are flat over a PARKED window. A driven window brings meshes into view
+ *             (81.3 -> 98.3 KB over 20 beats in that run), so there it is reported and pass-census --park gates it.
+ *  Gated on hardware only, like every other row. An ABSENT count fails rather than passing vacuously when the leg
+ *  itself proves the recorder ran (it counted gpu.writeBuffer calls); a leg with no WebGPU work at all says NOT MEASURED. */
+export function uploadGate(g, { hardware = false } = {}) {
+  const rows = [], bad = [];
+  const groups = Array.isArray(g.uploadGroups) ? g.uploadGroups : null;
+  const draws = g.draws && typeof g.draws.perFrame === "number" ? g.draws.perFrame : null;
+  const of = (name) => (groups || []).find((r) => r.group === name) || null;
+  const strides = (r) => (Array.isArray(r.sizes) && r.sizes.length ? " strides " + r.sizes.map(([b, n]) => `${b}Bx${n}`).join(",") : "");
+  if (!groups) {
+    rows.push(`${IND}ubo-w: NOT MEASURED — ${(g.uploadGroups && g.uploadGroups.note) || "the leg wrote no writeBuffer groups"}`);
+    if (hardware && g.gpuWork && g.gpuWork["gpu.writeBuffer"] > 0) bad.push(`NO writeBuffer groups recorded beside ${g.gpuWork["gpu.writeBuffer"]} counted writeBuffer calls — the uniform-write gates would pass vacuously`);
+    return { rows, bad };
+  }
+  const obj = of("object"), ren = of("render");
+  if (obj) {
+    rows.push(`${IND}ubo-w: object ${obj.nPerFrame}/f ${obj.kbPerFrame}KB vs draws ${draws != null ? draws + "/f (" + Math.round(100 * obj.nPerFrame / (draws || 1)) + "%)" : "?"}${strides(obj)}`);
+    if (hardware && draws == null) bad.push("NO draw count recorded — the object-group write bound would pass vacuously");
+    else if (hardware && obj.nPerFrame > draws) bad.push(`object-group writes ${obj.nPerFrame}/f exceed draws ${draws}/f — an object block is written more than once per draw`);
+  } else rows.push(`${IND}ubo-w: no object-group write in the window`);
+  if (ren) {
+    const progs = Math.max(0, ...(g.beats || []).map((b) => (b && b.mm && +b.mm.progs) || 0));
+    const passes = g.passes && typeof g.passes.maxPasses === "number" ? g.passes.maxPasses : null;
+    const bound = progs > 0 && passes != null ? progs * passes : null;
+    rows.push(`${IND}       render ${ren.nPerFrame}/f ${ren.kbPerFrame}KB vs bound ${bound != null ? `${bound} (${progs} programs x ${passes} passes)` : "?"}${strides(ren)}`);
+    if (hardware && bound == null) bad.push("NO program or pass count recorded — the render-group write bound would pass vacuously");
+    else if (hardware && ren.nPerFrame > bound) bad.push(`render-group writes ${ren.nPerFrame}/f exceed ${bound} (${progs} programs x ${passes} passes) — the shared frame block is written more than once per program per pass`);
+  } else rows.push(`${IND}       no render-group write in the window`);
+  const ubo = (g.beats || []).map((b) => b && b.ubo).filter((u) => u && typeof u.kb === "number");
+  if (ubo.length >= 4) {
+    const half = ubo.slice(Math.floor(ubo.length / 2)), lo = Math.min(...half.map((u) => u.kb)), hi = Math.max(...half.map((u) => u.kb));
+    const parked = !!(g.race && g.race.drive === false);
+    rows.push(`${IND}       rUbo ${ubo[0].kb} -> ${ubo[ubo.length - 1].kb} KB over ${ubo.length} beats, second half ${lo}..${hi} KB` +
+      (parked ? "" : "  (driven window: reported, not gated; pass-census --park gates the parked frame)"));
+    if (hardware && parked && lo !== hi) bad.push(`rUboKB is not flat on a parked window: ${lo}..${hi} KB over the second half of the beats`);
+  } else rows.push(`${IND}       rUbo: fewer than 4 beats reported memState().rUboKB`);
+  return { rows, bad };
+}
+
+/** #4783 row 6: a shadow-map pass on WebGPU stores no colour. The WebGL2 twin is tlx-shadow.js S.colorDiscards; here
+ *  the evidence is the beginRenderPass inventory (frame-hitch analyseDepthTargets): every pass whose depth attachment
+ *  is a square of side >= 256 must have no colour attachment, or only ones whose storeOp is "discard". `colorPcss`
+ *  (the one case a shadow map's colour is read) is WebGL2-only (tlx-shadow.js: `!isWebGPU && ...`), so on this leg
+ *  there is no exemption to apply. */
+export function shadowGate(g, { hardware = false } = {}) {
+  const rows = [], bad = [];
+  const dt = g.depthTargets;
+  if (!dt || !Array.isArray(dt.rows)) {
+    rows.push(`${IND}shadow: NOT MEASURED — ${(dt && dt.note) || "the leg wrote no depth-target inventory"}`);
+    if (hardware && g.passOps && Array.isArray(g.passOps.rows)) bad.push("NO depth-target inventory recorded beside a pass inventory — the shadow-target discard check would pass vacuously");
+    return { rows, bad };
+  }
+  const shadow = dt.rows.filter((r) => r.shadow);
+  if (!shadow.length) { rows.push(`${IND}shadow: no shadow-map pass in the window (${dt.rows.length} depth-target kinds, none square >= 256)`); return { rows, bad }; }
+  const stores = (r) => r.color !== "none" && r.color.split("+").some((a) => !a.endsWith(">discard"));
+  rows.push(`${IND}shadow: ` + shadow.slice(0, 6).map((r) => `${r.perFrame}/f ${r.depth} colour=${r.color}`).join(" | "));
+  for (const r of shadow.filter(stores)) bad.push(`shadow-map pass ${r.depth} stores a colour attachment (${r.color}, ${r.perFrame}/f) — nothing reads it on WebGPU`);
   return { rows, bad };
 }
 
@@ -232,6 +306,17 @@ function detailRows(path3, g, { tlxLeg }) {
   }
   // GPU hunt 3: every writeBuffer by buffer group (unsampled), then the mirror and churn rates over the window.
   if (Array.isArray(g.uploadGroups)) rows.push(`${IND}ugroups: ` + g.uploadGroups.slice(0, 8).map((r) => `${r.group} ${r.nPerFrame}/f ${r.kbPerFrame}KB`).join(" | "));
+  // #4710: who created a buffer or a texture inside the window (unsampled), and when the mirror target re-allocated.
+  const _ca = g.createAttribution;
+  if (_ca && _ca.rows) {
+    rows.push(`${IND}creates: ${_ca.buffersPerFrame} createBuffer/f ${_ca.texturesPerFrame} createTexture/f over ${_ca.frames} frames (${_ca.creates} calls${_ca.unattributed ? ", " + _ca.unattributed + " past the site cap" : ""})`);
+    for (const r of _ca.rows.slice(0, 8)) rows.push(`${IND}  ${String(r.perFrame).padStart(6)}/f ${String(r.n).padStart(4)}x ${String(r.kb).padStart(8)} KB  ${r.site.slice(0, 220)}`);
+  }
+  const _ma = g.mirrorAllocs;
+  if (_ma && _ma.events) rows.push(`${IND}mirallocs: ${_ma.allocs} over ${_ma.beats} beats` + (_ma.events.length ? " — " + _ma.events.map((e) => `beat ${e.beat} +${e.allocs} ${e.sizeChanged ? e.from + " -> " + e.to : "SAME " + e.to}`).join("; ") : ""));
+  // #4783 row 3: the requested WebGPU bytes at the end of the window (descriptors, not driver residency).
+  const _gm = g.gpuMem;
+  if (_gm && _gm.cat) rows.push(`${IND}gpumem: textures ${_gm.texMB} MB (${_gm.tex}) buffers ${_gm.bufMB} MB (${_gm.buffers}) — ` + _gm.cat.slice(0, 5).map((c) => `${c.k} ${c.mb}MB x${c.n}`).join(" | "));
   const _mw = g.mirrorWindow;
   if (_mw && !_mw.note) rows.push(`${IND}mirror: drawn ${_mw.drawnPerFrame}/f glass ${_mw.glassPerFrame}/f renders ${_mw.rendersPerFrame}/f allocs ${_mw.allocs}` +
     ` rung ${(_mw.quality || []).join(">")}` + (_mw.churnPerFrame ? " churn " + Object.entries(_mw.churnPerFrame).map(([k, v]) => `${k}=${v}/f`).join(" ") : ""));

@@ -1,5 +1,5 @@
 {
-  "why": "Miami International Autodrome, def turns[] numbering (19 apexes, FIA T1-T19 map): the Turnpike chicane is the slow T14 (R, built r42 m) / T15 (L, r63 m) pair under the stadium-side ramp, not the straight past the T17 hairpin.",
+  "why": "Miami International Autodrome, def turns[] = the official F1/FIA 2026 T1-T19 numbering since 2026-11-11 (tools/track/official-corners.cjs): the Turnpike chicane is the slow T14 (L) / T15 (R) pair under the stadium-side ramp, not the straight past the T16 hairpin.",
   "names": {
     "Turnpike chicane": [
       14,

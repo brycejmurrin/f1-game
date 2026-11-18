@@ -83,7 +83,11 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
             value: { request: () => new Promise((resolve) => { grant = resolve; }) },
           });
           const origInfo = Log.info;
-          Log.info = (_ns, message) => messages.push(message);
+          // Only RaceWakeLock's own two lines (js/core/wake-lock.js): the page is a live boot, and any other
+          // module's Log.info landing in these two timer ticks made the exact comparison below fail
+          // (hooks run 44003010579, first attempt). Either line, in any number, is still recorded.
+          const OWN = ["late wake-lock release failed", "wake lock was already released"];
+          Log.info = function (_ns, message) { if (OWN.includes(message)) messages.push(message); else return origInfo.apply(this, arguments); };
           try {
             const owner = RaceWakeLock.create();
             let releases = 0;

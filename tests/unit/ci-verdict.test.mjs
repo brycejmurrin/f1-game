@@ -139,6 +139,8 @@ test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming 
   assert.ok(m, "REQUIRE_SUCCESS must be set only when the run is a non-draft pull_request");
   const needs = body.split("needs:")[1].split("if:")[0];
   for (const j of m[1].split(",")) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
+  // #5403 part 1: a skipped selected-verdict (the selected gate's own verdict) must red a full-tier run.
+  assert.deepEqual(m[1].split(","), ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "select", "selected-verdict", "smoke", "staged-boot"]);
   assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
 });
 
@@ -156,6 +158,31 @@ test("summary lists executed vs skipped jobs and names the required set", () => 
 
 // ---- #5241 G5 ----
 import { rerunVerdict } from "../../tools/ci/ci-verdict.mjs";
+test("nightly schedule NEEDS: a successful select with selected-verdict judging the plan passes ci-verdict", () => {
+  const nightly = {
+    guards: { result: "success" },
+    select: { result: "success", outputs: { any: "true", reason: "infra", plan_reason: "all" } },
+    selected: { result: "success" },
+    "selected-verdict": { result: "success" },
+    smoke: { result: "skipped" },
+  };
+  const v = verdict(nightly);
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.bad, []);
+});
+
+test("push and pull_request: skipped selected-verdict after a successful select still fails closed (#5459)", () => {
+  const needs = {
+    guards: { result: "success" },
+    select: { result: "success", outputs: { any: "true", reason: "infra" } },
+    selected: { result: "success" },
+    "selected-verdict": { result: "skipped" },
+  };
+  const v = verdict(needs);
+  assert.equal(v.ok, false);
+  assert.ok(v.bad.some((b) => /selected-verdict: skipped after a successful selection/.test(b)));
+});
+
 test("#5241 G5: a plan that said run and a job that skipped is not green", () => {
   const ok = { guards: { result: "success" }, select: { result: "success", outputs: { any: "true", any_node: "true" } },
     selected: { result: "success" }, "selected-verdict": { result: "success" }, "node-suites": { result: "success" } };

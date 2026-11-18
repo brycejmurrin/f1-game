@@ -46,8 +46,68 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const arg = (k, d) => { const i = process.argv.indexOf("--" + k); return i > 0 ? process.argv[i + 1] : d; };
-const flag = (k) => process.argv.includes("--" + k);
+
+/* THE COMMAND LINE, strictly: an unknown or misspelt flag (`--apend`) used to
+ * fall through to a FULL rebuild, and a valued flag with no value read the next
+ * flag as its value. Both now stop before any work. */
+const CLI_FLAGS = new Set(["list", "append", "integrity-only", "opus", "opus-only"]);
+const CLI_VALUES = new Set(["id", "speaker", "kokoro", "ffmpeg", "voice", "dtype", "speed", "out"]);
+export function parseCli(argv) {
+  const flags = new Set(), values = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i], k = a.startsWith("--") ? a.slice(2) : null;
+    if (k && CLI_FLAGS.has(k)) { flags.add(k); continue; }
+    if (k && CLI_VALUES.has(k)) {
+      const v = argv[i + 1];
+      if (v == null || v.startsWith("--")) throw new Error(`--${k} needs a value`);
+      values[k] = v; i++; continue;
+    }
+    throw new Error(`unknown argument ${a} (flags: ${[...CLI_FLAGS, ...CLI_VALUES].map((f) => "--" + f).join(" ")})`);
+  }
+  if (values.speed != null && !(Number.isFinite(+values.speed) && +values.speed > 0)) {
+    throw new Error(`--speed must be a positive number, got ${values.speed}`);
+  }
+  return { flag: (k) => flags.has(k), arg: (k, d) => (k in values ? values[k] : d) };
+}
+let cli = null;
+const arg = (k, d) => cli.arg(k, d);
+const flag = (k) => cli.flag(k);
+
+/* PUBLISH ATOMICALLY: every file is written beside its target under a temp
+ * name, then each is renamed into place, the .json index LAST. A crash or a
+ * full disk mid-write leaves the published pack whole (a rename is atomic on
+ * one filesystem), never a .bin cut short under an index that names its bytes. */
+export function publishFiles(entries) {
+  const temps = [];
+  try {
+    for (const [file, data] of entries) {
+      const tmp = file + ".tmp-" + process.pid;
+      temps.push([tmp, file]);
+      fs.writeFileSync(tmp, data);
+    }
+    for (const [tmp, file] of temps) fs.renameSync(tmp, file);
+  } catch (e) {
+    for (const [tmp] of temps) fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/* AN APPEND EXTENDS ONLY A WHOLE PACK: the published .bin must hash to what its
+ * index recorded, and every clip must lie inside it, or the new clips would be
+ * indexed after bytes that are not the ones the old clips point at. */
+export function checkPrior(man, bin, label) {
+  if (man.binary) {
+    const got = binaryIntegrity(bin);
+    if (got.bytes !== man.binary.bytes || got.sha256 !== man.binary.sha256) {
+      throw new Error(`${label}: the published binary does not match its index (${got.bytes} B ${got.sha256.slice(0, 12)} vs ${man.binary.bytes} B ${String(man.binary.sha256).slice(0, 12)}); rebuild without --append`);
+    }
+  }
+  for (const [key, c] of Object.entries(man.clips || {})) {
+    if (!Array.isArray(c) || !(c[0] >= 0) || !(c[1] > 0) || c[0] + c[1] > bin.length || !(c[2] > 0)) {
+      throw new Error(`${label}: clip ${JSON.stringify(key)} ${JSON.stringify(c)} is outside the ${bin.length} B binary or has no duration`);
+    }
+  }
+}
 
 function sandbox(files) {
   const sb = { Math, Object, Array, Number, String, JSON, Map, Set, Promise, console, Log: { info() {}, warn() {} } };
@@ -279,7 +339,7 @@ export function stampIntegrity(outDir) {
     const man = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
     man.binary = binaryIntegrity(fs.readFileSync(path.join(outDir, file.replace(/\.json$/, ".bin"))));
     if (man.opus) man.opus.binary = binaryIntegrity(fs.readFileSync(path.join(outDir, man.opus.file)));
-    fs.writeFileSync(jsonPath, JSON.stringify(man) + "\n");
+    publishFiles([[jsonPath, JSON.stringify(man) + "\n"]]);
     count++;
   }
   return count;
@@ -317,11 +377,18 @@ export async function recordClips({ list, cache, voice, dtype, speed, loadTTS, g
     return +(words <= 1 ? speed * 1.22 : words === 2 ? speed * 1.12 : speed).toFixed(2);
   };
   const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60);
+  // A clip with no readable duration is a broken encode: fail, never index a
+  // 0 s clip the splicer would schedule on top of the next one.
   const durationOf = (file) => {
     const probe = spawnSync(getFFmpeg(), ["-i", file], { encoding: "utf8" }).stderr || "";
     const dm = probe.match(/Duration: (\d+):(\d+):([\d.]+)/);
-    return dm ? +((+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3])).toFixed(3) : 0;
+    const secs = dm ? +((+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3])).toFixed(3) : NaN;
+    if (!(secs > 0)) throw new Error(`[voicepack] no duration for ${path.basename(file)}: ${dm ? dm[0] : "probe printed none"}`);
+    return secs;
   };
+  // A cache hit is a non-empty file: an encode killed mid-write leaves an empty
+  // or missing one, which re-renders instead of publishing as silence.
+  const cached = (file) => { try { return fs.statSync(file).size > 0; } catch (_) { return false; } };
   let off = chunks.reduce((n, buf) => n + buf.length, 0), i = 0, tts;
   let opusOff = opus ? opus.chunks.reduce((n, buf) => n + buf.length, 0) : 0;
   for (const { key, text } of list) {
@@ -334,14 +401,14 @@ export async function recordClips({ list, cache, voice, dtype, speed, loadTTS, g
     })).digest("hex") + ext);
     const mp3 = name(ENCODING, ".mp3");
     const ogg = wantOpus ? name(OPUS_ENCODING, ".ogg") : null;
-    if (!fs.existsSync(mp3) || (ogg && !fs.existsSync(ogg))) {
+    if (!cached(mp3) || (ogg && !cached(ogg))) {
       const wav = mp3.replace(/\.mp3$/, ".wav");
       tts ||= await loadTTS();
       const audio = await tts.generate(text, { voice, speed: sp });
       await audio.save(wav);
       // Trim Kokoro's lead-in and tail, both ends, then encode.
-      if (!fs.existsSync(mp3)) execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...ENCODING, mp3]);
-      if (ogg && !fs.existsSync(ogg)) execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...OPUS_ENCODING, ogg]);
+      if (!cached(mp3)) execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...ENCODING, mp3]);
+      if (ogg && !cached(ogg)) execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...OPUS_ENCODING, ogg]);
       fs.unlinkSync(wav);
     }
     if (!clips[key]) {
@@ -399,27 +466,33 @@ async function build() {
     const old = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8"));
     if (old.voice !== voice) throw new Error("--append cannot mix different voices");
     const bin = fs.readFileSync(path.join(outDir, pack + ".bin"));
+    checkPrior(old, bin, pack + ".bin");
     Object.assign(clips, old.clips); chunks.push(bin);
     // An existing twin is extended like the MP3; without one, --opus records every clip.
     if (opus && old.opus && fs.existsSync(path.join(outDir, opusFile))) {
-      Object.assign(opus.clips, old.opus.clips); opus.chunks.push(fs.readFileSync(path.join(outDir, opusFile)));
+      const twinBin = fs.readFileSync(path.join(outDir, opusFile));
+      checkPrior(old.opus, twinBin, opusFile);
+      Object.assign(opus.clips, old.opus.clips); opus.chunks.push(twinBin);
     }
   }
   const { binary, opus: twin } = await recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips, chunks, opus });
-  fs.writeFileSync(path.join(outDir, pack + ".bin"), binary);
+  const files = [[path.join(outDir, pack + ".bin"), binary]];
   const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips, binary: binaryIntegrity(binary) };
   if (twin) {
-    fs.writeFileSync(path.join(outDir, opusFile), twin.binary);
+    files.push([path.join(outDir, opusFile), twin.binary]);
     man.opus = { codec: "opus", container: "ogg", kbps: OPUS_KBPS, file: opusFile, binary: binaryIntegrity(twin.binary), clips: twin.clips };
-  } else if (fs.existsSync(path.join(outDir, opusFile))) {
-    fs.unlinkSync(path.join(outDir, opusFile));   // a twin must never outlive the MP3 it was cut beside
   }
-  fs.writeFileSync(path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n");
+  files.push([path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n"]);
+  publishFiles(files);
+  // A twin must never outlive the MP3 it was cut beside; the new index no longer
+  // names it, so it goes after the index is in place.
+  if (!twin && fs.existsSync(path.join(outDir, opusFile))) fs.unlinkSync(path.join(outDir, opusFile));
   console.log(`[voicepack] ${pack}: ${list.length} clips, ${(binary.length / 1024).toFixed(0)} KB` +
     (twin ? `, opus ${(twin.binary.length / 1024).toFixed(0)} KB` : ""));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  try { cli = parseCli(process.argv.slice(2)); } catch (e) { console.error("[voicepack] " + e.message); process.exit(2); }
   if (flag("list")) for (const p of phrases(arg("id", "george"), arg("speaker", null))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
   else if (flag("integrity-only")) console.log(`[voicepack] integrity metadata: ${stampIntegrity(path.resolve(ROOT, arg("out", "assets/voice")))} packs`);
   else await build();

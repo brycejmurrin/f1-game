@@ -208,12 +208,13 @@ function firstApex(Tracks, track) {
 
 // `only` (optional array of circuit ids) narrows the sweep; an id that is not
 // in Tracks.LIST throws rather than probing nothing and printing 0/0.
+// A --frac candidate for a circuit that is not built is an error too: it used
+// to be dropped, so a typo printed the authored row as if it were the probe.
 function probe(candidates, only) {
   const Tracks = buildContext();
-  if (only && only.length) {
-    const unknown = only.filter((id) => !Tracks.LIST.some((d) => d.id === id));
-    if (unknown.length) throw new Error(`unknown circuit ${unknown.join(" ")}`);
-  }
+  const named = [...(only || []), ...Object.keys(candidates || {})];
+  const unknown = [...new Set(named.filter((id) => !Tracks.LIST.some((d) => d.id === id)))];
+  if (unknown.length) throw new Error(`unknown circuit ${unknown.join(" ")}`);
   const rows = [];
   for (const def of Tracks.LIST) {
     if (only && only.length && !only.includes(def.id)) continue;
@@ -248,6 +249,51 @@ function probe(candidates, only) {
 
 /* ---------- CLI ---------- */
 
+// --frac takes every following `id=frac` token up to the next flag; the
+// `--frac=id=frac` form carries one. Each must be `<id>=<number in [0, 1)>`:
+// `Number("")` is 0 and `Number("0.4x")` is NaN, and both used to be probed
+// (NaN as a silent garbage rotation). Returns the candidates and the argv
+// indices they used, so the remaining bare tokens are circuit ids.
+function parseCandidates(argv) {
+  let candidates = null;
+  const fracTok = new Set();
+  argv.forEach((a, i) => {
+    if (a.startsWith("--frac=")) fracTok.add(i);
+    if (a !== "--frac") return;
+    let j = i + 1;
+    for (; j < argv.length && !argv[j].startsWith("--"); j++) fracTok.add(j);
+    if (j === i + 1) throw new Error("--frac needs at least one <id>=<frac>");
+  });
+  for (const i of fracTok) {
+    const tok = argv[i].replace(/^--frac=/, "");
+    const m = /^([a-z0-9_]+)=(.+)$/.exec(tok);
+    const v = m ? Number(m[2]) : NaN;
+    if (!m || !m[2].trim() || !Number.isFinite(v) || v < 0 || v >= 1) {
+      throw new Error(`--frac ${tok}: want <id>=<frac>, frac a number in [0, 1)`);
+    }
+    (candidates ||= {})[m[1]] = v;
+  }
+  return { candidates, fracTok };
+}
+
+// --calibrate is the check every hand below depends on, so it must be able to
+// fail: a mismatch exits 1, and a sweep holding none of the KNOWN_T1 circuits
+// (`--calibrate monza`) has calibrated nothing and is an error, not "0/0".
+function calibration(rows) {
+  const lines = [];
+  let hit = 0, seen = 0;
+  for (const r of rows) {
+    const want = KNOWN_T1[r.id];
+    if (!want) continue;
+    const m = r.next || r.now;
+    const got = m.apex.hand;
+    seen++; if (got === want) hit++;
+    lines.push(`  ${r.id.padEnd(13)} expected ${want}   measured ${got}   ` +
+      `${got === want ? "ok" : "MISMATCH"}   (|k|=${Math.abs(m.apex.k).toFixed(4)} at ${m.apex.distM} m)`);
+  }
+  return { hit, seen, ok: seen > 0 && hit === seen, lines };
+}
+
 // [5,6,7,9] -> "5-7,9"
 const ranges = (xs) => xs.reduce((out, x, i) => {
   if (i && x === xs[i - 1] + 1) out[out.length - 1][1] = x; else out.push([x, x]);
@@ -279,20 +325,9 @@ if (require.main === module) {
   const wantSnap = F.has("--snap");
   const calibrate = F.has("--calibrate");
 
-  // --frac takes every following `id=frac` token up to the next flag; the
-  // `--frac=id=frac` form carries one. Bare tokens anywhere else are circuit ids.
-  let candidates = null;
-  const fracTok = new Set();
-  argv.forEach((a, i) => {
-    if (a.startsWith("--frac=")) fracTok.add(i);
-    if (a !== "--frac") return;
-    for (let j = i + 1; j < argv.length && !argv[j].startsWith("--"); j++) fracTok.add(j);
-  });
-  for (const i of fracTok) {
-    candidates = candidates || {};
-    const [id, v] = argv[i].replace(/^--frac=/, "").split("=");
-    candidates[id] = Number(v);
-  }
+  let candidates, fracTok;
+  try { ({ candidates, fracTok } = parseCandidates(argv)); }
+  catch (e) { console.error(`startline-probe: ${e.message}`); process.exit(2); }
   const only = argv.filter((a, i) => !a.startsWith("-") && !fracTok.has(i));
   if (wantSnap) {
     const { snap, START } = require("./startline-snap.cjs");
@@ -311,23 +346,21 @@ if (require.main === module) {
   // naturally instead of forcing process.exit() after a potentially large JSON.
   const unexcused = rows.flatMap((r) => r.unexcused);
   if (unexcused.length) process.exitCode = 1;
+  const cal = calibrate ? calibration(rows) : null;
+  if (cal && !cal.ok) {
+    process.exitCode = 1;
+    // stderr, so a --json consumer still reads one clean JSON document.
+    console.error(cal.seen ? `startline-probe: calibration ${cal.hit}/${cal.seen} — the first-apex hand is not trustworthy`
+      : `startline-probe: --calibrate scored nothing: the sweep holds none of ${Object.keys(KNOWN_T1).join(" ")}`);
+  }
   if (asJson) { console.log(JSON.stringify(rows, null, 2)); }
   else {
 
-  if (calibrate) {
+  if (cal) {
     console.log("CALIBRATION — first-apex hand against six undisputed Turn 1s.");
     console.log("Scored on the SNAPPED line, since the authored one is what is in doubt.\n");
-    let hit = 0, seen = 0;
-    for (const r of rows) {
-      const want = KNOWN_T1[r.id];
-      if (!want) continue;
-      const m = r.next || r.now;
-      const got = m.apex.hand;
-      seen++; if (got === want) hit++;
-      console.log(`  ${r.id.padEnd(13)} expected ${want}   measured ${got}   ` +
-        `${got === want ? "ok" : "MISMATCH"}   (|k|=${Math.abs(m.apex.k).toFixed(4)} at ${m.apex.distM} m)`);
-    }
-    console.log(`\n  ${hit}/${seen} — ${hit === seen ? "sign convention calibrated (+k = LEFT)" : "DO NOT TRUST ANY HAND BELOW"}\n`);
+    for (const l of cal.lines) console.log(l);
+    console.log(`\n  ${cal.hit}/${cal.seen} — ${cal.ok ? "sign convention calibrated (+k = LEFT)" : "DO NOT TRUST ANY HAND BELOW"}\n`);
   }
 
   let bad = 0, badAfter = 0, badGrid = 0;
@@ -351,7 +384,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  probe, gridSpan, allowVerdict, straightness,
+  probe, parseCandidates, calibration, gridSpan, allowVerdict, straightness,
   STRAIGHT_BAR, HALF_WINDOW_M, LINE_HALF_M, LINE_MAX_BAR,
   GRID_MAX_SLOTS, GRID_BOX_TAIL_M, GRID_K_BAR, GRID_CURVE_ALLOW, KNOWN_T1,
 };

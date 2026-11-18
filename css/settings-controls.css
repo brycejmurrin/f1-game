@@ -575,6 +575,11 @@
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
+/* #5358: under 100 % UI the sheet zoom paints --chip-h (48) below 44 (33.6 px at the phone's 70 %). Re-floor
+   the touch folds on the PAINTED 44, as #3334 did for the garage chips; 100 %+ is unchanged. */
+body:not(.desktop) :is(#pmsettings-inner .pm-group, #rs-body) details > summary {
+  min-height: max(var(--chip-h), calc(45px / var(--ui-scale)));
+}
 #advanced-inner > .pm-group-h {
   display: flex;
   justify-content: space-between;
@@ -788,5 +793,8 @@ body.desktop #pm-calib-help { display: none !important; }
 [data-dep-off] :is(input, select, button, textarea):disabled { opacity: 0.45; cursor: default; }
 [data-dep-reason] { margin-left: 0.5em; font-size: 0.8em; font-weight: 400; color: var(--text); white-space: nowrap; }
 [data-dep-reason][hidden] { display: none; }
+/* One piece that moves to its own line, and wraps only when it is wider than the row (#5452: GEARS' reason ran
+   63 px out of the 320 px Driving pane at UI SIZE 50 %, whose text rung is 12px / --ui-scale). */
+[data-dep-reason="label"] { display: inline-block; max-width: 100%; white-space: normal; }
 [data-dep-reason="line"] { display: block; margin: 0.25em 0 0.5em; }
 }

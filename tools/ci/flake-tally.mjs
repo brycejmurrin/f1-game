@@ -477,7 +477,7 @@ export function quarantineSchemaKeys(file = path.join(ROOT, "tests/data/flaky-qu
     const first = (q.quarantine || [])[0];
     if (first && typeof first === "object") return Object.keys(first);
   } catch { /* fall through */ }
-  return ["spec", "since", "owner", "why"];
+  return ["spec", "since", "owner", "why", "title", "evidence", "expires", "review"];
 }
 
 /** The issue body: marker, the table, the proposals, how to act. */

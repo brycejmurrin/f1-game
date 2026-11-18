@@ -357,7 +357,7 @@ runner, with failures the local box never produced:
   effect yet. Replaced with `test.describe.configure({ timeout: 360_000 })`,
   which is set at collection time, covers setup, and survives CI passing an
   explicit `--timeout=120000` on the command line (which the change-aware job
-  does). Precedent: `zandvoort-foundation.spec.js`.
+  does). Precedent: `tests/specs/foundation/zandvoort.js`.
 - **A 5 s `expect` default masquerading as a functional bug.**
   `playwright.config.js` declares no `expect` block, so assertions get 5 s. The
   COPY ALL chip only flips to `COPIED n ✓` once the fan-out has written a

@@ -39,6 +39,8 @@ const SaveSchemaRegistry = (function () {
     { re: /^parts\./, owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
     { re: /^livery\./, owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
     { re: /^setup\./, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    // A career's own sheet (#5036): careerSetup.<flavour>.<slot>.<team>, the tune plus the career seed.
+    { re: /^careerSetup\.(driver|myteam)\.[0-2]\.[A-Za-z0-9_-]{1,64}$/, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
     // Named garage sheets (js/garage/setup-presets.js). Must precede any looser
     // setup.* consumer; the write-site scan used to skip *presets.js entirely.
     { re: /^setupPresets\./, owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },
@@ -175,7 +177,9 @@ const SaveSchemaRegistry = (function () {
     "trackId": entry("js/game.js", "json", 1, "string"),
     "turn": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "turnApi": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "wheelAssist": entry("js/physics/wheel-state.js (ABS/TC level; default off)", "raw", 1, "rawScalar"),
     "wheelState": entry("js/physics/wheel-state.js (opt-in #1628; default OFF)", "raw", 1, "rawScalar"),
+    "brakeThermal": entry("js/physics/wheel-state.js (opt-in #1577 brake temperature and fade; default OFF)", "raw", 1, "rawScalar"),
     "wgxCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxInsetInPass": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxPackAsync": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -209,6 +213,7 @@ const SaveSchemaRegistry = (function () {
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
+    xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrPrevBackend: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
   };

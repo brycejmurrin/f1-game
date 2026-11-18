@@ -1,12 +1,8 @@
 {
   "files": {
-    "css/hud.css": {
-      "codeLines": 6,
-      "lines": 7
-    },
     "js/ui/hud.js": {
-      "codeLines": 4,
-      "lines": 5
+      "codeLines": 2,
+      "lines": 2
     }
   }
 }

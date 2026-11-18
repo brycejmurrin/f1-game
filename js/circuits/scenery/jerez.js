@@ -13,34 +13,39 @@
    FRAME NOTE (2026-11-10, #5078): the line now sits on the real Lorenzo ->
    Expo '92 straight (def startFrac 0.2169), so racing = authored + 0.7827
    (def._sceneryShift) and built T1, the first right after the line (racing
-   ~0.087), is the real Curva Expo '92. The authored fracs below still sit on
-   built turns exactly, but the block NAMES are labels from an older corner
-   order, not the built one: "T4, start of the climb" (0.3043) is built T1,
-   "Sito Pons" (0.3563) T2, "Dry Sack" (0.3842) T3, "Turn 7" (0.5228) T4,
-   "Angel Nieto" (0.7123) T6, "Peluqui" (0.8417) T7/T8, "Ferrari" (0.9177) T9,
-   "final right" (0.9517) T10, "T1 Expo '92" (0.0663) T11, and the "Michelin
-   -> Sito Pons stand complex" (block 7, 0.126-0.272) is the terracing down
-   the outside of the start/finish straight itself (racing 0.909-0.055).
-   Renaming the blocks is a separate pass; no geometry moves with a name.
+   ~0.087), is the real Curva Expo '92. The authored fracs below sit on built
+   turns exactly; the block NAMES were labels from an older corner order and
+   were RELABELLED 2026-11-11 (#5316) to the built corner each block dresses
+   (authored s = racing + 0.2173; def.turns names and sources in jerez.js).
+   No geometry moved with a name except block 5's tyre wall (to the outside).
+   Old label -> built corner: "T4, start of the climb" -> T1 Expo '92;
+   "Sito Pons" -> T2 Michelin (infield); "Dry Sack" -> T2 exit / T3 left;
+   "descent from Dry Sack" -> T4 left; "Turn 7" -> T5 Sito Pons entry;
+   "Angel Nieto" -> T6 Pedrosa (ex-Dry Sack); "Peluqui" -> T7-T8 (Ezpeleta,
+   Aspar); "Ferrari" -> T9 Angel Nieto; "final right" -> T10 Peluqui;
+   "Expo '92 braking zone" / "T1 infield" -> T12; "T1 -> Michelin open
+   country" -> the straight into Lorenzo; "Michelin -> Sito Pons stands" ->
+   the Lorenzo (T13) inside and the start/finish straight (racing 0.909-0.055).
+   Side: -1 is LEFT of travel, +1 RIGHT; a right-hander's outside is -1.
 
-   Block -> brief §4 row map (s, side, dist):
+   Block -> brief §4 row map (authored s, side, dist; built corner):
      1  palette + helpers                      (§2 palette, §6 modelling notes)
      2  sl(0.005) -1  the line's own extras on block 7's terracing (masts, concourse)
      3  sl(0.010) +1  pit + paddock block (the only dense built mass)
-     4  0.045  -1 32  Expo '92 braking zone: terrace steps + spectator hill
-     5  0.0663 +1 14  T1 Curva Expo '92 infield apex (nothing tall)
-     6  0.110  -1 45  open country T1 -> Michelin, loose olive scatter
-     7  0.1447 -1 24  Curva Michelin stand complex running toward Sito Pons
-     8  0.3043 -1 38  T4, start of the climb: natural banking, no seating
-     9  0.3563 +1 18  Curva Sito Pons broadcast compound
-    10  0.3842 -1 22  Curva Dry Sack, highest point of the lap
-    11  0.460  +1 50  descent ridges away from Dry Sack (§3 elevation)
-    12  0.5228 -1 28  Turn 7 left, standing room only
-    13  0.6300 -1 65  far outfield: olive field rows + one white farm
-    14  0.7123 -1 26  Curva Angel Nieto, terracing returns
-    15  0.8417 -1 22  Peluqui, into the stadium bowl
-    16  0.9177 -1 20  Curva Ferrari, terracing unbroken from Peluqui
-    17  0.9517 +1 12  final right onto the pit straight
+     4  0.045  -1 32  T12 braking zone, outside: terrace steps + spectator hill
+     5  0.0663 +1 14  T12 infield apex (nothing tall); tyre wall outside
+     6  0.110  -1 45  open country on the straight into Lorenzo
+     7  0.1447 -1 24  T13 Lorenzo stand complex (inside) down the main straight
+     8  0.3043 -1 38  T1 Expo '92, outside: natural banking, no seating
+     9  0.3563 +1 18  T2 Michelin infield broadcast compound
+    10  0.3842 -1 22  T2 Michelin exit, outside, into the T3 left
+    11  0.460  +1 50  T4 left, outside: descent ridges (§3 elevation)
+    12  0.5228 -1 28  T5 Sito Pons entry, outside, standing room only
+    13  0.6300 -1 65  far outfield on the back straight: olive rows + one farm
+    14  0.7123 -1 26  T6 Pedrosa (ex-Dry Sack) hairpin, outside
+    15  0.8417 -1 22  T7-T8 Ezpeleta / Aspar lefts, the stadium bowl (inside)
+    16  0.9177 -1 20  T9 Angel Nieto, outside, terracing unbroken from the bowl
+    17  0.9517 +1 12  T10 Peluqui, inside, beside the paddock
     18  circuit-wide: guardrail, marshal posts, sparse scrub, start gantry
 
    Every stand block also carries its BACK-OF-HOUSE (§4 gives the trackside
@@ -82,10 +87,10 @@
       const TERR  = { conc: CONC, concAlt: CONC_ALT, rows: 10, rise: 1.45, depth: 2.5 };
       const TERR_LO = { conc: CONC, concAlt: CONC_ALT, rows: 6, rise: 1.4, depth: 2.5 };
       // step 8 (#2204): default step 5 packed treads into each other on the
-      // Expo / Dry Sack bends; a wider stride lets the curve-scaled span close.
+      // block-4 / block-10 bends; a wider stride lets the curve-scaled span close.
       const HILL  = { grass: OCHRE, riser: DUST, rows: 5, rise: 1.2, density: 0.45, step: 8 };
       const HILL_BARE = { grass: OCHRE, riser: DUST, rows: 4, rise: 1.1, density: 0.06, step: 8 };
-      // Dry Sack's four 2 m-deep treads occupy gap 36..44. Allow for
+      // Block 8's (T1 outside) four 2 m-deep treads occupy gap 36..44. Allow for
       // the clump's full 2.74 m crown, hill phase and curved end segments.
       const scrubCrown = 2.74, bankPhase = 0.3, bankDepth = 2;
       const drySackInner = 36 - scrubCrown - bankPhase;
@@ -254,7 +259,7 @@
       // Control tower: the required jerez-control-tower modelGroup near the
       // finish line below.
       // Motorhomes belong to the paddock, so they key through sl() like the
-      // rest of this block (raw fracs park them half a lap away, in the T4
+      // rest of this block (raw fracs park them a fifth of a lap away, by T11, in its
       // infield). Both rows sit INSIDE the perimeter fence: past ~46 m the
       // guard eats them. Skip any pad where terrain disagrees with the
       // unembedded anchor baseline; anchor() deliberately sinks props 0.3 m.
@@ -289,7 +294,7 @@
       for (let i = 0; i < 9; i++) {                        // freight containers
         const k = K(sl(0.9660 + i * 0.0060));
         if (!clear(k, 1, 20, 10)) continue;
-        // The T3 car park (carPark 0.156 -1 110) folds back into this paddock:
+        // Block 7's car park (carPark 0.156 -1 110) folds back into this paddock:
         // register each container so no car lands in one (was a 1.04 m clip).
         parked.push(anchor(k, 1, 20).c.concat(6.5));
         place(k, 1, 20, [2.6, 2.6, 6.0],
@@ -301,7 +306,9 @@
       if (!blocksPalmView(1, 56, K(sl(0.0180))))
         palm(K(sl(0.0180)), 1, 56, 11, OLIVE);
 
-      // 4. EXPO '92 BRAKING ZONE  (0.045, -1, 32)
+      // 4. T12 BRAKING ZONE, OUTSIDE  (0.045, -1, 32)
+      //    Built on the right-hander before Lorenzo (racing 0.806-0.851, the
+      //    apex 0.8488); was labelled "Expo '92", which is built T1.
       //    Open terrace steps cut into the natural rise with the hill
       //    continuing behind them, one camera mast. Bare pale ochre ground —
       //    groundPatch, not grass.
@@ -311,29 +318,32 @@
       groundPatch(K(0.0400), -1, 12, slab(22, 120), OCHRE);
       groundPatch(K(0.0520), -1, 36, slab(40, 110), DUST);
       runoffApron(K(0.0520), -1, 11, 34, OCHRE_PALE);
-      // Past the Expo spectatorHill treads (was 86–106 — bush×tread at f07).
+      // Past the block-4 spectatorHill treads (was 86–106 — bush×tread at f07).
       for (let i = 0; i < 5; i++)
         scrub(K(0.0230 + i * 0.0060), -1, 110 + hash(i * 19) * 24, SCRUB);
       kiosks(0.0300, -1, 60, 7, 11);                        // behind the steps
       carPark(0.0300, -1, 82, 10, 2, 7);
       groundPatch(K(0.0420), -1, 84, slab(52, 150), DUST);
 
-      // 5. T1 — CURVA EXPO '92, INFIELD APEX  (0.0663, +1, 14)
-      //    Tyre wall against the barrier, marshal post, one billboard angled
-      //    at the braking zone. NOTHING TALL: the horizon must stay visible
-      //    over the infield.
-      tyreWall(0.0580, 0.0790, 1, 12, TYRE_CAP);
+      // 5. T12 — INFIELD APEX OF THE RIGHT BEFORE LORENZO  (0.0663, +1, 14)
+      //    Was labelled "T1 Curva Expo '92"; it builds on T12 (racing 0.8488).
+      //    Marshal post and one billboard angled at the braking zone on the
+      //    infield; the tyre wall stands on the OUTSIDE (-1) of this right,
+      //    where the cars run wide (it stood on the +1 inside until #5316).
+      //    NOTHING TALL: the horizon must stay visible over the infield.
+      tyreWall(0.0580, 0.0790, -1, 12, TYRE_CAP);
       marshalPost(K(0.0663), 1, 16);
       billboard(K(0.0600), 1, 17, 12, 4.5, [0.88, 0.82, 0.32]);
       groundPatch(K(0.0663), 1, 20, slab(40, 90), OCHRE);
-      // T1 infield: no scrub/olive — brief §4 "nothing tall"; near scrub was
-      // filling the orbit eye at f17 and clipping the Expo terrace treads.
+      // Infield: no scrub/olive — brief §4 "nothing tall"; near scrub was
+      // filling the orbit eye at f17 and clipping the block-4 terrace treads.
 
-      // 6. OPEN COUNTRY, T1 -> MICHELIN  (0.110, -1, 45)
-      //    Scattered bush and a LOOSE scatter of olive-grey tree, never a
-      //    continuous rank, on flat ochre. Empty to the horizon behind it.
+      // 6. OPEN COUNTRY ON THE APPROACH TO LORENZO (T13)  (0.110, -1, 45)
+      //    Racing 0.866-0.906, the short straight from T12 to the hairpin; was
+      //    labelled "T1 -> Michelin". Scattered bush and a LOOSE scatter of
+      //    olive-grey tree, never a continuous rank, on flat ochre. Empty to the horizon behind it.
       //    Thinned + set back off the f17 camera corridor (was 40–74 m).
-      //    Stop short of the Michelin terrace (s≥0.125 canopy was clipping it).
+      //    Stop short of the block-7 terrace (s≥0.125 canopy was clipping it).
       for (let i = 0; i < 10; i++) {
         const s = 0.0840 + i * 0.0038;
         if (s > 0.118) continue;
@@ -350,10 +360,13 @@
       for (let i = 0; i < 6; i++)
         scrub(K(0.0880 + i * 0.0055), -1, 68 + hash(i * 41) * 20, SCRUB);
 
-      // 7. CURVA MICHELIN -> SITO PONS STAND COMPLEX  (0.1447, -1, 24)
-      //    The larger permanent stand complex, terrace filling between the
-      //    bays, hoarding at the base, armco and tyre wall at the edge.
-      // Lead Michelin bay. Was 0.1447/23/150: crowdBank hit the neighbouring
+      // 7. T13 — CURVA JORGE LORENZO STAND COMPLEX, INSIDE, DOWN THE MAIN STRAIGHT  (0.1447, -1, 24)
+      //    Was labelled "Michelin -> Sito Pons"; it builds from the Lorenzo
+      //    hairpin (racing 0.9262, a LEFT, so -1 is its inside) down the
+      //    start/finish straight (racing 0.909-0.055). The larger permanent
+      //    stand complex, terrace filling between the bays, hoarding at the
+      //    base, armco and tyre wall at the edge (on the hairpin's inside).
+      // Lead bay. Was 0.1447/23/150: crowdBank hit the neighbouring
       // leg fold → hollow suppress. s=0.130 gap=28 len=90 clears with positive
       // rake (probe HIT 600 prims, slope ~1.73).
       grandstandEx(0.1500, -1, 28, 40, null, null,
@@ -396,8 +409,9 @@
       carPark(0.1560, -1, 110, 18, 2, 17);
       groundPatch(K(0.2000), -1, 114, slab(70, 260), OCHRE_PALE);
 
-      // 8. T4, START OF THE CLIMB  (0.3043, -1, 38)
-      //    Natural banking with NO built seating — earth and scrub, a thin
+      // 8. T1 — CURVA EXPO '92, OUTSIDE  (0.3043, -1, 38)
+      //    Was labelled "T4, start of the climb"; it builds on T1 (racing
+      //    0.0872, a RIGHT, so -1 is its outside). Natural banking with NO built seating — earth and scrub, a thin
       //    guardrail line, one marshal post.
       spectatorHill(0.2860, 0.3260, -1, 36, HILL_BARE);
       guardrail(0.2740, 0.3400, -1, 11, ARMCO);
@@ -412,7 +426,10 @@
         if (!onTrack(a.c[0], a.c[2], 10)) olive(K(s), -1, d, 5.0 + hash(i * 5) * 2);
       }
 
-      // 9. CURVA SITO PONS, INFIELD  (0.3563, +1, 18)
+      // 9. T2 — CURVA MICHELIN, INSIDE (INFIELD)  (0.3563, +1, 18)
+      //    Was labelled "Sito Pons"; it builds on the T2 right hairpin
+      //    (racing 0.1385; +1 is its inside). The tyre wall below stays on
+      //    the inside apex as authored (moving it outside is a parent call).
       //    Broadcast compound with a camera tower beside it, serving the
       //    whole upper loop; tyre wall on the apex side.
       broadcastCompound(K(0.3563), 1, 20);
@@ -423,9 +440,11 @@
       for (let i = 0; i < 4; i++)
         scrub(K(0.3480 + i * 0.0060), 1, 58 + hash(i * 31) * 18, SCRUB);
 
-      // 10. CURVA DRY SACK  (0.3842, -1, 22) — the slow right at the top of
-      //     the climb, HIGHEST POINT OF THE LAP and the best-attended corner
-      //     outside the stadium. Stepped terrace plus a grandstand block,
+      // 10. T2 — CURVA MICHELIN EXIT, OUTSIDE  (0.3842, -1, 22)
+      //     Was labelled "Dry Sack" (that is T6, block 14). It builds from
+      //     the Michelin exit (racing 0.1407) over the T3 left (0.1667), so
+      //     its tyre wall (racing 0.153-0.183) is on T3's inside. The
+      //     best-attended corner outside the stadium. Stepped terrace plus a grandstand block,
       //     deep tyre wall, marshal post, billboard at the braking zone.
       terrace(0.3640, 0.3800, -1, 21, TERR);
       terrace(0.3880, 0.4020, -1, 21, TERR);
@@ -439,7 +458,7 @@
       cameraTower(K(0.3960), -1, 20);
       sponsorHoarding(0.3660, 0.4020, -1, 13);
       groundPatch(K(0.3842), -1, 76, slab(40, 170), OCHRE_PALE);
-      // Dry Sack palms past chase (was gap 26 — canopy filled the orbit eye).
+      // Block-10 palms past chase (was gap 26 — canopy filled the orbit eye).
       if (!blocksPalmView(-1, 58, K(0.4000)))
         palm(K(0.4000), -1, 58, 11, OLIVE);
       if (!blocksPalmView(-1, 56, K(0.3660)))
@@ -459,7 +478,9 @@
           62, 26, 4 + hash(i * 17) * 2.5, DUST);
       }
 
-      // 11. DESCENT AWAY FROM DRY SACK  (0.460, +1, 50)
+      // 11. T4 LEFT, OUTSIDE: THE DESCENT RIDGES  (0.460, +1, 50)
+      //     Was labelled "descent away from Dry Sack"; racing 0.201-0.285,
+      //     round the T4 left (0.2295; +1 is its outside).
       //     Bare ridge running parallel to the track with sparse bush — the
       //     FALL OF THE LAND is the landmark, not any prop. ridge() takes
       //     world x/z and a scalar heading; the long axis is +ang, so take it
@@ -482,7 +503,10 @@
       groundPatch(K(0.4600), 1, 50, slab(46, 140), OCHRE);
       guardrail(0.4180, 0.5020, 1, 12, ARMCO);
 
-      // 12. TURN 7 LEFT  (0.5228, -1, 28)
+      // 12. T5 — CURVA SITO PONS ENTRY, OUTSIDE  (0.5228, -1, 28)
+      //     Was labelled "Turn 7 left"; it builds on the approach to and
+      //     first half of the long T5 right (racing 0.289-0.339, apex 0.3398;
+      //     -1 is its outside).
       //     Guardrail and tyre wall, a LOW spectator hill with standing room
       //     only, one marshal post.
       guardrail(0.5040, 0.5460, -1, 10, ARMCO);
@@ -501,6 +525,7 @@
         scrub(K(0.5060 + i * 0.0048), -1, 44 + hash(i * 37) * 18, SCRUB);
 
       // 13. FAR OUTFIELD, THE QUIETEST STRETCH  (0.6300, -1, 65)
+      //     The back straight (racing 0.38-0.44), before the Pedrosa hairpin.
       //     Widely spaced olive in FIELD ROWS and a single white farm set
       //     well back. Horizon unbroken above it: nothing here is tall.
       //     First row past the orbit eye; thinned so crowns do not stack.
@@ -566,7 +591,7 @@
       groundPatch(K(0.6700), -1, 104, slab(46, 120), [0.88, 0.86, 0.80]);
       groundPatch(K(0.6560), -1, 124, slab(76, 190), OCHRE_PALE);
       groundPatch(K(0.6300), -1, 56, slab(80, 230), OCHRE_PALE);
-      // Past Angel Nieto kiosk/tower band (was 32–52 — bush×mast at f71).
+      // Past the block-14 kiosk/tower band (was 32–52 — bush×mast at f71).
       // Skip the amphitheatre window where kiosks sit at gap 58.
       for (let i = 0; i < 8; i++) {
         const s = 0.6020 + i * 0.0055;
@@ -574,13 +599,15 @@
         scrub(K(s), -1, 72 + hash(i * 31) * 24, SCRUB);
       }
 
-      // 14. CURVA ANGEL NIETO  (0.7123, -1, 26)
+      // 14. T6 — CURVA DANI PEDROSA (EX-DRY SACK), OUTSIDE  (0.7123, -1, 26)
+      //     Was labelled "Angel Nieto" (that is T9, block 16); it builds on
+      //     the T6 right hairpin (racing 0.4955; -1 is its outside).
       //     Terrace returns as the stadium section opens up, with hoarding
       //     and a camera tower; guardrail and tyre wall at the edge.
       // Terrace slab still skips the unsupported dip (was gap 25 / 3.2 m
       // float) — the packed ochre spectatorHill is the MotoGP amphitheatre
       // bank (was HILL_BARE density 0.06 = empty earth). Satellite / OSM:
-      // continuous tan hillside seating into Peluqui.
+      // continuous tan hillside seating into the T7-T8 bowl.
       // https://www.openstreetmap.org/#map=16/36.7085/-6.0341
       // https://www.google.com/maps/@36.7085,-6.0341,16z/data=!3m1!1e3
       sponsorHoarding(0.6920, 0.7420, -1, 14);
@@ -597,16 +624,18 @@
       kiosks(0.6980, -1, 58, 6, 31);
       carPark(0.7000, -1, 84, 14, 2, 37);
 
-      // 15. PELUQUI, INTO THE STADIUM BOWL  (0.8417, -1, 22)
+      // 15. T7-T8 — EZPELETA AND ASPAR, THE STADIUM BOWL ON THE INSIDE  (0.8417, -1, 22)
+      //     Was labelled "Peluqui" (that is T10, block 17); racing 0.535-0.669
+      //     over the T7 (0.5592) and T8 (0.6249) lefts, so -1 is the inside.
       //     Continuous permanent terrace wrapping the outside, a grandstand
       //     on the highest bank, billboard above the run-off.
-      terrace(0.7520, 0.8080, -1, 26, TERR_LO);   // bowl wrap from Angel Nieto
-      // Leave a wide gap under the Peluqui grandstand (0.8417) so terrace
+      terrace(0.7520, 0.8080, -1, 26, TERR_LO);   // bowl wrap from the hairpin exit
+      // Leave a wide gap under the bowl grandstand (0.8417) so terrace
       // steps do not share faces with the stand's crowdBank (coplanar /
       // flatCoplanar).
       terrace(0.8120, 0.8280, -1, 26, TERR);
       terrace(0.8600, 0.8780, -1, 27, TERR);
-      // Peluqui high bank. Was gap=36 len=140: hollow suppress on the bowl
+      // Bowl high bank. Was gap=36 len=140: hollow suppress on the bowl
       // fold. gap=42 len=70 clears with positive rake.
       grandstandEx(0.8417, -1, 42, 70, null, null,
         { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, h: 13 });
@@ -623,8 +652,8 @@
       runoffApron(K(0.8417), -1, 11, 30, OCHRE_PALE);
       marshalPost(K(0.8480), -1, 16);
       cameraTower(K(0.8680), -1, 24);
-      //   The bowl's back-of-house: one continuous concourse from Angel Nieto
-      //   to Ferrari, then the main spectator park on the outside of it.
+      //   The bowl's back-of-house: one continuous concourse from block 14
+      //   to block 16 (T9), then the main spectator park on the outside of it.
       groundPatch(K(0.8000), -1, 56, slab(46, 300), DUST);
       kiosks(0.7700, -1, 54, 8, 41);
       tower(K(0.8000), -1, 54, 1.1, 15);
@@ -632,8 +661,9 @@
         { wall: WHITEWASH, roof: [0.57, 0.36, 0.25] });
       carPark(0.7660, -1, 90, 16, 2, 43);
 
-      // 16. CURVA FERRARI  (0.9177, -1, 20)
-      //     Terracing UNBROKEN from Peluqui — terrace and grandstand,
+      // 16. T9 — CURVA ANGEL NIETO, OUTSIDE  (0.9177, -1, 20)
+      //     Was labelled "Curva Ferrari"; it builds on the T9 right (racing
+      //     0.7004; -1 is its outside). Terracing UNBROKEN from the bowl — terrace and grandstand,
       //     hoarding at the base, tyre wall and marshal post at the edge.
       terrace(0.8740, 0.9260, -1, 20, TERR);
       grandstandEx(0.9177, -1, 34, 135, null, null,
@@ -649,7 +679,10 @@
       carPark(0.8820, -1, 86, 12, 2, 53);
       tower(K(0.9280), -1, 56, 1.1, 15);
 
-      // 17. FINAL RIGHT ONTO THE PIT STRAIGHT  (0.9517, +1, 12)
+      // 17. T10 — CURVA PELUQUI, INSIDE  (0.9517, +1, 12)
+      //     Was labelled "final right onto the pit straight"; it builds on
+      //     the T10 right (racing 0.7342; +1 is its inside), beside the
+      //     paddock that the start straight's pit lane serves.
       //     Pit-exit guardrail merging in, paddock building mass and
       //     motorhome rows immediately behind it, marshal post on the apex.
       guardrail(0.9420, 0.9740, 1, 12, ARMCO);
@@ -657,7 +690,7 @@
       building(K(0.9450), 1, 32, 22, 9, 15,
         { wall: CONC, roof: [0.58, 0.56, 0.53] });
       // Final-sector motorhomes omitted: seatOk kept dropping them on the
-      // grade, and survivors floated / buried against the Ferrari terrace.
+      // grade, and survivors floated / buried against the block-16 (T9) terrace.
       groundPatch(K(0.9517), 1, 20, slab(20, 56), TARMAC);
 
       // 18. CIRCUIT-WIDE — continuous armco, marshal posts and a very sparse
@@ -674,7 +707,7 @@
         const h = hash(k * 37 + 11);
         if (h < 0.58) return;
         const side = h < 0.82 ? -1 : 1;
-        // Always past kiosk/mast bands on hot fracs (Angel Nieto gap 58).
+        // Always past kiosk/mast bands on hot fracs (block 14 gap 58).
         const dist = (camHot(k) ? ORBIT_HOT : CAM_NEAR) + h * 28;
         if (blocksOrbitView(side, dist, k)) return;
         const a = anchor(k, side, dist);
@@ -784,7 +817,7 @@
       // ── CURVA JORGE LORENZO marker (final corner, renamed 2013) ──────────
       // Wikipedia / RacingCircuits.info. Signage art UNCERTAIN — abstract board.
       // Seated on def.turns[12] (built T13, the final corner) through sl(): the
-      // old authored K(0.9517) built on T12, ~500 m before the corner it names.
+      // old authored K(0.9517) built on T10 Peluqui, ~840 m before the corner it names.
       {
         const a = anchor(K(sl(api.def.turns[12])), -1, 16);
         if (!onTrack(a.c[0], a.c[2], 6)) {
@@ -806,7 +839,7 @@
       // ── CURVA DANI PEDROSA marker (T6 / Dry Sack, renamed 2019) ──────────
       // Wikipedia. Signage art UNCERTAIN — abstract board.
       // Seated on def.turns[5] (built T6, the hairpin after the back straight)
-      // through sl(): the old authored K(0.3842) built on T5, ~600 m early.
+      // through sl(): the old authored K(0.3842) built on T3, ~1440 m early.
       {
         const a = anchor(K(sl(api.def.turns[5])), -1, 18);
         if (!onTrack(a.c[0], a.c[2], 6)) {

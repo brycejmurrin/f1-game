@@ -454,6 +454,8 @@ const TrackBuildClient = (function () {
       }
     });
     if (!msg || msg.type !== "preview" || !msg.track) return false;
+    // The adopted centreline never derives the shift here: carry the worker's (#5081).
+    if (Number.isFinite(msg.sceneryShift)) def._sceneryShift = msg.sceneryShift;
     return !!Tracks.adoptPreviewCenterline(def, msg.track);
   }
 

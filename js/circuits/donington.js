@@ -18,19 +18,25 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // MEASURED: v0 sits in a 28 m-radius corner with the 182 m grid behind
-    // it, so the line moves to the nearest section holding R >= 1500 m across
-    // the whole grid zone.
+    // MEASURED START LINE (2026-11-11): driver61 Donington circuit guide
+    // (https://driver61.com/circuit-guide/donington/) gives Start/Finish
+    // 52°49'47.3"N 1°22'46.4"W, on the straight between Goddards and Redgate
+    // (pit wall on the driver's left approaching Redgate). Projected with
+    // import-circuit-path.mjs project() it lands 3.8 m off the 491 m segment
+    // pts[24]->pts[25] at t = 0.402 (~197 m past pts[24]); no node sat on it.
+    // pts[25] = [319.8, -82.2] is HAND-ADDED, collinear on that segment
+    // (0.006 m off the chord, so the centreline moves < 1 m; jerez.js
+    // precedent) — every OSM point from the old pts[25] on is index + 1.
+    // The previous 0.9072 put the line on the straight before the Esses.
     //
     // startFrac is an INDEX fraction into the control points, NOT an arc
-    // fraction: the points are not arc-uniform (converting the arc target
-    // straight to a fraction lands on a 31 m radius), so the value is the
-    // control-point index whose cumulative arc length reaches the target.
+    // fraction (racing node 0 = pts[round(startFrac * pts.length)]):
+    // 25 / 98 = 0.2551 -> the hand-added point.
     //
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
-    startFrac: 0.9072,
+    startFrac: 0.2551,
     sceneryStartFrac: 0.0000,
     name: "DONINGTON",
     gp: "European GP",
@@ -64,11 +70,11 @@
     // 11 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
     sectors: [0.333, 0.645],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0410, 0.1636, 0.2671, 0.4185, 0.4315, 0.5525, 0.6135, 0.6686, 0.7776, 0.8565, 0.8860],
+    turns: [0.0853, 0.0939, 0.2149, 0.2759, 0.3310, 0.4400, 0.5189, 0.5484, 0.7034, 0.8260, 0.9295],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],
-    path: { len: 3998, pts: [[244,-236.4],[274.5,-237.5],[336.4,-244.2],[456.7,-259.7],[465.4,-259.2],[471.8,-255.9],[477.2,-249.4],[478.7,-245.5],[479.5,-235.7],[478.4,-224.9],[473.8,-220],[457.7,-212.2],[323.8,-193.4],[234.4,-181.7],[192.9,-178.9],[130.9,-179.9],[117.1,-178.5],[106.9,-173.7],[100.8,-165.9],[98.6,-155.8],[100,-145.3],[104.6,-134.8],[109.9,-127.5],[119.2,-120.4],[125.6,-118.3],[608.6,-28.5],[640.3,-19.2],[655.5,-12.3],[665.7,-4.5],[671.3,2],[677.9,16],[679.6,23.5],[680.3,29.9],[678.6,39.8],[671.5,54.7],[604.4,141.7],[581.5,166.8],[571.1,175.2],[549.6,188],[528.1,199.2],[510.4,206.2],[463.8,216.5],[406.7,218],[376.2,213.8],[300.1,192.3],[284.4,189.5],[268.9,190.8],[250.4,194],[228.6,200.1],[208.1,208.4],[145,238.8],[70.9,259.7],[54.6,259.1],[42.7,255],[32,246.7],[-59.2,156.8],[-97,117.4],[-106.5,109.5],[-136.5,98.2],[-172,88.2],[-200,83.2],[-224.3,80.5],[-304.6,75],[-340.3,76],[-357.1,79.1],[-372.5,84.5],[-429.5,117.9],[-443.2,124.6],[-465.5,132.4],[-485,137],[-493.9,137.8],[-512.1,135.3],[-523.3,130.8],[-534.7,120.2],[-546.3,102.5],[-599.8,5.1],[-671.8,-117.4],[-676.5,-126.3],[-680.3,-142.4],[-679,-155.2],[-676,-163.3],[-658.9,-193.4],[-646.5,-207.2],[-625.8,-221.3],[-611.1,-229.9],[-598.2,-234.6],[-570.9,-239.3],[-542.5,-239.3],[-77.2,-196.8],[-6.9,-190.9],[0.7,-193.3],[10.4,-198.1],[14.6,-205.6],[19.3,-218.4],[26.8,-227.2],[35.4,-232.1],[45.7,-234.7]] },
+    path: { len: 3998, pts: [[244,-236.4],[274.5,-237.5],[336.4,-244.2],[456.7,-259.7],[465.4,-259.2],[471.8,-255.9],[477.2,-249.4],[478.7,-245.5],[479.5,-235.7],[478.4,-224.9],[473.8,-220],[457.7,-212.2],[323.8,-193.4],[234.4,-181.7],[192.9,-178.9],[130.9,-179.9],[117.1,-178.5],[106.9,-173.7],[100.8,-165.9],[98.6,-155.8],[100,-145.3],[104.6,-134.8],[109.9,-127.5],[119.2,-120.4],[125.6,-118.3],[319.8,-82.2],[608.6,-28.5],[640.3,-19.2],[655.5,-12.3],[665.7,-4.5],[671.3,2],[677.9,16],[679.6,23.5],[680.3,29.9],[678.6,39.8],[671.5,54.7],[604.4,141.7],[581.5,166.8],[571.1,175.2],[549.6,188],[528.1,199.2],[510.4,206.2],[463.8,216.5],[406.7,218],[376.2,213.8],[300.1,192.3],[284.4,189.5],[268.9,190.8],[250.4,194],[228.6,200.1],[208.1,208.4],[145,238.8],[70.9,259.7],[54.6,259.1],[42.7,255],[32,246.7],[-59.2,156.8],[-97,117.4],[-106.5,109.5],[-136.5,98.2],[-172,88.2],[-200,83.2],[-224.3,80.5],[-304.6,75],[-340.3,76],[-357.1,79.1],[-372.5,84.5],[-429.5,117.9],[-443.2,124.6],[-465.5,132.4],[-485,137],[-493.9,137.8],[-512.1,135.3],[-523.3,130.8],[-534.7,120.2],[-546.3,102.5],[-599.8,5.1],[-671.8,-117.4],[-676.5,-126.3],[-680.3,-142.4],[-679,-155.2],[-676,-163.3],[-658.9,-193.4],[-646.5,-207.2],[-625.8,-221.3],[-611.1,-229.9],[-598.2,-234.6],[-570.9,-239.3],[-542.5,-239.3],[-77.2,-196.8],[-6.9,-190.9],[0.7,-193.3],[10.4,-198.1],[14.6,-205.6],[19.3,-218.4],[26.8,-227.2],[35.4,-232.1],[45.7,-234.7]] },
   }
   );
 })();

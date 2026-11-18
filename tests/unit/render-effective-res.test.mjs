@@ -22,6 +22,30 @@ test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsew
   assert.match(read("docs/GFX-CONTRACT.md"), /capped 1\.5 mobile \/ 2/);   // the seam's contract doc
 });
 
+test("each backend's resize() sizes the present buffer from the CAPPED dpr (evaluated at DPR 3)", () => {
+  // The pins above read the cap's declaration; this runs the resize line that
+  // APPLIES it, so a resize that stops using the cap (DPR_CAP declared, raw
+  // devicePixelRatio used) fails. The capped dpr must feed Math.round(… * dpr).
+  const resizeDpr = (file) => {
+    const m = read(file).match(/const dpr = (Math\.min\(window\.devicePixelRatio \|\| 1, [^;\n]+\));[\s\S]{0,800}?Math\.round\((?:cw|css\.width) \* dpr\)/);
+    assert.ok(m, file + ": resize() derives the present width from `dpr`");
+    return m[1];
+  };
+  const evalAt = (expr, flags) => vm.runInNewContext(expr, { window: { devicePixelRatio: 3 }, ...flags }, { filename: "vm-page:evaluate" });
+  const tlx = read("js/render/three/tlx.js");
+  const capDecl = tlx.match(/let DPR_CAP = ([^;]+);/)[1];
+  const tlxDpr = resizeDpr("js/render/three/tlx.js");
+  const tlxAt = (mobileTier) => evalAt(tlxDpr, { DPR_CAP: evalAt(capDecl, { _lite: null, mobileTier }) });
+  assert.equal(tlxAt(true), 1.5, "TLX phone at DPR 3");
+  assert.equal(tlxAt(false), 2, "TLX desktop at DPR 3");
+  const glx = resizeDpr("js/render/glx/glx.js");
+  assert.equal(evalAt(glx, { MOBILE_TIER: true }), 1.5, "GLX phone at DPR 3");
+  assert.equal(evalAt(glx, { MOBILE_TIER: false }), 2, "GLX desktop at DPR 3");
+  const wgx = resizeDpr("js/render/webgpu/wgx.js");
+  assert.equal(evalAt(wgx, { WGX_MINIMAL: false, WGX_LITE: true }), 1.5, "WGX lite at DPR 3");
+  assert.equal(evalAt(wgx, { WGX_MINIMAL: false, WGX_LITE: false }), 2, "WGX full at DPR 3");
+});
+
 test("RESOLUTION ships at AUTO everywhere; a phone's AUTO is capped at MED's 0.75 (#5227; #5166: was a MED pin)", () => {
   const src = read("js/ui/scale.js");
   assert.match(src, /const defaultResMode = \(\) => "auto";/);

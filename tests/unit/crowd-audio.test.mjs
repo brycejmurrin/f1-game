@@ -24,7 +24,7 @@ function param(v) {
     value: v, targets: [],
     setTargetAtTime(x) { p.value = x; p.targets.push(x); p._apexCrowdTgt = x; },
     setValueAtTime(x) { p.value = x; },
-    linearRampToValueAtTime(x) { p.value = x; p.ramped = true; },
+    linearRampToValueAtTime(x) { p.value = x; p.ramped = true; (p.ramps || (p.ramps = [])).push(x); },
     exponentialRampToValueAtTime(x) { p.value = x; },
     cancelScheduledValues() {},
     cancelAndHoldAtTime(at) { p.holds = (p.holds || 0) + 1; p.heldAt = at; },
@@ -174,7 +174,7 @@ test("silent on countdown, pause, results, and SFX off", () => {
 });
 
 test("P3 overtake and chequered-flag swells are capped", () => {
-  const { CrowdAudio, G, ctx, GameAudio } = boot({ player: { s: 100, pos: 5, finished: false } });
+  const { CrowdAudio, G, ctx, GameAudio, nodes } = boot({ player: { s: 100, pos: 5, finished: false } });
   CrowdAudio._setPos(5);
   G.player.pos = 3;
   ctx.currentTime += 0.05;
@@ -186,10 +186,23 @@ test("P3 overtake and chequered-flag swells are capped", () => {
   CrowdAudio._resetEvents();
   CrowdAudio.silence();
   ctx.currentTime += 3;
+  for (const n of nodes) if (n.gain) n.gain.ramps = [];
+  const bedBefore = (CrowdAudio.update(), CrowdAudio.inspect().bed);
+  assert.equal(CrowdAudio.inspect().swell, 0, "no swell before the flag (the next assertions are the flag's)");
   G.player.finished = true;
   CrowdAudio.update();
   const afterFlag = CrowdAudio.inspect();
-  assert.ok(afterFlag.swell > 0 || afterFlag.bed > 0.01, "chequered swell/bed");
+  // The bed alone is > 0.01 in a live race, so it proves nothing about the flag:
+  // the chequered flag must start a SWELL that lifts the bed, and fire a cheer.
+  assert.ok(afterFlag.swell > 0, `the chequered flag starts a swell (swell=${afterFlag.swell})`);
+  // update() aims the bed before it reads events, so the swell lands on the next tick.
+  ctx.currentTime += 0.05;
+  CrowdAudio.update();
+  const lifted = CrowdAudio.inspect().bed;
+  assert.ok(lifted > bedBefore + 1e-6, `the flag swell lifts the bed (${bedBefore} -> ${lifted})`);
+  assert.ok(lifted <= 0.11 + 1e-6, `flag swell capped while it plays, bed=${lifted}`);
+  const cheered = nodes.filter((n) => n.kind === "gain" && n.gain.ramps && n.gain.ramps.some((x) => x > 0.01));
+  assert.ok(cheered.length >= 1, "the chequered flag fires a cheer voice");
   assert.ok(afterFlag.bed <= 0.11 + 1e-6, `flag swell capped, bed=${afterFlag.bed}`);
 
   GameAudio.finish();

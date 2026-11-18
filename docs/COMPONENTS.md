@@ -190,7 +190,7 @@ not tabled: they move with every edit and nothing reads them.
 | `trb-` | `race-setup.css` | — |  |
 | `tune-` | `settings.css` | `components.css`, `garage-experience.css`, `photo-studio.css`, `race-setup.css`, `settings-controls.css`, `tuner.css` |  |
 | `vs-` | `overlays.css` | — |  |
-| `watch-` | `watch-transport.css` | `helmet-visor.css` | WATCH replay transport and its race layout context |
+| `watch-` | `watch-transport.css` | `helmet-visor.css`, `hud.css` | WATCH replay transport and its race layout context |
 | *(unprefixed)* | `overlays.css` | most files | state classes (below) |
 
 `.pad-ring` (`responsive.css`) is the PHONE CONTROLLER's focus ring: `PhonePad`
@@ -265,7 +265,7 @@ missing class, a file that left, or a file that joined.
 - `.mirror-controls` — `hud` + `touch-controls`. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
 - `.bc-on` — `helmet-visor` + `hud`. Body class for the broadcast HUD (a REAL RACE WATCH / HIGHLIGHTS run): `hud` hides the driving chrome, the touch buttons and CAM; `helmet-visor` skips refraction while broadcast is up.
 - `.bc-head` — `hud` + `watch-transport`. Timing header button semantics.
-- `.watch-controls-on` — `helmet-visor` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
+- `.watch-controls-on` — `helmet-visor` + `hud` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `hud` folds it into the AERO / BRAKE BIAS and RELATIVE / STRATEGY / INPUTS hide rules; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` — `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits their zoom and anchors around its side or bottom dock while it is open.
 - `.pc-uihidden` — `helmet-visor` + `hud`. Photo-mode HIDE HUD: `hud` clears the driving chrome for an unobstructed frame; `helmet-visor` drops the refraction filter with it.
 - `.pc-nopanel` — `hud` + `tuner`
@@ -440,8 +440,8 @@ some branch turns on or off at it.
 |---|---|
 | `ios-iphone-portrait` 393x852 | the phone as most people hold it |
 | `ios-iphone-landscape` 852x393 | the shape the game is PLAYED in — 343px of sheet height for everything |
-| `ios-iphone-landscape-safari` 852x344 | landscape Safari with the toolbar collapsed. The device descriptor's 393px is the FULL-SCREEN/PWA height; a browser tab is ~50px shorter, and until 2026-08 no cell sat between 344 and 393 — the hole that hid the fixed-chrome sheets' worst case |
-| `ios-iphone-landscape-844` 844x390 | iPhone 12-14 and common Android phones in landscape, full screen. The 852x344 / 852x393 cells never land on it; a title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here |
+| `ios-iphone-landscape-safari` 852x368 | landscape Safari tab, the window measured on the owner's iPhone (#5218; it was a guessed 852x344 "collapsed toolbar" cell). The device descriptor's 393px is the FULL-SCREEN/PWA height; sizes come from `tests/data/phone-windows.json` |
+| `ios-iphone-landscape-844` 844x390 | iPhone 12-14 and common Android phones in landscape, full screen. The 852x368 / 852x393 cells never land on it; a title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here |
 | `ios-ipad-portrait` 834x1194 | wide sheet, tall window: wants bands, not columns |
 | `ios-ipad-landscape` 1194x834 | the two-column case at its smallest |
 | `desktop-1280x800` | a small laptop |

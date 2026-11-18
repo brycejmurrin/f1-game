@@ -81,7 +81,10 @@ export function verdict(needs, opts = {}) {
   const sel = needs.select && typeof needs.select === "object" ? needs.select : null;
   if (sel) {
     const out = sel.outputs && typeof sel.outputs === "object" ? sel.outputs : {};
-    if (out.any === "true" && "selected" in needs && res("selected") === "skipped")
+    // The one sanctioned skip (#5426): a ready flip whose select job proved the same-sha draft verdict reusable.
+    // The verdict job still has to pass (and is in the full tier's REQUIRE_SUCCESS); it re-checks the claim.
+    const reused = out.selected_reused === "true" && /^\d+$/.test(String(out.selected_reused_run || ""));
+    if (out.any === "true" && "selected" in needs && res("selected") === "skipped" && !reused)
       bad.push("selected: skipped, but the plan has browser legs (select.outputs.any=true) — the selected specs did not run");
     if (sel.result === "success" && "selected-verdict" in needs && res("selected-verdict") === "skipped")
       bad.push("selected-verdict: skipped after a successful selection — nothing judged the selected specs");
@@ -155,9 +158,11 @@ function main(argv = process.argv.slice(2)) {
   }
   const require = String(process.env.REQUIRE_SUCCESS || "").split(",").map((x) => x.trim()).filter(Boolean);
   const v = verdict(needs, { require, fullTier: require.length > 0 });
-  // This job cannot read attempt N-1 (no token here); it can say that it is one. merge-gate is where rerunVerdict binds.
+  // This job cannot read attempt N-1 (no token here); it can say that it is one. The binding check is merge-gate's
+  // ciRetryVerdict (the `ci` row): it reads every earlier attempt's jobs and refuses after any failed one, whatever
+  // the body says (#5404: a `re-run:` body line does not lift it there, so this warning does not promise that).
   const attempt = Number(process.env.GITHUB_RUN_ATTEMPT || 1) || 1;
-  if (attempt > 1) console.log(`::warning::CI verdict on run attempt ${attempt}: a pass that needed a retry is a red until the PR names it (AGENTS.md rule 9)`);
+  if (attempt > 1) console.log(`::warning::CI verdict on run attempt ${attempt}: a pass that needed a retry is a red (AGENTS.md rule 9) — merge-gate refuses it if an earlier attempt had a failed job; push a fresh commit, or quarantine the test by name`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(v, require)); } catch { /* the summary is advisory */ }
   }

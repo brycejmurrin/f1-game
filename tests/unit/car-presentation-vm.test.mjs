@@ -987,3 +987,27 @@ test("race entry's warm builds one field body per team, each seat its own mesh",
   assert.deepEqual(meshes.map((m) => m.num), rivals.map((c) => c.num), "each mesh is its own seat's");
   assert.equal(v.rec.builds.filter((b) => b.kind === "body").length, bodies.length, "and the draws are all hits");
 });
+
+test("cockpitKey: a hit builds no key string; the cockpit style and the livery's chassis still key apart (#5057)", () => {
+  // Node VM census 2026-11-11: 112 B -> 0 a cockpit body + caster pair with a livery body style.
+  const livery = { c1: [1, 0, 0], c2: [0, 0, 1], bodyStyle: "b1" };
+  const v = carDrawVm({ cam: "cockpit", livery });
+  v.field((c, i) => 1000 + 9 * i);
+  const t = v.G.player.team, pl = v.G.player, built = () => v.rec.builds.length;
+  const m1 = v.carDraw.cockpitBodyMesh(t, pl), n1 = built();
+  assert.equal(v.carDraw.cockpitBodyMesh(t, pl), m1, "a repeat is a hit");
+  assert.equal(built(), n1, "and builds nothing");
+  livery.bodyStyle = "b2";
+  const m2 = v.carDraw.cockpitBodyMesh(t, pl);
+  assert.notEqual(m2, m1, "another chassis keys its own cockpit body");
+  v.ctx.CockpitOpts.body = () => "low";
+  assert.notEqual(v.carDraw.cockpitBodyMesh(t, pl), m2, "another cockpit style keys its own body");
+  v.ctx.CockpitOpts.body = () => "standard"; livery.bodyStyle = "b1";
+  const n2 = built();
+  assert.equal(v.carDraw.cockpitBodyMesh(t, pl), m1, "back to the first inputs: the cached body");
+  assert.equal(built(), n2);
+  const src = fs.readFileSync(new URL("../../js/car/car-draw.js", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("    function cockpitKey("), src.indexOf("    function cockpitBodyMesh("));
+  const hit = fn.slice(0, fn.indexOf("if (team.id !== _cbId"));
+  assert.ok(hit.length > 0 && !/\+\s*"/.test(hit) && !/"\s*\+/.test(hit), "no string is joined before the change test");
+});

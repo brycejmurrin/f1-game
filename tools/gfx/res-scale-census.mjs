@@ -14,7 +14,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV, WEBGPU_CENSUS_ARM, adapterMismatch, readWebgpuAdapter } from "../lib/harness.mjs";
 import { censusInitScript, waitFrames } from "../lib/mem-census.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -27,10 +27,10 @@ export function parseArgs(argv) {
     else if (a === "--scales") o.scales = next().split(",").map(Number).filter((v) => v >= 0.5 && v <= 1);
     else if (a === "--settle") o.settle = Math.max(1, +next() | 0);
     else if (a === "--json") o.json = next();
-    else if (a === "--webgpu") o.webgpu = true;   // three's WebGPU backend on Mesa lavapipe
+    else if (a === "--webgpu") o.webgpu = true;   // three's WebGPU backend; the adapter is checked (#5450: SwiftShader, not lavapipe)
     else if (a === "--ls") { const [k, v] = next().split("="); o.ls[k] = v; }
     else if (a === "-h" || a === "--help") {
-      console.log("usage: node tools/gfx/res-scale-census.mjs [--track id] [--scales a,b,c] [--settle frames] [--json PATH] [--ls key=value] [--webgpu]");
+      console.log("usage: node tools/gfx/res-scale-census.mjs [--track id] [--scales a,b,c] [--settle frames] [--json PATH] [--ls key=value] [--webgpu]\n  --webgpu: three's WebGPU backend, software WebGPU on the google/swiftshader adapter; exits 1 on any other adapter (#5450)");
       process.exit(0);
     } else throw new Error("unknown argument " + a);
   }
@@ -145,7 +145,7 @@ async function main() {
     // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
     // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
     // A frame is one top-level render (no render target); three's info.render.frame is not trusted to advance.
-    let base = null, prev = null, api = "?", warmTimedOut = false, framesOk = true;
+    let base = null, prev = null, api = "?", adapter = null, warmTimedOut = false, framesOk = true;
     try {
     await page.evaluate(() => {
       const r = window.GLX.__tlx.renderer;
@@ -190,6 +190,11 @@ async function main() {
     });
     api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
+    if (o.webgpu) {   // #5450: the arm says which adapter it measured, and refuses one it does not claim
+      adapter = await readWebgpuAdapter(page);
+      const bad = adapterMismatch(adapter);
+      if (bad) throw new Error(`--webgpu is the ${WEBGPU_CENSUS_ARM} arm: ${bad}`);
+    }
     warmTimedOut = !(await warmed());
     framesOk = await presented(5);   // sweep only once present() is running
     if (!framesOk) {
@@ -222,7 +227,7 @@ async function main() {
     if (!base) base = prev = { rtResizes: 0, textures: null, targets: [0, 0], fixed: false };
     if (!rows.length) rows.push({ step: "start", ...base });
     const total = (prev.rtResizes || 0) - (base.rtResizes || 0);
-    const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
+    const summary = { track: o.track, backend: api, adapter, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
       maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length,
       maxSettleFrames: Math.max(0, ...rows.map((r) => r.settledAfter || 0)), unsettledSteps: rows.filter((r) => r.step === "scale" && r.settledAfter == null).length,
       warmTimedOut, framesOk, texturesStart: rows[0].textures, texturesEnd: prev.textures, aborted: rows.some((r) => r.step === "aborted"), fixedTargets: base.fixed };

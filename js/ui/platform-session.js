@@ -336,7 +336,8 @@ document.addEventListener("visibilitychange", () => updates.onVisible());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();
   if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry
-  if (document.hidden && (G.state === "race" || G.state === "count")) setPaused(true, "hidden-tab");
+  // ALREADY PAUSED: a second pause re-showed the card over the lighting tuner and ended a replay scrub (#5017).
+  if (document.hidden && !G.paused && (G.state === "race" || G.state === "count")) setPaused(true, "hidden-tab");
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
   // return to a live session.
@@ -361,14 +362,14 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); disarmPr
 // in a friend race (the rival cannot be paused) and never under automation.
 window.addEventListener("blur", () => {
   setTimeout(() => {
-    if (document.hidden || document.hasFocus() || navigator.webdriver || G.netPlay.active()) return;
+    if (document.hidden || document.hasFocus() || navigator.webdriver || G.netPlay.active() || G.paused) return;
     if (G.state === "race" || G.state === "count") setPaused(true, "blur");
   }, 250);
 });
 // …and the platform taking the AUDIO (an iOS call answered from the compact
 // banner keeps the page visible and focused): the race stops with the sound.
 if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
-  if ((G.state === "race" || G.state === "count") && !G.netPlay.active()) setPaused(true, "audio-interrupted");
+  if ((G.state === "race" || G.state === "count") && !G.netPlay.active() && !G.paused) setPaused(true, "audio-interrupted");
 });
 
 }

@@ -169,3 +169,28 @@ test("external owner navigation reports refusal visibly and restores search on e
   const button = h.result("tyre wear"); button.onclick(); assert.match(h.index.querySelector('[role="status"]').textContent, /before a race/); assert.equal(h.index.hidden, false);
   allowed = true; button.onclick(); assert.equal(h.dom.document.activeElement, target); h.dom.document.querySelector("#pmsettings").hidden = false; h.nav.returnToSearch(); assert.equal(h.dom.document.activeElement, button); assert.equal(target.value, "real");
 });
+test("a dependency-greyed row reports its reason, not 'unavailable', and takes focus", () => {
+  const h = boot();
+  const sheet = h.el("section", "dep-sheet"), row = h.el("div", "dep-row", sheet), target = h.el("select", "dep-map-sel", row), why = h.el("p", "dep-why", row);
+  row.setAttribute("data-dep-off", "hud"); target.disabled = true; target.setAttribute("data-dep-disabled", ""); why.setAttribute("data-dep-reason", "label"); why.textContent = "HUD is OFF";
+  h.ctx.Search.register("dep-owner", [{ id: "dep-map", label: "Track map", page: "controls", target: "dep-map-sel", aliases: "zzdepmap" }]);
+  h.result("zzdepmap").onclick();
+  const text = h.index.querySelector('[role="status"]').textContent;
+  assert.match(text, /HUD is OFF/); assert.doesNotMatch(text, /unavailable/); assert.equal(h.dom.document.activeElement, row);
+});
+
+// #5562: SettingDeps EXPLAIN greys nothing itself; it writes the owner's reason beside the control and points
+// aria-describedby at it, with no data-dep-off row. Search printed "unavailable ... on this device" for those.
+test("an owner-greyed control reports the reason it is described by, not 'unavailable'", () => {
+  const h = boot();
+  const sheet = h.el("section", "own-sheet"), group = h.el("div", "own-gears", sheet), a = h.el("button", "own-gears-auto", group), b = h.el("button", "own-gears-manual", group);
+  const why = h.el("p", "why-gears-why-0", sheet), stale = h.el("p", "own-stale-why", sheet);
+  for (const x of [why, stale]) x.setAttribute("data-dep-reason", "group");
+  why.textContent = "MANUAL needs TILT or a pad"; stale.textContent = "Connect a controller first"; stale.hidden = true;
+  a.disabled = b.disabled = true; b.setAttribute("aria-describedby", "own-help own-stale-why why-gears-why-0");
+  h.ctx.Search.register("own-owner", [{ id: "own-gears", label: "Manual gears", page: "controls", target: "own-gears", aliases: "zzowngears" }]);
+  h.result("zzowngears").onclick();
+  assert.equal(h.index.querySelector('[role="status"]').textContent, "Manual gears is off: MANUAL needs TILT or a pad");
+  assert.equal(h.dom.document.activeElement, why, "focus lands on the reason");
+  assert.equal(h.dom.document.querySelector("#pm-panel-controls").children.length, 0, "no generic note is left on the page");
+});

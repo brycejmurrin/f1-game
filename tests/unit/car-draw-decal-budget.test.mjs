@@ -224,7 +224,8 @@ test("the player's LEGENDS slot builds its helmet from the picked legend and key
 // then uploads the bitmap without one. GLX gets the flip baked in (WebGL ignores UNPACK_FLIP_Y /
 // UNPACK_PREMULTIPLY_ALPHA for an ImageBitmap source), TLX and WGX flip in the copy and get it
 // unflipped; premultiply is baked for all three. The texel contract (byte parity with the canvas
-// upload) is proven in Chromium by tests/unit/livery-tier.test.mjs under APEX_LIVERY_PARITY=1.
+// upload) was measured once in Chromium (docs/notes/PERF-HUNT-4-2026-10-14.md, maxAbs 0); the opt-in
+// probe that measured it was deleted 2026-11-10 (W30: no automation ran it). Nothing executes it now.
 const tick = () => new Promise((r) => setImmediate(r));
 function bitmapRig(backend, { refuse = false } = {}) {
   const r = rig();

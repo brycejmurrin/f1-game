@@ -1,0 +1,33 @@
+{
+  "doc": "THE record of the owner's iPhone windows (issue #5218): CSS px size and env(safe-area-inset-*) per window. Every tool and helper that emulates his phone reads this file: tools/lib/bryce-phone.mjs (BRYCE_WINDOWS), tests/helpers/title-fit.mjs (GEOS) and tools/ui/menu-screens.mjs (the ios-iphone-landscape* cells). `measured` says what a real-device reading confirmed; `assumed` names what it did not. Change a number only from a new reading, and cite it in `source`.",
+  "dpr": 3,
+  "windows": {
+    "standalone": {
+      "width": 852, "height": 393,
+      "insets": { "top": 0, "left": 59, "bottom": 21, "right": 59 },
+      "owner": true,
+      "measured": "nothing on the device yet: size and insets are the Chromium emulation read back in PR #5216",
+      "assumed": "size and insets (the Home Screen app reading is still open on #5218)",
+      "source": "PR #5216",
+      "verified": "Home Screen app. Chromium emulation read-back (PR #5216); insets on the real device pending #5218"
+    },
+    "safari": {
+      "width": 852, "height": 368,
+      "insets": { "top": 0, "left": 59, "bottom": 21, "right": 59 },
+      "owner": true,
+      "measured": "size: inner = documentElement.client = visualViewport = 852x368, scale 1, DPR 3, iOS 18_7 Safari tab, landscape title menu and race",
+      "assumed": "insets (env() was not read; taken equal to standalone) and the toolbar state (expanded or collapsed was not recorded)",
+      "source": "#5218 comment 2026-11-10T02:40Z (phone bridge thread #5168, live build e808230)",
+      "verified": "Safari tab. Size MEASURED on his iPhone over the phone bridge 2026-11-10 02:40Z (#5218, DPR 3); insets ASSUMED equal to standalone"
+    },
+    "w844": {
+      "width": 844, "height": 390,
+      "insets": { "top": 0, "left": 47, "bottom": 21, "right": 47 },
+      "owner": false,
+      "measured": "not his phone",
+      "assumed": "the iPhone 12-14 full-screen cell most reports and specs were written against",
+      "source": "tools/ui/menu-screens.mjs ios-iphone-landscape-844",
+      "verified": "NOT his phone: the iPhone 12-14 cell (tools/ui/menu-screens.mjs ios-iphone-landscape-844) most reports were measured on"
+    }
+  }
+}

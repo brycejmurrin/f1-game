@@ -117,8 +117,8 @@ test("15-F5: a green draft run is reused only on its first attempt and the same 
     fs.writeFileSync(path.join(dir, "gh"), [
       "#!/usr/bin/env bash",
       'case "$2" in',
-      '  repos/o/r/check-runs/*/annotations*) printf \'%s\' "$STUB_ANN" ;;',
-      '  repos/o/r/actions/runs/*/jobs*) printf \'%s\' "$STUB_JOBS" ;;',
+      '  repos/o/r/check-runs/*/annotations*) printf \'%s\' "$STUB_ANN"; exit "${STUB_ANN_EXIT:-0}" ;;',
+      '  repos/o/r/actions/runs/*/jobs*) printf \'%s\' "$STUB_JOBS"; exit "${STUB_JOBS_EXIT:-0}" ;;',
       '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"run_attempt":%s,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request"}]}\' "$STUB_ATTEMPT" ;;',
       '  *) exit 1 ;;',
       "esac",
@@ -140,6 +140,12 @@ test("15-F5: a green draft run is reused only on its first attempt and the same 
     const rerun = reuse({ STUB_ATTEMPT: "2" });
     assert.equal(rerun.stdout, "reuse=false\n", "a draft that passed only on a re-run is not reused");
     assert.equal(rerun.stderr, "reuse-draft-fast: ci.yml run 77 passed on attempt 2, not its first — run the fast tier\n");
+    for (const STUB_ATTEMPT of ["null", "0", '\"bad\"']) {
+      assert.equal(reuse({ STUB_ATTEMPT }).stdout, "reuse=false\n", "unknown attempt is not first-attempt evidence");
+    }
+    for (const key of ["STUB_ANN_EXIT", "STUB_JOBS_EXIT"]) {
+      assert.equal(reuse({ [key]: "1" }).stdout, "reuse=false\n", "partial API stdout is not a successful lookup");
+    }
     // No base, no record, or a malformed record is not "same": fail safe.
     assert.equal(reuse({ CURRENT_BASE: "", GITHUB_EVENT_NAME: "workflow_dispatch" }).stdout, "reuse=false\n");
     assert.equal(reuse({ STUB_ANN: "[]" }).stdout, "reuse=false\n");

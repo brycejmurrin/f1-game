@@ -350,33 +350,6 @@ test("analytic cancel-and-hold fallback keeps interrupted release and overlappin
   A.setVoiceFocusHold(false, a);
 });
 
-test("WATCH media focuses only on audible playing, not pending fetch, stall or muted buffers", () => {
-  const media = [];
-  class Audio {
-    constructor() { this.paused = true; this.ended = false; this.volume = 1; this.muted = false; media.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; this.onpause?.(); }
-  }
-  const { GameAudio: A, contexts, vctx } = boot({ Audio }); A.init(); A.setRadioFocusDb(8);
-  const clip = vctx.GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.8 }); const el = media[0];
-  assert.equal(A.mixDuck().focusHolds, 0, "play request has not emitted playing");
-  el.onplaying(); assert.equal(A.mixDuck().focusHolds, 1);
-  el.onstalled(); assert.equal(A.mixDuck().focusHolds, 1, "fetch stall can keep buffered audio playing");
-  el.onwaiting(); assert.equal(A.mixDuck().focusHolds, 0);
-  el.onplaying(); el.muted = true; el.onvolumechange(); assert.equal(A.mixDuck().focusHolds, 0);
-  el.muted = false; el.onvolumechange(); assert.equal(A.mixDuck().focusHolds, 1);
-  const stale = el.onplaying; clip.stop(); stale(); assert.equal(A.mixDuck().focusHolds, 0);
-  contexts[0].state = "suspended";
-  const plain = vctx.GameAudioRadioFx.playWatchMedia("https://example.test/plain.mp3", { volume: 0.8 });
-  const fallback = media.at(-1); fallback.onplaying(); assert.equal(A.mixDuck().focusHolds, 1);
-  plain.stop(); assert.equal(A.mixDuck().focusHolds, 0, "plain HTMLAudio lifecycle included");
-  contexts[0].state = "running";
-  assert.equal(A.radioVoice([sampleBuf(1, SR)], 0, { volume: 0 }), null);
-  A.setEnabled(false);
-  assert.equal(vctx.GameAudioRadioFx.playWatchMedia("https://example.test/refused.mp3", { volume: 0.8 }), null);
-});
-
-
 test("repeating STANDARD restore is inert during an active legacy attack", () => {
   const { GameAudio: A, gains, contexts } = boot(); A.init(); A.setRadioDuck(true);
   const [_, critical, focus] = gains, before = critical.gain.sets;

@@ -1,234 +1,52 @@
-// REAL REPLAY audio and radio focus: the pause card's team-radio clips, the GameAudioRadioFx route,
-// the direct Audio fallback's focus ownership, and the engine voice of a puppet. Split from
-// real-replay-vm.test.mjs (M1-15).
+// REAL REPLAY audio: real team radio is caption-only (docs/DECISIONS.md D-032) and the engine
+// voice of a puppet. Split from real-replay-vm.test.mjs (M1-15).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { transportReplay, directRadioReplay, audioHarness } from "../helpers/real-replay-fixtures.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { transportReplay, audioHarness } from "../helpers/real-replay-fixtures.mjs";
 
-test("WATCH: the pause card cuts a real team radio clip mid-sentence, as a hidden tab does", () => {
-  // The game loop returns before update() while paused, so tick() — and the
-  // replay clock — froze under the card while the HTMLAudio clip talked on.
-  const clips = [], observers = [];
-  const pause = { hidden: true };
-  const document = { addEventListener() {}, getElementById: (id) => (id === "pausemenu" ? pause : null) };
-  class MutationObserver {
-    constructor(fn) { this.fn = fn; observers.push(this); }
-    observe(el, o) { this.el = el; this.o = o; }
-  }
-  const { replay, G, options } = transportReplay({ document, MutationObserver, Audio: class {
-    constructor() { this.paused = true; clips.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; }
-  } });
-  options.script.radio = [{ t: 3, num: 1, url: "https://example.test/radio.mp3" }];
-  G.soundOn = true;
-  replay.start(options);
-  replay.tick(3.5);
-  assert.equal(clips.length, 1, "the clip fires at its moment");
-  assert.equal(clips[0].paused, false);
-  // What the browser does when setPaused(true) (Escape / blur / pad-lost) shows #pausemenu.
-  const flip = (hidden) => { pause.hidden = hidden; for (const o of observers) if (o.el === pause) o.fn([]); };
-  flip(false);
-  assert.equal(clips[0].paused, true, "the clip stops with the game, not when it runs out");
-  assert.equal(replay.status().paused, false, "the replay's own transport is untouched");
-  flip(true);                              // RESUME: nothing restarts a stale clip
-  assert.equal(clips[0].paused, true);
-  replay.stop();
-});
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-// ROTATE-BLOCK / PHOTO-MODE PAUSE HIDES THE CARD IN THE SAME TASK.
-// setPaused(true) shows #pausemenu; syncRotateBlocker then sets
-// els.pausemenu.hidden = active || photoMode because the blocker (or photo
-// studio) owns the screen. MutationObserver callbacks run AFTER that task,
-// so a gate on `if (!pause.hidden) cutClip()` sees the card already hidden
-// and never cuts — the OpenF1 HTMLAudio clip talks over a frozen WATCH.
-// Same blind spot #1029 fixed for radioVoice via setPaused → halt(); here
-// the fix stays inside real-replay (G.paused survives the re-hide).
-test("WATCH: a rotate-block pause that re-hides the card in the same task still cuts team radio", () => {
-  const clips = [], observers = [], queued = [];
-  const pause = { _hidden: true };
-  Object.defineProperty(pause, "hidden", {
-    get() { return this._hidden; },
-    set(v) {
-      this._hidden = !!v;
-      for (const o of observers) if (o.el === pause) queued.push(o.fn);
-    },
-  });
-  const document = { addEventListener() {}, getElementById: (id) => (id === "pausemenu" ? pause : null) };
-  class MutationObserver {
-    constructor(fn) { this.fn = fn; observers.push(this); }
-    observe(el, o) { this.el = el; this.o = o; }
-  }
-  const { replay, G, options } = transportReplay({ document, MutationObserver, Audio: class {
-    constructor() { this.paused = true; clips.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; }
-  } });
-  options.script.radio = [{ t: 3, num: 1, url: "https://example.test/radio.mp3" }];
-  G.soundOn = true;
-  G.paused = false;
-  replay.start(options);
-  replay.tick(3.5);
-  assert.equal(clips.length, 1, "precondition: a clip is on air");
-  assert.equal(clips[0].paused, false);
-
-  // setPaused(true, "rotate-block") then syncRotateBlocker(false), one task:
-  G.paused = true;
-  pause.hidden = false;                       // setPaused shows the card
-  pause.hidden = true;                        // blocker / photo took the screen
-  assert.equal(pause.hidden, true, "the card is gone by the end of the task");
-  while (queued.length) queued.shift()();     // observers run now, seeing hidden
-  assert.equal(clips[0].paused, true, "the clip stops — the observer never saw the card");
-  assert.equal(replay.status().paused, false, "the replay's own transport is untouched");
-
-  G.paused = false;
-  pause.hidden = true;                        // RESUME: nothing restarts a stale clip
-  while (queued.length) queued.shift()();
-  assert.equal(clips[0].paused, true, "resume must not restart a stale clip");
-  replay.stop();
-});
-
-test("WATCH OpenF1 team radio routes through GameAudioRadioFx.playWatchMedia (FX chain + duck)", () => {
-  const ducks = [];
-  const chain = [];
-  const playWatchMedia = (url, o) => {
-    chain.push({ url, volume: o && o.volume });
-    ducks.push(true);
-    return {
-      chained: true,
-      paused: false,
-      ended: false,
-      pause() { ducks.push(false); },
-      play: () => Promise.resolve(),
-      stop() { ducks.push(false); },
-    };
-  };
+// TEAM RADIO IS CAPTION-ONLY (D-032). The replay used to hot-link OpenF1's recording_url
+// (real broadcast audio) and play it through three fallbacks; now the message is a caption,
+// status().radio carries the source link for the transport, and nothing is fetched or played.
+test("WATCH real team radio is a caption with a source link: no Audio, no fetch, no media clip", () => {
+  const made = [], fetched = [], media = [], cards = [];
   const { replay, G, options } = transportReplay({
-    Audio: class { play() { return Promise.resolve(); } pause() {} },
-    GameAudioRadioFx: { playWatchMedia },
-    GameAudio: { setRadioDuck: (on) => ducks.push(!!on) },
+    Audio: class { constructor(u) { made.push(u); } play() { return Promise.resolve(); } pause() {} },
+    fetch: (u) => { fetched.push(u); return Promise.reject(new Error("no")); },
+    GameAudioRadioFx: { playWatchMedia: (u) => { media.push(u); return null; } },
+    GameAudio: { radioMediaClip: (u) => { media.push(u); return null; } },
   });
-  options.script.radio = [{ t: 3, num: 1, url: "https://example.test/radio.mp3" }];
+  options.script.radio = [{ t: 3, num: 1, lap: 1, url: "https://example.test/radio.mp3" }];
   G.soundOn = true;
-  G.radio = { volume: () => 0.8 };
+  G.radio = { volume: () => 0.9 };
+  G.announce = (text, dur, kind) => cards.push({ text, kind });
   replay.start(options);
+  assert.equal(replay.status().radio, null, "no radio before the message");
   replay.tick(3.5);
-  assert.equal(chain.length, 1, "playWatchMedia is used instead of bare new Audio()");
-  assert.equal(chain[0].url, "https://example.test/radio.mp3");
-  assert.equal(chain[0].volume, 0.8);
-  assert.ok(ducks.includes(true), "music duck latched for the clip");
-  replay.stop();
-  assert.ok(ducks.includes(false), "stop releases the duck");
-});
-
-test("WATCH direct Audio fallback focuses only audible playing and releases on interruption", () => {
-  const { replay, G, clips, holds, focus, ducks } = directRadioReplay();
-  replay.tick(3.5);
-  const a = clips[0];
-  assert.equal(holds.size, 0, "requesting playback does not claim focus");
-  assert.deepEqual(ducks, [true], "the fallback preserves legacy radio ducking");
-  a.emit("playing");
-  assert.equal(holds.size, 1);
-  const owner = focus[0].owner;
-  a.emit("playing");
-  assert.equal(focus.length, 1, "repeated playing is idempotent");
-  a.emit("stalled");
-  assert.equal(holds.size, 1, "a stalled fetch can still have buffered playback");
-  a.emit("waiting");
-  assert.equal(holds.size, 0);
-  a.emit("volumechange");
-  assert.equal(holds.size, 0, "volume changes cannot acquire while waiting");
-  a.emit("playing");
-  assert.equal(holds.size, 1, "playing after buffering recovers focus");
-  a.volume = 0; a.emit("volumechange");
-  assert.equal(holds.size, 0);
-  a.volume = 0.8; a.emit("volumechange");
-  assert.equal(holds.size, 1, "restoring volume recovers focus during confirmed playback");
-  a.muted = true; a.emit("volumechange");
-  assert.equal(holds.size, 0);
-  a.muted = false; a.emit("volumechange");
-  assert.equal(holds.size, 1, "unmuting ongoing playback recovers focus without another playing event");
-  G.soundOn = false; a.emit("playing");
-  assert.equal(holds.size, 0);
-  G.soundOn = true; G.radio.volume = () => 0; a.emit("playing");
-  assert.equal(holds.size, 0, "effective radio volume also gates the hold");
-  G.radio.volume = () => 0.8; a.emit("playing");
-  assert.equal(holds.size, 1);
-  replay.setPaused(true);
-  assert.equal(a.paused, true, "public transport pause pauses the existing element");
-  assert.equal(holds.size, 0, "transport pause releases focus without disposing the source");
-  assert.ok(a.listeners.has("playing"), "transport pause keeps resume listeners");
-  assert.equal(ducks.at(-1), false, "transport pause preserves legacy duck release");
-  a.emit("volumechange");
-  assert.equal(holds.size, 0, "volume changes cannot acquire while paused");
-  replay.setPaused(false);
-  assert.equal(clips.length, 1, "public transport resume reuses the same Audio element");
-  assert.equal(a.paused, false);
-  assert.equal(ducks.at(-1), true, "resuming restores the legacy radio duck");
-  a.emit("volumechange");
-  assert.equal(holds.size, 0, "a play request after pause still needs confirmation");
-  a.emit("playing");
-  assert.equal(holds.size, 1, "the same element reacquires focus on resumed playing");
-  a.muted = true; a.emit("volumechange");
-  assert.equal(holds.size, 0);
-  a.muted = false; a.emit("volumechange");
-  assert.equal(holds.size, 1, "resumed playback also recovers focus after unmuting");
+  assert.deepEqual(made, [], "no HTMLAudio element is ever made for a radio clip");
+  assert.deepEqual(fetched, [], "the recording is never fetched");
+  assert.deepEqual(media, [], "no media-clip route is called");
+  assert.ok(cards.some((c) => c.text === "RADIO · AAA"), "the message is captioned with the driver's code");
+  const r = replay.status().radio;
+  assert.equal(r && r.url, "https://example.test/radio.mp3", "status().radio links out to the source");
+  replay.setSpeed(4);
+  assert.ok(replay.status().radio, "a faster replay still shows the link (no audio to cut)");
   replay.seek(0);
-  assert.equal(holds.size, 0, "seek stops and releases the owned fallback");
-  assert.equal(a.listeners.size, 0, "stop removes every event listener");
-  assert.equal(ducks.at(-1), false);
-  assert.ok(focus.every((entry) => entry.owner === owner), "one clip uses one stable owner object");
+  assert.equal(replay.status().radio, null, "a seek clears a stale radio link");
   replay.stop();
 });
 
-test("WATCH fallback rejects stale events and play failures without releasing a newer owner", async () => {
-  const { replay, clips, holds, focus } = directRadioReplay();
-  replay.tick(3.5);
-  const old = clips[0], stalePlaying = old.listeners.get("playing"), staleEnded = old.listeners.get("ended");
-  old.emit("playing");
-  replay.tick(3);
-  const current = clips[1];
-  current.emit("playing");
-  const owner = focus.at(-1).owner, before = focus.length;
-  assert.equal(holds.size, 1);
-  assert.notEqual(owner, focus[0].owner, "replacement clips get distinct ownership");
-  stalePlaying(); staleEnded(); old.reject(new Error("late rejection"));
-  await Promise.resolve();
-  assert.equal(focus.length, before, "queued callbacks and an old rejection cannot touch the new hold");
-  assert.ok(holds.has(owner));
-  current.reject(new Error("autoplay refused"));
-  await Promise.resolve();
-  assert.equal(holds.size, 0, "a failed play request releases its own focus");
-  assert.equal(current.listeners.size, 0, "rejection removes listeners");
-  replay.tick(3);
-  const last = clips[2];
-  last.emit("playing"); last.emit("error");
-  assert.equal(holds.size, 0, "media errors release focus");
-  assert.equal(last.listeners.size, 0);
-  replay.stop();
-});
-
-test("WATCH fallback callbacks from a previous audio context cannot claim or release focus", () => {
-  const { replay, clips, holds, focus, ducks, rebuild } = directRadioReplay();
-  replay.tick(3.5);
-  const old = clips[0], stalePlaying = old.listeners.get("playing"), staleEnded = old.listeners.get("ended");
-  old.emit("playing");
-  rebuild();
-  const before = focus.length, duckCount = ducks.length;
-  stalePlaying(); staleEnded();
-  assert.equal(focus.length, before, "old callbacks do not call the rebuilt engine");
-  assert.equal(ducks.length, duckCount, "old callbacks cannot release the rebuilt radio duck");
-  assert.equal(old.listeners.size, 0);
-  replay.tick(3);
-  const current = clips[1];
-  current.emit("playing");
-  assert.equal(holds.size, 1, "a clip created in the rebuilt context can focus");
-  staleEnded();
-  assert.equal(holds.size, 1);
-  current.ended = true; current.emit("ended");
-  assert.equal(holds.size, 0, "natural completion releases the current clip");
-  assert.equal(current.listeners.size, 0);
-  replay.stop();
+test("radio-fx no longer exports a WATCH media player (the three-attempt fallback is gone)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/audio/radio-fx.js"), "utf8");
+  for (const gone of ["playWatchMedia", "radioMediaClip", "createMediaElementSource", "fetch("]) {
+    assert.ok(!src.includes(gone), "js/audio/radio-fx.js still carries " + gone);
+  }
+  const replaySrc = fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8");
+  assert.ok(!/new Audio\(/.test(replaySrc), "real-replay.js makes no Audio element");
 });
 
 test("WATCH transport pause hands the audio a stopped car, and playing again brings the speed back", () => {

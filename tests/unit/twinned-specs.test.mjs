@@ -85,8 +85,13 @@ test("a twin that loses a test is caught", async () => {
 
   // And the real pairs are all equal right now, which is what makes the
   // exclusion in select-specs sound rather than merely convenient.
-  for (const { spec, twin, specTests, twinTests } of verify().rows)
-    assert.equal(specTests, twinTests, `${spec} vs ${twin}`);
+  // A TWIN_SUBSET spec was shrunk to the render()-only cases, so its twin
+  // carries MORE tests; verify() also checks each spec title is a twin title.
+  for (const { spec, twin, specTests, twinTests, subset } of verify().rows) {
+    if (subset) assert.ok(specTests <= twinTests, `${spec} (${specTests}) vs ${twin} (${twinTests})`);
+    else assert.equal(specTests, twinTests, `${spec} vs ${twin}`);
+  }
+  assert.deepEqual(verify().problems, []);
 });
 
 test("the gated-node set is derived from ci.yml, not copied", () => {
@@ -292,4 +297,73 @@ test("the train runs the twins of every spec its plan drops (ci-7d C2): read fro
     { file: spec }, { file: spec }, { file: "tests/specs/pit-lane.spec.js" }, { file: "tests/specs/not-a-twin.spec.js" }] });
   assert.deepEqual(plan, { twins: [TWINNED[spec]], adapted: ["tests/specs/pit-lane.spec.js"], circuits: "monza" });
   assert.deepEqual(trainTwinPlan({}), { twins: [], adapted: [], circuits: "" });
+});
+
+/* ── THE VERDICT, EXECUTED ───────────────────────────────────────────────
+ *
+ * The E2E test above is gated behind APEX_RUNNER_E2E=1 (spawning the runner
+ * trips the live-run signal), and the static test reads source text. Neither
+ * EXECUTES the arithmetic, so a broken empty-run check passed both. twinVerdict
+ * is the runner's verdict as a pure export (importing the runner does not run
+ * its CLI); these drive it on synthetic TAP summaries, ungated.
+ */
+const tap = (pass, fail) => `TAP version 13\nok 1 - x\n1..1\n# tests ${pass + fail}\n# pass ${pass}\n# fail ${fail}\n`;
+const verdictLine = (v) => {
+  const vs = v.lines.filter((l) => /^= run /.test(l));
+  assert.ok(vs.length <= 1, `at most one verdict line, got ${vs.length}`);
+  return vs[0] || null;
+};
+
+test("twinVerdict: an EMPTY twin run (0 passed, 0 failed, exit 0) is a failure, never a 0/0 green", async () => {
+  const { twinVerdict } = await import("../../tools/ci/run-playwright.mjs");
+  for (const nothingToRun of [true, false]) {
+    const v = twinVerdict({ status: 0, stdout: tap(0, 0) }, { nothingToRun });
+    assert.equal(v.exit, 1, `nothingToRun=${nothingToRun}: an empty run must exit 1`);
+    assert.match(verdictLine(v), /^= run failed\s+\(0\/0 done, 1 failed\)/);
+    assert.ok(!v.lines.some((l) => /= run passed/.test(l)), "no pass line anywhere");
+  }
+});
+
+test("twinVerdict: an unreadable TAP summary is a failure verdict", async () => {
+  const { twinVerdict } = await import("../../tools/ci/run-playwright.mjs");
+  for (const stdout of ["", "garbage\n", "# pass 3\n", "# fail 0\n", undefined]) {
+    const v = twinVerdict({ status: 0, stdout }, { nothingToRun: true });
+    assert.equal(v.exit, 1, JSON.stringify(stdout));
+    assert.match(verdictLine(v), /^= run failed\s+\(0\/0 done, 1 failed\)\s+\[VM twins: no TAP summary\]/);
+  }
+});
+
+test("twinVerdict: a failing twin, or a non-zero exit with a clean summary, is a failure", async () => {
+  const { twinVerdict } = await import("../../tools/ci/run-playwright.mjs");
+  const v1 = twinVerdict({ status: 1, stdout: tap(4, 2) }, { nothingToRun: true });
+  assert.equal(v1.exit, 1);
+  assert.match(verdictLine(v1), /^= run failed\s+\(6\/6 done, 2 failed\)/);
+  const v2 = twinVerdict({ status: 1, stdout: tap(5, 0) }, { nothingToRun: true });
+  assert.equal(v2.exit, 1, "a crashed child with an all-pass summary is not a pass");
+  assert.match(verdictLine(v2), /^= run failed\s+\(5\/5 done, 1 failed\)/);
+  assert.equal(twinVerdict({ status: null, stdout: tap(5, 0) }, { nothingToRun: false }).exit, 1,
+    "a killed child (status null) is not a pass");
+});
+
+test("twinVerdict: a real pass with nothing left for a browser ends green, counting what ran", async () => {
+  const { twinVerdict } = await import("../../tools/ci/run-playwright.mjs");
+  const v = twinVerdict({ status: 0, stdout: tap(7, 0) }, { nothingToRun: true });
+  assert.equal(v.exit, 0);
+  assert.match(verdictLine(v), /^= run passed\s+\(7\/7 done, 0 failed\)\s+\[VM twins, no browser\]/);
+  assert.equal(v.lines.at(-1), verdictLine(v), "the verdict line is last");
+});
+
+test("twinVerdict: a pass with specs left for a browser emits NO verdict line and continues", async () => {
+  const { twinVerdict } = await import("../../tools/ci/run-playwright.mjs");
+  const v = twinVerdict({ status: 0, stdout: tap(3, 0) }, { nothingToRun: false });
+  assert.equal(v.exit, null, "null: the browser half follows");
+  assert.equal(verdictLine(v), null, "two verdict lines would let last-match-wins report the twins' result as the group's");
+  assert.ok(v.lines.some((l) => /VM twin\(s\) passed \(3\)/.test(l)));
+});
+
+test("the runner's CLI routes the twins' result through twinVerdict, behind an isMain guard", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/run-playwright.mjs"), "utf8");
+  assert.match(src, /const v = twinVerdict\(r, \{ nothingToRun \}\);/);
+  assert.match(src, /if \(v\.exit !== null\) process\.exit\(v\.exit\);/);
+  assert.match(src, /if \(isMain\) await main\(\);/, "importing the runner must not run its CLI");
 });

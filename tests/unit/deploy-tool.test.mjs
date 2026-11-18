@@ -4,7 +4,7 @@
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
-import { GENERATED_PATHS, BUILT_PATHS, RETIRED_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { GENERATED_PATHS, BUILT_PATHS, ON_DEMAND_PATHS, RETIRED_PATHS } from "../../tools/lib/generated-paths.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
@@ -272,8 +272,9 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md"];
   assert.equal(cure(derived), true);
   assert.deepEqual(cureableConflicts(derived).derivedF, derived);
-  assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery cache regenerates");
-  assert.deepEqual(cureableConflicts(["tools/shot/scenery-locations.json", "package.json"]).sceneryF, ["tools/shot/scenery-locations.json"]);
+  // The scenery catalog is built on demand since 2026-11-11 (ON_DEMAND_PATHS): its conflict is modify/delete, cured as a deletion.
+  assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery catalog cures as a built path");
+  assert.deepEqual(cureableConflicts(["tools/shot/scenery-locations.json", "package.json"]).builtF, ["tools/shot/scenery-locations.json"]);
   assert.equal(cure(["tools/shot/scenery-locations.json", "js/circuits/spa.js"]), false, "a circuit conflict is authored");
   // docs/agent-index.json is derived (gen-agent-index.mjs) too.
   assert.deepEqual(cureableConflicts(["docs/agent-index.json"]).derivedF, ["docs/agent-index.json"]);
@@ -390,11 +391,11 @@ test("a circuit edit routes the sweeps; a docs-only union does not", () => {
 /* The half ci.yml drifted on: its hand-written alternation omitted
  * scenery-grounding, so a diff touching only that suite's own file skipped the
  * sweep it belongs to. Neither copy owns a literal list now — both read
- * package.json's test:sweeps — and this is what holds that true. */
+ * tests/groups.json's test:sweeps — and this is what holds that true. */
 test("editing a sweep suite's OWN file routes the sweeps", () => {
   const suites = sweepSuites();
   assert.ok(suites.includes("tests/unit/debris-hazard-hint.test.mjs"),
-    "premise: the suite list is really derived from package.json's test:sweeps");
+    "premise: the suite list is really derived from tests/groups.json's test:sweeps");
   const r = geomRepo();
   try {
     r.write(suites[0], "// a moved baseline\n"); r.g("add", "-A"); r.g("commit", "-qm", "suite");
@@ -729,7 +730,7 @@ test("a targeted edit routes ONLY the suite that reads it, in test:sweeps order"
   assert.deepEqual(targetedSuites(["js/physics/debris-world.js", "README.md"]), ["tests/unit/debris-hazard-hint.test.mjs"]);
   assert.deepEqual(targetedSuites(["js/ui/driving-line-opts.js", "js/car/car3d.js"]),
     ["tests/unit/car-front-wing-width.test.mjs", "tests/unit/driving-line-opts.test.mjs"],
-    "deduplicated and in package.json's test:sweeps order, so the runner's output reads like the group's");
+    "deduplicated and in tests/groups.json's test:sweeps order, so the runner's output reads like the group's");
   const r = geomRepo();
   try {
     r.write("js/car/parts.js", "// a wider wing\n"); r.g("add", "-A"); r.g("commit", "-qm", "car");
@@ -738,7 +739,7 @@ test("a targeted edit routes ONLY the suite that reads it, in test:sweeps order"
   } finally { r.rm(); }
   const suites = sweepSuites();
   for (const rule of TARGETED) {
-    for (const s of rule.suites) assert.ok(suites.includes(s), `${s} (a TARGETED rule) is not in package.json's test:sweeps — the fleet run would not include it`);
+    for (const s of rule.suites) assert.ok(suites.includes(s), `${s} (a TARGETED rule) is not in tests/groups.json's test:sweeps — the fleet run would not include it`);
     assert.ok(rule.why, `the rule for ${rule.ere} must say what its suite reads`);
   }
 });
@@ -1005,12 +1006,12 @@ test("RETIRED_PATHS are gitignored, untracked, not generated, and not site files
   for (const p of RETIRED_PATHS) {
     assert.equal(spawnSync("git", ["check-ignore", "-q", "--no-index", "--", p], { cwd: ROOT }).status, 0, `${p} must be in .gitignore`);
     assert.equal(execFileSync("git", ["ls-files", "--", p], { cwd: ROOT, encoding: "utf8" }).trim(), "", `${p} must not be tracked`);
-    assert.equal(GENERATED_PATHS.includes(p) || BUILT_PATHS.includes(p), false, `${p} is retired: it is in no other list`);
+    assert.equal(GENERATED_PATHS.includes(p) || BUILT_PATHS.includes(p) || ON_DEMAND_PATHS.includes(p), false, `${p} is retired: it is in no other list`);
   }
 });
 
-for (const rel of [BUILT_PATHS[0], ...RETIRED_PATHS]) test(`${rel}: a modify/delete conflict is cureable, and \`git rm --cached\` resolves it as a deletion`, () => {
-  for (const p of [...BUILT_PATHS, ...RETIRED_PATHS]) {
+for (const rel of [BUILT_PATHS[0], ...ON_DEMAND_PATHS, ...RETIRED_PATHS]) test(`${rel}: a modify/delete conflict is cureable, and \`git rm --cached\` resolves it as a deletion`, () => {
+  for (const p of [...BUILT_PATHS, ...ON_DEMAND_PATHS, ...RETIRED_PATHS]) {
     const c = cureableConflicts([p]);
     assert.equal(c.cureable, true, `${p}: a built or retired path must be cureable`);
     assert.deepEqual(c.builtF, [p]);
@@ -1090,7 +1091,6 @@ function generatorCureFixture(output, generator, failure) {
 
 for (const [output, generator] of [
   ["docs/agent-index.json", "tools/docs/gen-agent-index.mjs"],
-  ["tools/shot/scenery-locations.json", "tools/shot/gen-scenery-locations.cjs"],
 ]) {
   test(`conflict cure waits for ${generator} before the merge commit`, () => {
     const r = generatorCureFixture(output, generator, false);

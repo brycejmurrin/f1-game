@@ -38,3 +38,17 @@ test("float-audit builds exactly what the shared harness builds (no private load
   }
   assert.deepEqual([...audit.Tracks.LIST.map((d) => d.id)].sort(), [...shared.Tracks.LIST.map((d) => d.id)].sort(), "the same roster");
 });
+
+// #2501: --json is one JSON document; the text-only reports refuse it.
+test("float-audit refuses --json with its text-only --foliage, --clip and --why reports", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const path = (await import("node:path")).default;
+  const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "tools", "track", "float-audit.cjs");
+  for (const mode of ["--foliage", "--clip", "--why"]) {
+    const r = spawnSync(process.execPath, [cli, "monza", "--json", mode], { encoding: "utf8", timeout: 20000 });
+    assert.equal(r.status, 2, mode + " " + r.stderr);
+    assert.equal(r.stdout, "", mode + ": nothing on stdout");
+    assert.match(r.stderr, new RegExp(mode + " is a text report"));
+  }
+});

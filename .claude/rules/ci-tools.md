@@ -11,7 +11,9 @@ paths:
 - Every PR push runs CI: a DRAFT push gets the fast tier plus the `selected`
   browser legs under a 5-min budget with no overflow (one leg for a typical
   diff; a wide diff still fans out, since select-specs never drops a routed
-  spec); ready gets the full tier. No label or body line opts in. `= ci none` after a push means no open PR carries the sha (not
+  spec); ready gets the full tier, minus the `selected` legs when the same-sha draft
+  passed them first try with the same plan and the deploy tip has not moved
+  (`tools/ci/reuse-draft-selected.mjs`). No label or body line opts in. `= ci none` after a push means no open PR carries the sha (not
   pushed, or no PR yet). A whole browser group: `node tools/ci/remote-group.mjs
   <group>` on the pushed branch; agents never run a browser test locally
   (AGENTS.md rule 5). A manual `ci.yml` dispatch is a hook "ask" (a deny on Codex).

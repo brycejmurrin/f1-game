@@ -41,7 +41,7 @@ Add to the repo `.gitignore` (one line) so the marker never dirties `git status`
 
 ## Repo reference + test
 
-- Reference implementation: `tests/fixtures/stop-hook-git-check.sample.sh` (not wired by the harness).
-- Unit test: `tests/unit/bash-guard-hardening.test.mjs` subtest **H1** (memory exclude + `push-hold`).
+- Reference implementation: the diff above (an unwired sample copy under tests/fixtures was deleted 2026-11-10; git history has it).
+- Unit test: none left in the repo (as of 2026-11-10 `tests/unit/bash-guard-hardening.test.mjs` has no H1 / `push-hold` subtest).
 
 Fixes #2662 (docs + test; Bryce applies H1 locally).

@@ -3,7 +3,7 @@
 var SessionRecords = (function () {
   const PHYS = SessionPhys.PHYS;
   function create(G) {
-    let key = null, revision = -1, spoiled = false, dailyRestore = null;
+    let key = null, revision = -1, spoiled = false, dailyRestore = null, assistRestore = null;
     let comparedGuest = null, comparedKey = null;
     const STANDARD = { PACE: 0.84, DRIFT: 0, FRONT_GRIP: 0.94, PLAYER_GRIP: 1.15, ROAD_FOLLOW: 0,
       STEER_EXPO: 2.4, STEER_MAX_SLIP: 0.29, STEER_SPEED_REF: 41.7, WHEELBASE: 3.6, YAW_DAMP: 1, YAW_INERTIA: 0.58, raceLineAssist: 0 };
@@ -12,8 +12,17 @@ var SessionRecords = (function () {
       for (const [k, v] of Object.entries(STANDARD)) G[k] = v;
       G.teamIdx = Math.max(0, Teams.LIST.findIndex(t => t.id === "mclaren")); G.driverIdx = 0; G.difficulty = "normal";
       Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+      // GRIP STEER and WheelState are OFF in a standard daily too (#5024); session-only, never persisted.
+      if (!assistRestore) assistRestore = { grip: typeof GripSteer !== "undefined" ? GripSteer.level() : 1, wheel: typeof WheelState !== "undefined" && WheelState.enabled() };
+      if (typeof GripSteer !== "undefined") GripSteer.setLevel(1);
+      if (typeof WheelState !== "undefined") WheelState.setEnabled(false, false);
     }
     function restoreDaily() {
+      if (assistRestore) {
+        if (typeof GripSteer !== "undefined") GripSteer.setLevel(assistRestore.grip);
+        if (typeof WheelState !== "undefined") WheelState.setEnabled(assistRestore.wheel, false);
+        assistRestore = null;
+      }
       if (!dailyRestore) return;
       for (const [k, v] of Object.entries(dailyRestore)) G[k] = v;
       dailyRestore = null;
@@ -93,7 +102,7 @@ var SessionRecords = (function () {
     }
     function accept() {
       const daily = G.daily.current();
-      if (daily && daily.class === "standard" && PHYS.some(k => G[k] !== STANDARD[k])) {
+      if (daily && daily.class === "standard" && (PHYS.some(k => G[k] !== STANDARD[k]) || Object.keys(SessionPhys.assists()).length)) {
         spoiled = true;
         G.announce("STANDARD DAILY SETTINGS CHANGED — RESTART DAILY", 3, "info");
         return false;

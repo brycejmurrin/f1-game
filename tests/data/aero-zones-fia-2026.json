@@ -98,7 +98,7 @@
    ],
    "doc": "https://www.fia.com/system/files/decision-document/2026_miami_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
    "status": "fia-2026",
-   "note": "def.turns not FIA-numbered yet (W5 circuit): count only"
+   "note": "def.turns FIA-numbered 2026-11-11 (official-corners.cjs, F1 timing corner markers)"
   },
   "montreal": {
    "count": 4,
@@ -110,7 +110,7 @@
    ],
    "doc": "https://www.fia.com/system/files/decision-document/2026_canadian_grand_prix_-_competition_notes_-_circuit_map_v2.pdf",
    "status": "fia-2026",
-   "note": "def.turns not FIA-numbered yet (W5 circuit): count only"
+   "note": "def.turns FIA-numbered 2026-11-11 (official-corners.cjs, F1 timing corner markers)"
   },
   "catalunya": {
    "count": 4,
@@ -391,7 +391,7 @@
    ],
    "doc": "https://www.fia.com/system/files/decision-document/2026_mexico_city_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
    "status": "fia-2026",
-   "note": "def.turns not FIA-numbered yet (W5 circuit): count only"
+   "note": "def.turns FIA-numbered 2026-11-11 (official-corners.cjs, F1 timing corner markers)"
   },
   "interlagos": {
    "count": 2,

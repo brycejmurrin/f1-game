@@ -346,7 +346,7 @@ var RadioVoice = (function () {
   }
   function inert() {
     return Object.freeze({
-      say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, flushDecoded: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
@@ -707,6 +707,8 @@ var RadioVoice = (function () {
      *  land right there), a spotter clip and the card's hiss bed played on over
      *  the garage, and the frozen card never ages out to stop them. It calls this. */
     function halt() { stop(); if (pack) pack.stop(); }
+    /** Quit to menu: free the decoded PCM (the .bin stays; clips re-decode on demand). */
+    function flushDecoded() { if (pack && pack.flushDecoded) pack.flushDecoded(); }
     function stop() {
       stopBattleEarcons();
       stopVoice();
@@ -989,7 +991,7 @@ var RadioVoice = (function () {
     }
 
     return {
-      say, stop, halt, unlock, preview,
+      say, stop, halt, flushDecoded, unlock, preview,
       previewGeneration: () => previewGen,
       stopPreviewIfGeneration(generation) { if (generation !== previewGen) return false; stop(); return true; },
       /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's

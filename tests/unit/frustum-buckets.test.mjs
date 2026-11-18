@@ -193,3 +193,22 @@ test("every backend's chunk loop culls through radialCulled, and game.js feeds i
   assert.match(read("js/render/webgpu/wgx.js"), /get frameCullFog\(\) \{ return frameCullFog; \}/);
   assert.match(read("js/render/three/tlx.js"), /chunkedSys\.cull\(rec\.chunked, vp, eye, cd, fog\)/);
 });
+
+
+test("sheared and composed nonuniform transforms keep boundary geometry visible", () => {
+  // x' = x + y + z. A unit sphere's support along world X is sqrt(3),
+  // larger than every column length (sqrt(2)); largest-column is not a bound.
+  const m = new Float32Array([1,0,0,0, 1,1,0,0, 1,0,1,0, 0,0,0,1]);
+  const q = 1 / Math.sqrt(3), pos = new Float32Array([q,q,q, -q,-q,-q]);
+  for (const radius of [undefined, 1]) {
+    const [cell] = Frustum.bucketInstances(m, 1, pos, 72, radius);
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i] + pos[i+1] + pos[i+2];
+      assert.ok(x >= cell.mn[0] - 1e-7 && x <= cell.mx[0] + 1e-7, "transformed vertex is contained");
+    }
+    const planes = [[1,0,0,-1.6], [-1,0,0,2], [0,1,0,2], [0,-1,0,2], [0,0,1,2], [0,0,-1,2]];
+    assert.equal(Frustum.aabbInFrustum(planes, cell.mn, cell.mx), true, "visible corner must survive a side-plane cull");
+    planes[0][3] = -2;
+    assert.equal(Frustum.aabbInFrustum(planes, cell.mn, cell.mx), false, "negative control: wholly outside still culls");
+  }
+});

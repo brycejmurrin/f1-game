@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
 import { loadDb, unionDb, median, inBuckets, TIMINGS_FILE } from "./spec-timings.mjs";
+import { foundationScope } from "../../tests/helpers/foundation-roster.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -331,7 +332,45 @@ export function declaredTests(file) {
     }
   };
   walk(ast, 1);
+  for (const m of caseModules(file)) n += declaredTests(m) || 0;
   return n;
+}
+
+/** A REGISTRY SPEC'S CASE MODULES (TK2-17, #3039). tests/specs/circuit-foundation.spec.js
+ *  declares no test of its own: it default-imports one `./foundation/<id>.js` per
+ *  circuit and calls it, and the test() calls live there. Every static reader that
+ *  bills a spec (declaredTests, maxDeclaredTimeout) follows these imports, so the
+ *  registry costs what Playwright will run. Sibling-relative (`./…`) default imports
+ *  only: a spec's helpers are `../helpers/…` and keep their own rules. */
+export function caseModules(file) {
+  let src;
+  try { src = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return []; }
+  const out = [];
+  for (const m of src.matchAll(/^import\s+\w+\s+from\s+"(\.\/[^"]+\.js)";$/gm))
+    out.push(path.posix.normalize(path.posix.join(path.posix.dirname(file), m[1])));
+  return out;
+}
+
+/** The circuit ids a registry spec registers: the basenames of its case modules
+ *  (tests/specs/foundation/<id>.js — the name IS the id). [] for any other spec. */
+export const caseModuleIds = (file) => caseModules(file).map((m) => path.posix.basename(m, ".js"));
+
+/** declaredTests under an APEX_CIRCUITS scope (an id list): a registry spec bills only the
+ *  case modules it will register — the SAME rule the spec runs (foundationScope: an empty or
+ *  unmatched scope registers every module, fail closed); any other spec is unchanged. */
+export function declaredTestsIn(file, scope) {
+  const mods = caseModules(file);
+  if (!mods.length) return declaredTests(file);
+  const keep = scopedCaseModules(file, scope);
+  const sum = (list) => list.reduce((a, m) => a + (declaredTests(m) || 0), 0);
+  return declaredTests(file) - sum(mods) + sum(keep);
+}
+
+/** The case modules a registry spec registers under `scope` (an id list). */
+export function scopedCaseModules(file, scope) {
+  const mods = caseModules(file);
+  const keep = new Set(foundationScope(mods.map((m) => path.posix.basename(m, ".js")), (scope || []).join(",")));
+  return mods.filter((m) => keep.has(path.posix.basename(m, ".js")));
 }
 
 /** How many selected tests fit in `budgetMin`, surviving `failures` timeouts. */

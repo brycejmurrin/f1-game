@@ -97,13 +97,19 @@ const UiScale = (() => {
     // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
     // and the two must not disagree. BUTTON SIZE keeps its own fixed default.
-    // 1.25, corrected 2026-09-14 from 1.4536. See the long note on the
-    // `(pointer: coarse)` block in css/tokens.css: 1.24 x 1.4536 put ~34mm
-    // pedals on a phone and the column covered the minimap and the sector strip.
-    // Target size and readout size are separate floors; this ratio carries the
-    // buttons' physical floor, --hud-scale no longer carries a blanket bump.
+    // History: 1.4536, then 1.25 (2026-09-14, when --hud-scale still carried a 1.24 bump and
+    // nothing capped the dock; fitHud's caps do that now).
+    // NOT moved to the owner's 143.25 % (#5358): in TILT / DRAG steering the bigger BOOST / OT / AERO
+    // column makes fitHud shrink the readouts to pay for it (852x393: minimap 103 -> 90 px, tower
+    // 371 -> 324) and tests/specs/hud-layout.spec.js stops settling. In BUTTONS steering the only
+    // difference is the steer pad: 90 px here, 103 at his stored 143.25.
     const BTN_DEFAULT = 1.25;
-    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
+    // A PHONE (touch, short side <= 500 px) ships UI SIZE 70 %, the owner's own setting (#5358):
+    // 109 % painted every menu "way too big" there. A tablet keeps 109. Only an UNSET size reads
+    // these; a stored one is never rewritten by a new default.
+    const PHONE_UI_DEFAULT = 70;
+    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
+    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : (phoneUi() ? PHONE_UI_DEFAULT : 109)) : 100);
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
@@ -120,8 +126,7 @@ const UiScale = (() => {
       const t = scaleSnap(pct, k);
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
-    // UI SIZE: full top (the row names this sheet's zoom); a phone stops at 70 % (#5235).
-    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
+    // UI SIZE: full top (the row names this sheet's zoom); a phone stops at 50 % (#5452; 70 under #5235).
     const uiSheet = () => $("pm-uiscale")?.closest?.(".sheet") || null;
     const sheetCap = () => { const sh = uiSheet(); return (sh?.getClientRects?.().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
     const fitCaps = () => (document.body?.classList?.contains("in-race") ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
@@ -429,6 +434,8 @@ const UiScale = (() => {
     if (key === "uiScale" && sheetCap > 0 && sheetCap * 100 < value - 0.5) part = ` · this menu ${Math.round(sheetCap * 100)}%`;
     return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
   }
-  const UI_PHONE_MIN = 70;   // #5235
+  // A phone's UI SIZE FLOOR (#5452, Bryce 2026-11-11: "Down to 50 %"; it was 70 under #5235, which left the slider
+  // stuck at its left end). A stored value under it is raised to it on load; one above it (his 61) is kept.
+  const UI_PHONE_MIN = 50;
   return { create, defaultResMode, migrateResMode, RES_SCHEMA, sizeRow, parseCaps };
 })();

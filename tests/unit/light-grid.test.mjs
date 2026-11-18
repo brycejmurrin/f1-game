@@ -303,16 +303,34 @@ test("every TUNE_DEFS uniform is wired in executable code on GLX, WGX, and TLX",
       "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js",
       "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"]),
   };
-  const hit = (src, d) => [d.id, d.u].filter(Boolean).some((n) => src.includes(n));
+  // Two halves, both required. CONSUME: the id or uniform name appears as a
+  // whole word (a bare substring let "tint" match `const tint = o.tint`, the
+  // per-draw sprite tint, so WGX could drop the WARM / COOL upload unnoticed).
+  // UPLOAD: the backend READS the knob's value — a quoted id (`k("tint")`,
+  // `PostCommon.knob(T, "tint")`) or a member read on one of that backend's
+  // tune / frame holders. A knob uploaded through a new holder fails here with
+  // its name: add the holder to UPLOAD_HOLDERS, it is the backend's contract.
+  const UPLOAD_HOLDERS = {
+    glx: ["T", "opts"],
+    wgx: ["T", "Td", "f", "lastFrame"],
+    tlx: ["T", "U", "F", "sky", "frame", "_postF", "o"],
+  };
+  const esc = (s) => s.replace(/[$]/g, "\\$&");
+  const word = (n) => new RegExp(`(?<![\\w$])${esc(n)}(?![\\w$])`);
+  const uploads = (name, src, id) =>
+    new RegExp(`["'\`]${id}["'\`]`).test(src) ||
+    new RegExp(`(?<![\\w$.])(?:${UPLOAD_HOLDERS[name].map(esc).join("|")})\\s*\\.\\s*${id}(?![\\w$])`).test(src);
+  const hit = (name, src, d) =>
+    [d.id, d.u].filter(Boolean).some((n) => word(n).test(src)) && uploads(name, src, d.id);
   const uniforms = defs().filter((x) => x.u);
   assert.ok(uniforms.length > 50, `only ${uniforms.length} u: knobs — the registry parse broke`);
   const missing = [], staleGaps = [];
   for (const d of uniforms) {
     for (const [name, src] of Object.entries(backends)) {
       const gap = BACKEND_GAPS[name] && BACKEND_GAPS[name][d.id];
-      if (hit(src, d)) { if (gap) staleGaps.push(`${d.id} is wired on ${name} now: drop its BACKEND_GAPS entry`); continue; }
+      if (hit(name, src, d)) { if (gap) staleGaps.push(`${d.id} is wired on ${name} now: drop its BACKEND_GAPS entry`); continue; }
       if (gap && gap.test(d.help || "")) continue;
-      missing.push(`${d.id} (${d.u}) has no executable use on ${name.toUpperCase()}`);
+      missing.push(`${d.id} (${d.u}) has no executable upload + use on ${name.toUpperCase()}`);
     }
   }
   assert.deepEqual(staleGaps, []);

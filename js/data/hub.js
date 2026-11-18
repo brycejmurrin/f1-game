@@ -387,7 +387,7 @@ const DataHub = (function () {
       contentEl.appendChild(errorBlock(id, st.error, !!st.node && st.hasData !== false));
       if (st.node) {
         contentEl.appendChild(st.node);
-        if (st.hasData !== false) contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
+        if (st.hasData !== false) footer(id, st);
       }
       contentEl.scrollTop = 0;
       return;
@@ -400,7 +400,7 @@ const DataHub = (function () {
       clear(contentEl);
       if (st.lockout) contentEl.appendChild(lockoutBlock());
       contentEl.appendChild(st.node);
-      if (st.status !== "loading") contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
+      if (st.status !== "loading") footer(id, st);
       contentEl.scrollTop = 0;
       return;
     }
@@ -458,7 +458,7 @@ const DataHub = (function () {
         contentEl.appendChild(errorBlock(id, err, !!(st && st.node)));
         if (st && st.node) {
           contentEl.appendChild(st.node);
-          contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
+          footer(id, st);
         }
       }
       // Keep the failed state even without a stale node. Switching away and
@@ -542,6 +542,33 @@ const DataHub = (function () {
     else txt = "updated " + Math.floor(mins / 60) + "h " + (mins % 60) + "m ago";
     if (offlineCopy || navigator.onLine === false) txt += " · offline copy";
     return el("div", "dh-footnote", txt);
+  }
+
+  // THE DATA SOURCE LINE under every tab's data (docs/DECISIONS.md D-032): both
+  // feeds are CC BY-NC-SA 4.0, which asks for the credit and the licence wherever
+  // their data is shown, and for non-commercial use only.
+  const FEEDS = {
+    jolpica: { name: "Jolpica F1", href: "https://github.com/jolpica/jolpica-f1" },
+    openf1: { name: "OpenF1", href: "https://openf1.org" },
+  };
+  const TAB_FEED = { schedule: "jolpica", standings: "jolpica", results: "openf1", live: "openf1", telemetry: "openf1", race: "openf1", export: "openf1" };
+  function sourceLine(id) {
+    const feed = FEEDS[TAB_FEED[id]];
+    const line = el("div", null);   // styled as `.dh-footnote + [data-feed]` (css/data.css)
+    if (!feed) return line;
+    line.dataset.feed = TAB_FEED[id];
+    const link = (text, href) => { const a = el("a", null, text); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
+    line.appendChild(el("span", null, "Data: "));
+    line.appendChild(link(feed.name, feed.href));
+    line.appendChild(el("span", null, ", "));
+    line.appendChild(link("CC BY-NC-SA 4.0", "https://creativecommons.org/licenses/by-nc-sa/4.0/"));
+    line.appendChild(el("span", null, " · unofficial, non-commercial"));
+    return line;
+  }
+  /** The freshness footnote, then the source line: the footer of a tab showing data. */
+  function footer(id, st) {
+    contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
+    contentEl.appendChild(sourceLine(id));
   }
 
   let lastEmpty = "";

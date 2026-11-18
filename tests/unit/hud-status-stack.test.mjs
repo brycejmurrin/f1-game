@@ -6,7 +6,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 import { analyzeOverlap, overlapArea } from "../../tools/lib/hud-geometry.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -32,10 +35,43 @@ test("fitHud publishes gaps-bottom and tyre-stack for the left/centre columns", 
     "tyre stack anchors from the map/gaps edge (colBot), not a leftBot that already includes TYRES");
   assert.match(HUD_JS, /--hud-tyre-max-h/,
     "fitHud caps stacked TYRES above the left dock when the map→pedal gap is short");
-  assert.match(HUD_JS, /hud-gearbox/,
-    "radioPaintedCollapse clears announce when it still paints over the gearbox");
   assert.match(HUD_JS, /announceLaneTick[\s\S]{0,200}?radioPaintedCollapse/,
     "painted collapse re-runs after announceLaneTick so a lane re-pick cannot undo SPEED/GEAR clearance");
+});
+
+// The REAL radioPaintedCollapse (js/ui/hud-radio-lane.js) over mini-dom rects:
+// a radio card still painted over SPEED/GEAR collapses to the hanging lane; the
+// same card with the cluster elsewhere stays open (the negative that makes the
+// collapse the gearbox's doing, not the harness's).
+test("radioPaintedCollapse collapses a radio card painted over the gearbox or the speed readout", () => {
+  const R = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const run = (obstacleId, obstacleRect) => {
+    const dom = makeDom(), root = dom.documentElement;
+    const tower = dom.document.createElement("div"); tower._rect = R(250, 8, 300, 54);
+    const els = { announce: dom.byId("announce"), flag: dom.byId("hud-flag"), hudSectors: dom.byId("hud-sectors"),
+      hudLimits: dom.byId("hud-limits"), tyre: dom.byId("hud-tyre"), btnCam: dom.byId("btn-cam"), pausebtn: dom.byId("pausebtn") };
+    for (const k of ["flag", "hudSectors", "hudLimits", "tyre", "btnCam", "pausebtn"]) els[k].hidden = true;
+    for (const id of ["hud-gearbox", "hud-speed"]) { const el = dom.byId(id); el.hidden = false; el._rect = R(600, 300, 120, 60); }
+    const ob = dom.byId(obstacleId); ob._rect = obstacleRect;
+    els.announce.hidden = false; els.announce._rect = R(320, 280, 220, 70);
+    els.announce.toggleAttribute("data-lane-collapsed", false);
+    root.style.setProperty("--announce-lane-w", "220px");
+    const sb = { document: dom.document, Map, Math, Object, parseFloat, getComputedStyle: () => ({ getPropertyValue: () => "47" }) };
+    vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-radio-lane.js"), "utf8").replace(/^const\b/gm, "var") + ";this.lane=HudRadioLane;",
+      sb, { filename: absSrc("js/ui/hud-radio-lane.js") });
+    const lane = sb.lane.create({ els }, { vpW: () => 844, vpH: () => 390, top: () => tower, docks: () => [], fitKey: () => "",
+      hStyle: (el, key, value) => el.style.setProperty(key, value), hUnstyle: (el, key) => el.style.removeProperty(key), hToggle() {} });
+    lane.radioPaintedCollapse(root);
+    return { collapsed: els.announce.hasAttribute("data-lane-collapsed"), w: root.style.getPropertyValue("--announce-lane-w") };
+  };
+  // Clear of the card (bottom right): the card stays open.
+  assert.deepEqual(run("hud-gearbox", R(600, 300, 120, 60)), { collapsed: false, w: "220px" },
+    "a card clear of SPEED/GEAR stays open (control)");
+  // Under the card: the gearbox, then the speed readout alone.
+  assert.deepEqual(run("hud-gearbox", R(400, 300, 120, 60)), { collapsed: true, w: "0px" },
+    "a radio card painted over #hud-gearbox collapses to the hanging lane");
+  assert.deepEqual(run("hud-speed", R(400, 300, 120, 60)), { collapsed: true, w: "0px" },
+    "a radio card painted over #hud-speed collapses to the hanging lane");
 });
 
 test("CSS: flag and announce clear the gaps strip; tyre stack; strat under REL", () => {

@@ -329,6 +329,29 @@ test("#1575: a per-shot sway is optional and disabled under reduced motion", () 
   assert.equal(F.swayAt({ sway: 0.4 }, 0.25, true), 0, "reduced motion holds the authored pose");
 });
 
+test("perf P6: presentation() given solve()'s shotAt result is identical to computing its own", () => {
+  const F = loadFlybyRuntime();
+  F.setDuration(20000);
+  const shots = [{ id: "wide", dur: 0.25 }, { id: "turn", dur: 0.25 }, { id: "wide2", dur: 0.5 }];
+  for (const list of [shots, F.DEFAULT, null]) for (let i = 0; i <= 64; i++) for (const r of [false, true]) {
+    const u = i / 64;
+    assert.deepEqual(F.presentation(u, list, r, F.shotAt(u, list)), F.presentation(u, list, r), `u=${u} reduced=${r}`);
+  }
+});
+
+test("perf P6: solve() resolves the reduce-motion media query once, not every frame", async () => {
+  await withTrack("monza", (track, g) => {
+    const sb = g.sandbox, F = sb.FlybySeq, orig = sb.matchMedia;
+    let calls = 0;
+    sb.matchMedia = (q) => { calls++; return orig(q); };
+    try {
+      for (let i = 0; i < 60; i++) F.solve(track, i / 60);
+    } finally { sb.matchMedia = orig; }
+    // At most one: zero when an earlier solve() in this VM already cached the list (fails before: 60).
+    assert.ok(calls <= 1, `60 solve() frames called matchMedia ${calls}x`);
+  });
+});
+
 test("the shipped flyby never puts the eye inside a building", async () => {
   for (const id of CIRCUITS) {
     const bad = await withTrack(id, (track, g) => {
@@ -394,8 +417,25 @@ test("hidden picker warm sits on turn-first, not the horizon-levelled wide shot"
     const u = F.warmProgress();
     assert.ok(u > 0 && u < 1, "warmProgress is inside the sequence");
     assert.equal(F.shotAt(u).id, "turn-first");
-    assert.equal(F.shotAt(0).id, "wide");
+    assert.equal(F.shotAt(0).id, "pit-exit", "the flyby opens on the car leaving the pits (#4745 slice C)");
     assert.equal(F.warmProgress([{ id: "wide", dur: 1 }]), 0, "an edited list without turn-first keeps shot 0");
+  });
+});
+
+test("pit-exit shot: the player's menu car rolls out of the lane, then goes home", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, out = track.pit.sOut;
+    const hero = { isPlayer: true, s: 123, x: 0, xVis: 0, px: 1, pz: 2, speed: 0, rPrevS: 123, rPrevX: 0, rPrevPx: 1, rPrevPz: 2 };
+    F.setHeroCars([hero]); F.reset();
+    const near = (s) => { const d = Math.abs(s - out); return Math.min(d, track.total - d); };
+    F.solve(track, 0.0, undefined);
+    assert.equal(F.solve(track, 0.01).id, "pit-exit");
+    assert.ok(near(hero.s) <= 31, "the car starts on the exit road, within 30 m of the line: " + hero.s);
+    F.solve(track, 0.06);
+    assert.ok(hero.speed > 0, "it is rolling");
+    F.solve(track, 0.95);   // grid-mine: no roll, no corner
+    assert.equal(hero.s, 123, "a later shot puts the car back");
+    F.setHeroCars(null);
   });
 });
 

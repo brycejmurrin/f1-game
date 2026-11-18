@@ -21,11 +21,11 @@ test.describe("simulation determinism — rendered frames", () => {
     // reset() WITHOUT a seed argument keeps the stream where seed(42) and the
     // frames since left it; reset(.., seed) re-seeds and would erase any advance
     // (the previous version could not fail — review R3-01).
-    // LIMIT: no __apex hook reads the stream position, and reset()/a 1 s rollout
-    // do not depend on it, so no in-page positive control exists; the
-    // comparison below catches a cosmetic draw only where a later draw (the
-    // frames themselves, reliability, start hold) feeds the episode. A real
-    // control needs a stream-position read (sub-issue of #2952).
+    // Positive control (R3-01): seed(undefined, true) reads the stream position
+    // without drawing. It must see a real draw (an unseeded reset() regrids from
+    // the stream, so it moves), and 20 rendered frames must leave it exactly
+    // where seed(42) put it: a cosmetic draw now fails here directly, not only
+    // where a later draw happens to feed the episode comparison below.
     const r = await page.evaluate(() => {
       const A = window.__apex;
       const episode = () => {
@@ -45,14 +45,23 @@ test.describe("simulation determinism — rendered frames", () => {
       // Same seed, but real frames render between the rewind and the episode:
       // if particles / camera shake / sparks drew from the seeded stream, the
       // stream would have advanced and the grid + rollout would differ.
+      A.seed(42);
+      const pos0 = A.seed(undefined, true), pos0Again = A.seed(undefined, true);
+      A.reset(0.02, 55, 0);
+      const posAfterReset = A.seed(undefined, true);
       A.headless(false);
       A.seed(42); return frames(20).then(() => {
+        const posAfterFrames = A.seed(undefined, true);
         A.headless(true);
         const afterFrames = episode();
         A.headless(false);
-        return { baseline, afterFrames };
+        return { baseline, afterFrames, pos0, pos0Again, posAfterReset, posAfterFrames };
       });
     });
+    expect(r.pos0, "seed(42) starts the stream at the seed").toBe(42);
+    expect(r.pos0Again, "reading the position draws nothing").toBe(42);
+    expect(r.posAfterReset, "the read sees a real sim draw (positive control)").not.toBe(42);
+    expect(r.posAfterFrames, "rendered frames draw nothing from the seeded stream").toBe(42);
     expect(r.afterFrames).toBe(r.baseline);
   });
 });

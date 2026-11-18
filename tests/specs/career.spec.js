@@ -126,6 +126,71 @@ test.describe.parallel("Career — save", () => {
     expect(season.round).toBe(7);
     expect(season.pts["mclaren:0"]).toBe(99);
   });
+
+  // M1-18 (#3040): the restore-point history against a REAL IndexedDB, not the
+  // transactional fake in tests/unit/save-durability.test.mjs. A readwrite
+  // transaction aborted after its put succeeded must roll the put back (the
+  // engine's rollback), keep the prior point, and report the capture as not
+  // durable. No wall-clock waits: every step awaits the transaction's own events.
+  test("an aborted history write rolls back and keeps the prior restore point", async ({ page }) => {
+    await boot(page);
+    const r = await page.evaluate(async () => {
+      const DB = "apex26-restore-points";
+      // Arm a one-shot abort on the next readwrite "slots" transaction: the put
+      // succeeds inside it, then the transaction is aborted before it commits.
+      let armed = false, injected = 0;
+      const orig = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (names, mode, ...rest) {
+        const tx = orig.call(this, names, mode, ...rest);
+        if (armed && this.name === DB && mode === "readwrite") {
+          armed = false;
+          const objectStore = tx.objectStore.bind(tx);
+          tx.objectStore = (n) => {
+            const os = objectStore(n), put = os.put.bind(os);
+            os.put = (v, ...a) => {
+              const req = put(v, ...a);
+              req.addEventListener("success", () => { injected++; tx.abort(); });
+              return req;
+            };
+            return os;
+          };
+        }
+        return tx;
+      };
+      const readRaw = () => new Promise((resolve, reject) => {
+        const o = indexedDB.open(DB);
+        o.onerror = () => reject(o.error);
+        o.onsuccess = () => {
+          const db = o.result, q = db.transaction("slots", "readonly").objectStore("slots").get("driver.2");
+          q.onsuccess = () => { db.close(); resolve(q.result ? q.result.items.map((x) => JSON.parse(x.json).season.round) : []); };
+          q.onerror = () => { db.close(); reject(q.error); };
+        };
+      });
+      const save = (round) => ({ v: 1, flavour: "driver", year: 2026, team: "haas", money: 100 + round,
+        season: { round, pts: {}, teamPts: {}, results: [] } });
+      try {
+        const P = CareerRestorePoints.create({ store: GameStore.store });
+        const first = await P.capture("driver", 2, save(1), { reason: "round" });
+        armed = true;
+        const aborted = await P.capture("driver", 2, save(2), { reason: "round" });
+        const afterAbort = await readRaw();
+        const listed = (await P.list("driver", 2)).items.map((x) => x.summary.round);
+        // Positive control: the same write with no injected abort lands.
+        const control = await P.capture("driver", 2, save(3), { reason: "round" });
+        const afterControl = await readRaw();
+        return { first, aborted, injected, afterAbort, listed, control, afterControl };
+      } finally {
+        IDBDatabase.prototype.transaction = orig;
+      }
+    });
+    expect(r.first.durable, "the first point commits").toBe(true);
+    expect(r.injected, "the abort fired after a successful put").toBe(1);
+    expect(r.aborted.durable, "an aborted write is reported as not durable").toBe(false);
+    expect(r.afterAbort, "the engine rolled the put back: only the prior point is on disk").toEqual([1]);
+    expect(r.listed, "the history API sees the same").toEqual([1]);
+    expect(r.control.durable, "positive control: an unaborted write commits").toBe(true);
+    expect(r.afterControl, "and lands on disk ahead of the prior point").toEqual([3, 1]);
+  });
 });
 
 // ── isolation: a career must not change free play ────────────────────────────

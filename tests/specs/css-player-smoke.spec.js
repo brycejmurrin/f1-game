@@ -98,7 +98,7 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     expect(after.camera).not.toBe(before);
     expect(after.throttle).toBe(true);
     await touch("touchCancel", []);
-    expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
 
     const held = await contact("btn-throttle", 3), pause = await contact("pausebtn", 4);
     await touch("touchStart", [held]); await touch("touchStart", [pause]); await touch("touchEnd", [pause]);
@@ -109,7 +109,7 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     expect(paused.throttle).toBe(false);
     expect(paused.throttleLevel).toBe(0);
     await touch("touchCancel", []);
-    expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
     await pointerClick("pm-resume");
     await expect(page.locator("#pausemenu")).toBeHidden();
   } finally { if (contactOpen) await touch("touchCancel", []); await cdp.detach(); }

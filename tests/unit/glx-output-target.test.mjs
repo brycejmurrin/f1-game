@@ -171,6 +171,27 @@ test("WebKit never invalidates the DEFAULT framebuffer; FBO targets keep theirs 
 // ---- Perf hunt 9: phone cover targets (iPhone GLX black canvas, candidate 1 + 2) ----
 const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 const CHROME_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+for (const [w, hgt] of [[640, 360], [360, 640]]) for (const flip of [true, false]) {
+  test(`phone ${w}x${hgt} mirror samples its full exact-size target, flip=${flip}`, () => {
+    const h = bootGlx({ userAgent: IPHONE_UA, extensions: ["EXT_color_buffer_float"] });
+    h.GLX.setRenderSizeOverride({ width: w, height: hgt }); h.GLX.resize();
+    assert.equal(h.GLX.width > h.GLX.height, w > hgt, "exercise the requested phone orientation");
+    assert.equal(h.GLX.mirrorBegin(h.frame(), 160, 48), true);
+    h.GLX.mirrorEnd(); h.GLX.mirrorRect([0.1, 0.1, 0.3, 0.15], flip);
+    h.GLX.begin(h.frame()); h.reset(); h.GLX.present({ ssao: 0.5, bloom: 0.5 });
+    let program = null; const scales = [], flips = [];
+    for (const [name, args] of h.calls) {
+      if (name === "useProgram") program = args[0];
+      const isMirror = program?.shaders?.some(s => s.source?.includes("mix(vUV.x, 1.0 - vUV.x, uFlip)"));
+      if (isMirror && name === "uniform2f" && args[0]?.name === "uUVScale") scales.push(args.slice(1));
+      if (isMirror && name === "uniform1f" && args[0]?.name === "uFlip") flips.push(args[1]);
+    }
+    assert.deepEqual(scales, [[1, 1]], "main square-cover UV scale must not crop the mirror");
+    assert.deepEqual(flips, [flip ? 1 : 0]);
+  });
+}
+
 function presentCalls(userAgent) {
   const h = bootGlx({ userAgent, extensions: ["EXT_color_buffer_float"] });
   h.GLX.begin(h.frame()); h.reset();

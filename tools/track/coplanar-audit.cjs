@@ -470,6 +470,10 @@ function main() {
   const wantJson = argv.includes("--json");
   const wantGate = argv.includes("--gate");
   const why = argv.includes("--why");
+  // --json promises ONE JSON document on stdout: --why's call-site report is
+  // text, and printed between the per-circuit rows and the JSON it made the
+  // stream unparseable. Refuse the pair; --gate's verdict goes to stderr below.
+  if (wantJson && why) { console.error("coplanar-audit: --why is a text report; run it without --json"); process.exit(2); }
 
   const env = buildContext();
   const scopeLib = require("../lib/circuit-scope.cjs");
@@ -583,7 +587,7 @@ function main() {
     const grew = out.filter((r) => r.spots > (base[r.id] || 0))
       .map((r) => `${r.id}: ${r.spots} spots > baseline ${base[r.id] || 0}`);
     if (grew.length) { console.error("\ncoplanar faces grew:\n  " + grew.join("\n  ")); process.exit(1); }
-    console.log(`\n✓ all ${out.length} circuit(s) within the coplanar baseline`);
+    (wantJson ? console.error : console.log)(`\n✓ all ${out.length} circuit(s) within the coplanar baseline`);
   }
 }
 

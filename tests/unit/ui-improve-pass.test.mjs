@@ -2312,9 +2312,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">ADVANCED INPUT &amp; HANDLING/, "settings door is STEERING & ASSISTS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
-  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|audio|open-files|open-graphics|open-visual|open-progress))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"],
-    "Settings home has the ten primary doors in order");
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|audio|open-files|open-graphics|open-visual|open-progress|open-credits))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-credits"],
+    "Settings home has the eleven primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
   assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");
@@ -2575,6 +2575,13 @@ test("root view-transition fades the old snapshot out before the new fades in", 
   assert.equal(decl(tokens, "::view-transition-new(root)", "mix-blend-mode"), "normal");
   assert.equal(decl(tokens, "::view-transition-new(root)", "animation-fill-mode"), "both");
   assert.equal(decl(tokens, "::view-transition", "background-color"), "var(--bg)");
+  assert.equal(decl(tokens, "::view-transition", "pointer-events"), "none",
+    "the root snapshot overlay must not take the click");
+  assert.ok(declares(tokens, /::view-transition-group\(\*\)/, "pointer-events", "none"),
+    "pointer-events is not inherited; the group snapshot must be click-through");
+  assert.ok(declares(tokens, /::view-transition-old\(\*\)/, "pointer-events", "none"));
+  assert.ok(declares(tokens, /::view-transition-new\(\*\)/, "pointer-events", "none"));
+  assert.ok(declares(tokens, /::view-transition-image-pair\(\*\)/, "pointer-events", "none"));
   assert.match(decl(tokens, "::view-transition-old(root)", "animation-name") || "", /apex-vt-fade-out/);
   assert.match(decl(tokens, "::view-transition-new(root)", "animation-name") || "", /apex-vt-fade-in/);
   // Reduced-motion still cancels the UA snapshots (prefers-reduced-motion + MOTION: REDUCED).

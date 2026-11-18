@@ -200,7 +200,7 @@ test("particles are lit by the frame hemisphere and fogged by the lit pass's fog
   assert.match(tlx, /mix\(vec3\(U\.ambGround\), vec3\(U\.ambSky\), up\)\.add\(vec3\(U\.sunColor\)\.mul\(0\.45\)\)/);
   assert.match(tlx, /max\(lit, vec3\(0\.18\)\)/);
   assert.match(tlx, /exp\(fd\.mul\(fd\)\.negate\(\)\)/);
-  assert.match(t, /U\.fogDensity\.value = \(frame\.fogDensity != null \? frame\.fogDensity : 0\) \* k\("fogDensityMul", 1\)/, "TLX refreshes the fog uniform per frame");
+  assert.match(t, /U\.fogDensity\.value = \(frame\.fogDensity != null \? frame\.fogDensity : 0\) \* _kn\(T, "fogDensityMul", 1\)/, "TLX refreshes the fog uniform per frame");
   const w = read("js/render/webgpu/wgsl-fx.js");
   const wgx = w.slice(w.indexOf("const PARTICLE ="), w.indexOf("// 2c. LINE"));
   assert.match(wgx, /mix\(U\.ambGnd\.xyz, U\.ambSky\.xyz, in\.uv\.y \* 0\.5 \+ 0\.5\) \+ U\.sunFog\.xyz \* 0\.45/);

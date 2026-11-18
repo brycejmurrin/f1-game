@@ -7,6 +7,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -101,7 +102,7 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
   }
   const resolve = section(post, "        vset(P.composite, pW, pH);", "      _last.ssao")
     .replace(/\n      }\s*$/, ""); // close of present()'s non-viz branch
-  const gate = section(tlx, "      function wantSpatialUpscale()", "      function getPresentSize()");
+  const gate = section(tlx, "      function wantSpatialUpscale()", "      function getPresentSize(");
   const sizing = section(post, "    const halfOf =", "    function layoutHalf()");
   const uv = section(viewport, "    function uv(v)", "    function tex(node)");
   const vector = () => ({ values: [], set(...values) { this.values = values; } });
@@ -146,4 +147,27 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
       }
     }
   }
+});
+
+test("presentSize() and getPresentSize(out) answer in scratch: no fresh pair a present (#5057)", () => {
+  // Node VM census 2026-11-11: 64 B -> 0 a call, up to once a present on a fixed phone target.
+  const post = read("js/render/three/tlx-post.js"), tlx = read("js/render/three/tlx.js");
+  const a = post.indexOf("    const _psOut"), fn = post.indexOf("    function presentSize(", a);
+  assert.ok(a >= 0 && fn > a, "tlx-post keeps its present-size scratch beside presentSize()");
+  const ps = post.slice(a, post.indexOf("\n    }\n", fn) + 6);
+  const gps = tlx.split("\n").find((l) => l.includes("function getPresentSize("));
+  const context = vm.createContext({ PW: 844, PH: 390, presentW: 1688, presentH: 780, W: 999, H: 499 });
+  vm.runInContext(gps + "\nvar ctx = { getPresentSize };\n" + ps, context, { filename: absSrc("js/render/three/tlx-post.js") });
+  const presentSize = vm.runInContext("presentSize", context), getPresentSize = vm.runInContext("getPresentSize", context);
+  const first = presentSize();
+  assert.deepEqual(Array.from(first), [1688, 780]);
+  assert.equal(presentSize(), first, "the same scratch pair every call");
+  const out = { width: 0, height: 0 };
+  assert.equal(getPresentSize(out), out, "getPresentSize fills the caller's object");
+  assert.deepEqual(out, { width: 1688, height: 780 });
+  const fresh = getPresentSize();
+  assert.deepEqual({ ...fresh }, { width: 1688, height: 780 }, "with no target it still answers (apex-lifecycle, other callers)");
+  assert.notEqual(getPresentSize(), fresh);
+  vm.runInContext("presentW = 0; presentH = 0;", context);
+  assert.deepEqual(Array.from(presentSize()), [999, 499], "no present size: the render size");
 });

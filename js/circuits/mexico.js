@@ -50,9 +50,9 @@
     // Racing-lap arc fractions, like the elevations below (no sceneryStartFrac
     // shift); the banks land on the curated apexes above. MEASURED via
     // Tracks.bankAngle: max 5.99 deg at 0.693 (T11), 3.5 deg at 0.892-0.930
-    // (T15), none after 0.93. docs/tracks/mexico.md still says 6 deg at ~0.97.
+    // (T16), none after 0.93. docs/tracks/mexico.md still says 6 deg at ~0.97.
     bankZones: [
-      { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T15 (was 0.1866 + shift 0.7236)
+      { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T16 (was 0.1866 + shift 0.7236)
       { frac: 0.5044, angleDeg: 3.0, widthM: 80 },    // T6
       { frac: 0.6070, angleDeg: 3.0, widthM: 90 },    // T8
       { frac: 0.6275, angleDeg: 3.0, widthM: 100 },   // T9
@@ -85,7 +85,11 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
-    turns: [0.2571, 0.2776, 0.2891, 0.4531, 0.4701, 0.5066, 0.5836, 0.6076, 0.6276, 0.6721, 0.6926, 0.8261, 0.8681, 0.8821, 0.9101, 0.9346, 0.9496],
+    // FIA 2026 numbering (live-timing corner markers, circuits/65/2026, + FIA
+    // 2026 MEX circuit map, 17 turns): Foro Sol = T12-T16 (T15 the left flick
+    // at the 0.8909 peak, R~106 m), Peraltada = T17 (one apex, peak 0.9356;
+    // its 0.9487 tail peak is the same corner, not a numbered turn).
+    turns: [0.2571, 0.2776, 0.2891, 0.4531, 0.4701, 0.5066, 0.5836, 0.6076, 0.6276, 0.6721, 0.6926, 0.8261, 0.8681, 0.8821, 0.8909, 0.9101, 0.9356],
     barrier: { a: [0.05, 0.55, 0.26], b: [0.95, 0.95, 0.96], c: [0.90, 0.12, 0.14], night: [0.09, 0.20, 0.11], tyre: [0.05, 0.55, 0.26] },  // flag green/white/red
     furniture: { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },

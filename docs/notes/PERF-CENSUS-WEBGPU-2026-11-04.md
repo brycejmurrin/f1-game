@@ -46,11 +46,53 @@ frames each step needs to reach the scaled post-target size, and `--webgpu` exit
 count that does not return to the start. Confirm on the next `perf-census-webgpu` run; if the targets still do not follow
 once presenting, the renderer is at fault and that run's rows say where.
 
-## Not done yet (#4783)
+## The rest of #4783 (2026-11-11, PR for #5400)
 
-- gpu-mem-census `--webgpu`: its allocation counters wrap WebGL calls. Needs a WebGPU `createTexture`/`createBuffer` wrapper (overlaps #4710).
-- writeBuffer bytes per group, idle `createBindGroup`/`createBuffer`, shadow-target colour attachments (issue items 2 to 4).
-- The gates themselves: need the determinism question above answered first.
+- **Row 3, `gpu-mem-census --webgpu`.** Done: `tools/gfx/gpu-mem-webgpu.mjs` wraps `GPUDevice.createTexture` /
+  `createBuffer` and `destroy()` on the prototypes (bytes from the descriptor: block size, mip chain, layers, samples).
+  The same wrapper runs inside `gpu-game-check`, so the real-GPU census reports requested WebGPU bytes too.
+- **Row 4, writeBuffer per uniform group.** Gated in `census-verdict.mjs` (`uploadGate`) on the TLX WebGPU leg. Two of
+  the issue's three premises did not survive the real-GPU data of gpu-census run 42943667972 (macos-latest):
+  three writes only changed object blocks (33.66 object writes a frame), so the gate is `object writes <= draws`, not
+  `== draws x stride`; and `rUboKB` is not flat on a DRIVEN window (81.3 to 98.3 KB over 20 beats, meshes coming
+  into view), so it is gated on the parked frame (`pass-census --park`) and reported on driven legs.
+- **Row 6, shadow-target discard on WebGPU.** Gated (`shadowGate`) from the `beginRenderPass` inventory: a pass whose
+  depth attachment is a square of side 256 or more must store no colour. The pass inventory keys a view by size and format,
+  so the shape is the identifier. On r187 the maps are depth-only (`count: 0`), which is what that run's `d:clear>store` rows show.
+- **Row 1, exact baselines.** `pass-census --park` now freezes the sim in the task that starts the race, waits for the
+  camera to come to rest (the chase rig eased for 300 frames after `snapCam()`), and counts its warm and its window in
+  presented frames. Before that, two boots of one tree disagreed (monza: main pass 143067 vs 143139 triangles, mirror
+  23 vs 21 calls); after it, they agree on every pass. `geometries` and `uniformBuffers` still differ between boots
+  (193 vs 194, 352 vs 362: lifetime totals that follow the menu frames before the race), and so does `textures` on the
+  phone tier (40 vs 39 in two runs, #5451), so the exact compare covers the pass counts and `renderTargets`, and prints
+  the other three.
+
+### First run of the new legs (perf-census-webgpu 42979924558, head d2bb399c, 2026-11-11)
+
+**Adapter: the WebGPU adapter that run reported is `vendor google, architecture swiftshader`** (`adapterInfo`, in
+`gpu-mem-*.json` `provenance.renderer`), not a Mesa one. This workflow and its tools call the arm "lavapipe" after the
+driver the job installs and the launch flags it passes; what three's WebGPU backend actually ran on in this run is
+Dawn's SwiftShader adapter. Every number from this workflow is a software WebGPU number either way.
+
+- Parked cells, 8 of 8 (monaco, monza x chase, helmet x desktop, mobile): camera at rest in every cell (3 frames on
+  helmet, 296 to 307 on chase), uniform buffers flat, 0 page errors, 60 presented frames each. Committed as
+  `tests/data/pass-census-park.json`. Example, monaco chase desktop: main pass 29 calls and 158237 triangles on
+  every render. The phone tier drops the `rt 256x256` shadow pass and three of the post targets.
+- `gpu-mem-census --webgpu` monaco, requested bytes: desktop textures 80.94 MB (47), buffers 32.1 MB (921); phone
+  tier textures 30.48 MB (40), buffers 29.67 MB (936). No unknown formats. The largest desktop texture is one
+  `rgba8unorm 2048x2560` with 12 mips (26.67 MB); the phone tier's is two `256x256x17` arrays (5.67 MB each).
+- Time: the parked step took 2 min 27 s and the memory step 30 s, so about 3 runner minutes added to a job that now
+  takes 4 min 9 s in all.
+
+**Second run (42983871455, head eb78b0db), the stability evidence.** Every pass count in all 8 cells equals the first
+run exactly, the camera came to rest and the uniform buffers were flat in all 8. One number differed: `textures` in
+`monza|helmet|mobile` read 39 where the first run read 40, and the phone-tier memory leg read 39 textures (30.07 MB)
+where it had read 40 (30.48 MB). A texture count that differs between two boots of one tree does not belong in an
+exact compare, so `textures` is printed and not compared; which texture is sometimes absent is #5451.
+
+The same wrapper on a real GPU (gpu-census 42979981148, macos-latest, Apple Metal, montreal, end of a 476-frame driven
+window): textures 125.76 MB (51), buffers 37.99 MB (1603). The sun shadow map there is `depth24plus 2048x2048` (16 MB)
+where the software adapter builds 1024 or smaller.
 
 Run 8 (bisect, one variable): res-scale-census now sets `sessionStorage apex26.wgxCapture=0` as pass-census does. Without
 it, TLX on a headless software adapter soft-blits every present (`_softBlit` in tlx.js). Ruled out before this: boot-step

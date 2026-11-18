@@ -188,7 +188,8 @@ const GarageExteriorGeometry = (function () {
   }
   function* buildRegion(def, options) {
     if (!def || !def.id) return unsupported(def, "missing-circuit");
-    // Resolve the lazy centreline first: its points getter finalises _sceneryShift.
+    // A preview-cache hit never derived _sceneryShift: rebuild rather than dress at 0 (#5081).
+    if (def.sceneryStartFrac != null && !Number.isFinite(def._sceneryShift) && Tracks.forgetPreviewCenterline) Tracks.forgetPreviewCenterline(def.id);
     const centerline = Tracks.buildCenterline(def, { line: false });
     // Scenery closures may adjust their palette (Spa); never mutate the picker/race definition.
     const copy = value => ArrayBuffer.isView(value) ? value.slice() : Array.isArray(value) ? value.map(copy) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, copy(v)])) : value;

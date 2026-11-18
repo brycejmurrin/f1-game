@@ -255,7 +255,9 @@ const ShareCode = (function () {
     if (typeof h.startRace === "function") { /* intentionally unused */ }
     if (decoded.kind === "undo") return undo(store);
     if (decoded.kind === "setup") {
-      const failed = importValues(store, decoded, { ["setup." + decoded.team]: decoded.tune });
+      const failed = importValues(store, decoded, typeof SetupTune !== "undefined"
+        ? { [SetupTune.keyFor(decoded.team)]: SetupTune.stamp(decoded.team, decoded.tune) }
+        : { ["setup." + decoded.team]: decoded.tune });
       if (failed) return failed;
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");

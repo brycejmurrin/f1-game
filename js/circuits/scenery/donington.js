@@ -122,7 +122,9 @@
       const hut = (k, side, dist, col) => safeBox(k, side, dist, [2.6, 2.8, 3.4], col || CREAM);
       // A back rank of broadleaf: guarded, jittered in gap and height, and
       // colour-mixed so the rank never reads as one wall of green.
-      const rank = (f0, f1, side, dist, count, seed, hMin, hMax) => {
+      // `relief` (optional, metres): skip a tree whose 5 m ring of terrain
+      // spans more than this — a trunk seated on a bank buries its low canopy.
+      const rank = (f0, f1, side, dist, count, seed, hMin, hMax, relief) => {
         for (let i = 0; i < count; i++) {
           const t = count < 2 ? 0.5 : i / (count - 1);
           const h = hash(i * 31 + seed);
@@ -131,6 +133,14 @@
           const d = dist + h * 16;
           const a = anchor(k, side, d);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
+          if (relief != null) {
+            let lo = Infinity, hi = -Infinity;
+            for (const [dx, dz] of [[0, 0], [5, 0], [-5, 0], [0, 5], [0, -5]]) {
+              const y = terrainYAt(a.c[0] + dx, a.c[2] + dz);
+              lo = Math.min(lo, y); hi = Math.max(hi, y);
+            }
+            if (hi - lo > relief) continue;
+          }
           tree(k, side, d, hMin + h * (hMax - hMin), LEAVES[Math.floor(g * 6) % 6]);
           if (g > 0.88) bush(k, side, d - 7, LEAF_D);
         }
@@ -168,7 +178,12 @@
       // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
-      building(K(sl(0.968)), 1, 26, 14, 4.8, 108, { col: WALL, roof: ROOF });
+      // Garage run cut to its 52 m line-side half: on the Wheatcroft line the
+      // upstream half of the old 108 m block lost its walls to the pit-complex
+      // guard and left a roof slab 5.5 m over the ground (ground-audit
+      // unsupported, also with gap 24 / depth 11); the engine pit garages
+      // cover that stretch.
+      building(K(sl(0.9748)), 1, 26, 14, 4.8, 52, { col: WALL, roof: ROOF });
       building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
       // Race control / timing over the end of the garage run — still club scale.
       building(K(sl(0.004)), 1, 25, 10, 7.0, 16, { col: CREAM, roof: ROOF_D });
@@ -215,7 +230,9 @@
       building(K(sl(0.972)), -1, 42, 9, 4.2, 16, { col: STEEL, roof: ROOF_D, flat: true });
       groundPatch(K(sl(0.020)), -1, 62, [30, 0.16, 96], GRAVEL);
       carPark(sl(0.960), sl(0.070), -1, 66, 9, 4, 143);
-      rank(sl(0.938), sl(0.088), -1, 86, 22, 720, 9.0, 15.0);
+      // relief 1.5: on the Wheatcroft line this rank reaches the Redgate
+      // bank, where one tree buried 2.4 m into the slope (ground-audit).
+      rank(sl(0.938), sl(0.088), -1, 86, 22, 720, 9.0, 15.0, 1.5);
 
       // 4. s 0.048 +1 34 — EX-DONINGTON COLLECTION (disused)
       //    The Donington Grand Prix Exhibition closed permanently on
@@ -284,8 +301,11 @@
           }, (stage) => {
             const len = 46;
             const rows = 5;
-            // Pad on terrain (anchor sinks ~0.3 m; seat.box at a.c was buried).
-            const pad = [a.c[0], terrainYAt(a.c[0], a.c[2]) + 0.15, a.c[2]];
+            // Pad on the highest of centre + 4 corners.
+            let padY = terrainYAt(a.c[0], a.c[2]);
+            for (const [rr, tt] of [[-4, -24], [-4, 24], [4, -24], [4, 24]])
+              padY = Math.max(padY, terrainYAt(...[0, 2].map((i) => a.c[i] + a.r[i] * rr + a.t[i] * tt)));
+            const pad = [a.c[0], padY + 0.15, a.c[2]];
             stage._mat = MAT.CONCRETE;
             seat.box(stage, pad, [8, 0.4, len + 2], [0.52, 0.52, 0.50], b);
             for (let t = 0; t < rows; t++) {
@@ -300,8 +320,7 @@
               for (let j = 0; j < cnt; j++) {
                 const h2 = hash(K(sHollywood) * 17 + t * 41 + j * 13);
                 if (h2 < 0.45) continue;
-                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)),
-                                     a.u, 0.2),
+                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)), a.u, 0.2),
                   [0.55, 0.95, 1.3], CROWD[Math.floor(h2 * 97) % CROWD.length], b);
               }
             }
@@ -328,7 +347,9 @@
       // Grass banks clear of the Hollywood stand footprint (was coplanar with
       // the modelGroup pad when the hill ran under s≈0.16–0.19).
       spectatorHill(0.118, 0.148, -1, 30, { h: 6.5, col: GRASS });
-      spectatorHill(0.220, 0.255, -1, 30, { h: 7.0, col: GRASS });
+      // Ends at 0.240 (was 0.255): the S/F stand (sl(0.014), gap 32) now
+      // starts ~0.246 on the Wheatcroft line and its crowd bank z-fought this hill.
+      spectatorHill(0.220, 0.240, -1, 30, { h: 7.0, col: GRASS });
       forestEdge(0.120, 0.250, -1, 52, { col: LEAF, spacing: 15 });
       guardrail(0.120, 0.250, -1, 11, ARMCO);
       fence(0.130, 0.235, -1, 14, 3.2, FENCE_C);
@@ -546,7 +567,9 @@
       slopeRidge(K(0.890), -1, 58, 90, 22, 4.0, ROUGH);
       rank(0.822, 0.926, -1, 86, 18, 2060, 9.5, 16.0);
 
-      // 17. s 0.9437 +1 13 — GODDARDS, the last corner onto the pit straight
+      // 17. s 0.9437 +1 13 — brief row "Goddards". Since the line moved onto
+      //     the Wheatcroft straight (def startFrac 0.2551) this authored window
+      //     is turn 9 of the racing lap (corner-frames), not the lap's closing corner.
       tyreWall(0.936, 0.954, 1, 13, TW_R);
       // No grandstandEx here — at every gap the crowdBank buried into the
       // Goddards exit berm (ground-audit). Viewing is the spectatorHill below

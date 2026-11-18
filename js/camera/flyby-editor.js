@@ -536,10 +536,10 @@ function openFlyby() {
   refreshAnn();
   showCard(true);
   els.pmsettings.hidden = true;
-  // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
-  // .hidden survives underneath and reappears the moment pmsettings does.
-  const displayPage = $("pm-panel-display");
-  if (displayPage) displayPage.hidden = true;
+  // Nested under VISUAL STUDIO (#pm-panel-visual): hide that page too, and give
+  // exactly it back on close; never the HUD & CAMERA page (#5066).
+  const visualPage = $("pm-panel-visual");
+  if (visualPage) visualPage.hidden = true;
   refreshChips(); refreshRows(); preview();
 }
 
@@ -574,8 +574,8 @@ function closeFlyby(showPauseMenu) {
   G.snapGameCam();   // at the car, not a swoop back from the last previewed frame (no-op without a player)
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
-    const displayPage = $("pm-panel-display");
-    if (displayPage) displayPage.hidden = false;   // ...specifically its DISPLAY page
+    const visualPage = $("pm-panel-visual");
+    if (visualPage) visualPage.hidden = false;   // ...specifically its VISUAL STUDIO page
   }
 }
 

@@ -149,12 +149,12 @@ window.PhysicsConsts = {
   // damp or drizzly track; the full wet wins only in standing water). A full
   // wet on a merely wet road (0.88) runs hot and squirms below the inter (0.94),
   // and only passes it toward heavy rain. Through weatherGrip's lerp the
-  // inter/full crossover is wetness ~0.68 on grip alone and ~0.79 once the
-  // catalog's dry stat cost (cornering 0.94 vs 0.90) is counted — bracketing
-  // TyreModel.treadFor's 0.72 switch, so "the right tyre" is the faster one.
-  // The slick/inter crossover with that stat cost is ~0.24 (treadFor: 0.25).
-  // tests/unit/wet-grip-ladder.test.mjs pins the ordering.
+  // inter/full crossover is wetness ~0.68, just under TyreModel.treadFor's 0.72
+  // switch; the slick/inter crossover is ~0.20 (treadFor: 0.25), set by the
+  // dry row below. tests/unit/wet-grip-ladder.test.mjs pins the ordering.
+  // dry: a grooved tyre's dry-road cost, paid by player and AI (#5289; docs/PHYSICS.md).
   WET_GRIP: {
+    dry:  [1.00, 0.92, 0.90],
     wet:  [0.82, 0.94, 0.88],
     rain: [0.72, 0.86, 0.97],
   },

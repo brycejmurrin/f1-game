@@ -245,7 +245,9 @@ self.onmessage = async (e) => {
         rx: tr.rx, ry: tr.ry, rz: tr.rz, hw: tr.hw, bank: tr.bank, curv: tr.curv,
         bankP: tr.bankP, meshes: {},
       };
-      const msg = { type: "preview", seq: m.seq, id: def.id, track };
+      // buildCenterline wrote _sceneryShift onto THIS def copy only; the page adopts
+      // the arrays without running it, so send the shift as the "built" reply does (#5081).
+      const msg = { type: "preview", seq: m.seq, id: def.id, track, sceneryShift: def._sceneryShift };
       // Transfer detaches the typed arrays — drop the worker-side preview cache
       // so a later preview of the same id rebuilds instead of returning neutered buffers.
       if (Tracks.forgetPreviewCenterline) Tracks.forgetPreviewCenterline(def.id);

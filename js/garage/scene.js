@@ -803,7 +803,7 @@ function mood(id) {
 // The garage LIGHTING picker: apply a mood and remember it (mood() alone never writes).
 function setMood(id) {
   const m = mood(id);
-  try { localStorage.setItem("apex26.garageMood", m); } catch (_) { /* private mode */ }
+  try { if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.rawSet("garageMood", m); else localStorage.setItem("apex26.garageMood", m); } catch (_) { /* private mode */ }
   return m;
 }
 function moodDef() { return MD; }

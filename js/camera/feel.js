@@ -466,6 +466,10 @@ const CamFeel = (function () {
       "OFF = hold B / the pad button to glance behind. ON = press once to latch the rear view, press again to release. Never flips reverse or rear cams.",
       () => (latchOn ? "on" : "off"),
       (v) => setLookBackLatch(v === "on"));
+    row("pm-pitentry", "PIT ENTRY SHOT",
+      "ON = a called stop's entry road cuts for about 2 s to a trackside camera that follows your car; you keep driving, and a tap, brake or steer cuts back.",
+      () => (store && store.get("pitEntryShot", true) === false ? "off" : "on"),
+      (v) => { if (store) store.set("pitEntryShot", v === "on"); });
     row("pm-speedvig", "SPEED VIGNETTE",
       "Soft tunnel darkening that grows with speed (motion comfort). Off by default; also forced off when Reduce Motion is on.",
       () => (vignetteOn ? "on" : "off"),

@@ -247,29 +247,18 @@ const Broadcast = (function () {
     let clickBound = null;
     let cameraSuspended = false;
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
-    let graphics = null, graphicsLoad = null;
+    let graphics = null;
 
-    // TV graphics are a display-only lazy island. WATCH/HIGHLIGHTS is the
-    // existing Broadcast owner, so loading it here needs no game.js hook.
+    // TV graphics (OverlayFeed + TvGraphics) load eagerly before this file in
+    // every shell that creates a Broadcast (tools/manifest.cjs FULL); overlay.html
+    // loads Broadcast only for its pure helpers and never calls create().
     function makeGraphics() {
       const factory = TvGraphics;
       return Reflect.apply(factory.create, factory, [G]);
     }
     function ensureGraphics() {
-      if (graphics || graphicsLoad || typeof document === "undefined") return;
-      if (typeof TvGraphics !== "undefined" && typeof OverlayFeed !== "undefined") {
-        graphics = makeGraphics();
-        return;
-      }
-      if (typeof ScriptLoader === "undefined" || !ScriptLoader.create) return;
-      graphicsLoad = ScriptLoader.create().load(
-        ["js/overlay/feed.js", "js/race/tv-graphics.js"],
-        [["js/overlay/feed.js", "js/race/tv-graphics.js"]],
-        { ready: (src) => src !== "js/overlay/feed.js" || typeof OverlayFeed !== "undefined" }
-      ).then((ok) => {
-        graphicsLoad = null;
-        if (ok && on && typeof TvGraphics !== "undefined") graphics = makeGraphics();
-      });
+      if (graphics || typeof document === "undefined") return;
+      if (typeof TvGraphics !== "undefined" && typeof OverlayFeed !== "undefined") graphics = makeGraphics();
     }
 
     function modeIdx(id) {

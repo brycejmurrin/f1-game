@@ -354,6 +354,25 @@ test("reset() forgets the order, so a re-grid cannot read as a pass", () => {
   assert.equal(w.tick(f.p, f.all, 4, DT), null, "the first tick after a reset only primes");
 });
 
+test("a tick touches no Set: the order buffers are reused, not cleared and refilled (#5057)", () => {
+  // Set.clear() mints a new table and the refill grows it again: ~0.7-1.6 KB a
+  // step over a 22-car field (Node VM census, 2026-11-11). Count every Set call.
+  const calls = { make: 0, clear: 0, add: 0 };
+  class CountingSet extends Set {
+    constructor(it) { super(it); calls.make++; }
+    clear() { calls.clear++; return super.clear(); }
+    add(v) { calls.add++; return super.add(v); }
+  }
+  const c2 = vm.createContext({ Set: CountingSet });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8"), c2, { filename: absSrc("js/race/sporting-regs.js") });
+  const w = vm.runInContext("SportingRegs", c2).createPassWatch(5), f = field(21);
+  const made = calls.make;
+  for (const level of [0, 3]) for (let i = 0; i < 60; i++) w.tick(f.p, f.all, level, DT);
+  assert.deepEqual({ make: calls.make - made, clear: calls.clear, add: calls.add }, { make: 0, clear: 0, add: 0 });
+  f.p.prog = 125;   // and it still sees a pass under the caution
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+});
+
 // ── 3. CHAMPIONSHIP-ORDER GRID ──────────────────────────────────────────────
 
 test("champOrder: scorers by the standings comparator, the pointless behind in pace order", () => {

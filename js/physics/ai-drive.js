@@ -12,7 +12,7 @@ const AiDrive = (function () {
   // aggression / optimism are signed style traits (−1..+1), default neutral.
   const _traits = {
     craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
-    aggression: 0, optimism: 0,
+    aggression: 0, optimism: 0, composure: 0, ersBias: 0,
   };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
@@ -22,6 +22,8 @@ const AiDrive = (function () {
     _traits.consistency = c.consistency != null ? c.consistency : 0.75;
     _traits.aggression = c.aggression != null ? c.aggression : 0;
     _traits.optimism = c.optimism != null ? c.optimism : 0;
+    _traits.composure = c.composure != null ? c.composure : 0;
+    _traits.ersBias = c.ersBias != null ? c.ersBias : 0;
     return _traits;
   }
 
@@ -472,6 +474,7 @@ const AiDrive = (function () {
     return roll < 1 - Math.exp(-rate * dt);
   }
 
+  const ERS_BIAS = 0.06;
   function wantBoost(ctx) {
     const energy = ctx.energy || 0;
     if (energy <= 0.02) return false;
@@ -495,7 +498,9 @@ const AiDrive = (function () {
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
     const regen = ctx.ersRegen != null ? ctx.ersRegen : 0.5;
-    const rich = energy > (0.55 - hs.attack * 0.08 - (dep - 0.5) * 0.10);
+    // ERS deploy bias (#1566, AI style axis): "rich" ±ERS_BIAS of charge.
+    const eb = ctx.traits && ctx.traits.ersBias != null ? clamp(ctx.traits.ersBias, -1, 1) : 0;
+    const rich = energy > (0.55 - hs.attack * 0.08 - (dep - 0.5) * 0.10 - ERS_BIAS * eb);
     const desperate = energy > 0.25 && catching;
     const bank = ctx.traits.awareness > (0.8 - hs.hold * 0.08)
       && energy < (0.4 - hs.hold * 0.05 + (regen - 0.5) * 0.08) && !catching && !defending;
@@ -540,6 +545,15 @@ const AiDrive = (function () {
   // as it was measured to be.
   const YAW_AERO = -0.28 / AI_DF;
   function yawScale(speed, load, grip, pace, vmax) { return lateralScale(speed, load, grip, pace, vmax, YAW_AERO); }
+  // yawScale + lateralScale from one q/prefix, bit-identical (same operator order; AI_DF*YAW_AERO not folded).
+  const _lsOut = { yaw: 1, lat: 1 };   // pooled
+  function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
+    const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
+    const pre = (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip);
+    out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
+    out.lat = pre * (1 + AI_DF * aero * q * q);
+    return out;
+  }
   // Solve k*v² = lat*(1 + D*(v/V)²) analytically: v² = lat / (k - lat*D/V²)
   // below the top speed V, and the flat (1 + D) envelope past it.
   // No iterative solver in the per-car, per-node brake lookahead.
@@ -974,6 +988,30 @@ const AiDrive = (function () {
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
+  // THE GAP ROUND A STATIC BODY (#5539): a street's minLatGap (2.2 m at Monaco) leaves 0.2 m to a
+  // 2.0 m car. Fine beside a moving neighbour, who gives; a parked retirement or a stopped car
+  // does not, and the lane change onto that aim overshoots it (measured 0.35 m at 59 m/s): a
+  // dead stop from full speed and a queue behind. A hazard gets the permanent-circuit lane.
+  const HAZARD_CLEAR_M = 2.8;
+  function hazardClear(clear) { return clear > HAZARD_CLEAR_M ? clear : HAZARD_CLEAR_M; }
+  // ...AND THE HEADING STOPS AT THAT GAP, the edgeHead rule with the hazard's clear line as the
+  // edge: the racing line's own slope (tanT) carried a car 0.85 m past a clamped aim. The side
+  // is game.js's (pass on the centre side of the hazard). An aim beyond the line (the pit lane,
+  // a rub yield: something later overrode the clamp) is left alone. Pure, no allocation.
+  function hazardHead(want, x, hz, clear, desiredX, v, yawMax) {
+    if (!hz || !(v > 1) || !(yawMax > 0)) return want;
+    const k = 2 * EDGE_YAW_SHARE * yawMax / v;
+    if (hz.x > 0) {
+      const lim = hz.x - clear;
+      if (desiredX > lim + 0.01) return want;
+      const hi = Math.sqrt(k * Math.max(0, lim - x));
+      return want > hi ? hi : want;
+    }
+    const lim = hz.x + clear;
+    if (desiredX < lim - 0.01) return want;
+    const lo = 0 - Math.sqrt(k * Math.max(0, x - lim));   // 0 - x: never -0
+    return want < lo ? lo : want;
+  }
   // A PARKED PLAYER IS RETIRED (W26): stationary seconds while the race is live; the
   // race-end owner retires the car at STALL_RETIRE_S.
   const STALL_RETIRE_S = 60, STALL_V = 1.0;
@@ -1105,6 +1143,14 @@ const AiDrive = (function () {
   }
   function sbsCommitT(ctx) { return sbsConcedes(ctx) ? SBS_COMMIT_MIN : 2; }
   function sbsEase(ctx) { return sbsConcedes(ctx) ? 0.94 : 0.97; }
+  // sbsCommitT + sbsEase from ONE sbsConcedes.
+  const _slOut = { commitT: 2, ease: 0.97 };   // pooled
+  function sbsLimits(ctx, out = _slOut) {
+    const c = sbsConcedes(ctx);
+    out.commitT = c ? SBS_COMMIT_MIN : 2;
+    out.ease = c ? 0.94 : 0.97;
+    return out;
+  }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -1263,7 +1309,10 @@ const AiDrive = (function () {
     const press = clamp(pressure || 0, 0, 1);
     const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
     const optMul = 1 + 0.25 * opt * press;
-    return MISTAKE_BASE * em * (1 + 2 * press) * (1.3 - cons) * optMul;
+    // Composure (AI-only, zero-mean): a cool head blunts how much pressure
+    // inflates the error rate; a rattled one amplifies it. Unpressured: no effect.
+    const comp = clamp(t && t.composure != null ? t.composure : 0, -1, 1);
+    return MISTAKE_BASE * em * (1 + 2 * press * (1 - 0.5 * comp)) * (1.3 - cons) * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
@@ -1587,6 +1636,14 @@ const AiDrive = (function () {
     const pull = lerp(0.9, 1.5, t.experience);
     return street ? pull * 0.5 : pull;
   }
+  // Which side a blue-flagged car steps to: AWAY from the lapper (dx = our x
+  // minus its x) when that side has the room the caller gates on, else the
+  // roomier side. Room alone stepped INTO a lapper beyond the room scan (#5557).
+  function letPassSide(roomL, roomR, dx) {
+    const away = dx >= 0.3 ? 1 : dx <= -0.3 ? -1 : 0;
+    if (away && (away > 0 ? roomR : roomL) > 1.6) return away;
+    return roomR >= roomL ? 1 : -1;
+  }
   function letPassEase(t) {
     return lerp(0.965, 0.99, t.experience);
   }
@@ -1649,16 +1706,16 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,
     PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL, PULL_EDGE, PULL_EDGE_FULL, PULL_REACH,
     defendPull, mirrorReach, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
-    letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
+    letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

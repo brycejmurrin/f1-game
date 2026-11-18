@@ -36,6 +36,10 @@ export function MeshBuilder() {
     return i;
   }
 
+  // Counter-clockwise seen from outside (the face normal = (b-a)x(c-a) points
+  // along the vertex normal), the box's and the renderers' front-face rule.
+  // The angle runs +x toward +z, which is CLOCKWISE seen from above (+y), so a
+  // ring's side and cap triangles list the later angle first.
   function tri(a, b, c) { idx.push(a, b, c); }
 
   /** Axis-aligned box centred at (cx,cy,cz). */
@@ -68,14 +72,14 @@ export function MeshBuilder() {
       const b1 = vert(cx + x1, cy, cz + z1, nx, 0, nz, rgb, mid);
       const t0 = vert(cx + x0, cy + h, cz + z0, nx, 0, nz, rgb, mid);
       const t1 = vert(cx + x1, cy + h, cz + z1, nx, 0, nz, rgb, mid);
-      tri(b0, b1, t1); tri(b0, t1, t0);
+      tri(b0, t1, b1); tri(b0, t0, t1);
       bot.push(b0); top.push(t0);
     }
     const bc = vert(cx, cy, cz, 0, -1, 0, rgb, mid);
     const tc = vert(cx, cy + h, cz, 0, 1, 0, rgb, mid);
     for (let i = 0; i < segs; i++) {
-      tri(bc, bot[(i + 1) % segs], bot[i]);
-      tri(tc, top[i], top[(i + 1) % segs]);
+      tri(bc, bot[i], bot[(i + 1) % segs]);
+      tri(tc, top[(i + 1) % segs], top[i]);
     }
   }
 
@@ -88,7 +92,7 @@ export function MeshBuilder() {
       const b1 = vert(cx + Math.cos(a1) * rBase, cy, cz + Math.sin(a1) * rBase, Math.cos(a1), 0.2, Math.sin(a1), rgb, mid);
       const t0 = vert(cx + Math.cos(a0) * rTop, cy + h, cz + Math.sin(a0) * rTop, Math.cos(a0), 0.2, Math.sin(a0), rgb, mid);
       const t1 = vert(cx + Math.cos(a1) * rTop, cy + h, cz + Math.sin(a1) * rTop, Math.cos(a1), 0.2, Math.sin(a1), rgb, mid);
-      tri(b0, b1, t1); tri(b0, t1, t0);
+      tri(b0, t1, b1); tri(b0, t0, t1);
     }
     if (rBase > 0.01) {
       const bc = vert(cx, cy, cz, 0, -1, 0, rgb, mid);
@@ -96,7 +100,7 @@ export function MeshBuilder() {
         const a0 = (i / segs) * Math.PI * 2, a1 = ((i + 1) / segs) * Math.PI * 2;
         const p0 = vert(cx + Math.cos(a0) * rBase, cy, cz + Math.sin(a0) * rBase, 0, -1, 0, rgb, mid);
         const p1 = vert(cx + Math.cos(a1) * rBase, cy, cz + Math.sin(a1) * rBase, 0, -1, 0, rgb, mid);
-        tri(bc, p1, p0);
+        tri(bc, p0, p1);
       }
     }
   }

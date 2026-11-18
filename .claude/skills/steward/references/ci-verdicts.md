@@ -18,7 +18,7 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 ## Verdicts
 
 - `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the notification SHA ≠ tip).
-- `= ci running` → do **not** claim stale or fixed; stay subscribed (no timer, AGENTS.md rule 13). **"0 failed"
+- `= ci running` → do **not** claim stale or fixed; stay subscribed (no timer while it works, AGENTS.md rule 13). **"0 failed"
   while running is not green.** Ending the turn on mid-run `0 failed` leaves a tip red sitting until a human acts.
 - `= ci none` / `unknown` → no run observed / API evidence unavailable; neither proves a pass.
 - `superseded` → follow the named current head or replacement run before concluding anything about that tree.
@@ -33,7 +33,8 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 
 `gate` is a COMMIT STATUS posted by `land.yml`, not a workflow run, so ci-watch never shows it. Read it with
 `gh api repos/<owner>/<repo>/commits/<sha>/statuses` (the newest `context: gate`; its description and the linked
-run's summary name the failing merge-gate row).
+run's summary name the failing merge-gate row). `retest=FAIL` beside `ci=ok gen=ok` on the current head is the one
+gate refusal a sync cures: `needs-sync` then answers `retest-refused` and `sync-pr` runs (#5554).
 
 ## "Live" is an ancestry test
 

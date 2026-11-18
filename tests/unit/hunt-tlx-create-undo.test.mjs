@@ -27,9 +27,42 @@ test("the create() catch runs the undo list before it hands the canvas to the fa
   assert.match(body, /return _fail\(/);
 });
 
-test("no bare anonymous addEventListener is left in create() (each attach must be undoable)", () => {
-  const adds = create.match(/\.addEventListener\(/g) || [];
-  const removes = create.match(/\.removeEventListener\(/g) || [];
-  assert.ok(removes.length >= 4, "document, window, canvas undos exist: " + removes.length);
-  assert.ok(adds.length > 0);
+// Attaches in create() that are deliberately NOT paired with a remove, keyed
+// `target.event:handler`. Each needs its reason; anything else unpaired fails.
+const UNPAIRED_OK = new Map([
+  // Lives on the GPUDevice itself, which dies with the renderer the catch
+  // disposes; guarded by _dev.__apexErrHook so a reused device never doubles it.
+  ["_dev.uncapturederror:onErr", "device-lifetime hook"],
+  // Marks a texture freed on its own dispose event: texture-lifetime, and the
+  // texture is the only thing holding the closure.
+  ["t.dispose:<inline>", "texture-lifetime flag"],
+]);
+
+/** Every `target.add|removeEventListener("ev", handler` in create(), as
+ *  `target.ev:handler`. `onX = function ...` names onX; an inline function or
+ *  arrow is `<inline>` (it can never be removed, so it can never pair). */
+function listenerSites(kind) {
+  const re = new RegExp(`([\\w$.]+)\\.${kind}EventListener\\(\\s*"(\\w+)"\\s*,\\s*([^,)]+)`, "g");
+  return [...create.matchAll(re)].map((m) => {
+    const target = m[1].split(".").pop();
+    let h = m[3].trim();
+    const named = h.match(/^([\w$.]+)\s*=\s*(?:function|\()/);
+    if (named) h = named[1];
+    else if (/^(?:function\b|\(|[\w$]+\s*=>)/.test(h)) h = "<inline>";
+    return `${target}.${m[2]}:${h}`;
+  });
+}
+
+test("every addEventListener in create() is paired with its removeEventListener (same target, event, handler)", () => {
+  const adds = listenerSites("add");
+  const removes = listenerSites("remove");
+  assert.ok(adds.length >= 4, "the listener parse found only " + adds.length + " attaches: " + adds);
+  const unpaired = adds.filter((a) => !removes.includes(a) && !UNPAIRED_OK.has(a));
+  assert.deepEqual(unpaired, [],
+    "create() attaches a listener it never removes — register an undo in _createUndo (or its own self-remove):\n  " +
+    unpaired.join("\n  "));
+  const paired = adds.filter((a) => !UNPAIRED_OK.has(a));
+  const removable = removes.filter((r) => adds.includes(r));
+  assert.equal(new Set(paired).size, new Set(removable).size, "adds and removes pair one-for-one");
+  for (const k of UNPAIRED_OK.keys()) assert.ok(adds.includes(k), `UNPAIRED_OK entry ${k} is stale: drop it`);
 });

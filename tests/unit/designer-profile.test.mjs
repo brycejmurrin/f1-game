@@ -286,6 +286,10 @@ test("destroy removes every input subscription and is idempotent", () => {
   const remove = h.canvas.removeEventListener;
   h.canvas.removeEventListener = (type, fn) => { removed.push(type); remove(type, fn); };
   h.pr.destroy(); h.pr.destroy();
+  // Every registration must be gone, not just a remove call per type: a
+  // destroy that removed a different function reference leaves the real one live.
+  const live = [...h.canvas._listeners].filter(([, l]) => l.length).map(([t, l]) => `${t}×${l.length}`);
+  assert.deepEqual(live, [], "listeners still registered after destroy");
   assert.deepEqual(removed.sort(), ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'keydown'].sort());
   const before = JSON.stringify(h.ev);
   h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });

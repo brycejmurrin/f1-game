@@ -178,13 +178,29 @@ const NetPlay = (function () {
         try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }, head + JSON.stringify(to) + "}"); } catch (e) { /* peer closed */ }
       }
     }
-    const sessionList = () => [...sessions.values()];
-    const _pumpBuf = [];               // tick()'s per-frame snapshot, refilled in place
+    // Scratch snapshots — tick already used _pumpBuf; broadcast/status used to
+    // allocate a fresh array via spread on every call (hot while racing).
+    const _pumpBuf = [];
+    const _sessBuf = [];
+    const _remoteBuf = [];
+    const sessionList = () => {
+      _sessBuf.length = 0;
+      for (const s of sessions.values()) _sessBuf.push(s);
+      return _sessBuf;
+    };
+    const remoteList = () => {
+      _remoteBuf.length = 0;
+      for (const r of remotes.values()) _remoteBuf.push(r);
+      return _remoteBuf;
+    };
     const PEER_ONE = "peer";
     let session = null;
     function broadcast(type, data) {
-      let ok = false;
-      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
+      let ok = false, dj;
+      // Serialised ONCE for every session (sendEvent's dataJson path writes the same bytes); a payload
+      // JSON.stringify cannot write (a cycle, undefined) takes each session's own path, as before.
+      try { dj = data === undefined ? "null" : JSON.stringify(data); } catch (e) { dj = undefined; }
+      for (const s of sessionList()) { try { ok = s.sendEvent(type, data, dj) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
       return ok;
     }
     const peerCar = new Map();            // peerId -> wireId
@@ -194,7 +210,6 @@ const NetPlay = (function () {
     let localCar = null;
     let raceOpts = null;
     const remotes = new Map();
-    const remoteList = () => [...remotes.values()];
     // GUEST ONLY: wireId -> remote for an AI car the HOST simulates. Kept apart
     // from `remotes` (the human rivals), which seats, arming and status read.
     const aiRemotes = new Map();
@@ -220,7 +235,7 @@ const NetPlay = (function () {
       car.dnfAt = null; car.dnfWhy = null;
       car.incidentInvalidLap = true; car.lapTime = 0; car._secT0 = null;
     }
-    // A silent rival goes to the local AI; its packets bring it back.
+    // A silent rival goes to the local AI; a newer pose brings it back.
     // Keep owner lap evidence apart from speculative motion: fallback crossings
     // cannot finish a connected human, validate a LAP event, or seed gateLap.
     function goLocal(r) {
@@ -472,7 +487,10 @@ const NetPlay = (function () {
         const r = remotes.get(entry.id) || aiRemotes.get(entry.id);
         // adopt, not push: decodeSnapshot built `entry` for this packet alone
         // and nothing reads it after this loop, so the buffer keeps it uncopied.
-        if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival)) {   // an aged (relayed) entry keeps its own stamp
+        // Reordering may fill an interpolation gap, but only a newer pose
+        // renews ownership. Old backlog must not keep an exhausted pose frozen
+        // on the wire, or reclaim a car already handed to the local AI.
+        if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival) && r.interp.newest() === entry) {
           r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
           r.everHeard = true;
         }
@@ -839,6 +857,9 @@ const NetPlay = (function () {
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
+      // Each friend's paint for this race (#5037), stamped on its car as car.netPaint
+      // for the car draw (CarDraw.paintTeam): what they sent, never this phone's store.
+      if (remotes.size && typeof LobbyRoster !== "undefined") LobbyRoster.paintField(G.cars || [], remoteList());
       if ((role !== SpectatePolicy.SPECTATOR && (!localCar || (!remotes.size && !(role === "host" && hasSpectator))))
           || (role === SpectatePolicy.SPECTATOR && !(G.cars || []).length)) {
         // start() adopts the lobby's sessions, but a failed adoption must not
@@ -1176,7 +1197,7 @@ const NetPlay = (function () {
       // spawn) while this tick's interp sample sits unused.
       for (const map of _poseMaps) for (const r of map.values()) {
         // SILENCE: past STALE_MS the local AI drives the car (owns() is false
-        // for it) instead of it standing on the line; a packet brings it back.
+        // for it) instead of it standing on the line; a newer pose brings it back.
         // A human rival that has never spoken stays posed where it is (it is
         // still building its circuit); a host AI car the host never names (a
         // grid the two screens disagree on) is the local AI's after STALE_MS.

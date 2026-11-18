@@ -66,12 +66,32 @@ test("stop keeps parents alive until their terminated children have been reaped"
   assert.deepEqual([...alive], [99], "unregistered bystander survives");
 });
 
-test("pidAlive treats a zombie as gone (hunt 2026-11-02)", async () => {
-  const { spawn } = await import("node:child_process");
+test("pidAlive treats a zombie as gone (hunt 2026-11-02)", async (t) => {
+  // The stat reader is stubbed at the fs level (deploy-status calls fs.readFileSync at call time), and
+  // process.kill with it: a real zombie is racy to catch (node reaps its own children), and the old
+  // version of this test returned before its only assert whenever node won that race.
   const { pidAlive } = await import("../../tools/lib/deploy-status.mjs");
-  const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
-  await new Promise((r) => setTimeout(r, 300));   // exited, not yet reaped by us if no 'exit' listener has run wait
-  if (!fs.existsSync(`/proc/${child.pid}/stat`)) return;   // already reaped by node: nothing to assert
-  const z = /^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${child.pid}/stat`, "utf8"));
-  assert.equal(pidAlive(child.pid), !z);
+  const realRead = fs.readFileSync;
+  let stat = null, killErr = null;
+  const probes = [];
+  t.mock.method(fs, "readFileSync", (file, ...rest) => {
+    if (typeof file === "string" && /^\/proc\/\d+\/stat$/.test(file)) {
+      if (stat === null) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      return stat;
+    }
+    return realRead.call(fs, file, ...rest);
+  });
+  t.mock.method(process, "kill", (pid, sig) => { probes.push([pid, sig]); if (killErr) throw Object.assign(new Error(killErr), { code: killErr }); return true; });
+  const alive = (s, err = null) => { stat = s; killErr = err; probes.length = 0; return pidAlive(4242); };
+
+  assert.equal(alive("4242 (node) Z 1 4242 4242 0 -1"), false, "a zombie is gone");
+  assert.deepEqual(probes, [], "a zombie is never signalled, not even with signal 0");
+  assert.equal(alive("4242 (odd) name) Z 1 0"), false, "a comm containing ') ' still parses to its state");
+  assert.equal(alive("4242 (node) S 1 4242"), true, "a sleeping process is alive");
+  assert.deepEqual(probes, [[4242, 0]], "liveness is signal 0");
+  assert.equal(alive("4242 (Zed) R 1 4242"), true, "a Z inside the comm is not the state");
+  assert.equal(alive("4242 (node) S 1", "ESRCH"), false, "no such process");
+  assert.equal(alive("4242 (node) S 1", "EPERM"), true, "exists but not ours: alive");
+  assert.equal(alive(null), true, "no /proc: falls through to signal 0");
+  assert.equal(alive(null, "ESRCH"), false);
 });

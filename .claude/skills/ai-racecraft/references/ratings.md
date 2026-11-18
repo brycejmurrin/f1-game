@@ -23,7 +23,7 @@ ai-racecraft owns how those axes drive the field).
 ## Ratings → behaviour (where each knob lives)
 
 `AiDrive.traits(c)` reads `craft`/`awareness`/`experience`/`skill`/`consistency`/
-`aggression`/`optimism` (mid-grid fallbacks; a reused scratch). Every map below is
+`aggression`/`optimism`/`composure`/`ersBias` (mid-grid fallbacks; a reused scratch). Style axes `tyreCare` (TyreModel.aiLoad) and `qualiBias` (Quali simLap) are read off the car / the ratings row, not traits() (#1566). Every map below is
 in `ai-drive.js`; the game.js caller builds its ctx. Find the caller with apex-lsp
 `lsp_references` (skill code-nav) before tuning an `AiDrive` export: some exports are
 test-only (`_t`) or have no game.js caller, and tuning one changes nothing.

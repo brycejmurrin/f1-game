@@ -57,7 +57,7 @@ function dirtyExitFixture(from) {
   run('js/garage/setup-sheet.js'); context.G = G;
   const ui = vm.runInContext('SetupUI.create(G)', context);
   const routes = [];
-  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {} }, garageReturn: from, soundOn: false,
+  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {}, skipPitOut: () => false, startPitOut: (done) => done() }, garageReturn: from, soundOn: false,
     loadingScreen: { phase: () => '', busy() {}, stop() {} }, setupPreviewOn: true, recomputePlayerMods() {},
     buildSelect() {}, els: G.els, netLobby: { roomChanged: () => routes.push('vsfriend') },
     careerUi: { openHub: () => routes.push('career') }, raceSettings: { openRaceSettings: () => routes.push('select') },
@@ -429,4 +429,144 @@ test('pause comparison controls cannot quit a later ordinary session with no run
  const h=measuredFixture(),pause=h.dom.makeElement('div'),body=h.dom.makeElement('div');body.className='sheet-body';pause.appendChild(body);h.dom.body.appendChild(pause);let owns=true,quits=0;
  const ui=h.T.mountPause({$:()=>pause,setupTrialContext:()=>owns?h.context():null,quitToMenu:()=>quits++,openGarageFrom(){}});h.begin();await h.T.attempt('baseline');assert.equal(ui.section.hidden,false);owns=false;ui.refresh();assert.equal(ui.section.hidden,true);
  for(const b of ui.section.querySelectorAll('button'))b.onclick();assert.equal(quits,0);h.T.cancel();ui.dispose();
+});
+
+// ── Batch #5094 (garage bay): the zoom takes the distance off the turntable (#5034), a camera
+// restore drives the AERO button and one Escape closes one layer (#5045), and the decal
+// stations ink against every paint the mesh puts under them (#5039). ──
+const CAM = "js/garage/setup-camera.js", SHEET = "js/garage/setup-sheet.js", cam = read(CAM);
+const at = (f) => ({ filename: absSrc(f) });
+function slice(src, from, to) {
+  const a = src.indexOf(from), b = src.indexOf(to, a + from.length);
+  assert.ok(a >= 0 && b > a, "found " + from);
+  return src.slice(a, b);
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const button = () => {
+  const attrs = {}, val = { textContent: "" };
+  return { attrs, val, classList: { toggle() {} }, setAttribute: (k, v) => { attrs[k] = v; }, querySelector: () => val };
+};
+
+// ── #5034 ──
+function zoomRig(state) {
+  const c = vm.createContext({ clamp, SP_DIST_MAX: 15, spDistMin: () => 4.6, home: { active: false },
+    setSetupSpin(on) { c.setupPreviewSpin = !!on; }, ...state });
+  vm.runInContext(slice(cam, "function setupZoom(mul) {", "// Move the rig sideways"), c, at(CAM));
+  return c;
+}
+test("a zoom on the spinning turntable moves the DRAWN distance and stops the spin (#5034)", () => {
+  // Measured at 844x390 (#5034): stored 8.35, drawn 7.12 with the sheet docked.
+  for (const [mul, dir] of [[1 / 1.1, -1], [1.1, 1]]) {
+    const c = zoomRig({ setupPreviewSpin: true, setupPreviewDist: 6.0, _spEffDist: 7.12 });
+    c.setupZoom(mul);
+    assert.equal(c.setupPreviewSpin, false, "the zoom stops the turntable");
+    assert.ok((c.setupPreviewDist - 7.12) * dir >= 7.12 * 0.05, "one press moves the drawn distance by 5 % or more: " + c.setupPreviewDist);
+  }
+});
+test("a zoom with the turntable off, or on the Home camera, keeps its own distance (#5034)", () => {
+  const off = zoomRig({ setupPreviewSpin: false, setupPreviewDist: 8, _spEffDist: 5 });
+  off.setupZoom(1.1);
+  assert.equal(off.setupPreviewDist, 8 * 1.1);
+  const home = zoomRig({ setupPreviewSpin: true, setupPreviewDist: 8, _spEffDist: 5, home: { active: true } });
+  home.setupZoom(1.1);
+  assert.equal(home.setupPreviewDist, 8 * 1.1);
+  assert.equal(home.setupPreviewSpin, true, "the Home turntable is not the garage's to stop");
+  const max = zoomRig({ setupPreviewSpin: false, setupPreviewDist: 14.9, _spEffDist: 14.9 });
+  max.setupZoom(1.1);
+  assert.equal(max.setupPreviewDist, 15);
+});
+
+// ── #5045 ──
+test("restoring the camera after INSPECT puts the AERO button back with the flaps (#5045)", () => {
+  const aero = button(), spots = [];
+  const c = vm.createContext({ $: (id) => (id === "cs-aero" ? aero : null), GarageScene: { spot: (n) => spots.push(n) },
+    setSetupSpin() {}, setupPreviewXOn: false, setupPreviewAeroX: 0 });
+  vm.runInContext(slice(cam, "function setSetupAero(on, opts) {", "function setupZoom(")
+    + slice(cam, "function restoreCamera(s) {", "function setHomeView("), c, at(CAM));
+  const saved = { az: 1, el: 0.2, dist: 8, spin: false, orbit: [0, 0, 0], target: [0, 0, 0], pan: [0, 0, 0],
+    minDist: 0, free: false, xOn: false, aeroX: 0, view: "side" };
+  c.setSetupAero(true);   // AERO pressed during the inspection
+  assert.equal(aero.attrs["aria-pressed"], "true");
+  c.restoreCamera(saved);
+  assert.equal(c.setupPreviewXOn, false);
+  assert.equal(aero.attrs["aria-pressed"], "false", "aria-pressed follows the restored flaps");
+  assert.equal(aero.val.textContent, "CORNER MODE", "and so does the label");
+  assert.deepEqual(spots, ["side"]);
+});
+
+test("one Escape with the CAMERA panel open over the paint editor closes the panel only (#5045)", () => {
+  const game = read(GAME_REL);
+  const sheetFirst = game.indexOf("SetupUI.create(G)") < game.indexOf("SetupCamera.create(G");
+  assert.ok(game.includes("SetupUI.create(G)") && game.includes("SetupCamera.create(G"), "both modules are created by the entry file");
+  const panel = { hidden: false }, cancel = { clicks: 0, click() { this.clicks++; } }, listeners = [];
+  const c = vm.createContext({
+    $: (id) => (id === "cs-cam-panel" ? panel : null), G: { setupPreviewOn: true }, csLivCreating: true,
+    setupCamPanelOpen: () => !panel.hidden, setSetupCamPanel: (open) => { panel.hidden = !open; },
+    document: { querySelector: (sel) => (sel.includes(".cs-liv-ed-cancel") ? cancel : null) },
+    window: { addEventListener: (type, fn) => listeners.push(fn) },
+  });
+  const sheetEsc = slice(sheet, 'window.addEventListener("keydown", (e) => {\n  if (e.key !== "Escape" || !csLivCreating', "}, true);") + "}, true);";
+  const camEsc = slice(cam, 'window.addEventListener("keydown", (e) => {\n  // …but only when the GARAGE is the top layer', "}, true);") + "}, true);";
+  for (const [src, f] of sheetFirst ? [[sheetEsc, SHEET], [camEsc, CAM]] : [[camEsc, CAM], [sheetEsc, SHEET]]) vm.runInContext(src, c, at(f));
+  assert.equal(listeners.length, 2);
+  const press = () => {
+    const e = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    for (const fn of listeners) fn(e);
+    return e;
+  };
+  assert.equal(press().defaultPrevented, true, "the key is claimed");
+  assert.equal(panel.hidden, true, "the panel closes");
+  assert.equal(cancel.clicks, 0, "CANCEL is not pressed by the same key");
+  press();
+  assert.equal(cancel.clicks, 1, "the next Escape is the editor's");
+});
+
+// ── #5039 ──
+function loadLivery() {
+  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-design.js",
+                   "js/car/livery-graphics.js", "js/car/livery-stations.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
+    vm.runInContext(read(f), ctx, at(f));
+  return { S: vm.runInContext("LiveryStations", ctx), T: vm.runInContext("LiveryTex", ctx), Teams: vm.runInContext("Teams", ctx) };
+}
+const L = loadLivery(), INK_TARGET = 6.5;
+const REG = { noseTip: { id: "noseTip" }, cockpitSide: { id: "cockpitSide" }, podTop: { id: "podTop" }, haloTop: { id: "haloTop" } };
+function paintStations(colors) {
+  const marks = {}, fills = {};
+  L.S.paint({}, REG, { teamId: "cadillac", colors, c1: colors.c1, accent: [0.9, 0.1, 0.1], names: ["TITLE", "B", "C", "D", "E", "F"], num: 1,
+    fillRegion: (ctx, R, colour) => { fills[R.id] = colour; },
+    drawWordmark: (ctx, text, R, ink, opts) => { marks[R.id] = { ink, halo: opts.halo }; },
+    inkOn: L.T.inkOn, haloIf: (i) => (i.worst < INK_TARGET ? [1, 1, 1] : null) });
+  return { marks, fills };
+}
+const reads = (mark, bgs, label) => {
+  const worst = Math.min(...bgs.map((b) => L.T.contrast(mark.ink, b)));
+  assert.ok(worst >= INK_TARGET || mark.halo, label + ": ink clears " + INK_TARGET + " on every paint under it, or carries a halo (worst " + worst.toFixed(2) + ")");
+};
+test("cockpit code and pod-top sponsor read on both flanks of a left/right split (#5039)", () => {
+  const cad = L.Teams.LIST.find((t) => t.id === "cadillac");
+  const white = [0.95, 0.95, 0.96], black = [0.04, 0.04, 0.05];
+  assert.ok(JSON.stringify(cad).includes('"bodySplit":"lr"'), "Cadillac ships the lr split this guards");
+  const { marks } = paintStations({ c1: white, c2: black, bodySplit: "lr" });
+  reads(marks.cockpitSide, [white, black], "cockpit code");
+  reads(marks.podTop, [white, black], "pod-top sponsor");
+});
+test("cockpit code and pod-top sponsor read on an upper / lower zone (#5039)", () => {
+  const black = [0.04, 0.04, 0.05], silver = [0.76, 0.78, 0.82], white = [0.95, 0.95, 0.96];
+  const up = paintStations({ c1: black, upper: silver }).marks;
+  reads(up.cockpitSide, [black, silver], "cockpit code, upper");
+  reads(up.podTop, [black, silver], "pod-top sponsor, upper");
+  reads(paintStations({ c1: white, lower: black }).marks.cockpitSide, [white, black], "cockpit code, lower");
+  // A one-paint car keeps its plain ink: no halo it did not need.
+  const plain = paintStations({ c1: black }).marks;
+  assert.equal(plain.cockpitSide.halo, null);
+  assert.equal(plain.podTop.halo, null);
+});
+test("NOSE TIP wears the NOSE CAP colour when the livery sets one, else the accent (#5039)", () => {
+  const nose = [1, 1, 1], c1 = [0.04, 0.04, 0.05];
+  assert.deepEqual(paintStations({ c1, nose }).fills.noseTip, nose);
+  assert.deepEqual(paintStations({ c1 }).fills.noseTip, [0.9, 0.1, 0.1]);
+  assert.equal(paintStations({ c1, nose, decalNoseTip: "off" }).fills.noseTip, undefined);
 });

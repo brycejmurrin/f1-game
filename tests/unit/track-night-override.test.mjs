@@ -9,8 +9,8 @@
 //
 // This has now been fixed twice — once in tracks.js (written up in place) and
 // scenery-structures.js ferrisWheel — so it is a recurring class, not an
-// incident. Two sites in tracks.js are sanctioned: they are the ones that
-// RESOLVE def.night into track._night / NIGHT. Everything else in js/track/ is
+// incident. Two sites are sanctioned (tracks.js, scenery/build-props.js): they
+// are the ones that RESOLVE def.night into track._night / NIGHT. Everything else in js/track/ is
 // a defect.
 //
 // Note the deliberate asymmetry: js/game/ is NOT covered. There `def.night` is
@@ -26,13 +26,36 @@ import path from "node:path";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = path.join(ROOT, "js/track");
 
-// tracks.js resolves the override; those two reads are the contract, not a bug.
-const SANCTIONED = new Map([["tracks.js", 2]]);
+// The reads that RESOLVE the override are the contract, not a bug. Keys are
+// paths relative to js/track/: the walk is recursive, because most scenery
+// emitters live in js/track/scenery/, which a flat readdir never saw.
+const SANCTIONED = new Map([
+  // `track._night = opts.night != null ? !!opts.night : !!def.night` — where
+  // the build's value is set.
+  ["tracks.js", 1],
+  // `const NIGHT = track._night != null ? track._night : !!def.night` — the
+  // buildProps prelude that hands the resolved value to every emitter.
+  ["scenery/build-props.js", 1],
+]);
 
-test("no js/track/ module reads def.night except the two that resolve it", () => {
+function walkJs(dir) {
+  const out = [];
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, ent.name);
+    if (ent.isDirectory()) out.push(...walkJs(full));
+    else if (ent.name.endsWith(".js")) out.push(full);
+  }
+  return out;
+}
+
+test("no js/track/ module (recursive) reads def.night except the ones that resolve it", () => {
   const offenders = [];
-  for (const file of readdirSync(DIR).filter((f) => f.endsWith(".js"))) {
-    const src = readFileSync(path.join(DIR, file), "utf8");
+  const files = walkJs(DIR);
+  assert.ok(files.some((f) => f.includes(`${path.sep}scenery${path.sep}`)),
+    "the walk must reach js/track/scenery/, where the emitters live");
+  for (const full of files) {
+    const file = path.relative(DIR, full).split(path.sep).join("/");
+    const src = readFileSync(full, "utf8");
     // Strip block and line comments: the fix in tracks.js and the one in
     // scenery-structures.js both EXPLAIN the trap in prose, and a guard that
     // matches its own warning is the failure mode this repo keeps hitting.

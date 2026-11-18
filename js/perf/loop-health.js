@@ -268,8 +268,8 @@ const LoopHealth = (() => {
     stallWatch(on) {
       if (on !== undefined) {
         try {
-          if (on) localStorage.setItem("apex26.stallWatch", "1");
-          else localStorage.removeItem("apex26.stallWatch");
+          // Removing the key restores the auto default (ON outside automation).
+          localStorage.setItem("apex26.stallWatch", on ? "1" : "0");
           watchOn = null;
         } catch (_) { /* blocked storage */ }
       }

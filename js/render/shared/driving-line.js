@@ -37,6 +37,10 @@ window.DrivingLine = (function () {
   const STEP = 2.5;          // m between samples (a 5 km lap ≈ 2000 samples)
   const LOOK = 60;           // m — the assist's look-ahead at ~70 m/s (25-90)
   const HALF_W = 0.75;       // m — half the ribbon width (one 1.5 m row of chevrons)
+  // build()'s fallbacks when the api omits a budget (m/s², m/s); `brakeMul`
+  // derates the brake budget for a display that reads as early, not late.
+  // Exported so tests/unit/track-line-circuits.test.mjs models the same sweep.
+  const DEFAULTS = Object.freeze({ latMax: 22, brake: 22, brakeMul: 0.85, accel: 7, vTop: 72, grip: 1 });
   const LIFT = 0.03;         // m above the road (the road mesh sits at +0.02)
   const MODES = ["off", "corner", "full"];
   const KMIN = 1 / 400;      // |k| above this is "a corner" (radius under 400 m)
@@ -169,8 +173,9 @@ window.DrivingLine = (function () {
   function build(api) {
     const L = api.total, n = Math.max(8, Math.round(L / STEP));
     const ds = L / n;
-    const latMax = api.latMax || 22, brake = (api.brake || 22) * 0.85, accel = api.accel || 7;
-    const vTop = api.vTop || 72, grip = api.grip || 1;
+    const D = DEFAULTS;
+    const latMax = api.latMax || D.latMax, brake = (api.brake || D.brake) * D.brakeMul, accel = api.accel || D.accel;
+    const vTop = api.vTop || D.vTop, grip = api.grip || D.grip;
     const v = new Float32Array(n), zone = new Float32Array(n), x = new Float32Array(n);
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
     // 1. cornering cap and the line's lateral offset, per sample
@@ -349,9 +354,9 @@ window.DrivingLine = (function () {
 
   // MODES / STEP / HALF_W stay module-local (setters + build/draw); nothing
   // outside reads them. PALETTES feeds SETTINGS › LINE COLOUR's values;
-  // OPACITIES / STRIDE / opacityMul / bankOffset stay exported — unit tests pin
-  // the palette and opacity tables and the bank lerp.
-  return { PALETTES, OPACITIES, STRIDE, setMode, mode: getMode, setPhoto, shown,
+  // OPACITIES / STRIDE / opacityMul / bankOffset / DEFAULTS stay exported — unit
+  // tests pin the palette and opacity tables, the bank lerp and the sweep budgets.
+  return { PALETTES, OPACITIES, STRIDE, DEFAULTS, setMode, mode: getMode, setPhoto, shown,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
            build, draw, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };

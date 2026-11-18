@@ -25,15 +25,16 @@ const Assets = (function () {
   const _models = Object.create(null);   // id -> {pos,nrm,col,mat,idx} | null (miss)
   const _modelPromises = Object.create(null);
   const _requests = new Set();
+  const TIMED_OUT = "timed out";
   const REQUEST_MS = 15000;              // shared transfer lifetime, separate from a caller's readiness wait
 
   function _request(url, body) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     let timer = null, cancel;
     const deadline = new Promise((_, reject) => {
-      cancel = () => { if (controller) controller.abort(); reject(new Error("asset request canceled: " + url)); };
+      cancel = (why) => { if (controller) controller.abort(); reject(new Error("asset request " + (why === TIMED_OUT ? why : "canceled") + ": " + url)); };
       // Minimal VM schedulers may support task yields without cancellable timers.
-      if (typeof setTimeout === "function" && typeof clearTimeout === "function") timer = setTimeout(cancel, REQUEST_MS);
+      if (typeof setTimeout === "function" && typeof clearTimeout === "function") timer = setTimeout(() => cancel(TIMED_OUT), REQUEST_MS);
     });
     _requests.add(cancel);
     const work = (async () => {
@@ -613,7 +614,8 @@ const Assets = (function () {
   }
 
   // Load + upload the baked material arrays. Resolves to true only when the
-  // arrays are actually live on the GPU; false (never a rejection) otherwise.
+  // arrays are prepared and handed to the backend; false (never a rejection)
+  // otherwise. TLX schedules lazy GPU upload, so true is not presentation evidence.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
   function load(opts) {
     if (_loadPromise) return _loadPromise;
@@ -636,12 +638,15 @@ const Assets = (function () {
   // session on procedural materials. game.js calls this at race entry and never
   // awaits it. No retry for an unsupported backend ("backend"), after an
   // explicit unload(), while a load is in flight, or once the pack is up.
+  // A strip that ran out REQUEST_MS (a whole-transfer deadline) was too big for
+  // this link, and the same tier would time out again: that retry takes the
+  // 128 px tier, a third of the bytes (#5555). Any other failure keeps its tier.
   let _retried = false;
   function retry() {
     if (_retried || _uploaded || _loadPromise || _tier !== "off" || !_err || _err === "backend") return false;
     _retried = true;
     Log.info("assets", "retrying the material pack after: " + _err);
-    load();
+    load(_err.indexOf("asset request " + TIMED_OUT) === 0 ? { tier: "low" } : undefined);
     return true;
   }
 
@@ -698,8 +703,8 @@ const Assets = (function () {
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
       // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
-      // path) hands back a token with `ready`; the pack is live — and load()
-      // resolves — only once every array is filled. A failed fill reads as the
+      // path) hands back a token with `ready`; load() waits for that fill
+      // before publication. This does not prove GPU residency or presentation. A failed fill reads as the
       // sync path's upload failure (no partial pack; a lost normal stays survivable).
       if (albedoTex.ready && !(await albedoTex.ready)) { quietNormal(); throw new Error("albedo-upload"); }
       if (normalP) {

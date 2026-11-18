@@ -118,12 +118,40 @@ test("Machado simulation is the severity-1 matrix on linear RGB", () => {
   assert.equal(P.MACHADO.tritan[2][1], 0.691367);
 });
 
+// The co-visible roster is OWNED HERE, not read back from production: the
+// separation test below loops over P.COVISIBLE, so an emptied or trimmed list
+// would pass it vacuously. Every view that shows these states together is a
+// group; production may add groups, never drop or shrink one of these.
+const COVISIBLE_ROSTER = [
+  ["good", "warn", "bad", "best", "you"],                 // timing deltas + you
+  ["sec1", "sec2", "sec3"],                               // sector plate
+  ["cmpS", "cmpM", "cmpH", "cmpI", "cmpW"],               // compound chips
+  ["zone", "ghost", "you"],                               // map overlays
+  ["tyreS", "tyreM", "tyreH", "tyreI", "tyreW"],          // HUD tyre tokens
+  ["thr", "brk"],                                         // INPUTS trace
+  ["cnrHairpin", "cnrSlow", "cnrMedium", "cnrFast", "sec2"], // circuit-map corner classes
+];
+
+test("the co-visible roster covers every view that shows these states together", () => {
+  const { P } = load();
+  const key = (g) => [...g].sort().join(",");
+  for (const mode of ["deutan", "protan", "tritan"]) {
+    const have = new Set((P.COVISIBLE[mode] || []).map(key));
+    for (const group of COVISIBLE_ROSTER)
+      assert.ok(have.has(key(group)), `${mode}: COVISIBLE is missing the group [${group.join(", ")}]`);
+    for (const group of P.COVISIBLE[mode])
+      for (const k of group) assert.ok(P.STATE[k], `${mode}: COVISIBLE names "${k}", which STATE has no row for`);
+  }
+});
+
 test("co-visible states stay apart under every CVD simulation", () => {
   const { P } = load();
   const types = ["deutan", "protan", "tritan"];
+  let pairs = 0;
   for (const mode of types) {
     P.set(mode);
     for (const group of P.COVISIBLE[mode]) {
+      pairs += group.length * (group.length - 1) / 2;
       const labs = group.map((key) => {
         const rgb = P.hex(key).match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16) / 255);
         return P.labFromLinear(P.simulateLinear(rgb, mode));
@@ -149,6 +177,8 @@ test("co-visible states stay apart under every CVD simulation", () => {
       }
     }
   }
+  const floor = 3 * COVISIBLE_ROSTER.reduce((n, g) => n + g.length * (g.length - 1) / 2, 0);
+  assert.ok(pairs >= floor, `scored ${pairs} co-visible pairs across the three modes; the roster alone has ${floor}`);
 });
 
 test("CVD inks clear 4.5:1 on the HUD plate and match tokens.css", () => {

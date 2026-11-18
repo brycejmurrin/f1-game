@@ -103,6 +103,15 @@ const ROUGHNESS = {
 // (col, row) with row 0 at the TOP of the PNG — the same convention as the
 // filmstrip (layer N at y = N*size).
 const ATLAS_DIR = path.join(ROOT, "assets", "atlases");
+// PROVENANCE of the sheets in assets/atlases/: each PNG carries a C2PA manifest
+// naming OpenAI's image service (gpt-image, digital source type
+// trainedAlgorithmicMedia). They are AI-generated, not procedural, so a layer
+// baked from them says so (assets/atlases/README.md). Any other sheet passed
+// with --albedo/--normal is labelled by --licence/--author (default procedural).
+export const ATLAS_PROVENANCE = Object.freeze({
+  licence: "LicenseRef-AI-Generated-OpenAI",
+  author: "AI-generated (OpenAI gpt-image, C2PA manifest) for Apex 26",
+});
 const ATLAS_PRESETS = {
   generated: {
     grid: 4,
@@ -1094,19 +1103,24 @@ function sliceAtlasTile(png, cols, rows, col, row, inset) {
   return { w, h, rgba: out };
 }
 
-function resizeBilinear(src, sw, sh, dw, dh) {
+// Edge-clamped bilinear. Upscaling puts the first output row's sample centre
+// BEFORE source row 0 (fy = -0.25 at 2x), and `fy - y0` with y0 clamped to 0
+// was a NEGATIVE weight: an extrapolation past the edge, and the out-of-range
+// result WRAPPED in the Uint8 buffer (black-to-white edge 0,255 at 2x gave 192
+// at the dark edge). Clamping the weight to [0, 1] is clamp-to-edge sampling.
+export function resizeBilinear(src, sw, sh, dw, dh) {
   if (sw === dw && sh === dh) return Buffer.from(src);
   const out = Buffer.alloc(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
     const fy = (y + 0.5) * sh / dh - 0.5;
     const y0 = Math.max(0, Math.min(sh - 1, Math.floor(fy)));
     const y1 = Math.min(sh - 1, y0 + 1);
-    const ty = fy - y0;
+    const ty = Math.max(0, Math.min(1, fy - y0));
     for (let x = 0; x < dw; x++) {
       const fx = (x + 0.5) * sw / dw - 0.5;
       const x0 = Math.max(0, Math.min(sw - 1, Math.floor(fx)));
       const x1 = Math.min(sw - 1, x0 + 1);
-      const tx = fx - x0;
+      const tx = Math.max(0, Math.min(1, fx - x0));
       const at = (xx, yy) => (yy * sw + xx) * 4;
       const d = (y * dw + x) * 4;
       for (let c = 0; c < 4; c++) {
@@ -1498,8 +1512,9 @@ function bakeAtlas(args) {
     baked.push({
       mid, id: MAT_NAME[mid].toLowerCase(),
       source: `generated:${srcFile}#${ac},${ar}`,
-      licence: "Apex26-Procedural",
-      author: "Apex 26",
+      ...(path.dirname(albPng._path) === ATLAS_DIR
+        ? ATLAS_PROVENANCE
+        : { licence: strArg(args, "--licence", "Apex26-Procedural"), author: strArg(args, "--author", "Apex 26") }),
     });
     console.log(`  ${matKey} ← ${srcFile} tile ${ac},${ar}`);
   }

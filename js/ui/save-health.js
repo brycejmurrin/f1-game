@@ -71,7 +71,8 @@ const SaveHealth = (function () {
   const size = (n) => (n / 1024).toFixed(1) + " KiB";
   function node(doc, tag, text) { const el = doc.createElement(tag); if (text !== undefined) el.textContent = text; return el; }
   function mount(host, opts) {
-    if (!host || mounted.has(host)) return mounted.get(host) || null;
+    if (!host) return null;
+    if (mounted.has(host)) { const h = mounted.get(host); if (h.root.parentNode === host && host.lastElementChild !== h.root) host.appendChild(h.root); return h; }
     opts = opts || {};
     const doc = host.ownerDocument || document, root = node(doc, "section"); root.className = "save-health";
     const toggle = node(doc, "button", "STORAGE HEALTH & RESTORE POINTS"); toggle.type = "button"; toggle.className = "sel-chip";
@@ -160,7 +161,8 @@ const SaveHealth = (function () {
     const host = document.getElementById("pm-panel-files"); if (host) mount(host);
   }
   if (typeof document !== "undefined" && document.addEventListener) {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot();
+    // #4798 gate (queued before SettingsExport)
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(boot) : boot()), { once: true }); else boot();
   }
   // category stays module-local (inspect grouping).
   return { inspect, cleanup, mount };

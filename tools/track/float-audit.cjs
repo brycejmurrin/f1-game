@@ -387,6 +387,12 @@ if (args.includes("--help") || args.includes("-h")) {
   process.exit(0);
 }
 const asJson = args.includes("--json");
+// --json emits only from the default and --all reports; --foliage, --clip and
+// --why are text reports that used to ignore it and print text to a consumer
+// expecting JSON. Refuse the pair rather than hand it unparseable stdout.
+for (const textOnly of ["--foliage", "--clip", "--why"]) {
+  if (asJson && args.includes(textOnly)) { console.error(`float-audit: ${textOnly} is a text report; run it without --json`); process.exit(2); }
+}
 const allClusters = args.includes("--all-clusters");
 const topN = (() => {
   try { return topFrom(args); } catch (e) { console.error(e.message); process.exit(2); }

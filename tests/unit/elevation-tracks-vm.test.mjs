@@ -1,29 +1,32 @@
 /* elevation-tracks-vm.test.mjs — tests/specs/elevation-tracks.spec.js replayed
  * in the Node VM (tools/lib/game-vm.cjs): banking geometry (Tracks.banking on a
- * bare centreline), the chase camera riding the bank, and — for every one of
- * the 40 circuits — slope gravity, the climb, road-following on the grade and
- * the two banked bowls, with the SAME assertions, launches and thresholds.
+ * bare centreline), the chase camera riding the bank, and — for EVERY circuit
+ * in Tracks.LIST (52, TK1-16) — slope gravity, the climb, road-following on the
+ * grade, plus the two banked bowls, with the SAME assertions, launches and
+ * thresholds the browser spec carried.
  *
- * Ported: all 47 tests. The four banking-geometry tests read the `Tracks`
- * engine global from the VM sandbox exactly as the browser reads the page
- * global; the camera test reads camState() (the camera rig runs in the VM —
- * measured roll -13.5 deg on Madrid's bowl). The pageerror guards read the
- * VM's console/rejection record.
- * Not portable: none. This is the heaviest twin because it BUILDS 40 circuits
- * plus ~2,200 physics steps per circuit — still an order of magnitude under
- * the browser group's 40 × 24 s.
+ * SUPERSET OF THE SPEC (TK1-16, #3039). The browser spec used to declare the
+ * same 47 tests; it now keeps only the chase-camera roll and the two banked
+ * bowls (the render()-only cases a VM cannot see), and this file is the sole
+ * carrier of the banking-geometry audits and the per-circuit grade sweep.
+ * tools/ci/twinned-specs.mjs TWIN_SUBSET checks every spec title is a title
+ * here. The four banking-geometry tests read the `Tracks` engine global from
+ * the VM sandbox exactly as the browser reads the page global; the camera test
+ * reads camState() (the camera rig runs in the VM — measured roll -13.5 deg on
+ * Madrid's bowl). The pageerror guards read the VM's console/rejection record.
+ * This is the heaviest twin because it BUILDS every circuit plus ~2,200
+ * physics steps per circuit.
  *
  * FOUR VMs, ONE FILE (2026-09-16). ~70 % of this file was physics stepping at
  * 3.13 ms a step on ONE core (docs/plans/research-2026-09-16/vm-harness.md), and
- * the 42 per-circuit tests are independent races. They now go through
+ * the per-circuit tests are independent races. They now go through
  * tools/lib/game-vm-pool.cjs: each worker boots its own game-vm and runs one
  * circuit's probe from tests/helpers/elevation-probes.cjs — the same recipe,
  * launches and thresholds, with the grade search confirming 12 profile
  * candidates instead of 300 jump+steps — and returns a plain object. EVERY
  * assertion stayed here, so a failure still names the circuit and the number,
- * and the twin is still ONE file with 47 declared tests (tools/ci/twinned-specs
- * .mjs counts them against the spec). Measured on this 4-core box:
- * 400 s serial -> 191-210 s pooled, 47/47 green every run. (The box was shared
+ * and the twin is still ONE file (60 declared tests since TK1-16). Measured on this 4-core box:
+ * 400 s serial -> 191-210 s pooled, 47/47 green every run (40 circuits then). (The box was shared
  * with other agents' suites throughout: the 210 s run averaged load 5.1 of four
  * cores, so the pool held about three of them.) The five geometry / camera
  * tests keep the parent's own boot, because they read `Tracks` and camState()
@@ -32,12 +35,14 @@
  * this file ran before (400 s); tests/unit/game-vm-pool.test.mjs asserts the
  * two paths return the same numbers for two circuits.
  *
- * The browser spec stays the truth until CI has run this twin.
  * Run: node --test tests/unit/elevation-tracks-vm.test.mjs   (~3.5 min, 4 VMs)
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -49,20 +54,19 @@ const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);
 const gte = (a, b, m) => assert.ok(a >= b, m || `${a} >= ${b}`);
 
-// Verbatim from the browser spec.
-const ELEVATION_TRACKS = [
-  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
-  "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
-  "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
-  "suzuka", "vegas", "zandvoort",
-  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
-  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
-  "jacarepagua",
-];
+// EVERY circuit (TK1-16, #3039). This was a hand-copied list of 40 ids, the
+// browser spec's, and the twelve circuits added since (fuji ... mosport) were
+// never swept. It is now one id per js/circuits/*.js def — read with a
+// readdirSync of that directory, the form select-budget.mjs resolves
+// statically (circuitDefCount), so the declared count stays exact — and the
+// first test below pins it to Tracks.LIST itself, so a def that is not in the
+// roster (or a roster entry with no def) reds here instead of going unswept.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ELEVATION_TRACKS = fs.readdirSync(path.join(ROOT, "js/circuits"))
+  .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 // APEX_CIRCUITS (comma list) narrows the per-circuit launches below — this file
-// is the node gate's slowest (~5.6 min, 40 circuit builds). Unset = every
+// is the node gate's slowest (one build per circuit). Unset = every
 // circuit. ci.yml's node-suites job sets it on a circuit-only pull request
 // (tools/ci/node-plan.mjs); set it locally to check one circuit.
 // APEX_CIRCUIT_SHARD=i/n (2026-09-30) takes every n-th circuit of the scoped
@@ -143,6 +147,13 @@ async function startRace(id) {
   }, 200);
   assert.ok(ok, `${id}: elevation profile never showed relief`);
 }
+
+test("the swept roster is Tracks.LIST: every circuit, no stale id", () => {
+  // Array.from: a sandbox array has the VM realm's prototype, which a strict
+  // deepEqual would report as a mismatch even with identical ids.
+  const ids = Array.from(g.sandbox.Tracks.LIST, (entry) => entry.id).sort();
+  assert.deepEqual(ELEVATION_TRACKS, ids, "js/circuits/*.js and Tracks.LIST disagree — the sweep would miss a circuit");
+});
 
 test("banking pivots around the centreline with smooth edge transitions", () => {
   const Tracks = g.sandbox.Tracks;
@@ -237,6 +248,16 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
 for (const id of GRADE_RUNS) {
   test(`${id}: slope gravity behaves + road-following holds on the grade`, async () => {
     const { result: r, errors } = await probed(`grad:${id}`, id, GRADIENT);
+    // A def that opts out of relief (`undulate: false`, today only korea: the
+    // SRTM bake measured 0.00 m over Yeongam's tidal flat) has no grade to
+    // sweep — measured 2026-11-11, the probe reads relief:false there. Assert
+    // that it IS flat, so the day it gains a profile this reds and the opt-out
+    // goes, rather than the circuit silently skipping the sweep.
+    if (g.sandbox.Tracks.LIST.find((entry) => entry.id === id)?.undulate === false) {
+      assert.equal(r.relief, false, `${id} declares undulate:false but its profile shows relief — drop the opt-out`);
+      assert.deepEqual(errors, []);
+      return;
+    }
     assert.ok(r.relief, `${id}: elevation profile never showed relief`);
     assert.deepEqual(errors, []);
     assert.equal(r.finite, true);

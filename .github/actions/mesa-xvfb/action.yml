@@ -14,69 +14,53 @@ description: >-
 runs:
   using: composite
   steps:
-    # BOUNDED APT (2026-09-30). The two apt calls had no limit of their own, so
-    # a stalled mirror or a held dpkg lock spent the CALLER's whole job budget:
-    # PR #537's selected-specs shard sat 31.6 min in `apt-get update/install`
-    # (job 109932275468) and was cancelled before a single spec ran — a red
-    # verdict with no test behind it. Now each call is capped (`timeout`),
-    # apt retries a failed fetch itself with a per-connection timeout, waits
-    # at most 60 s for the dpkg lock. All attempts share a five-minute budget
-    # so setup cannot consume staged-boot's entire twenty-minute job timeout.
-    # Options: apt.conf(5) Acquire::Retries, apt-transport-http(1)
-    # Acquire::http::Timeout (https://manpages.debian.org/bookworm/apt/).
+    # MIRROR-INDEPENDENT INSTALL (#5519, 2026-11-11). From about 13:50Z a runner
+    # apt mirror / DNS outage failed every browser leg here before a spec ran
+    # (job 130489678362: three apt attempts, five minutes, a red PR). The
+    # install is tools/ci/apt-cached-install.sh: nothing when dpkg already has
+    # the packages, the cached .debs offline when it does not, a fast distinct
+    # "runner package mirror unreachable" when no apt host resolves, else the
+    # bounded apt of 2026-09-30 / 2026-11-10 (caps, one shared 300 s budget,
+    # dpkg repair). The .debs apt fetches are saved with actions/cache, keyed on
+    # the runner image and this package list; a deploy-branch run's cache is
+    # what every PR restores. Passing job 130492997085 measured the image: xvfb
+    # and libgl1-mesa-dri ship on it, apt fetched 8 .debs (libegl1, libgles2,
+    # mesa-utils and their deps).
+    # CONCURRENT SAVES: on a cold key every leg of a run reaches the save step
+    # with the same key; the losers' save is a log line, not a step failure.
+    # actions/cache@55cc834 (v6.1.0) src/saveImpl.ts catches every save error
+    # as `utils.logWarning(...)` and never calls setFailed, and saveOnlyRun
+    # logs a -1 cacheId at debug level. The Playwright cache action makes the
+    # same many-legs-one-key save on every lockfile bump.
+    - id: plan
+      shell: bash
+      env:
+        MESA_PKGS: mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+      run: |
+        # shellcheck disable=SC2086 # MESA_PKGS is a word list
+        bash "$GITHUB_WORKSPACE/tools/ci/apt-cached-install.sh" --label mesa-xvfb --plan $MESA_PKGS
+        echo "key=mesa-debs-v1-${ImageOS:-os}-${ImageVersion:-img}-${RUNNER_ARCH}-$(printf '%s' "$MESA_PKGS" | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+    - id: restore
+      if: steps.plan.outputs.missing != ''
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/apex-apt-debs/mesa-xvfb
+        key: ${{ steps.plan.outputs.key }}
+    - id: install
+      if: steps.plan.outputs.missing != ''
+      shell: bash
+      env:
+        MESA_PKGS: mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+      run: |
+        # shellcheck disable=SC2086 # MESA_PKGS is a word list
+        bash "$GITHUB_WORKSPACE/tools/ci/apt-cached-install.sh" --label mesa-xvfb --cache "$HOME/.cache/apex-apt-debs/mesa-xvfb" --budget 300 $MESA_PKGS
+    - if: steps.install.outputs.populated == '1' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/apex-apt-debs/mesa-xvfb
+        key: ${{ steps.plan.outputs.key }}
     - shell: bash
       run: |
-        APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60"
-        mesa_deadline=$((SECONDS + 300))
-        apt_with_budget() {
-          local remaining=$((mesa_deadline - SECONDS))
-          local cap=$1
-          shift
-          if [ "$remaining" -le 0 ]; then return 124; fi
-          if [ "$cap" -gt "$remaining" ]; then cap=$remaining; fi
-          sudo timeout "$cap" apt-get "$@" $APT_OPTS
-        }
-        # REPAIR AN INTERRUPTED DPKG (2026-11-10). The cap above kills apt-get, and a
-        # kill that lands mid-dpkg leaves the database "interrupted": every later
-        # apt call then exits at once with "E: dpkg was interrupted, you must
-        # manually run 'sudo dpkg --configure -a'", so attempts 2 and 3 could never
-        # succeed. Job 129623589272 (run 42753449133): attempt 1 was killed at 180 s
-        # while processing its last trigger, attempts 2 and 3 failed in 12 s each on
-        # that message, and the shard went red with 113 s of budget left and no spec
-        # run (four jobs that night). After a failed attempt: finish the half-done
-        # configure inside the same budget, and if the packages are then installed
-        # the setup is done.
-        MESA_PKGS="mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb"
-        mesa_installed() {
-          local p
-          for p in $MESA_PKGS; do
-            dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q '^install ok installed$' || return 1
-          done
-        }
-        repair_dpkg() {
-          local remaining=$((mesa_deadline - SECONDS))
-          local cap=60
-          if [ "$remaining" -le 0 ]; then return 0; fi
-          if [ "$cap" -gt "$remaining" ]; then cap=$remaining; fi
-          sudo timeout "$cap" dpkg --configure -a || true
-        }
-        ok=0
-        for attempt in 1 2 3; do
-          if apt_with_budget 120 update -qq \
-             && apt_with_budget 180 install -y -qq --no-install-recommends $MESA_PKGS; then
-            ok=1; break
-          fi
-          repair_dpkg
-          if mesa_installed; then
-            echo "::warning::mesa-xvfb: apt attempt $attempt was cut short; dpkg --configure -a finished the install"
-            ok=1; break
-          fi
-          remaining=$((mesa_deadline - SECONDS))
-          if [ "$attempt" -eq 3 ] || [ "$remaining" -le 0 ]; then break; fi
-          echo "::warning::mesa-xvfb: apt attempt $attempt failed or timed out; retrying"
-          if [ "$remaining" -gt 10 ]; then sleep 10; else sleep "$remaining"; fi
-        done
-        if [ "$ok" != 1 ]; then echo "::error::mesa-xvfb: apt could not install Mesa/Xvfb within 300 s and up to 3 attempts (runner mirror down?)"; exit 1; fi
         Xvfb :99 -screen 0 1280x800x24 >"$RUNNER_TEMP/apex-xvfb.log" 2>&1 &
         # WAIT FOR THE DISPLAY (2026-10-04): the first Chromium launch raced a
         # server that had not created its socket yet. Xvfb makes

@@ -170,17 +170,20 @@ test("real game: road thresholds, drizzle seeding and rendered rain retain separ
         // eye-relative offsets (4.5, 0, 4.5): dist=sqrt(40.5)>2, and a falling
         // streak cannot align with this horizontal ray. Alpha is 0.415 before
         // the real opacity multiplier. This counts the pool, not random culls.
-        const gameMath = vm.runInContext("Math", g.ctx);
-        g.ctx.Math = vm.runInContext(`(() => {
-          const values = [0.75, 0.375, 0.75, 0.5, 0.5, 0.75];
-          let i = 0;
-          return Object.assign(Object.create(Math), { random: () => values[i++ % values.length] });
-        })()`, g.ctx);
+        // Patch `random` ON the realm's Math, not `g.ctx.Math`: game-vm aliases Math as a
+        // script-scope lexical (#5056, game-vm.cjs "intrinsics"), so game code never reads the
+        // global property and a replaced `g.ctx.Math` left it on the real Math.random. The count
+        // was then 100 minus random culls: 99 in 2 of 24 runs on the tip (2026-11-11).
+        const gameMath = vm.runInContext("Math", g.ctx), realRandom = gameMath.random;
+        const values = [0.75, 0.375, 0.75, 0.5, 0.5, 0.75];
+        let i = 0, calls = 0;
+        gameMath.random = () => { calls++; return values[i++ % values.length]; };
         try {
           G.initRainDrops(); P.rainShow(true);
           P.rainUpdate(0, [0, 1, 0], true); drawn = 0; P.draw();
+          assert.ok(calls >= 6, `the game drew its rain from the pinned sequence (${calls} calls)`);
           return drawn;
-        } finally { g.ctx.Math = gameMath; }
+        } finally { gameMath.random = realRandom; }
       };
       A.weatherArc(null); A.weather("wet");
       assert.equal(seeded(), 30, "static wet uses the drizzle pool");

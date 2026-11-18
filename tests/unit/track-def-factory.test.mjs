@@ -5,11 +5,12 @@
 // It was carved out of js/track/tracks.js verbatim (dayPal/nightPal,
 // elevationAt/hasRealElevation, realPoints/applyHwZones, the LIST mapper and
 // materializeListPoints). The move is only safe if every circuit builds to the
-// same bytes it did before, so this pins a golden hash per circuit — metadata
-// plus the MATERIALISED points (startFrac / reverse / hwZones remaps) — captured
-// from the pre-extraction tree (tests/data/def-factory-golden.json). A change
-// here means every circuit's road moved: re-capture the golden deliberately, in
-// the commit that means it, and say why.
+// same bytes it did before, so this pins a golden hash per circuit — the fields
+// fromRaw TRANSFORMS plus the MATERIALISED points (startFrac / reverse / hwZones
+// remaps) — first captured from the pre-extraction tree, narrowed to the
+// transformed fields 2026-11-11 (tests/data/def-factory-golden.json). A change
+// here means the factory, or a circuit's road, moved: re-capture the golden
+// deliberately, in the commit that means it, and say why.
 //
 // Run: node --test tests/unit/track-def-factory.test.mjs
 import test from "node:test";
@@ -25,13 +26,22 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
 const GOLDEN = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/def-factory-golden.json"), "utf8")).hashes;
 
-// The exact canon the capture script used: every enumerable non-function field
-// except `points` (hashed separately, materialised) and `custom` (added by the
-// extraction; the golden predates it and a runtime flag is not geometry).
+// The canon hashes what the FACTORY computes, not what a circuit file authors:
+// the materialised points (startFrac / reverse / hwZones remaps, elevation
+// fmap) plus the fields fromRaw derives, defaults, coerces or gates on
+// presence. Authored pass-through data (turns, sectors, pit, scenery rows…)
+// is copied verbatim — tests/unit/circuit-def-fields.test.mjs guards that
+// copy — so hashing it re-captured the golden on every data edit (#3039 TK1-21).
+const TRANSFORMED = [
+  "laps", "gpLaps", "palette", "classic", "street", "banked", "flatTerrain",
+  "kerbStyle", "berms", "terrainFalloffStart", "terrainMat", "sceneryCoordinates",
+  "sceneryLapMirror", "ownPitStraight", "elevations", "splineAlpha",
+  "reverse", "startFrac", "sceneryStartFrac",
+];
 function hashEntry(d) {
   const pts = d.points;
   const meta = {};
-  for (const k of Object.keys(d)) { const v = d[k]; if (k === "points" || k === "custom" || typeof v === "function") continue; meta[k] = v; }
+  for (const k of TRANSFORMED) if (k in d) meta[k] = d[k];
   const canon = JSON.stringify({ meta, pts: pts.map((p) => p.map((v) => +v.toFixed(6))) });
   return crypto.createHash("sha256").update(canon).digest("hex").slice(0, 16);
 }
@@ -59,6 +69,38 @@ test("every shipped circuit builds to the bytes it built to before the factory m
   }
   assert.deepEqual(bad, [], "a LIST entry no longer matches the pre-extraction golden — the def factory changed how that circuit builds");
   assert.equal(Object.keys(GOLDEN).length, Tracks.LIST.filter((t) => !t.custom).length, "golden rows == shipped circuits");
+});
+
+test("every field the golden leaves out is a verbatim copy of the authored def", () => {
+  // The narrowing is only safe while fromRaw passes those fields through
+  // untouched: a new transform on one of them must join TRANSFORMED.
+  const Tracks = buildContext(undefined, { quiet: true });
+  const { TrackDefs } = Tracks._vmContext;
+  const bad = [];
+  for (const d of Tracks.LIST) {
+    if (d.custom) continue;
+    const raw = TrackDefs.find((r) => r.id === d.id);
+    for (const k of Object.keys(d)) {
+      if (k === "points" || k === "custom" || TRANSFORMED.includes(k) || typeof d[k] === "function") continue;
+      const want = raw[k] === undefined ? [undefined, null] : [raw[k]];
+      if (!want.includes(d[k])) bad.push(`${d.id}.${k}`);
+    }
+  }
+  assert.deepEqual(bad, [], "fromRaw transforms a field the golden does not hash — add it to TRANSFORMED and re-capture");
+});
+
+test("the golden canon ignores authored pass-through data and sees every factory transform", () => {
+  const Tracks = buildContext(undefined, { quiet: true });
+  const d = Tracks.LIST.find((t) => t.id === "monza");
+  const base = { ...d, points: d.points };
+  const h0 = hashEntry(base);
+  assert.equal(hashEntry({ ...base, turns: [], sectors: null, pit: { side: "left" }, name: "x" }), h0,
+    "renumbering turns or editing pit/sector metadata must not re-capture the golden");
+  for (const k of ["gpLaps", "laps", "startFrac", "reverse", "elevations", "palette"]) {
+    assert.notEqual(hashEntry({ ...base, [k]: k === "palette" ? { ...base.palette, sky: 0 } : `mut-${k}` }), h0, `${k} is hashed`);
+  }
+  const moved = base.points.map((p, i) => (i === 3 ? [p[0] + 0.5, ...p.slice(1)] : p));
+  assert.notEqual(hashEntry({ ...base, points: moved }), h0, "a materialised point moving is hashed");
 });
 
 test("rotating or reversing a full-lap width zone still narrows the whole built road", () => {

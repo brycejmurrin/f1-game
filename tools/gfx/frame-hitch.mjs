@@ -1660,6 +1660,38 @@ async function main() {
   console.log(json);
 }
 
+// #4710 item 2: WHEN the mirror target was re-allocated. gpu-game-check reads the backend's lifetime `allocs` count and
+// the target's size at every beat (beat.mir); a rise between two beats is a re-allocation, printed with the size and
+// quality on either side of it, which is what tlx.js prepareMirrorTarget re-allocates on (size, or a deeper mip chain).
+export function analyseMirrorAllocs(beats) {
+  const rows = (beats || []).map((b, i) => ({ i, s: b && b.s, m: b && b.mir })).filter((r) => r.m && typeof r.m.allocs === "number");
+  if (rows.length < 2) return { note: "no per-beat mirror allocation count (no mirror pass, or fewer than 2 beats read it)" };
+  const sig = (m) => `${m.w}x${m.h} mips${m.mips}${m.q ? " " + m.q : ""}`;
+  const events = [];
+  for (let k = 1; k < rows.length; k++) {
+    const a = rows[k - 1], b = rows[k], d = b.m.allocs - a.m.allocs;
+    if (d > 0) events.push({ beat: b.i, s: b.s, allocs: d, from: sig(a.m), to: sig(b.m), sizeChanged: sig(a.m) !== sig(b.m) });
+  }
+  return { beats: rows.length, allocs: rows[rows.length - 1].m.allocs - rows[0].m.allocs, events,
+    // A re-allocation between two beats that read the SAME size and mip chain is one the size cannot explain.
+    unexplained: events.filter((e) => !e.sizeChanged).length };
+}
+
+// #4783 row 6: the armed window's passes that carry a depth attachment, as "depth view | colour attachments" counts
+// (gpu-game-check's beginRenderPass wrapper). `shadow` marks a shadow-map pass. The wrapper's view signature is size and format only, so it is
+// told by its shape, a SQUARE depth attachment of side 256 or more (tlx-shadow.js: sun 512 to 2048, car 256 or 1024,
+// lamp 256 or 512; the scene, mirror and post targets are not square and the env probe's faces are 64).
+export function analyseDepthTargets(pairs, frames) {
+  if (!Array.isArray(pairs) || !pairs.length) return { note: "no pass with a depth attachment recorded (no WebGPU encoder on this leg, or the window drew none)" };
+  if (!(frames > 0)) return { note: "no window frames" };
+  const rows = pairs.map(([key, n]) => {
+    const cut = key.indexOf(" | "), depth = key.slice(0, cut), color = key.slice(cut + 3);
+    const m = /^(\d+)x(\d+)\//.exec(depth);
+    return { depth, color, n, perFrame: +(n / frames).toFixed(3), shadow: !!m && m[1] === m[2] && +m[1] >= 256 };
+  }).sort((a, b) => b.n - a.n);
+  return { frames, rows };
+}
+
 // GPU hunt 3: the mirror and TLX churn counters read at both ends of the armed window (gpu-game-check
 // readMirChurn), as per-frame rates. `drawn` is mirror-pass's own pass count (backend-neutral);
 // `renders` restarts at 0 when WGX/GLX re-allocate the target, so its rate is printed only for a window

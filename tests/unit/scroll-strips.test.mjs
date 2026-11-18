@@ -71,7 +71,20 @@ test("every horizontal scroll strip declares the whole pattern", () => {
   // The three declarations that make a sideways strip actually pan under a
   // thumb. `scrollbar-width` is deliberately NOT required — a visible scrollbar
   // is a look, not a behaviour, and a strip is free to want one.
-  const REQUIRED = ["overscroll-behavior-x", "touch-action"];
+  // Each declaration's VALUE is part of the pattern: `touch-action: none` (or
+  // `pan-y`) on a sideways strip is a dead tab rail on a phone, and
+  // `overscroll-behavior-x: auto` is the chain-out this exists to stop. A
+  // touch-action that still lets the browser pan sideways (`pan-x` among its
+  // tokens, `manipulation`, `auto`) passes; the overscroll must not chain.
+  const REQUIRED = {
+    "overscroll-behavior-x": (v) => /^(contain|none)$/.test(v),
+    "touch-action": (v) => /^(auto|manipulation)$/.test(v) || v.split(/\s+/).includes("pan-x"),
+  };
+  const valueOf = (body, d) => {
+    let last = null;
+    for (const m of body.matchAll(new RegExp(`(?:^|[;{\\s])${d}\\s*:\\s*([^;]*)`, "g"))) last = m[1].replace(/\s*!important\s*$/, "").trim();
+    return last;
+  };
   const bad = [];
   for (const f of fs.readdirSync(CSS).filter((n) => n.endsWith(".css"))) {
     const src = fs.readFileSync(path.join(CSS, f), "utf8");
@@ -82,7 +95,10 @@ test("every horizontal scroll strip declares the whole pattern", () => {
       const horiz = /overflow-x:\s*(auto|scroll)/.test(b.body)
         || /overflow:\s*(auto|scroll)\b/.test(b.body);
       if (!horiz) continue;
-      const missing = REQUIRED.filter((d) => !new RegExp(`${d}\\s*:`).test(b.body));
+      const missing = Object.entries(REQUIRED).flatMap(([d, ok]) => {
+        const v = valueOf(b.body, d);
+        return v === null ? [d] : ok(v) ? [] : [`${d} (declares "${v}")`];
+      });
       if (missing.length) {
         bad.push(`css/${f}:${b.line} — ${b.prelude.slice(0, 70)} is missing ${missing.join(", ")}`);
       }

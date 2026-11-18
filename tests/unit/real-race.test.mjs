@@ -52,6 +52,7 @@ function load({ realTyres = false } = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-drive.js") });
   evalRealRace(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-boot.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-boot.js") });   // the FULL stub the body reads
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   if (realTyres) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8"), ctx, { filename: absSrc("js/physics/tyre-model.js") });
   const Teams = vm.runInContext("Teams", ctx);
@@ -671,6 +672,28 @@ test("arm marks a DSQ finisher with c.dsq; the wrapped endRace call reads publis
   during = null;
   G.endRace();
   assert.equal(during.watch, false, "after stop the wrap is gone: endRace no longer forces the watch path");
+});
+
+// #5557: a WATCH whose replay refuses to start is raced instead; that driven
+// race needs the same #3287 wrap, and it is no longer a highlights reel.
+test("a replay that does not start falls back to a driven race that still preserves the script DSQ", () => {
+  const { R, script, Teams, ctx } = load();
+  ctx.RealReplay = { create: () => ({ start: () => false, stop() {}, tick() {}, status: () => null, owns: () => false }) };
+  const odd = host(script);
+  const rus = odd.drivers.find((d) => d.num === 63);
+  rus.dnf = true; rus.dsq = true; rus.dns = false; rus.pos = null; rus.lapsDone = odd.laps;
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  let during = null, rr = null;
+  G.endRace = function () { during = !!rr.status().watch; };
+  rr = R.create(G);
+  assert.ok(rr.stage(odd, { seat: "LEC", watch: true, reel: true, traces: {} }), "staged as a WATCH");
+  G.state = "count"; rr.update(1 / 60);
+  assert.equal(rr.status().watch, false, "the replay refused: it is a driven race");
+  assert.equal(rr.status().reel, false, "and not a reel");
+  assert.equal(cars.find((c) => c.code === "RUS").dsq, "real race classification");
+  G.endRace();
+  assert.equal(during, true, "endRace reads the published classification, so the DSQ survives");
 });
 
 // THE REAL endRace (js/game.js) in a DRIVEN (non-watch) real race on the real

@@ -45,7 +45,7 @@ test("headMoved warns only on a real difference", () => {
 });
 
 test("test-bg accepts --grep (both spellings) and quotes it for sh -c", () => {
-  const greps = [["--spec", "tests/specs/abudhabi-foundation.spec.js", "--grep", "pit stop"], ["--grep=a|b", "--spec", "tests/specs/smoke.spec.js"], ["--spec", "tests/specs/smoke.spec.js"]].map((a) => parseTestBgArgv(a).grep);
+  const greps = [["--spec", "tests/specs/circuit-foundation.spec.js", "--grep", "pit stop"], ["--grep=a|b", "--spec", "tests/specs/smoke.spec.js"], ["--spec", "tests/specs/smoke.spec.js"]].map((a) => parseTestBgArgv(a).grep);
   assert.deepEqual([...greps, shQuote("it's $x")], ["pit stop", "a|b", null, `'it'\\''s $x'`]);
 });
 

@@ -1019,6 +1019,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   const SGSR = `
 // Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
+// Conditions and disclaimer: vendor/sgsr/LICENSE (retained, BSD-3-Clause clause 1).
 // Adapted for Apex 26 WGSL (gatherComp = 4× textureSampleLevel, like GLX).
 struct SgsrU {
   viewport : vec4<f32>,

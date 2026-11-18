@@ -26,7 +26,7 @@ function boot(opts = {}) {
   const full = (k) => (k.startsWith("apex26.") ? k : "apex26." + k);
   const store = {
     get(k, d) { const v = disk.get("apex26." + k); return v === undefined ? d : JSON.parse(v); },
-    set(k, v) { disk.set("apex26." + k, JSON.stringify(v)); },
+    set(k, v) { if (v === undefined) disk.delete("apex26." + k); else disk.set("apex26." + k, JSON.stringify(v)); },   // undefined removes, as the real store does
     raw(k) { const v = disk.get(full(k)); return v === undefined ? null : v; },
     rawSet(k, v) { disk.set(full(k), String(v)); return true; },
     rawDel(k) { disk.delete(full(k)); return true; },
@@ -71,6 +71,22 @@ function boot(opts = {}) {
     vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
     vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
   }
+  // LAZY_CAREER_UI (#4748): CareerBackup is absent until CareerUI.ensureBackup injects it.
+  if (opts.careerLazy) {
+    vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+    vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: absSrc("js/career/save-migrate.js") });
+    vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
+    sb.ensureBackupCalls = 0;
+    // The inject lands a macrotask later, the way a <script> does.
+    sb.CareerUI = { ensureBackup() {
+      sb.ensureBackupCalls++;
+      return new Promise((resolve) => setImmediate(() => {
+        if (vm.runInContext("typeof CareerBackup", ctx) === "undefined")
+          vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
+        resolve(true);
+      }));
+    } };
+  }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
@@ -80,8 +96,8 @@ function boot(opts = {}) {
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, GameStore: sb.GameStore, G, disk,
-    careerVersion: opts.career ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
+  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb,
+    careerVersion: opts.career || opts.careerLazy ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
     career: () => plain(SettingsExport.collectCareer()),
@@ -624,6 +640,19 @@ test("the garage file carries what the player BUILT, and nothing else in the nam
   assert.ok(!/parts|"livery(?:\.[^"]*)?":|setup\.|customTeam/.test(JSON.stringify(collect("all")).replace(/"excluded":"[^"]*"/, "")));
 });
 
+test("#5036: a career's own setup sheet round-trips through the garage file beside the free-play one", () => {
+  const free = { arbF: 9, arbR: 3, rideF: 20, rideR: 70, brakeBias: 58 };
+  const mine = { arbF: 4, arbR: 6, rideF: 25, rideR: 60, brakeBias: 56, seed: 4242 };
+  const out = boot({ disk: { "apex26.setup.mercedes": JSON.stringify(free), "apex26.careerSetup.driver.0.mercedes": JSON.stringify(mine) } }).garage();
+  assert.deepEqual(out.garage["setup.mercedes"], free);
+  assert.deepEqual(out.garage["careerSetup.driver.0.mercedes"], mine);
+  const b = boot();
+  const r = b.loadGarage(out);
+  assert.equal(r.ok, true);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.setup.mercedes")), free, "the free-play choices come back unchanged");
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.careerSetup.driver.0.mercedes")), mine, "the career choices and their seed stamp come back unchanged");
+});
+
 test("an empty or blocked store still produces a valid garage file", () => {
   const f = boot().garage();
   assert.equal(f.format, "apex26-garage-v1");
@@ -739,16 +768,34 @@ test("restoring default motion restores OS preference following", () => {
   assert.equal(legacy.disk.get("apex26.motion"), '"reduce"');
 });
 
-test("a refused raw reset is a storage failure, not an applied setting", () => {
+test("a refused raw reset is a storage failure that leaves nothing applied", () => {
   const target = boot({ disk: { "apex26.gfxBackend": "glx" }, store: { rawDel: () => false } });
   const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
     display: { gfxBackend: null }, audio: { volMusic: 0.4 },
   } });
   assert.equal(result.failed, 1, "the UI must stay open instead of reloading");
-  assert.equal(result.applied, 1, "only the successful volume write counts");
+  assert.equal(result.applied, 0, "one refusal undoes the whole import (#5005): nothing is half-applied");
   assert.equal(result.skipped, 0);
   assert.equal(target.disk.get("apex26.gfxBackend"), "glx");
-  assert.equal(target.disk.get("apex26.volMusic"), "0.4");
+  assert.equal(target.disk.has("apex26.volMusic"), false, "the volume write that did land is put back");
+});
+
+test("#5005: on the real store one refused write undoes the import in memory and on disk, and unset keys stay unset", () => {
+  const seed = { "apex26.volSfx": "0.2", "apex26.gfxBackend": "glx" };
+  const target = boot({ realStore: true, disk: seed });
+  const ls = target.sb.localStorage, setItem = ls.setItem;
+  ls.setItem = (k, v) => { if (k === "apex26.volMusic") throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" }); setItem(k, v); };
+  const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    audio: { sfx: false, volSfx: 0.9, volMusic: 0.4 }, display: { gfxBackend: "tlx" },
+  } });
+  assert.equal(result.applied, 0);
+  assert.ok(result.failed >= 1);
+  assert.deepEqual(Object.fromEntries(target.disk), seed);
+  const s = target.GameStore.store;
+  assert.equal(s.get("volSfx", 1), 0.2);
+  assert.equal(s.raw("apex26.gfxBackend"), "glx");
+  assert.equal(s.getStored("sfx"), undefined, "never set before the import, so not written out as a default after it");
+  assert.equal(s.getStored("volMusic"), undefined, "the refused value does not live on in memory either");
 });
 
 test("throwing storage is reported as failed for settings and garage imports", () => {
@@ -1795,4 +1842,43 @@ test("cockpit finish choices round-trip as camera preferences without exporting 
   dst.loadSettings(file);
   for (const [key, value] of Object.entries({ cockpitWheelFinish: "suede", cockpitBodyFinish: "chrome", cockpitHaloFinish: "livery" }))
     assert.equal(dst.disk.get("apex26." + key), value);
+});
+
+test("storage health ends up after the SAVES & DATA heading when it self-booted first", () => {
+  const dom = makeDom();
+  const host = dom.byId("pm-panel-files");
+  const ctx = vm.createContext({ document: dom.document, localStorage: {}, Log: { info() {}, warn() {} } });
+  vm.runInContext(read("js/ui/save-health.js") + ";this.SH=SaveHealth;", ctx, { filename: absSrc("js/ui/save-health.js") });
+  const real = host.appendChild; // mini-dom does not detach a moved node like a real DOM
+  host.appendChild = (c) => { const i = host.children.indexOf(c); if (i >= 0) host.children.splice(i, 1); return real(c); };
+  const handle = ctx.SH.mount(host); assert.ok(handle);
+  const h = dom.document.createElement("h3"), nav = dom.document.createElement("div");
+  host.append(h, nav);
+  assert.equal(ctx.SH.mount(host), handle);
+  assert.equal(host.children[host.children.length - 1], handle.root);
+  assert.ok(host.children.indexOf(h) < host.children.indexOf(handle.root));
+});
+
+test("#4748: CAREER FILE load awaits the lazy CareerBackup before its future-version gate", async () => {
+  const b = bootImportUI({ careerLazy: true });
+  assert.equal(vm.runInContext("typeof CareerBackup", b.sb), "undefined", "CareerBackup is still in flight");
+  assert.ok(b.sb.ensureBackupCalls >= 1, "mounting FILES warms the career bundle");
+  const button = b.dom.byId("pm-career-load");
+  const file = JSON.stringify({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+    "career.driver.2": { ...CAREER_SAVE, v: b.careerVersion + 1 } } });
+  pickerFile(b, button, { text: () => Promise.resolve(file) });
+  for (let i = 0; i < 8; i++) await new Promise(setImmediate);
+  assert.match(button.textContent, /NEWER-VERSION/, "futureCareerSlot ran with CareerBackup loaded, not 'unavailable'");
+  assert.equal(b.reloads(), 0);
+});
+
+test("WHEEL LOCK & ABS (wheelState, wheelAssist) survive settings backup and restore (#4946)", () => {
+  const file = boot({ disk: { "apex26.wheelState": "1", "apex26.wheelAssist": "full" } }).collect("changes");
+  const dst = boot();
+  assert.equal(dst.loadSettings(file).skipped, 0);
+  assert.equal(dst.disk.get("apex26.wheelState"), "1");
+  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
+  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { driving: { wheelAssist: "turbo" } } });
+  assert.equal(bad.skipped, 1);
+  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
 });

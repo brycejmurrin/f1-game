@@ -5,13 +5,17 @@ const GarageEntranceMotion = (function () {
   const WHEEL_RADIUS = 0.34;   // fitted CarWheels tyre radius, matched in the Blender source
   const MIRROR = new Set(["x", "yaw", "steer"]);
   let checked = null, usable = false;
-  function data() {
-    const d = typeof GarageEntranceMotionData === "undefined" ? null : GarageEntranceMotionData;
-    if (d === checked) return usable ? d : null;
-    checked = d; usable = !!d && d.version === 1 && Array.isArray(d.columns)
+  // Apart: closures in data() gave every call a context (#5462).
+  function valid(d) {
+    return !!d && d.version === 1 && Array.isArray(d.columns)
       && FIELDS.every((key, i) => d.columns[i] === key)
       && [d.lane, d.back].every((rows) => Array.isArray(rows) && rows.length >= 2
         && rows.every((row) => Array.isArray(row) && row.length === FIELDS.length && row.every(Number.isFinite)));
+  }
+  function data() {
+    const d = typeof GarageEntranceMotionData === "undefined" ? null : GarageEntranceMotionData;
+    if (d === checked) return usable ? d : null;
+    checked = d; usable = valid(d);
     return usable ? d : null;
   }
   // Linear interpolation preserves the baked contact envelope and cannot overshoot

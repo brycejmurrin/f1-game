@@ -39,9 +39,9 @@ test("a lapped car that takes the flag is classified behind a lead-lap car still
   place(B, L - 100, 2, 75);                                        // a lap down, just behind on the road
   place(C, L - 440, 3, 80);                                        // lead lap, ~5 s back
   a.setInput({ throttle: true, steer: 0 });
-  // A wait cap, not a measured value: C is dropped at x=0 at 80 m/s, runs to the right-hand wall and scrubs
-  // along it to the pit entry, so when it takes the flag depends on that wall. Measured: results at step 716
-  // with the #5079 pocket (the car left the wall one node early), 724 with the taper capped at the lane wall.
+  // A wait cap, not a measured value. C used to keep its 0.45 rad getaway heading at 80 m/s, run to the
+  // right-hand wall and scrub along it (results at step 716-724, by barrier geometry); since #5338 a car whose
+  // speed is set starts facing the road: it holds the line (max |x| 0.21 m) and the results come at step 495.
   for (let i = 0; i < 60 * 15 && G.state === "race"; i++) g.step(1);
   assert.equal(G.state, "results");
   assert.equal(P.finPos, 1);

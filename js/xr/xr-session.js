@@ -107,7 +107,17 @@ const XrSession = (function () {
       emit("capability", { supported: false, reason: "isSessionSupported-threw", error: String(e && e.message || e) });
       return false;
     }
+    // Store the answer so the next boot seeds it instead of asking (#4324, #5417).
+    if (typeof XrBoot !== "undefined" && XrBoot.storeVrCaps) XrBoot.storeVrCaps(_supported);
     emit("capability", { supported: _supported });
+    return _supported;
+  }
+
+  /** Adopt a stored capability answer without asking navigator.xr (#4324: bfcache). */
+  function seed(supported) {
+    _probed = true;
+    _supported = !!supported;
+    emit("capability", { supported: _supported, cached: true });
     return _supported;
   }
 
@@ -494,7 +504,7 @@ const XrSession = (function () {
   }
 
   return {
-    probe, isSupported, isProbed, isPresenting, isVisible,
+    probe, seed, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
     getFrame, getSession, getRefSpace, backend, lastError,
     frameCount, enabledFeatures, featureGranted, sessionInit,

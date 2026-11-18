@@ -1126,8 +1126,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
     // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
     // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
-    const bz = vpW() > vpH() && !document.body.classList.contains("desktop") ? 1   // landscape touch: the real 44 px pair; the plate is pinned (css/hud.css, #5256), capRow clears it
-      : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    const bz = Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
     const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
@@ -1406,18 +1405,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
           && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
         let leftEdge = 0, rightEdge = vpW();
         const mid = vpW() / 2;
-        for (const dock of [_dockL, _dockR]) {
-          if (!dock) continue;
-          const nodes = dock.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn");
-          for (let i = 0; i < nodes.length; i++) {
-            const el = nodes[i];
-            if (!el || el.hidden) continue;
-            const r = el.getBoundingClientRect();
-            if (!(r.width && r.height)) continue;
-            const cx = (r.left + r.right) / 2;
-            if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
-            else leftEdge = Math.max(leftEdge, r.right);
-          }
+        for (const el of dockButtons()) {   // the cached [dockL…, dockR…] list, not a query per pass (#3108)
+          if (!el || el.hidden) continue;
+          const r = el.getBoundingClientRect();
+          if (!(r.width && r.height)) continue;
+          const cx = (r.left + r.right) / 2;
+          if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
+          else leftEdge = Math.max(leftEdge, r.right);
         }
         // `bottom` is zoom-invariant (span / currentCSSZoom); room is screen px.
         const room = rightEdge - leftEdge - 2 * FIT_AIR;

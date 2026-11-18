@@ -8,7 +8,9 @@
  * one car's teleport (> JUMP_M beyond what its speed covers): it snaps to the
  * nearer real sample instead, and PLAYBACK across either one cuts the camera
  * rig (a seek always did). Flaps, disc glow and the pedals ride a byte lane
- * (AUX), so the replayed car shows the recorded state, not the paused one. */
+ * (AUX), so the replayed car shows the recorded state, not the paused one;
+ * the same lane carries the pit stop (in its box, and how far through), so a
+ * car is on its jacks in the replay only where it was when recorded. */
 "use strict";
 const ReplayBuf = (function () {
   // Audio presentation only: live retirement/classification remains authoritative.
@@ -18,21 +20,27 @@ const ReplayBuf = (function () {
     if (entry && !entry.owner.valid()) { entry.owner.release(); entry = audioStatus.get(car); }
     return entry ? entry.retired : !!car.retired;
   }
+  /** The replayed stop's progress (PitLane.stopAnim's u, 0..1) for a car a scrub shows in its box; -1 otherwise. */
+  function boxU(car) {
+    const entry = audioStatus.get(car);
+    return entry && entry.owner.valid() && entry.boxU >= 0 ? entry.boxU : -1;
+  }
   const HZ = 30;
   const WINDOW_S = 20;
   const MAX_FRAMES = HZ * WINDOW_S;           // 600
   const FLOATS = 9;                           // s, x, yaw, speed, px, py, pz, steer, yawVis
   const AUX = ["aeroX", "brakeHeat", "throttleDemand", "brakeDemand"];   // 0..1 render cues, one byte each
+  const BOX = AUX.length, AUXN = AUX.length + 1;   // + one byte: 0 not in its pit box, else 1 + stopAnim u * 254
   const MAX_CARS = 24;                         // MY TEAM / LEGENDS grids run 23-24 cars
   const MAX_BYTES = 720 * 1024;               // ring typed-array cap; fixed scratch/status reported separately
   const TAG_CAP = 64;
   const JUMP_M = 50;                          // pose jump past speed*dt that no car drives: a teleport
   const RATES = [0.25, 0.5, 1];
-  const POSE_FIELDS = ["s", "x", "head", "speed", "px", "py", "pz", "steer", "yawVis",
+  const POSE_FIELDS = ["pitState", "s", "x", "head", "speed", "px", "py", "pz", "steer", "yawVis",
     "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis"].concat(AUX);
 
   function frameBytes(nCars) {
-    return 8 + nCars * FLOATS * 4 + nCars * AUX.length + nCars + 1; // Float64 timestamp + poses + cues + status + break
+    return 8 + nCars * FLOATS * 4 + nCars * AUXN + nCars + 1; // Float64 timestamp + poses + cues and stop + status + break
   }
   function budgetOk(nCars, frames) {
     return frameBytes(nCars) * frames <= MAX_BYTES;
@@ -96,7 +104,7 @@ const ReplayBuf = (function () {
       cap = capacityFor(nCars);
       times = new Float64Array(cap);
       data = new Float32Array(cap * nCars * FLOATS);
-      aux = new Uint8Array(cap * nCars * AUX.length);
+      aux = new Uint8Array(cap * nCars * AUXN);
       status = new Uint8Array(cap * nCars);
       brk = new Uint8Array(cap);   // brk[f] = 1: frame f opens a new segment, never blended from the one before
       head = 0; count = 0; lastSlot = -1; tags = [];
@@ -138,8 +146,10 @@ const ReplayBuf = (function () {
       data[o + 6] = c.pz || 0;
       data[o + 7] = c.steer || 0;
       data[o + 8] = c.yawVis || 0;
-      const q = (frame * nCars + i) * AUX.length;
+      const q = (frame * nCars + i) * AUXN;
       for (let k = 0; k < AUX.length; k++) aux[q + k] = Math.round(Math.max(0, Math.min(1, +c[AUX[k]] || 0)) * 255);
+      const stop = c.pitState === "box" ? (G.pits && G.pits.stopAnim ? G.pits.stopAnim(c).u : 0) : -1;
+      aux[q + BOX] = stop >= 0 ? 1 + Math.round(Math.min(1, stop) * 254) : 0;
       status[frame * nCars + i] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
     }
     function readCar(out, frame, i) {
@@ -237,8 +247,13 @@ const ReplayBuf = (function () {
         row.s = _o[0]; row.x = _o[1]; row.head = _o[2]; row.speed = _o[3];
         row.px = _o[4]; row.py = _o[5]; row.pz = _o[6]; row.steer = _o[7]; row.yawVis = _o[8];
         row.status = st;
-        const qa = (i0 * nCars + c) * AUX.length, qb = (i1 * nCars + c) * AUX.length, ua = snap ? snapU : u;
+        const qa = (i0 * nCars + c) * AUXN, qb = (i1 * nCars + c) * AUXN, ua = snap ? snapU : u;
         for (let k = 0; k < AUX.length; k++) row[AUX[k]] = (aux[qa + k] + (aux[qb + k] - aux[qa + k]) * ua) / 255;
+        // The stop blends only between two in-box samples: across its first or last frame it takes the
+        // shown sample's, as status does, so the jacks never flash through a blend with "not in the box".
+        const ba = aux[qa + BOX], bb = aux[qb + BOX];
+        const bv = ba && bb ? ba + (bb - ba) * ua : (snap && snapU ? bb : ba);
+        row.box = bv ? (bv - 1) / 254 : -1;
       }
       // k: the chronological frame the shown pose belongs to (the far side of a break once it is shown).
       if (out) { out.t = tt; out.k = k0 + (cut && snapU ? 1 : 0); return out; }
@@ -271,7 +286,10 @@ const ReplayBuf = (function () {
         c.rPrevS = p.s; c.rPrevX = p.x; c.rPrevPx = p.px; c.rPrevPz = p.pz;
         c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
         for (let k = 0; k < AUX.length; k++) c[AUX[k]] = p[AUX[k]];
-        audioStatus.set(c, { owner: audioOwner, retired: !!(p.status & 1) });
+        // The recorded stop, not the live one: a car paused in its box replays its lap on its wheels.
+        const inBox = p.box >= 0;
+        if (inBox) c.pitState = "box"; else if (c.pitState === "box") c.pitState = "none";
+        audioStatus.set(c, { owner: audioOwner, retired: !!(p.status & 1), boxU: inBox ? p.box : -1 });
       }
       if (typeof GameAudio !== "undefined" && GameAudio.syncReplayRpms) GameAudio.syncReplayRpms(cars);   // revs follow the replayed speed
     }
@@ -417,7 +435,7 @@ const ReplayBuf = (function () {
       const say = (text) => { if (generation === sheetGeneration && typeof document !== "undefined") { const el = document.getElementById("pm-replay-sheet-status"); if (el) el.textContent = text; } };
       say("Capturing before, moment and after…");
       try { const ok = await PhotoStudio.contactSheet(times, seek, cancelled); if (cancelled()) return false; say("Contact sheet PNG download requested."); return ok; }
-      catch (e) { say(sheetCancelled ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
+      catch (e) { say(sheetCancelled || (typeof PhotoStudio.shareCancelled === "function" && PhotoStudio.shareCancelled(e)) ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
       finally {
         if (owns()) {
           seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
@@ -577,7 +595,7 @@ const ReplayBuf = (function () {
   }
 
   return {
-    create, audioRetired, HZ, WINDOW_S, FLOATS, MAX_CARS, MAX_FRAMES, MAX_BYTES,
+    create, audioRetired, boxU, HZ, WINDOW_S, FLOATS, MAX_CARS, MAX_FRAMES, MAX_BYTES,
     frameBytes, budgetOk, capacityFor, lerpCar,
   };
 })();

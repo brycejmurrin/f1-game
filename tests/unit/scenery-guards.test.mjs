@@ -279,10 +279,33 @@ test("a run that wraps the start line is not read as contained in an earlier run
 });
 
 test("one tree per spot", () => {
-  const src = read("js/track/scenery/nature.js");
-  assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");
-  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 2,
-    "both pine() and tree() must take the guard — two trees on one spot is one tree drawn twice");
+  // Planted, not grepped: the old pin counted two `if (spotTaken(..)) return;`
+  // lines and stayed green with spotTaken() answering false — every repeat
+  // planting then drew a second tree into the first. Both pine() and tree()
+  // must refuse a spot either of them already holds, and still plant elsewhere.
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const env = vmContext();
+  const base = env.Tracks.LIST.find((d) => d.id === "bahrain");
+  const emitted = {};
+  const FOL = [0.2, 0.4, 0.2];
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      const k = Math.round(api.n * 0.3), kB = (k + 40) % api.n, kC = (k + 80) % api.n;
+      const run = (what, fn) => { const from = env.mark(); fn(); emitted[what] = env.prims.length - from; };
+      run("tree A", () => api.tree(k, 1, 30, 12, FOL));
+      run("tree A again", () => api.tree(k, 1, 30, 12, FOL));
+      run("pine on A", () => api.pine(k, 1, 30, 12, FOL));
+      run("tree B", () => api.tree(kB, 1, 30, 12, FOL));
+      run("pine C", () => api.pine(kC, 1, 30, 12, FOL));
+      run("tree on C", () => api.tree(kC, 1, 30, 12, FOL));
+      run("pine on C again", () => api.pine(kC, 1, 30, 12, FOL));
+    },
+  });
+  env.release(env.Tracks.build(def, {}));
+  for (const first of ["tree A", "tree B", "pine C"])
+    assert.ok(emitted[first] > 0, `${first} on an empty spot must plant (${emitted[first]} prims)`);
+  for (const repeat of ["tree A again", "pine on A", "tree on C", "pine on C again"])
+    assert.equal(emitted[repeat], 0, `${repeat}: a second tree on a planted spot is one tree drawn twice`);
 });
 
 test("a facade draws no rail on its bottom face", () => {
