@@ -19,7 +19,7 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 | **ci-red-triage** | A red `ci.yml` / `pages.yml` run: names test, assertion, lane, base verdict, and stale `gen:check` / agent-index drift (prescribe `npm run gen`); for Pages, the nested `ci / …` job and the merge since the last green Pages run. Read-only; never re-runs locally. |
 | **prior-art-scout** | Step 0 of a hunt or audit: greps `docs/notes/DEFECT-LEDGER.md`, `docs/BUGS.md`, hunt/survey notes and `git log` for one slice or topic and returns ≤ 30 `KNOWN` rows — the do-not-re-report list. Haiku, 12 turns; never judges whether an item is still true. |
 | **code-hunter** | Bug / perf / dead-code / drift hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. `focus: dead-code` on a skill, card or fat module runs the `bloat-scan.mjs` recipe. Node-only checks; the whole run stays well under 10 min. Tiered at spawn (the workflows pass haiku / sonnet / opus by slice shape). |
-| **surface-reviewer** | Cross-file review of a SET of agent-surface units (skills, cards, hooks, rules, settings, AGENTS.md sections): extracts every claim unit A makes about unit B and tests it against B (`--help`, anchors, a sample payload piped into the hook, WebFetch for a host-doc claim), flags one-home collisions and pointer cycles, writes a ≤ 60-line report to `scratch/**.md` (`tools/hooks/scratch-md-only.sh`; no Bash writes) and returns `VERDICT` + `CLAIM` rows; `retest <old report>` adds BEFORE/AFTER. |
+| **surface-reviewer** | Cross-file review of a SET of agent-surface units (skills, cards, hooks, rules, settings, AGENTS.md sections): extracts every claim unit A makes about unit B and tests it against B (`--help`, anchors, the hook's pinned test, WebFetch for a host-doc claim), flags one-home collisions and pointer cycles, writes a ≤ 60-line report to `scratch/**.md` (`tools/hooks/scratch-md-only.sh`; no Bash writes) and returns `VERDICT` + `CLAIM` rows; `retest <old report>` adds BEFORE/AFTER. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. A workflow's verifier schema carries `needsBrowser` so a renderer/HUD claim is reported, not refuted. |
 | **worker** | ONE scoped change handed off by the parent, in its own worktree (`isolation: worktree`), node-only verification, commits on its branch, coordinates mid-task with `SendMessage` (§Parent and child). The spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. No browser servers on its list; never merges, arms, readies or cancels. Ends with the fixed `WORKER <name>:` report. |
 
@@ -46,14 +46,16 @@ one of them.
   the agent. A whole MCP server is `mcp__<server>__*` (the bare `mcp__<server>`
   form matches nothing in `tools:`; code.claude.com/docs/en/sub-agents,
   read 2026-11-03), a single tool is its full name. `disallowedTools: Write,
-  Edit, NotebookEdit` is the belt over the braces on every reporter. The
+  Edit, NotebookEdit` is the belt over the braces on every reporter but
+  surface-reviewer (it writes its report). The
   browser MCP servers are simply absent from every card but none: omission
   beats a deny hook, and `mcp-browser-guard.sh` still refuses them to any
   subagent that somehow lists them.
 - Per-agent `hooks:` frontmatter (run only while that agent runs): the
-  reporters wire `tools/hooks/readonly-bash.sh` on Bash (refuses `>`/`>>`,
-  tee, `sed -i`, mv/cp/rm, index- or ref-moving git verbs, interpreter file
-  writes, the generators; verify-agent's ONE exception is its
+  reporters wire `tools/hooks/readonly-bash.sh` on Bash (refuses `>`/`>>` and
+  tee outside `scratch/` and `artifacts/`, `sed -i`, mv/cp/rm, `bash <script>`,
+  `curl -o`, index- or branch-moving git verbs (`git fetch` passes), interpreter
+  file writes, the generators; verify-agent's ONE exception is its
   `scratch/verify-base-*` worktree); track-surveyor wires
   `tools/hooks/surveyor-scope.sh` (Write/Edit to the circuit pair, `scratch/`,
   `artifacts/`); surface-reviewer wires `tools/hooks/scratch-md-only.sh`

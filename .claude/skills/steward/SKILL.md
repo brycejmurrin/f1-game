@@ -79,8 +79,10 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. A red
    deploy branch is claimed through the Board and fixed by a PR; the deploy branch is never pushed to. Before
    opening a tip fix, list the open PRs of the last hour that name the failing test or carry `deploy:red`; if one
-   exists, comment there instead of opening a second. A path in an open PR's diff belongs to that PR until it merges
-   or closes.
+   exists, comment there instead of opening a second. A path in another open PR's diff is NOT a blocker (D-033):
+   edit it in parallel, keep the hunks small and list the open PRs that share files in the PR body. The PR that
+   merges second syncs through `sync-pr.mjs` (§Red 5) and resolves the conflict in that merge commit, never by a
+   force-push or a rebase.
 4. Fix on the branch, verify at the floor (§Push), ONE push. A flake: AGENTS.md rule 9 (quarantine by name in
    `tests/data/flaky-quarantine.json`). A job that FAILED (infra, setup, timeout) is never re-run on a PR that must
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
