@@ -1526,6 +1526,7 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "layout": [
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "onWheel": [
@@ -2046,18 +2047,22 @@
     },
     "js/camera/fov-fit.js": {
       "fitFovY": [
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/fov-fit.test.mjs",
         "tests/unit/trackside.test.mjs"
       ],
       "hfovFromVfov": [
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/fov-fit.test.mjs"
       ]
     },
     "js/camera/fov-mode.js": {
       "modeBoost": [
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/fov-fit.test.mjs"
       ],
       "modeFov": [
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/fov-fit.test.mjs"
       ],
       "*": [
@@ -2644,6 +2649,7 @@
       "*": [
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/cam-avoid.test.mjs",
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/flyby-shots.test.mjs"
       ]
@@ -5661,6 +5667,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",

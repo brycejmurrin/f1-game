@@ -414,6 +414,12 @@ const Car3D = (function () {
           if(s>0) addQuad(out,a[j],b[j],b[j+1],a[j+1],c1); else addQuad(out,a[j+1],b[j+1],b[j],a[j],c1);
         }
         CarMaterials.smoothSkin(out,start);
+        // LINED shoulder (Bryce 2026-11-18, "I can see through the sides"): the wide onboard lens's 0.3 m near plane cuts this
+        // open crown shell at the frame's sides; inward carbon 2 mm inside the outer wall (ring 1-4, z 0.94..-0.12, where a forward
+        // ray leaves it) hides the road on every backend, culled (GLX/TLX) or not (WGX). tests/unit/cockpit-side-occlusion.test.mjs
+        const lin=(q)=>q.map((p)=>{ const d=[q[0][0]-p[0],q[4][1]-p[1]]; const L=Math.hypot(...d)||1; return [p[0]+d[0]/L*0.002,p[1]+d[1]/L*0.002,p[2]]; });
+        for(let i=1;i<3;i++) for(let j=1;j<4;j++) { const a=lin(rings[i]), b=lin(rings[i+1]);
+          if(s>0) addQuad(out,a[j+1],b[j+1],b[j],a[j],CARBON,SURFACES.carbon); else addQuad(out,a[j],b[j],b[j+1],a[j+1],CARBON,SURFACES.carbon); }
         for(const i of [0,rings.length-1]) for(let j=1;j<6;j++) {
           const q=rings[i]; if((i===0)===(s>0)) addTri(out,q[0],q[j],q[j+1],c1); else addTri(out,q[0],q[j+1],q[j],c1);
         }

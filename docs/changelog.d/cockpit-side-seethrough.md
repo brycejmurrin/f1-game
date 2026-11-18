@@ -1,0 +1,1 @@
+Fixed: COCKPIT and HELMET cameras: the road no longer shows through the car's sides at the lower left and right of a wide phone screen. The shoulder beside the driver was an open shell the wide lens cut through; it is now lined with carbon.
