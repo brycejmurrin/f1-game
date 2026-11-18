@@ -237,7 +237,7 @@
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/capture-tools-regressions.test.mjs",
+        "tests/unit/capture-tools-replay.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/cdmcp-measure.test.mjs",
@@ -3880,7 +3880,7 @@
       ],
       "*": [
         "tests/unit/ai-strategy.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/apex-tools-mcp-contract.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
@@ -18891,7 +18891,7 @@
       "*": [
         "tests/specs/hud-mirror.spec.js",
         "tests/unit/a11y-opts.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/apex-tools-mcp-occupancy.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
