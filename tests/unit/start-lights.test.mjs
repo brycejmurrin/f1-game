@@ -239,6 +239,10 @@ test("#1882: countCredit gives nothing back at full rate and caps a resumed tab 
   assert.equal(SL.countCredit(-5, 0, 0), 0);             // non-monotonic rAF stamp
   assert.equal(SL.countCredit(30, 0.25, 0), 0.75);        // a 30 s gap: one lamp, never the whole sequence
   assert.ok(Math.abs(SL.countCredit(0.25, 0.25, 0.1) - 0.1) < 1e-12);   // the dropped backlog comes back
+  // A resumed tab that ALSO hits the 5-step frame cap: wall catch-up + a large
+  // dropped backlog must still be one lamp, not wall-cap + uncapped drop.
+  assert.equal(SL.countCredit(30, 0.25, 2.5), 1, "wall + drop sum ≤ CATCHUP_S");
+  assert.equal(SL.countCredit(0.5, 0.25, 0.9), 1, "partial wall + drop still caps at one lamp");
   assert.equal(SL.create({ state: "count" }, { Particles: null }).countCredit, SL.countCredit);
 });
 
