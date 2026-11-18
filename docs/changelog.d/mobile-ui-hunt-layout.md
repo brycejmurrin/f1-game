@@ -1,0 +1,1 @@
+Fixed: phone Settings postcard width, landscape door fold, Race Settings DEFAULT/STABLE boxes, Data Hub calendar bar gap, How to Play chip clip, Qualifying two-column order, and title landscape black bar / section labels.

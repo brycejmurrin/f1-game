@@ -5,7 +5,9 @@
    --fit-at (where set) inherits onto the inner .sheet so classifyFit can
    shrink the sheet at 200% UI size. Landscape is a viewport fact. */
 #pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
-#pmsettings  { --sheet-w: 760px; }
+/* Cap lives in css/settings.css (1020, zoom-safe). Keep a fallback here for
+   the brief window before settings.css applies. */
+#pmsettings  { --sheet-w: 1020px; }
 /* The HUD SIZE sample: a picture of a hud-box that zooms by the same RAW
    --hud-scale the dock takes, so the slider's drag visibly resizes it —
    every real cluster is hidden while this .dim sheet is open (css/hud.css's

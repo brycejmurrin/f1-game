@@ -121,3 +121,10 @@ test("r6 carve stays Settings APPEARANCE (no foreign selectors)", () => {
   assert.match(m[0], /data-shape="tall"/);
   assert.match(m[0], /preset-list/);
 });
+
+test("mobile-ui: Settings sheet-w is 1020; wide compact-at is 620", () => {
+  const settings = fs.readFileSync(path.join(ROOT, "css/settings.css"), "utf8");
+  const sRules = cssRules(settings);
+  assert.equal(decl(sRules, "#pmsettings", "--sheet-w"), "1020px");
+  assert.equal(decl(sRules, '#pmsettings-inner:not([data-shape="tall"])', "--compact-at"), "620px");
+});
