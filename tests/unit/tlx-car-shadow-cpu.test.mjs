@@ -73,6 +73,60 @@ test("sweepCarShadowMirrors walks only the car casters, not the whole geometry r
   void keep;
 });
 
+// R20 (#5777): a car shadow caster (car-draw.js data._casterOnly) is position + index, and no lit entry draws it.
+const A = (array, itemSize) => ({ array, itemSize, count: array.length / itemSize });
+function casterRig() {
+  const warns = [], recs = [];
+  class BufferGeometry {
+    constructor() { this.attributes = {}; this.index = null; this.userData = {}; }
+    setAttribute(k, a) { this.attributes[k] = a; }
+    setIndex(a) { this.index = a; }
+  }
+  const THREE = { BufferGeometry, BufferAttribute: function (array, itemSize) { return A(array, itemSize); } };
+  const TLXShaders = { packIndex: (T, idx, verts) => A(verts > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1) };
+  const pk = (T, src, n, size) => A(new Float32Array(n), size);
+  const draw = "function " + lift(tlx.replace("        draw(mesh, model, opts) {", "function drawLit(mesh, model, opts) {"), "drawLit").slice(9);
+  const h = new Function("THREE", "TLXShaders", "_pk", "Log", "recs", `
+    const renderer = { backend: { isWebGPUBackend: true } }, _regGeo = (g) => g;
+    const _capture = null, _captureRec = () => {}, _coOn = true, _drawMatMode = 0, vizMat = null, lit = {}, skipBatches = () => false, poolModelMat = (m) => m;
+    const materialFor = () => "lit", drawEm = () => 0, drawAl = () => 1, fxFor = () => false;
+    const pushRec = (geo) => { recs.push(geo); };
+    ${lift(tlx, "buildGeometry")}
+    let _casterWarned = false;
+    ${lift(tlx, "casterRefused")}
+    ${lift(tlx, "_coAppend")}
+    ${draw}
+    return { build: buildGeometry, draw: drawLit };`)(THREE, TLXShaders, pk, { warn: (...a) => warns.push(a) }, recs);
+  return { ...h, warns, recs };
+}
+const TRI = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], mat: [61, 61, 61], idx: [0, 1, 2] };
+
+test("a caster-only build is exactly position + index; an ordinary build keeps the lit vertex format", () => {
+  const r = casterRig();
+  const lit = r.build({ ...TRI });
+  assert.deepEqual(Object.keys(lit.attributes).sort(), ["color", "mat", "normal", "position", "trk"]);
+  assert.ok(lit.userData.tlxFx === true && !lit.__tlxCasterOnly, "the finish scan still runs for a lit car mesh");
+  const g = r.build({ ...TRI, _casterOnly: true, _releaseCpuMirror: true });
+  assert.deepEqual(Object.keys(g.attributes), ["position"], "no normal, colour, mat or trk is allocated");
+  assert.deepEqual(Array.from(g.attributes.position.array), TRI.pos, "the same positions");
+  assert.ok(g.index && g.index.array instanceof Uint16Array, "indexed, same index packing");
+  assert.deepEqual(Array.from(g.index.array), TRI.idx, "the same triangles");
+  assert.ok(g.__tlxCasterOnly === true, "marked for the lit guard");
+});
+
+test("a lit draw of a caster-only geometry draws nothing and warns once", () => {
+  const r = casterRig();
+  const caster = { __tlx: true, geo: r.build({ ...TRI, _casterOnly: true }) }, body = { __tlx: true, geo: r.build({ ...TRI }) };
+  const W = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  r.draw(caster, W, {}); r.draw(caster, W, { coalesce: true }); r.draw(caster, W, {});
+  assert.equal(r.recs.length, 0, "no draw record for a position-only geometry");
+  assert.equal(r.warns.length, 1, "one Log.warn, not one per frame");
+  assert.match(String(r.warns[0][1]), /position-only shadow caster/);
+  r.draw(body, null, {});
+  assert.ok(r.recs.length === 1 && r.recs[0] === body.geo, "an ordinary mesh still draws");
+  assert.equal(r.warns.length, 1);
+});
+
 test("a healthy post frame reuses the post-health record instead of minting one per frame", () => {
   const at = tlx.indexOf('_postHealth = { state: "healthy"');
   assert.notEqual(at, -1, "healthy assignment moved");

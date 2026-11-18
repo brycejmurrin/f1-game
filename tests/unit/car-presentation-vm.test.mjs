@@ -750,6 +750,28 @@ test("team meshes: painted and body-only key per seat, the caster per team, and 
 
 // A car with its OWN fitted shelf (a career R&D upgrade) must not share the
 // factory mesh — its stamp joins the suffix, the caster's ":sh" included.
+// R19/R20 (#5777): Car3D's `_releaseCpuMirror` marks EVERY silhouette build, the shared rival body included, and
+// that one draws LIT (game.js). `_casterOnly` is what TLX builds position + index for, so it may sit on the two
+// depth-only builds and nowhere else. The VM's createMesh hands the build data back, so the mesh IS the data.
+test("_casterOnly marks the team caster and the first-person caster, never a lit mesh or the shared rival body", () => {
+  const v = carDrawVm({ casters: true, cam: "cockpit" });
+  v.field((c, i) => 1000 + 9 * i);
+  const cd = v.carDraw, team = v.teams[1], idle = [];
+  const [a] = v.G.cars.filter((c) => c.team === team);
+  v.ctx.requestIdleCallback = (fn) => { idle.push(fn); return idle.length; };
+  v.ctx.CarGeometry = { decimate: (geo) => ({ ...geo, far: true }) };   // a decimator that keeps every own property
+  assert.ok(cd.teamMesh(team, a, true)._casterOnly === true, "the team silhouette caster");
+  assert.ok(cd.teamMesh(team, null)._casterOnly === true, "teamMesh(team) with no car is that caster");
+  assert.ok(cd.cockpitShadowMesh(v.G.player.team, v.G.player)._casterOnly === true, "the first-person caster");
+  const lit = { painted: cd.teamMesh(team, a), body: cd.teamBodyMesh(team, a), cockpit: cd.cockpitBodyMesh(v.G.player.team, v.G.player),
+    rival: cd.sharedRivalBodyMesh(true) };
+  assert.equal(idle.length, 1, "the far decimation queued");
+  idle.shift()();
+  lit.far = cd.sharedRivalBodyMesh(true);
+  assert.ok(lit.far.far === true && lit.far !== lit.rival, "the decimated far body");
+  for (const k in lit) assert.ok(lit[k] && !("_casterOnly" in lit[k]), k + " draws lit: no caster flag");
+});
+
 test("a car on its own shelf builds its own body and its own caster; the factory car shares the team's", () => {
   const up = Object.assign({}, WORKS, { aero: "outwash_max" });
   const v = carDrawVm({ career: {} });

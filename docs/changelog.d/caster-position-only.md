@@ -1,0 +1,1 @@
+Improved: Default renderer memory: car shadow casters now hold positions and triangles only, so a race keeps about 8 to 9 MB less geometry data in memory (counted, not measured on a phone); shadows are drawn from the same triangles as before.
