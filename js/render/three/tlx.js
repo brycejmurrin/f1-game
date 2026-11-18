@@ -1461,12 +1461,15 @@ const TLX = (function () {
       // march budget. Keep its material eligibility attachment on every active
       // post chain; white fallback would polish porous verges again. Retain it
       // through temporary overload shedding to avoid render-target churn.
-      // The old tlxTagLess A/B override is incompatible with this requirement:
-      // every chain is built with the attachment (ssrTag: true below).
+      // The old tlxTagLess A/B override is incompatible with this requirement.
+      // _wantTag is the rule's one seam (tlx-hunt3 R3 drives it); it answers true today.
+      function _wantTag() {
+        return true;
+      }
       // Preserve compatibility with a chain created without the attachment:
       // upgrade it before the scene records, then retire the replaced chain.
       function _tagSwap() {
-        if (!post || !post.tagOn || _warmPending || post.tagOn()) return;
+        if (!post || !post.tagOn || _warmPending || post.tagOn() === _wantTag()) return;
         const old = post; post = null;
         _cancelSoftBlits();
         try { if (old.dispose) old.dispose(); } catch (_) { /* best effort */ }
@@ -1483,7 +1486,7 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
-            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: true,
+            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
@@ -5734,9 +5737,9 @@ const TLX = (function () {
           }
           // A throw while pooling the face (acquireMesh) must not leave _envActive latched: mirrorBegin refuses
           // while it is set, so the mirror stayed dark until a later clean envFaceEnd (hunt 2026-11-18 (2) row 11).
+          _poolBatch++;
+          _kidsBegin(_kidsEnv);
           try {
-            _poolBatch++;
-            _kidsBegin(_kidsEnv);
             _instStamp++;
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
@@ -5745,6 +5748,9 @@ const TLX = (function () {
                 // A 64px blurred cube cannot resolve the city. Hardware now
                 // skips chunked/city on probe faces the way software already
                 // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
+                // Both arms skip today; the softContent("chunked") arm stays as the
+                // tlxForceHw=chunked override seam (gfx-backend-canary pins it).
+                if (softContent("chunked") || !chunkedSys) continue;
                 continue;
               }
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
