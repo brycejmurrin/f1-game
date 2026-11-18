@@ -565,14 +565,13 @@ const AiDrive = (function () {
   // use the shared envelope), so tier was ~0.4 of a lap's worth of itself and the
   // team ladder barely showed at a twisty circuit. paceTrim scales an AI car's top
   // speed AND corner target by PACE_GAIN x its scripted pace relative to the mid
-  // field, so solo pace follows team tier, then driver skill. PACE_REF sits 0.8 %
+  // field, so solo pace follows team tier, then driver skill. PACE_REF sits 0.4 %
   // under the field's median scripted pace (tier 2, skill 0.968 = 0.9339): the mean
-  // trim is ~+2 %, which hands back what bounding the setups took off the field
-  // (NORMAL solo median: Red Bull Ring +1.8 %, Monaco +1.2 % slower without it;
-  // with it +0.4 % and -0.2 %, every difficulty within 0.9 %).
+  // trim (~+1 %) is set so the field's NORMAL solo median lap holds against the
+  // calibration's base (tools/check/ai-solo.mjs: Red Bull Ring +0.02 %, Monaco +0.19 %).
   // Fed the BASE tier ladder (TIER_V[tier] x skill), not tierV: career development
   // and a legend duel's tierV lift keep exactly their old weight.
-  const PACE_GAIN = 2.5, PACE_REF = 0.9265;
+  const PACE_GAIN = 2.5, PACE_REF = 0.9302;
   function paceTrim(script) { return script > 0 ? 1 + PACE_GAIN * (script / PACE_REF - 1) : 1; }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));

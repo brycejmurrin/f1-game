@@ -815,7 +815,7 @@ test("AI pace calibration terms (#5330): the wing's drag, the scripted trim, bou
   assert.equal(A.lateralScale(0, 0, 1, 1, 72), 0.975);
   // Scripted trim: 1 at the mid-field reference, PACE_GAIN x the relative scripted pace either side.
   assert.equal(A.PACE_GAIN, 2.5);
-  assert.equal(A.PACE_REF, 0.9265);
+  assert.equal(A.PACE_REF, 0.9302);
   assert.equal(A.paceTrim(A.PACE_REF), 1);
   assert.equal(A.paceTrim(A.PACE_REF * 1.01), 1 + 2.5 * (A.PACE_REF * 1.01 / A.PACE_REF - 1));
   assert.equal(A.paceTrim(0), 1);
