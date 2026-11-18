@@ -80,6 +80,7 @@ const DataSchedule = (function () {
 
   // When the current NEXT stops being upcoming: a reused Schedule node must be
   // rebuilt then, or the chip sits on a finished race for the node's MAX_AGE.
+  const FALLBACK_RECHECK_MS = 30 * 60 * 1000;   // a last-season fallback node is rebuilt after this
   function nextFlipAt(items, now) {
     const r = nextRace(items, now);
     if (r) {
@@ -327,12 +328,15 @@ const DataSchedule = (function () {
           const grid = el("div", "dh-race-grid");
           for (const r of items) grid.appendChild(raceRow(r, false));
           wrap.appendChild(grid);
+          // Re-ask soon: the new calendar can publish any day (hunt #5694 B5).
+          wrap.nextFlipAt = now + FALLBACK_RECHECK_MS;
           return wrap;
         }
         const next = nextRace(items, now);
         let nextMarked = false;
         if (next) wrap.appendChild(nextTile(next, wrap));
-        wrap.appendChild(icsBar(items, next));
+        // After the finale nothing is left to add to a calendar (see seasonItems).
+        if (next) wrap.appendChild(icsBar(items, next));
         wrap.appendChild(el("h3", "dh-section", `${year} CALENDAR`));
         const grid = el("div", "dh-race-grid");
         for (const r of items) {
@@ -348,6 +352,6 @@ const DataSchedule = (function () {
     return { loadSchedule };
   }
 
-  return { create, raceInstant, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
+  return { create, raceInstant, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt, FALLBACK_RECHECK_MS };
 })();
 Object.freeze(DataSchedule);

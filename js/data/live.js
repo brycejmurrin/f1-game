@@ -59,8 +59,12 @@ const DataLive = (function () {
     if (!meta || !meta.dateStart) return "";
     // The LIVE badge opens 30 min before the start: the verb follows the clock.
     const at = now == null ? Date.now() : now;
-    const verb = phase === "UPCOMING" || Date.parse(meta.dateStart) > at ? "Starts " : "Started ";
-    return verb + fmtDateTime(meta.dateStart);
+    const t = Date.parse(meta.dateStart);
+    const verb = phase === "UPCOMING" || t > at ? "Starts " : "Started ";
+    // A session pinned from another year (RESULTS ▸ 2023) must say so: the
+    // date format carries no year (hunt #5694 I2).
+    const year = Number.isFinite(t) ? new Date(t).getUTCFullYear() : NaN;
+    return verb + fmtDateTime(meta.dateStart) + (Number.isFinite(year) && year !== new Date(at).getUTCFullYear() ? ", " + year : "");
   }
 
   // Which requests one LIVE refresh makes. A FINISHED session's first build
@@ -211,6 +215,10 @@ const DataLive = (function () {
         // otherwise a 30 s loop silently re-serves the same payload. ttl:0
         // bypasses the read (api.js request) while still writing on success.
         const ttl = 0;
+        // A batch any request of which fell back to a stale cache copy is not
+        // an update: it must not stamp "updated <now>" (hunt #5694 B2).
+        const staleApi = typeof F1API.staleMark === "function" && typeof F1API.staleSince === "function" ? F1API : null;
+        const staleMark = staleApi ? staleApi.staleMark() : 0;
         const feed = liveFeedRequests(F1API, meta.sessionKey, liveState, phase);
         const positionReq = feed.position;
         const intervalReq = feed.interval;
@@ -224,7 +232,8 @@ const DataLive = (function () {
           paintPhase();
           dataEl.setAttribute("aria-busy", "false");
           const failed = batch.filter((x) => !x.ok);
-          if (batch[1].ok || batch[3].ok) liveState.okAt = Date.now();
+          const staleAt = staleApi ? staleApi.staleSince(staleMark) : null;
+          if ((batch[1].ok || batch[3].ok) && staleAt == null) liveState.okAt = Date.now();
           const gate = failed.find((x) => DataTabUtils.liveLockout(x.error));
           if (failed.length === batch.length || gate) {
             if (!hadData) clear(dataEl);
@@ -262,11 +271,12 @@ const DataLive = (function () {
           const focusedSort = dataEl.isConnected && armAuto === scheduleAuto
             ? Object.keys(sortControls).find(key => sortControls[key] === document.activeElement) : null;
           clear(dataEl);
-          if (failed.length) {
+          if (failed.length || staleAt != null) {
             const partial = el("div", "dh-error");
             partial.setAttribute("role", "status");
-            partial.setAttribute("data-state", "partial");
-            partial.appendChild(el("div", "dh-error-msg", "Some live data couldn't refresh."));
+            partial.setAttribute("data-state", failed.length ? "partial" : "stale");
+            partial.appendChild(el("div", "dh-error-msg", failed.length ? "Some live data couldn't refresh."
+              : "Couldn't refresh live data. Showing an offline copy."));
             dataEl.appendChild(partial);
           }
           const res = batch.map((x) => x.ok ? x.value : null);
@@ -281,7 +291,7 @@ const DataLive = (function () {
           }
           sortControls = fillLive(dataEl, res[0], positions, res[2]) || {};
           if (focusedSort && sortControls[focusedSort]) sortControls[focusedSort].focus({ preventScroll: true });
-          dataEl.setAttribute("data-state", failed.length ? "partial"
+          dataEl.setAttribute("data-state", failed.length ? "partial" : staleAt != null ? "stale"
             : (positions && positions.length ? "ready" : "empty"));
           // The stamp is the last position/interval answer, not this paint:
           // a batch where only weather or drivers came back keeps the old time.

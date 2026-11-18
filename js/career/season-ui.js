@@ -58,7 +58,13 @@ function create(G) {
         ["↑", "Move up", i > 0, () => { swap(i, i - 1); return i - 1; }],
         ["↓", "Move down", i < draft.trackIds.length - 1, () => { swap(i, i + 1); return i + 1; }],
         ["✕", "Remove", draft.trackIds.length > 1,
-          () => { draft.trackIds.splice(i, 1); return Math.min(i, draft.trackIds.length - 1); }],
+          () => {
+            draft.trackIds.splice(i, 1);
+            // A removed round takes its sprint mark with it: re-adding it from the shelf is a GP.
+            const at = sprintIds().indexOf(id);
+            if (at >= 0) draft.sprintIds.splice(at, 1);
+            return Math.min(i, draft.trackIds.length - 1);
+          }],
       ];
       // SPRINT ROUNDS mode: each round says whether it sprints, and toggles.
       if (perRound) ctl.push([sprintHere ? "SPRINT" : "GP", "Sprint weekend", true, () => { toggleSprint(id); return i; }]);
@@ -69,7 +75,12 @@ function create(G) {
         b.disabled = !on;
         b.setAttribute("aria-label", `${label} — ${t.name}`);
         if (k === 3) b.setAttribute("aria-pressed", sprintHere ? "true" : "false");
-        b.onclick = () => { const row = act(); tick(); build(); focusCal(row, k); };
+        b.onclick = () => {
+          const row = act(); tick(); build(); focusCal(row, k);
+          // build() replaced the row the player was on: say what moved (hunt #5694 I3).
+          say(k < 2 ? `${t.name} — round ${row + 1}` : k === 2 ? `${t.name} removed`
+            : `${t.name} — ${sprintIds().indexOf(id) >= 0 ? "sprint weekend" : "Grand Prix"}`);
+        };
         row.appendChild(b);
         btns.push(b);
       });
@@ -85,6 +96,7 @@ function create(G) {
     const b = btns[k] && !btns[k].disabled ? btns[k] : btns.find((x) => !x.disabled);
     (b || $("ss-apply")).focus();
   }
+  function say(text, kind) { if (typeof LiveRegion !== "undefined" && LiveRegion.say) LiveRegion.say(text, kind || "hud"); }
   function sprintIds() { return Array.isArray(draft.sprintIds) ? draft.sprintIds : (draft.sprintIds = []); }
   function toggleSprint(id) {
     const ids = sprintIds();
@@ -118,6 +130,7 @@ function create(G) {
         Object.assign(draft, next);
         if (next.sprintIds) draft.sprintIds = next.sprintIds.slice();
         tick(); build();
+        say(`${p.label} — ${draft.trackIds.length} rounds`);
       };
       pre.appendChild(b);
     }
@@ -127,7 +140,7 @@ function create(G) {
     ]) {
       const b = el("button", "sel-chip", label);
       b.type = "button";
-      b.onclick = () => { act(); tick(); build(); };
+      b.onclick = () => { act(); tick(); build(); say(`${label} — ${draft.trackIds.length} rounds`); };
       pre.appendChild(b);
     }
     pane.appendChild(pre);
@@ -286,6 +299,9 @@ function create(G) {
         if (note) {
           note.setAttribute("role", "status");
           note.textContent = "Season changed in another tab — loaded the latest save. Review, then APPLY again.";
+          // build() just recreated this status node, so it is rarely heard, and at 844×390 it sits below the fold (hunt #5694 I4).
+          say(note.textContent, "save");
+          if (note.scrollIntoView) note.scrollIntoView({ block: "nearest" });
         }
         return;
       }

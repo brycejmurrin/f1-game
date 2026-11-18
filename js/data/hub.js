@@ -827,8 +827,15 @@ const DataHub = (function () {
         ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
         if (!ss.length) { detached(userChanged); ph(sesSel, "no data"); return; }
         if (sel.sessionKey === null) {
+          // The race once it has started; before that (a Friday of the current
+          // weekend) the latest session that has, so RESULTS and WATCH open on
+          // data rather than "no classification yet" (hunt #5694 B4).
+          const now = Date.now(), begun = function (s) { const t = Date.parse(s.dateStart); return !(t > now); };
           const race = ss.filter(function (s) { return (s.type || "").toLowerCase() === "race"; });
-          const def = race.length ? race[race.length - 1] : ss[ss.length - 1];
+          const startedRace = race.filter(begun), started = ss.filter(begun);
+          const def = startedRace.length ? startedRace[startedRace.length - 1]
+            : started.length && race.length ? started[started.length - 1]
+            : race.length ? race[race.length - 1] : ss[ss.length - 1];
           sel.sessionKey = def.sessionKey; sel.meta = def;
         }
         setSelectOptions(sesSel, ss.map(function (s) {

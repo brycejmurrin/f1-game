@@ -372,6 +372,28 @@ test("RESULTS cold-start with empty latestSession defaults year (never meetings(
   assert.equal(active.textContent, String(year));
 });
 
+// Hunt #5694 B4: on the Friday of a weekend the default session was the
+// future Race, so RESULTS read "no classification yet" and WATCH had no race.
+test("the default session is the race once it starts, else the latest session that has", async () => {
+  const at = (h) => new Date(Date.now() + h * 3600000).toISOString();
+  const weekend = (q, r) => [
+    { sessionKey: 1, meetingKey: 50, name: "Practice 1", type: "Practice", dateStart: at(-26) },
+    { sessionKey: 2, meetingKey: 50, name: "Practice 2", type: "Practice", dateStart: at(-22) },
+    { sessionKey: 3, meetingKey: 50, name: "Qualifying", type: "Qualifying", dateStart: at(q) },
+    { sessionKey: 4, meetingKey: 50, name: "Race", type: "Race", dateStart: at(r) }];
+  for (const [q, r, want] of [[20, 44, 2], [-2, 20, 3], [-26, -2, 4]]) {
+    const h = harness({ latest: null, sessions: weekend(q, r) });
+    h.DataHub.open("results"); await h.drain();
+    const picked = h.content().selects()[1].children.find((o) => o.selected);
+    assert.equal(picked && picked.value, String(want), `quali ${q} h, race ${r} h`);
+    h.DataHub.close();
+  }
+  const future = harness({ latest: null, sessions: weekend(20, 44).map((x) => ({ ...x, dateStart: at(48) })) });
+  future.DataHub.open("results"); await future.drain();
+  assert.equal(future.content().selects()[1].children.find((o) => o.selected).value, "4", "a weekend with nothing started still defaults to its race");
+  future.DataHub.close();
+});
+
 // M24: leaving TELEMETRY mid-COMPARE used to leave its OpenF1 lane fetches queued in F1API's serialized lane, so the next
 // tab waited behind work nobody would render. Only hub close() and WATCH cancelled.
 async function startCompare(h) {
@@ -916,5 +938,38 @@ test("LIVE's updated stamp is the last position/interval answer, not the paint",
   h.content().find((n) => n.tagName === "BUTTON" && n.textContent === "↻ REFRESH").dispatch("click");
   await h.drain();
   assert.equal(stamp(), at(t0), "weather/drivers alone do not move the stamp");
+  h.DataHub.close();
+});
+
+// Hunt #5694 B2: offline, a request that falls back to its stale cache copy
+// settles ok — the batch must not stamp "updated <now>" over an old payload.
+test("LIVE: a batch served from a stale cache copy keeps the old stamp and says offline copy", async () => {
+  const timers = new Map(); let nextTimer = 0;
+  const clock = { now: Date.parse("2026-10-04T15:00:00Z"),
+    setTimeout(fn, ms) { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
+    clearTimeout(id) { timers.delete(id); } };
+  const h = harness({ clock });
+  const at = (ms) => "updated " + new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const t0 = clock.now;
+  let staleSeq = 0, staleT = null;
+  h.api.staleMark = () => staleSeq;
+  h.api.staleSince = (mark) => (staleSeq > mark ? staleT : null);
+  h.DataHub.open("live"); await h.drain();
+  const stamp = () => h.content().querySelector(".dh-live-updated").textContent;
+  assert.equal(stamp(), at(t0));
+  const ok = h.api.livePositions;
+  h.api.livePositions = (...a) => { staleSeq++; staleT = t0 - 3600000; return ok(...a); };
+  clock.now += 60000;
+  h.content().find((n) => n.tagName === "BUTTON" && n.textContent === "↻ REFRESH").dispatch("click");
+  await h.drain();
+  assert.equal(stamp(), at(t0), "a stale fallback is not an update");
+  const staleBanner = () => h.content().find((n) => n.classList.contains("dh-error") && n.getAttribute("data-state") === "stale");
+  assert.ok(staleBanner(), "an offline-copy banner is up");
+  h.api.livePositions = ok;
+  clock.now += 60000;
+  h.content().find((n) => n.tagName === "BUTTON" && n.textContent === "↻ REFRESH").dispatch("click");
+  await h.drain();
+  assert.equal(stamp(), at(clock.now), "a fresh answer stamps again");
+  assert.equal(staleBanner(), null, "and it is gone after a fresh answer");
   h.DataHub.close();
 });
