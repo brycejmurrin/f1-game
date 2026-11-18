@@ -280,7 +280,10 @@ const STRIP = {
   // → #5080 (PR #5254, 2026-11-10): the Rettifilo gravel is trimmed per cell instead
   //   of dropped whole; cells under the asphalt are left out. Emission 313768 → 313916,
   //   strip-after 284782 → 284930.
-  monza: { before: 313916, after: 284930 },
+  // → #5652 slice 2 (PR #5741, 2026-11-18): Lesmo 1 bank widened to span both apexes,
+  //   Parabolica bank on { turn: 11 }; the banked road edge moves the trackside
+  //   emission. Emission 313916 → 313976, strip-after 284930 → 284985.
+  monza: { before: 313976, after: 284985 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
