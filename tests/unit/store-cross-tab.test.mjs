@@ -633,6 +633,24 @@ test("BLOCKED storage: a read that throws is remembered, not retried (and re-log
   assert.equal(logs, 1, "one log line, not one per frame");
 });
 
+test("BLOCKED storage: a raw read that throws is remembered, not retried (and re-logged) every frame", () => {
+  // Twin of the JSON-lane test above. XROpts.xrInput() and PerfGov hit store.raw
+  // every frame; before this guard a blocked getItem re-logged 60×/s on the raw
+  // lane while get() was already quiet.
+  let logs = 0, touches = 0;
+  const ctx = {
+    Log: { info() { logs++; }, warn() { logs++; } }, setTimeout, clearTimeout,
+    get localStorage() { touches++; const e = new Error("The operation is insecure."); e.name = "SecurityError"; throw e; },
+  };
+  vm.createContext(ctx);
+  seedSaveMigrate(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8") + ";this.GS=GameStore;", ctx, { filename: absSrc("js/core/store.js") });
+  const s = ctx.GS.store; logs = 0; touches = 0;
+  for (let i = 0; i < 600; i++) assert.equal(s.raw("xrInput"), null);
+  assert.equal(touches, 1, "one storage access, then memory");
+  assert.equal(logs, 1, "one log line, not one per frame");
+});
+
 test("BLOCKED storage: a throwing global getter does not abort boot when IndexedDB exists", async () => {
   const idb = fakeIndexedDb([["apex26.career.driver.0", JSON.stringify({ money: 7 })]]);
   const ctx = {

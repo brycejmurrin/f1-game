@@ -15,6 +15,10 @@ let raceWake = null;
 let raceWakePending = null;
 let raceWakeWanted = false;
 let raceWakeOnRelease = null;
+// hold() while a request is already in flight coalesces into that attempt.
+// If that attempt rejects, the coalesced hold must still be honored — otherwise
+// wanted stays true with no lock and no further request until the next race.
+let raceWakeCoalesce = false;
 function clearReleaseListener(lock) {
   if (lock && raceWakeOnRelease) {
     try { lock.removeEventListener("release", raceWakeOnRelease); } catch (_) { /* sentinel may be dead */ }
@@ -24,11 +28,15 @@ function clearReleaseListener(lock) {
 function hold() {
   raceWakeWanted = true;
   try {
-    if (!navigator.wakeLock || raceWake || raceWakePending) return;
+    if (!navigator.wakeLock || raceWake || raceWakePending) {
+      if (raceWakePending) raceWakeCoalesce = true;
+      return;
+    }
     const pending = navigator.wakeLock.request("screen");
     raceWakePending = pending;
     pending.then((lock) => {
       if (raceWakePending === pending) raceWakePending = null;
+      raceWakeCoalesce = false;
       if (!raceWakeWanted || document.hidden) {
         releaseLock(lock, "late wake-lock release failed");
         return;
@@ -51,11 +59,25 @@ function hold() {
         }, 0);
       };
       lock.addEventListener("release", raceWakeOnRelease);
-    }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
+    }).catch(() => {
+      if (raceWakePending === pending) raceWakePending = null;
+      const again = raceWakeCoalesce;
+      raceWakeCoalesce = false;
+      // Only a coalesced hold() retries — a lone NotAllowedError must not
+      // spin request() on a tight timer (permanent denial would loop forever).
+      if (!again || !raceWakeWanted) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      setTimeout(() => {
+        if (!raceWakeWanted || raceWake || raceWakePending) return;
+        if (typeof document !== "undefined" && document.hidden) return;
+        hold();
+      }, 0);
+    });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }
 function drop() {
   raceWakeWanted = false;
+  raceWakeCoalesce = false;
   const held = raceWake;
   raceWake = null;
   if (held) {
