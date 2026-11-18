@@ -9949,8 +9949,12 @@
         "tests/unit/steer-presets.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "helpBand": [
+        "tests/unit/steer-presets.test.mjs"
+      ],
       "helpFromSlider": [
-        "tests/specs/steer-migration.spec.js"
+        "tests/specs/steer-migration.spec.js",
+        "tests/unit/steer-presets.test.mjs"
       ],
       "lockFromSlider": [
         "tests/unit/low-speed-lock.test.mjs",

@@ -25,8 +25,11 @@ const X_ZONE_STEP = 8;                          // m between curvature samples
 
 // Curvature that counts as straight FOR A ZONE. A kink of ~220 m radius must NOT
 // qualify — approving zones at that threshold gave MONACO four of them, which is
-// exactly the circuit the real rule exists to exclude. A zone is a proper
-// straight (r >= ~700 m), and the length test then does the rest.
+// exactly the circuit the real rule exists to exclude. A sampled run is a proper
+// straight (r >= ~700 m), and the length test then does the rest. That bound is
+// on each RUN only: a turn-pair zone (spanForTurnPair, below) merges every run
+// between its two apexes and so spans whatever lies between them — at Albert
+// Park's T8-T9 zone a bend of r ~92 m (|k| 0.0109 at s ~2504), measured #5783 K1.
 const X_ZONE_K = 0.0014;
 
 // HOW MANY zones each circuit has, and WHICH straights they are, from the FIA

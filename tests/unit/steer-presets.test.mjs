@@ -294,10 +294,39 @@ test("AIDS fold and DRIVING HELP row share OFF/MEDIUM/HIGH labels", () => {
   // Live survey: ROOKIE chip + AIDS · OFF while the row said LOW for the same
   // notch. The fold used `dh <= 1 ? OFF : HELP_LABEL[hb]` and HELP_LABEL.low
   // was still "LOW".
-  assert.match(SRC, /const HELP_LABEL = \{ low: "OFF", med: "MEDIUM", high: "HIGH" \}/);
+  assert.match(SRC, /const HELP_LABEL = \{ low: "OFF", med: "MEDIUM", high: "HIGH", custom: "CUSTOM" \}/);
   assert.match(SRC, /\[hb === "low" \? "off" : "val", HELP_LABEL\[hb\]\]/);
   assert.doesNotMatch(SRC, /dh <= 1 \? \["off", "OFF"\]/);
   assert.doesNotMatch(SRC, /low: "LOW"/);
+});
+
+// #5783 J1: the band called notches 2 and 3 "low" = OFF while helpFromSlider gave
+// them ROAD_FOLLOW 0.078 / 0.156 — a steer read from the road's curvature under a
+// row and a fold that both said OFF. The label is OFF exactly when the gain is 0.
+test("DRIVING HELP reads OFF exactly when ROAD_FOLLOW is 0, at every notch", () => {
+  const fn = (name) => {
+    const at = SRC.indexOf(`function ${name}(`);
+    assert.notEqual(at, -1, `${name} is gone from js/input/steer-tuning.js`);
+    let depth = 0, end = -1;
+    for (let i = SRC.indexOf("{", at); i < SRC.length; i++) {
+      if (SRC[i] === "{") depth++;
+      else if (SRC[i] === "}") { depth--; if (!depth) { end = i; break; } }
+    }
+    return SRC.slice(at, end + 1);
+  };
+  const HELP_LABEL = table("HELP_LABEL");
+  const seen = {};
+  for (let notch = 1; notch <= 10; notch++) {
+    // eslint-disable-next-line no-new-func
+    const run = Function("store", "clamp", "SLIDER_MIN", "SLIDER_MAX",
+      `"use strict"; ${fn("helpFromSlider")} ${fn("helpBand")} return { band: helpBand(), gain: helpFromSlider(store.get("drivingHelp", 1)) };`);
+    const { band, gain } = run({ get: () => notch }, (v, a, b) => Math.max(a, Math.min(b, v)), 1, 10);
+    assert.ok(HELP_LABEL[band], `notch ${notch}: band "${band}" has no label`);
+    assert.equal(HELP_LABEL[band] === "OFF", gain === 0, `notch ${notch}: label ${HELP_LABEL[band]} with ROAD_FOLLOW gain ${gain}`);
+    seen[band] = (seen[band] || 0) + 1;
+  }
+  assert.equal(seen.low, 1, "anti-vacuity: exactly one notch (1, the shipped default and Bryce's export) is OFF");
+  assert.equal(seen.custom, 2, "notches 2 and 3 are CUSTOM");
 });
 
 test("STEER ASSIST fold token is STEER OFF, not LINE OFF", () => {
