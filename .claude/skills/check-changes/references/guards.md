@@ -48,7 +48,7 @@ generated readers and executable changes follow the code gates below.
    local floor (AGENTS.md rule 3); the PR's CI tiers run the full ladder.
    Docs/skills/tools edits: `--changed` selects the docs-integrity family.
    Smoke + load order when you touched `index.html` or `tools/manifest.cjs`: the `smoke` group runs on the
-   pushed PR (`node tools/ci/remote-group.mjs smoke` for the whole group).
+   pushed PR (its ready tier; a whole-group dispatch is Bryce's opt-in).
    `test:tooling` also runs the slow full-fleet sweeps — reserve that for
    geometry pushes.
 
@@ -67,9 +67,8 @@ the intended design. Magnitude-threshold specs and the legacy
 drift; geometry/behaviour hooks are ground truth. Do not "fix" code to
 satisfy a threshold that itself went stale.
 
-A timeout on a busy box measures the machine, not the code — re-run the
-group on the pushed branch (`node tools/ci/remote-group.mjs <group>`) before
-believing it: [`triage.md`](triage.md).
+A timeout on a busy box measures the machine, not the code — read the shard
+log before believing it (a whole-group re-run is Bryce's opt-in): [`triage.md`](triage.md).
 
 ## Push
 

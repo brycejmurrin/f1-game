@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { readProfile } from "../../tools/lib/bryce-phone.mjs";
 
 test.describe.configure({ mode: "parallel" });
 
@@ -715,7 +716,8 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
 // At 0.7 the sheet has 520 own px in A and 534 in D, over its --compact-at 480, so it went NORMAL there (head 85.2
 // painted px); the short-touch gate in css/overlays.css holds it compact. Limits that were own px for 1.09 are
 // painted px now (probe 2026-11-16, 0.7 | 1.09): foot 56 | 58.2; head 62.5 | 94.8; body 243.5 in A (218.5 normal).
-const OWNER_EXPORT = JSON.parse(await readFile(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+// the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
 const CONTRACT_WINDOWS = [
   { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
   { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
@@ -725,7 +727,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("ROOMY is clamped: compact, stacked, one scroller, the foot on screen", async ({ page }) => {
     await boot(page);
-    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

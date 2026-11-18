@@ -1,6 +1,6 @@
 // @doc Owner-profile screen survey: all menu screens at contract windows A/C/D/As, seeded from the settings export.
 // #5201. Every menu-screens.mjs screen at the UI-contract windows (As = A with a stale portrait inner*), seeded from
-// tests/data/settings-defaults-export.json: scrollers, controls outside the safe box, fat controls. Parent only (one browser).
+// the legacy export (tools/lib/bryce-phone.mjs; SURVEY_PROFILE=live for his phone today): scrollers, controls outside the safe box, fat controls. Parent only (one browser).
 // Usage: node tools/ui/profile-survey.mjs [A,C,D,As] [screenA,screenB|*]   env SURVEY_ROOT=<tree to serve> SURVEY_OUT=<dir under artifacts/> SURVEY_SCALE=<UI SIZE percent; unset = the export's>
 // Output: artifacts/profile-survey/report-<windows>.json + one JPEG per cell. Insets are injected as --sa* before first layout. Results: docs/notes/VIEWPORT-ASSUMPTIONS-2026-11-10.md.
 import fs from "node:fs";
@@ -13,9 +13,11 @@ import { bootPage, resetToTitle, waitScreenReady } from "./menu-capture.mjs";
 import { chromiumArgs } from "../shot/hud-survey.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
 import { probeMenu, leaveToMenu } from "./menu-mock.mjs";
+import { readProfile } from "../lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
-const EXPORT = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/settings-defaults-export.json"), "utf8"));
+// SURVEY_PROFILE=live|legacy (default legacy, the file the report notes were measured on); live = his phone today.
+const EXPORT = readProfile(process.env.SURVEY_PROFILE || "legacy");
 const WINDOWS = {
   A: { w: 852, h: 393, l: 59, r: 59, t: 0, b: 21, standalone: true },
   C: { w: 852, h: 283, l: 59, r: 59, t: 0, b: 0 },

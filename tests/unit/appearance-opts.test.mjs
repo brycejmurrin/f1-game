@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/appearance-opts.js"), "utf8").replace(/^const\b/gm, "var");
@@ -556,6 +557,51 @@ test("tokens.css defines both text sizes and the high-contrast block", () => {
   for (const sel of ['[data-text-size="large"]', '[data-text-size="larger"]', '[data-ui-contrast="high"]'])
     assert.ok(TOKENS.includes(":root" + sel), sel);
   for (const id of ["pm-textsize", "pm-contrast", "pm-units"]) assert.ok(SHELL.includes(`id="${id}-sel"`), id);
+});
+
+// TEXT SIZE × UI SIZE (#5586). Menus zoom by --ui-scale, so painted px = the rung's own px × ui. The floor blocks
+// cascade over the bare rungs; resolve the last :root / :root[data-text-size] write of each rung like the cascade.
+test("every TEXT SIZE rung paints >= 12 px and LARGER >= LARGE >= NORMAL at every UI SIZE (exact painted px)", () => {
+  const RUNGS = ["--fs-micro", "--fs-2", "--fs-3", "--fs-4", "--fs-5", "--fs-6"];
+  const rules = cssRules(TOKENS).filter((r) => r.context.every((c) => c.startsWith("@layer")));
+  const vars = (sel) => {
+    const out = new Map();
+    for (const r of rules) if (r.selector === ":root" || r.selector === sel) for (const [k, v] of r.decls) out.set(k, v);
+    return out;
+  };
+  const evalPx = (expr, env, ui) => {
+    let e = expr;
+    for (let i = 0; i < 4 && /var\(--[\w-]+\)/.test(e); i++) e = e.replace(/var\((--[\w-]+)\)/g, (_, k) => env.get(k));
+    e = e.replace(/var\(--ui-scale, 1\)/g, String(ui));
+    e = e.replace(/calc\(([\d.]+)px \/ ([\d.]+)\)/g, (_, a, b) => `${a / b}px`);
+    e = e.replace(/max\(([\d.]+)px, ([\d.]+)px\)/g, (_, a, b) => `${Math.max(+a, +b)}px`);
+    const m = /^([\d.]+)px$/.exec(e);
+    assert.ok(m, `${expr} resolved to ${e}`);
+    return +m[1];
+  };
+  const presets = { normal: ":root", large: ':root[data-text-size="large"]', larger: ':root[data-text-size="larger"]' };
+  const paint = (preset, ui) => {
+    const env = vars(presets[preset]);
+    return RUNGS.map((k) => Math.round(evalPx(env.get(k), env, ui) * ui * 100) / 100);
+  };
+  // painted px per rung [micro, 2, 3, 4, 5, 6]
+  const EXPECT = {
+    50: { normal: [12, 12, 12, 12, 12, 12], large: [12, 12, 12, 12, 12, 12], larger: [12, 12, 12, 12, 12, 13] },
+    60: { normal: [12, 12, 12, 12, 12, 12], large: [12, 12, 12, 12, 12.6, 13.8], larger: [12, 12, 12.6, 13.2, 13.8, 15.6] },
+    67: { normal: [12, 12, 12, 12, 12.06, 13.4], large: [12, 12, 12.06, 13.4, 14.07, 15.41], larger: [12.06, 13.4, 14.07, 14.74, 15.41, 17.42] },
+    70: { normal: [12, 12, 12, 12, 12.6, 14], large: [12, 12, 12.6, 14, 14.7, 16.1], larger: [12.6, 14, 14.7, 15.4, 16.1, 18.2] },
+    85: { normal: [12, 12.75, 13.6, 14.45, 15.3, 17], large: [13.6, 14.45, 15.3, 17, 17.85, 19.55], larger: [15.3, 17, 17.85, 18.7, 19.55, 22.1] },
+    100: { normal: [14, 15, 16, 17, 18, 20], large: [16, 17, 18, 20, 21, 23], larger: [18, 20, 21, 22, 23, 26] },
+  };
+  for (const [pct, want] of Object.entries(EXPECT)) {
+    const ui = pct / 100;
+    const got = { normal: paint("normal", ui), large: paint("large", ui), larger: paint("larger", ui) };
+    assert.deepEqual(got, want, `UI SIZE ${pct} %`);
+    RUNGS.forEach((k, i) => {
+      assert.ok(got.normal[i] >= 12, `${k} NORMAL at ${pct} % paints ${got.normal[i]} px`);
+      assert.ok(got.large[i] >= got.normal[i] && got.larger[i] >= got.large[i], `${k} at ${pct} %: ${got.normal[i]} / ${got.large[i]} / ${got.larger[i]}`);
+    });
+  }
 });
 
 // ── HELP TEXT (READABILITY) ──────────────────────────────────────────────────
