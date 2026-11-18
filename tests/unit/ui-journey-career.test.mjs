@@ -188,7 +188,7 @@ test("NEW CAREER CODE refuses a grid or hire code (ratings are keyed by code)", 
   const make = (extra) => { const ctx = { ...extra }; vm.runInNewContext(gate + ";globalThis.errors = draftErrors;", ctx); return ctx.errors; };
   const errors = make({ DriverRatings: { BASE: { VER: [] }, HIRES: { OKO: [] } } });
   const d = (code) => ({ name: "Test Driver", code, num: 7 });
-  for (const code of ["ver", "OKO"]) assert.match(errors(d(code)).code || "", /already on the grid/, code);
+  for (const code of ["ver", "OKO"]) assert.equal(errors(d(code)).code, "Code already on the grid", code);
   assert.equal(errors(d("TST")).code, undefined, "a free code is accepted");
   assert.equal(make({})(d("VER")).code, undefined, "without DriverRatings the gate stays format-only");
 });
