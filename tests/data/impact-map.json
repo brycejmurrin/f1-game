@@ -1665,6 +1665,9 @@
       ]
     },
     "js/camera/extra-rigs.js": {
+      "localBattles": [
+        "tests/unit/extra-rigs.test.mjs"
+      ],
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
       ],

@@ -206,6 +206,22 @@ test("ExtraRigs.pickRival reuses its running-car rows and array across calls", (
   assert.equal(seen[1].arr[0].key, a, "rows are re-filled and re-sorted (a leads on prog)");
 });
 
+// localBattles is the no-Broadcast fallback on every RIVAL frame — pool fight bags like Broadcast.battles.
+test("ExtraRigs.localBattles reuses its fight bags across calls", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  const a = { key: { id: "a" }, prog: 100, speed: 50 };
+  const b = { key: { id: "b" }, prog: 80, speed: 50 };   // 0.4 s gap → a battle
+  const c = { key: { id: "c" }, prog: 60, speed: 50 };
+  const first = ExtraRigs.localBattles([a, b, c], 1);
+  assert.ok(first.length >= 1);
+  const bag0 = first[0];
+  const second = ExtraRigs.localBattles([a, b, c], 1);
+  assert.equal(second, first, "the same fights array is reused");
+  assert.equal(second[0], bag0, "the same fight bag object is reused");
+  assert.equal(second[0].key, b.key);
+  assert.equal(second[0].ahead, a.key);
+});
+
 // #4745 D — the pit-entry shot: a short, drivable tracking cut on the entry road of a called stop.
 function pitEntryRig({ motion = null, now = { t: 0 } } = {}) {
   const { ExtraRigs, ctx } = loadExtraRigs();
