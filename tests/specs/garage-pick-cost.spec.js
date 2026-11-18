@@ -95,6 +95,10 @@ test.describe("garage livery pick cost", () => {
           }; }
       }
     });
+    // The deferred 2048 (car-draw schedulePlayerHiRes) is bounded: an idle {timeout} plus a patience cap, so a
+    // queue that never drains within this wait is the regression, not the runner.
+    const settleHiRes = () => page.waitForFunction(() => CarDraw.instance().decalBytes().hiPending === 0,   // eslint-disable-line no-undef
+      null, { polling: 100, timeout: 30_000 });
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
       const before = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
@@ -102,15 +106,18 @@ test.describe("garage livery pick cost", () => {
         window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k];
         window.__pickOf[s.closest("[data-cs-livery]").dataset.csLivery] = k; s.click();
       }, i);
-      // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas.
+      // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas, then the
+      // product's own settle signal: no deferred 2048 still queued (car-draw decalBytes().hiPending). A fixed
+      // frame count read before the idle slot fired on a slow runner (0 uploads seen: #2394 tally).
       await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 8 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
+      await settleHiRes();
       const after = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
       rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits, cardReused: after.reused - before.reused,
         car3dBuilds: after.car3dBuilds - before.car3dBuilds,
         reuploads: after.reuploads - before.reuploads });
     }
     // Late uploads settle, then each pick reads the uploads of the atlases IT painted.
-    await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 16 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
+    await settleHiRes();
     const { texByPick, atlasByPick } = await page.evaluate(() => ({ texByPick: { ...window.__pickCount.texByPick }, atlasByPick: { ...window.__pickCount.atlasByPick } }));
     for (const [i, r] of rows.entries()) { r.textures = texByPick[i + 1] || 0; r.atlases = atlasByPick[i + 1] || 0; }
     test.info().annotations.push({ type: "pick-cost", description: JSON.stringify(rows) });

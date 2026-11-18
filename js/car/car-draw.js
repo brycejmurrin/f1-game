@@ -545,7 +545,8 @@ const CarDraw = (function () {
     function decalBytes() {
       let b = 0;
       for (let i = 0; i < _decalTexOrder.length; i++) b += _decalTexBytes[_decalTexOrder[i]] || 0;
-      return { bytes: b, live: _decalTexOrder.length, recorded: Object.keys(_decalTexBytes).length };
+      // hiPending: deferred 2048 builds still queued (the garage-pick-cost spec waits for 0 before it counts).
+      return { bytes: b, live: _decalTexOrder.length, recorded: Object.keys(_decalTexBytes).length, hiPending: _hiResPending.size };
     }
     // A PAINT DRAFT RE-FILLS ITS OWN ATLAS (#3505). Every garage edit drops the draft key and mints the
     // next one at the same size. Through freeTexture that leaned on TLX's shared retire pool: an entry
@@ -722,6 +723,7 @@ const CarDraw = (function () {
     // A failed build used to retry on every draw (each a 2048 paint). Two tries per
     // key, like the sync path's three; an invalidate / eviction forgets the count.
     const HIRES_TRIES = 2, _hiResFail = new Map();
+    const HIRES_IDLE_MAX_MS = 4000;   // longest a deferred 2048 waits for a roomy idle slot before it runs anyway
     const _hiResGrave = [];   // {key, tex} prev preview; free AFTER the next bind
     function reapHiResGrave() {
       if (!_hiResGrave.length) return;
@@ -830,17 +832,21 @@ const CarDraw = (function () {
         }
       };
       _hiResPending.set(key, kick);
+      // Bounded patience: a short idle slot re-queues, but only until HIRES_IDLE_MAX_MS since scheduling, and an
+      // idle callback that TIMED OUT runs the kick. With no {timeout} and a re-queue on didTimeout, a busy main
+      // thread (a loaded phone or tablet, llvmpipe CI) never offered a 10 ms slot, so the 2048 never uploaded.
+      const since = Date.now();
       const enqueue = function () {
         if (typeof requestIdleCallback === "function") {
           requestIdleCallback(function (deadline) {
             if (!owns()) { done(); return; }
-            if (deadline && (deadline.didTimeout ||
-                (typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 10))) {
+            const starved = !deadline || deadline.didTimeout || Date.now() - since >= HIRES_IDLE_MAX_MS;
+            if (!starved && typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 10) {
               enqueue();
               return;
             }
             kick();
-          });
+          }, { timeout: 2000 });
         } else {
           setTimeout(kick, 0);
         }
