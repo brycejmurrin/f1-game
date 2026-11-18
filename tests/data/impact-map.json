@@ -3491,13 +3491,17 @@
       "hasGhost": [
         "tests/unit/mechanics-coherence.test.mjs"
       ],
+      "medal": [
+        "tests/unit/session-records-medal-keep.test.mjs"
+      ],
       "migrateKey": [
         "tests/unit/storage-key-prefix.test.mjs"
       ],
       "record": [
         "tests/specs/time-trial.spec.js",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/race-insights.test.mjs"
+        "tests/unit/race-insights.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "scheduleSave": [
         "tests/specs/time-trial.spec.js"
@@ -3506,7 +3510,8 @@
         "tests/specs/time-trial.spec.js",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/race-insights.test.mjs"
+        "tests/unit/race-insights.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "speedAt": [
         "tests/unit/race-insights.test.mjs"
@@ -3515,7 +3520,8 @@
         "tests/specs/time-trial.spec.js",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/race-insights.test.mjs"
+        "tests/unit/race-insights.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "timeAt": [
         "tests/specs/time-trial.spec.js",
@@ -13203,6 +13209,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/title-menu-even.test.mjs"
       ],
@@ -13226,6 +13233,7 @@
         "tests/specs/menu-baseline.spec.js",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "plan": [
@@ -13239,6 +13247,7 @@
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "select": [
@@ -13250,11 +13259,13 @@
         "tests/unit/share-card.test.mjs"
       ],
       "shareResult": [
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "shareText": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "stop": [
         "tests/unit/daily-challenge.test.mjs",
@@ -13885,7 +13896,8 @@
     },
     "js/race/quali-model.js": {
       "begin": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
@@ -13907,7 +13919,11 @@
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
+      ],
+      "medalFor": [
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "order": [
         "tests/specs/quali.spec.js",
@@ -14663,6 +14679,7 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-trial-session.test.mjs"
       ]
     },
@@ -14672,7 +14689,8 @@
       ],
       "begin": [
         "tests/unit/ghost-share.test.mjs",
-        "tests/unit/radio-voice.test.mjs"
+        "tests/unit/radio-voice.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "board": [
         "tests/unit/ghost-share.test.mjs"
@@ -14685,6 +14703,7 @@
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/session-records-assists.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-trial-session.test.mjs"
       ],
       "current": [
@@ -14693,7 +14712,8 @@
         "tests/unit/session-records-assists.test.mjs"
       ],
       "finish": [
-        "tests/unit/ghost-share.test.mjs"
+        "tests/unit/ghost-share.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "prepareDaily": [
         "tests/unit/daily-challenge.test.mjs",
