@@ -653,7 +653,7 @@ test("HELP TEXT: CSS hides explanations in settings + race setup, never status l
   assert.equal((pad.match(/class="adv-help" data-help="keep"/g) || []).length, 2, "#pm-phonepad-text's room-code lines");
   // JS-built ones.
   const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
-  assert.match(read("js/ui/settings-export.js"), /note\.className = "adv-help";\s*note\.setAttribute\("data-help", "keep"\)/);
+  assert.match(read("js/ui/settings-export-body.js"), /note\.className = "adv-help";\s*note\.setAttribute\("data-help", "keep"\)/);
   assert.match(read("js/garage/setup-experiments.js"), /rakeOut\.id = "cs-rake-readout";[^\n]*setAttribute\("data-help", "keep"\)/);
   assert.match(read("js/ui/title-layout.js"), /id: "pm-tl-shape"[^\n]*"data-help": "keep"/);
   assert.match(EXPORT, /k:\s*"menuHelp"[^\n]*group:\s*"appearance"[^\n]*oneOf: \["on", "off"\]/);

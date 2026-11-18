@@ -46,7 +46,9 @@ const MAX_EAGER_SCRIPTS = 314;
 // 8,030,960 raw (−22,785), so the room stays the owner's 8,150,000 decision and the freed bytes are not handed out.
 // 8,018,484: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE behind the FULL stub js/race/real-race-boot.js
 // (#5515): tip 2de6f5eb 8,076,221 → 7,967,490 raw (−108,731), so the room stays what the owner's decision left.
-const MAX_EAGER_BYTES = 8_018_484;
+// 7,975,467: lowered by #4748 settings-export body → LAZY_SAVES_DATA behind the FULL SettingsExport façade
+// (js/ui/settings-export-body.js): tip ed2d7e46 7,996,837 → 7,953,820 raw (−43,017), so the room stays what it was.
+const MAX_EAGER_BYTES = 7_975_467;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");

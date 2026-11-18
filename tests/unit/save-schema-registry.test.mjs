@@ -49,7 +49,7 @@ const PASSTHROUGH_FILES = new Set([
   "js/career/custom-team.js",   // identitySet/Get relays: keys are customTeam / livery.* below
   "js/car/custom-liveries.js",   // setIdentityValue relay for livery.* keys
   "js/career/restore-points.js",   // writes the captured slot key back, never a new one
-  "js/ui/settings-export.js",
+  "js/ui/settings-export-body.js",   // the SPEC relay moved with the body (#4748)
   "js/ui/scale.js",
   "js/ui/screen-looks.js",
   "js/ui/pause-opts.js",

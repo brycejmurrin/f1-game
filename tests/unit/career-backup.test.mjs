@@ -112,7 +112,10 @@ function loadHarness(options = {}) {
   vm.runInContext(src("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
   vm.runInContext(src("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
   // The MY TEAM identity is shape-gated by the GARAGE file's garageValue.
-  if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  if (options.settingsExport !== false) {
+    vm.runInContext(src("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+    vm.runInContext(src("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // LAZY_SAVES_DATA (#4748)
+  }
   vm.runInContext(src("js/career/team-identity.js"), ctx, { filename: absSrc("js/career/team-identity.js") });
   vm.runInContext(src("js/career/career.js"), ctx, { filename: absSrc("js/career/career.js") });
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: absSrc("js/career/season-cal.js") });
