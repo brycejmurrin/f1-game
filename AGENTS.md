@@ -19,9 +19,9 @@ Prose-only change (`docs/`, `*.md`): skip 1 and 3, run `node --test tests/unit/d
 tests/unit/agent-config.test.mjs`.
 
 ## Verification — scale it to the change
-What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser tests (rule 5): each draft
-head gets the fast tier plus a selected browser shard, and `node tools/ci/remote-group.mjs <group>`
-runs a whole group on the pushed branch.
+GitHub writes go by MCP, never `gh`. What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser
+tests (rule 5): each draft head gets the fast tier plus a selected browser shard; a whole group
+(`remote-group.mjs`) is Bryce's opt-in.
 
 Session rules (numbers are cited across the repo; a (hook) rule is refused by that hook, whose message says what to
 do instead).
