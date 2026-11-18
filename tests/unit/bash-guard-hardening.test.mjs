@@ -154,11 +154,52 @@ test("4. gh run cancel, pr merge, pr ready and their REST / GraphQL forms are re
     "gh api graphql -f query='mutation { markPullRequestReadyForReview(input:{}) { clientMutationId } }'",
     " gh pr merge 1", "command gh pr merge 1", "env GH_TOKEN=x gh pr merge 1", "{ gh pr ready 2; }", "if true; then gh run cancel 1; fi"])
     refused(cmd, /cancel|merges|ready/);
-  for (const cmd of ["gh run view 123", "gh run list", "gh pr view 1", "gh pr checks 1", "gh api repos/a/b/pulls/1", "gh pr edit 1 --add-label land",
+  for (const cmd of ["gh run view 123", "gh run list", "gh pr view 1", "gh pr checks 1", "gh api repos/a/b/pulls/1",
     "gh pr ready --help", "gh pr merge --help", "gh api repos/a/b/pulls/5/merge", "gh pr view 5 -R a/b", "echo 'see actions/runs/12/cancel'",
-    'git commit -m "x\n\ngh run cancel mention"', "cat > notes.md <<'EOF'\ngh pr merge 5\nEOF", "gh pr ready 1 --undo"])
+    'git commit -m "x\n\ngh run cancel mention"', "cat > notes.md <<'EOF'\ngh pr merge 5\nEOF"])
     allowed(cmd);
   assert.equal(run("gh run cancel 1", {}, { APEX_RUN_CANCEL_OK: "1" }).status, 2, "no env hatch for a cancel");
+});
+
+// 5. Owner decision 2026-11-11 ("Hook refuses gh writes"): a write on the gh token is recorded as Bryce's own act, so
+// agents write through the GitHub MCP tools (app-marked). Every read the session rules use must keep working.
+test("5. a GitHub write from a shell is refused in any spelling; gh reads, GET searches and prose pass", () => {
+  for (const cmd of ["gh api -X POST repos/a/b/issues/1/labels -f 'labels[]=x'", "gh api repos/a/b/issues/1/labels -f labels[]=x",
+    "gh api -X DELETE repos/a/b/issues/1/labels/x", "gh api --method PATCH repos/a/b/pulls/1", "gh api --method=put repos/a/b/x",
+    "gh api -XPOST repos/a/b/forks", "gh api -fa=b repos/x", "gh api repos/a/b/issues/1/comments --input body.json",
+    "gh api repos/a/b/issues/1/comments -F body=@note.md", "gh api --field=title=x repos/a/b/issues",
+    "gh api graphql -f query='mutation { addLabelsToLabelable(input:{}) { clientMutationId } }'",
+    "gh api graphql -F query=@missing-query.graphql", "gh api graphql --input -",
+    "gh pr create --draft", "gh pr ready 1 --undo", "gh pr comment 1 -b x", "gh pr edit 1 --add-label land", "gh pr review 1 --approve", "gh pr close 1",
+    "gh issue create -t x", "gh issue edit 1 --add-label x", "gh issue close 3", "gh issue comment 1 -b x", "gh issue delete 1",
+    "gh label create x", "gh label delete x", "gh workflow run ci.yml", "gh workflow disable x", "gh run rerun 1", "gh run delete 1",
+    "gh release create v1", "gh secret set X", "gh variable set X", "gh cache delete 1", "gh repo edit", "gh repo fork",
+    "gh repo autolink create", "gh repo deploy-key add k", "gh gist create f", "gh alias set x 'pr comment'", "gh myalias", "gh copilot",
+    // evasions: wrappers, global flags, absolute paths, compounds, pipes, subshells, substitutions, shells
+    "gh -R a/b issue comment 1 -b x", "gh --repo=a/b label create x", "/usr/bin/gh pr comment 1", "\\gh pr comment 1",
+    "command gh pr comment 1", "env GH_TOKEN=x gh issue edit 1", "GH_TOKEN=x gh issue edit 1", "sudo gh label create x",
+    "timeout 30 gh pr comment 1", "echo y | gh pr review 1 --approve", "true && gh pr close 1", "ls; gh pr close 1",
+    "false || gh pr close 1", "(gh issue reopen 1)", "{ gh issue reopen 1; }", "bash -c 'gh label delete x'", "eval 'gh pr comment 1'",
+    "x=$(gh api -X POST repos/a/b/forks)", "echo \"$(gh pr comment 1 -b y)\"", "echo 1 | xargs gh run rerun",
+    "bash <<'EOF'\ngh pr comment 1 -b x\nEOF", "if true; then gh issue close 1; fi",
+    // raw HTTP to the API, and the owner's opt-in set by an agent
+    "curl -X POST https://api.github.com/repos/a/b/issues/1/labels", "curl -XDELETE https://api.github.com/repos/a/b/x",
+    "curl -d '{}' -H 'Authorization: token x' https://api.github.com/repos/a/b/dispatches", "curl --json '{}' https://api.github.com/x",
+    "curl --request=PATCH https://api.github.com/x", "wget --post-data=x https://api.github.com/x",
+    "APEX_GH_OWNER_WRITE=1 node tools/ci/remote-group.mjs smoke", "export APEX_GH_OWNER_WRITE=1", "env APEX_GH_OWNER_WRITE=1 node x.mjs"])
+    refused(cmd, /writes to GitHub|APEX_GH_OWNER_WRITE/);
+  for (const cmd of ["gh api repos/a/b/pulls/1", "gh api repos/a/b/pulls/1 --jq .head.sha", "gh api -H 'Accept: x' repos/a/b",
+    "gh api -X GET search/code -f q='foo repo:a/b' --paginate", "gh api --method=GET search/issues -F q=x", "gh api -XGET repos/x -fq=1",
+    "gh api --method GET search/commits -f q=x", "gh api graphql -f query='query { viewer { login } }'",
+    "gh pr view 1", "gh pr list", "gh pr diff 2", "gh pr checks 3", "gh pr status", "gh pr checkout 4", "gh pr", "gh pr comment --help",
+    "gh issue view 1", "gh issue list", "gh run view 1 --log", "gh run list", "gh run watch 1", "gh run download 1", "gh workflow list",
+    "gh auth status", "gh auth token", "gh search code foo", "gh --version", "gh label list", "gh repo view", "gh repo autolink list",
+    "gh release view v1", "gh variable get X", "gh ruleset view 1", "gh -R a/b pr view 1", "curl -s https://api.github.com/repos/a/b",
+    "curl -G -d q=x https://api.github.com/search/code", "curl -X POST https://example.com/x",
+    "echo 'gh pr comment 1'", "git commit -m 'never gh api -X POST x'", "grep -n 'gh label create' AGENTS.md",
+    "cat > notes.md <<'EOF'\ngh pr comment 1 -b x\ncurl -X POST https://api.github.com/x\nEOF", "echo APEX_GH_OWNER_WRITE",
+    "node tools/ci/remote-group.mjs --help"])
+    allowed(cmd);
 });
 
 test("fail closed on a payload or a command it cannot read; an empty command passes; the header names the limits", () => {
