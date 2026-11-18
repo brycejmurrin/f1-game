@@ -7878,7 +7878,8 @@
         "tests/specs/touch-buttons.spec.js",
         "tests/specs/touch-pedals.spec.js",
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "sheetRelease": [
         "tests/unit/daily-intro-session-late.test.mjs",
@@ -9365,6 +9366,12 @@
       "holdReleasePointer": [
         "tests/unit/key-binds-hunt.test.mjs"
       ],
+      "press": [
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "release": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9673,6 +9680,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
@@ -9714,6 +9722,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
