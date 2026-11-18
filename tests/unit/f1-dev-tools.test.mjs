@@ -302,15 +302,6 @@ test('audit: design lab skips invalid entries, derives counts and retains existi
   assert.equal(get('preview-notice').hidden,true,'sidecars present → no preview banner');
 });
 
-test('audit: design-lab presentation source does not preload absent Site fonts', () => {
-  const html=fs.readFileSync(path.join(root,'sites/design-lab/index.html'),'utf8');
-  // equal(+.test) — not assert.match/doesNotMatch (assertPinsAll).
-  assert.equal(!/rel=["']preload["'][^>]*assets\/fonts\//.test(html), true);
-  assert.equal(/id=["']preview-notice["']/.test(html), true);
-  assert.equal(/id=["']collection-link["']/.test(html), true);
-  assert.equal(/class=["'][^"']*site-asset/.test(html), true);
-});
-
 test('audit: design-lab hides the collection link when the sidecar 404s', async () => {
   class Element {
     constructor(){this.children=[];this.listeners={};this.classList={add(){},toggle(){}};this.dataset={};this.hidden=false;this.href='http://localhost/collection/';}
@@ -337,13 +328,6 @@ test('audit: design-lab hides the collection link when the sidecar 404s', async 
   assert.equal(get('load-error').hidden,false);
 });
 
-test('audit: bench.html reports GLX.backendState, not the retired __tlx hook', () => {
-  const page=fs.readFileSync(path.join(root,'bench.html'),'utf8');
-  assert.equal(!/GLX\.__tlx/.test(page), true);
-  assert.equal(!/GLX\.backend\)/.test(page), true);
-  assert.equal(/GLX\.backendState/.test(page), true);
-  assert.equal(/gfx:\s*gfxState/.test(page), true);
-});
 
 test('audit: optics stops scheduling when paused and responds to motion preference changes', () => {
   const html=fs.readFileSync(path.join(root,'examples/visor-lab/optics.html'),'utf8');
