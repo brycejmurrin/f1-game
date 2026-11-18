@@ -151,7 +151,11 @@ Above `--chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(` i
   UI and --tap itself paints under 52, so the chip keeps its rung). So the
   chip meets the floor at every s >= 1 and nothing moves outside 92-108 %;
   at exactly 100 % it is as tall as --tap, which is the price of the floor.
-  The 24/s arm is the WCAG floor at small scales.
+  The last arm is 44.2/s, not 24/s (#5672, 2026-11-18): "under 100 % the
+  player asked for a SMALLER UI" predates the phone shipping UI SIZE 70 by
+  default (#5358). At 0.7 the 48 arm painted 33.6 px: SEASON SETUP's ▲ / ▼ /
+  ✕ at 34×34 and 3 px apart, the career hub chips at 34. 44.2/s paints 44.2
+  at every s under 0.92 (the --tap snap margin, tokens.css §--tap).
 
 ## R6. --ui-scale — HOW BIG THE UI IS, as one number, consumed as a zoom by t
 
