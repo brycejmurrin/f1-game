@@ -595,6 +595,9 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
 // ON, a stepper never writes an unchanged value, and the page had no master control: no way to make a sound.
 test("MUSIC & SOUND has a MASTER SOUND row that reads the master and lifts it; a muted bus says MUTED and no hint names a dead row", () => {
   const h = bootAudio({ soundOn: false, musicEnabled: true });
+  // Voices present, so the radio / announcer notes reach their master-off branch (with none they say so instead).
+  h.G.radio = { available: () => true };
+  h.G.announcer = { available: () => true };
   h.api.init();
   h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
   const fold = (id) => h.dom.byId(id).innerHTML.replace(/<[^>]+>/g, "");
@@ -606,8 +609,7 @@ test("MUSIC & SOUND has a MASTER SOUND row that reads the master and lifts it; a
   assert.equal(fold("as-music-sum"), "MUSIC · MUTED · DEFAULT", "the closed MUSIC fold no longer claims ON");
   assert.equal(fold("as-sound-sum"), "SOUND · MUTED");
   for (const id of ["as-radio-note", "as-ann-note"]) {
-    const t = h.dom.byId(id).textContent;
-    if (/Master sound is off/.test(t)) assert.match(t, /MASTER SOUND ON, at the top of this page/, id + " names the control that works");
+    assert.equal(h.dom.byId(id).textContent, "Master sound is off \u2014 MASTER SOUND ON, at the top of this page, turns it on.", id + " names the control that works");
   }
   h.dom.byId("as-master-next").onclick();   // the row wraps: either arrow flips it
   assert.equal(h.G.soundOn, true, "one tap on the row turns master sound on");
@@ -632,12 +634,14 @@ test("NOW PLAYING does not name a track when the whole list failed to load", () 
   assert.equal(h.dom.byId("as-now").textContent, "Music could not load", "no track name over silence");
   assert.equal(h.dom.byId("as-skip").disabled, true, "nothing to skip to");
   assert.equal(h.dom.byId("pm-now").textContent, "Music could not load", "the pause card says the same");
+  assert.equal(h.dom.byId("as-play").textContent, "\u25b6", "a stalled list shows play, not pause");
   vm.runInContext("this.navigator = { onLine: false }", h.ctx);
   h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
   assert.equal(h.dom.byId("as-now").textContent, "Music needs a connection", "offline: it names what is missing");
   h.track.stalled = false;
   h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
   assert.equal(h.dom.byId("as-now").textContent, "Song A", "a track that plays again is named again");
+  assert.equal(h.dom.byId("as-play").textContent, "\u275a\u275a", "and its button reads pause again");
 });
 
 test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT", () => {
