@@ -1264,6 +1264,7 @@
       "connect": [
         "tests/specs/music-library.spec.js",
         "tests/unit/audio-mix-improvements.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -1276,6 +1277,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "disconnect": [
+        "tests/unit/load-order.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -1347,8 +1349,7 @@
         "tests/unit/spotify-refresh.test.mjs"
       ],
       "*": [
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/audio/stub.js": {
@@ -1813,6 +1814,9 @@
       ],
       "preview": [
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "show": [
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/camera/flyby-panel.js": {
@@ -5429,6 +5433,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
@@ -5473,6 +5478,9 @@
       ],
       "ensureRealRace": [
         "tests/unit/real-race-lazy.test.mjs"
+      ],
+      "ensureRouteCss": [
+        "tests/unit/load-order.test.mjs"
       ],
       "ensureScenery": [
         "tests/unit/assets-pack.test.mjs",
@@ -13764,6 +13772,7 @@
         "tests/specs/pit-lane.spec.js",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
