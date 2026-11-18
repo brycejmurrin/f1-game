@@ -6820,6 +6820,9 @@
       "exportEnvelope": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
+      "exportFile": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
       "exportLibraryFile": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
