@@ -2,7 +2,9 @@
 .save-health { flex-basis: 100%; min-width: 0; margin-block: var(--gap); }
 .save-health > button { max-width: 100%; white-space: normal; }
 .save-health-panel { display: grid; gap: var(--gap); padding-block: var(--pad); }
-.save-health-panel[hidden] { display: none; }
+/* [hidden] → css/responsive.css `[hidden]{display:none!important}` (beats
+   this panel's `display:grid`; a local restatement without !important was
+   redundant once that global landed). */
 .save-health-panel p { margin: 0; overflow-wrap: anywhere; font-size: var(--fs-2); line-height: 1.5; }
 .save-health-panel button, .save-health-panel select { max-width: 100%; white-space: normal; min-height: var(--tap); }
 .save-health-history, .save-health-history > div { display: grid; gap: var(--gap); min-width: 0; }

@@ -25,15 +25,11 @@
   #pm-quick-doors { --tray-gap: calc(var(--gap) / 2); --tray-cols: 3; display: flex; flex-wrap: wrap; gap: var(--tray-gap); grid-column: 1 / -1; }
   #pm-quick-doors > * { flex: 1 1 calc((100% - (var(--tray-cols) - 1) * var(--tray-gap)) / var(--tray-cols)); min-width: 0; }
   #pm-quick-doors button { margin: 0; min-height: max(var(--chip-h), 44px); min-width: 0; font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: calc(var(--gap) / 3); transform: none; }
-  #pm-quick-doors button[hidden] { display: none; }
-  /* #pm-howto is listed with the full-span stack doors in css/dialogs.css, but
-     inside this 3-col tray a span made PHOTO sit alone and pushed HOW TO PLAY
-     + REWIND under the fold on a short landscape phone (layout-audit
-     2026-10-04). Keep every tray tile one cell so the second row is
-     PHOTO | HOW TO PLAY | REWIND & RETRY. */
-  #pm-quick-doors #pm-howto { grid-column: auto; }
   /* Disclosure tiles (REWIND & RETRY, RACE MESSAGES, REVIEW INPUTS): the
      same plate as a button tile closed, the tray's full width open. */
+  /* [hidden] is css/responsive.css `[hidden]{display:none!important}`.
+     `#pm-howto { grid-column: auto }` was a grid-tray leftover — the tray is
+     `display:flex` (#pm-quick-doors above), so grid-column never applied. */
   #pm-quick-doors > details { font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: 0 calc(var(--gap) / 3); border-radius: var(--r-md); background: var(--carbon); min-width: 0; }
   #pm-quick-doors > details[open] { flex-basis: 100%; padding-bottom: calc(var(--gap) / 2); }
   #pm-quick-doors > details > summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; list-style: none; }
