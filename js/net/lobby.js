@@ -266,7 +266,7 @@ const NetLobby = (function () {
           // roomState().peers and would wait forever for a lap the gone host
           // can no longer relay (2p never saw it — no relayed roster).
           _peers.clear(); _ready.clear(); selfReady = false; clashClear();
-          if (raceHeld && !racing && why === "local") { raceHeld = false; return; } // quit: onStop restores
+          if (raceHeld && why === "local") { raceHeld = false; return; } // local quit (in/after race): onStop restores
           raceHeld = false;
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);

@@ -1474,6 +1474,42 @@ test("a local NetPlay stop after the race does not claim the friend left", async
   } finally { h.lobby.cancel(); }
 });
 
+test("a mid-race local quit does not claim Connection closed while still inRace", async () => {
+  // quitToMenu → stop("local") can close the transport while UiLayers.inRace()
+  // is still true for a frame; that used to take the racing peer-leave copy.
+  const made = [], closers = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
+    return t;
+  });
+  h.G.startRace = async () => ({ ok: true });
+  h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  h.context.UiLayers = { inRace: () => true };
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1);
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), true);
+    for (let i = 0; i < 40 && /Starting race/.test(h.status.textContent); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    h.status.textContent = "Racing…";
+    closers[0]("local");
+    assert.notEqual(h.status.textContent, "Connection closed.",
+      "our mid-race quit is not a peer disconnect");
+    assert.equal(h.status.textContent, "Racing…", "status left for quitToMenu / onStop");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a transport that never connected closes silently: the watcher's diagnosis is not overwritten", async () => {
   // waitForOpen() said WHICH failure it was, then dropPending() closed the
   // transport, whose close event ran the peer-leave handler synchronously and
