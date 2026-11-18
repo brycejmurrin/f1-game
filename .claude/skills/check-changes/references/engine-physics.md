@@ -4,7 +4,7 @@
 names run on the pushed PR (every draft push, or `node tools/ci/remote-group.mjs <group>` for a whole group); name
 any left unrun as not-run in the PR.
 
-0. Before the edit: check `node tools/ci/pr-board.mjs --json` for an open PR already on `js/game.js` (a path in an open PR's diff belongs to that PR: AGENTS.md §Git branch & deploy).
+0. Before the edit: check `node tools/ci/pr-board.mjs --json` for open PRs already on `js/game.js`. They do not block you (D-033, AGENTS.md §Git branch & deploy): keep your hunks small, name those PRs in your PR body, and resolve at sync if yours merges second.
 1. Plan: `node tools/ci/verify-change.mjs --plan <your paths>`; its `batches` are YOUR groups (a
    consts/game.js edit lists many; a single physics file fewer — read the plan, not this page).
 2. The one spec: `tests/specs/physics-characterization.spec.js` is the master gate near game.js; for another
