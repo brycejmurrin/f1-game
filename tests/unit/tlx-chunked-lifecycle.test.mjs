@@ -642,6 +642,17 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
   const want = [...fine.chunks[0].geo.index.array, ...fine.chunks[1].geo.index.array];
   assert.deepEqual(Array.from(g.index.array.subarray(g.drawRange.start, g.drawRange.start + g.drawRange.count)), want);
   assert.equal(mesh._tlxMv, undefined, "the record's own merge slots are untouched");
+  // One surviving cell (the mirror's last cell inside its draw-distance cap) merges too: it has no geometry of
+  // its own to draw on, and the fall-through drew its whole block.
+  sys.visList[0] = fine.chunks[1];
+  const g1 = sys.mergeVisible(fine, 1, 1);
+  assert.ok(g1 === g, "the mirror slot's geometry, reused");   // not assert.equal: its failure message inspects a whole geometry
+  assert.equal(g1.drawRange.count, 70 * 3, "one cell's 70 triangles, not its 2x2 block's 280");
+  assert.deepEqual(Array.from(g1.index.array.subarray(g1.drawRange.start, g1.drawRange.start + g1.drawRange.count)),
+    Array.from(fine.chunks[1].geo.index.array));
+  assert.equal(sys.mergeVisible(fine, 0, 1), null, "no cell: nothing to merge");
+  sys.visList[0] = mesh.chunks[0];
+  assert.equal(sys.mergeVisible(mesh, 1, 1), null, "a lone BLOCK still draws on its own geometry");
   const freed = new Set();
   sys.free(mesh, freed);
   assert.ok(freed.has(g), "the fine merge slot is freed with the record");
