@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict, raisesCovered,
+  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict, raisesCovered,
   baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
@@ -1762,8 +1762,9 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     const calls = [];
     const run = (cmd, argv, opts) => { calls.push({ cmd, argv, cwd: opts.cwd, env: opts.env }); return { status: 0, stdout: "", stderr: "" }; };
     const select = (paths) => ({ files: paths.filter((f) => f.startsWith("tests/unit/")), reason: "matched" });
+    const estimate = () => null;
     let tip = git(W, undefined, "rev-parse", "HEAD");
-    const quiet = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
+    const quiet = retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate });
     assert.equal(quiet.ok, true, quiet.evidence);
     assert.equal(quiet.evidence, "no tip merge since the CI run's base (created 2026-11-11T01:00:00Z, margin 15 min; no recorded base): CI tested this combination");
     assert.equal(calls.length, 0, "nothing runs when CI tested this combination");
@@ -1772,32 +1773,65 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     tip = git(W, undefined, "rev-parse", "HEAD");
     const t = newerTipPaths({ cwd: W, tip, head, ciAt });
     assert.deepEqual([t.commits.length, t.newer, t.pr], [1, ["tests/unit/tools-runnable.test.mjs"], ["tools/check/offline-precache-check.cjs"]]);
-    const green = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
+    const green = retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate });
     assert.equal(green.ok, true, green.evidence);
     assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].argv, ["tools/ci/tooling-fast.mjs", "--jobs=2", "--quiet", "--file-timeout=180", "tests/unit/tools-runnable.test.mjs"], "the merge result's tooling-fast runs the touched test");
+    assert.deepEqual(calls[0].argv, ["tools/ci/tooling-fast.mjs", "--jobs=3", "--quiet", "--file-timeout=300", "tests/unit/tools-runnable.test.mjs"], "the merge result's tooling-fast runs the touched test");
     assert.equal(calls[0].cwd, W);
     assert.equal(calls[0].env.GITHUB_TOKEN, undefined, "the PR's code runs with the stripped environment");
-    assert.equal(green.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); 1 unit file(s) re-tested on the merge result (tooling-fast's --changed selection (matched)): tests/unit/tools-runnable.test.mjs passed`);
+    assert.equal(green.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); 1 unit file(s) re-tested on the merge result (the unit files both sides select (tooling-fast's --changed selection: newer tip 1, the PR 0) and the touched tests/unit files): tests/unit/tools-runnable.test.mjs passed`);
     // The crossing itself: the re-test is red on the merge → refused (deploy red #5396 would not have happened).
-    const red = retestOnMerge({ cwd: W, tip, head, ciAt, select, run: () => ({ status: 1, stdout: "[tooling-fast] FAIL  1/1 tests/unit/tools-runnable.test.mjs exit=1\n", stderr: "" }) });
+    const red = retestOnMerge({ cwd: W, tip, head, ciAt, select, estimate, run: () => ({ status: 1, stdout: "[tooling-fast] FAIL  1/1 tests/unit/tools-runnable.test.mjs exit=1\n", stderr: "" }) });
     assert.equal(red.ok, false);
     assert.equal(red.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test of 1 unit file(s) on the merge onto ${tip.slice(0, 8)} failed: [tooling-fast] FAIL  1/1 tests/unit/tools-runnable.test.mjs exit=1 — the PR and the newer tip cross; sync-pr.mjs, fix, and push (a fresh CI run)`);
-    const slow = retestOnMerge({ cwd: W, tip, head, ciAt, select, run: () => ({ status: null, error: Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" }) }) });
+    const slow = retestOnMerge({ cwd: W, tip, head, ciAt, select, estimate, run: () => ({ status: null, error: Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" }) }) });
     assert.equal(slow.ok, false);
     assert.equal(slow.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test of 1 unit file(s) on the merge onto ${tip.slice(0, 8)} failed: timed out after 420 s — the PR and the newer tip cross; sync-pr.mjs, fix, and push (a fresh CI run)`);
     // Un-runnable never passes: no CI time, a selection that cannot run, a git error.
-    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).ok, false);
-    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).evidence, 're-test not runnable: the CI run\'s creation time is unreadable ("")');
-    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: () => ({ error: "tooling-fast selection failed: boom" }) }).evidence, "re-test not runnable: tooling-fast selection failed: boom");
-    assert.equal(retestOnMerge({ cwd: W, tip: "f".repeat(40), head, ciAt, run, select }).ok, false, "an unknown tip refuses");
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select, estimate }).ok, false);
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select, estimate }).evidence, 're-test not runnable: the CI run\'s creation time is unreadable ("")');
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, estimate, select: () => ({ error: "tooling-fast selection failed: boom" }) }).evidence, "re-test not runnable: tooling-fast selection failed: boom");
+    assert.equal(retestOnMerge({ cwd: W, tip: "f".repeat(40), head, ciAt, run, select, estimate }).ok, false, "an unknown tip refuses");
     // Measured too broad for the cap: refused up front, nothing runs (the cure is a sync and a fresh CI run).
     calls.length = 0;
-    const broad = retestOnMerge({ cwd: W, tip, head, ciAt, run, select: (p) => ({ ...select(p), estMs: 400_000 }) });
+    const asked = [];
+    const broad = retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: (files) => { asked.push(files); return 400_000; } });
     assert.equal(broad.ok, false);
-    assert.equal(broad.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test would run 1 unit file(s), measured ~400 s at --jobs=2, over the 420 s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
+    assert.deepEqual(asked, [["tests/unit/tools-runnable.test.mjs"]], "the estimate is of the files the re-test would run");
+    assert.equal(broad.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test would run 1 unit file(s) (the unit files both sides select (tooling-fast's --changed selection: newer tip 1, the PR 0) and the touched tests/unit files), measured ~400 s at --jobs=3, over the 420 s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
     assert.equal(calls.length, 0);
-    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: (p) => ({ ...select(p), estMs: 30_000 }) }).ok, true, "a measured-small re-test runs");
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: () => 30_000 }).ok, true, "a measured-small re-test runs");
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: () => 336_000 }).ok, true, "the line is 0.8 of the cap, exclusive");
+    // #5597 — only a test BOTH sides select can cross. The tool (the PR's path) and the pinned test (the tip's path)
+    // each reach one test of their own and share one; all four exist on the merge result.
+    for (const n of ["shared", "pr-only", "tip-only"]) write(U(n), "// fixture\n");
+    const reach = { "tools/check/offline-precache-check.cjs": [U("shared"), U("pr-only")], "tests/unit/tools-runnable.test.mjs": [U("shared"), U("tip-only"), "tests/unit/tools-runnable.test.mjs"] };
+    const seen = [];
+    const both = (paths) => { seen.push(paths); return { files: [...new Set(paths.flatMap((f) => reach[f] || []))].sort(), reason: "matched" }; };
+    calls.length = 0; asked.length = 0;
+    const crossing = retestOnMerge({ cwd: W, tip, head, ciAt, run, select: both, estimate: (files) => { asked.push(files); return 226_000; } });
+    assert.deepEqual(seen, [["tests/unit/tools-runnable.test.mjs", "tools/check/offline-precache-check.cjs"], ["tests/unit/tools-runnable.test.mjs"], ["tools/check/offline-precache-check.cjs"]], "the union (does it widen?), then each side alone");
+    assert.deepEqual(calls.map((c) => c.argv.slice(4)), [[U("shared"), "tests/unit/tools-runnable.test.mjs"]], "the test both sides reach and the touched test run; a one-sided test does not");
+    assert.deepEqual(asked, [[U("shared"), "tests/unit/tools-runnable.test.mjs"]]);
+    assert.deepEqual([crossing.ok, crossing.evidence], [true, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); 2 unit file(s) re-tested on the merge result (the unit files both sides select (tooling-fast's --changed selection: newer tip 3, the PR 2) and the touched tests/unit files): ${U("shared")}, tests/unit/tools-runnable.test.mjs passed`]);
+    // The #5568 shape (gate run 43975288518): the union measured over the cap, what both sides select fits. The
+    // estimate decides on the planned files, so the row re-tests instead of refusing.
+    const cap = (files) => (files.length > 2 ? 712_000 : 226_000);
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: both, estimate: cap }).ok, true);
+    assert.equal(cap(both(seen[0]).files), 712_000, "the union of this fixture is what the row refused before #5597");
+    // A side that still selects too much is still refused: the cap is not raised.
+    const wideBoth = (paths) => ({ files: [U("shared"), U("pr-only"), U("tip-only")], reason: "matched" });
+    const still = retestOnMerge({ cwd: W, tip, head, ciAt, run, select: wideBoth, estimate: cap });
+    assert.deepEqual([still.ok, still.evidence], [false, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test would run 4 unit file(s) (the unit files both sides select (tooling-fast's --changed selection: newer tip 3, the PR 3) and the touched tests/unit files), measured ~712 s at --jobs=3, over the 420 s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`]);
+    // An infra path on the tip widens the union: the touched tests/unit files run, as before; no side is consulted
+    // and nothing is estimated.
+    seen.length = 0; calls.length = 0; asked.length = 0;
+    const infra = (paths) => { seen.push(paths); return { files: ["x"], reason: "tracked", widened: "package.json forces full suite" }; };
+    const widenedRow = retestOnMerge({ cwd: W, tip, head, ciAt, run, select: infra, estimate: (files) => { asked.push(files); return 999_000; } });
+    assert.deepEqual([seen.length, asked.length, calls.map((c) => c.argv.slice(4))], [1, 0, [["tests/unit/tools-runnable.test.mjs"]]]);
+    assert.deepEqual([widenedRow.ok, widenedRow.evidence], [true, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); 1 unit file(s) re-tested on the merge result (the touched tests/unit files (the selection widened: package.json forces full suite)): tests/unit/tools-runnable.test.mjs passed`]);
+    // A side whose selection cannot be read refuses.
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, estimate, select: (paths) => (paths.length === 1 ? { error: "tooling-fast selection failed: side" } : both(paths)) }).evidence, "re-test not runnable: tooling-fast selection failed: side");
     // A merge just BEFORE the CI run's creation (inside the margin) may be missing from its merge ref: re-tested too.
     assert.equal(RETEST_MARGIN_MIN, 15);
     assert.equal(newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T01:50:00Z" }).commits.length, 1, "01:44:54 is inside 01:50 - 15 min");
@@ -1823,13 +1857,36 @@ test("#5407 ciRecordedBase: the green run's tooling A `apex-guards` annotation n
   assert.equal(ciRecordedBase(undefined, req), "");
 });
 
-test("#5407 retestPlan: the gate's own selection, kept to files the merge has; a widened selection falls back to the touched unit files and says so", () => {
+test("#5407 #5597 retestPlan: the files both sides select plus the touched unit files, kept to files the merge has; a widened selection falls back to the touched unit files and says so", () => {
   const has = (f) => f !== U("deleted");
-  assert.deepEqual(retestPlan({ newer: ["js/a.js", U("b")], pr: [U("deleted")], selection: { files: [U("a")], reason: "matched" }, exists: has }),
-    { files: [U("a"), U("b")], how: "tooling-fast's --changed selection (matched)" });
+  const how = (n, p) => `the unit files both sides select (tooling-fast's --changed selection: newer tip ${n}, the PR ${p}) and the touched tests/unit files`;
+  const union = { files: [U("a"), U("n"), U("p"), U("deleted")], reason: "matched" };
+  const N = { files: [U("a"), U("n"), U("deleted")], reason: "matched" }, P = { files: [U("a"), U("p"), U("deleted")], reason: "matched" };
+  assert.deepEqual(retestPlan({ newer: ["js/a.js", U("b")], pr: ["js/b.js", U("deleted")], selection: union, sides: { newer: N, pr: P }, exists: has }),
+    { files: [U("a"), U("b")], how: how(3, 3) }, "shared a, touched b; n and p are one-sided, deleted is not on the merge");
+  // One side widens on its own (it pins nothing, so it may reach anything): the other side's files stand.
+  const wide = { files: ["every"], reason: "no-pin-match", widened: "no-pin-match" };
+  assert.deepEqual(retestPlan({ newer: [["assets", "x.bin"].join("/")], pr: ["js/b.js"], selection: union, sides: { newer: wide, pr: P }, exists: has }),
+    { files: [U("a"), U("p")], how: how("every file", 3) });
+  assert.deepEqual(retestPlan({ newer: ["js/a.js"], pr: [["assets", "x.bin"].join("/")], selection: union, sides: { newer: N, pr: wide }, exists: has }),
+    { files: [U("a"), U("n")], how: how(3, "every file") });
+  // Both widen, or no side was read: the union selection, never fewer files than it.
+  assert.deepEqual(retestPlan({ newer: ["js/a.js"], pr: ["js/b.js"], selection: union, sides: { newer: wide, pr: wide }, exists: has }).files, [U("a"), U("n"), U("p")]);
+  assert.deepEqual(retestPlan({ newer: ["js/a.js"], pr: ["js/b.js"], selection: union, exists: has }),
+    { files: [U("a"), U("n"), U("p")], how: how("every file", "every file") });
+  // A docs-only tip merge against a broad PR (#5569 × the changelog fold): only what the docs side selects too.
+  assert.deepEqual(retestPlan({ newer: [["docs", "x.md"].join("/")], pr: ["js/b.js", U("p")], selection: P, sides: { newer: { files: [U("a"), U("docs")], reason: "docs-only" }, pr: P }, exists: has }).files, [U("a"), U("p")]);
   assert.deepEqual(retestPlan({ newer: ["package.json", U("b")], pr: [U("c")], selection: { files: ["x"], widened: "package.json forces full suite" }, exists: has }),
     { files: [U("b"), U("c")], how: "the touched tests/unit files (the selection widened: package.json forces full suite)" });
   assert.deepEqual(retestPlan({ newer: [["docs", "x.md"].join("/")], pr: [], selection: { files: [], reason: "docs" } }).files, []);
+  assert.deepEqual([RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS], [3, 300, 420_000], "the per-file bound stays inside the cap, and the cap is unchanged");
+  // gateEstimate: the gate checkout's own tooling-fast, a number or null (never a throw, never a guess).
+  const child = [];
+  assert.equal(gateEstimate([U("a")], { root: "/gate", run: (cmd, argv, opts) => { child.push([argv[0], argv.at(-1), opts.cwd]); return { status: 0, stdout: "226000" }; } }), 226000);
+  assert.deepEqual(child, [["--input-type=module", JSON.stringify([U("a")]), "/gate"]]);
+  assert.equal(gateEstimate([], { run: () => ({ status: 1, stdout: "" }) }), null);
+  assert.equal(gateEstimate([], { run: () => ({ status: 0, stdout: "null" }) }), null);
+  assert.equal(gateEstimate([], { run: () => ({ status: 0, stdout: "not json" }) }), null);
 });
 
 test("#5407 evaluate: the retest row is local (never --trusted), waits with a pending ci row, and a refused re-test refuses the gate", () => {
