@@ -11082,6 +11082,9 @@
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
       ],
+      "rowsFrom": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
       ],
