@@ -63,6 +63,53 @@ test('samplePose applies authored car path for every tuner angle, including Nigh
   assert.ok(Math.hypot(p.x - raw.x, p.z - raw.z) > 0.5, 'authored mid-roll leaves the analytic path');
 });
 
+test('createGarage draw links material prototype only when the mat identity changes', () => {
+  const ctx = vm.createContext({
+    Math, Float32Array, Object, Array, Number, String, Error, TypeError,
+    console, performance: { now: () => 0 },
+  });
+  ctx.Car3D = {
+    TYRE_BAND: [null, [1, 0, 0]],
+    BRAKE_CALIPER: [null, [1, 1, 0]],
+    buildWheelLayers() {
+      return {
+        rotating: { pos: [0, 0, 0], nrm: [0, 1, 0], col: [0, 0, 0], mat: [0], idx: [0, 0, 0] },
+        fixed: { pos: [0, 0, 0], nrm: [0, 1, 0], col: [0, 0, 0], mat: [0], idx: [0, 0, 0] },
+      };
+    },
+  };
+  ctx.M4 = { mulTo(out) { out.fill(0); out[15] = 1; } };
+  vm.runInContext(readFileSync(new URL('../../js/car/car-wheels.js', import.meta.url), 'utf8'), ctx, {
+    filename: absSrc('js/car/car-wheels.js'),
+  });
+  let protoCalls = 0;
+  const realSet = ctx.Object.setPrototypeOf.bind(ctx.Object);
+  Object.defineProperty(ctx.Object, 'setPrototypeOf', {
+    configurable: true,
+    writable: true,
+    value(o, proto) { protoCalls++; return realSet(o, proto); },
+  });
+  const draws = [];
+  const gfx = {
+    createMesh(d) { return { d }; },
+    freeMesh() {},
+    draw(mesh, world, opts) { draws.push({ mesh, opts }); },
+  };
+  // Top-level const CarWheels is script-scoped in the VM, not ctx.CarWheels.
+  const garage = vm.runInContext('CarWheels', ctx).createGarage(gfx);
+  garage.prepare('k1', {}, { tyres: 1, brakes: 1, _visual: {} });
+  const mat = { roughness: 0.4, specular: 0.2 };
+  garage.draw(new Float32Array(16), 1.2, 0.1, mat);
+  garage.draw(new Float32Array(16), 1.4, 0.1, mat);
+  garage.draw(new Float32Array(16), 1.6, 0.1, mat);
+  assert.equal(protoCalls, 1, 'same material identity: one setPrototypeOf for the turntable');
+  const mat2 = { roughness: 0.5, specular: 0.1 };
+  garage.draw(new Float32Array(16), 1.8, 0.1, mat2);
+  assert.equal(protoCalls, 2, 'a new material identity re-links once');
+  assert.ok(draws.length >= 4 * 4, 'four wheels × layers still draw');
+  assert.equal(Object.getPrototypeOf(draws.at(-1).opts), mat2);
+});
+
 test('calm reduced-motion still gets the wide exterior camera on non-CUT angles', () => {
   const cfg = Arrival.settings({ angle: 'high', fov: 56 });
   const pose = Object.assign({}, Arrival.poseOut(5.0, cfg, true));

@@ -530,7 +530,11 @@ function getSpinDisc() {
 // on (js/physics/tyre-model.js AI_CLASS colour): one flat ring per colour,
 // cached by its rgb, laid on each wheel's outer face like the brake ring —
 // outside the brake ring's band, so the two never overlap.
+// FIFO-capped like getCrewMesh: the parts catalog alone has dozens of band
+// colours, and a garage / custom tyre edit mints more — an uncapped map kept
+// every stripe's GPU buffers for the page's life.
 const _compoundRings = new Map();
+const COMPOUND_CACHE_MAX = 64;
   function getCompoundRing(col) {
     const key = colKey3(col);   // per wheel per car per frame: the memoised key
     let m = _compoundRings.get(key);
@@ -553,6 +557,12 @@ const _compoundRings = new Map();
     }
     m = _gfx.createMesh(out);
     _compoundRings.set(key, m);
+    if (_compoundRings.size > COMPOUND_CACHE_MAX) {
+      const old = _compoundRings.keys().next().value;
+      const om = _compoundRings.get(old);
+      _compoundRings.delete(old);
+      if (om && _gfx.freeMesh) _gfx.freeMesh(om);
+    }
     return m;
   }
 
@@ -640,12 +650,25 @@ function _flatQuadData(w, h, col) {
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
   return out;
 }
+// Exhaust flame quad, keyed by fuel fxFlame colour. FIFO-capped: the fuel
+// catalog alone has ~20 distinct burns, and join(",") without toFixed minted a
+// new GPU mesh for every float spelling of the same colour.
 const _exhaustMeshes = {};
+const _exhaustOrder = [];
+const EXHAUST_CACHE_MAX = 32;
 function getExhaustFlame(color) {
   const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
-  const key = R.join(",");
+  const key = colKey3(R);
   if (_exhaustMeshes[key]) return _exhaustMeshes[key];
-  return (_exhaustMeshes[key] = _gfx.createMesh(_flatQuadData(0.035, 0.030, R)));
+  const mesh = _gfx.createMesh(_flatQuadData(0.035, 0.030, R));
+  _exhaustMeshes[key] = mesh;
+  _exhaustOrder.push(key);
+  while (_exhaustOrder.length > EXHAUST_CACHE_MAX) {
+    const old = _exhaustOrder.shift(), om = _exhaustMeshes[old];
+    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
+    delete _exhaustMeshes[old];
+  }
+  return mesh;
 }
 let boostMesh = null;
 function getBoostFlame() {
@@ -827,15 +850,23 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only, surface, rearCol) 
 // track a dim night sky/road (≈0.01–0.04) so the lens does not read as a day
 // env card. Cached per (quads, night).
 const _mirrorFbMeshes = new Map();
+const MIRROR_FB_CACHE_MAX = 32;   // one slot per cockpitMirrorGlass scale; FIFO+free like crew
 // Day sky tint (legacy) and night env tint — night TOP stays under ~1.5× a
 // typical night road luma (~0.05) once the matte emissive opts are applied.
 const _FB_DAY = { TOP: [0.62, 0.72, 0.84], MID: [0.40, 0.48, 0.58], BOT: [0.20, 0.23, 0.27] };
 const _FB_NIGHT = { TOP: [0.045, 0.050, 0.070], MID: [0.028, 0.032, 0.042], BOT: [0.014, 0.016, 0.022] };
+function _mirrorFbEvict() {
+  while (_mirrorFbMeshes.size > MIRROR_FB_CACHE_MAX) {
+    const oldQ = _mirrorFbMeshes.keys().next().value, old = _mirrorFbMeshes.get(oldQ);
+    _mirrorFbMeshes.delete(oldQ);
+    if (old && _gfx.freeMesh) { if (old[0]) _gfx.freeMesh(old[0]); if (old[1]) _gfx.freeMesh(old[1]); }
+  }
+}
 function getMirrorFallback(quads, night) {
   const key = night ? 1 : 0;
   let slot = _mirrorFbMeshes.get(quads);
   if (slot && slot[key]) return slot[key];
-  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); }
+  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); _mirrorFbEvict(); }
   const band = night ? _FB_NIGHT : _FB_DAY;
   const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = band.TOP, MID = band.MID, BOT = band.BOT;
   const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);   // per-axis mix of two corners
@@ -866,6 +897,7 @@ function getMirrorFallback(quads, night) {
 // has no createTexMesh (the caller then lays the fallback).
 const MIRROR_GLASS_V = [0.22, 0.78];
 const _mirrorGlassMeshes = new Map();
+const MIRROR_GLASS_CACHE_MAX = 32;
 function getMirrorGlass(quads) {
   if (_mirrorGlassMeshes.has(quads)) return _mirrorGlassMeshes.get(quads);
   let m = null;
@@ -881,6 +913,11 @@ function getMirrorGlass(quads) {
     m = _gfx.createTexMesh(out);
   }
   _mirrorGlassMeshes.set(quads, m);
+  while (_mirrorGlassMeshes.size > MIRROR_GLASS_CACHE_MAX) {
+    const oldQ = _mirrorGlassMeshes.keys().next().value, om = _mirrorGlassMeshes.get(oldQ);
+    _mirrorGlassMeshes.delete(oldQ);
+    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
+  }
   return m;
 }
 // 7-seg digit table, shared by the gear and speed LCD readouts.
