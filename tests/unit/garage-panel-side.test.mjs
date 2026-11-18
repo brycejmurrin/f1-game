@@ -366,6 +366,12 @@ test("#4529: PANEL WIDTH below 100 % really shrinks; PANEL HEIGHT caps the portr
   assert.equal(sheet(0.6, 395), 252, "60 % takes the panel under the rail floor");
   assert.ok(sheet(0.8, 900) < sheet(1, 900), "and narrows a desktop sheet too");
   // Portrait: the sheet is full width, so only a value under 100 % narrows it; PANEL HEIGHT scales the
-  // shipped 70vh cap there (the other caps are 100 % of the row). One pin for the portrait block.
-  assert.match(css, /@media \(orientation: portrait\) \{\s*:root\[data-look-garage-ph\] #carsetup #cs-inner \{\s*max-height: calc\(min\(70vh, 100%\) \* var\(--look-garage-ph, 1\)\);\s*\}\s*\/\*[^]*?\*\/\s*:root\[data-look-garage-pw\] #carsetup #cs-inner \{\s*width: calc\(100% \* min\(var\(--look-garage-pw, 1\), 1\)\);/);
+  // shipped 70vh cap there (the other caps are 100 % of the row). Exact rule bodies, read from the portrait block.
+  const flat = css.replace(/\s+/g, " ");
+  const block = "@media (orientation: portrait) { :root[data-look-garage-ph] #carsetup #cs-inner { ";
+  const at = flat.indexOf(block);
+  assert.notEqual(at, -1, "the portrait PANEL HEIGHT block exists");
+  const body = (from, head) => { const i = flat.indexOf(head, from) + head.length; return flat.slice(i, flat.indexOf("}", i)).trim(); };
+  assert.equal(body(at, block), "max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));");
+  assert.equal(body(at, ":root[data-look-garage-pw] #carsetup #cs-inner { "), "width: calc(100% * min(var(--look-garage-pw, 1), 1)); justify-self: end;");
 });
