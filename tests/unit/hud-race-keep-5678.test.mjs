@@ -118,3 +118,15 @@ test("keepUser: a saved piece is shifted at race time only, never into the saved
   assert.equal(ed.sectors.style.getPropertyValue("--hud-clear-x"), "");
   assert.ok(!ed.sectors.hasAttribute("data-hl-keep"));
 });
+
+test("keepUser: a piece parked mostly off the screen is the player's choice and is left alone", () => {
+  const { H, sectors } = layout();
+  const r0 = sectors.getBoundingClientRect;
+  sectors.getBoundingClientRect = () => { const r = r0.call(sectors); return { ...r, left: r.left + 120, right: r.right + 120 }; };   // 861..959 at "--": all of it past 844
+  H.keepUser(844, 390);
+  assert.equal(sectors.style.getPropertyValue("--hud-clear-x"), "");
+  assert.ok(!sectors.hasAttribute("data-hl-keep"));
+  sectors.getBoundingClientRect = () => { const r = r0.call(sectors); return { ...r, left: r.left + 20, right: r.right + 20 }; };   // widest 761..859: 83 of 98 px on screen
+  H.keepUser(844, 390);
+  assert.equal(sectors.style.getPropertyValue("--hud-clear-x"), "-62px", "mostly on screen: kept, 62 px back inside the 47 px inset");
+});

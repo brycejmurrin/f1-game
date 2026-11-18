@@ -45,7 +45,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -96,7 +96,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -147,7 +147,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -198,7 +198,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -249,7 +249,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -300,7 +300,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -351,7 +351,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -402,7 +402,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
@@ -453,7 +453,7 @@
       "hud": {
         "taps": 0,
         "text": 0,
-        "outside": 6,
+        "outside": 0,
         "blocked": 0,
         "scroll": 0
       },

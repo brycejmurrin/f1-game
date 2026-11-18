@@ -733,10 +733,9 @@ test("clearControls preserves manual placement and discards stale automatic clea
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
-  // #5678: in the race a saved piece is kept on screen and off the controls by the smallest shift — 200 px
-  // back from 1200, then 44 px down past the button (4 px air) rather than 104 left or 134 up — never saved.
-  assert.deepEqual([r.left, r.right, r.top, r.bottom], [900, 1000, 544, 574], "kept on screen and off the control, no further");
-  assert.deepEqual([props["--hud-clear-x"], props["--hud-clear-y"]], ["-200px", "44px"]);
+  // Wholly off the screen is a parked piece: #5678's race-time keep leaves it where the player put it.
+  assert.equal(r.right, 1200, "an edited widget is not brought back on screen");
+  assert.deepEqual([props["--hud-clear-x"], props["--hud-clear-y"]], [undefined, undefined]);
   assert.equal(props["--hl-x"], "30", "control clearance cannot change the saved geometry");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
   // A prior terminal placement must not bias the next edge clamp. Simulate a

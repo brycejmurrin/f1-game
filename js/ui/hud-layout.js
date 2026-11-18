@@ -819,8 +819,10 @@ const HudLayout = (function () {
       if (!el || !el.style || (only && el !== only)) continue;
       if (el.hasAttribute("data-hl-keep")) { el.style.removeProperty("--hud-clear-x"); el.style.removeProperty("--hud-clear-y"); el.removeAttribute("data-hl-keep"); }
       if (editing || !manuallyPlaced(el) || el.hidden) continue;
-      const r = maxRect(id, el);
-      if (!(r.right > r.left && r.bottom > r.top)) continue;
+      const r = maxRect(id, el), area = (r.right - r.left) * (r.bottom - r.top);
+      if (!(area > 0)) continue;
+      // PARKED is a choice: a piece saved mostly off the screen stays there (unrestricted placement, hud-layout.spec).
+      if ((Math.max(0, Math.min(r.right, W) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0))) * 2 < area) continue;
       if (!obs) {
         obs = [];
         const n = Array.from(doc.querySelectorAll(KEEP_CTRL));
