@@ -4220,6 +4220,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -4789,6 +4790,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4938,6 +4940,7 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "scored": [
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "setConfig": [
