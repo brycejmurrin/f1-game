@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 // The god-ray nearest-k lamp selection used to be one algorithm cloned into
 // all three backends; it now lives ONCE in js/render/shared/post-common.js
@@ -103,3 +105,33 @@ for (const c of edgeCases) {
     assert.deepEqual(new Set(sel), before, "same objects, none aliased or dropped");
   });
 }
+
+test("makeDirtCanvas caches the LCG dirt map across post-chain inits", () => {
+  let creates = 0;
+  const doc = {
+    createElement(tag) {
+      assert.equal(tag, "canvas");
+      creates++;
+      return {
+        width: 0, height: 0,
+        getContext() {
+          return {
+            fillStyle: "", globalCompositeOperation: "", imageSmoothingEnabled: false,
+            lineWidth: 1, strokeStyle: "",
+            fillRect() {}, createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+            putImageData() {}, drawImage() {}, createRadialGradient() { return { addColorStop() {} }; },
+            beginPath() {}, arc() {}, fill() {}, moveTo() {}, lineTo() {}, stroke() {},
+          };
+        },
+      };
+    },
+  };
+  const ctx = vm.createContext({ document: doc, Math });
+  vm.runInContext(readFileSync(join(ROOT, SHARED), "utf8") + "\n;globalThis.PostCommon = PostCommon;", ctx,
+    { filename: absSrc(SHARED) });
+  const a = ctx.PostCommon.makeDirtCanvas();
+  const b = ctx.PostCommon.makeDirtCanvas();
+  assert.ok(a && b);
+  assert.equal(a, b, "second call must return the same canvas");
+  assert.equal(creates, 2, "one dirt canvas + one noise canvas, not a second dirt rebuild");
+});
