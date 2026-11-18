@@ -301,10 +301,15 @@ function buildResults(order, race) {
   const cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
-  // A FRIEND race ends with the room still on screen but not alive: RACE AGAIN is a solo race and MENU
-  // drops the connection (game.js resNext/resMenu stop NetPlay). Name both, and offer a fresh room.
+  // A FRIEND race ends with NetPlay sometimes still live (the guest may BYE while the sheet is up):
+  // RACE AGAIN is a solo race and MENU drops the connection (game.js resNext/resMenu stop NetPlay).
+  // Name both, and offer a fresh room. The click reads dataset.friend, never the live peer, so the
+  // label and the action agree even after the guest leaves.
   const friend = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
-  if (els.resMenu) els.resMenu.textContent = friend ? tr("results.newFriendRoom", null, "NEW FRIEND ROOM") : tr("results.menu", null, "MENU");
+  if (els.resMenu) {
+    els.resMenu.textContent = friend ? tr("results.newFriendRoom", null, "NEW FRIEND ROOM") : tr("results.menu", null, "MENU");
+    els.resMenu.dataset.friend = friend ? "1" : "";
+  }
   const sprint = race && typeof race.sprint === "boolean" ? race.sprint
     : G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? tr("results.sprintTitle", { track: track.def.name }, "SPRINT — {track}")
@@ -619,7 +624,7 @@ function buildTTResults() {
   const track = G.track;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";
-  if (els.resMenu) els.resMenu.textContent = tr("results.menu", null, "MENU");   // a friend race's NEW FRIEND ROOM label must not outlive it
+  if (els.resMenu) { els.resMenu.textContent = tr("results.menu", null, "MENU"); els.resMenu.dataset.friend = ""; }   // a friend race's NEW FRIEND ROOM label (and action) must not outlive it
   els.resultsTitle.textContent = tr("results.ttTitle", { track: track.def.name }, "{track} — TIME TRIAL");
   winnerChip(els, "");
   const best = G.player.best;

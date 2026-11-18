@@ -9863,6 +9863,9 @@
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "encodeSuspend": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
