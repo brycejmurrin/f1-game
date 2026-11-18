@@ -30,6 +30,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/input/steer-tuning.js"), "utf8");
@@ -145,7 +146,7 @@ test("RELAX is the most forgiving bundle, which is the whole point of it", () =>
 // PRO's value. WEIGHT (carWeight, hand-wired) did the same. Only a preset-owned
 // row may clear the chip. SteerTuning.create runs in a VM against a stub DOM, a
 // disk-backed store and an Input whose every setter is a no-op.
-function bootTuning(input = {}, disk = {}) {
+function bootTuning(input = {}, disk = {}, g = {}) {
   const els = {};
   const noop = () => {};
   const mk = () => {
@@ -171,7 +172,7 @@ function bootTuning(input = {}, disk = {}) {
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/input/steer-tuning.js") });
   const api = vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
-    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
+    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), ...g });
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
   return { $, disk, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
 }
@@ -342,4 +343,48 @@ test("the injected AUDIO DRIVING CUES row drops the preset chip by delegation (b
   $("pm-preset-pro").onclick();
   for (const [t, f] of $("advanced-inner").listeners) if (t === "input") f({ target: { id: "pm-haptics" } });
   assert.equal(disk.preset, "pro", "another row's bubbled input leaves the chip alone");
+});
+
+// #5575 finding 1: only the ROOKIE click wrote autoThrottle, so ROOKIE -> STANDARD
+// left THROTTLE on AUTO and the GAS pedal hidden under a chip reading STANDARD.
+// An assist that stays on after the player turned it off is the worst kind.
+test("leaving ROOKIE for RELAX / STANDARD / PRO restores manual throttle (#5575)", () => {
+  for (const name of ["relax", "standard", "pro"]) {
+    const seen = [];
+    const disk = {};
+    const { $ } = bootTuning({}, disk, { onAssistBundle: () => seen.push(disk.autoThrottle) });
+    $("pm-preset-rookie").onclick();
+    assert.equal(disk.autoThrottle, true, "ROOKIE hands the throttle to the car");
+    assert.deepEqual(seen, [true]);
+    $("pm-preset-" + name).onclick();
+    assert.equal(disk.autoThrottle, false, name.toUpperCase() + " must hand the throttle back");
+    assert.equal(disk.preset, name);
+    assert.deepEqual(seen, [true, false], "game.js is told to re-read it AFTER the store holds false");
+    // A second tap has nothing to hand back, so it must not re-run the bundle hook.
+    $("pm-preset-" + name).onclick();
+    assert.deepEqual(seen, [true, false]);
+  }
+});
+
+test("onAssistBundle re-reads the throttle, shows the pedals again and only announces ROOKIE on the way IN (#5575)", () => {
+  const GAME = gameSource();
+  const at = GAME.indexOf("  onAssistBundle() {");
+  assert.notEqual(at, -1, "onAssistBundle moved");
+  const body = GAME.slice(GAME.indexOf("{", at) + 1, GAME.indexOf("\n  },", at));
+  const run = (stored) => {
+    const calls = [];
+    const rec = (n) => (...a) => { calls.push([n, ...a]); };
+    // eslint-disable-next-line no-new-func
+    const out = Function("store", "Input", "paintThrottleMode", "refreshGearsBtn", "showTouchControls", "announce", "state",
+      `let autoThrottleOpt = true, throttleLatchOpt = false; ${body}; return autoThrottleOpt;`)(
+      { get: (k, d) => (k === "autoThrottle" ? stored : d) }, { setThrottleLatch: rec("latch") },
+      rec("paint"), rec("gears"), rec("touch"), rec("announce"), "race");
+    return { out, names: calls.map((c) => c[0]) };
+  };
+  const leaving = run(false);
+  assert.equal(leaving.out, false, "the live option follows the store");
+  assert.deepEqual(leaving.names, ["latch", "paint", "gears", "touch"], "repaints the row and the dock, says nothing");
+  const entering = run(true);
+  assert.equal(entering.out, true);
+  assert.equal(entering.names[entering.names.length - 1], "announce");
 });
