@@ -107,7 +107,7 @@ ledger lists.
 ## Orchestration
 
 - [Review fix plan, 2026-10-27](plans/2026-10-27-review-fix-plan.md): OPEN — every finding from the whole-surface Opus review as PR-sized work packages (landing safety first, then game bugs, skills, rulebook); evidence in [notes/review-2026-10-27/](notes/review-2026-10-27/README.md).
-- [Orchestration redesign: GitHub is the orchestrator](plans/2026-10-27-orchestration-redesign.md): shipped in #3895 on 2026-10-27 — labels, `land.yml` and the dispatcher replace the bus, claims board and orchestrators (the contract: [WORKERS.md](WORKERS.md)); evidence in [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md).
+- [Orchestration redesign: GitHub is the orchestrator](plans/2026-10-27-orchestration-redesign.md): shipped in #3895 on 2026-10-27 — labels, `land.yml` and the dispatcher replace the bus, claims board and orchestrators (the contract: [WORKERS.md](WORKERS.md)); evidence in [notes/orchestration-redesign-2026-10-27/](archive/notes/orchestration-redesign-2026-10-27/README.md).
 - [Fleet redesign, 2026-10-19](plans/2026-10-19-fleet-redesign.md): superseded by the 2026-10-27 redesign; history only.
 
 ## Deferred repository maintenance

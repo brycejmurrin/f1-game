@@ -5,7 +5,8 @@
 // @skill steward
 //
 // Design (docs/plans/2026-11-03-agent-surface-reset.md §4.1, §4.3, §5): GITHUB IS THE DISPATCHER; THE CLOUD ONLY RUNS
-// WORKERS. `.github/workflows/dispatch.yml` runs this file hourly and on issue / PR / check-suite / comment events, from
+// WORKERS. `.github/workflows/dispatch.yml` runs this file hourly, on issue and comment events and when a CI run ends
+// green or a Pages train ends (`workflow_run`; no PR or check-suite trigger since 2026-11-10), from
 // the DEPLOY branch's checkout (a PR cannot change the dispatcher that judges it), with the Action's own GITHUB_TOKEN.
 // There is no persistent dispatcher session, no Board lock, no PAUSE/RESUME of a scheduled task, no launch receipt, no
 // session listing (`--children`) and no `@parent`: every write is a label or a comment, every launch is one HTTP POST.
@@ -45,14 +46,17 @@
 // maxLaunchesPerRun, maxLiveWorkers (launch comments younger than launchClaimHours) and maxLaunchesPerDay (launch
 // comments in the last 24 h), and none at all while landQueueMax or more open non-draft PRs carry `land` (LANDING
 // BACKPRESSURE; rules 2 and 3 drain the queue and are never paused); (2) an open PR with no push and no comment for
-// staleHours (6 for lane:codex), or one already labelled `needs-owner`, no `hold`/`needs-decision` → `needs-owner` +
-// ONE `CONTINUE PR <n>` worker, unless a live worker's claim, foreign activity (a commit by another author in
+// staleHours, or one already labelled `needs-owner`, no `hold`/`needs-decision` → `needs-owner` +
+// ONE `CONTINUE PR <n>` worker, unless a live worker's claim, an `adopts PR #<n>` comment by the owner's account
+// younger than launchClaimHours (a hand-launched owner: skill steward §Lane 3), foreign activity (a commit by another author in
 // foreignHours, or a lane:cursor push) or an unmerged prerequisite PR named in the body says wait; (3) deploy red (the
 // newest COMPLETED pages.yml run on the deploy branch failed) and no open PR labelled `deploy:red` → label the Board,
 // launch one fixer addressed `DEPLOY-RED <run id>` (none when the run's PLATFORM_STEP failed: a Pages-side publish
-// failure is a skip line on the Board, not a code fix); (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
+// failure is a skip line on the Board, not a code fix; none while a NEWER train is queued or running: that tip is
+// untested and may be the fix, #5420); an ORPHAN claim (`ready` +
+// `claimed`, no open PR closing it, no live launch, no comment for staleHours.default) is a Board skip line, never a relaunch; (4) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
 // acts on gets ONE comment per nudgeEveryMinutes (`dispatch: nudge …`) naming what to do next — a subscribed worker is
-// woken by the comment; (6) the Board markdown, ONE comment this tool edits on the issue titled `Board`
+// woken by the comment; a DRAFT labelled `deploy:red` whose CI is green is nudged at once, not after nudgeAfterMinutes; (5) the Board markdown, ONE comment this tool edits on the issue titled `Board`
 // (marker `<!-- dispatch-board -->`). Idempotent: every launch is recorded as a comment on the issue/PR (deploy:red
 // fixers on the Board issue), and a launch comment younger than launchClaimHours is a live claim.
 // Rule 2's "last activity" is the head's push (its first workflow run, a server time) or the newest comment not written
@@ -85,8 +89,8 @@ export const ANTHROPIC_VERSION = "2026-10-21";
 /** Rows per list page; a page shorter than this is the last one (GitHub REST pagination). */
 export const PAGE_SIZE = 100;
 export const DEFAULT_CONFIG = {
-  pause: false, maxLaunchesPerRun: 4, maxLaunchesPerDay: 24, maxLiveWorkers: 8, landQueueMax: 15, workerCostCapUsd: 10, workerStopAtK: 300,
-  staleHours: { default: 2, codex: 6 }, launchClaimHours: 2, foreignHours: 2, nudgeAfterMinutes: 45, nudgeEveryMinutes: 60,
+  pause: false, maxLaunchesPerRun: 2, maxLaunchesPerDay: 24, maxLiveWorkers: 8, landQueueMax: 15, workerCostCapUsd: 10,
+  staleHours: { default: 6, codex: 6 }, launchClaimHours: 2, foreignHours: 2, nudgeAfterMinutes: 45, nudgeEveryMinutes: 60,
   deployBranch: "claude/f1-game-project-26h3ng", repo: "brycejmurrin/f1-game", owner: OWNER,
   boardIssue: 1780, dispatchIssue: 3899, boardIssueTitle: "Board", dispatchIssueTitle: "Dispatch",
 };
@@ -102,6 +106,7 @@ export const labelsOf = (x) => (x?.labels || []).map((l) => (typeof l === "strin
 const has = (x, name) => labelsOf(x).includes(name);
 const t = (iso) => Date.parse(iso || "") || 0;
 const hoursAgo = (iso, now) => (now - t(iso)) / 3.6e6;
+const sha7 = (sha) => String(sha || "").slice(0, 8) || "?";
 export const ageLabel = (iso, now) => { const h = hoursAgo(iso, now); return !t(iso) ? "?" : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`; };
 /** This tool's own comments (launch claims, nudges, digests, the Board) are never activity. Pure. */
 export const isDispatchComment = (body) => { const b = String(body || ""); return LAUNCH_RE.test(b) || NUDGE_RE.test(b) || b.startsWith(BOARD_MARKER) || b.includes(DIGEST_MARKER); };
@@ -135,6 +140,15 @@ export function launchComments(comments) {
 const within = (iso, now, hours) => !!t(iso) && t(iso) <= now + FUTURE_SKEW_MS && hoursAgo(iso, now) < hours;
 /** The newest launch comment younger than `hours` (a live claim), or null. Pure. */
 export const liveLaunch = (comments, now, hours) => launchComments(comments).find((l) => within(l.at, now, hours)) || null;
+/** An adoption comment (skill steward §Lane 3): `adopts PR #<n> — <host>:<session>`. */
+export const ADOPT_RE = /^adopts PR #(\d+) — (\S+)/m;
+/** The newest `adopts PR #<number>` comment by the owner's account (a hand-launched worker writes as the owner) or this
+ *  Action, created less than `hours` ago: a live owner the launch comments do not show. → { who, at } | null. Pure. */
+export function liveAdoption(comments, number, now, hours, owner = OWNER) {
+  const c = (comments || []).filter((x) => (x?.author === owner || x?.author === DISPATCH_BOT) && within(x.created_at, now, hours)
+    && Number(ADOPT_RE.exec(String(x.body || ""))?.[1]) === Number(number)).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
+  return c ? { who: ADOPT_RE.exec(String(c.body))[2], at: c.created_at } : null;
+}
 /** Launch comments younger than `hours` across every issue and PR of the state (the live-worker and per-day counts). Pure. */
 export const launchedWithin = (state, now, hours) => [...(state.issues || []), ...(state.prs || [])]
   .flatMap((x) => launchComments(x.comments)).filter((l) => within(l.at, now, hours)).length;
@@ -265,6 +279,12 @@ export function foreignActivity(p, now, hours = 2) {
   return "";
 }
 const RED = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
+/** The newest run (highest id) of each check name on the head. Pure. */
+const newestChecks = (p) => {
+  const newest = new Map();
+  for (const c of p.checks || []) { const o = newest.get(c.name); if (!o || (c.id || 0) > (o.id || 0)) newest.set(c.name, c); }
+  return [...newest.values()];
+};
 /** Has the head of a `land` PR a failed check (the newest run of each check name), a failed `gate` COMMIT STATUS
  *  (land.yml posts `gate` as a status, not a check run), a `gate` pending longer than `staleH` hours (not while
  *  `mergePaused`: land.yml parks it on purpose) or a conflict? null when it only waits. Pure. */
@@ -274,11 +294,13 @@ export function landProblem(p, now = Date.now(), staleH = Infinity, mergePaused 
   if (gate && (gate.state === "failure" || gate.state === "error")) return `gate ${gate.state}`;
   if (gate && gate.state === "pending" && !mergePaused && hoursAgo(gate.updated_at || gate.created_at, now) >= staleH)
     return `gate pending ${Math.round(hoursAgo(gate.updated_at || gate.created_at, now))}h`;
-  const newest = new Map();
-  for (const c of p.checks || []) { const o = newest.get(c.name); if (!o || (c.id || 0) > (o.id || 0)) newest.set(c.name, c); }
-  const red = [...newest.values()].filter((c) => c.status === "completed" && RED.has(c.conclusion)).map((c) => c.name).sort();
+  const red = newestChecks(p).filter((c) => c.status === "completed" && RED.has(c.conclusion)).map((c) => c.name).sort();
   return red.length ? `${red.join(", ")} red` : null;
 }
+const GREEN = new Set(["success", "skipped", "neutral"]);
+/** Is the head's CI green: at least one check, and the newest run of every check name completed without a red or a
+ *  cancel? Unread checks (none fetched) are not green. Pure. */
+export const ciGreen = (p) => { const cs = newestChecks(p); return cs.length > 0 && cs.every((c) => c.status === "completed" && GREEN.has(c.conclusion)); };
 
 // ---- provenance over one issue / PR ------------------------------------------------------------------------------
 /** The newest `labeled needs-decision` event and whether an owner `decision:` comment is newer than it. Pure.
@@ -308,7 +330,8 @@ export const addressOf = (l) => l.kind === "issue" ? `ISSUE ${l.number}` : l.kin
 export const claimComment = (l, now, session) => `dispatch: launched claude:${l.title} for ${l.number ? `#${l.number}` : "deploy:red"} at ${new Date(now).toISOString()}${session ? ` as ${session}` : ""}`;
 
 /**
- * @param {{ issues?: object[], prs?: object[], deployRed?: boolean, deployRunId?: number|string|null, deployPlatform?: boolean }} state
+ * @param {{ issues?: object[], prs?: object[], deployRed?: boolean, deployRunId?: number|string|null, deployPlatform?: boolean,
+ *   deployRunSha?: string|null, deployNext?: { id: number, sha: string, status: string }|null }} state
  * @returns {{ launches, labels, digests, nudges, skipped, board, flags, live, launchedToday, landQueue, boardIssue, dispatchIssue }}
  */
 export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
@@ -358,11 +381,12 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     if (board && !has(board, "deploy:red")) label(board.number, ["deploy:red"]);
     if (state.deployPlatform) skip("deploy:red fixer", `pages.yml run ${state.deployRunId || "?"} failed on the Pages side (step "${PLATFORM_STEP}" failed: both publish attempts): no fixer, re-run the train`);
     else if (claimed) skip("deploy:red fixer", `PR #${claimed.number} carries deploy:red`);
+    else if (state.deployNext) skip("deploy:red fixer", `pages.yml run ${state.deployNext.id} on ${sha7(state.deployNext.sha)} is ${state.deployNext.status}, newer than the failed run ${state.deployRunId || "?"} on ${sha7(state.deployRunSha)}: that tip is untested, wait for its train`);
     else if (!board) skip("deploy:red fixer", `no open Board issue (#${config.boardIssue || "?"}) to record the launch on`);
     else if (l && l.target === "deploy:red") skip("deploy:red fixer", `launched ${ageLabel(l.at, now)} ago (live claim)`);
     else launch("deploy-red", 0, "[Worker] deploy:red fixer", board.number, { runId: state.deployRunId || null });
   } else if (board && has(board, "deploy:red")) label(board.number, [], ["deploy:red"]);
-  // (2) stale open PRs → needs-owner + ONE takeover. (5) idle PRs → one nudge per nudgeEveryMinutes.
+  // (2) stale open PRs → needs-owner + ONE takeover. (4) idle PRs → one nudge per nudgeEveryMinutes.
   const recover = [...prs].sort((a, b) => (has(b, "needs-owner") - has(a, "needs-owner"))
     || (ownerLabel(b, "priority") - ownerLabel(a, "priority")) || activityAt(a) - activityAt(b));
   for (const p of recover) {
@@ -375,12 +399,17 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     }
     const l = liveLaunch(p.comments, now, claimH);
     if (idleH < limit && !asked) {
-      // (5) a nudge: idle past nudgeAfterMinutes, not landing (CI/gate/train work), no nudge in the last nudgeEveryMinutes.
-      if (idleM < (config.nudgeAfterMinutes ?? 45) || (has(p, "land") && !landProblem(p, now, limit, flags.mergePause))) continue;
+      // (4) a nudge: idle past nudgeAfterMinutes, not landing (CI/gate/train work), no nudge in the last nudgeEveryMinutes.
+      // A green deploy:red fixer still in draft is nudged at once: the deploy branch stays red until it lands (#5420).
+      const fixer = p.draft && has(p, "deploy:red") && ciGreen(p);
+      if (!fixer && (idleM < (config.nudgeAfterMinutes ?? 45) || (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)))) continue;
       const last = recentNudge(p.comments, now, config.nudgeEveryMinutes);
       if (last) { skip(`nudge PR #${p.number}`, `nudged ${ageLabel(last, now)} ago (rule: one per ${config.nudgeEveryMinutes} min)`); continue; }
       const next = parseHandoff(p.body)?.next;
-      nudges.push({ on: p.number, body: [`dispatch: nudge at ${new Date(now).toISOString()} — PR #${p.number} has had no push or comment for ${idleM} min.`,
+      nudges.push({ on: p.number, body: fixer ? [`dispatch: nudge at ${new Date(now).toISOString()} — PR #${p.number} carries deploy:red, its CI is green on ${sha7(p.head_sha)} and it is still a draft.`,
+        `Next: \`node tools/ci/ship-pr.mjs --pr ${p.number}\`, flip ready and add \`land\` now. The deploy branch stays red until this lands.`,
+        `Silence for ${limit} h hands the PR to a CONTINUE worker.`].join("\n")
+        : [`dispatch: nudge at ${new Date(now).toISOString()} — PR #${p.number} has had no push or comment for ${idleM} min.`,
         "Next: " + (next || "finish the Plan, push, run ready-gate, flip ready and add `land`") + ". A question goes to Bryce as `needs-decision` + one comment, never to the chat.",
         `Silence for ${limit} h hands the PR to a CONTINUE worker.`].join("\n") });
       continue;
@@ -391,6 +420,8 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     const needs = unmergedPrerequisites(p, prs);
     if (needs.length) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but waits for ${needs.map((n) => `#${n}`).join(", ")} to merge (launch after it lands)`); continue; }
     if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
+    const adopted = liveAdoption(p.comments, p.number, now, claimH, owner);
+    if (adopted) { skip(`PR #${p.number}`, `adopted by ${adopted.who} ${ageLabel(adopted.at, now)} ago (a live owner): no takeover`); continue; }
     if (!asked) label(p.number, ["needs-owner"]);
     launch("continue", p.number, `[Worker] CONTINUE PR #${p.number} ${p.title || ""}`.slice(0, 120), p.number);
   }
@@ -414,6 +445,15 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     if (p.state && p.state !== "open") continue;
     for (const n of closingIssues(p.body, config.repo)) linkedPrs.set(n, [...(linkedPrs.get(n) || []), p.number]);
   }
+  // An ORPHAN claim: `ready` + `claimed`, no open PR closes it, no live launch, and no comment for
+  // staleHours.default. Rule 1 never relaunches a `claimed` issue, so a worker that died between its claim and its first commit
+  // would hide the issue for good: say so on the Board (the cure is a human or orchestrator removing `claimed`).
+  for (const i of issues.filter((x) => !x.pull_request && has(x, "ready") && has(x, "claimed"))) {
+    if ((linkedPrs.get(Number(i.number)) || []).length || liveLaunch(i.comments, now, claimH)) continue;
+    const last = Math.max(0, ...(i.comments || []).map((c) => t(c.created_at)));
+    const idleH = (now - last) / 3.6e6;   // no comment at all: no dated evidence, so no verdict
+    if (last && idleH >= config.staleHours.default) skip(`issue #${i.number}`, `claimed but orphaned: no open PR closes it and no claim or comment for ${Math.round(idleH)}h — remove \`claimed\` to relaunch`);
+  }
   for (const i of queueFull ? [] : ready.filter((x) => trustedReady(x, owner))) {
     const linked = linkedPrs.get(Number(i.number)) || (has(i, "batch") ? [...new Set(batchMembers(i.body).flatMap((n) => linkedPrs.get(n) || []))] : []);
     if (linked.length) { skip(`issue #${i.number}`, `already has open PR ${linked.map((n) => `#${n}`).join(", ")}`); continue; }
@@ -429,7 +469,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
   return plan;
 }
 
-/** (6) The Board comment: flags, caps, one row per open PR, this run's launches, digests, nudges and skips. Pure. */
+/** (5) The Board comment: flags, caps, one row per open PR, this run's launches, digests, nudges and skips. Pure. */
 export function renderBoard(state, plan, config, now) {
   const rows = (state.prs || []).map((p) => {
     const h = parseHandoff(p.body) || {};
@@ -520,7 +560,7 @@ export function readState({ api = githubApi, config, now = Date.now() } = {}) {
     // The foreign-activity probe reads commits only for PRs a takeover could target (stale or asked for).
     if (has(p, "needs-owner") || (now - activityAt(out)) / 3.6e6 >= config.staleHours.default)
       out.commits = getAll(api, `pulls/${p.number}/commits`, { pick: (j) => (Array.isArray(j) ? j : []) }).slice(-30).map((c) => ({ author: c.author?.login || c.commit?.author?.name || "", at: c.commit?.committer?.date || c.commit?.author?.date }));
-    if (has(p, "land")) {   // rule 2 needs to know whether a landing PR only waits (land.yml) or is red/conflicting
+    if (has(p, "land") || has(p, "deploy:red")) {   // a green draft fixer is nudged at once; rule 2 needs to know whether a landing PR only waits (land.yml) or is red/conflicting
       out.mergeable_state = get(api, `pulls/${p.number}`)?.mergeable_state ?? null;
       out.checks = getAll(api, `commits/${p.head.sha}/check-runs`, { pick: (j) => j?.check_runs })
         .map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion }));
@@ -533,7 +573,11 @@ export function readState({ api = githubApi, config, now = Date.now() } = {}) {
   // The newest COMPLETED train: an in-progress run has no conclusion, which flapped deploy:red mid-incident.
   const run = get(api, `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(config.deployBranch)}&status=completed&per_page=1`)?.workflow_runs?.[0];
   const deployRed = !!run && ["failure", "timed_out"].includes(run.conclusion);
-  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null, deployPlatform: deployRed ? platformFailure(api, run.id) : false, landed: landedCount(api, config, now) };
+  // A NEWER train that is queued or running (the newest run of any status): its tip is untested, so no fixer yet. A
+  // prose-only push starts no train (pages.yml paths-ignore), so the tip's sha alone would wait for the 6-hourly cron.
+  const next = deployRed ? api(`actions/workflows/pages.yml/runs?branch=${encodeURIComponent(config.deployBranch)}&per_page=1`).json?.workflow_runs?.[0] : null;
+  const deployNext = next && next.id !== run.id && next.status && next.status !== "completed" ? { id: next.id, sha: next.head_sha || "", status: next.status } : null;
+  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null, deployRunSha: deployRed ? run.head_sha || null : null, deployNext, deployPlatform: deployRed ? platformFailure(api, run.id) : false, landed: landedCount(api, config, now) };
 }
 
 // ---- I/O: the worker fire and the GitHub writes ---------------------------------------------------------------
@@ -635,7 +679,7 @@ const USAGE = `usage: node tools/ci/dispatch.mjs --plan [--json] [--now <iso>] [
   --fire   with --apply: POST each address to \$WORKER_FIRE_URL (Bearer \$WORKER_FIRE_TOKEN, anthropic-version ${ANTHROPIC_VERSION});
            on 200 the claim comment names the returned session; non-200 prints \`= fire failed <status>\` and posts nothing;
            unset env prints \`= fire skipped: WORKER_FIRE_URL unset\`
-  .github/workflows/dispatch.yml runs --apply --fire hourly and on issue/PR/check-suite/comment events (header of this file).`;
+  .github/workflows/dispatch.yml runs --apply --fire hourly, on issue/comment events and after CI or a Pages train (header of this file).`;
 
 export async function main(argv, { api = githubApi, read = fs.readFileSync, log = console.log, now = Date.now, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   exitIfHelp(argv, USAGE);

@@ -975,6 +975,13 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
 }
 #install-chip[hidden] { display: none; }
 #update-chip[hidden] { display: none; }
+/* THE TITLE MAKES ROOM FOR IT. The chip is fixed bottom-right at z 9000 and the
+   title grid fills the window, so on a landscape phone it sat ON the last menu
+   row: SAVES & DATA fully and HOW TO PLAY half at 844x390 (SETTINGS too under the
+   longer "RELOAD TO CONTINUE" text), for as long as the update was pending, and
+   a tap meant for one of them reloaded the game. While it shows, #overlay ends
+   one chip row (+ a gap of air) higher; the grid reflows inside what is left. */
+body:has(> #update-chip:not([hidden])) #overlay { padding-bottom: calc(var(--sab) + var(--tap) + var(--gap) * 2); }
 /* NOT UNDER A MODAL DIALOG. showModal() puts dialog.screen (RESULTS after
    every race, SETTINGS, STANDINGS, DATA HUB…) in the top layer, which no
    z-index outranks, and makes everything outside it inert — the chip sat under
@@ -1172,6 +1179,21 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quit::before { content: none; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
+/* NOW PLAYING on the phone card (#5543; hidden outright since #5200): ONE line in an implicit last row, which only
+   exists while panel.js shows the card, so a silent pause keeps the three-row box. Title, source, then the transport
+   (ids and structure, never the shared now-playing classes, whose one home is the tuner sheet) at the tray tile's floor (44 painted). 844x390 at UI 70 %: card 171 -> 224 px of 390; 852x283 at 109 %: 210 -> 257. */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card { margin: 0; padding: calc(var(--gap) / 4) calc(var(--gap) * 0.7); min-width: 0; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card > div:first-child { flex-direction: row; align-items: baseline; gap: var(--gap); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card > div:first-child > span:first-child { display: none; }
+/* The song and the glyphs take the type tokens, which carry the 12 px PAINTED floor on a phone (css/tokens.css):
+   the shared card's bare 15 / 16 px paint 7.5-10.5 px at UI SIZE 50-70 (bryce-phone-paint counts them). */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now { font-size: var(--fs-2); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-src { flex: 0 99 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card button {
+  --pm-t: max(41px, calc(44px / var(--ui-scale)));
+  width: var(--pm-t); min-width: var(--pm-t); height: var(--pm-t); min-height: var(--pm-t); flex-basis: var(--pm-t);
+  font-size: var(--fs-2);
+}
 /* The doors outside the tray paint the touch comfort floor, not the compact
    one; COMPACT (the layout that spends the least height) takes the chip floor. */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body > button:not(.as-tbtn) { min-height: var(--pm-door); flex: none; min-width: 0; }
@@ -1243,6 +1265,13 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-look-career-density="tight"] #cr-inner,
 :root[data-look-garage-density="tight"] #cs-inner { --compact-at: 99999px; }
 :root[data-look-popups-density="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 99999px; }
+/* ...AND AT EVERY UI SIZE (#5580), the picker's #5358 gate (css/select.css): a phone ships UI SIZE 70 %, where 393 / 0.7
+   hands the career hub 520 own px (over its 480) and the results sheet 515 (over 380), so both went normal on the
+   owner's 852x393 and 844x390: results rows two lines and 74 painted px (3.8 in the pane, no pinned podium) where
+   compact paints 44; the hub head 85 painted where compact paints 62. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #career #cr-inner, #results > .sheet { --compact-at: 99999px; }
+}
 
 /* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
    (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
@@ -1573,6 +1602,14 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"].you { top: 0; }
+/* YOU never bottom-sticks over the rows above it (#5580): its margin box must stay inside the list, so a top margin of
+   --you-clear rows (taken back by the row before it; results-sheet.js fitPins writes the pane's whole rows less one)
+   keeps it out until the list fills the pane, so it never lands on a row that is only entering. At
+   UI SIZE 70 % the list opens 55 px into the pane and YOU sat under P1 (844x390: P1 at y 278, YOU at 287). */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { margin-top: calc(var(--you-clear, 3) * var(--rr-h)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:has(+ .you:not(.p1, .p2, .p3)) { margin-bottom: calc(-1 * var(--you-clear, 3) * var(--rr-h)); }
+/* The story podium's driver code keeps 12 PAINTED px: TEXT LARGE's --fs-4 is a bare 20px (10 painted at UI SIZE 50 %), --fs-micro carries the floor. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) #results-table [data-results-part="podium"] > li > strong { font-size: max(var(--fs-4), var(--fs-micro)); }
 
 /* ---------- section label ---------- */
 .sel-label {
