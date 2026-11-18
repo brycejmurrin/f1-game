@@ -161,7 +161,7 @@ function startDriveOut() {
   driveOutEngine(false);   // repeated launch releases its previous audio graph
   if (typeof clearSetupGestures === "function") clearSetupGestures();
   driveOut = null;
-  if (!cfg.enabled) return 0;
+  if (!GarageArrival.plays(cfg, "raceStart")) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
   // card uses): a harness launch on software GL spent the ~10.6 s drive-out (up to 3x
   // on a stalled clock) plus awaitSoftPresent on top of a 30-90 s build and blew
@@ -488,7 +488,7 @@ function startHome(from) {
   if (!p || from === "pit" || from === "vsfriend") return false;
   pendingHome = null;
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
-  if (!cfg.enabled || !cfg.afterRace || performance.now() - p.at > 30 * 60e3) return false;
+  if (!GarageArrival.plays(cfg, "afterRace") || performance.now() - p.at > 30 * 60e3) return false;
   if (typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation()) return false;
   endHome();
   arrival.start({ home: p });
@@ -502,7 +502,7 @@ const auto = () => typeof LoadingScreen !== "undefined" && LoadingScreen.isAutom
 function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
 function startPitOut(done) {
   handoff = { done };
-  if (!GarageArrival.settings(G.store.get("garageArrival", null)).enabled || reducedMotion() || auto()) { fireHandoff(); return false; }
+  if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitOut") || reducedMotion() || auto()) { fireHandoff(); return false; }
   endHome(); arrival.start({ out: true, rate: 1.6 });
   return true;
 }
