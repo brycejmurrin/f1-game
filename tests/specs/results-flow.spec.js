@@ -421,7 +421,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
           frames.push({ frame: n, ov, pins: T.dataset.pins || null, youClear: T.style.getPropertyValue("--you-clear") || null, paneOwnH: T.clientHeight,
             rowOwnH: +(rows[0].getBoundingClientRect().height / (rows[0].currentCSSZoom || 1)).toFixed(1), density: sheet.dataset.density || null,
             shape: sheet.dataset.shape || null, opacity: getComputedStyle(sheet).opacity, scrollTop: T.scrollTop, youTop: +yr.top.toFixed(1), paneTop: +tb.top.toFixed(1), paneBottom: +tb.bottom.toFixed(1),
-            youMarginTop: getComputedStyle(you).marginTop, above: [...T.children].map((k) => (k.getAttribute("data-results-part") || k.id || k.className || k.tagName)
+            youMarginTop: getComputedStyle(you).marginTop, boot: document.readyState + (document.fonts ? "/" + document.fonts.status : ""), hold: document.getElementById("results").hasAttribute("data-reveal-hold"), printCss: [...document.querySelectorAll('link[rel="stylesheet"]')].filter((l) => l.media !== "all" || !l.sheet).map((l) => l.href.split("/").pop().split("?")[0] + ":" + l.media + (l.sheet ? "" : ":unloaded")).join(" "), above: [...T.children].map((k) => (k.getAttribute("data-results-part") || k.id || k.className || k.tagName)
               .slice(0, 16) + "@" + Math.round(k.getBoundingClientRect().top) + "/" + Math.round(k.getBoundingClientRect().height)).join(" ") });
           if (T.dataset.pins) held++;
         }

@@ -256,6 +256,13 @@ if (typeof MutationObserver === "function" && typeof queueMicrotask === "functio
     if (G.els.results.hidden) return;
     queueMicrotask(() => {
       if (G.els.results.hidden) return;
+      // The shell defers most sheets on media="print" and flips them only once ALL have loaded (index.html). A results
+      // screen opened that early on a slow box (CI: before window load) would paint without its own rules.
+      const deferred = Array.from(document.querySelectorAll('link[rel="stylesheet"][media="print"]')).filter((l) => l.sheet);
+      if (deferred.length) {
+        for (const l of deferred) l.media = "all";
+        Log.info("ui", "results: activated " + deferred.length + " deferred stylesheet(s) at open");
+      }
       if (typeof SheetShape !== "undefined" && SheetShape.reclassify) SheetShape.reclassify();
       fitPins();
       holdUntilLaidOut();
