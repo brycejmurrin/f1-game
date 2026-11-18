@@ -341,7 +341,7 @@ test("#5394: route sheets carry data-route in the shell and the boot flipper nev
   const route = Object.fromEntries(tags.filter((m) => / data-route="/.test(m[2]))
     .map((m) => [m[1], m[2].match(/ data-route="([^"]*)"/)[1].split(" ")]));
   assert.deepEqual(route, CSS_ROUTE, "every route tag, and only those, names the manifest's roots");
-  for (const f of Object.keys(CSS_ROUTE)) assert.ok(CSS_DEFERRED.includes(f), f + " is a deferred (print) sheet");
+  assert.deepEqual(Object.keys(CSS_ROUTE).filter((f) => !CSS_DEFERRED.includes(f)), [], "every route sheet is a deferred (print) sheet");
   // Each root is a static shell element, or one a named module builds (podium-beat.js makes #ceremony-podium).
   const BUILT = ["ceremony-podium"];
   const missing = [...new Set(Object.values(CSS_ROUTE).flat())].filter((id) => !BUILT.includes(id) && !html.includes(`id="${id}"`));
