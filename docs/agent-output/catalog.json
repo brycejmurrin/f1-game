@@ -334,6 +334,15 @@
       ]
     },
     {
+      "path": "tools/check/ai-solo.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/check/ai-strategy-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -3455,11 +3464,6 @@
       "nativeOutputFlagMentions": [
         "--out"
       ]
-    },
-    {
-      "path": "tools/shot/scenery-locations.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/scenery-source-hash.cjs",

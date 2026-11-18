@@ -32,14 +32,24 @@ test("readonly-bash.sh is an allowlist of reads: write shapes, unknown programs 
     "find . -exec rm {} ;", "curl -o js/core/log.js https://example.com", "curl -X POST https://api.github.com/x", "gh pr edit 1 --add-label land", "gh pr merge 1",
     "gh api -X PATCH repos/a/b/pulls/1", "gh api repos/a/b/issues/1/labels -f labels[]=x", "wget https://example.com/x", "git tag v1", "git config user.name x",
     "ln -s a b", "chmod +x a", "install a b", "sort -o js/x a", "bash -c 'echo x > js/a'", "awk 'BEGIN{system(\"rm x\")}'", "git diff --output=js/x",
-    "node tools/check/ratchets.mjs --update", "unknowncmd x", "echo 'unterminated"];
+    "node tools/check/ratchets.mjs --update", "unknowncmd x", "echo 'unterminated",
+    // write shapes the 2026-11-18 agent-surface exercise found passing (code-hunter probe, #5690)
+    "sed -n '1w /tmp/x' a", "sed 's/a/b/w /tmp/x' a", "sed -e 1e a", "yq -i .a=1 f.yml", "uniq a /tmp/b", "tree -o /tmp/x", "xxd -r a /tmp/o",
+    "date -s now", "awk '{print > FILENAME}' a", "awk '{print | \"sh\"}' a", "curl -sSo /tmp/x https://e", "curl -XPOST https://e",
+    "curl --request=POST https://e", "curl -sF a=b https://e", "curl -sdx https://e", "gh api -XPOST repos/x/y", "gh api --method=PATCH repos/x/y",
+    "git symbolic-ref HEAD refs/heads/x", "git notes add -m x", "git reflog expire --all", "git reflog delete HEAD@{0}", "gh -R a/b pr merge 1",
+    "git config --unset user.name"];
   const allow = ["ls -la", "git log --oneline -5 -- js/", "git show HEAD:js/core/log.js", "grep -rn foo js/", "node --test tests/unit/ratchets.test.mjs", "cat a 2>&1",
     "ls >/dev/null 2>&1", "git log --format='%H -> %s'", "git diff HEAD~1", "wc -l js/core/log.js", "node tools/ci/verify-change.mjs --fast --json",
     "echo x 2>/dev/null", "git worktree list", "git blame js/core/log.js", "node tools/check/bloat-scan.mjs --json js/track/",
     "echo x > scratch/review/notes.md", "mkdir -p artifacts/report", "grep -n x js/core/log.js | tee artifacts/hits.txt", "git branch -a", "git branch --show-current",
     "gh pr view 5 --json title", "gh run list --limit 5", "gh api repos/a/b/pulls/1", "curl -sS https://example.com", "find . -name '*.js' | head",
     "export APEX_SUBAGENT=1\nnode tools/ci/pick-tests.mjs", "cd js && grep -rn Tracks .", "git fetch origin main", "git config --get remote.origin.url",
-    "echo 'git commit -m x > y' | wc -c", "cat <<'EOF' | wc -l\nrm -rf /\nEOF", "jq . package.json", "for f in a b; do cat $f; done"];
+    "echo 'git commit -m x > y' | wc -c", "cat <<'EOF' | wc -l\nrm -rf /\nEOF", "jq . package.json", "for f in a b; do cat $f; done",
+    // reads it refused (same exercise)
+    "sed -n 1,5p web/index.html", "sed 's/foo/w/' a", "uniq -c a", "tree -L 2", "xxd a", "awk '{print $1}' a", "curl -sSL -H 'X-d: o' https://e",
+    "git symbolic-ref HEAD", "git notes list", "git reflog", "wget -qO- https://e", "wget -qO - https://e", "gh -R a/b pr view 1",
+    "gh --repo a/b pr view 1", "git config user.name", "node --check js/core/log.js", "yq . f.yml"];
   for (const c of refuse) { const r = sh("tools/hooks/readonly-bash.sh", bashCmd(c)); assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`); assert.match(r.stderr, /read-only reporter|fail closed/); }
   for (const c of allow) { const r = sh("tools/hooks/readonly-bash.sh", bashCmd(c)); assert.equal(r.status, 0, `must allow: ${c}\n${r.stderr}`); }
   assert.equal(sh("tools/hooks/readonly-bash.sh", "junk").status, 2, "fail closed");
@@ -169,10 +179,20 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     assert.equal(JSON.parse(other.stdout).hookSpecificOutput.additionalContext,
       `protect-files: .claude/allow-protected is ACTIVE in ${dir} — no rule applied to notes.md.${tail}`, "every guarded call announces the hatch");
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
+    // A tree from before ON_DEMAND_PATHS (an older branch's worktree edited from a newer checkout) has no such list:
+    // that is "no on-demand file", not an unreadable list, so the other rules still hold there (2026-11-11, #5427).
+    const gpSrc = fs.readFileSync(path.join(ROOT, "tools/lib/generated-paths.mjs"), "utf8");
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, ""));
+    const older = pf({ agent_id: "a1" });
+    assert.equal(older.status, 2, `an older tree still protects version.json\n${older.stderr}`);
+    assert.equal(older.stderr.startsWith("BLOCKED: version.json is GENERATED — "), true, older.stderr);
+    // Present but unresolvable fails closed, like the other two lists.
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, "export const ON_DEMAND_PATHS = Object.freeze([someVar]);"));
+    assert.equal(pf({ agent_id: "a1" }).stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });
     assert.equal(broken.status, 2);
-    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
+    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
