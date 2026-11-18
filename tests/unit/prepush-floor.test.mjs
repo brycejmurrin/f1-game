@@ -12,7 +12,7 @@ import {
   stripGenShellBlocks, syncMergePaths, syncMergeScope, SYNC_REGEN_SUBJECT, runToolingFast,
 } from "../../tools/ci/tooling-fast.mjs";
 import {
-  NEW_MODULE_CHECKLIST, addedGlobals, extraSpecs, newModuleTriggers, sharedUiSpecs, standaloneSpecs,
+  NEW_MODULE_CHECKLIST, addedGlobals, assetSpecs, extraSpecs, newModuleTriggers, sharedUiSpecs, standaloneSpecs,
 } from "../../tools/ci/pick-tests.mjs";
 import { preflipAdvisory, probeState, probeSteps, probeVerdictLine, runProbe, stepTimedOut } from "../../tools/ci/preflip-probe.mjs";
 
@@ -175,6 +175,25 @@ test("the real tree: photo-studio.js reaches photo-studio.spec.js; the shared UI
   assert.deepEqual(["tests/specs/menu-keyboard.spec.js", "tests/specs/ui-scale.spec.js"].filter((x) => ui.includes(x)).length, 2);
   assert.deepEqual(sharedUiSpecs(["js/car/parts.js"]), []);
   for (const r of extraSpecs(["js/ui/modal.js"])) assert.ok(fs.existsSync(path.join(process.cwd(), r.spec)), `${r.spec} exists`);
+});
+
+test("assetSpecs names a spec that names the changed file's assets/ subdirectory, path or escaped regex (#5334)", () => {
+  const specs = { "a.spec.js": "if (/assets\\/sfx\\/f1_engine\\.mp3/.test(url)) hit++;", "b.spec.js": 'await fetch("/assets/pack/index.json");', "c.spec.js": "// sfx only in prose" };
+  const specPath = (n) => path.posix.join("tests", "specs", n);   // fake names: built, so no comment-path check sees them
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "specs-"));
+  try {
+    for (const [n, t] of Object.entries(specs)) fs.writeFileSync(path.join(dir, n), t);
+    assert.deepEqual(assetSpecs(["assets/sfx/f1_engine.mp3", "assets/music/menu.mp3", "js/ui/dom.js"], { specsDir: dir }),
+      [{ spec: specPath("a.spec.js"), module: "assets/sfx/f1_engine.mp3" }]);
+    assert.deepEqual(assetSpecs(["assets/pack/a.ktx2", "assets/pack/b.ktx2"], { specsDir: dir }),
+      [{ spec: specPath("b.spec.js"), module: "assets/pack/a.ktx2" }]);
+    assert.deepEqual(assetSpecs(["js/ui/dom.js"], { specsDir: dir }), []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the real tree: an assets/sfx/ diff names audio-smoke.spec.js, the spec that asserts the engine sample fetch (#5334)", () => {
+  assert.deepEqual(extraSpecs(["assets/sfx/f1_engine.mp3"]),
+    [{ spec: "tests/specs/audio-smoke.spec.js", module: "assets/sfx/f1_engine.mp3", kind: "names-asset-dir" }]);
 });
 
 test("new-module checklist: triggers on an added js module, a tools/perf script or an added global", () => {
