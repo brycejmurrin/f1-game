@@ -2401,6 +2401,9 @@
       ]
     },
     "js/camera/replay-buf.js": {
+      "adjacentFrame": [
+        "tests/unit/replay-buf.test.mjs"
+      ],
       "apply": [
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -4220,6 +4223,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -4789,6 +4793,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4938,6 +4943,7 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "scored": [
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "setConfig": [
@@ -7737,6 +7743,7 @@
         "tests/specs/ui-button-touch.spec.js"
       ],
       "otEnabled": [
+        "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -8588,7 +8595,8 @@
         "tests/unit/title-warm.test.mjs"
       ],
       "stop": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "tick": [
         "tests/unit/garage-arrival.test.mjs",
@@ -11816,6 +11824,9 @@
       "poll": [
         "tests/unit/title-warm.test.mjs"
       ],
+      "stop": [
+        "tests/unit/title-warm.test.mjs"
+      ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js"
       ]
@@ -14706,6 +14717,7 @@
         "tests/unit/session-records-assists.test.mjs"
       ],
       "*": [
+        "tests/unit/ghost.test.mjs",
         "tests/unit/global-registry.test.mjs"
       ]
     },
@@ -16735,7 +16747,8 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/validation-cli-check.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
@@ -17377,6 +17390,9 @@
         "tests/unit/build-worker.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
+      "cold": [
+        "tests/unit/build-worker.test.mjs"
       ],
       "drop": [
         "tests/unit/build-client-drop.test.mjs"

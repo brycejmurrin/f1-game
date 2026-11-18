@@ -103,8 +103,8 @@ Load from the SKILL.md index when the task needs this detail.
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
-   - The browser specs (`tests/specs/multiplayer-*.spec.js`) are the `net` group: CI runs them on the PR, or
-     `node tools/ci/remote-group.mjs net` on the pushed branch. Never locally (AGENTS.md rule 5).
+   - The browser specs (`tests/specs/multiplayer-*.spec.js`) are the `net` group: CI runs them on the PR (a whole
+     group, `remote-group.mjs net`, is Bryce's opt-in). Never locally (AGENTS.md rule 5).
    - The real-RTC scripts (`tools/net/rtc-e2e*.mjs`) boot Chromium: a parent-session diagnosis aid for ICE
      behaviour loopback cannot exercise, not a pre-push gate; a subagent never runs them.
 

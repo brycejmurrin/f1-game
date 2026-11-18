@@ -79,12 +79,22 @@ const TitleWarm = (function () {
           if (e.build && doneBuild !== e.build) { doneBuild = e.build; const s = store(); if (s) s.rawSet("titleWarm", e.build); }
           last = { ...last, done: Math.round(now()) };
           try { Log.info("gfx", "title warm done " + e.build); } catch (_) { /* logging is optional */ }
+          // One per session: drop the 1 Hz poll so an idle title does not keep
+          // waking the main thread for the rest of the visit (phone + desktop).
+          stop();
         }
         return;
       }
-      if (doneBuild) return;   // one per session
+      if (doneBuild) { stop(); return; }   // one per session
       const e = env(), why = blockers(e);
       last = { at: Math.round(now()), why };
+      // A phone that already finished this build will never warm again this
+      // visit: latch and drop the poll (was a permanent 1 Hz env() wake).
+      if (why.indexOf("done-this-build") >= 0) {
+        doneBuild = e.build || "done";
+        stop();
+        return;
+      }
       // Idle counts from the title actually showing: any blocker but the quiet clock itself restarts it.
       if (why.some((w) => w !== "input-recent")) noisy();
       if (why.length) return;
@@ -92,13 +102,14 @@ const TitleWarm = (function () {
       try { Log.info("gfx", "title warm start (build " + e.build + (e.phone ? ", phone" : "") + ")"); } catch (_) { /* optional */ }
       d.schedule();
     }
+    function stop() { if (timer) clearInterval(timer); timer = 0; }
     return {
       start() { if (!timer && typeof setInterval === "function") timer = setInterval(poll, POLL_MS); },
-      stop() { if (timer) clearInterval(timer); timer = 0; },
+      stop,
       poll,
       // scheduleFlybyTrack's current(): a title warm in progress keeps the prep alive on the title.
       wants: () => wanted && titleShowing(),
-      state: () => ({ wanted, doneBuild, last }),
+      state: () => ({ wanted, doneBuild, last, polling: !!timer }),
     };
   }
 

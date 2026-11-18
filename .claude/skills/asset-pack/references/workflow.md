@@ -81,8 +81,7 @@ vertex-displaced; FLAT is the no-material id.
    node tools/ci/pick-tests.mjs                # the browser group(s) this change needs
    ```
    The pack's own spec `tests/specs/assets-api.spec.js` is a browser spec: never run it locally
-   (AGENTS.md rule 5). It runs on the PR; to run its group on the pushed branch:
-   `node tools/ci/remote-group.mjs <group>`.
+   (AGENTS.md rule 5). The PR's own CI runs it; a whole group (`remote-group.mjs`) is Bryce's opt-in.
    Visual: **lighting-tuner** or **renderer-debug** on a track
    with varied surfaces.
 

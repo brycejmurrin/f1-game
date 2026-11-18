@@ -10,8 +10,8 @@
  * and the MEASURED 852x368, both 59/21/59; tests/data/phone-windows.json is the one
  * record, #5218), the 844x390 house geometry and a Pro Max. Insets land through CDP Emulation.setSafeAreaInsetsOverride, which
  * is what env(safe-area-inset-*) reads. PROFILES are what a phone BOOTS with:
- * a fresh profile, Bryce's export (tests/data/settings-defaults-export.json,
- * landscape WIDTH 20) and that export carrying the Nov 4–5 title-layout values
+ * a fresh profile, the legacy export (tools/lib/bryce-phone.mjs `legacy`, the
+ * October 2026 file, not his phone today; landscape WIDTH 20) and that export carrying the Nov 4–5 title-layout values
  * (WIDTH 40, LAYOUT STACK — the #5139 sweep's scrollHeight 563 in a 343 box).
  * SWEEP is every stored TITLE LAYOUT value the issue lists, applied in-page
  * through TitleLayout.set so one boot covers them all, plus UI SIZE 130/200.
@@ -19,6 +19,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LEGACY_EXPORT, ownerStore } from "../../tools/lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -64,8 +65,8 @@ export function judgeFloor(m) {
   return bad;
 }
 
-/** What Bryce's phone stored on 2026-11-09 (his live export, the settings file PR #5264
- *  adds under tests/data): UI SIZE 61 %, and a landscape TITLE LAYOUT with
+/** What Bryce's phone stored on 2026-11-09 (tests/data/settings-live-export-2026-11-09.json; his
+ *  CURRENT profile is the 2026-11-10 export, tools/lib/bryce-phone.mjs `live`): UI SIZE 61 %, and a landscape TITLE LAYOUT with
  *  BUTTONS SIZE 60, WIDTH 49, pushed right and up, the title pushed left. Over the older export. */
 export const LIVE_TITLE = Object.freeze({ v: 2, wide: { btns: { x: 50, y: -42, size: 60, width: 49 }, title: { x: -50, y: 2, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" } });
 export function liveStore() {
@@ -73,16 +74,10 @@ export function liveStore() {
   return { json: { ...exp.json, uiScale: 61, titleLayout: LIVE_TITLE }, raw: exp.raw };
 }
 
-/** Bryce's export as the store keys a boot writes: `json` through store.set, `raw` verbatim. */
+/** The legacy export as the store keys a boot writes: `json` through store.set, `raw` verbatim. One parser:
+ *  tools/lib/bryce-phone.mjs ownerStore (#5218). */
 export function exportStore() {
-  const exp = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/settings-defaults-export.json"), "utf8"));
-  const spec = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
-  const raw = new Set([...spec.matchAll(/k: "([^"]+)", lane: "raw"/g)].map((m) => m[1]));
-  const out = { json: {}, raw: {} };
-  for (const g of Object.values(exp.settings)) {
-    for (const [k, v] of Object.entries(g)) { if (v === null) continue; (raw.has(k) ? out.raw : out.json)[k] = v; }
-  }
-  return out;
+  return ownerStore({ file: LEGACY_EXPORT }).store;
 }
 
 const SHIPPED = { btns: { x: 0, y: 0, size: 100, width: 0 }, title: { x: 0, y: 0, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" };

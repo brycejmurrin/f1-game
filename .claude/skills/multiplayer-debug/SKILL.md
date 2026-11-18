@@ -89,7 +89,7 @@ Commands:
 ```sh
 npm run test:net-unit                                  # node, no browser: the local floor, run first
 node tools/ci/pick-tests.mjs                           # which groups the change needs
-node tools/ci/remote-group.mjs net                     # the browser `net` specs, on CI against the pushed branch (rule 5: never locally)
+# the browser `net` specs run in the PR's own CI (rule 5: never locally); a whole group is Bryce's opt-in
 # The real-RTC scripts (tools/net/rtc-e2e*.mjs) boot Chromium: a PARENT-session diagnosis aid, never a pre-push step or a subagent's (rule 10).
 node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass   # relay-only ICE; a bare rtc:e2e-3p-relay has no TURN (STUN-only default) and proves nothing
 # Room-code / relay diagnosis (not a package.json dep — install on demand):
