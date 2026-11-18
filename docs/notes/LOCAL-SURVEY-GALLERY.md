@@ -137,9 +137,9 @@ avoids confusing source/scenery fractions with racing fractions on reversed or
 shifted circuits. `stationMethod`, `viewpointSource`, `projectedFrac`,
 `nearestRoadDistanceM`, and `viewDistanceM` make the choice inspectable. The
 screenshot plan aims at the model centre. Distant nearest-road candidates are
-flagged as uncertain. The catalog's source digest catches stale coordinates
-when a circuit or projection engine changes. Regenerate with
-`node tools/shot/gen-scenery-locations.cjs` and check with `--check`.
+flagged as uncertain. The catalog is built on demand (gitignored since
+2026-11-11): its reader rebuilds it when a circuit or projection input changes
+(`node tools/gen/ensure-built.mjs --with tools/shot/scenery-locations.json`).
 
 ```sh
 bash tools/mcp/apex-tools-mcp.sh call apex_locations '{"track":"singapore","search":"merlion"}'
