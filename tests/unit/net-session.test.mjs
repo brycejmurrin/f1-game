@@ -526,6 +526,28 @@ test("autoPong answers only PINGs, and refuses a transport it cannot use", () =>
   assert.equal(NetSession.autoPong({}), false, "a thing with no onMessage/send is not a transport");
 });
 
+test("a second NetSession.create on one endpoint replaces the prior session handler", () => {
+  // onMessage only pushes; without the replace, re-create stacked decode
+  // handlers and every STATE/EVENT fired twice. autoPong must still keep its push.
+  const [ta] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(91) });
+  const first = NetSession.create({ transport: ta, pingEveryMs: 100 });
+  const second = NetSession.create({ transport: ta, pingEveryMs: 100 });
+  const firstEvents = [], secondEvents = [];
+  first.onEvent("ping-test", (d) => firstEvents.push(d));
+  second.onEvent("ping-test", (d) => secondEvents.push(d));
+  const sessionHandlers = ta._handlers.message.filter((fn) => fn && fn._netSessionMsg);
+  assert.equal(sessionHandlers.length, 1, "exactly one session message binder");
+  // Deliver an EVENT through the wire-shaped path the binder owns.
+  const payload = JSON.stringify({ t: "ping-test", d: { n: 1 } });
+  for (const fn of ta._handlers.message) {
+    if (fn && fn._netSessionMsg) fn(NetTransport.EVENT, payload, 0);
+  }
+  assert.equal(firstEvents.length, 0, "the replaced first session does not see the event");
+  assert.equal(secondEvents.length, 1, "the live session receives it once");
+  first.close();
+  second.close();
+});
+
 // The handshake rides the SAME unreliable channel as the snapshots, and a
 // snapshot is not handed to the game until synced() — so on a lossy link the
 // rival simply does not appear, with no error and nothing on screen, for as
