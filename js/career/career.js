@@ -129,8 +129,13 @@ function adoptTeamIdentity() {
     career.myTeamIdentity = career.myTeamIdentity ? CareerTeamIdentity.sanitize(career.myTeamIdentity) : CareerTeamIdentity.capture(store);
   }
 }
+// CLEARED IS NOT NEVER SET (#5657). A key the career holds answers what it holds; only an
+// absent key falls back. A held null is "no logo" (CLEAR LOGO, or none at capture()), so it
+// must not fall back to the GP logo; the other keys have no empty value, so null falls back.
 function identityValue(key, fallback) {
-  return inCareer() && career.flavour === "myteam" && career.myTeamIdentity && Object.hasOwn(career.myTeamIdentity, key) && career.myTeamIdentity[key] != null ? career.myTeamIdentity[key] : fallback;
+  const id = inCareer() && career.flavour === "myteam" && career.myTeamIdentity;
+  if (!id || !Object.hasOwn(id, key)) return fallback;
+  return id[key] != null || key === "customLogo" ? id[key] : fallback;
 }
 function setIdentityValue(key, value) {
   if (!inCareer() || career.flavour !== "myteam" || blocked() || (careerRevision != null && currentRevision() !== careerRevision) || typeof CareerTeamIdentity === "undefined") return false;
