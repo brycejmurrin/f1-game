@@ -20,6 +20,15 @@ const CareerAiDev = (function () {
     return (mods.speed || 1) + (mods.accel || 1) + (mods.cornering || 1) + (mods.braking || 1);
   }
 
+  // Real F1's Aerodynamic Testing Restrictions sliding scale (#5760): the
+  // constructors' leader develops at ATR_LEAD of the baseline rate, last place at
+  // ATR_LAST, linear between, re-read from the standings every winter.
+  const ATR_LEAD = 0.75, ATR_LAST = 1.15;
+  function atrScale(pos, field) {
+    const n = Math.max(2, field | 0);
+    return ATR_LEAD + (ATR_LAST - ATR_LEAD) * (clamp(pos, 1, n) - 1) / (n - 1);
+  }
+
   /** Soft fitted-cost ceiling for an AI team this winter (credits). */
   function teamCap(team, career) {
     let works = 0;
@@ -83,11 +92,14 @@ const CareerAiDev = (function () {
     return cat ? cat.options.find((o) => o.id === id) || null : null;
   }
 
-  /** One catalog step that raises summed mods and stays under `cap`. */
+  /** One catalog step that raises summed mods and stays under `cap`. Tyres are
+   *  never a step (#5760): an AI car races the class tyre draw, so a fitted
+   *  Hyper Soft paid its pace (cornering 1.36) and never its wear (life 0.30). */
   function pickStep(team, fitted, cap) {
     const baseScore = scoreMods(Parts.getMods(fitted, team));
     let best = null;
     for (const cat of Parts.CATALOG) {
+      if (cat.id === "tyres") continue;
       for (const opt of cat.options) {
         if (!(opt.cost > 0)) continue;
         if (!Parts.isOptionAvailable(opt, team)) continue;
@@ -117,14 +129,16 @@ const CareerAiDev = (function () {
     if (!career || typeof Parts === "undefined") return;
     const year = diceYear != null ? diceYear : career.year;
     const posOf = new Map((tStand || []).map((r) => [r.id, r.pos]));
+    const field = Teams.LIST.filter((t) => Teams.isReal && Teams.isReal(t)).length;
     for (const team of Teams.LIST) {
       if (!Teams.isReal || !Teams.isReal(team)) continue;
       const pos = posOf.get(team.id) || 11;
       const exp = (expected && expected.get(team.id)) || 11;
       // Over-performance raises the chance; backmarkers still get a floor so
-      // the field does not freeze on the factory shelf.
+      // the field does not freeze on the factory shelf. The ATR scale then
+      // throttles it by this winter's constructors' place (#5760).
       const shove = exp - pos;
-      const chance = clamp(0.30 + shove * 0.12, 0.12, 0.80);
+      const chance = clamp(0.30 + shove * 0.12, 0.12, 0.80) * atrScale(pos, field);
       if (rnd(year, "aidev", team.id) > chance) continue;
       const bag = ensureSeed(career, team);
       const cap = teamCap(team, career);
@@ -192,6 +206,6 @@ const CareerAiDev = (function () {
   }
 
   // scoreMods stays module-local (pickStep / scrubFitted only).
-  return { developWinter, fittedOf, teamCap, pickStep, scrubFitted, worksSetup };
+  return { developWinter, fittedOf, teamCap, pickStep, scrubFitted, worksSetup, atrScale, ATR_LEAD, ATR_LAST };
 })();
 Object.freeze(CareerAiDev);

@@ -281,10 +281,24 @@ imported save is held to (#5047). Folded into one new per-car field baked in
 `makeCars()`:
 
 ```js
-tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : isP ? 1 : catalogPace),
+tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? matePace : isP ? 1 : catalogPace),
 // paceMult() is exactly 1 outside career; the mate factor is MY TEAM's second car (below);
-// catalogPace credits a career AI's developed build (Career.aiSetup) against its works car, 1 otherwise
+// catalogPace credits a career AI's developed build (Career.aiSetup) against its works car, 1 otherwise;
+// both build factors go through DriverRatings.ladderPace(…, team.tier, TIER_V): never past TIER_V[0]
 ```
+
+**AI winter development is held on the ladder (#5760).** Three rules, from Bryce's
+`decision: b1+a`. (1) `CareerAiDev.pickStep` never buys `tyres`: an AI car races the
+class tyre draw, so a fitted Hyper Soft paid its pace (cornering 1.36) and never its
+wear, and it was every team's first pick. (2) `catalogPace` is clamped by `ladderPace`
+like the MY TEAM hire (#5035), so no developed AI car is faster than the fastest tier's
+works car before `tdev`. (3) The develop chance is scaled ATR-style (real F1's
+aerodynamic testing sliding scale): `CareerAiDev.atrScale(pos)` runs from `ATR_LEAD`
+0.75 for the constructors' leader to `ATR_LAST` 1.15 for last place, re-read from each
+winter's standings. Before the fix (seed 42) Williams' `tierV` was 1.1172 in 2027 and
+the grid spread 16–17 % by 2029; after it the spread stays under 2 %. A save that
+already fitted Hyper Soft keeps the part (nothing is migrated); the clamp holds its
+pace to the ceiling from the next grid built.
 
 The per-car update reads `c.tierV * c.skill * dd.ai`. `team.tier` itself is never
 rewritten — it drives the grid sort, the mesh presets and the colours.
