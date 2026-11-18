@@ -910,6 +910,22 @@ test("QualiNet: when the last rival posts, the gate wake-up timer is cleared", (
   assert.equal(btn.textContent, before);
 });
 
+test("QualiNet: resetSoft clears peer times with the gate (hunt memory-leaks back)", () => {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const player = { driverId: "alpha:0", lastLap: 0, best: Infinity };
+  const q = QualiNet.create({
+    $: () => ({ disabled: false, textContent: "" }), fmtTime: String, isQuali: () => false,
+    getPlayer: () => player, getCars: () => [], openQuali: () => {}, applyPeerQuali: () => {},
+    getNetPlay: () => ({ rivalDriverIds: () => ["beta:0"] }),
+    getNetLobby: () => ({ roomState: () => ({ role: "guest", peers: [] }) }),
+  });
+  q.arm(() => {});
+  q.onPeerQuali({ driverId: "beta:0", t: 75 });
+  assert.equal(q.driven(0).get("beta:0"), 75, "precondition: a peer lap is held");
+  q.resetSoft();
+  assert.equal(q.driven(0), 0, "soft reset drops peer times so the next lobby starts empty");
+});
+
 test("QualiNet (NP-2): BACK before driving tells the room NO TIME", () => {
   const { q, reported } = qualiGateHarness({ role: "guest" });
   q.arm(() => {});

@@ -221,6 +221,7 @@ const QualiNet = (function () {
     function resetSoft() {
       qualiNetDone = null;
       qualiLive.clear();
+      qualiPeers.clear();
       qualiHadRivals = false;
       gateReset();
     }

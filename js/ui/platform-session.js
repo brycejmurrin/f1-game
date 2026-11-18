@@ -354,7 +354,11 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && G.netPlay.active()) _netHiddenPump = setInterval(() => G.netPlay.tick(performance.now()), 500);
 });
 let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep(); });
+window.addEventListener("pagehide", () => {
+  // A bfcache hide can leave the VS FRIEND hidden-tab pump armed; clear it with the rest.
+  clearInterval(_netHiddenPump); _netHiddenPump = 0;
+  PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep();
+});
 // LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
 // the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
 // or an overlay taking focus, left the car coasting off-line while the field

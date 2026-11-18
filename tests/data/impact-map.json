@@ -13981,6 +13981,9 @@
       "resetOnQuitWithCancel": [
         "tests/unit/quali-persist.test.mjs"
       ],
+      "resetSoft": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "waiting": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs"
@@ -19459,11 +19462,16 @@
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
+      "sayCards": [
+        "tests/unit/results-sheet-lazy.test.mjs"
+      ],
+      "spokenText": [
+        "tests/unit/results-sheet-lazy.test.mjs"
+      ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs",
-        "tests/unit/results-sheet-lazy.test.mjs"
+        "tests/unit/mobile-native-download.test.mjs"
       ]
     },
     "js/ui/results-story.js": {
