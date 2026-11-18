@@ -730,7 +730,6 @@ export const GENERATED_FILES = Object.freeze({
   "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
   "tools/README.md": { source: "tools/**/@doc headers", always: true },
   "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
-  "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },
   "version.json": { source: "tools/ci/bump-cache.mjs", always: true },
   "index.html": { source: "tools/manifest.cjs", blocks: true },
   "sw.js": { source: "tools/manifest.cjs", blocks: true },
