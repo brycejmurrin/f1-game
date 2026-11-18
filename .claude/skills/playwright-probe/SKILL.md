@@ -12,7 +12,8 @@ launch a browser (AGENTS.md rule 10, hook-enforced).
 
 ## Gotchas
 
-- `orbit()` then `snapCam()` breaks the shot: `snapCam()` is for `park` (chase) only. A chase
+- `orbit()` then `snapCam()` breaks the shot: `snapCam()` clears `dbgCam` (`js/agent/apex-cam.js`), so it follows `park()`/`jump()` in any game camera
+  mode, never `orbit()`/`eye()`. A chase
   eye hundreds of metres from the car means a missing `snapCam()`, not a short wait (cameras.md).
 - A still frame cannot show shimmer (headless rAF freezes at 0 fps), and a CPU chart cannot see
   fill-bound work: use `motion-capture.mjs` (trust p90) or `profile.mjs --repeat 3`.

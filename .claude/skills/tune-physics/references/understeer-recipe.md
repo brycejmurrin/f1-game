@@ -6,7 +6,8 @@ Node VM only, no browser.
 1. Baseline: `node tools/check/player-dyn.mjs --json > scratch/pd-base.json` (desktop car). `TRACK`/`FRAC` only pick the
    straight the car is pinned to (position only), so they do not select a corner. Slow corner = `skidpad` rows whose
    STANDARD speed `vStd(v) = v / PACE` (read `g.apex.tuning().pace`) falls in the `lockTaper` blend (its thresholds: `updateCarBicycle`, js/game.js;
-   the script's `30` mirrors the upper one). Add a slower row if the shipped rows miss the blend.
+   the script's `30` mirrors the upper one). At shipped PACE only the `v` 20 rows land there
+   (the speeds `[20, 30, 45, 60, 72]` are fixed in `player-dyn.mjs`, no flag): add a slower row to sample the blend.
 2. Sweep with this script (Node only). Save it as `scratch/sweep-frontgrip.mjs`
    (the `../tools/…` imports resolve from `scratch/`) and run it from the repo root; swap `frontGrip` for
    `yawInertia` or `wheelbase`:

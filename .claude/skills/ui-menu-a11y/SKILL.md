@@ -100,7 +100,7 @@ The oracle requires the remembered node to be disconnected and a unique new
 matching node to hold sampled focus. A different expected selector permits an
 intentional focus transfer. Same-node reinsertion never proves replacement.
 Target changes, mismatches and sampling gaps restart the stability window; the poll
-interval, gap limit and timeline cap live in `sampleFocus` (`tools/ui/explorer/browser.mjs`). Missing
+interval lives in `checkFocus`, the gap limit and timeline cap in `sampleFocus` (`tools/ui/explorer/browser.mjs`). Missing
 witnesses, unobserved replacement, measured wrong focus and incomplete sampling
 are distinct outcomes. A sampling gap is unmeasured time, not proof of a UI defect.
 

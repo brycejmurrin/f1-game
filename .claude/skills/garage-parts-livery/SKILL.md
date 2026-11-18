@@ -63,7 +63,7 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 | `_resolve` | Career-blind; supplier/team lock only |
 | Owned gate | UI: `G.careerOwned()` → `Parts.isOptionAvailable` |
 | ERS / aero | `ersProfile` / `aeroLoad` → game.js battery / X-mode |
-| Finish | `gloss` default; `satin`/`chrome` via `FINISH_SURFACE` |
+| Finish | `gloss` default; every other finish is a `FINISH_SURFACE` key in `js/car/car-materials.js` (satin, chrome, matte, carbon, pearl, …) |
 | `--refl` | Studio dial — **not** in-game chrome finish |
 
 ```sh

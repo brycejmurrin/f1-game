@@ -270,6 +270,7 @@ const BG     = arg('bg', null);
 const LOOK   = parseFloat(arg('look', '0'));    // orbit-target Z offset (+nose / −rear)
 const LOOKX  = parseFloat(arg('lookx', '0'));   // orbit-target X offset (+right / −left)
 const PRESET = arg('preset', null);
+if (PRESET && PRESET !== 'list' && arg('views', null) != null) { console.error('render-car: --preset overrides --views; pass one of them'); process.exit(2); }
 const LIGHTSET = arg('lightset', null);   // e.g. "day,dusk,night" — fan out every shot across these tod values
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.

@@ -18,5 +18,6 @@
    and `forestRank`). Never reuse one ground sample across a wide span: Trap B in `docs/SCENERY-API.md`
    §Grounding.
 4. Done = SKILL.md "Grounded". If the cause is the helper itself (`js/track/scenery/*.js`), the fix hits
-   every circuit: run each audit with `--all`/`--gate` plus `props-tris.cjs <id>` on a dense circuit, and
+   every circuit: run `float-audit.cjs --all` (it gates on its own baseline), `clip-audit.cjs --all --gate`,
+   `coplanar-audit.cjs --all --gate`, plus `props-tris.cjs <id>` (no gate) on a dense circuit, and
    name the unrun ones in the PR (CI group `sweeps` runs the fleet).

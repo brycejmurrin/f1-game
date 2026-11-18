@@ -21,13 +21,14 @@ __apex.lightState()
 // }
 ```
 
-`tools/shot/apex-eval.mjs` and `tools/shot/apex-capture.mjs` launch Chromium via
+`tools/shot/apex-capture.mjs`, and `tools/shot/apex-eval.mjs` without `--vm`, launch Chromium via
 Playwright — they need a browser install. Do not run them while a Playwright
-group is already in flight.
+group is already in flight. `apex-eval … --vm` boots a Node VM instead (no lamps: `numLights` 0,
+`meanLampRGB`/`meanPerChunkRGB` null).
 
 ```sh
-node tools/shot/apex-eval.mjs vegas "a.lightState()"
-node tools/shot/apex-eval.mjs monaco "a.lightState()"
+node tools/shot/apex-eval.mjs vegas "a.lightState()" --vm
+node tools/shot/apex-eval.mjs monaco "a.lightState()" --vm
 ```
 
 Monza has `night:false` — prefer vegas/singapore for night probes (night command: SKILL.md Workflow
@@ -37,10 +38,10 @@ the floodlight row below.
 ## Before/after a code change
 
 ```sh
-node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw --vm > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
 # (no cache bump: .claude/rules/game-code.md cache busting); then:
-node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw --vm > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```
 

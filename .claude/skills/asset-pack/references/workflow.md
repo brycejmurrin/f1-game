@@ -70,8 +70,8 @@ vertex-displaced; FLAT is the no-material id.
    Sources live in `assets/atlases/`. `--map BRICK=1,0` patches one tile;
    `ATLAS_PRESETS.generated` in `tools/gen/assets.mjs` is the committed mapping.
 
-5. **Add a real CC0 layer** — manifest shape in
-   `docs/research/ASSET-API-RESEARCH.md`; run `verify`; confirm MAT id and
+5. **Add a real CC0 layer** — copy an existing layer entry in
+   `assets/pack/manifest.json` (field list: `docs/research/ASSET-API-RESEARCH.md`); run `verify`; confirm MAT id and
    `scale` (world metres per tile — there is no `worldTile` field; the
    manifest and `tools/gen/assets.mjs` `SCALES` table both call it `scale`).
 

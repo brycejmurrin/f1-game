@@ -8,7 +8,7 @@
 
 ## Default-first visual verification
 
-Bryce's profile first (`ios-iphone-landscape-844`, touch). Then fresh shipped appearance and device input
+Bryce's cells first (`bryce-standalone` / `bryce-safari`, touch; `ios-iphone-landscape-844` is the generic iPhone cell). Then fresh shipped appearance and device input
 defaults (AGENTS.md §Seeing the game); stress scales, imported settings and legacy looks are separately
 labelled comparisons. Record requested scale and painted zoom.
 

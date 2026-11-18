@@ -27,13 +27,13 @@ whose rows include a DNF is unpinned.
 
 DNF and the money ("wrong sponsor money after a DNF"). A DNF row is always `clean:false`, so a clean window is never
 met. It scores 0 pts UNLESS it is classified: `settleRound()`'s `scored()` counts a car that retired past the
-classification cut (`c.classified`, set in `js/race/race-control.js` at the finish), which keeps its points, counts as a finish and can make a `double`. So a
+classification cut (`c.classified`, set in `js/race/race-control.js` at the finish), which keeps its points, counts as a finish when it still scores (`r.pts > 0`, `js/career/career.js`) and can make a `double`. So a
 points/finishes/double window can still be met after a late DNF. Other modifiers that change the amount:
 - `sponsorAt()`: `career.sponsorPicks[year:idx] === 1` swaps the window's kind, target and pay;
 - a season's LAST window is cut at the finale and asks and pays pro rata (`window / kind.window`);
 - pay lands only on the window's last round (`raced >= sp.end`).
 
-To repro: `__apex.retire()` in a driven race (browser), or `careerSim(n)` (its draws include DNFs).
+To repro: `__apex.retire()` in a driven race (browser), or `careerSim(n)` (DNFs only after `__apex.reliability("real")` or `"low"`: reliability defaults to off, `js/game.js`, so a default sim draws none).
 Hand-off: record which guard or modifier the repro hits (rollback, results row, `paidSponsors`, pick, pro rata)
 and the `paidSponsors` value before/after.
 

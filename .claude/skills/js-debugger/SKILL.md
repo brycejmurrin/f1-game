@@ -18,7 +18,9 @@ The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
 
 - Session only: `mcp-browser-guard.sh` refuses every `mcp__js-debugger__*` call
-  inside a subagent, status reads included (AGENTS.md rule 10). No hook covers the shell
+  inside a subagent except the no-browser set (`debugger_node_test`, `output_read`, `debugger_logpoint_read`,
+  `debugger_exception_log`, `debugger_instances`, `debugger_state`: `JS_DEBUGGER_TREE` in
+  `.claude/hooks/mcp_browser_rules.py`) (AGENTS.md rule 10). No hook covers the shell
   wrapper: by that rule a subagent uses only its `list-tools` / `status` (references/setup.md).
 - One browser at a time: never beside a Playwright test run, `playwright-official`
   `browser_*` or chrome-devtools. Attached here, profile with `debugger_profile`

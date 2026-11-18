@@ -19,7 +19,7 @@
 
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
    reads a BenchRun, `snap` returns a small JPEG of the canvas, `batch` runs up to BATCH_MAX steps from one comment.
-   Recipes: .claude/skills/phone-browser/references/bridge.md. */
+   Recipes: .claude/skills/phone-bridge/references/commands.md. */
 const ApexBridge = (function () {
   "use strict";
 

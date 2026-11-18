@@ -157,7 +157,7 @@ keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
 density). Measured fit is BROWSER-only (`tools/ui/layout-audit.mjs`;
 `menu-fit.mjs` is deprecated, kept only for `--safe=` notch insets;
 `ui-scale-axis.mjs`, `ui-scale.spec.js`); record the cell (viewport, scale,
-pointer — `ios-iphone-landscape-844` touch first) and the unrun tool in the PR.
+pointer — `ios-iphone-landscape-844` touch first; that is the generic iPhone cell, Bryce's own are `bryce-standalone` / `bryce-safari` in `layout-audit --list`) and the unrun tool in the PR.
 
 ## Common mistakes
 

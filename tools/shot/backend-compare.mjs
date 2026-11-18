@@ -57,6 +57,8 @@ exitIfHelp(argv, `backend-compare — same scene on GLX/TLX/WGX + pixel diff
 
   node tools/shot/backend-compare.mjs [track] [frac] [cam]
     [--backends webgl2,three] [--tod day] [--out DIR] [--az N] [--el N] [--dist N]
+    [--side -1|1]                 trackside cam: which side of the road (default 1)
+    [--label NAME]                output file stem (default <track>-<frac%>-<cam>-<tod>)
     [--ls apex26.key=value ...]   (repeatable: localStorage pins set before boot, for kill-switch A/Bs)
     [--gov-free]                  let the perf governor shed tiers / scale during the capture (default: pinned)
     [--lamps-live]                keep the lamp warm-up ramp and flicker (default: pinned off — a night capture

@@ -46,7 +46,7 @@ race-incidents-control. "Dive-bombs" (late lunges into a corner, esp. turn 1) ar
 4. `startGapT` headway, the tight follow gap (`followGap`), `passSideBonus`, `sbsCommitT`.
 Measure BEFORE and after, same seeds:
 `node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5` (background, log to
-`artifacts/logs/`) — compare `byLap` lap 1
+`artifacts/logs/`) — compare `byLap` lap 1 (the console prints run 1 only; `--json` or `--out artifacts/<f>.json` holds every run)
 against later laps (a lap-1-only excess is calm/startGapT; every lap is attackOK/late-brake)
-and the swap-back count. Confirm on a second circuit; no per-track constant: these are field-wide rules, so a
+and `swapBackPct`. Confirm on a second circuit; no per-track constant: these are field-wide rules, so a
 Monza-only fix is wrong.

@@ -78,8 +78,11 @@ export function formatDiff(d) {
 }
 
 /** CLI body: prints the diff; returns 1 when `after` has a finding `before`
- *  lacked, or when no cell was compared (EMPTY). */
+ *  lacked, or when no cell was compared (EMPTY); 2 when either file is missing. */
 export function runDiff(beforePath, afterPath) {
+  for (const [what, p] of [["baseline", beforePath], ["after", afterPath]]) {
+    if (!fs.existsSync(p)) { console.error(`layout-audit --diff: ${what} audit not found: ${p}`); return 2; }
+  }
   const read = (p) => JSON.parse(fs.readFileSync(p, "utf8"));
   const d = diffAudits(read(beforePath), read(afterPath));
   for (const l of formatDiff(d)) console.log(l);

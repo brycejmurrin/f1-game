@@ -217,7 +217,7 @@ async function runVm() {
   console.error(`agent: vm route track=${track} cmd=${cmd}`);
   let g = null;
   try {
-    g = await createGame(cmd === "help" ? {} : { track, tod: opts.tod || undefined, wx: opts.weather || undefined });
+    g = await createGame(cmd === "help" ? {} : { track, tod: opts.tod || undefined, wx: opts.weather || undefined, search: "?seed=" + opts.seed });
     if (cmd === "help") { console.log(JSON.stringify(g.apex.agentHelp(), null, 2)); }
     else {
       g.apex.go();
