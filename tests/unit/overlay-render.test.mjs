@@ -113,6 +113,49 @@ test("team plates paint in contrast ink; a new sector time flashes for FLASH_MS 
   assert.equal(cells[1].dataset.flash, "");
 });
 
+test("clear() cancels pending sector flash timers so a late tick cannot re-flash", () => {
+  const timers = [];
+  let cleared = 0;
+  const dom = makeDom();
+  const { Render, Feed } = load({ document: dom.document,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, dead: false }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) { timers[id - 1].dead = true; cleared++; } } });
+  const { root, sectors } = overlayRoot(dom);
+  const painter = Render.create(root, {});
+  painter.paint(Feed.frame({ seq: 1, state: "race", ranked: [{ code: "LEC", pos: 1 }],
+    sectorLast: [25.1, null, null], sectorBests: [25.1, null, null], fieldSectorBests: [1, 1, 1] }));
+  assert.equal(sectors.children[0].dataset.flash, "1");
+  assert.equal(timers.length, 1);
+  painter.clear();
+  assert.equal(cleared, 1, "clear() must clearTimeout the flash handle");
+  assert.equal(sectors.children[0].dataset.flash, "");
+  if (timers[0].fn && !timers[0].dead) timers[0].fn();
+  assert.equal(sectors.children[0].dataset.flash, "", "a cancelled flash callback must not re-arm");
+});
+
+test("watch() stop() clears its interval and ignores later frames", () => {
+  const dom = makeDom();
+  const { Render, Feed } = load({ document: dom.document, setTimeout() { return 0; }, clearTimeout() {} });
+  const { root } = overlayRoot(dom);
+  const painter = Render.create(root, {});
+  let armed = null, cleared = 0;
+  const feed = Render.watch(painter, {
+    now: () => 0,
+    setInterval: (fn, ms) => { armed = { fn, ms }; return 7; },
+    clearInterval(id) { assert.equal(id, 7); cleared++; },
+  });
+  assert.equal(typeof feed.stop, "function");
+  feed.frame(Feed.frame({ seq: 1, state: "race", ranked: [{ code: "LEC", pos: 1 }] }));
+  assert.equal(painter.rows[0].el.hidden, false);
+  feed.stop();
+  assert.equal(cleared, 1);
+  feed.stop();
+  assert.equal(cleared, 1, "stop is idempotent");
+  assert.equal(feed.frame(Feed.frame({ seq: 2, state: "race", ranked: [{ code: "VER", pos: 1 }] })), false);
+  assert.equal(feed.check(), false);
+  assert.ok(armed && armed.ms > 0);
+});
+
 test("reduced motion turns the sector flash into a static outline, with no animation", () => {
   const html = source("overlay.html");
   const reduce = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n  \}/.exec(html);
