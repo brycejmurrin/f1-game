@@ -781,6 +781,29 @@ const CarShade = (function () {
     return heightZone(out, from, to, c1, upper, anchors, paint, true);
   }
 
+  // Stable LSD counting sort of `order` (vertex ids, in place) by k0, then k1, then k2 (k2 most significant).
+  // false, order untouched, when a key's range is over 2^21 buckets.
+  function countSort3(order, k0, k1, k2) {
+    const n = order.length, keys = [k0, k1, k2], lo = [0, 0, 0], span = [0, 0, 0];
+    if (!n) return true;
+    for (let p = 0; p < 3; p++) {
+      let a = Infinity, b = -Infinity;
+      for (let i = 0; i < n; i++) { const q = keys[p][order[i]]; if (q < a) a = q; if (q > b) b = q; }
+      if (!(b - a < 2097152)) return false;
+      lo[p] = a; span[p] = b - a + 1;
+    }
+    let src = order, dst = new Int32Array(n);
+    for (let p = 0; p < 3; p++) {
+      const key = keys[p], a = lo[p], at = new Uint32Array(span[p] + 1);
+      for (let i = 0; i < n; i++) at[key[src[i]] - a + 1]++;
+      for (let c = 0; c < span[p]; c++) at[c + 1] += at[c];
+      for (let i = 0; i < n; i++) { const v = src[i]; dst[at[key[v] - a]++] = v; }
+      const t = src; src = dst; dst = t;
+    }
+    if (src !== order) order.set(src);   // three passes: the result sits in the scratch buffer
+    return true;
+  }
+
   /** Crease-angle normal smoothing over a Car3D mesh, in place, read through
    *  `idx`: most of car3d emits three fresh vertices per triangle with a face
    *  normal, but tubes (halo, harness) share ring vertices that already carry
@@ -819,13 +842,18 @@ const CarShade = (function () {
       // Vertices SORTED by quantised position (stable: index order within), so each position run is contiguous;
       // a weld group is a run's vertices on one surface.
       const qx = new Int32Array(nv), qy = new Int32Array(nv), qz = new Int32Array(nv);
-      order = [];
+      order = new Int32Array(nv);
+      let no = 0;
       for (let v = 0; v < nv; v++) {
         if (skip.has(M[v]) || cnt[v + 1] === cnt[v]) continue;
         qx[v] = Math.round(P[v * 3] * 1e4); qy[v] = Math.round(P[v * 3 + 1] * 1e4); qz[v] = Math.round(P[v * 3 + 2] * 1e4);
-        order.push(v);
+        order[no++] = v;
       }
-      order.sort((u, v) => (qx[u] - qx[v]) || (qy[u] - qy[v]) || (qz[u] - qz[v]));
+      order = order.subarray(0, no);
+      // Three stable counting passes, least significant key first (z, y, x): the order a stable comparator sort on
+      // (x, y, z) gives, without ~n log n comparator calls (81 ms of a 22-car grid warm, 2026-11-18). A key range
+      // too wide to count (not a car) takes the comparator.
+      if (!countSort3(order, qz, qy, qx)) order.sort((u, v) => (qx[u] - qx[v]) || (qy[u] - qy[v]) || (qz[u] - qz[v]));
       runs = [];   // [start, end) pairs of runs with two or more vertices
       for (let i = 0; i < order.length;) {
         const u0 = order[i];

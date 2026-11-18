@@ -57,7 +57,7 @@ node --test tests/unit/custom-tracks.test.mjs tests/unit/track-codec.test.mjs te
   tests/unit/designer-code-cli.test.mjs
 node --test tests/unit/track-validate-fleet.test.mjs     # the validator's ORACLE: no shipped circuit reads RED
 # BROWSER, CI only (AGENTS.md rule 5): tests/specs/track-designer.spec.js (door → randomise → SAVE → RACE → reload)
-#   is in group `modes`: the PR run covers it; node tools/ci/remote-group.mjs modes on the pushed branch
+#   is in group `modes`: the PR run covers it; a whole group (remote-group.mjs) is Bryce's opt-in
 ```
 
 The VM tests share `tests/helpers/editor-vm.mjs` (the real track engine + the

@@ -110,8 +110,8 @@ resolution.
    Browser specs: `tests/specs/parts-catalog.spec.js` (the category tabs),
    `parts-physics.spec.js` (mesh-hash collision) — CI runs them, never a local run (AGENTS.md rule 5).
 8. **Test and ship.** `node tools/ci/pick-tests.mjs` names the groups (`car`; `modes` when you changed
-   research locks or garage ownership UI — there is no `test:career`); the PR runs them, and one whole
-   group runs on the pushed branch with `node tools/ci/remote-group.mjs car`. Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
+   research locks or garage ownership UI — there is no `test:career`); the PR runs them; a whole
+   group (`remote-group.mjs car`) is Bryce's opt-in. Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
    before commit.
 
 ## Common mistakes
