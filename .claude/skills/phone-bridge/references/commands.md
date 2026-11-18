@@ -44,10 +44,12 @@ Idle title screen, then a race, in two round trips:
 {"cmd":"batch","args":{"steps":[{"cmd":"call","args":{"method":"race","args":["monza"]}},{"cmd":"wait","args":{"ms":8000}},{"cmd":"call","args":{"method":"go"}},{"cmd":"wait","args":{"ms":3000}},{"cmd":"frames","args":{"seconds":10}},{"cmd":"call","args":{"method":"perf"}}]}}
 ```
 
-`race` returns before the track is built on a slow phone; if `go` answers `ok:false`, raise the wait. Check
+`call race` replies only once the race reaches the grid (the bridge awaits it; a grid failure is `ok:false "Race start
+did not reach the grid"`), so no wait is needed after it; `go` answers `{ok:true, value:false}` when it refuses. Check
 `call info` / `physState` for state `race` before trusting `frames`.
 
-WebGPU vs WebGL2 A/B (each `path` reloads; wait for each new hello and check `facts.render.live`):
+WebGPU vs WebGL2 A/B (each `path` reloads; wait for each new hello and check `facts.render.live`
+and `facts.render.engine`: `live` reads `webgl2` for both three.js-on-WebGL2 and a silent GLX fallback):
 
 0. `{"cmd":"path"}` — record Bryce's pin now; the `was` in a reloading `path` reply may never arrive.
 1. `{"cmd":"path","args":{"to":"webgpu"}}` → hello → the race recipe above.

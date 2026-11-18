@@ -3,7 +3,9 @@
 1. Find it: `node tools/track/float-audit.cjs <id> --why` names each unsupported cluster's emitting
    source line (reports a prop base > `THRESH` above ground that nothing beneath supports; the constants,
    `THRESH` among them, sit at the top of the tool, so a hover under `THRESH` reads clean). Buried/unsupported prims:
-   `ground-audit.cjs <id> --why`.
+   `ground-audit.cjs <id> --why`. A floater float-audit calls clean (a stand on a cantilever or a gap) shows only as
+   ground-audit's `footprintSupport` advisory: `WARN <id> unsupportedFootprint <gap>m … @circuits/scenery/<id>.js:<line>`
+   (the line may be a helper lambda: read its caller).
 2. Read the call in `js/circuits/scenery/<id>.js` (grep the helper name at that frac).
 3. Footing: `place`/`prop`/`anchor` use raycast terrain, else `groundYAt`; `grandstandEx`
    (`js/track/scenery/nature.js`) seats its shell with `groundYAt(k, gap + offset)` at the stand's CENTRE node,

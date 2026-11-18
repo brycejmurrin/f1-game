@@ -44,7 +44,8 @@ with no SW (or Safari before install) revalidates them. Measured headers and pay
 `index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
 **DEFERRED** backends, `vendor/three-0.187.0`, other vendors, self-hosted fonts.
-The GLX files and the career UI (`career-ui.js`, `career-planning-ui.js`) in it are promoted to
+The GLX files and the career UI (`REQUIRED_LAZY` in the generated `@gen-shell:sw-required-lazy` block, from `MANIFEST.LAZY_CAREER_UI`:
+`career-backup.js`, `career-planning-ui.js`, `career-ui.js`) in it are promoted to
 REQUIRED at install (`isRequiredLazy` in `sw.js`: offline without GLX is "graphics unavailable",
 without the career UI there is no career); TLX and its vendor dependency are the critical optional pool,
 scenery/data/fonts the background pool after it (WGX, editor, XR and camera editors are

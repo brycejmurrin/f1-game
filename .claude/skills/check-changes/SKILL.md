@@ -22,7 +22,7 @@ PR status only → **check**; diagnosing or fixing a failed PR → **steward**.
 
 ## Prerequisites
 
-For prose-only edits, take the [canonical docs/skill fast path](../../../docs/VERIFICATION.md#docs-and-skill-changes)
+For prose-only edits, take the [canonical docs/skill fast path](../../../docs/VERIFICATION.md#by-change)
 before choosing the code gate below. Generated documentation is not prose-only;
 agent-surface edits also run the focused `agent-config` checks.
 
@@ -50,7 +50,8 @@ node tools/ci/verify-change.mjs --plan       # what this change needs (JSON); ex
 ```
 
 Anything over 2 minutes is ONE background Bash task logging to `artifacts/logs/` (AGENTS.md rule 4). Waiting:
-`node tools/ci/wait-for.mjs --log-matches <log> '^= '` as the task; a `Monitor` (5 min default, 30 max) is early
+`node tools/ci/wait-for.mjs --background --log-matches <log> '^= '` as the task (without `--background` its 30-min
+default exceeds the 590 s foreground cap and it refuses); a `Monitor` (5 min default, 30 max) is early
 warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`). The verdict is the log's closing `= …` line
 (`= tooling-fast passed|failed (<n> files, <m> failed)`; a `test-bg` log's `= bg exit N`); never the process table.
 

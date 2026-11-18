@@ -14,5 +14,6 @@ Work in this order; each step is one read in `js/career/season-cal.js` unless no
    stage; `buildResults(order, { sprint: wasSprint })` takes it explicitly.
 5. `js/ui/results-sheet.js` falls back to `SeasonCal.scored()` for the sprint flag, which is
    stale after a season save conflict — check the conflict before blaming the table.
-6. `resetWeekend()` sets the stage back to `"race"`; a reload mid-weekend must keep the stage
+6. `resetWeekend()` (module-private) only resets the last-scored marker `scored()` reads; the weekend stage is
+   `season.stage`, which only `award()` writes; a reload mid-weekend must keep the stage
    (test `resume keeps a mid-weekend stage, so a reload cannot re-pay a sprint`).

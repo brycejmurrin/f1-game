@@ -34,7 +34,8 @@ Slack 0 on every row = saturated: the scan names no block. First `node tools/che
 (names raises: a blocked commit may be a raise, not saturation). Seed the hunter's `known:` with
 `docs/notes/DEFECT-LEDGER.md` §8 and `docs/ARCHITECTURE.md` §Extraction lessons (sort by boundary crossings). Candidates come
 only from `code-hunter` `focus: dead-code` (a cohesive block with few free names — `extract-module`
-prints them as `name×count`; `let`s are the `G` accessors the carve costs).
+prints them as `name×count`; `let`s are the `G` accessors the carve costs; it counts only names coming IN, so grep
+what the range defines against the rest of the file before calling it cohesive).
 Done = ratchet `--update` lowers the ceiling; `ratchets.mjs` ends `all at or under`.
 No cohesive block (every candidate crosses too many `G` boundaries) = stop: report that the ratchet
 is the limit, with the hunter's top three rows and their crossing counts — never force a carve.

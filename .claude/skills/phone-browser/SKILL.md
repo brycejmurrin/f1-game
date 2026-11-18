@@ -64,6 +64,7 @@ next browser tool breaks one browser at a time (AGENTS.md rule 5).
 
 - Add this server to `.mcp.json`. Keep the checkout's configured catalog; phone-browser stays a separate bridge.
 - Run it beside another browser (Playwright, chrome-devtools, playwright-official `browser_*`, `apex_*` browser
-  tools) — one browser at a time — or from a subagent (AGENTS.md rules 5 and 10). No hook catches this server's
-  Chromium: `bash-guard.sh` and `mcp-browser-guard.sh` do not match `browser-http-up.mjs`, so the rule is yours to keep.
+  tools) — one browser at a time — or from a subagent (AGENTS.md rules 5 and 10). `bash-guard.sh` refuses
+  `browser-http-up.mjs` (all but `--stop`) in a subagent; nothing catches a direct `node tools/mcp/browser-http.mjs`
+  or a run beside another browser, so that rule is yours to keep.
 - Hand them a localhost address. The phone cannot open it.

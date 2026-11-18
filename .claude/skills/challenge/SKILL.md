@@ -16,7 +16,8 @@ Target: PR `$ARGUMENTS` in `brycejmurrin/f1-game`. You have no conversation hist
 author's summary. ONE pass, soft cap about $1 and 150k context. Read-only: no edits, pushes, approvals, merges, browser runs (AGENTS.md rule 10);
 the only writes are the step-4 review and the step-5 label. A forked subagent's permission mode is ignored under auto, so these limits are yours to keep.
 
-1. Read the PR body (Goal, Plan, Verified / Not run, Hand-off), the diff and CI with `gh api repos/brycejmurrin/f1-game/pulls/<n>` (GraphQL `gh pr view` 403s).
+1. Read the PR body (Goal, Plan, Verified / Not run, Hand-off), the diff and CI with `gh api repos/brycejmurrin/f1-game/pulls/<n>` (body and head sha), `…/pulls/<n>/files` (the diff)
+   and `…/commits/<head sha>/check-runs` (CI); GraphQL `gh pr view` 403s.
 2. List every CLAIM: a ticked Plan item, a verdict line, "no player-facing change", a not-run group, a "fixed" or
    "already passes". At most 15; say which you skipped.
 3. Try to refute each against the tree at the PR head. Re-run only cheap proofs (one `node --test <file>`, a grep, a

@@ -87,7 +87,7 @@ Hook names drift: `__apex.agentHelp()` is the live manifest.
 Commands:
 
 ```sh
-npm run test:net-unit                                  # node, no browser: the local floor, run first
+npm run test:net-unit                                  # node, no browser: the wire logic, run first (the floor is AGENTS.md rule 3)
 node tools/ci/pick-tests.mjs                           # which groups the change needs
 node tools/ci/remote-group.mjs net                     # the browser `net` specs, on CI against the pushed branch (rule 5: never locally)
 # The real-RTC scripts (tools/net/rtc-e2e*.mjs) boot Chromium: a PARENT-session diagnosis aid, never a pre-push step or a subagent's (rule 10).

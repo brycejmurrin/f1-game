@@ -2,7 +2,9 @@
 
 The HUD on BLACK with every widget mocked (radio card, flag, limits chip, damage), a labelled box per
 element (readouts cyan, taps yellow, overlapping pairs RED), report.json + index.md + sheet.jpg. One race
-boot per pointer type, then DOM-only cells. Use it FIRST to see a layout or to before/after a CSS change;
+boot per pointer type, then DOM-only cells. Use it FIRST to see a layout or to look before/after a CSS change
+(it has no diff mode: the diffable HUD path is `layout-audit.mjs --screens='hud*'`, screens hud, hudpause, hudtouch,
+hudbuttons, hudmanual, then `--diff`);
 use the hud-survey reference (SKILL.md §References) when the 3D frame behind matters (occlusion).
 
 ```sh

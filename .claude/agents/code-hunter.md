@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 35
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover
 hooks:
   PreToolUse:
     - matcher: "Bash"

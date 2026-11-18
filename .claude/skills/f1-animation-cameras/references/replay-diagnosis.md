@@ -16,7 +16,7 @@ every non-continuous seek, and a HIGHLIGHTS scrub also cuts to the reel item ahe
 after it, may be.
 
 ## Likely causes of "old car after a seek"
-- FOLLOW LOCK is on (`setLocked(true)`): `reposition()` in `real-replay.js` skips the auto re-follow (`setFollow`) while `picture.locked`/`manual`.
+- HIGHLIGHTS only: FOLLOW LOCK is on (`setLocked(true)`): `reposition()` in `real-replay.js` skips the auto re-follow (`setFollow`) while `picture.locked`/`manual`. A WATCH seek (no reel) passes `highlight = null` and never re-follows, locked or not.
 - The follow id was not re-pointed on seek (`setFollow` not called for the new car).
 
 ## Fields to diff per phase (probe JSON on stdout)

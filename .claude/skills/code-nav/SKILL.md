@@ -20,7 +20,8 @@ failure, not a missing symbol. Bootstrap/trust conditions:
 
 Use attached `lsp_*` tools when listed by the session. Configured `.mcp.json`
 or an installed plugin does not establish attachment. Without those tools,
-use `bash tools/mcp/lsp-mcp.sh` with the table's commands; do not rebuild the
+use `node tools/mcp/lsp-mcp.mjs` with the table's commands (the `tools/mcp/lsp-mcp.sh`
+wrapper runs the same thing, but a reporter subagent's read-only hook refuses it); do not rebuild the
 server or change global host configuration to perform a lookup.
 
 ## Which call
@@ -33,10 +34,10 @@ also support the common terminal entrypoint, for example
 
 | You want | MCP call | Shell (same tools, one process per call) |
 |---|---|---|
-| where it is defined (and its code) | `lsp_definition {symbol, body: true}` | `tools/mcp/lsp-mcp.sh def Liveries.forTeam --body` |
+| where it is defined (and its code) | `lsp_definition {symbol, body: true}` | `node tools/mcp/lsp-mcp.mjs def Liveries.forTeam --body` |
 | uses, with enclosing functions (first page) | `lsp_references {symbol, format: "concise", limit: 40}` | `… refs Tracks.curvature --concise --limit=40` |
 | who would an edit touch (first caller page) | `lsp_callers {symbol, limit: 40}` | `… callers AiDrive.cornerK --limit=40` |
-| which files use it, counts only | `lsp_references {symbol, files: true}` (or `lsp_callers {…, files: true}`; any call takes `path` to scope) | `… refs G.player --files` |
+| which files use it, counts only | `lsp_references {symbol, files: true}` (or `lsp_callers {…, files: true}`; definition, references and callers take `path` to scope) | `… refs G.player --files` |
 | a module's exports without reading it | `lsp_outline {symbol, limit: 40}` or `{file, limit: 40}` | `… outline GameHud --limit=40` / `… outline js/physics/consts.js --limit=40` |
 | a name you only half know | `lsp_symbols {query}` | `… sym clamp` |
 | its type / JSDoc | `lsp_hover {symbol}` | `… hover G.wrapS` |

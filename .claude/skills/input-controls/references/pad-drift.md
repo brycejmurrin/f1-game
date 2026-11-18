@@ -18,7 +18,7 @@ All in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`), applied thr
 ## Triage: stick drifts / creeps when centred
 
 1. Read the live state: `__apex.inputState()` carries `pad.steer`, `padDeadzone`,
-   `padSaturation`, `padRestOffset`, `padAxisMap`, `padSteerAnalog` (reference: `docs/DEBUG-HOOKS.md` §inputState).
+   `padSaturation`, `padRestOffset`, `padAxisMap`, `padSteerAnalog` (`debugStateNow` in `js/input/input.js`; `docs/DEBUG-HOOKS.md` §inputState does not list the `pad*` fields yet).
    Non-zero `pad.steer` at rest with `padRestOffset` 0 = never calibrated.
 2. Wheel or wrong axis map? `padIsWheel` (input.js) is true for a non-standard pad with a saved map; at the
    default dead zone it forces dz 0, so a wheel "drift" is a map/rest problem. Compare `padAxisMap` with

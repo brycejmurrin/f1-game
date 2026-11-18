@@ -1,6 +1,7 @@
 # Season/year and stale-standings triage
 
-Season/year: schedule and results take NO year argument and standings take an
+Season/year: results take NO year argument; `schedule(year)` takes an optional one (the Schedule tab falls back to
+`F1API.schedule(year - 1)` and paints LAST season when this year's calendar is empty, `js/data/schedule.js`); standings take an
 OPTIONAL one. `F1API` derives the Jolpica season from the clock per call
 (`season()` in `js/data/api.js`; URL = `/<year>/driverstandings.json`;
 a past year caches `TTL_HISTORIC`). `loadStandings` (`standings.js`) asks for the current
@@ -8,8 +9,8 @@ year and, when that table is empty (intended: Jan to the opener), falls back to 
 season's FINAL table, headings tagged `LAST SEASON · <y> FINAL` (pinned by
 `tests/unit/data-standings.test.mjs`). Only the OpenF1 pickers carry a year
 (`hub.js` `apiYears()` / `sel.year`; `export.js` its own); the year/GP/SESSION
-picker drives RESULTS, LIVE and TELEMETRY (`invalidateOther`), never STANDINGS
-or SCHEDULE.
+picker drives RESULTS, LIVE, TELEMETRY (`invalidateOther`) and RACE IT (WATCH; `SESSION_TABS`, kept fresh because
+`showTab` and `close()` drop `state.race`, so its `MAX_AGE` never reuses a node), never STANDINGS or SCHEDULE.
 
 "Standings show last year" — split on the heading tag first:
 
