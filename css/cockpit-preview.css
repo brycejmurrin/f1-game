@@ -7,6 +7,12 @@
 #ckpreview-frame { display: block; width: 100%; height: clamp(230px, 35vw, 340px); border: 1px solid var(--dim); border-radius: var(--r-md); margin-top: var(--gap); background: var(--carbon); }
 #ckpreview-angles { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * .5); padding-top: calc(var(--gap) * .66); }
 #ckpreview-angles button { flex: 1 0 64px; font-size: var(--fs-micro); }
-@media (max-width: 600px) { #ckpreview-frame { height: 245px; } }
-@media (max-height: 500px) { #ckpreview-frame { height: 150px; } }
+/* Short preview only when the SETTINGS sheet itself is compact — not the
+   zoom-blind `(max-height: 500px)` window band (VIEWPORT-ASSUMPTIONS
+   2026-11-10; UI contract gap 24). At 852×393 / UI 70% the sheet is still
+   data-density="normal" (536px local) while the viewport media crushed the
+   iframe to 150px (~61% of the preview block). */
+.sheet[data-density="compact"]:not([data-shape="tall"]) #ckpreview-frame { height: 150px; }
+/* Tall sheet (phone portrait): was zoom-blind `(max-width: 600px)`. */
+:is(body, .sheet)[data-shape="tall"] #ckpreview-frame { height: 245px; }
 }
