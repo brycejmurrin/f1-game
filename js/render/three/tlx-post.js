@@ -605,7 +605,9 @@
         return;
       }
       if (_holdDev) {
-        const ps = target ? null : presentSize(), size = target ? target.width * 65536 + target.height : ps[0] * 65536 + ps[1];
+        // The canvas pass is keyed on its DRAWING BUFFER (what three writes to screenSize), not the present size:
+        // at a render scale under 1 with no upscale the two differ.
+        const cv = target ? null : renderer.domElement, size = target ? target.width * 65536 + target.height : (cv ? cv.width * 65536 + cv.height : -2);
         if (_holdSeen.has(mat) || (size !== _holdSize && _hold.length)) holdFlush(true);
         _holdSeen.add(mat); _holdSize = size;
       }
