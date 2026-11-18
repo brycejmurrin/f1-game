@@ -1,8 +1,8 @@
 # Several lanes, one phone
 
-Every session posts as the OWNER account, so the page cannot tell lanes apart: it runs every ` ```apex-cmd ` comment
-on the issue, oldest first (`js/agent/apex-bridge.js`). On 2026-11-18 two sessions posted the same block seconds
-apart because the hand-over of who drives crossed in flight, and a third lane's request was already queued.
+Every session posts as the OWNER account, so the page cannot tell lanes apart: it runs every OWNER ` ```apex-cmd `
+comment created after its hello, oldest first (`js/agent/apex-bridge.js`). On 2026-11-18 two sessions posted the
+same block seconds apart because the hand-over of who drives crossed in flight, and a third lane's request was already queued.
 
 - **One driver.** The bridge issue's body names the driving session's id before Bryce links the phone. Hand-over is a
   body edit by the current driver, and the new driver posts nothing until it has read the edited body. Nobody else

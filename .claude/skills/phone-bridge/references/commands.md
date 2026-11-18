@@ -75,9 +75,10 @@ Read on iPhone Safari and the Home Screen app, these fields do not mean what the
   again; nothing listens for `visibilitychange`. A run that was backgrounded still reads `hidden: false`. Trust a
   run only when the reply's outer `ms` is about `seconds` x 1000 and `maxMs` is under 1000; a larger `maxMs` is the
   hole, and it sits inside `fps` and `meanMs`.
-- **Long tasks.** WebKit has no `longtask` or `long-animation-frame` entry type and observing one does not throw:
-  `frames.longTasks` and `frametimeBench` `longTasks` read 0, `raceEntryProfile` reads 0 with `supported: false`,
-  `perf` reads `loaf: {supported: false}`. A 0 from the phone is "not measured"; use `maxMs` and `over33`.
+- **Long tasks.** WebKit has no `longtask` or `long-animation-frame` entry type. `frames` observes without a
+  support check, so `frames.longTasks` reads 0; `frametimeBench` `longTasks` reads 0; `raceEntryProfile` reads
+  `longTasks: []`, `blockMs: 0` with `supported: false`; `perf` reads `loaf: {supported: null}` until
+  `perf({on:true})`, then `{supported: false}`. A 0 from the phone is "not measured"; use `maxMs` and `over33`.
 - **Memory in bytes.** `texCensus` is `{supported: false, bytes: null}` on the three path, Safari has no
   `performance.memory` (heap fields read null or "unsupported"), and `facts.mem` (`navigator.deviceMemory`) is
   always null. `memState` numbers (through `recorder` or `bench result`) are three.js object counts and its own

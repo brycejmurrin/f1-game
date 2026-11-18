@@ -7,22 +7,25 @@ adds only what no other file said. Brief template and wave checks: [`orchestrato
 
 - `send_message` is a doorbell; the PR is the record (AGENTS.md §Coordination). A worker reports by message
   (`tools/ci/worker-prompt.md`), and anything a later session must know also goes in the PR body or a comment.
-- A PR can be adopted by a session you did not launch, and `send_message` to an id you cannot address answers
-  "resource not found". Before messaging an owner, read the newest `adopts PR #<n>` comment (skill `steward` §Lane 3).
+- A PR can be adopted by a session you did not launch, and on 2026-11-18 `send_message` to two such ids
+  answered "resource not found". Before messaging an owner, read the newest `adopts PR #<n>` comment (skill
+  `steward` §Lane 3).
   When the id it names is not one you launched, or a send fails, write ONE PR comment and stop sending to that id.
 - A worker whose launcher does not answer does the same in reverse: the report goes in its own PR's Hand-off block.
 
 ## After `land`
 
-- A worker's run ends at `land` (skill `steward` §Lane 7), and a push to a `land` branch moves the head the gate
-  measured (skill `steward` `references/land.md`). So "keep working" sent to a session whose PR carries `land` is
-  research, not commits: it cannot push them, and a local commit is lost with the container.
+- A worker's run ends at `land` (skill `steward` §Lane 7), and auto-merge is pinned to the head the gate measured
+  (skill `steward` `references/land.md`), so a push re-gates it. "Keep working" sent to a session whose PR carries
+  `land` is therefore research, not commits: a local commit is lost with the container. The one push such a
+  session still makes is a fix for a red on its own head (skill `steward` §After land).
 - The coordinator gives follow-up work a NEW brief on a new branch (a fresh session), never a second task for a
   `land` branch.
 - A worker that found follow-up work after `land` writes it into a PR comment as text another session can redo: the
   file, the function, the change and its test. On 2026-11-18 two local commits were lost with their container; the
-  one described that way was rebuilt from the comment and merged the same day, the other had to be redone later.
-- Before adding `land`, push everything you mean to keep (AGENTS.md rule 12 applies up to that point).
+  one described that way (the hand-off comment on #5628) was rebuilt from the comment and merged the same day as
+  #5688; the other still had to be redone.
+- Before adding `land`, push everything you mean to keep: after it, new work is a new brief (above).
 
 ## Whose word
 
