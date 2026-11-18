@@ -525,11 +525,12 @@ const CSS_DEFERRED = [
 // ROUTE SHEETS (#5394 row 2): a CSS_DEFERRED sheet whose rules style only the screens named here. gen-shell writes the
 // ids into the tag's data-route; the boot flipper skips such a tag, so it stays on print (out of the cascade) through
 // the title intro, and LazyBundles flips it the first time one of these elements is shown (hidden removed or open set),
-// or at the idle backstop. The ids come from a selector-to-element census of each sheet (PR body). Not here, on
+// or at the idle backstop. The ids come from a selector-to-element census of each sheet, plus every #id its selectors
+// name mapped to its screen (PR #5714 body). Not here, on
 // purpose: hud, touch-controls and overlays style title chips, pause settings, toasts and html vars; watch-transport's
 // replay bar is a body-level node with body-class rules.
 const CSS_ROUTE = {
-  "css/career.css": ["career", "career-offers", "career-guide", "career-history", "quali"],
+  "css/career.css": ["career", "career-offers", "career-guide", "career-history", "quali", "results", "standings"],   // compact .res-row rules for every results/standings sheet
   "css/career-experience.css": ["career", "results", "ceremony-podium"],
   "css/garage-experience.css": ["carsetup", "customize"],
   "css/photo-studio.css": ["photo-studio"],
