@@ -118,6 +118,8 @@ var GameAudioSoundtrack = (function () {
     // decodeAudioData refuses, a 404, offline) never made one: silence, with
     // the UI naming the dead track. Skip it; a whole list that fails stops.
     let _musicFails = 0;
+    // True from "every eligible track failed" until something plays or music is switched: the panel's readout (#5584).
+    let listFailed = false;
     function trackHealth(state, reason) {
       const track = PLAYLIST[musicIndex];
       if (track && !track.builtin && typeof MusicLib !== "undefined" && MusicLib.playbackStatus) MusicLib.playbackStatus(track.id, { state, reason: reason || "" });
@@ -127,7 +129,7 @@ var GameAudioSoundtrack = (function () {
       trackHealth("failed", reason || "Could not load or decode this audio file.");
       // Capped at the ELIGIBLE count: nextTrack only cycles the selected source,
       // so a PLAYLIST.length cap re-fetched one dead upload up to that many times.
-      if (++_musicFails >= Math.max(1, eligibleCount())) { _musicFails = 0; stopInternal(); return; }
+      if (++_musicFails >= Math.max(1, eligibleCount())) { _musicFails = 0; stopInternal(); listFailed = true; return; }
       nextTrack(1);
     }
     // Replacement preserves the resume position; stopInternal also clears it.
@@ -145,7 +147,7 @@ var GameAudioSoundtrack = (function () {
       if (!musicEl) return;
       captureStreamPos();
       const el = musicEl;
-      el.onended = el.onerror = el.onloadedmetadata = el.onplaying = null;
+      el.onended = el.onerror = el.onloadedmetadata = el.onplaying = el.onpause = null;
       try { el.pause(); } catch (e) { /* an element mid-teardown is silent either way */ }
       if (release) { try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded */ } }
       musicStreaming = false;
@@ -177,7 +179,17 @@ var GameAudioSoundtrack = (function () {
       const off = (musicResumeBuf === url && Number.isFinite(musicResumeOff)) ? musicResumeOff : 0;
       musicResumeBuf = url; musicResumeAt = NaN; musicResumeOff = off;
       el.onloadedmetadata = () => { if (token === musicToken && off > 0 && off < (el.duration || 0)) try { el.currentTime = off; } catch (e) { /* unseekable: from the top */ } };
-      el.onplaying = () => { if (token === musicToken) { streamUnlockPending = null; _musicFails = 0; trackHealth("playing"); } };
+      el.onplaying = () => { if (token === musicToken) { streamUnlockPending = null; musicStreaming = true; _musicFails = 0; listFailed = false; trackHealth("playing"); } };
+      // A PAUSE THE GAME DID NOT ASK FOR (#5584): the platform paused the element while the page stayed visible.
+      // Our own pause nulls this handler first (stopStream); a stale queued event from it finds the element playing
+      // again, and a track's natural end is `ended`'s. Keep the position and arm the replay: the next gesture
+      // (retryStreamUnlock) plays on in place, and resumeMusic no longer sees a live stream to leave alone.
+      el.onpause = () => {
+        if (token !== musicToken || el !== musicEl || !musicOn || !musicStreaming || !el.paused || el.ended || document.hidden) return;
+        captureStreamPos();
+        musicStreaming = false;
+        streamUnlockPending = { token, url };
+      };
       el.onended = () => { if (token === musicToken && musicOn) nextTrack(1); };
       el.onerror = () => {
         if (token !== musicToken) return;
@@ -211,7 +223,7 @@ var GameAudioSoundtrack = (function () {
     }
     function playMusicBuffer(buf, token) {
       if (!host.context() || !musicOn || token !== musicToken) return;  // superseded
-      _musicFails = 0;
+      _musicFails = 0; listFailed = false;
       trackHealth("playing");
       ensureMusicGain();
       replaceMusicSource();
@@ -491,7 +503,7 @@ var GameAudioSoundtrack = (function () {
 
     function setMusicEnabled(b) {
       ++actionGeneration;
-      musicEnabled = !!b;
+      musicEnabled = !!b; listFailed = false;
       if (!musicEnabled) stopMusic();
       else if (host.context() || backend) startMusic(lastTrackIdx);
     }
@@ -612,7 +624,7 @@ var GameAudioSoundtrack = (function () {
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
       suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine, retryStreamUnlock,
       // streaming stays create-local (musicStreaming); no soundtrack.streaming reader.
-      isPlaying: () => musicOn, lastTrack: () => lastTrackIdx, volume: () => musicVol,
+      isPlaying: () => musicOn, musicStalled: () => listFailed, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }
   return { create };
