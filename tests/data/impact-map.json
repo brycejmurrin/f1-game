@@ -1721,6 +1721,7 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "read": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [

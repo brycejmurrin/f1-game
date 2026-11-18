@@ -26,6 +26,7 @@ const CamAvoid = (function () {
   }
 
   const _rs = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  const _pr = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
 
   /**
    * THE ROAD IS ALWAYS CLEAR (the rule FlybySeq.onRoadPose states for the
@@ -43,8 +44,8 @@ const CamAvoid = (function () {
   function roadClear(track, eye, margin) {
     if (typeof Tracks === "undefined" || !Tracks.project || !Tracks.sample) return false;
     if (!blocked(track, eye, margin)) return false;
-    const pr = Tracks.project(track, eye[0], eye[2], null, eye[1]);
-    if (!pr) return false;
+    const pr = Tracks.project(track, eye[0], eye[2], null, eye[1], _pr);
+    if (!pr || !isFinite(pr.s)) return false;
     Tracks.sample(track, pr.s, _rs);
     if (Math.abs(pr.lat) > (_rs.hw || 7) + ROAD_PAD) return false;
     // Only the 2 m facade margin reaches the eye: a stand beside the road, not a

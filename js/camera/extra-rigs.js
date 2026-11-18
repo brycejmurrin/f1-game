@@ -90,10 +90,15 @@ const ExtraRigs = (function () {
     return out.sort((x, y) => x.score - y.score);
   }
 
+  // Pooled: rivalLock calls this every rendered RIVAL frame; the fields are
+  // read synchronously into locals, so a shared bag is safe (same contract as
+  // pickRival's running rows).
+  const _carSamp = { s: 0, x: 0, p: null, t: null, r: null, hw: 0 };
   function carSample(track, car, out) {
     const s = wrapS(track, car.s || 0), x = car.x || 0;
     Tracks.sample(track, s, out);
-    return { s, x, p: out.p, t: out.t, r: out.r, hw: out.hw };
+    _carSamp.s = s; _carSamp.x = x; _carSamp.p = out.p; _carSamp.t = out.t; _carSamp.r = out.r; _carSamp.hw = out.hw;
+    return _carSamp;
   }
 
   /** Frame the car ahead or behind in a battle — both cars stay in shot. */

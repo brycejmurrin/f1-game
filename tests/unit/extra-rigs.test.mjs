@@ -120,6 +120,23 @@ test("ExtraRigs.solve returns finite eye/tgt/fov for rival, pitwall, drone", () 
   }
 });
 
+// Rival mode used to allocate a fresh {s,x,p,t,r,hw} bag per frame via carSample.
+// With a rival subject the solve must stay finite across many frames (pooled bag).
+test("ExtraRigs.solve rival with a subject stays finite across many frames (carSample pooled)", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  const track = { total: 1000, pit: { side: 1 }, def: {} };
+  const eye = [0, 0, 0], tgt = [0, 0, 0];
+  const rival = { s: 140, x: 1.5, speed: 50 };
+  for (let i = 0; i < 120; i++) {
+    rival.s = 140 + i * 2;
+    const fov = ExtraRigs.solve("rival", track, 100 + i, 0, 50, 0, {
+      bankDy: 0, rival, carPos: [100 + i, 0], carHead: 0, dt: 1 / 60,
+    }, eye, tgt);
+    assert.ok(Number.isFinite(fov), `fov at frame ${i}`);
+    assert.ok(eye.every(Number.isFinite) && tgt.every(Number.isFinite), `pose at frame ${i}`);
+  }
+});
+
 test("ExtraRigs.tickPitAuto cuts to pitwall on entry and restores on exit", () => {
   const { ExtraRigs } = loadExtraRigs();
   let mode = 0;

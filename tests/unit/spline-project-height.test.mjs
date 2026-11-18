@@ -194,3 +194,31 @@ test("a hinted query is the windowed search, untouched by the grid", () => {
   const r = T.project(tr, tr.px[100] + 3, tr.pz[100], 100 * ds);
   assert.ok(Math.abs(r.k - 100) <= 1, `hinted projection stays at node ~100, got ${r.k}`);
 });
+
+test("project out-param is bit-identical to a fresh return and reuses the bag", () => {
+  const tr = trackOf("spa");
+  const out = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
+  const a = T.project(tr, tr.px[50] + 2, tr.pz[50], null, tr.py[50], out);
+  assert.equal(a, out, "out-param is returned");
+  const b = T.project(tr, tr.px[50] + 2, tr.pz[50], null, tr.py[50]);
+  assert.deepEqual({ ...out }, { ...b }, "pooled write matches a fresh object");
+  const firstK = out.k;
+  const again = T.project(tr, tr.px[200] + 2, tr.pz[200], null, null, out);
+  assert.equal(again, out);
+  assert.notEqual(out.k, firstK, "the bag is overwritten in place for the next query");
+  assert.ok(Number.isFinite(out.s) && Number.isFinite(out.lat));
+});
+
+test("sample leaves a pooled out untouched on non-finite s or an empty track", () => {
+  const tr = trackOf("spa");
+  const out = { p: [1, 2, 3], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  const snap = { p: out.p.slice(), t: out.t.slice(), r: out.r.slice(), hw: out.hw };
+  T.sample(tr, NaN, out);
+  assert.deepEqual(out.p, snap.p);
+  assert.equal(out.hw, snap.hw);
+  T.sample({ n: 0, total: 0, px: [], py: [], pz: [], tx: [], ty: [], tz: [], rx: [], ry: [], rz: [], hw: [] }, 0, out);
+  assert.deepEqual(out.p, snap.p);
+  const emptyProj = T.project({ n: 0, total: 0 }, 1, 1);
+  assert.equal(emptyProj.dist, Infinity);
+  assert.equal(emptyProj.s, 0);
+});
