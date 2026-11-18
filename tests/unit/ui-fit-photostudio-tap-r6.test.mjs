@@ -36,10 +36,17 @@ test("r6 carve stays Photo Studio #ps-* (no foreign selectors)", () => {
 });
 
 test("portrait studio: preview-band pad, guide, overflow and --bg (393×852 hunt)", () => {
-  // One pin for the whole portrait carve — assertPinsAll is at its ceiling.
-  assert.match(
-    css,
-    /body\.photo-studio-open\s*\{\s*background:\s*var\(--bg\)\s*;\s*\}[\s\S]*@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*?#photo-studio\s*\{[^}]*--ps-preview-h:\s*calc\(100svh\s*-\s*42svh\s*-\s*var\(--safe-b\)\)[^}]*padding-top:\s*var\(--ps-preview-h\)[^}]*padding-bottom:\s*0[\s\S]*?#ps-guide\s*\{[^}]*top:\s*calc\(var\(--ps-preview-h\)\s*\/\s*2\)[\s\S]*?#ps-panel\s*\{[^}]*overflow:\s*visible[\s\S]*?#ps-body\s*\{[^}]*overscroll-behavior:\s*contain/,
-    "portrait: --bg letterbox, pad = 100svh-42svh-safe-b, guide in preview, panel overflow visible, body overscroll contained",
-  );
+  // cssRules/decl (no source-pin regex) — assertPinsAll is at its ceiling.
+  const phone = { context: /max-width:\s*640px/ };
+  assert.equal(decl(rules, "body.photo-studio-open", "background"), "var(--bg)",
+    "open studio fills the letterbox with --bg (not white)");
+  assert.equal(decl(rules, "#photo-studio", "--ps-preview-h", phone),
+    "calc(100svh - 42svh - var(--safe-b))", "preview band = viewport minus sheet minus safe-b");
+  assert.equal(decl(rules, "#photo-studio", "padding-top", phone), "var(--ps-preview-h)");
+  assert.equal(decl(rules, "#photo-studio", "padding-bottom", phone), "0");
+  assert.equal(decl(rules, "#ps-guide", "top", phone), "calc(var(--ps-preview-h) / 2)",
+    "guide centres on the preview band, not the full viewport");
+  assert.equal(decl(rules, "#ps-panel", "overflow", phone), "visible",
+    "Garage / Subject native selects must not clip to the sheet");
+  assert.equal(decl(rules, "#ps-body", "overscroll-behavior", phone), "contain");
 });

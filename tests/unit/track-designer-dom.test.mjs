@@ -2147,7 +2147,7 @@ test("3 LOOK: a chip per theme (thirty), dual-colour swatches, the theme's blurb
   assert.match(css, /forced-colors: active[\s\S]*\[data-role="themes"\][\s\S]*forced-color-adjust:\s*none/, "swatch colour survives forced-colors");
   // Phone default DESIGNER SIZE 75 % × ui-scale 0.7 → zoom 0.525; a bare 16 px
   // --fs-micro painted ~8.4 px on UNDO/REDO/FIT. Floor against --td-zoom.
-  // assert.equal (not assert.match) — assertPinsAll is at its ceiling.
+  // Prefer equal(+.test) over a source-pin regex assert — assertPinsAll is at ceiling.
   assert.equal(/#trackdesigner\s*\{[^}]*--td-fs-floor:\s*calc\(12px\s*\/\s*var\(--td-zoom\)\)[^}]*--fs-micro:\s*max\(14px,\s*var\(--td-fs-floor\)\)/s.test(css), true,
     "designer text floors at 12 painted px via --td-fs-floor");
   assert.equal(/#trackdesigner\s+\.td-rail\s*\{[^}]*scroll-padding-bottom:\s*calc\(var\(--tap-paint\)\s*\+\s*var\(--gap\)\)/s.test(css), true,
