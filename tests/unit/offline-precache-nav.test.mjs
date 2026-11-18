@@ -141,3 +141,76 @@ test("an install where controller.html 404s still completes (optional, not essen
   await h.install();
   assert.ok(!h.stores.get("apex26-321").has(`${ORIGIN}/controller.html`));
 });
+
+// Secondary root pages share the navigate handler with controller.html: any
+// `*.html` other than index.html must never fall back to the game shell
+// (sw.js isShellDocument). bench.html / cockpit-view.html are covered in the
+// often-held service-worker.test.mjs; overlay.html was not. Install does not
+// seed overlay/bench/cockpit (SW_ROOT_PAGES is controller only), so the offline
+// uncached path must fail honestly — not open the race.
+for (const page of ["overlay.html", "bench.html", "cockpit-view.html"]) {
+  test(`offline, an uncached ${page} fails honestly instead of opening the game`, async () => {
+    const h = harness({ seed: { "index.html": GAME }, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+    const res = await h.nav("/" + page);
+    assert.equal(res.status, 0, "Response.error()");
+  });
+
+  test(`offline, a precached ${page} answers under its own URL`, async () => {
+    const h = harness({
+      seed: { "index.html": GAME, [page]: `cached ${page}` },
+      fetchImpl: () => Promise.reject(new TypeError("offline")),
+    });
+    assert.equal(await (await h.nav("/" + page)).text(), `cached ${page}`);
+  });
+
+  test(`a stalled ${page} navigation is never answered with the game shell`, async () => {
+    let release;
+    const h = harness({
+      seed: { "index.html": GAME },
+      fetchImpl: (r) => {
+        const url = typeof r === "string" ? r : r.url;
+        if (url.endsWith("version.json")) return Promise.resolve(new Response('{"build":321}'));
+        return new Promise((res) => { release = () => res(new Response(`${page} body`, { status: 200 })); });
+      },
+    });
+    const p = h.nav("/" + page);
+    let settled = false;
+    p.then(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(settled, false, "the race was lost; the shell must NOT be substituted");
+    release();
+    assert.equal(await (await p).text(), `${page} body`);
+  });
+}
+
+// Install art must land in the optional pool (audit4 L7): otherwise an installed
+// PWA that re-asks for a shortcut / appearance icon offline gets a network miss.
+// Proven by the install fetch list + cache, not by grepping sw.js source pins.
+test("install seeds manifest icons, shortcut-96, and appearance A–F sets", async () => {
+  const needed = [
+    "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",
+    "icons/shortcut-96.png",
+    ...["A", "B", "C", "D", "E", "F"].flatMap((s) => [
+      `icons/shortcuts/${s}/favicon-32.png`, `icons/shortcuts/${s}/apple-touch-180.png`,
+    ]),
+  ];
+  const fetched = [];
+  const h = harness({
+    fetchImpl: async (r) => {
+      const u = new URL(typeof r === "string" ? r : r.url, `${ORIGIN}/`);
+      const rel = u.pathname.replace(/^\//, "");
+      fetched.push(rel);
+      if (u.pathname.endsWith("/version.json")) return new Response('{"build":321}');
+      if (u.pathname.endsWith("/index.html")) {
+        return new Response('<meta name="apex-build" content="321"><script src="js/game.js?v=321"></script>');
+      }
+      return new Response("asset-bytes");
+    },
+  });
+  await h.install();
+  const cache = h.stores.get("apex26-321");
+  for (const rel of needed) {
+    assert.equal(fetched.indexOf(rel) >= 0, true, `install requested ${rel}`);
+    assert.equal(cache.has(`${ORIGIN}/${rel}`), true, `install cached ${rel}`);
+  }
+});
