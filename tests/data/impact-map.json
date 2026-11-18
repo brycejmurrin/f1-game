@@ -20485,6 +20485,9 @@
       "recenter": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "seed": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "sessionInit": [
         "tests/unit/xr-phase0.test.mjs"
       ],
