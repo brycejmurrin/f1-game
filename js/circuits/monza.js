@@ -52,14 +52,11 @@
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // racing arc 0.608-0.652 Ascari
     ],
     bankZones: [
-      // Curva Grande: kept on the sweep body (built 0.155-0.235, |k| 0.003-0.0045), not
-      // turns[2] 0.1288 (the short Rettifilo-exit right 200 m earlier) — a turn-3 anchor would bank the kink.
       { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande
-      // Lesmo 1 is a double apex (0.3692 = T6, 0.3825); centred between them so one window banks both.
-      { frac: 0.3760, angleDeg: 6.0, widthM: 170 },   // Lesmo 1 (T6)
+      { frac: 0.3831, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
       { frac: 0.4323, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
       { frac: 0.6310, angleDeg: 3.5, widthM: 110 },   // Ascari
-      { turn: 11, angleDeg: 4.0, widthM: 300 },       // Parabolica (was frac 0.8222: banked the braking straight, exit flat)
+      { frac: 0.8222, angleDeg: 4.0, widthM: 300 },   // Parabolica
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
