@@ -562,3 +562,14 @@ test("#5420 F3: a DRAFT deploy:red PR whose CI is green is nudged at once (once 
   assert.deepEqual([quiet.nudges, quiet.launches], [[], []]);
   assert.deepEqual([ciGreen({ checks: ok }), ciGreen({ checks: [] }), ciGreen({}), ciGreen({ checks: [{ id: 1, name: "a", status: "completed", conclusion: "cancelled" }] })], [true, false, false, false]);
 });
+
+test("rule 1: a claimed issue with no open PR, no live launch and no comment for staleHours is an ORPHAN skip line, never a launch", () => {
+  const claim = (h) => ({ author: "brycejmurrin", body: "claims #10 — claude:session_x", created_at: ago(h) });
+  const orphan = planDispatch(state({ issues: [board(), issue(10, ["ready", "claimed"], { comments: [launched(10, 9), claim(8.9)] })] }), cfg(), NOW);
+  assert.equal(orphan.launches.length, 0);
+  assert.deepEqual(skips(orphan), ["issue #10: claimed but orphaned: no open PR closes it and no claim or comment for 9h — remove `claimed` to relaunch"]);
+  const quiet = (issues, prs = []) => skips(planDispatch(state({ issues: [board(), ...issues], prs }), cfg(), NOW)).filter((s) => /orphan/.test(s));
+  assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(1)] })]), [], "a claim younger than staleHours is alive");
+  assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9)] })], [pr(20, { body: "Closes #10" })]), [], "an open PR that closes it owns it");
+  assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9), launched(10, 1)] })]), [], "a live launch claim");
+});

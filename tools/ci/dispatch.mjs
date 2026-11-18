@@ -53,9 +53,10 @@
 // newest COMPLETED pages.yml run on the deploy branch failed) and no open PR labelled `deploy:red` → label the Board,
 // launch one fixer addressed `DEPLOY-RED <run id>` (none when the run's PLATFORM_STEP failed: a Pages-side publish
 // failure is a skip line on the Board, not a code fix; none while a NEWER train is queued or running: that tip is
-// untested and may be the fix, #5420); (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
+// untested and may be the fix, #5420); an ORPHAN claim (`ready` +
+// `claimed`, no open PR closing it, no live launch, no comment for staleHours.default) is a Board skip line, never a relaunch; (4) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
 // acts on gets ONE comment per nudgeEveryMinutes (`dispatch: nudge …`) naming what to do next — a subscribed worker is
-// woken by the comment; a DRAFT labelled `deploy:red` whose CI is green is nudged at once, not after nudgeAfterMinutes; (6) the Board markdown, ONE comment this tool edits on the issue titled `Board`
+// woken by the comment; a DRAFT labelled `deploy:red` whose CI is green is nudged at once, not after nudgeAfterMinutes; (5) the Board markdown, ONE comment this tool edits on the issue titled `Board`
 // (marker `<!-- dispatch-board -->`). Idempotent: every launch is recorded as a comment on the issue/PR (deploy:red
 // fixers on the Board issue), and a launch comment younger than launchClaimHours is a live claim.
 // Rule 2's "last activity" is the head's push (its first workflow run, a server time) or the newest comment not written
@@ -88,7 +89,7 @@ export const ANTHROPIC_VERSION = "2026-10-21";
 /** Rows per list page; a page shorter than this is the last one (GitHub REST pagination). */
 export const PAGE_SIZE = 100;
 export const DEFAULT_CONFIG = {
-  pause: false, maxLaunchesPerRun: 2, maxLaunchesPerDay: 24, maxLiveWorkers: 8, landQueueMax: 15, workerCostCapUsd: 10, workerStopAtK: 300,
+  pause: false, maxLaunchesPerRun: 2, maxLaunchesPerDay: 24, maxLiveWorkers: 8, landQueueMax: 15, workerCostCapUsd: 10,
   staleHours: { default: 6, codex: 6 }, launchClaimHours: 2, foreignHours: 2, nudgeAfterMinutes: 45, nudgeEveryMinutes: 60,
   deployBranch: "claude/f1-game-project-26h3ng", repo: "brycejmurrin/f1-game", owner: OWNER,
   boardIssue: 1780, dispatchIssue: 3899, boardIssueTitle: "Board", dispatchIssueTitle: "Dispatch",
@@ -385,7 +386,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     else if (l && l.target === "deploy:red") skip("deploy:red fixer", `launched ${ageLabel(l.at, now)} ago (live claim)`);
     else launch("deploy-red", 0, "[Worker] deploy:red fixer", board.number, { runId: state.deployRunId || null });
   } else if (board && has(board, "deploy:red")) label(board.number, [], ["deploy:red"]);
-  // (2) stale open PRs → needs-owner + ONE takeover. (5) idle PRs → one nudge per nudgeEveryMinutes.
+  // (2) stale open PRs → needs-owner + ONE takeover. (4) idle PRs → one nudge per nudgeEveryMinutes.
   const recover = [...prs].sort((a, b) => (has(b, "needs-owner") - has(a, "needs-owner"))
     || (ownerLabel(b, "priority") - ownerLabel(a, "priority")) || activityAt(a) - activityAt(b));
   for (const p of recover) {
@@ -398,7 +399,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     }
     const l = liveLaunch(p.comments, now, claimH);
     if (idleH < limit && !asked) {
-      // (5) a nudge: idle past nudgeAfterMinutes, not landing (CI/gate/train work), no nudge in the last nudgeEveryMinutes.
+      // (4) a nudge: idle past nudgeAfterMinutes, not landing (CI/gate/train work), no nudge in the last nudgeEveryMinutes.
       // A green deploy:red fixer still in draft is nudged at once: the deploy branch stays red until it lands (#5420).
       const fixer = p.draft && has(p, "deploy:red") && ciGreen(p);
       if (!fixer && (idleM < (config.nudgeAfterMinutes ?? 45) || (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)))) continue;
@@ -444,6 +445,15 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     if (p.state && p.state !== "open") continue;
     for (const n of closingIssues(p.body, config.repo)) linkedPrs.set(n, [...(linkedPrs.get(n) || []), p.number]);
   }
+  // An ORPHAN claim: `ready` + `claimed`, no open PR closes it, no live launch, and no comment for
+  // staleHours.default. Rule 1 never relaunches a `claimed` issue, so a worker that died between its claim and its first commit
+  // would hide the issue for good: say so on the Board (the cure is a human or orchestrator removing `claimed`).
+  for (const i of issues.filter((x) => !x.pull_request && has(x, "ready") && has(x, "claimed"))) {
+    if ((linkedPrs.get(Number(i.number)) || []).length || liveLaunch(i.comments, now, claimH)) continue;
+    const last = Math.max(0, ...(i.comments || []).map((c) => t(c.created_at)));
+    const idleH = (now - last) / 3.6e6;   // no comment at all: no dated evidence, so no verdict
+    if (last && idleH >= config.staleHours.default) skip(`issue #${i.number}`, `claimed but orphaned: no open PR closes it and no claim or comment for ${Math.round(idleH)}h — remove \`claimed\` to relaunch`);
+  }
   for (const i of queueFull ? [] : ready.filter((x) => trustedReady(x, owner))) {
     const linked = linkedPrs.get(Number(i.number)) || (has(i, "batch") ? [...new Set(batchMembers(i.body).flatMap((n) => linkedPrs.get(n) || []))] : []);
     if (linked.length) { skip(`issue #${i.number}`, `already has open PR ${linked.map((n) => `#${n}`).join(", ")}`); continue; }
@@ -459,7 +469,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
   return plan;
 }
 
-/** (6) The Board comment: flags, caps, one row per open PR, this run's launches, digests, nudges and skips. Pure. */
+/** (5) The Board comment: flags, caps, one row per open PR, this run's launches, digests, nudges and skips. Pure. */
 export function renderBoard(state, plan, config, now) {
   const rows = (state.prs || []).map((p) => {
     const h = parseHandoff(p.body) || {};
