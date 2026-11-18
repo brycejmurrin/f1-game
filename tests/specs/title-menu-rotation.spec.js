@@ -37,13 +37,22 @@ async function waitTitle(page) {
 /** @param {import("@playwright/test").Page} page
  *  @param {{ width: number, height: number }} size */
 async function rotate(page, size) {
+  const wantWide = size.width > size.height;
   await page.setViewportSize(size);
-  await page.evaluate(() => {
+  // SheetShape re-asks at SETTLE_MS = [250, 700, 1500]. A fixed 1700 ms sleep
+  // raced loaded runners (same file's kb-clear test, 2026-10-02): wait until
+  // shape matches AND the last re-ask could have fired, then settle the fit.
+  const t0 = await page.evaluate(() => {
     window.dispatchEvent(new Event("orientationchange"));
     window.dispatchEvent(new Event("resize"));
+    return performance.now();
   });
-  // SheetShape SETTLE_MS tops out at 1500; wait past that so late re-asks land.
-  await page.waitForTimeout(1700);
+  await page.waitForFunction(({ wantWide: wide, t0: start }) => {
+    const shape = document.body.dataset.shape;
+    const shaped = wide ? shape === "wide" : shape === "tall";
+    return shaped && (performance.now() - start) >= 1500;
+  }, { wantWide, t0 }, { polling: 50, timeout: 8000 });
+  await page.evaluate(settleInPage, 12);
 }
 
 /** @param {import("@playwright/test").Page} page */
