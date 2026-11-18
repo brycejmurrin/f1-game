@@ -167,7 +167,7 @@ if ($("pm-fullscreen")) {
   if (!anchor || !anchor.parentNode || !navigator.serviceWorker || typeof MessageChannel === "undefined") return;
   const note = document.createElement("p"), button = document.createElement("button");
   note.className = "adv-help"; note.setAttribute("role", "status");
-  note.textContent = "Offline availability has not been checked.";
+  note.textContent = "Checking offline availability…";
   button.type = "button"; button.textContent = "CHECK OFFLINE AVAILABILITY";
   anchor.parentNode.insertBefore(note, anchor.nextSibling);
   anchor.parentNode.insertBefore(button, note.nextSibling);
@@ -205,8 +205,19 @@ if ($("pm-fullscreen")) {
     }
   }
   button.addEventListener("click", () => { polls = 0; refresh(retry); });
-  navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
-  refresh();
+  // The status costs the worker one cache lookup per precached file (~620), on the thread that also answers the
+  // title's lazy loads, for a note inside Settings. Ask when the note is on screen, not at every boot.
+  if (typeof IntersectionObserver !== "function") {
+    navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
+    refresh();
+    return;
+  }
+  let shown = false, stale = true;
+  new IntersectionObserver((rows) => {
+    shown = rows[rows.length - 1].isIntersecting;
+    if (shown && stale) { stale = false; refresh(); }
+  }).observe(note);
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (shown) refresh(); else stale = true; });
 })();
 }
 
