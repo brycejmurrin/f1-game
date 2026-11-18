@@ -79,6 +79,13 @@ function create(G) {
   let backupReadGeneration = 0; // only the latest picker/read in this screen visit may update its review
 
   function announce(msg) { if (G.announce) G.announce(msg); }
+  // Career refused to keep a decision and put it back (#5657): say why the tap did nothing.
+  function saveRefused() {
+    const st = Career.saveStatus ? Career.saveStatus() : null;
+    if (!st || (st.ok !== false && st.durable !== false)) return false;
+    announce(st.reason === "conflict" ? "CAREER CHANGED IN ANOTHER TAB — NOT SAVED" : "STORAGE FULL — NOT SAVED");
+    return true;
+  }
 
   function writerMessage() {
     const s = typeof GameStore !== "undefined" && GameStore.store;
@@ -1071,7 +1078,7 @@ function create(G) {
           b.type = "button";
           b.setAttribute("aria-pressed", i === picked ? "true" : "false");
           b.onclick = () => {
-            if (!Career.chooseObjective(i)) return;
+            if (!Career.chooseObjective(i)) { saveRefused(); return; }
             if (G.soundOn) GameAudio.uiTick();
             build();
           };
@@ -1203,7 +1210,7 @@ function create(G) {
         el("span", "cr-record-cta", "COST " + I18n.n(st.facilityCost) + " cr  ·  LEVEL " + st.facility + " → " + (st.facility + 1)
           + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH" + shortNote(fShort)));
       fac.onclick = () => {
-        if (!Career.upgradeFacility()) return;
+        if (!Career.upgradeFacility()) { saveRefused(); return; }
         if (G.soundOn) GameAudio.uiSelect();
         build();
       };
@@ -1221,8 +1228,8 @@ function create(G) {
         el("span", "cr-record-cta", "COST " + I18n.n(st.budgetCost) + " cr  ·  LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
           + "  ·  CAP " + I18n.n(st.budget) + " cr" + shortNote(bShort)));
       cap.onclick = () => {
-        // Refused (save conflict, storage full): repaint from the save, which shows why (#5575).
-        if (!Career.upgradeBudget()) { if (G.soundOn) GameAudio.uiReject(); build(); return; }
+        // Refused (save conflict, storage full): repaint from the save and say why (#5575, #5657).
+        if (!Career.upgradeBudget()) { saveRefused(); if (G.soundOn) GameAudio.uiReject(); build(); return; }
         if (G.soundOn) GameAudio.uiSelect();
         build();
       };
@@ -1246,7 +1253,7 @@ function create(G) {
     const grantBtn = el("button", "sel-chip", "+" + I18n.n(Career.GRANT) + " CR");
     grantBtn.id = "cr-grant";
     grantBtn.onclick = () => {
-      Career.grant(Career.GRANT);
+      if (Career.grant(Career.GRANT) == null) { saveRefused(); return; }
       if (G.soundOn) GameAudio.uiSelect();
       fundsOpen = true; build();
     };
@@ -1292,7 +1299,7 @@ function create(G) {
           el("span", "cr-record-cta", "RE-SIGN"));
         if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(keep, 0, h.ask);
         keep.onclick = () => {
-          Career.renewHire(1);
+          if (!Career.renewHire(1)) { saveRefused(); return; }
           if (G.soundOn) GameAudio.uiSelect();
           build();
         };
@@ -1308,7 +1315,7 @@ function create(G) {
           el("span", "cr-seat-who", I18n.n(a2.ask) + " cr / round"));
         if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(b2, 0, a2.ask);
         b2.onclick = () => {
-          Career.hireDriver(a2.code, 1);
+          if (!Career.hireDriver(a2.code, 1)) { saveRefused(); return; }
           if (G.soundOn) GameAudio.uiSelect();
           build();
         };
@@ -1424,7 +1431,12 @@ function create(G) {
     const sign = el("button", "sel-edit", "SIGN CONTRACT"); sign.type = "button";
     const cancel = el("button", "sel-edit", "CANCEL"); cancel.type = "button";
     const status = el("p", "cg-p"); status.setAttribute("role", "status");
-    sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = I18n.t("career.offer.changed", null, "The offer changed. Cancel and compare it again."); sign.disabled = true; return; } closeOffers(); G.openCareer(); };
+    sign.onclick = () => {
+      if (Career.acceptOffer(index, preview)) { closeOffers(); G.openCareer(); return; }
+      // A refused write keeps the sheet and the old contract; the offer itself did not change (#5657).
+      if (saveRefused()) { status.textContent = I18n.t("career.offer.notSaved", null, "Not saved — the contract is unsigned. Try again."); return; }
+      status.textContent = I18n.t("career.offer.changed", null, "The offer changed. Cancel and compare it again."); sign.disabled = true;
+    };
     cancel.onclick = () => backToOffers();
     body.append(card, sign, cancel, status);
     previewing = index; $("co-back").textContent = I18n.t("career.back", null, "BACK");
@@ -1815,6 +1827,8 @@ function create(G) {
       // draftFrom alone so BACK still works.
       if (!Career.start(draft)) {   // draft.slot, when the picker set one
         const full = draft.slot == null && Career.firstFree(draft.flavour) < 0;
+        // Never durably written: stay on the form, no hub on a career a reload loses (#5657).
+        if (!full && saveRefused()) return;
         openSlots(slotsOrigin);
         if (full) announce("ALL THREE SLOTS ARE IN USE — DELETE ONE TO START A NEW CAREER");
         return;

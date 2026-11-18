@@ -3554,7 +3554,7 @@ customTeam = CustomTeam.create({
   getLivDraftOverride: () => customLiv.livDraftOverride,
   setLivDraftOverride: (v) => { customLiv.livDraftOverride = v; },
   getSoundOn: () => soundOn,
-  GameAudio,
+  GameAudio, announce,
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },

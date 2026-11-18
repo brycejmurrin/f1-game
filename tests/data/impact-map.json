@@ -4051,10 +4051,12 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "chooseSponsor": [
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "chooseStake": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "comparison": [
@@ -4169,12 +4171,14 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "active": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "ambition": [
@@ -4208,6 +4212,7 @@
         "tests/unit/season-calendar-default.test.mjs"
       ],
       "chooseObjective": [
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "clear": [
@@ -4216,6 +4221,9 @@
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
+      ],
+      "commit": [
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
@@ -4237,6 +4245,7 @@
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -4267,6 +4276,7 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -4295,6 +4305,7 @@
       ],
       "freeAgents": [
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
       "freeMoney": [
@@ -4318,7 +4329,8 @@
       ],
       "grant": [
         "tests/unit/career-cross-tab.test.mjs",
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "gridSeats": [
         "tests/unit/career-legends.test.mjs",
@@ -4331,6 +4343,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
       "hirePending": [
@@ -4358,6 +4371,7 @@
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/damage.test.mjs",
@@ -4415,6 +4429,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
@@ -4424,6 +4439,7 @@
       "renewHire": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
       "replace": [
@@ -4438,7 +4454,8 @@
       ],
       "research": [
         "tests/unit/career-cross-tab.test.mjs",
-        "tests/unit/career-parts-regs.test.mjs"
+        "tests/unit/career-parts-regs.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "rollover": [
         "tests/unit/career-ai-dev.test.mjs",
@@ -4471,6 +4488,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
@@ -4480,6 +4498,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs"
@@ -4502,10 +4521,12 @@
       ],
       "setAmbition": [
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "setIdentityValue": [
-        "tests/unit/career-data-audio-improvements.test.mjs"
+        "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "settleRound": [
         "tests/unit/career-backup.test.mjs",
@@ -4521,6 +4542,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "slotRevision": [
@@ -4550,6 +4572,7 @@
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -4589,7 +4612,8 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "upgradeFacility": [
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "useSlot": [
         "tests/unit/career-backup.test.mjs",
@@ -4747,6 +4771,7 @@
         "tests/specs/steer-migration.spec.js",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -4998,7 +5023,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "*": [
-        "tests/unit/career-data-audio-improvements.test.mjs"
+        "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ]
     },
     "js/circuits/abudhabi.js": {
@@ -5346,6 +5372,7 @@
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
         "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
@@ -5659,6 +5686,7 @@
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
@@ -5923,6 +5951,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
@@ -6079,6 +6108,7 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
