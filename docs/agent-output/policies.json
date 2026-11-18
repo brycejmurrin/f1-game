@@ -221,6 +221,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/ai-solo.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/ai-race.mjs": {
       "action": "keep-native",
       "presentation": "native",
