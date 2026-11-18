@@ -326,3 +326,41 @@ test("armPrime: each blend group with nothing to draw submits one zero-size, zer
   P.update(0.016); P.armPrime(); P.draw();
   assert.deepEqual(uploads.map((u) => [u.additive, u.floats === 60]), [[false, false], [true, true]], "a group already drawing this frame is left alone");
 });
+
+// Re-init under a live shower used to allocate only MAX*FLOATS_PER for _vertA
+// while leaving _rainN set: rainFill then wrote past the TypedArray length
+// (silent no-ops — streaks vanished / corrupted). init drops the field;
+// rainSeed re-arms. clear() also drops a pending armPrime.
+test("re-init under a live shower does not overflow the alpha buffer", () => {
+  const uploads = [];
+  const P = make(uploads, null, { count: 650 });
+  P.rainSeed(false); P.rainShow(true);
+  P.rainUpdate(0.016, [0, 5, 0], true); P.draw();
+  const seeded = uploads.at(-1);
+  assert.ok(seeded && seeded.floats > 0 && seeded.floats <= seeded.data.length,
+    "seeded shower fits the buffer it was sized for");
+  // Desktop → mobile re-init: old code shrunk _vertA to 96*60 while _rainN stayed 650.
+  uploads.length = 0;
+  P.init({
+    mobileTier: true,
+    drawParticles: (data, floats, additive, dirty) => {
+      uploads.push({ floats, additive: !!additive, dirty: dirty !== false, len: data.length });
+    },
+  });
+  assert.equal(P.rainActive(), false, "re-init drops the armed shower");
+  P.rainUpdate(0.016, [1, 5, 0], true); P.draw();
+  assert.equal(uploads.length, 0, "no rain geometry is submitted until rainSeed");
+  P.rainSeed(false); P.rainShow(true);
+  P.rainUpdate(0.016, [2, 5, 0], true); P.draw();
+  const u = uploads.at(-1);
+  assert.ok(u && u.floats > 0 && u.floats <= u.len,
+    `re-seeded mobile shower fits its buffer (floats ${u?.floats} len ${u?.len})`);
+});
+
+test("clear disarms a pending armPrime so the next draw is not a stale idle prime", () => {
+  const uploads = [], P = make(uploads);
+  P.armPrime();
+  P.clear();
+  P.draw();
+  assert.equal(uploads.length, 0, "clear dropped the pending prime");
+});

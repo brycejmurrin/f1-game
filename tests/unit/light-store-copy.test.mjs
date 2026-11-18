@@ -335,10 +335,28 @@ test("a reapply knob re-runs applyRaceSettings in a race but not from the menu",
   defs.push({ id: APPLY, def: 0, min: -1, max: 1 });
   h.state.applied = 0; h.store.set(APPLY, 0.5);
   assert.equal(h.state.applied, 1, "race: scene re-derived once");
+  h.state.applied = 0; h.store.set(APPLY, 0.5);
+  assert.equal(h.state.applied, 0, "a no-op rewrite of the same value must not re-apply");
   for (const mode of ["menu", "select"]) {
     h.state.mode = mode; h.state.applied = 0; h.store.set(APPLY, -0.5);
     assert.equal(h.state.applied, 0, mode + ": no race settings to apply yet");
   }
+});
+
+test("a no-op set of a rebuild or reinitRain knob does not invalidate again", () => {
+  const h = loadStore();
+  const tr = h.state.liveTracks.bahrain;
+  tr._lights = ["x"]; tr._alwaysLights = ["y"];
+  h.store.set("ssrWetMul", 1.4);   // rebuild:true in the fixture registry
+  assert.equal(tr._lights, null, "first rebuild nulls the lamp cache");
+  tr._lights = ["x"]; tr._alwaysLights = ["y"];
+  h.store.set("ssrWetMul", 1.4);
+  assert.deepEqual([tr._lights, tr._alwaysLights], [["x"], ["y"]], "same value again leaves caches");
+  h.state.wetRoad = true; h.state.rainInits = 0;
+  h.store.set("rainCount", 900);
+  assert.equal(h.state.rainInits, 1);
+  h.store.set("rainCount", 900);
+  assert.equal(h.state.rainInits, 1, "same rainCount again does not re-seed");
 });
 
 test("tuned() counts the condition's overrides and reset() clears them (and the global layer)", () => {
