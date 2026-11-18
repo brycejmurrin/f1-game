@@ -26,7 +26,8 @@
 //   429 with Retry-After, 30 fires/h per task, no idempotency key) and https://code.claude.com/docs/en/routines
 //   (read 2026-11-03: the <routine-fire-payload> wrapper, skills committed to the repo load in the fired session).
 // The claim comment (`dispatch: launched claude:<title> for #<n> at <iso> as <session id>`) is posted ONLY after a 200,
-// so a refused fire leaves no phantom claim; a non-200 prints `= fire failed <status>` and posts nothing. Without
+// so a refused fire leaves no phantom claim; a non-200 prints `= fire failed <status>` and posts nothing (a 200 whose
+// body names no session is still a fired worker: it is claimed without the session id). Without
 // WORKER_FIRE_URL / WORKER_FIRE_TOKEN, --apply still writes labels and the Board and prints `= fire skipped: …` per launch.
 // Without `--fire`, --apply prints `LAUNCH <address>` lines and fires nothing (the 24 h plan-only soak, plan §7 Wave 1A).
 //
@@ -646,12 +647,14 @@ export async function applyPlan(plan, { api = githubApi, config, log = console.l
     if (!fire) { log("= fire skipped: --fire not given"); continue; }
     const r = await fireWorker(l.address, { env, fetchImpl });
     if (r.skipped) { log(`= fire skipped: ${r.skipped}`); continue; }
-    if (r.status !== 200 || !r.session) { log(`= fire failed ${r.status}${r.error ? ` ${r.error}` : ""}${r.retryAfter ? ` (retry-after ${r.retryAfter}s)` : ""}`); continue; }
+    if (r.status !== 200) { log(`= fire failed ${r.status}${r.error ? ` ${r.error}` : ""}${r.retryAfter ? ` (retry-after ${r.retryAfter}s)` : ""}`); continue; }
     fired++;
+    // A 200 is a fired worker even when the body names no session: claim it anyway (LAUNCH_RE takes a claim without
+    // one), or the caps would not count it and the next cycle would launch the same address again.
     const body = claimComment(l, now, r.session);
     post(`issues/${l.on}/comments`, { body }); writes++;
-    log(`= launched ${l.address} as ${r.session}${r.url ? ` ${r.url}` : ""}`);
-    if (l.kind === "continue") {   // adopt for the worker: its label DELETE is classifier-denied
+    log(r.session ? `= launched ${l.address} as ${r.session}${r.url ? ` ${r.url}` : ""}` : `= launched ${l.address}: ${r.error} — claimed without a session id`);
+    if (l.kind === "continue" && r.session) {   // adopt for the worker: its label DELETE is classifier-denied
       const d = api(`issues/${l.on}/labels/needs-owner`, { method: "DELETE" });
       log(d.error ? `dispatch: needs-owner not removed from #${l.on}: ${d.error}` : `= needs-owner removed from #${l.on}`);
       post(`issues/${l.on}/comments`, { body: `adopts PR #${l.on} — claude:${r.session} (posted by the dispatcher when it launched the takeover)` }); writes++;

@@ -573,3 +573,17 @@ test("rule 1: a claimed issue with no open PR, no live launch and no comment for
   assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9)] })], [pr(20, { body: "Closes #10" })]), [], "an open PR that closes it owns it");
   assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9), launched(10, 1)] })]), [], "a live launch claim");
 });
+
+test("a fire that returns 200 without a session id is still claimed (no session in the comment), so the caps count it and the next cycle does not relaunch", async () => {
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])] }), cfg(), NOW);
+  const writes = [], out = [];
+  const api = (path, o) => { if (o?.method || o?.body) writes.push(`${o.method || "POST"} ${path} ${o.body?.body || ""}`.trim()); return { json: path.endsWith("/comments") && !o ? [] : { state: "open" } }; };
+  const noSession = async () => ({ status: 200, json: async () => ({ type: "routine_fire" }), headers: { get: () => null } });
+  const r = await applyPlan(p, { api, config: cfg(), log: (s) => out.push(s), now: NOW, fire: true, env: { WORKER_FIRE_URL: "https://x/fire", WORKER_FIRE_TOKEN: "t" }, fetchImpl: noSession });
+  assert.equal(r.fired, 1);
+  const claim = `dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`;
+  assert.ok(writes.includes(`POST issues/10/comments ${claim}`), writes.join("\n"));
+  assert.ok(out.includes("= launched ISSUE 10: 200 without a claude_code_session_id — claimed without a session id"), out.join("\n"));
+  const next = planDispatch(state({ issues: [board(), issue(10, ["ready"], { comments: [{ author: "github-actions[bot]", body: claim, created_at: ISO }] })] }), cfg(), NOW);
+  assert.equal(next.launches.length, 0, "the claim without a session is a live claim");
+});
