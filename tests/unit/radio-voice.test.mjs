@@ -1458,3 +1458,43 @@ test("say() uses the ladder voice on the iOS list (race control is not Aaron)", 
   const spoke = synth.calls.find((c) => c.m === "speak");
   assert.equal(spoke.voice && spoke.voice.name, "Daniel");
 });
+
+// SOUND OFF fetches no voice pack. A muted player with TEAM RADIO on used to download the engineer, coach and
+// spotter packs (~9.4 MB) at every race entry for lines plan() refuses as master-off. G.soundOn is the stored SOUND
+// setting, never the AudioContext's unlock state: a first race before the first tap still fetches.
+function packRig({ soundOn = true, state = "menu", phase = null } = {}) {
+  const staged = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: () => 0, clearTimeout() {} });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  ctx.VoicePack = { create: () => ({ stop() {}, remaining: () => 0, ensure() {}, raceLoadGate() {},
+    ensureStaged: (tiers) => staged.push(JSON.stringify(tiers)) }) };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  const G = { soundOn, state, loadingScreen: { phase: () => phase }, store: { get: (k, d) => (k === "radioVoice" ? true : d), set() {} } };
+  return { v: vm.runInContext("RadioVoice", ctx).create(G), G, staged };
+}
+test("SOUND off: race entry asks for no voice pack; SOUND on mid-race asks once, with the never-muted request", () => {
+  const live = packRig();
+  live.v.prepare();
+  assert.equal(live.staged.length, 1, "sound on: race entry stages the packs as before");
+  assert.ok(JSON.parse(live.staged[0])[0].length > 0, "the engineer pack is in the first tier");
+
+  const muted = packRig({ soundOn: false });
+  muted.v.prepare();
+  muted.v.setPackOn(true);
+  assert.deepEqual(muted.staged, [], "sound off: nothing is fetched at race entry or on a radio toggle");
+  muted.G.soundOn = true;
+  muted.v.soundOn();
+  assert.deepEqual(muted.staged, [], "back on in the menu: the next race entry fetches, not the toggle");
+  muted.G.state = "race";
+  muted.v.soundOn();
+  assert.deepEqual(muted.staged, live.staged, "back on in a race: one request, the same tiers a never-muted entry sends");
+});
+test("SOUND back on under the loading cover fetches the packs the muted entry skipped", () => {
+  const r = packRig({ soundOn: false, phase: "build" });
+  r.v.prepare();
+  r.G.soundOn = true;
+  r.v.soundOn();
+  assert.equal(r.staged.length, 1);
+});

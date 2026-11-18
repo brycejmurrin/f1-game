@@ -347,7 +347,7 @@ var RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, flushDecoded: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
+      setPackOn: () => {}, packOn: () => false, prepare: () => {}, soundOn: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
       announcerPackOn: () => false,
@@ -690,7 +690,9 @@ var RadioVoice = (function () {
       gatePoll = setTimeout(poll, 800);
     }
     function ensureVoices() {
-      if (!pack) return;
+      // G.soundOn is the stored SOUND setting (game.js `sound`), not the AudioContext's unlock state: with it off no
+      // line can play (plan() answers master-off), so the packs (4-9 MB a race) are not fetched until it is back on.
+      if (!pack || !G.soundOn) return;
       const [lap1, rest] = packsInUse();
       if (pack.ensureStaged) pack.ensureStaged([lap1, rest]);
       else for (const id of lap1.concat(rest)) pack.ensure(id);
@@ -1043,6 +1045,8 @@ var RadioVoice = (function () {
       },
       /** Fetch lap-1 recorded voices for race entry; announcer waits until race/count. */
       prepare() { armRaceLoadGate(); ensureVoices(); },
+      /** SOUND came back on (AudioPanel): fetch what a muted race entry skipped. In the menu the next prepare() does it. */
+      soundOn() { const ls = G.loadingScreen; if (G.state === "race" || G.state === "count" || (ls && ls.phase && ls.phase())) ensureVoices(); },
       /** Open the announcer gate early (tests / idle prefetch after lights-out). */
       releaseRaceLoadGate: clearRaceLoadGate,
       packOn: () => !!(pack && packOn),
