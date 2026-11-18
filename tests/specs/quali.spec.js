@@ -471,16 +471,22 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract race settings + q
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim()), tag + "the shipped phone 70 %").toBe("0.7");
     await page.locator("#mb-season").click();
     await page.locator("#sel-go").click();
+    // CI 2026-11-18 (run 44248921129): in A the first read right after the open saw data-density compact with the
+    // head still at its normal 29.6 painted px; the sheet settles a frame later (23.4 measured 500 ms after the open).
+    // So the head is polled until it settles; the bound is the compact head, not a widened one.
+    const settled = async (name, id) => {
+      await expect.poll(async () => (await page.evaluate(sheetCell, id)).headPaintedH, { message: tag + name + ": the compact head (measured 23.4; normal paints 29.6)", timeout: 5_000 }).toBeLessThan(26);
+      return page.evaluate(sheetCell, id);
+    };
     await expect(page.locator("#race-settings")).toBeVisible();
-    const race = await page.evaluate(sheetCell, "race-settings");
+    const race = await settled("race settings", "race-settings");
     await page.locator("#rs-go").click();
     await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
-    const quali = await page.evaluate(sheetCell, "quali");
+    const quali = await settled("qualifying", "quali");
     for (const [name, cell] of [["race settings", race], ["qualifying", quali]]) {
       expect(cell.density, tag + name + " is compact on a short touch screen at every UI SIZE").toBe("compact");
       expect(cell.compactAt, tag + name + ": the short-touch gate holds it").toBe("99999px");
       expect(cell.footOnScreen, tag + name + ": the foot is on screen").toBe(true);
-      expect(cell.headPaintedH, tag + name + ": the compact head (measured 23.4; normal paints 29.6)").toBeLessThan(26);
     }
   });
 });
