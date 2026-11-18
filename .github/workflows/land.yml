@@ -911,5 +911,6 @@ jobs:
           echo "::add-mask::$GIT_CONFIG_VALUE_0"
           code=0; out=$(node tools/ci/merge-train.mjs --build 2>&1) || code=$?
           echo "$out"
+          # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
           printf '### merge train\n\n```\n%s\n```\n' "$out" >> "$GITHUB_STEP_SUMMARY"
           exit "$code"
