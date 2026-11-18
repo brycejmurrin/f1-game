@@ -35,13 +35,15 @@
     // (`node tools/gen/bake-elevation.mjs hungaroring`). Three authored cosine
     // bumps left ~59% of the lap dead-flat between the T1 plunge and mid-sector
     // crest — stair-step basin. hasRealElevation(id) ignores elevations keys.
+    // bankZones: { turn } rows anchor on the curated racing-frame apex (turns[]);
+    // five of the six { frac } rows built a corner early (#5652, corner-frames.cjs).
     bankZones: [
-      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T2 downhill right
-      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T3 exit / T4 approach
-      { frac: 0.3474, angleDeg: 6.0, widthM: 90 },    // T4 — the banked left
-      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep (near T7)
-      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T13
-      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right (after T14)
+      { turn: 2,  angleDeg: 3.0, widthM: 100 },       // T2 downhill right
+      { turn: 3,  angleDeg: 3.5, widthM: 150 },       // T3 exit / T4 approach (built at T3 on base too)
+      { turn: 4,  angleDeg: 6.0, widthM: 90 },        // T4 — the banked left
+      { turn: 7,  angleDeg: 3.0, widthM: 170 },       // hilltop sweep (near T7)
+      { turn: 13, angleDeg: 3.0, widthM: 70 },        // T13
+      { turn: 14, angleDeg: 3.5, widthM: 190 },       // T14 — the final long right
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

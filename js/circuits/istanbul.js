@@ -61,6 +61,10 @@
       { frac: 0.050, angleDeg: 4.0, widthM: 130 },   // Turn 1
       // Turn 8: the long left sweeper, curvature peaks 0.438-0.476 (turns[6..7], both LEFT).
       // `turn: 6` resolved to turns[5] = 0.3659, a RIGHT-hander (survey 2026-10-15).
+      // Real Turn 8 (def T7 0.4384 .. T8 0.4764, one four-apex left): ONE zone over
+      // the whole corner. corner-frames.cjs lists it (98 m from either apex: it
+      // peaks between them, by design); splitting it per apex left ~80 m flat
+      // mid-corner (#5652), so the row stays in the baseline.
       { frac: 0.457, angleDeg: 7.0, widthM: 300 },
       { turn: 11, angleDeg: 3.5, widthM: 130 },   // Turn 12 (turns[10] = 0.8819, left)
     ],

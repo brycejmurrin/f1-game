@@ -29,6 +29,7 @@
       // The old last table entry was T14, with T15 missing; keep these
       // fixtures at that physical bend when the numbering table is corrected.
       const FC = wrapFrac(def.turns[13] - shift);
+      const T4F = wrapFrac(def.turns[3] - shift);
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -588,12 +589,15 @@
       lightBank(K(0.25), -1, 34);
       lightBank(K(0.27),  1, 34);
       // T4 broadcast vantage — the second of the four hero cameraTower spots.
-      cameraTower(K(0.235), -1, 40, { h: 20 });
-      tyreWall(0.225, 0.255, 1, 4, TYRE_CAP);
-      fence(0.22, 0.29, 1, 6, 3.2, [0.70, 0.72, 0.76]);
-      billboard(K(0.23), -1, 11, 12, 4, [0.85, 0.12, 0.12]);
-      billboard(K(0.27),  1, 11, 12, 4, [0.90, 0.55, 0.05]);
-      marshalPost(K(0.24), -1, 24);
+      // Keyed off T4F (def.turns[3]): the raw 0.22-0.29 this replaced built at
+      // racing 0.48-0.55, on T10, with the tyre wall on its inside. T4 is a
+      // RIGHT, so its run-off / tyre wall / catch fence stand on the LEFT (-1).
+      cameraTower(K(T4F - 0.006), -1, 46, { h: 20 });
+      tyreWall(wrap01(T4F - 0.004), wrap01(T4F + 0.012), -1, 4, TYRE_CAP);
+      fence(wrap01(T4F - 0.010), wrap01(T4F + 0.030), -1, 6, 3.2, [0.70, 0.72, 0.76]);
+      billboard(K(T4F - 0.012), 1, 11, 12, 4, [0.85, 0.12, 0.12]);
+      billboard(K(T4F + 0.020), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
+      marshalPost(K(T4F + 0.004), -1, 24);
 
       // Open desert left + grandstand right. Sparse dry scrub only — no green palms.
       for (let i = 0; i < 8; i++) {
@@ -926,13 +930,14 @@
         out._mat = 0;
       };
 
-      // Pit-straight wind towers, past the pit complex (not the T3-T4 leg).
+      // Pit-straight wind towers, past the pit complex and round the final
+      // corner (an older key put them on the infield leg after the first hairpin).
       windTower(K(SF + 0.060), -1, 58, 16);
       windTower(K(SF + 0.072),  1, 64, 14);
       windTower(K(0.63),  -1, 56, 15);
       windTower(K(0.80),   1, 58, 14);
-      // F1 Village marquee — back straight hospitality terrace only (T4 outside
-      // is open desert beyond the University stand; 0.26 marquee sat in runoff).
+      // F1 Village marquee — pit-straight hospitality terrace, paddock side
+      // (racing ~0.06). A 0.26 marquee sat in runoff beyond the University stand.
       marquee(K(0.80),  1, 40, 12, 44);
       // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
