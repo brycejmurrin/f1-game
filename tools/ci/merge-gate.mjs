@@ -973,7 +973,10 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
   if (!Number.isInteger(pr) || pr < 1) { log("= merge-gate error — --pr <n> is required"); return 1; }
-  if (argv.includes("--max-behind")) { log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03 (header of this file)"); return 1; }
+  if (argv.includes("--max-behind")) {
+    log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)");
+    return 1;
+  }
   const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner });
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
