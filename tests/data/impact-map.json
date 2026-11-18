@@ -15970,6 +15970,9 @@
       "disposeShared": [
         "tests/unit/tlx-r187-contracts.test.mjs"
       ],
+      "fineCells": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "free": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",

@@ -73,9 +73,26 @@ applies. It removes geometry the mirror draws today, so it changes mirror pixels
 |---|---|---|
 | `visor-optics.js`: do not read `clientWidth` on a frame that returns at visor OFF; cache the size behind a ResizeObserver | −1.5% of the helmet frame's JS, no pixel change | the file is in open PR #5296's diff |
 | HUD layout reads once per fit, not per frame | up to −4% | not rendering: HUD owner |
-| mirror: per-cell clip to the 120 m cap | Monaco mirror 96 k triangles → under half (to be counted) | changes mirror pixels: needs Bryce |
+| mirror: per-cell clip to the cap | **landed, see below** | — |
 | mirror every 2nd frame on the phone rung | about −7% of the helmet frame's JS | visible mirror cadence: needs Bryce |
 | skip three's per-draw revalidation for unchanged render objects | the largest single lever (row 3) | tried as vendor patches 7 and 8 and reverted for a black screen (PERF-FINDINGS §2af); needs a device arm |
 | fewer post passes (fold bright into the first down-sample) | −1 pass and submit of 15 | not bit-identical: needs a pixel A/B and Bryce |
 
-No change in this list is both free of a visible difference and inside this lane's paths, so none was landed.
+## Landed: the mirror culls cells, not merged blocks
+
+Bryce delegated the choice in the session ("You make decisions for me", 2026-11-18); the pick was the clip.
+`tlx-chunked.js fineCells` gives a chunked record as its cells (each index a view of its block's index: no copy, no
+GPU buffer of its own) and `tlx.js _drawChunked` culls that list for the mirror (merge slot 1) whenever the pass has
+a draw-distance cap. The main and shadow passes keep the merged blocks. There is no separate switch (a new hand-set
+key trips the writer-less key ratchet): `apex26.tlxChunkMerge=0`, a draw per chunk, turns it off with the merge.
+
+| Monaco, parked, phone tier, TLX WebGPU (`pass-census --park --mobile --webgpu`) | mirror draws | mirror triangles | main triangles |
+|---|---:|---:|---:|
+| before (deploy tip, and the change with a since-removed off pin) | 10 | 96,079 | 142,205 |
+| after | 10 | 25,243 | 142,205 |
+
+What changes on screen: world scenery in the mirror now ends at the mirror's own cap (120 m on a phone, 280 m on
+desktop) instead of at the edge of the 3×3-cell block that crossed it. Cars, the road and instanced props are
+untouched. Not measured: GPU time, the JS time of the mirror pass after the change, and no before/after picture was
+taken (software adapter). Gate: `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, plain and with
+`apex26.tlxForceHw=chunked`: PASS, `gpuErrors` 0.
