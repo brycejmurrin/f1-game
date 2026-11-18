@@ -32,7 +32,7 @@ and focus/rotation checkpoints. Show individual original captures when reporting
    clipped/offscreen/docOverflowX/tinyTaps/underHardware/starved/error finding; a skipped cell is listed
    as unmeasured, never a pass.
 4. Add `fit-audit.mjs --scale=` for type/spacing floors (no exit code); pixel identity is the CI `baseline`
-   group (on the PR, or `node tools/ci/remote-group.mjs baseline` on the pushed branch; AGENTS.md rule 5).
+   group (the nightly `baseline-trial` job, not a PR run; a whole-group dispatch is Bryce's opt-in; AGENTS.md rule 5).
 5. Record baseline path, scope and the `= diff` line.
 
 ## Capture identity

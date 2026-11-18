@@ -66,7 +66,7 @@ Commands:
 ```sh
 node tools/car/career-economy.mjs --help     # boots Chromium: session only (AGENTS.md rule 10)
 node tools/ci/pick-tests.mjs                 # the groups this diff needs (career specs: `modes`)
-node tools/ci/remote-group.mjs modes         # the browser specs (package.json `test:modes`) on the pushed branch
+# the browser specs (`test:modes`) run in the PR's own CI; a whole group (remote-group.mjs) is Bryce's opt-in
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
 node --test tests/unit/season-cal.test.mjs     # VM: the calendar/format gates (career neutral)
 node --test tests/unit/career-settle.test.mjs  # VM: settleRound, mid-weekend `stage`
