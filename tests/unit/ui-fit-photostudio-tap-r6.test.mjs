@@ -34,3 +34,12 @@ test("r6 carve stays Photo Studio #ps-* (no foreign selectors)", () => {
   assert.doesNotMatch(m[0], /#lighting|#camtune|#ct-|#lt-|title|#hud/,
     "must not retarget tuner / title / HUD selectors");
 });
+
+test("portrait studio: preview-band pad, guide, overflow and --bg (393×852 hunt)", () => {
+  // One pin for the whole portrait carve — assertPinsAll is at its ceiling.
+  assert.match(
+    css,
+    /body\.photo-studio-open\s*\{\s*background:\s*var\(--bg\)\s*;\s*\}[\s\S]*@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*?#photo-studio\s*\{[^}]*--ps-preview-h:\s*calc\(100svh\s*-\s*42svh\s*-\s*var\(--safe-b\)\)[^}]*padding-top:\s*var\(--ps-preview-h\)[^}]*padding-bottom:\s*0[\s\S]*?#ps-guide\s*\{[^}]*top:\s*calc\(var\(--ps-preview-h\)\s*\/\s*2\)[\s\S]*?#ps-panel\s*\{[^}]*overflow:\s*visible[\s\S]*?#ps-body\s*\{[^}]*overscroll-behavior:\s*contain/,
+    "portrait: --bg letterbox, pad = 100svh-42svh-safe-b, guide in preview, panel overflow visible, body overscroll contained",
+  );
+});
