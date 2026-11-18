@@ -106,7 +106,7 @@ const CarFields = (function () {
       "steerVis", "collideT", "xVis", "rPrevX", "accSm", "corridorAccel", "hitSev", "rPrevYawVis", "aiHead", "aiFam",
       "contactT", "kerbGripSm", "kerbCueT", "towing", "wake", "passT", "passCool", "passFailT", "errT", "pressT",
       "queueT", "trailT", "_trYT", "calm", "sbsT", "runT", "tyreWearF", "tyreWearR", "tyreTs", "tyreTb", "otT", "otE", "rescueT",
-      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain"]],
+      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain", "laneClr"]],
     ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
       ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
       "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",

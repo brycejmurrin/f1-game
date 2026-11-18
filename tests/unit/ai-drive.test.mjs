@@ -349,13 +349,20 @@ test("aggression raises otFireRate and shortens queue patience (fire half)", () 
   assert.ok(A.passHold(hot.traits) > A.passHold(base.traits));
 });
 
-test("optimism raises brakeTarget entry speed (late markers)", () => {
+test("optimism raises brakeTarget entry speed when attacking, and only then (#5330)", () => {
   const samples = [{ d: 50, k: 0.018, bank: 0 }];
-  const neut = A.brakeTarget({ traits: { ...mid, optimism: 0 }, samples, latMax: 22, brake: 22, grip: 1 });
-  const opt = A.brakeTarget({ traits: { ...mid, optimism: 1 }, samples, latMax: 22, brake: 22, grip: 1 });
-  const shy = A.brakeTarget({ traits: { ...mid, optimism: -1 }, samples, latMax: 22, brake: 22, grip: 1 });
-  assert.ok(opt > neut);
-  assert.ok(neut > shy);
+  // Attacking (a closing blocker inside 16 m) with no room, so the craft late-brake stays out of it.
+  const atk = { samples, latMax: 22, brake: 22, grip: 1, blocker: true, blockerGap: 8, speed: 40, blockerSpeed: 40, roomL: 0, roomR: 0 };
+  const neut = A.brakeTarget({ ...atk, traits: { ...mid, optimism: 0 } });
+  const opt = A.brakeTarget({ ...atk, traits: { ...mid, optimism: 1 } });
+  const shy = A.brakeTarget({ ...atk, traits: { ...mid, optimism: -1 } });
+  assert.equal(opt / neut, 1.012);
+  assert.equal(shy / neut, 0.988);
+  // Solo, optimism is not a pace term: team-mates on identical cars lap alike.
+  const solo = { samples, latMax: 22, brake: 22, grip: 1 };
+  const soloNeut = A.brakeTarget({ ...solo, traits: { ...mid, optimism: 0 } });
+  assert.equal(A.brakeTarget({ ...solo, traits: { ...mid, optimism: 1 } }), soloNeut);
+  assert.equal(A.brakeTarget({ ...solo, traits: { ...mid, optimism: -1 } }), soloNeut);
 });
 
 test("traits defaults style axes to neutral", () => {
@@ -789,8 +796,42 @@ test("factory wing and hold change the AI corner limit; midpoint stays put", () 
   assert.equal(A.brakeTarget({ ...base, aeroLoad: 0.5 }), midLim);
   assert.ok(A.brakeTarget({ ...base, aeroLoad: 1 }) > midLim, "ground-effect carries more");
   assert.ok(A.brakeTarget({ ...base, aeroLoad: 0 }) < midLim, "low-drag brakes earlier");
+  // #5330: house-style hold no longer costs corner speed (it grew with the top teams' stats).
   const holdTeam = { stats: { speed: 80, accel: 80, cornering: 96, braking: 94 } };
-  assert.ok(A.brakeTarget({ ...base, team: holdTeam }) < midLim, "hold cars brake earlier");
+  assert.equal(A.brakeTarget({ ...base, team: holdTeam }), midLim);
+});
+
+test("AI pace calibration terms (#5330): the wing's drag, the scripted trim, bounded ERS, the clear-road line", () => {
+  // Drag is the X-mode gain inverted, normalised at mid load; the constants mirror PhysicsConsts.
+  assert.equal(A.X_GAIN_LO, 0.055);
+  assert.equal(A.X_GAIN_HI, 0.155);
+  assert.equal(A.aeroDragMul(0.5), 1);
+  assert.equal(A.aeroDragMul(undefined), 1);
+  assert.equal(A.aeroDragMul(1), 1.105 / 1.155);
+  assert.equal(A.aeroDragMul(0), 1.105 / 1.055);
+  assert.equal(A.aeroDragMul(2), A.aeroDragMul(1), "clamped to the wing range");
+  assert.equal(A.AERO_LOAD_GRIP, 0.05);
+  assert.equal(A.lateralScale(0, 1, 1, 1, 72), 1.025);
+  assert.equal(A.lateralScale(0, 0, 1, 1, 72), 0.975);
+  // Scripted trim: 1 at the mid-field reference, PACE_GAIN x the relative scripted pace either side.
+  assert.equal(A.PACE_GAIN, 2.5);
+  assert.equal(A.PACE_REF, 0.9265);
+  assert.equal(A.paceTrim(A.PACE_REF), 1);
+  assert.equal(A.paceTrim(A.PACE_REF * 1.01), 1 + 2.5 * (A.PACE_REF * 1.01 / A.PACE_REF - 1));
+  assert.equal(A.paceTrim(0), 1);
+  assert.equal(A.paceTrim(NaN), 1);
+  // ERS: a factory axis pulled to within AI_ERS_SPAN of the midpoint.
+  assert.equal(A.AI_ERS_SPAN, 0.3);
+  assert.equal(A.aiErs(0), 0.35);
+  assert.equal(A.aiErs(1), 0.65);
+  assert.equal(A.aiErs(0.5), 0.5);
+  assert.equal(A.aiErs(undefined), 0.5);
+  // Clear road: the weight rises slowly toward 1 and falls fast back to 0, from either end.
+  const up = A.laneClear(0, true, 1), down = A.laneClear(1, false, 1);
+  assert.equal(up, 1 - Math.exp(-0.5));
+  assert.equal(down, 1 - (1 - Math.exp(-2.5)));
+  assert.equal(A.laneClear(undefined, false, 1), 0);
+  assert.equal(A.laneClear(1, true, 1), 1);
 });
 
 test("ERS map and wantX: harvest banks, attack opens X", () => {
@@ -1851,7 +1892,7 @@ test("RaceControl.holdCap finds the car by its rank slot, with a scan fallback (
 function brakeTargetOracle(samples, ctx) {
   const skill = ctx.traits.skill, diffC = ctx.diffCorner || 1, brake = ctx.brake || 22, grip = ctx.grip || 1;
   const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
-  const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
+  const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * A.AERO_LOAD_GRIP);
   const scrub = 2 * brake * 0.85;
   const pace = ctx.pace === undefined ? 1 : ctx.pace, vmax = ctx.vmax === undefined ? 72 : ctx.vmax;
   let vLimSq = Infinity;

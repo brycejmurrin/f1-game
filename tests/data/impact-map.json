@@ -11869,6 +11869,12 @@
       "adaptLane": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "aeroDragMul": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "aiErs": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "aiRescueDelay": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11998,6 +12004,9 @@
       "isMate": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "laneClear": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "laneFollow": [
         "tests/unit/ai-strategy.test.mjs"
       ],
@@ -12085,6 +12094,9 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "paceSample": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "paceTrim": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "passCooldown": [
