@@ -5,8 +5,10 @@
    unfinished, below STOP_V, inside the road's half-width and out of the pit lane
    — retired, crashed or stalled, human or AI alike — as plain { id, frac, sector }
    rows; RaceControl's machine owns the timers (yellow, then VSC, then marshalled).
-   retireCar pushes a retirement past the verge where there is room, so most
-   retirements are off the road and stay GREEN. Same "stopped" reading as
+   retireCar pushes a retirement past the verge where there is room; such a car,
+   RETIRED and parked in the runoff (past the half-width, inside the barrier), is
+   an `off` row: a local YELLOW only, never a VSC (#5784 decision B, the FIA
+   single waved yellow for a hazard beside the track). Same "stopped" reading as
    AiDrive.stoppedHazard (PR #5336): the box and the pit lane are not the road.
    LAZY_RACE_SESSION: RaceControl's adapter typeof-guards it. */
 var StoppedCars = (function () {
@@ -22,17 +24,21 @@ var StoppedCars = (function () {
       const c = cars[i];
       if (!c || c.finished || !(Math.abs(c.speed || 0) < STOP_V) || !Number.isFinite(c.s)) continue;
       Tracks.sample(track, c.s, smp);
-      if (Math.abs(c.x || 0) > (smp.hw || 6)) continue;   // off the racing surface
-      if (c.inPit || c.inPitLane || (Tracks.inPitLane && Tracks.inPitLane(track, c.s, c.x || 0))) continue;
+      const x = c.x || 0, ax = Math.abs(x);
+      if (c.inPit || c.inPitLane || (Tracks.inPitLane && Tracks.inPitLane(track, c.s, x))) continue;
+      // Off the racing surface: only a retirement in the runoff (inside the barrier) counts.
+      const off = ax > (smp.hw || 6) ? 1 : 0;
+      if (off && (!c.retired || (Tracks.wallAt && ax > Tracks.wallAt(track, c.s, x >= 0 ? 1 : -1)))) continue;
       const frac = (((c.s / track.total) % 1) + 1) % 1;
-      out.push({ id: c.num != null ? c.num : i, frac: +frac.toFixed(4), sector: frac < s0 ? 0 : frac < s1 ? 1 : 2 });
+      out.push({ id: c.num != null ? c.num : i, frac: +frac.toFixed(4), sector: frac < s0 ? 0 : frac < s1 ? 1 : 2, off });
     }
     return out;
   }
   // The timers: seconds each car id has stood on the road. picture() returns
   // null, or the flag it asks for — a local YELLOW in the sector of the car
   // stopped longest once one has stood STOP_DWELL s (a spin that drives off
-  // flies nothing), a VSC once one has stood STOP_VSC s, and nothing for a car
+  // flies nothing), a VSC once one ON the road has stood STOP_VSC s (a runoff
+  // row never escalates: no marshal crosses the track for it), and nothing for a car
   // past STOP_RECOVER s: the marshals have had it, and a retirement that cannot
   // be pushed clear (a street circuit's walls) must not neutralise the race forever.
   // A car counts only once it has left where the last reset found it (MOVED_M of
@@ -58,7 +64,7 @@ var StoppedCars = (function () {
         stopT.set(r.id, t);
         if (t < STOP_DWELL || t >= STOP_RECOVER) continue;
         n++;
-        if (t >= STOP_VSC) vsc++;
+        if (t >= STOP_VSC && !r.off) vsc++;
         if (!yellow || t > yellow.t) yellow = { t, sector: r.sector, frac: r.frac };
       }
       for (const id of [...stopT.keys()]) if (!seen.has(id)) stopT.delete(id);
