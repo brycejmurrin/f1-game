@@ -18,6 +18,8 @@
 import { test, expect } from "@playwright/test";
 import { openSession, performAction, matchesOracle } from "../../tools/ui/explorer/browser.mjs";
 import { replayFaultScenario } from "../../tools/ui/explorer/fault-schedule.mjs";
+// #5542: a route/unroute that stalls names itself (annotation + attachment) while still pending.
+import { routeStallReporter } from "../helpers/stall-diag.js";
 
 test("saved lazy fault schedules continue and reject Monaco hydration after leaving the picker", async ({ browser, baseURL }, testInfo) => {
   test.setTimeout(60000);
@@ -39,7 +41,7 @@ test("saved lazy fault schedules continue and reject Monaco hydration after leav
           expect(await current.page.evaluate(() => Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco")))).toBe(false);
         }
       };
-      const evidence = await replayFaultScenario(session, scenario, { performAction: actionAdapter, matchesOracle });
+      const evidence = await replayFaultScenario(session, scenario, { performAction: actionAdapter, matchesOracle, onSlowCall: routeStallReporter(testInfo, session.page) });
       // Terminal network transfer is not proof that the application consumed it.
       await session.page.waitForFunction(rejected => Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco"))
         || rejected && Log.records({ ns: "track", level: "warn" }).some(record => record.msg === "circuit payload failed to load: monaco"),
@@ -70,7 +72,7 @@ test("a saved lazy fault schedule cannot pass when its request never occurs", as
   ] };
   let evidence;
   try {
-    await expect(replayFaultScenario(session, scenario, { performAction, matchesOracle }).catch(error => {
+    await expect(replayFaultScenario(session, scenario, { performAction, matchesOracle, onSlowCall: routeStallReporter(testInfo, session.page) }).catch(error => {
       evidence = error.faultEvidence; throw error;
     })).rejects.toThrow(/not observed/);
     expect(evidence.events.some(e => e.state === "observed")).toBe(false);

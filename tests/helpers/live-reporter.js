@@ -102,6 +102,10 @@ class LiveReporter {
     if (mark === "x FAIL  ") { this.failed++; this.failures.push(this.name(test)); }
     if (result.status === "skipped") this.skipped++;
     this.write(`[${ts()}] ${mark} ${this.done}/${this.total} ${this.name(test)} (${dur}s)`);
+    // A slow boot or route call (tests/helpers/stall-diag.js, #5599/#5542) left one line: print it, pass or fail.
+    for (const a of (result.annotations || test.annotations || [])) {
+      if (a.type === "stall-diag" && a.description) this.write(`           ${a.description.slice(0, 600)}`);
+    }
     if (result.status !== "passed" && result.status !== "skipped" && result.error) {
       // The FIRST failed attempt's message is what a quarantine row's
       // `signature` is matched on (flaky-policy.mjs rowCovers).
