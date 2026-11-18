@@ -1429,10 +1429,11 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
       // The cluster is budgeted at its SHIPPED size: a smaller HUD SIZE used to GROW the steer pad (#5206).
-      // capKeepS also leaves a HUD SIZE above 100 % its cluster: BUTTON SIZE's slider stops there.
+      // capKeepS also leaves a HUD SIZE above 100 % its cluster (at the gear row's kept size, #5256 D: else BUTTON SIZE's
+      // first move budgeted the pinned HUD SIZE and cut its own range, 194 -> 174.25 % at cell A): the slider stops there.
       const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
       capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
-      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
+      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot, +root.style.getPropertyValue("--hud-bot-keep") || 9)) - 1)) / gS.w : Infinity));
     } else capDockS = capKeepS = capDock;
     const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));

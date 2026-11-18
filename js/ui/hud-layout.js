@@ -809,6 +809,20 @@ const HudLayout = (function () {
     return { left: Math.min(r.left, w.left), top: Math.min(r.top, w.top), right: Math.max(r.right, w.right), bottom: Math.max(r.bottom, w.bottom) };
   }
   const KEEP_CTRL = ".touchbtn, .steerbtn, .shiftbtn, #btn-cam";   // + #pausebtn by id
+  /** The painted rects keepUser keeps a saved piece off (ARRANGE's Bring Into View uses the same list). */
+  function ctrlRects() {
+    const out = [], n = Array.from(doc.querySelectorAll(KEEP_CTRL));
+    if (doc.getElementById) n.push(doc.getElementById("pausebtn"));
+    for (let i = 0; i < n.length; i++) {
+      const c = n[i];
+      if (!c || c.hidden || (c.classList && c.classList.contains("touchbtn") && has("desktop"))) continue;
+      const cs = typeof getComputedStyle === "function" ? getComputedStyle(c) : null;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
+      const b = c.getBoundingClientRect();
+      if (b.width && b.height) out.push(b);
+    }
+    return out;
+  }
   function keepUser(W = window.innerWidth, H = window.innerHeight, only) {
     if (!doc || !doc.querySelectorAll) return;
     const editing = !!(doc.body && doc.body.hasAttribute && doc.body.hasAttribute("data-hud-arrange"));
@@ -823,19 +837,7 @@ const HudLayout = (function () {
       if (!(area > 0)) continue;
       // PARKED is a choice: a piece saved mostly off the screen stays there (unrestricted placement, hud-layout.spec).
       if ((Math.max(0, Math.min(r.right, W) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0))) * 2 < area) continue;
-      if (!obs) {
-        obs = [];
-        const n = Array.from(doc.querySelectorAll(KEEP_CTRL));
-        if (doc.getElementById) n.push(doc.getElementById("pausebtn"));
-        for (let i = 0; i < n.length; i++) {
-          const c = n[i];
-          if (!c || c.hidden || (c.classList && c.classList.contains("touchbtn") && has("desktop"))) continue;
-          const cs = typeof getComputedStyle === "function" ? getComputedStyle(c) : null;
-          if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
-          const b = c.getBoundingClientRect();
-          if (b.width && b.height) obs.push(b);
-        }
-      }
+      if (!obs) obs = ctrlRects();
       const k = keepClear(r, screenBounds(W, H, 0), obs);   // the safe area itself: no further than needed
       if (!k.dx && !k.dy) continue;
       el.style.setProperty("--hud-clear-x", k.dx + "px"); el.style.setProperty("--hud-clear-y", k.dy + "px");
@@ -1468,7 +1470,7 @@ const HudLayout = (function () {
     get, set, commit, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
-    keepClear, maxRect, keepUser,
+    keepClear, maxRect, keepUser, ctrlRects,
   };
 })();
 Object.freeze(HudLayout);
