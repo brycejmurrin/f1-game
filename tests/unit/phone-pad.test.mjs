@@ -2405,7 +2405,7 @@ test("#5739 row 4: a pad that SUSPENDS (page going away) is re-hosted on the sam
   assert.equal(h.ctl.state().phase, "linked");
   const src = { roll: () => 0, thr: () => 0, brk: () => 0, held: () => 0 };
   const pad = PhonePad.padSession(pairs[0][0], src, { heartbeat: false, now: () => h.clock.t });
-  pad.suspend(); pad.close();
+  pad.sendSuspend(); pad.close();
   pairs[0][1].pump(1e6); await settle();
   assert.equal(h.ctl.state().phase, "waiting", "the room is open again, not lost");
   assert.equal(h.ctl.state().code, "ABC234");

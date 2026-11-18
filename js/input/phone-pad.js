@@ -604,7 +604,7 @@ const PhonePad = (function () {
       health,
       // The page is going away (pagehide): say so on the reliable channel, so the
       // close that follows reads as a wire loss on the game, which hosts the code again.
-      suspend() { if (!closed && transport.status === "open") { try { transport.send(T.EVENT, encodeSuspend()); } catch (e) { /* closing */ } } },
+      sendSuspend() { if (!closed && transport.status === "open") { try { transport.send(T.EVENT, encodeSuspend()); } catch (e) { /* closing */ } } },
       close() { try { transport.close(); } catch (e) { /* already closed */ } close("local"); },
       stats: () => ({ sent, haptics, huds, seq, queued: pending.length, expired, rejected, health: health(), open: !closed && transport.status === "open" }),
     };

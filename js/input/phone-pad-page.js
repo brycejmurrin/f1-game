@@ -468,7 +468,7 @@ const PhonePadPage = (function () {
     // again re-dials it. A pairing still in progress is simply cancelled.
     function pageHide() {
       const code = session ? liveCode : null;
-      if (session && session.suspend) session.suspend();
+      if (session && session.sendSuspend) session.sendSuspend();
       cancel();
       if (code && !deps.privateRelay()) { redial = code; say("Link paused — reconnecting when this page is back…", true); }
     }
