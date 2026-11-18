@@ -65,8 +65,9 @@ npm run test:service-worker
 npm run test:tooling-fast
 ```
 
-`tools/check/offline-precache-check.cjs` (native offline boot) LAUNCHES CHROMIUM and is wired to no npm
-script or CI group: not a pre-push step (AGENTS.md rule 5); parent session only, by hand.
+`tools/check/offline-precache-check.cjs` (native offline boot) LAUNCHES CHROMIUM. The browser group
+`test:offline-precache` (`tests/specs/offline-precache.spec.js`) runs it on a stamped staged copy: CI's job,
+not a pre-push step (AGENTS.md rule 5); by hand, parent session only.
 
 Related: `npm run gen:check`, **check-changes**.
 
