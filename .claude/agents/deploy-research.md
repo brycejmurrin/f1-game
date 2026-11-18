@@ -33,14 +33,14 @@ return a short summary with citations (URLs + live vs local build numbers).
 
 1. **Post-deploy liveness. THE VERDICT IS THE SHA, NOT THE BUILD NUMBER.**
    The live shell's `<meta name="apex-sha">` is the one thing that knows what
-   is published. `tools/ci/pages-live-sha.sh` prints it (curl + sed; it
-   swallows every curl error and exits 0, so an empty line is ANY failure —
-   timeout, proxy, 404, missing meta). On an empty read, run it once more;
-   still empty → UNKNOWN. Issue each as its OWN plain Bash call
-   (no `$(...)`, `&&`, `if`/`for` chains, pipes or variables: a compound command
-   never matches a prefix allowlist), then compare the printed values yourself:
+   is published. Read it with the curl + sed pipeline below (it is what
+   `tools/ci/pages-live-sha.sh` runs; your read-only hook refuses `bash <script>`,
+   and passes this pipe). An empty line is ANY failure — timeout, proxy, 404,
+   missing meta. On an empty read, run it once more; still empty → UNKNOWN.
+   Issue each as its OWN plain Bash call (no `$(...)`, `&&`, `if`/`for` chains
+   or variables), then compare the printed values yourself:
    ```sh
-   bash tools/ci/pages-live-sha.sh https://brycejmurrin.github.io/f1-game/
+   curl -fsS --max-time 20 https://brycejmurrin.github.io/f1-game/index.html | sed -n 's/.*<meta name="apex-sha" content="\([0-9a-f]\{40\}\)".*/\1/p'
    git fetch origin claude/f1-game-project-26h3ng
    git rev-parse origin/claude/f1-game-project-26h3ng
    git cat-file -e <live sha>
@@ -107,15 +107,10 @@ return a short summary with citations (URLs + live vs local build numbers).
    the tip's `pages.yml` `verify-live` job conclusion. Report one line per
    asset: `ASSET <url> status=<s> bytes=<n> sha256=<digest> cache=<header>`;
    a byte or provenance mismatch is verdict **MISMATCH**.
-   **Bulk (more than ~10 URLs): never one Bash call per URL.** One `curl`
-   call takes many URLs, each with its own `-o`:
-   `curl -sS -H 'Cache-Control: no-cache' -w '%{http_code} %{size_download} %{content_type} %{url_effective}\n' -o scratch/live-bytes/1 <url1> -o scratch/live-bytes/2 <url2> …`
-   (create `scratch/live-bytes/` first with `mkdir -p` as its own call; `curl -o`
-   under `scratch/` is the one file write your read-only hook does not see — keep
-   it there), then ONE `sha256sum scratch/live-bytes/1 scratch/live-bytes/2 …` call.
-   Over ~50 URLs, ask the parent for a curl config file
-   (`curl -sS -K scratch/<name>.curl`, `url = "…"` / `output = "…"` pairs):
-   you have no Write tool. A population audit (hundreds of URLs) is still
+   **One asset per call:** `curl -sS -H 'Cache-Control: no-cache' <url> | sha256sum`
+   for the digest and `curl -sSI <url>` for status and headers. Your read-only hook
+   refuses `curl -o` / `-O` / `-K` output files, so there is no bulk download: past
+   ~10 URLs, report the list as NOT RUN and ask the parent to fetch them. A population audit (hundreds of URLs) is still
    two or three calls, not hundreds of turns.
 3. **External grounding** — search, then fetch the best URLs. Prefer primary
    sources (FIA, circuit sites, official docs) over blogs.
