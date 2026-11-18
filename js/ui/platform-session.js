@@ -296,6 +296,8 @@ $("pm-phonepad").onclick = () => {
         btn.textContent = "UNPAIR PHONE"; G.announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
         if (VISOR_CAM >= 0 && G.camMode !== VISOR_CAM) { phonePadCam = G.camMode; G.setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
       },
+      // ALLOW / REJECT covers the pedals: pause a running solo race under it (a net race never pauses).
+      asking: () => { if ((G.state === "race" || G.state === "count") && !G.paused && !G.netPlay.active()) setPaused(true, "phone-confirm"); },
       // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
       relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
       recovery: (r) => {

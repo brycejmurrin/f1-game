@@ -1605,7 +1605,7 @@ test("host(): private exchange and unreadable-answer failures release their tran
   }
 });
 
-function wakePad(over = {}) {
+function wakePad(over = {}, extra = {}) {
   const events = {}, requests = [], transports = [], timeouts = [];
   const sb = { URL, URLSearchParams, Promise, Log: { info() {}, warn() {} }, NetTransport,
     setInterval: () => 1, clearInterval() {},
@@ -1621,12 +1621,13 @@ function wakePad(over = {}) {
     addEventListener(t, fn) { (events[t] ||= []).push(fn); },
   };
   sb.window = sb;
+  if (extra.location) sb.location = extra.location;
   const ctx = vm.createContext(sb);
   for (const f of ["js/input/pedal-travel.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const P = vm.runInContext("PhonePad", ctx);
-  const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl() };
-  const ctl = P.pad(dom, { deps: {
+  const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl(), ...(extra.codeIn ? { codeIn: fakeEl() } : {}) };
+  const ctl = P.pad(dom, { href: extra.location ? extra.location.href : undefined, deps: {
     privateRelay: () => false, normalise: (c) => c, valid: () => true, prefetchIce: async () => {},
     rtc: () => {
       let close;
@@ -2348,4 +2349,152 @@ test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH tran
     made[0].handlers.close && made[0].handlers.close("local");
     assert.equal(ctl.state().linked, true, "the superseded session's close is not a drop");
   } finally { ctl.cancel(); }
+});
+
+// ---------------------------------------------------------------------------
+// #5739 (hunt 2026-11-18): the ALLOW card pauses a running race, a page that
+// goes away suspends (the game re-hosts), an answer to a consumed offer has a
+// deadline, and a new #pad= link into an open tab is read.
+// ---------------------------------------------------------------------------
+
+test("#5739 row 3: host() tells the shell the ALLOW card is coming BEFORE it covers the screen", async () => {
+  const c = handConfirm();
+  const order = [];
+  const h = hostHarness({ confirm: (t) => { order.push("confirm"); return c.confirm(t); } });
+  h.ui.asking = () => order.push("asking");
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "confirming");
+  assert.deepEqual(order, ["asking", "confirm"]);
+  c.asks[0].answer(true); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  assert.deepEqual(order, ["asking", "confirm"], "ALLOW itself asks nothing more");
+  h.ctl.cancel();
+});
+
+test("#5739 row 3: PlatformSession pauses a running SOLO race under the ALLOW card — not a net race, a menu, or a paused race", async () => {
+  const elements = new Map(), hosts = [], pauses = [];
+  const G = { els: {}, store: {}, camMode: 1, state: "race", paused: false, announce() {}, setCamMode(i) { this.camMode = i; },
+    netPlay: { active: () => false },
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    ensureNet: () => Promise.resolve(true), setPaused: (p, why) => { pauses.push([p, why]); G.paused = p; },
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { options, cancel() {} }; hosts.push(h); return h; } },
+  });
+  vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
+  vm.runInContext("PlatformSession.create(G, { ensureNet, setPaused }).wirePhone();", context);
+  G.$("pm-phonepad").onclick(); await settle();
+  assert.equal(hosts.length, 1);
+  const asking = hosts[0].options.asking;
+  asking();
+  assert.deepEqual(pauses, [[true, "phone-confirm"]], "solo race: paused under the card");
+  asking();
+  assert.equal(pauses.length, 1, "already paused: no second pause");
+  G.paused = false; G.state = "count"; asking();
+  assert.deepEqual(pauses.at(-1), [true, "phone-confirm"], "the countdown pauses too");
+  G.paused = false; G.state = "menu"; asking();
+  G.state = "race"; G.netPlay.active = () => true; asking();
+  assert.equal(pauses.length, 2, "a menu or a VS FRIEND race is never paused");
+});
+
+test("#5739 row 4: a pad that SUSPENDS (page going away) is re-hosted on the same code; a plain close is still final", async () => {
+  const pairs = [];
+  const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(70 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
+  const h = hostHarness({ rtc });
+  h.ui.relinkN = 0; h.ui.relinking = () => h.ui.relinkN++;
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  const src = { roll: () => 0, thr: () => 0, brk: () => 0, held: () => 0 };
+  const pad = PhonePad.padSession(pairs[0][0], src, { heartbeat: false, now: () => h.clock.t });
+  pad.suspend(); pad.close();
+  pairs[0][1].pump(1e6); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "the room is open again, not lost");
+  assert.equal(h.ctl.state().code, "ABC234");
+  assert.equal(h.ui.relinkN, 1); assert.equal(h.ui.lostN, 0);
+  assert.equal(pairs.length, 2, "a fresh transport for the re-dial");
+  assert.deepEqual(PhonePad.decodeEvent(PhonePadCodec.encodeSuspend()), { t: "sus" });
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  pairs[1][0].close(); pairs[1][1].pump(1e6); await settle();
+  assert.equal(h.ctl.state().phase, "lost", "no suspend first: the phone's goodbye stays final");
+  assert.equal(h.ui.lostN, 1);
+});
+
+test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow re-dials the same code", async () => {
+  const wires = [], swaps = [];
+  const h = wakePad({
+    rtc: () => {
+      let onClose;
+      const t = { status: "open", sent: [], send(ch, d) { t.sent.push(d); return true; }, pump() {}, onMessage() {}, onOpen() {}, onClose(f) { onClose = f; },
+        close() { if (t.status === "closed") return; t.status = "closed"; if (onClose) onClose("local"); } };
+      wires.push(t); return t;
+    },
+    swap: async (o) => { swaps.push(o.code); return { ok: true }; },
+  });
+  await h.ctl.connect("ABC234");
+  assert.equal(h.ctl.state().linked, true);
+  h.fire("pagehide");
+  assert.ok(wires[0].sent.includes('{"t":"sus"}'), "the game is told this is a suspend, not an unpair");
+  assert.equal(wires[0].status, "closed");
+  assert.equal(h.ctl.state().linked, false);
+  assert.equal(h.dom.status.textContent, "Link paused — reconnecting when this page is back…");
+  assert.equal(h.dom.connect.disabled, false);
+  h.fire("pageshow"); await settle();
+  assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no CONNECT tap");
+  assert.equal(h.ctl.state().linked, true);
+  h.ctl.cancel();
+});
+
+test("#5739 row 5: an answer whose link never opens ends at the connect deadline, says so and frees CONNECT", async () => {
+  const wires = [];
+  const h = wakePad({
+    rtc: () => {
+      const t = { status: "connecting", send: () => false, pump() {}, onMessage() {}, onOpen() {}, onClose() {},
+        close() { t.status = "closed"; } };
+      wires.push(t); return t;
+    },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async (o) => { const code = await o.reply("OFFER"); return { ok: !!code }; },
+  });
+  const r = await h.ctl.connect("ABC234");
+  assert.equal(r.ok, true, "the swap resolved: an answer was published");
+  assert.equal(h.dom.connect.disabled, true, "waiting on the transport");
+  const deadline = h.timeouts.filter((t) => !t.cleared && t.ms === 15000);
+  assert.equal(deadline.length, 1, "one 15 s connect deadline armed");
+  deadline[0].fn(); await settle();
+  assert.equal(h.dom.connect.disabled, false, "CONNECT works again");
+  assert.equal(h.dom.status.textContent, "The game is not offering that code any more — choose MAKE NEW CODE in its phone-controller settings, then CONNECT.");
+  assert.equal(wires[0].status, "closed", "the dead transport is closed");
+  assert.equal(h.ctl.state().linked, false);
+
+  // A link that opens in time clears its deadline: nothing fires later.
+  const ok = wakePad({ acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async (o) => { const code = await o.reply("OFFER"); return { ok: !!code }; } });
+  await ok.ctl.connect("ABC234");
+  assert.equal(ok.ctl.state().linked, true);
+  assert.equal(ok.timeouts.filter((t) => !t.cleared && t.ms === 15000).length, 0, "an opened link has no live deadline");
+  ok.ctl.cancel();
+});
+
+test("#5739 row 6: a hash-only #pad= navigation into an open controller tab is read", async () => {
+  const location = { href: "https://apex.test/controller#pad=AAAA2345" };
+  const swaps = [];
+  let hang;
+  const h = wakePad({ swap: (o) => { swaps.push(o.code); return swaps.length === 1 ? new Promise((r) => { hang = r; }) : Promise.resolve({ ok: true }); } },
+    { location, codeIn: true });
+  assert.equal(h.dom.codeIn.value, "AAAA2345");
+  const first = h.ctl.connect(h.dom.codeIn.value); await settle();
+  assert.deepEqual(swaps, ["AAAA2345"], "dialing the OLD code");
+  location.href = "https://apex.test/controller#pad=BBBB2345";
+  h.fire("hashchange");
+  assert.equal(h.dom.codeIn.value, "BBBB2345", "the code box follows the new link");
+  assert.equal(h.dom.status.textContent, "Tap CONNECT to pair with the game.");
+  assert.equal(h.dom.connect.disabled, false, "the old dial was stopped");
+  hang({ ok: true });
+  assert.equal((await first).error, "cancelled");
+  await h.ctl.connect(h.dom.codeIn.value);
+  assert.deepEqual(swaps, ["AAAA2345", "BBBB2345"]);
+  assert.equal(h.ctl.state().linked, true);
+  h.fire("hashchange");
+  assert.equal(h.dom.codeIn.value, "BBBB2345", "the same link again changes nothing");
+  h.ctl.cancel();
 });
