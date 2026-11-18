@@ -1384,9 +1384,16 @@
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         // Hammered cotangent inputs: anchor derivatives before any If graph.
+        // Hammered (43) is a livery finish, so it only draws with carFinish (grade-tint.js carPaint, the garage
+        // mirror resolve), a per-draw UNIFORM: the derivatives stay in uniform control flow, and every other lit
+        // fragment skips their 10 components (#4556; the same gate as the fnDx finish anti-alias below).
         const hmUV = objP.xz.add(objP.y.mul(vec2(0.73, -0.61))).toVar();
-        const hmDP1 = dFdx(wp).toVar(), hmDP2 = dFdy(wp).toVar();
-        const hmDUV1 = dFdx(hmUV).toVar(), hmDUV2 = dFdy(hmUV).toVar();
+        const hmDP1 = vec3(0.0).toVar(), hmDP2 = vec3(0.0).toVar();
+        const hmDUV1 = vec2(0.0).toVar(), hmDUV2 = vec2(0.0).toVar();
+        If(matU.carFinish.greaterThan(0.5), () => {
+          hmDP1.assign(dFdx(wp)); hmDP2.assign(dFdy(wp));
+          hmDUV1.assign(dFdx(hmUV)); hmDUV2.assign(dFdy(hmUV));
+        });
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
         // Puddle shape (wet block): derivatives taken here, in uniform control flow
         // (the WebGPU path compiles this graph to WGSL, which requires it) — an If
@@ -2585,44 +2592,50 @@
      * NodeMaterial.setupPosition: instance → positionNode), and every world mesh
      * here draws at an identity model matrix, so the sway direction is world
      * xz on baked props and instanced pines alike — the same frame GLX uses. */
-    function vertexMotionNode() {
+    // A real branch, not select(): select() evaluates both arms, so every lit
+    // vertex (road, terrain, cars) paid ~7 sin plus the gust maths for a sway
+    // only flag and leaf vertices use (#4556). A draw's vertices are almost all
+    // static, so the branch is coherent.
+    // normalLocal and positionLocal are anchored as Fn-BODY statements before
+    // the If. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
+    // where the node is first built; built only inside the flag/foliage branch,
+    // that assignment landed there and every other vertex (the whole garage,
+    // the world soup) sent an UNINITIALISED normal varying to the fragment
+    // stage: lit surfaces black while decals and glare drew (shipped 2026-10-01
+    // as acdf1fed; the TLX gate passes on a blank readback, so no probe saw it).
+    // Same standing rule as the fragment anchors at the top of sharedFragment;
+    // tests/unit/tlx-shader-trims.test.mjs pins the order in the built shader.
+    const vertexMotionNode = () => Fn(() => {
+      const p = vec3(positionLocal).toVar();               // anchor
+      const nL = vec3(normalLocal).toVar();                // anchor (see above)
       const matA = attribute("mat", "float");
-      const mid = floor(matA.add(0.5));
-      const mfr = clamp(matA.sub(mid), 0.0, 1.0);
+      const mid = floor(matA.add(0.5)).toVar();
+      const mfr = clamp(matA.sub(mid), 0.0, 1.0).toVar();
+      const off = vec3(0.0).toVar();
       // FLAG — unchanged maths; the gate is the rounded id, not a half-open range
       // (GLX's own comment: a neighbour decoding a hair low has fract ~1.0).
-      const fw = mfr.mul(2.5);
-      const ph = U.time.mul(5.5).add(positionGeometry.x.mul(1.9)).add(positionGeometry.z.mul(1.9));
-      const wave = sin(ph).mul(0.085).add(sin(ph.mul(2.17).add(1.3)).mul(0.045)).mul(fw);
-      // FOLIAGE sway
-      const w = clamp(mfr.div(0.45), 0.0, 1.0);
-      const p = positionLocal;
-      const spd = U.wind.z;
-      const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
-      const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
-      const bend = sin(gust).mul(0.55)
-        .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
-        .add(0.45);                                                      // downwind lean bias
-      const amp = spd.mul(0.32).mul(w).mul(w);
-      const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
-      const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
-      const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
-      const isFlag = mid.equal(15.0);
-      const isLeaf = mid.equal(6.0).and(mfr.greaterThan(0.002));
-      // normalLocal is multiplied at the TOP LEVEL, never first inside a select
-      // branch. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
-      // where the node is first built; built inside `select(isFlag, normalLocal
-      // .mul(wave), ...)` that assignment landed inside the flag/foliage `if`
-      // blocks only, and every other vertex (every non-instanced lit mesh — the
-      // whole garage, the world soup) sent an UNINITIALISED normal varying to
-      // the fragment stage: zero or garbage N, lit surfaces black while decals
-      // and glare drew (shipped 2026-10-01 as acdf1fed; the TLX gate passes on a
-      // blank readback, so no probe saw it). Same standing rule as the fragment
-      // anchors at the top of sharedFragment: build shared nodes before any
-      // conditional use.
-      const alongNormal = select(isFlag, wave, select(isLeaf, flutter, float(0.0)));
-      return positionLocal.add(normalLocal.mul(alongNormal)).add(select(isLeaf, sway, vec3(0.0)));
-    }
+      If(mid.equal(15.0), () => {
+        const fw = mfr.mul(2.5);
+        const ph = U.time.mul(5.5).add(positionGeometry.x.mul(1.9)).add(positionGeometry.z.mul(1.9));
+        const wave = sin(ph).mul(0.085).add(sin(ph.mul(2.17).add(1.3)).mul(0.045)).mul(fw);
+        off.assign(nL.mul(wave));
+      }).ElseIf(mid.equal(6.0).and(mfr.greaterThan(0.002)), () => {
+        // FOLIAGE sway
+        const w = clamp(mfr.div(0.45), 0.0, 1.0);
+        const spd = U.wind.z;
+        const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
+        const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
+        const bend = sin(gust).mul(0.55)
+          .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
+          .add(0.45);                                                      // downwind lean bias
+        const amp = spd.mul(0.32).mul(w).mul(w);
+        const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
+        const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
+        const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
+        off.assign(nL.mul(flutter).add(sway));
+      });
+      return p.add(off);
+    })();
 
     /* material factory
      * makeMaterial(opts) -> THREE.MeshBasicNodeMaterial with the full lit

@@ -32,10 +32,15 @@
    never tied to rAF). A real pointer press young on BOTH the wall clock and
    the trusted event's timeStamp (since arm) is the same double tap,
    swallowed; the arm stays up. Input queued behind a long frame (software GL)
-   can land in one late batch where the wall gap collapses — event time keeps
-   a deliberate second tap from being mis-read as a ghost, and expireIfStale
-   will not disarm on wall expiry alone while the confirming event is still
-   within ARM_MAX_MS. Keyboard activation (detail 0) and a script's el.click()
+   can land in one late batch where the wall gap collapses. pointerdown keeps
+   the input time; the click and pointerup that flush with it are often stamped
+   at dispatch, so the gesture clock is the pointerdown queue, not those
+   stamps. A deliberate second tap still confirms, and expireIfStale will not
+   disarm on wall expiry alone while that gesture is inside ARM_MAX_MS. When
+   the flush pairs both downs before either up, Chrome may synthesize only the
+   first click: the confirming pointerup then quits once on a zero-delay timer
+   if that click never arrives. The idle timer still reverts the label at
+   ARM_MAX_MS, and confirmPending still expires on the wall clock. Keyboard activation (detail 0) and a script's el.click()
    (untrusted) are deliberate and may confirm. pointerup on the armed button
    confirms when past ARM_MIN_MS on both clocks (youngTap).
    A capture-phase click listener on #pausemenu does the gating, so the
@@ -133,9 +138,58 @@ const PauseOpts = (function () {
   // ── CONFIRM QUIT / RESTART ─────────────────────────────────────────────
   let armed = null;   // { btn, text, aria, wallAt, evAt } — wallAt from performance.now()
   let armTimer = 0;
+  let expiredArm = null; // { btn, evAt, wallAt } after the idle timer reverts the label
   let confirmPending = null;   // btn.id while a pointerup-driven el.click() is in flight
+  let confirmPendingAt = 0;    // wallNow() when it was set: the trusted click that clears it may never come
+  let confirmPendingEv = null; // that gesture's pointerdown timeStamp
+  let confirmFallback = false; // the timer's el.click() is the quit when no native click followed
+  let downQ = [];              // { id, ts, wall } pointerdown input times, oldest first
+  function clearPending() { confirmPending = null; confirmPendingAt = 0; confirmPendingEv = null; confirmFallback = false; }
   function wallNow() {
     try { return performance.now(); } catch (_) { return Date.now(); }
+  }
+  function guardedBtn(node) {
+    const btn = node && node.closest ? node.closest("#pm-quit, #pm-restart") : null;
+    return btn && GUARDED[btn.id] ? btn : null;
+  }
+  function pruneDowns() {
+    const now = wallNow();
+    if (downQ.length) downQ = downQ.filter((d) => now - d.wall < ARM_MAX_MS);
+  }
+  function noteDown(e) {
+    const btn = guardedBtn(e && e.target);
+    if (!btn || !e.isTrusted || !Number.isFinite(e.timeStamp)) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    pruneDowns();
+    // A new press on an armed button starts a new gesture. A down still queued
+    // from a ghost whose click never arrived must not become this gesture's clock.
+    if (armed && armed.btn === btn) downQ = downQ.filter((d) => d.id !== btn.id);
+    downQ.push({ id: btn.id, ts: e.timeStamp, wall: wallNow() });
+    if (downQ.length > 6) downQ.shift();
+  }
+  function peekDown(id) {
+    pruneDowns();
+    for (const d of downQ) if (d.id === id) return d.ts;
+    return null;
+  }
+  function takeDown(id) {
+    pruneDowns();
+    const i = downQ.findIndex((d) => d.id === id);
+    if (i < 0) return null;
+    const ts = downQ[i].ts;
+    downQ.splice(i, 1);
+    return ts;
+  }
+  // Click and pointerup timeStamps collapse to dispatch time behind a long
+  // frame. The pointerdown that started the gesture keeps the input time.
+  function stampOf(e) {
+    if (!e || !e.isTrusted) return null;
+    const btn = guardedBtn(e.target);
+    if (btn && e.type !== "pointerdown") {
+      const down = peekDown(btn.id);
+      if (Number.isFinite(down)) return down;
+    }
+    return Number.isFinite(e.timeStamp) ? e.timeStamp : null;
   }
   function clearArmTimer() {
     if (armTimer) { clearTimeout(armTimer); armTimer = 0; }
@@ -144,8 +198,10 @@ const PauseOpts = (function () {
   // frame (software GL) is handled in one late batch: the wall gap collapses
   // to ~0 or stretches past ARM_MAX_MS while the user's real gap was 400 ms.
   function eventAge(e) {
-    if (!armed || armed.evAt == null || !e || !e.isTrusted || !Number.isFinite(e.timeStamp)) return null;
-    return e.timeStamp - armed.evAt;
+    if (!armed || armed.evAt == null || !e || !e.isTrusted) return null;
+    const ts = stampOf(e);
+    if (!Number.isFinite(ts)) return null;
+    return ts - armed.evAt;
   }
   function expireIfStale(e) {
     if (!armed || wallNow() - armed.wallAt < ARM_MAX_MS) return;
@@ -166,17 +222,30 @@ const PauseOpts = (function () {
     if (a.btn.classList) a.btn.classList.remove("armed");
   }
   function disarm() {
+    expiredArm = null;
     if (!armed) return;
     const a = armed;
     armed = null;
     clearArmTimer();
     revertBtn(a);
   }
+  // The label goes back at ARM_MAX_MS, but the gesture's event time stays so a
+  // confirm already queued behind a long frame is not read as a fresh arm.
+  function expireArmTimer() {
+    armTimer = 0;
+    if (!armed) return;
+    const a = armed;
+    armed = null;
+    revertBtn(a);
+    expiredArm = { btn: a.btn, evAt: a.evAt, wallAt: a.wallAt };
+  }
   function arm(btn, e) {
+    const fromDown = e && e.isTrusted ? takeDown(btn.id) : null;
     disarm();
     armed = {
       btn,
-      evAt: e && e.isTrusted && Number.isFinite(e.timeStamp) ? e.timeStamp : null,
+      evAt: Number.isFinite(fromDown) ? fromDown
+        : (e && e.isTrusted && Number.isFinite(e.timeStamp) ? e.timeStamp : null),
       text: btn.textContent,
       aria: btn.getAttribute ? btn.getAttribute("aria-label") : null,
       wallAt: wallNow(),
@@ -184,7 +253,7 @@ const PauseOpts = (function () {
     btn.textContent = ARMED_LABEL;
     btn.setAttribute("aria-label", ARIA[btn.id]);
     if (btn.classList) btn.classList.add("armed");
-    armTimer = setTimeout(disarm, ARM_MAX_MS);
+    armTimer = setTimeout(expireArmTimer, ARM_MAX_MS);
   }
   const armAge = (t) => {
     if (!armed) return Infinity;
@@ -200,25 +269,49 @@ const PauseOpts = (function () {
     expireIfStale(e);
     const t = e && e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
+    // A pointerup whose native click never arrived (pointercancel, a click
+    // retargeted to an ancestor) must not leave a one-tap QUIT for later.
+    if (confirmPending) {
+      const onPending = !!(btn && confirmPending === btn.id);
+      const ev = (onPending && confirmPendingEv != null && e && e.isTrusted && Number.isFinite(e.timeStamp))
+        ? e.timeStamp - confirmPendingEv : null;
+      if (wallNow() - confirmPendingAt >= ARM_MAX_MS && !(ev != null && ev >= 0 && ev < ARM_MAX_MS)) clearPending();
+    }
     if (confirmPending && btn && confirmPending === btn.id) {
-      if (!e.isTrusted) {
+      if (!e.isTrusted && !confirmFallback) {
         e.stopImmediatePropagation();
         if (e.preventDefault) e.preventDefault();
         return;
       }
-      confirmPending = null;
+      clearPending();
+      expiredArm = null;
       return;
     }
-    if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); return; }
+    if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); else expiredArm = null; return; }
     if (confirmMode() === "off") { disarm(); return; }
+    if (!armed && expiredArm && expiredArm.btn === btn && e && e.isTrusted && e.detail !== 0
+        && expiredArm.evAt != null && Number.isFinite(e.timeStamp)) {
+      const ev = e.timeStamp - expiredArm.evAt;
+      if (ev >= ARM_MIN_MS && ev < ARM_MAX_MS) { expiredArm = null; return; }
+    }
+    if (expiredArm && expiredArm.btn === btn) expiredArm = null;
     const live = !!(armed && armed.btn === btn);
     // Keyboard activation (detail 0) and a script's el.click() (untrusted) are
     // deliberate; only a fast pointer repeat is the accidental double tap.
     const ghost = live && e.isTrusted && e.detail !== 0 && youngTap(e);
-    if (live && !ghost) { disarm(); return; }   // the second press: let the handler run
+    if (ghost) takeDown(btn.id);
+    if (live && !ghost) { takeDown(btn.id); disarm(); return; }   // the second press: let the handler run
     e.stopImmediatePropagation();
     if (e.preventDefault) e.preventDefault();
     if (!ghost) arm(btn, e);
+  }
+  function onPausePointerDown(e) { noteDown(e); }
+  function finishPointerConfirm(btn, stamp) {
+    setTimeout(() => {
+      if (confirmPending !== btn.id || confirmPendingAt !== stamp) return;
+      confirmFallback = true;
+      try { btn.click(); } finally { confirmFallback = false; }
+    }, 0);
   }
   function onPausePointerUp(e) {
     if (!e || e.pointerType === "mouse" && e.button !== 0) return;
@@ -228,9 +321,16 @@ const PauseOpts = (function () {
     if (!btn || !GUARDED[btn.id] || btn.disabled || confirmMode() === "off") return;
     if (!armed || armed.btn !== btn || !e.isTrusted) return;
     if (youngTap(e)) return;
+    const gesture = peekDown(btn.id);
+    takeDown(btn.id);
     confirmPending = btn.id;
+    confirmPendingAt = wallNow();
+    confirmPendingEv = Number.isFinite(gesture) ? gesture : (Number.isFinite(e.timeStamp) ? e.timeStamp : null);
+    const stamp = confirmPendingAt;
     disarm();
     btn.click();
+    // A flush can deliver the confirming pointerup and never synthesize its click.
+    finishPointerConfirm(btn, stamp);
   }
   function onPauseKey(e) {
     if (!e || e.key !== "Escape") return;
@@ -250,8 +350,9 @@ const PauseOpts = (function () {
     tag.textContent = build ? ("build " + build) : "build unknown";
   }
 
-  function initUI() {
-    wireRows();
+  function initUI(gate) {
+    // #4798 gate: rows only
+    if (gate) gate(wireRows); else wireRows();
     paintSummary();
     paintBuild();
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
@@ -281,10 +382,11 @@ const PauseOpts = (function () {
       if (mq.addEventListener) mq.addEventListener("change", stamp);
     }
     pm.addEventListener("click", onPauseClick, true);
+    pm.addEventListener("pointerdown", onPausePointerDown, true);
     pm.addEventListener("pointerup", onPausePointerUp, true);
     document.addEventListener("keydown", onPauseKey, true);
     if (typeof MutationObserver !== "undefined") {
-      const mo = new MutationObserver(() => { if (pm.hidden) disarm(); });
+      const mo = new MutationObserver(() => { if (pm.hidden) { disarm(); clearPending(); downQ = []; } });
       mo.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
     }
   }
@@ -329,7 +431,7 @@ const PauseOpts = (function () {
   // that is already COMPLETE wires now (same rule as js/ui/title-fx.js).
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => initUI(typeof SettingsNav !== "undefined" ? SettingsNav.lazy : null), { once: true });
   }
 
   return {

@@ -10,7 +10,7 @@ A new session starts with no memory and an unfetched branch, so the hand-off
 carries everything it needs. Never write a `HANDOFF` file to the repo root: a
 cold clone cannot see it.
 
-The cap is the brief's `STOP AT` line; `.claude/hooks/context-cap.py` advises on live context against it and refuses
+The cap is the brief's `STOP AT` line (`start+<N>k`: a budget above the first turn's context); `.claude/hooks/context-cap.py` advises on live context against it and refuses
 spawns over the hard cap; a session without a brief has no cap and hands off when the user asks or the context is
 long. Before idling, write the follow-up prompts into the PR's Hand-off block. Model names and messaging routes are
 host-specific; use only exposed host capabilities.

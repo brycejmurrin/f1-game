@@ -1,6 +1,7 @@
 /* InputGhost: local deterministic ghosts — record player inputs + seed +
- * physics/build version at the fixed physics timestep, and replay them as a
- * ghost car. Sibling of pose Ghost (js/car/ghost.js): pose stays the cheap
+ * physics/build version at the fixed physics timestep, so a tape can be
+ * replayed sim-faithfully (envelope() + decodeStep; no in-game ghost car drives
+ * one yet, so the old replay cursor was removed, #3109 row 15). Sibling of pose Ghost (js/car/ghost.js): pose stays the cheap
  * visual/PB path; this module is for sim-faithful local replay only (no
  * backend, no online leaderboards). */
 "use strict";
@@ -22,7 +23,6 @@ const InputGhost = (function () {
   let rec = null;                // in-progress: { steer:Int8[], flags:Uint8[], n }
   let meta = null;               // { seed, physRev, build, dt } for the open lap
   let lastSave = { durable: false, reason: "no recording" };
-  let replayStep = 0, replayNative = false;            // cursor while driving a ghost car
 
   let storeCache = null;
   let accessClock = Date.now();
@@ -117,7 +117,7 @@ const InputGhost = (function () {
   }
   // Snapshots this module committed (a finished lap, a decoded disk entry) are
   // immutable, so their O(steps) valid() runs once: compatible(best) ran it on
-  // every finishLap and every atStep (#3109).
+  // every finishLap (#3109).
   const _validSnaps = new WeakSet();
   function committed(g) { _validSnaps.add(g); return g; }
   function compatible(g) {
@@ -429,7 +429,6 @@ const InputGhost = (function () {
     if (best) { touch(best); stored._used = best._used; }
     rec = null;
     meta = null;
-    replayStep = 0; replayNative = false;
     if (typeof Log !== "undefined")
       Log.info("car", `input-ghost load ${id}${best ? " ok" : " none"}`);
   }
@@ -443,7 +442,6 @@ const InputGhost = (function () {
       dt: o.dt > 0 ? +o.dt : currentDt(),
     };
     rec = { steer: [], flags: [], throttle: [], brake: [], rawSteer: [], rawThrottle: [], rawBrake: [], native: false, initialState: null, n: 0 };
-    replayStep = 0; replayNative = false;
   }
 
   function record(inp) {
@@ -523,41 +521,12 @@ const InputGhost = (function () {
   function envelope() { return best; }
   function steps() { return best ? best.steer.length : 0; }
 
-  function atStep(i) {
-    if (!best || !compatible(best)) return null;
-    const n = best.steer.length;
-    if (n === 0) return null;
-    const idx = i < 0 ? 0 : (i >= n ? n - 1 : i | 0);
-    const step = decodeStep(best.steer[idx], best.flags[idx],
-      best.v >= 2 ? best.throttle[idx] : undefined,
-      best.v >= 2 ? best.brake[idx] : undefined);
-    if (best.v === 3) Object.assign(step, { steer: best.rawSteer[idx], throttleLevel: best.rawThrottle[idx], brakeLevel: best.rawBrake[idx] });
-    return step;
-  }
-
-  /** Begin driving the stored ghost from step 0. Returns false if incompatible. */
-  function beginReplay(opts) {
-    if (!best || !compatible(best) || (best.v === 3 && !(opts && opts.nativeControls))) { replayStep = 0; replayNative = false; return false; }
-    replayStep = 0; replayNative = !!(opts && opts.nativeControls);
-    return true;
-  }
-  /** Next fixed-timestep input for a ghost car (`c.netInput = InputGhost.next()`). */
-  function next() {
-    if (best && best.v === 3 && !replayNative) return null;
-    const inp = atStep(replayStep);
-    if (inp) replayStep++;
-    return inp;
-  }
-  function replayIndex() { return replayStep; }
-
   function clear(id) {
     const store = loadStore();
     if (id == null) {
       for (const k of Object.keys(store)) delete store[k];
       pending.clear();
       best = null;
-      replayStep = 0;
-      replayNative = false;
     } else {
       const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
       const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
@@ -565,8 +534,6 @@ const InputGhost = (function () {
       for (const key of Object.keys(store)) if (matches(key)) delete store[key];
       if (storageId != null && matches(storageId)) {
         best = null;
-        replayStep = 0;
-        replayNative = false;
       }
     }
     saveStore(store);
@@ -590,7 +557,6 @@ const InputGhost = (function () {
     STORE_KEY, MAX_LAP_S,
     setTrack, startLap, record, finishLap,
     hasGhost, bestTime, snapshot, envelope, steps,
-    atStep, beginReplay, next, replayIndex,
     needsState: () => !!rec && rec.n === 0,
     persistence: () => Object.assign({}, lastSave),
     compatible, valid, quantizeSteer, packFlags, decodeStep,

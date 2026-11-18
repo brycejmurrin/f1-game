@@ -496,6 +496,11 @@
       "presentation": "native",
       "preserve": "Unknown measurement; threshold and advisory semantics"
     },
+    "tools/ci/bot-pr-body.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "The PR body verbatim: the Plan the merge gate parses, the land item last"
+    },
     "tools/ci/branch-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -586,10 +591,20 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/docs-fast-tests.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line: the space-separated unit files a docs-only change runs (the pre-commit hook's node --test argv)"
+    },
     "tools/ci/file-verdict-reporter.mjs": {
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "A node --test reporter module: one JSON object of per-file event counts to its destination; never a command"
+    },
+    "tools/ci/fat-shard.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-piece plan vs the count split, one line per piece; an unlistable spec keeps the count shard"
     },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
@@ -636,6 +651,11 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
+    "tools/ci/lib/deploy-tip.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: tipState / codeRedJobs / platformStepFailed verdicts with run id and failed job names, and the paginated pages.yml run + jobs reader; no CLI output"
+    },
     "tools/ci/lib/provenance.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -675,6 +695,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Strict unreadable false; same SHA false; always exit 0 is not publish permission"
+    },
+    "tools/ci/pages-rearm.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Rearm yes/no with its reason; lookup or dispatch failure is a warning; always exit 0 is not a dispatch"
     },
     "tools/ci/pages-reuse-verdict.sh": {
       "action": "protocol-only",
@@ -765,6 +790,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
+    },
+    "tools/ci/dropped-group-runs.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt, other base, re-run or red group run forces accept=false; stdout is GITHUB_OUTPUT lines only"
     },
     "tools/ci/reuse-draft-selected.mjs": {
       "action": "protocol-only",
@@ -880,6 +910,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "VM coverage is test-for-test; drift exit remains 1"
+    },
+    "tools/ci/vendor-doctor.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One JSON line per vendor: cli, version, login, key NAME, api code, next steps; reads only. Never expose a key, e-mail or account id."
     },
     "tools/ci/verification-receipt.mjs": {
       "action": "no-direct-output",
@@ -2360,11 +2395,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
-    },
-    "tools/shot/scenery-locations.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c5"
     },
     "tools/shot/scenery-source-hash.cjs": {
       "action": "no-direct-output",

@@ -187,7 +187,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => {
     const root = document.documentElement.style;
     root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
-    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(null);
+    // 109, not null: a phone's default is 70 % now (#5358), where 393 / 0.7 = 561 own px is a NORMAL-density garage;
+    // the compact cells below are the 109 % ones this test has always measured.
+    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(109);
   });
   const searched = await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
@@ -395,7 +397,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     document.getElementById("sel-back").click();
     document.getElementById("mb-settings").click();
     const scale = /** @type {HTMLInputElement} */ (document.getElementById("pm-uiscale"));
-    scale.value = "200"; scale.dispatchEvent(new Event("input", { bubbles: true }));
+    scale.value = "200"; scale.dispatchEvent(new Event("input", { bubbles: true })); scale.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await page.waitForFunction(() => {
     const sheet = document.getElementById("pmsettings");
@@ -1160,6 +1162,9 @@ test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked fo
   await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]')]
     .filter(l => /\/(overlays|dialogs)\.css/.test(l.href)).every(l => l.media !== "print" && l.sheet),
     null, { polling: 100, timeout: 15_000 });
+  // The COMPACT foot is the subject. A phone ships UI SIZE 70 % (#5358), where 390 / 0.7 own px is the normal
+  // sheet; 100 % is the size that paints the compact one on this screen.
+  await page.evaluate(() => window.__apex.uiScale(100));
   await page.evaluate(() => document.getElementById("mb-vs").click());
   await page.waitForFunction(() => !document.getElementById("vsfriend").hidden, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.SheetShape?.reclassify());

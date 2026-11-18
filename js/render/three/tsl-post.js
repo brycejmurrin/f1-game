@@ -506,7 +506,13 @@
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
       ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
       ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
-      grainTime: uniform(0), sharpen: uniform(0), sharpenLimit: uniform(0), blackLift: uniform(0.005),
+      grainTime: uniform(0),
+      // CPU-derived per-frame constants (tlx-post.js writes them beside grainTime / reflTexel), so the composite
+      // and the mirror inset do not rebuild them per pixel (#4556): the dither's time step
+      // mod(floor(grainTime*60), 64)*5.588238 (tsl-sky.js D.dthOff, same float32 floor), the vignette's aspect
+      // reflTexel.y/x (1 before the first frame) and its corner norm 0.70710678 / length(vec2(aspect*0.5, 0.5)).
+      dthOff: uniform(0), vigAspect: uniform(1), vigNorm: uniform(1),
+      sharpen: uniform(0), sharpenLimit: uniform(0), blackLift: uniform(0.005),
       whitePoint: uniform(1.0),
       acesA: uniform(2.51), acesB: uniform(0.03), acesC: uniform(2.43),
       acesD: uniform(0.59), acesE: uniform(0.14),
@@ -577,7 +583,7 @@
       c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
     }
     function ditherT(c, xy) {
-      const dc = xy.add(mod(floor(C.grainTime.mul(60.0)), 64.0).mul(5.588238)).toVar();
+      const dc = xy.add(C.dthOff).toVar();
       const d0n = ignoise(dc);
       const d1n = fract(fract(dot(dc.add(17.31), vec2(0.00583715, 0.06711056))).mul(52.9829189));
       c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
@@ -992,11 +998,8 @@
 
         // Vignette — aspect-corrected circular falloff js/render/glx/shaders/glsl-post.js.
         const q = vec2(vUV.sub(0.5)).toVar();
-        const vAspect = select(C.reflTexel.x.greaterThan(0.0),
-          C.reflTexel.y.div(C.reflTexel.x), float(1.0)).toVar();
-        q.x.mulAssign(vAspect);
-        const vr = length(q).mul(0.70710678)
-          .div(length(vec2(vAspect.mul(0.5), 0.5)));
+        q.x.mulAssign(C.vigAspect);
+        const vr = length(q).mul(C.vigNorm);
         // Outer edge is the CORNER (vr is corner-normalised, so exactly
         // 0.70710678 at every aspect), not 0.95. The old form ran edge0 > edge1
         // and could never finish its ramp, so VIGNETTE could not reach black and

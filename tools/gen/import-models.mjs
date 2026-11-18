@@ -14,7 +14,7 @@
  * So this reads glTF directly, in node, with no browser and no game globals.
  *
  * SCOPE, deliberately narrow: static meshes, POSITION / NORMAL / TEXCOORD_0 /
- * indices, one level of node transform, colour from baseColorFactor OR a
+ * indices, hierarchical node transforms, colour from baseColorFactor OR a
  * per-vertex sample of a palette texture (the low-poly convention — Quaternius
  * "Simple" packs use flat factors, the atlas ones a small gradient png). No
  * skins, animations, Draco, sparse accessors. Anything unsupported is skipped
@@ -201,6 +201,16 @@ export function xformDir(m, p) {
           s * (c20 * p[0] + c21 * p[1] + c22 * p[2])];
 }
 
+// The importer's per-node handle on xformDir: `mirrored` (negative determinant)
+// tells the caller to swap triangle winding back to front faces. At zero
+// determinant the cofactors still transform oriented surface area, so a
+// flattened plane keeps a usable normal.
+function normalTransform(m) {
+  const a = m[0], b = m[4], c = m[8], d = m[1], e = m[5], f = m[9], g = m[2], h = m[6], k = m[10];
+  const det = a * (e * k - f * h) + b * (f * g - d * k) + c * (d * h - e * g);
+  return { mirrored: det < 0, apply: (p) => xformDir(m, p) };
+}
+
 // Load a material's base colour, and — when it points at a texture — the decoded
 // pixels so a vertex can be tinted by its UV (the low-poly palette convention).
 function materialColour(gltf, matIdx, images) {
@@ -241,6 +251,7 @@ function importFile(file, opts) {
     const node = json.nodes[nodeIdx];
     const world = mul(parent, nodeMatrix(node));
     if (node.mesh != null) {
+      const normal = normalTransform(world);
       for (const prim of json.meshes[node.mesh].primitives) {
         if (prim.mode != null && prim.mode !== 4) continue;   // triangles only
         const P = accessor(gltf, prim.attributes.POSITION);
@@ -257,22 +268,23 @@ function importFile(file, opts) {
         // (k_grandstandcoveredround 11,425 for 2,387; measured 2026-10-02). The
         // game's compaction hid the waste on the GPU, the pack and an instanced
         // upload did not. `remap` is source index -> local index, in first-use
-        // order, so the output is deterministic for a given file.
-        const base = pos.length / 3;
+        // order, so the output is deterministic for a given file. Missing
+        // NORMAL instead splits corners: glTF requires implicit flat normals.
+        const base = pos.length / 3, firstIndex = idx.length;
         const remap = new Map();
         const local = [];
         for (let i = 0; i < I.count; i++) {
           const src = I.data[i];
-          let li = remap.get(src);
+          let li = N ? remap.get(src) : undefined;
           if (li === undefined) { li = local.length; remap.set(src, li); local.push(src); }
           idx.push(base + li);
         }
         for (const i of local) {
           const wp = xform(world, [P.data[i * 3], P.data[i * 3 + 1], P.data[i * 3 + 2]]);
           pos.push(wp[0], wp[1], wp[2]);
-          if (N) { const wn = xformDir(world, [N.data[i * 3], N.data[i * 3 + 1], N.data[i * 3 + 2]]);
+          if (N) { const wn = normal.apply([N.data[i * 3], N.data[i * 3 + 1], N.data[i * 3 + 2]]);
             const l = Math.hypot(wn[0], wn[1], wn[2]) || 1; nrm.push(wn[0] / l, wn[1] / l, wn[2] / l); }
-          else nrm.push(0, 1, 0);
+          else nrm.push(0, 0, 0);
           if (tex && UV) {
             // Nearest-sample the palette; low-poly UVs point at solid regions so
             // nearest is exact and avoids bleeding between palette cells.
@@ -283,6 +295,17 @@ function importFile(file, opts) {
             const o = (py * tex.w + px) * 4;
             col.push(tex.rgba[o] / 255 * factor[0], tex.rgba[o + 1] / 255 * factor[1], tex.rgba[o + 2] / 255 * factor[2]);
           } else col.push(factor[0], factor[1], factor[2]);
+        }
+        // Reflections reverse geometric winding; restore front faces before
+        // deriving implicit flat normals on the independent emitted corners.
+        for (let t = firstIndex; t < idx.length; t += 3) {
+          if (normal.mirrored) [idx[t+1], idx[t+2]] = [idx[t+2], idx[t+1]];
+          if (N) continue;
+          const [a,b,c] = idx.slice(t,t+3).map(i => i*3);
+          const u = [0,1,2].map(k => pos[b+k]-pos[a+k]), v = [0,1,2].map(k => pos[c+k]-pos[a+k]);
+          const face = [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+          const len = Math.hypot(...face) || 1;
+          for (const off of [a,b,c]) for (let k=0;k<3;k++) nrm[off+k] = face[k]/len;
         }
       }
     }

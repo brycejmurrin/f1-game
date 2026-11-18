@@ -177,3 +177,26 @@ test("WATCH gap recovery preserves both actual Suzuka crossing branches", () => 
       `Suzuka branch ${frac}, t ${times[i]}: ${trace.prog[i]}`);
   }
 });
+
+test("a trace that joins mid-race takes its lap from the recorded lap starts, not lap 0 (#3665)", () => {
+  // A 1 km loop whose arc is x mod 1000; the car's first position is at t=600 s,
+  // 100 m into its seventh lap (lap starts every 100 s from lights out).
+  const total = 1000, track = { n: 1000, total };
+  const project = (_track, x) => ({ s: ((x % total) + total) % total, lat: 0, dist: 0 });
+  const R = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8") + "; RealReplay", { Tracks: { project }, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }, { filename: absSrc("js/race/real-replay.js") });
+  const starts = [0, 100, 200, 300, 400, 500, 600];
+  const raw = Float32Array.from([600, 100, 0, 601, 110, 0, 602, 120, 0]);
+  const frame = { refl: 1, th: 0, tx: 0, ty: 0 };
+  const tr = R.trackTrace(track, frame, raw, starts);
+  assert.ok(Math.abs(tr.prog[0] - 6100) < 1e-3, "seventh lap, 100 m in: " + tr.prog[0]);
+  assert.ok(Math.abs(tr.prog[2] - 6120) < 1e-3, "and it runs on from there: " + tr.prog[2]);
+  // Timing says the lap began, the position still reads just behind the line: the same lap, not one more.
+  const late = R.trackTrace(track, frame, Float32Array.from([600.5, 995, 0, 601, 1005, 0]), starts);
+  assert.ok(Math.abs(late.prog[0] - 5995) < 1e-3, "the wrap nearest the timing: " + late.prog[0]);
+  // buildTraces passes each driver's lap starts through.
+  const built = R.buildTraces(track, { drivers: [{ num: 7, pos: 1, code: "AAA", lapStart: starts, laps: [] }] }, { fit: frame, cars: { 7: raw } });
+  assert.ok(Math.abs(built.byNum.get(7).prog[0] - 6100) < 1e-3, "buildTraces anchors by lap timing: " + built.byNum.get(7).prog[0]);
+  // A trace from the grid keeps the lights-out convention.
+  const grid = R.trackTrace(track, frame, Float32Array.from([-5, 980, 0, 0, 990, 0, 1, 1010, 0]), starts);
+  assert.ok(Math.abs(grid.prog[1] + 10) < 1e-3, "on the grid, behind the line: " + grid.prog[1]);
+});

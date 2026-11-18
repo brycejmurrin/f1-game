@@ -46,7 +46,7 @@ test('glow growth disposes previous geometry; shrink, zero and moving eye preser
 });
 
 test('glow wrappers survive actual idle pruning after initial allocation and growth',()=>{
- const constants=source.match(/const PRUNE_EVERY_MS = [^;]+;/)[0];
+ const constants=source.match(/const PRUNE_EVERY_MS = [^;]+;/)[0], idle=+constants.match(/PRUNE_IDLE_MS = (\d+)/)[1];
  for(const grow of [false,true])for(const unpinned of [true,false]){
   const f=fixture();f.api.drawGlow(many(1),1);if(grow)f.api.drawGlow(many(40),1);
   const geo=f.glowStream.geo;if(unpinned)geo.__tlxPin=false;
@@ -54,9 +54,9 @@ test('glow wrappers survive actual idle pruning after initial allocation and gro
   const pool=[mesh], byGeo=new Map([[geo,new Map([[mat,[mesh]]])]]), dropped=[];
   const prune=vm.runInNewContext(`${constants}\nlet _pruneLast=0;\n${fnSource(source,'function prunePool(now) {')}\nprunePool`,
    {meshPool:pool,meshByGeo:byGeo,dropWrapper:m=>dropped.push(m)}, {filename:absSrc('js/render/three/tlx.js')});
-  prune(20999); // 19,999 ms idle: both pinned and unpinned wrappers survive.
+  prune(1000+idle-1); // 1 ms short of PRUNE_IDLE_MS: both pinned and unpinned wrappers survive.
   assert.equal(pool.length,1);assert.equal(dropped.length,0);
-  prune(27001); // 26,001 ms idle, also beyond the actual five-second prune cadence.
+  prune(1000+idle+6001); // past PRUNE_IDLE_MS and beyond the actual five-second prune cadence.
   assert.equal(pool.length,unpinned?0:1,`growth=${grow}, unpinned=${unpinned}`);
   assert.equal(dropped.length,unpinned?1:0);
   assert.equal(byGeo.has(geo),!unpinned,'the live geometry lookup follows wrapper ownership');

@@ -96,8 +96,8 @@ const SPEC = [
   // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
-  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
+  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; 109% on touch, 70% on a phone)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, 70 ui on a phone, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
@@ -165,6 +165,7 @@ const SPEC = [
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
+  { k: "pitEntryShot", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js PIT ENTRY SHOT (feel.js row; #4745)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
   { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
@@ -285,6 +286,8 @@ const SPEC = [
     // Self-contained (EnergyPlan.POLICIES' three names): settings-export loads without the race modules.
     normalize: (v) => (Array.isArray(v) && v.length === 3 && v.every((p) => p === "manual" || p === "deploy" || p === "save") ? v.slice() : undefined) },
   { k: "damageHandling", lane: "json", group: "driving", def: false, src: "js/race/race-settings.js DAMAGE row → DamageHandling.setEnabled (#1578)" },
+  { k: "wheelState", lane: "raw", group: "driving", def: "0", oneOf: ["0", "1"], src: "js/physics/wheel-state.js" },
+  { k: "wheelAssist", lane: "raw", group: "driving", def: "off", oneOf: ["off", "medium", "full"], src: "js/physics/wheel-state.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
@@ -540,7 +543,9 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
+// careerSetup.<flavour>.<slot>.<team> is a career's own setup sheet (#5036, SetupTune.keyFor):
+// it travels with the garage, and only applies where the slot holds the career whose seed it carries.
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets.", "careerSetup."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -617,6 +622,13 @@ function applySettings(file, G) {
     if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     writes.push([row, v]);
   }
+  // ALL OR NOTHING (#5005). A write storage refuses (a nearly full phone) used to leave the keys before and
+  // after it written: half old, half new after the next launch. Snapshot every key first; any refusal puts
+  // them all back and the time-trial merge below never starts.
+  // Read through the store, so a value it holds only in memory (an earlier refused write) is what comes back;
+  // getStored, never get: a key the player never set must go back to unset, not to a written-out default.
+  const stored = (k) => (GameStore.store.getStored ? GameStore.store.getStored(k) : GameStore.store.get(k, undefined));
+  const before = writes.map(([row]) => [row, row.lane === "raw" ? GameStore.store.raw(`apex26.${row.k}`) : stored(row.k)]);
   let applied = 0, failed = 0;
   for (const [row, v] of writes) {
     try {
@@ -633,6 +645,16 @@ function applySettings(file, G) {
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
+  }
+  if (failed) {
+    for (const [row, prev] of before) {
+      try {
+        if (row.lane !== "raw") GameStore.store.set(row.k, prev);   // undefined removes the key
+        else if (prev === null || prev === undefined) GameStore.store.rawDel(`apex26.${row.k}`);
+        else GameStore.store.rawSet(`apex26.${row.k}`, prev);
+      } catch (_) { /* storage is refusing: the key keeps whatever it could */ }
+    }
+    return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
   }
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
@@ -754,7 +776,7 @@ function garageValue(k, v) {
     }
     return out;
   }
-  if (k.indexOf("setup.") === 0) {
+  if (k.indexOf("setup.") === 0 || k.indexOf("careerSetup.") === 0) {
     // SetupTune clamps each field on read; here only the size is bounded.
     return v && typeof v === "object" && !Array.isArray(v) && JSON.stringify(v).length <= 4096 ? v : undefined;
   }
@@ -1110,7 +1132,7 @@ function create(G) {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
-        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
         if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
@@ -1387,7 +1409,8 @@ function create(G) {
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+  // #4798 gate (after SaveHealth's)
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(mount) : mount()), { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
   _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,

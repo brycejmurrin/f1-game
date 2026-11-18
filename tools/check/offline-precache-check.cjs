@@ -121,7 +121,7 @@ prepareSite().then(() => srv.listen(0, "127.0.0.1", async () => {
     .match(/— (\d+) instanced/) || [])[1]);
   console.log(`warm=${WARM} (raced online)   cold=${TRACK} (first touched OFFLINE, Node says ${want})`);
   // Chromium comes from harness.mjs's ladder (CHROME / PW_CHROMIUM / the known
-  // paths), never a hard-coded /opt path — tools-runnable.test.mjs pins that,
+  // paths), never a hard-coded /opt path — tools-runnable-cli.test.mjs pins that,
   // and rtc-e2e died on a Mac for exactly this.
   const exe = (await import("../lib/harness.mjs")).pickChromium();
   const hostArgs = STAMPED ? [`--host-resolver-rules=MAP ${HOST} 127.0.0.1`,

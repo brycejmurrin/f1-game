@@ -140,7 +140,10 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
   }
   const se = document.scrollingElement || document.documentElement;
   const scroll = { x: Math.max(0, se.scrollWidth - vw), y: Math.max(0, se.scrollHeight - vh), left: Math.round(scrollX), top: Math.round(scrollY) };
-  return { roots: selectors, rootsFound: rootEls.length, rootsVisible: rootEls.filter(visible).length, viewport: { width: vw, height: vh }, safe, taps, blocked, texts, outside, scroll };
+  // The sheet zoom: the first visible root's currentCSSZoom (UI SIZE lives in `zoom: var(--ui-scale)`).
+  const zroot = rootEls.find(visible) || rootEls[0];
+  const zoom = zroot ? +zoomOf(zroot).toFixed(3) : null;
+  return { roots: selectors, rootsFound: rootEls.length, rootsVisible: rootEls.filter(visible).length, viewport: { width: vw, height: vh }, safe, zoom, taps, blocked, texts, outside, scroll };
 }
 
 /**
@@ -158,12 +161,24 @@ export function summarisePaint(raw, { tapMin = TAP_PAINT_MIN, textMin = TEXT_PAI
   const scrolls = sc.x > 1 || sc.y > 1 || sc.left !== 0 || sc.top !== 0;
   return {
     floors: { tap: tapMin, text: textMin },
+    zoom: typeof raw.zoom === "number" ? raw.zoom : null,
     taps: { n: taps.length, under: underTaps.length, smallest: taps[0] ? { el: taps[0].el, w: taps[0].w, h: taps[0].h } : null, worst: underTaps.slice(0, keep).map((t) => `${t.el} ${t.w}x${t.h}`) },
     text: { n: texts.length, under: underText.length, smallest: texts[0] ? { el: texts[0].el, px: texts[0].px, text: texts[0].text } : null, worst: underText.slice(0, keep).map((t) => `${t.el} ${t.px}px "${t.text}"`) },
     outside: { under: outside.length, worst: outside.slice(0, keep).map((o) => `${o.el} ${o.kind} at ${o.at}`) },
     blocked: { under: blocked.length, worst: blocked.slice(0, keep).map((b) => `${b.el} under ${b.by} at ${b.at}`) },
     scroll: { under: scrolls ? 1 : 0, worst: scrolls ? [`page scrolls: +${sc.x}x+${sc.y} px beyond the window, at ${sc.left},${sc.top}`] : [] },
   };
+}
+
+/**
+ * Pure: the safe-area insets `measurePaintInPage` takes for a layout-audit viewport entry. An owner cell's preset
+ * (seedOwnerProfile) wins; else the entry's 4th element `{ t, r, b, l }`; else none (a desktop cell).
+ */
+export function paintInsets(vpEntry, owner = null) {
+  if (owner && owner.insets) return owner.insets;
+  const i = vpEntry && vpEntry[3];
+  if (!i) return null;
+  return { top: i.t || 0, right: i.r || 0, bottom: i.b || 0, left: i.l || 0 };
 }
 
 /** Pure: the violation counts of a `paint` block — the shape a ceiling has. */
@@ -175,7 +190,8 @@ export function paintCounts(p) {
 export function paintLine(p) {
   const tap = p.taps.smallest ? `${Math.min(p.taps.smallest.w, p.taps.smallest.h)}px ${p.taps.smallest.el}` : "none";
   const txt = p.text.smallest ? `${p.text.smallest.px}px ${p.text.smallest.el}` : "none";
-  return `taps under ${p.floors.tap}px ${p.taps.under}/${p.taps.n} (smallest ${tap}); text under ${p.floors.text}px ${p.text.under}/${p.text.n} (smallest ${txt}); outside safe box ${p.outside.under}; blocked ${p.blocked.under}; page scroll ${p.scroll.under ? "YES" : "no"}`;
+  const zoom = typeof p.zoom === "number" ? `zoom ${p.zoom}; ` : "";
+  return `${zoom}taps under ${p.floors.tap}px ${p.taps.under}/${p.taps.n} (smallest ${tap}); text under ${p.floors.text}px ${p.text.under}/${p.text.n} (smallest ${txt}); outside safe box ${p.outside.under}; blocked ${p.blocked.under}; page scroll ${p.scroll.under ? "YES" : "no"}`;
 }
 
 const KIND_WORDS = { taps: (p) => `tap target(s) paint under ${p.floors.tap}px`, text: (p) => `text node(s) paint under ${p.floors.text}px`,

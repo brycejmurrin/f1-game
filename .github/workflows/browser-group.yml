@@ -27,7 +27,10 @@ name: Browser group
 #
 # NOT A GATE. Nothing requires it and nothing reads its timings (spec-timings.yml
 # learns from the Pages train only); a PR's own ci.yml run still decides merge.
-# It is a fast answer to "is this group green on my branch?".
+# It is a fast answer to "is this group green on my branch?". ONE READER (#5480):
+# a ready PR's selected verdict counts a spec its plan dropped when a run of this
+# workflow with `pr` ran it green on the same head and base, attempt 1, llvmpipe
+# (each shard's `apex-group` annotation; tools/ci/dropped-group-runs.mjs).
 #
 # Docs: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 #       https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
@@ -56,6 +59,11 @@ on:
         required: false
         default: ""
         type: string
+      pr:
+        description: "open PR number: test its merge ref (refs/pull/<n>/merge) and record the commit pair, so its ready verdict can count a dropped spec (#5480); empty = the branch head"
+        required: false
+        default: ""
+        type: string
 
 # The group and branch are in the run's name, so the CLI (and a human in the
 # Actions tab) can tell dispatches apart.
@@ -80,10 +88,32 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.plan).matrix }}
     steps:
+      # `pr` is text from whoever dispatched: digits or nothing, checked before it names a ref (env, never inline).
+      - name: Validate the pr input
+        env:
+          PR: ${{ inputs.pr }}
+        run: |
+          case "$PR" in ""|[1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9]) ;; *) echo "::error::pr must be a PR number or empty"; exit 1;; esac
+      # With `pr`: the PR's merge ref, so the shard records (base, head) = the merge commit's parents and a ready
+      # verdict on that PR can count this run for a spec its plan dropped (tools/ci/dropped-group-runs.mjs).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.pr != '' && format('refs/pull/{0}/merge', inputs.pr) || '' }}
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # THE PLAN RECORD (#5480): what this shard will run, as an `apex-group-plan` annotation, written BEFORE any
+      # spec or test helper executes. A ready verdict counts only units in it (tools/ci/dropped-group-runs.mjs).
+      - name: Record this shard's plan
+        env:
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
+          GL: ${{ inputs.gl }}
+          GROUP: ${{ inputs.group }}
+          PLAN: ${{ inputs.plan }}
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ matrix.total }}
+          WORKERS: ${{ inputs.workers }}
+        run: node tools/ci/remote-group.mjs --plan-record
       # Cached Chromium (not the Playwright Docker image): restore ≈ install on
       # Linux, and Mesa/Xvfb still need the host runner — see
       # docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md §Docker.
@@ -108,6 +138,7 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           APEX_GL: llvmpipe
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
           LIBGL_ALWAYS_SOFTWARE: 1
           GL: llvmpipe
           GROUP: ${{ inputs.group }}
@@ -122,6 +153,7 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GL: swiftshader
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
           GROUP: ${{ inputs.group }}
           PLAN: ${{ inputs.plan }}
           SHARD: ${{ matrix.shard }}

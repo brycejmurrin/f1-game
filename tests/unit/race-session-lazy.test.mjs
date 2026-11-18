@@ -219,3 +219,34 @@ test("optional garage exterior coalesces loading and retries without holding a r
   assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "a failed optional fetch can retry");
   assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "resident globals need no extra fetch");
 });
+
+// #4274 item 15: the wave is preloaded together, then evaluated one file at a time in edge order with a
+// main-thread yield between evals (it used to inject every file at once: one long frame of evals).
+test("ensureRaceSession evaluates its wave one file at a time, a yield between, after one preload of the whole wave", async () => {
+  const bundles = src("js/core/lazy-bundles.js");
+  const ev = [];
+  const files = ["js/race/duel.js", "js/race/spotter.js", "js/race/pit-lane.js"];
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+      LAZY_RACE_SESSION: files, LAZY_RACE_SESSION_EDGES: [["js/race/pit-lane.js", "js/race/duel.js"]], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      SCENERY_DIR: "", LAZY_SCENERY: [], LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [] },
+    Duel: { _stub: true }, Spotter: { _stub: true }, PitLane: { _stub: true },
+    window: {}, Tracks: { LIST: [] }, Log: { warn() {}, info() {}, error() {} }, els: {}, queueMicrotask,
+    requestIdleCallback() { return 1; }, setTimeout() {}, clearTimeout() {},
+    scheduler: { yield: () => { ev.push("yield"); return Promise.resolve(); } },
+    ScriptLoader: { preload: (f) => { ev.push("preload " + f.join(",")); return f.length; } },
+    __load: async (f, edges, o) => {
+      ev.push("load " + f.join(","));
+      const G = { "js/race/duel.js": "Duel", "js/race/spotter.js": "Spotter", "js/race/pit-lane.js": "PitLane" };
+      for (const x of f) { ctx[G[x]] = { _stub: false }; if (o.ready(x)) o.loaded.add(x); }
+      return true;
+    },
+  });
+  vm.runInContext(bundles + `
+    const lb = LazyBundles.create({ els, loadBackendScripts: __load, getContext() {}, onRaceSessionReady() {} });
+    globalThis.__ensure = lb.ensureRaceSession;`, ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  assert.equal(await ctx.__ensure(), true);
+  assert.deepEqual(ev, ["preload js/race/duel.js,js/race/spotter.js,js/race/pit-lane.js",
+    "load js/race/spotter.js", "yield", "load js/race/pit-lane.js", "yield", "load js/race/duel.js"],
+    "one preload, then one eval per task; pit-lane before duel (its edge)");
+});

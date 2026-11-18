@@ -24,6 +24,7 @@ const WallClamp = (function () {
   //   track, dt, steer, postLim, smp,
   //   wrapS(s), worldFromTrack(s, x, smp),
   //   soundOn (bool), incidentSim ({ notifyWall }),
+  //   vStd — optional (absent: PACE 1),
   //   addShake(delta) — optional; street incidence FX (game.js owns shake)
   function apply(c, ctx) {
     const track = ctx.track;
@@ -36,6 +37,7 @@ const WallClamp = (function () {
     const soundOn = ctx.soundOn;
     const incidentSim = ctx.incidentSim;
     const addShake = ctx.addShake;
+    const kStd = ctx.vStd ? ctx.vStd(1) : 1;   // vStd is linear in v
 
     // Same candidate-position boundary as contact separation and incident takeover.
     const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, postLim);
@@ -55,7 +57,8 @@ const WallClamp = (function () {
         // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
         // collision surface for the car (that would be R3). promoteBarrier gates
         // on its own severity minimum and is a no-op when the flag is off.
-        const _wallSev = xOver * 60 + Math.abs(c.speed || 0) * 0.15;
+        // #4947: std-scale, any PACE / step rate (= xOver*60 form at PACE 1, 60 Hz)
+        const _wallSev = ((dt > 0 ? xOver / dt : 0) + Math.abs(c.speed || 0) * 0.15) * kStd;
         DebrisWorld.promoteBarrier(c, into, _wallSev);
         // Incident sim (R2 airborne): a GENUINELY hard wall strike launches this
         // car into a bounded 6-DoF Rapier tumble (queued now, promoted in preStep).
@@ -119,7 +122,7 @@ const WallClamp = (function () {
           // velocity to justify being turned (unscaled, a stopped car snaps
           // parallel in ~0.2 s).
           const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
-                          * clamp(Math.abs(c.speed) / 8, 0, 1);
+                          * clamp(Math.abs(c.speed) * kStd / 8, 0, 1);
           c.head -= rel * wallAlign;
           if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
         }

@@ -37,6 +37,12 @@ async function medianRatio(track, pace) {
     assert.equal(G.PACE, pace, "the pace slider took");
     g.aiOnly();
     G.cars.forEach((c, i) => { if (!c.retired && !KEEP(i)) a.retire(i, "bench"); });
+    // A benched car must be OUT of the world. retireCar parks it against the barrier, and on a street
+    // circuit that is ON the road (#2162: a static body the AI steers round), so eight parked cars lined
+    // the left of Monaco's start straight. A sampled car that brushed one stopped dead for 7 s and the
+    // next two queued behind it (#5510: laps 6-9 s long from a 1 cm change of line): an obstacle course,
+    // not the pace this test compares. Lift every benched car off the circuit.
+    G.cars.forEach((c) => { if (c.retired) { c.x = (c.x >= 0 ? 1 : -1) * 500; c.xVis = c.x; c.parkedOnRoad = false; } });
     const cars = G.cars.filter((c) => !c.retired);
     assert.ok(cars.length >= 4, "a sampled field of " + cars.length);
     const quali = g.sandbox.Quali.create(G);

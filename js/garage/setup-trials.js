@@ -28,7 +28,7 @@ const SetupTrials = (() => {
       owned: null, revision: null, context: null, busy: false };
     notify(); return true;
   }
-  function owns(r) { return r.owned && same(SetupTune.get(r.teamId), r.owned) && (!r.store.keyRevision || r.revision === r.store.keyRevision("setup." + r.teamId)); }
+  function owns(r) { return r.owned && same(SetupTune.get(r.teamId), r.owned) && (!r.store.keyRevision || r.revision === r.store.keyRevision(SetupTune.keyFor(r.teamId))); }
   function cancel() {
     const r = run;
     if (!r) return false;
@@ -44,7 +44,7 @@ const SetupTrials = (() => {
     if (!r || r.busy || r.pending || !["baseline", "control", "candidate"].includes(arm) || r.receipts.filter(x => x.arm === arm).length >= 6) return false;
     if (r.owned && !owns(r)) { r.reason = "Mechanical setup changed outside this comparison. Cancel and start again."; notify(); return false; }
     r.busy = true; const tune = arm === "candidate" ? r.candidate : r.baseline;
-    r.owned = SetupTune.set(r.teamId, tune); r.revision = r.store.keyRevision ? r.store.keyRevision("setup." + r.teamId) : null;
+    r.owned = SetupTune.set(r.teamId, tune); r.revision = r.store.keyRevision ? r.store.keyRevision(SetupTune.keyFor(r.teamId)) : null;
     notify();
     let result;
     try { result = await r.launch({ teamId: r.teamId, tune: copy(tune), mode: "launch", isCurrent: () => run === r && owns(r) }); }

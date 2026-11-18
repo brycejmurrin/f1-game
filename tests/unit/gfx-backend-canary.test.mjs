@@ -762,6 +762,10 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const old = { __tlxFrame: 7, dispose() { disposed++; } };
   const decalCache = new Map([["current", current], ["old", old]]);
   const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  // _decalDrop keeps the texture -> glow index in step (#4556); lifted, not re-implemented.
+  const decalByTex = new Map();
+  const dropAt = fx.indexOf("    function _decalDrop(k, v) {");
+  const _decalDrop = eval("(" + fx.slice(dropAt, fx.indexOf("\n    }\n", dropAt) + 6).trim() + ")");
   eval(evict);
   assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
   assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");
@@ -1065,6 +1069,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
     "apex26.gfxFallbackWhy",
+    // What the unset default's own boot probe saw when it bound GLX (renderer-boot.js, #5304).
+    "apex26.gfxAdapterWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -1180,7 +1186,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   const latchSeed = Object.fromEntries([
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
-    "apex26.gfxFallbackWhy",
+    "apex26.gfxFallbackWhy", "apex26.gfxAdapterWhy",
   ].map((k) => [k, "1"]));
   const a = bootPicker({
     ls: { "apex26.gfxBackend": "webgl2" },
@@ -1199,7 +1205,7 @@ test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () =
   const latchSeed = Object.fromEntries([
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
-    "apex26.gfxFallbackWhy",
+    "apex26.gfxFallbackWhy", "apex26.gfxAdapterWhy",
   ].map((k) => [k, "1"]));
   const three = bootPicker({
     ls: { "apex26.gfxBackend": "three" },
@@ -4308,14 +4314,20 @@ test("software GL garage path gates readback and stall reload (#3589)", async ()
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
-  // …and the gate is APPLIED: the real soft.js, run. Under the defer a capture
-  // waiter is satisfied with a generation bump and NO framebuffer readback;
-  // without it the same waiter costs exactly one readback.
-  for (const [deferOn, wantReads] of [[true, 0], [false, 1]]) {
+  // …and the gate is APPLIED: the real soft.js, run. Under the defer the PASSIVE
+  // arm (invalidateSoftPresent on garage entry) is consumed with NO readback;
+  // without it the same arm costs one. A capture WAITER reads #game-soft next
+  // (garage PHOTO, garage-angles), so it gets its one readback either way: a
+  // generation bump with nothing drawn was #5380 (blank 300x150 captures).
+  for (const [deferOn, wantArmReads] of [[true, 0], [false, 1]]) {
+    const arm = glxSoftHarness({ defer: () => deferOn });
+    arm.soft.invalidateSoftPresent();
+    arm.soft.blitIfDue();
+    assert.equal(arm.reads(), wantArmReads, `softwareGlUiReadbackDefer() ${deferOn}: passive arm costs ${wantArmReads} readback(s)`);
     const h = glxSoftHarness({ defer: () => deferOn });
     const waiter = h.soft.awaitSoftPresent(1000);
     h.soft.blitIfDue();
-    assert.equal(h.reads(), wantReads, `softwareGlUiReadbackDefer() ${deferOn}: ${wantReads} readback(s)`);
+    assert.equal(h.reads(), 1, `softwareGlUiReadbackDefer() ${deferOn}: a capture waiter gets its readback`);
     await waiter;   // resolves either way: __apex.awaitPresent() must not hang under the defer
   }
   const assets = readFile("js/render/shared/assets.js");
@@ -4573,7 +4585,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
 });
 
 test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry sheets are up", () => {
-  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h, asked) {", "function ", "readbackLdrPixels");
   assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
   const gov = read("js/perf/governor.js");
   assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("quitReadbackDefer"), "quit MenuTeardown defer must not leak garage mask into readback");
@@ -4839,13 +4851,13 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
   assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c, true\);/, "same mesh cache keys the draw uses — the CAR, plus the covered-warm hint");
-  assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
+  assert.match(wa, /getCarDecalTexture\(paintTeam\(c\), carDecalNum\(paintTeam\(c\), c\), !!c\.isPlayer\)/, "same atlas key the draw queues (the car's own paint, #5037)");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
   // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
   assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
   assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
   // A live paint draft swaps the livery id for its own tag (B·H13 hunter finding 3), memoised the same way.
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| G\.getLiveryId\(team\.id\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| livTag\(team\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -6530,6 +6542,7 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
     const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
     const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    const paintTeam = (c) => c.team;   // CarDraw's car's-own-paint seam (#5037): no friend or repainted AI here
     // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
     let casters = false;
     const shadowCastersWanted = () => casters;

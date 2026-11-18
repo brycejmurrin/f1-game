@@ -46,21 +46,28 @@ export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-
 
 /**
  * Measured / expected p50 job durations (seconds). Used only for --costs /
- * savings estimates — never for selection. Re-measured 2026-10-16 from 18
- * recent successful CI runs (setup included). Keep this table current when a
+ * savings estimates — never for selection. Re-measured 2026-11-11 (audit F4,
+ * #3117) from job start→end times (setup included) of the full-plan nightly
+ * ci.yml runs on the deploy branch, 2026-11-07..11-10 (4 green samples per
+ * node slice, median of the middle two). guards is the slowest of the four
+ * Structural guards shards, median over 36 non-skipped runs 2026-11-07..11-11.
+ * The 2026-10-16 table had page-a/page-b swapped and slow at a third of
+ * today's. vm-b1/vm-b2/slow (~600 s) now set the wall against vm-a2/page-b
+ * (~185 s); moving that work means repartitioning the game-vm-b / node-slow
+ * groups in tests/groups.json, not this table. Keep this table current when a
  * full deploy train changes runner images or test composition; queue and setup
  * time still need to be measured separately before moving ownership.
  */
 export const SLICE_COST_P50_SEC = {
-  guards: 374,
-  "vm-a1": 250,
-  "vm-a2": 280,
-  "vm-b1": 455,
-  "vm-b2": 295,
-  "page-a": 164,
-  "page-b": 391,
-  slow: 206,
-  "driving-model": 120,
+  guards: 321,
+  "vm-a1": 259,
+  "vm-a2": 190,
+  "vm-b1": 599,
+  "vm-b2": 595,
+  "page-a": 301,
+  "page-b": 181,
+  slow: 592,
+  "driving-model": 125,
 };
 
 /** Which npm scripts / groups.json keys feed each slice. MIRRORS the case

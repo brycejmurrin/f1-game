@@ -62,3 +62,29 @@ test("afterOverlay resets session flow without needing forgetGp or unused wire f
   assert.equal(calls.career, 1);
   assert.equal("team" in deps._doc.dataset, false);
 });
+
+// MenuTeardown (js/perf/menu-teardown.js): endQuit releases QUIT two frames later. A new quit inside that
+// window must keep its own QUIT bit, or software GL loses the readback cover mid-quit (#4550 B6 finding 2).
+test("MenuTeardown: a stale endQuit release does not clear a newer quit's cover", () => {
+  const raf = [];
+  const ctx = {
+    PerfGov: { softwareRaster: () => true },
+    requestAnimationFrame: (fn) => raf.push(fn),
+    setTimeout: () => 1, clearTimeout: () => {},
+    performance: { now: () => 0 },
+    document: { getElementById: () => null },
+  };
+  const MT = vm.runInNewContext(readFileSync(join(ROOT, "js/perf/menu-teardown.js"), "utf8") + "\n;MenuTeardown", ctx,
+    { filename: absSrc("js/perf/menu-teardown.js") });
+  const flush = () => { while (raf.length) raf.shift()(); };
+  MT.beginQuit();
+  assert.equal(MT.cover(), true);
+  MT.endQuit();
+  MT.beginQuit();   // a second quit before the two-frame release ran
+  flush();
+  assert.equal(MT.cover(), true, "the second quit keeps its QUIT bit");
+  assert.equal(MT.quitReadbackDefer(), true);
+  MT.endQuit();
+  flush();
+  assert.equal(MT.cover(), false, "its own endQuit still releases");
+});

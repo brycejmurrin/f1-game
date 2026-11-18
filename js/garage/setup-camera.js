@@ -494,6 +494,19 @@ function startHome(from) {
   arrival.start({ home: p });
   return true;
 }
+// PIT OUT (#4745): a stop's release, the drive-out at 1.6x in the paused bay, then done() once (closePitWork), on
+// its end, SKIP / Esc or a second DONE. Tuner off, reduced motion and automation hand back at once. Bay-local and
+// paused: no control to move (docs/PHYSICS.md).
+let handoff = null;
+const auto = () => typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation();
+function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
+function startPitOut(done) {
+  handoff = { done };
+  if (!GarageArrival.settings(G.store.get("garageArrival", null)).enabled || reducedMotion() || auto()) { fireHandoff(); return false; }
+  endHome(); arrival.start({ out: true, rate: 1.6 });
+  return true;
+}
+function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -674,6 +687,10 @@ function setSetupAero(on, opts) {
   }
 }
 function setupZoom(mul) {
+  // A zoom takes the distance off the turntable (#5034). While it spins the frame draws
+  // max(stored, fit), so a press moved a number the camera did not use: start from the
+  // DRAWN distance and stop the spin, as an orbit, a pan and a preset already do.
+  if (setupPreviewSpin && !home.active) { if (_spEffDist > 0) setupPreviewDist = _spEffDist; setSetupSpin(false); }
   setupPreviewDist = clamp(setupPreviewDist * mul, spDistMin(), SP_DIST_MAX);
 }
 // Move the rig sideways / along the car, in the SCREEN's frame rather than the
@@ -942,7 +959,8 @@ function restoreCamera(s) {
   if (!s) return;
   setupPreviewAz = s.az; setupPreviewEl = s.el; setupPreviewDist = s.dist;
   setupPreviewOrbit = s.orbit.slice(); setupPreviewTgt = s.target.slice(); setupPreviewPan = s.pan.slice();
-  setupPreviewMinDist = s.minDist; setupPreviewFree = s.free; setupPreviewXOn = s.xOn; setupPreviewAeroX = s.aeroX;
+  setupPreviewMinDist = s.minDist; setupPreviewFree = s.free; setupPreviewAeroX = s.aeroX;
+  setSetupAero(s.xOn);   // through the button: its label and aria-pressed follow the flaps (#5045)
   setupPreviewView = s.view; GarageScene.spot(s.view); setSetupSpin(s.spin);
 }
 function setHomeView(name, pose) {
@@ -1053,6 +1071,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  if (handoff && !driveOut && !preview && !home.active && !(arriving && arriving.active)) fireHandoff();   // the show ended or was skipped
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
@@ -1504,7 +1523,7 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, skipPitOut, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,

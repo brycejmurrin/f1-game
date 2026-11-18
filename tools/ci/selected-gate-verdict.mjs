@@ -10,13 +10,17 @@
  * diagnostics. Successful or genuinely empty plans retain the normal rules.
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
- *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT / REUSED / REUSED_RUN from env
+ *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT / REUSED / REUSED_RUN
+ *     / GROUP_ACCEPT / GROUP_RUNS / GROUP_WHY (dropped-group-runs.mjs: a separate run covered the dropped specs, #5480) from env
+ *     and SHARDS (the select job's `shards` plan JSON: every spec it names must have a junit testcase, #5403; a REUSED
+ *     verdict inherits that check: reuse-draft-selected.mjs requires the draft run's own verdict job, which applied it to
+ *     the same plan, to have passed)
  *     (DRAFT=true: a dropped spec warns instead of redding — the draft plan is the 5-min budget, 2026-11-03)
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { failedSpecsUnder, unattributedFailuresFrom, testcaseCount } from "./junit-failed.mjs";
+import { failedSpecsUnder, unattributedFailuresFrom, testcaseCount, testedSpecsFrom } from "./junit-failed.mjs";
 
 const JUNIT_PREFIX = "spec-timings-junit-selected-";
 const STARTED_PREFIX = "selected-started-";
@@ -58,6 +62,45 @@ export function shardEvidence(junitIn, startedIn) {
   return { started, junit };
 }
 
+/** The specs the select job PLANNED: the union of every `shards` row's space-separated `specs`. `null` when no plan
+ *  was handed in (pure callers, an older workflow); `{ error }` when one was handed in and cannot be read, which the
+ *  verdict fails closed on rather than reading as "nothing planned" (#5403).
+ *  A row with `circuits` set (the circuit lane, APEX_CIRCUITS) is left out: there a per-circuit loop spec
+ *  (select-specs CIRCUIT_FILTERED_TESTS, e.g. tracks-walls-a / -b, each half of the roster) legitimately collects zero
+ *  tests when the scoped circuit is in the other half. Such a row is still held by the per-shard rule (a started shard
+ *  with no testcase is red), and Playwright fails a run whose specs collect nothing at all. */
+export function plannedSpecs(shardsJson) {
+  const raw = String(shardsJson ?? "").trim();
+  if (!raw) return null;
+  let rows;
+  try { rows = JSON.parse(raw); } catch (e) { return { error: `the plan (SHARDS) is not JSON: ${e.message}` }; }
+  if (!Array.isArray(rows)) return { error: "the plan (SHARDS) is not a list of shard rows" };
+  const out = new Set();
+  for (const r of rows) {
+    if (!r || typeof r.specs !== "string") return { error: "a plan row (SHARDS) has no `specs` string" };
+    if (String(r.circuits || "").trim()) continue;
+    for (const s of r.specs.split(/\s+/)) if (s) out.add(s.replace(/^\.\//, ""));
+  }
+  return { specs: [...out].sort() };
+}
+
+/** Every spec with at least one <testcase> in any junit.xml under `root` (all shards, any layout). */
+export function ranSpecsUnder(root) {
+  const out = new Set();
+  const stack = root ? [root] : [];
+  while (stack.length) {
+    const d = stack.pop();
+    let ents = [];
+    try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+    for (const e of ents) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) stack.push(f);
+      else if (e.name === "junit.xml") for (const s of testedSpecsFrom(fs.readFileSync(f, "utf8"))) out.add(s);
+    }
+  }
+  return [...out].sort();
+}
+
 /**
  * @param {{
  *   select: string,
@@ -67,8 +110,11 @@ export function shardEvidence(junitIn, startedIn) {
  *   unrepresented?: string,
  *   called?: string,
  *   draft?: string,
+ *   reused?: string, reusedRun?: string,
+ *   groupAccept?: string, groupRuns?: string, groupWhy?: string,
  *   failedSpecs?: string[],
- *   evidence?: { started: string[], junit: string[], downloadFailed?: boolean },
+ *   evidence?: { started: string[], junit: string[], downloadFailed?: boolean,
+ *     planned?: { specs?: string[], error?: string } | null, ran?: string[] },
  * }} input
  * @returns {{ ok: boolean, reason: string, infraRetry: boolean, failedSpecs: string[] }}
  */
@@ -131,6 +177,20 @@ function judgeSpecs(input) {
       }
       if (ev.started.length === 0) {
         return { ok: false, reason: "selected specs success, but no shard left a run-step marker — nothing shows a selected spec ran", infraRetry: false, failedSpecs };
+      }
+      // THE PLAN IS THE CLAIM PER SPEC (#5403 part 2). A shard with ONE testcase passed the check above even when the
+      // other specs it was handed never ran (a spec that failed to collect, a filter that matched nothing), and a
+      // planned shard that never started at all left no marker to miss. Every spec the plan named needs a testcase.
+      if (ev.planned) {
+        if (ev.planned.error) {
+          return { ok: false, reason: `selected specs success, but ${ev.planned.error} — cannot check each planned spec ran; failing closed`, infraRetry: false, failedSpecs };
+        }
+        const ran = new Set(ev.ran || []);
+        const missing = (ev.planned.specs || []).filter((s) => !ran.has(s));
+        if (missing.length > 0) {
+          const shown = missing.slice(0, 8).join(", ") + (missing.length > 8 ? ` (+${missing.length - 8} more)` : "");
+          return { ok: false, reason: `selected specs success, but ${missing.length} planned spec(s) left no junit testcase in any shard: ${shown} — they did not run (or their upload was lost); re-run, never read it as a pass`, infraRetry: false, failedSpecs };
+        }
       }
     }
     reason = "selected specs passed";
@@ -215,9 +275,24 @@ function judgeSpecs(input) {
         failedSpecs,
       };
     }
+    if (!droppedKnown) {
+      return { ok: false, reason: `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output`, infraRetry: false, failedSpecs };
+    }
+    // THE SEPARATE RUN COUNTS (#5480; Bryce 2026-11-11 "Count the separate run"). The verdict job's group-runs step
+    // (tools/ci/dropped-group-runs.mjs) accepted only if every dropped spec ran green in a browser-group run on this
+    // head and this base, attempt 1, llvmpipe; it names the run(s). Anything else is the red below.
+    const runs = String(input.groupRuns ?? "");
+    if (String(input.groupAccept ?? "") === "true" && /^\d+(,\d+)*$/.test(runs)) {
+      return { ok: true, reason: `${reason}; the plan's ${dropped} dropped spec(s) ran green in browser-group run(s) ${runs.split(",").join(", ")} (same head, same base, attempt 1, llvmpipe)`, infraRetry, failedSpecs };
+    }
+    const why = String(input.groupWhy ?? "").trim();
     return {
       ok: false,
-      reason: !droppedKnown ? `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output` : `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change.`,
+      reason: `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log)${why ? `, and no separate run counts: ${why}` : ""}. `
+        + "What counts: every dropped spec green in ONE browser-group run per group on this head and this base, first attempt, default GL — "
+        + "`node tools/ci/remote-group.mjs <group>` on the pushed branch (it tests the PR's merge ref), BEFORE the ready flip (this job waits at most 7 min for one still running, then reds); "
+        + "after a red like this one, run it, then flip the PR to draft and back to ready (a new ready run on the same head; never a re-run of this one). "
+        + "A failed, cancelled, re-run or branch-head group run does not count, nor does one on another base than this run's (the deploy tip moved between them: run it again). Or split the change.",
       infraRetry: false,
       failedSpecs,
     };
@@ -244,7 +319,8 @@ function main(argv = process.argv.slice(2)) {
     // error has no classname) — both are a red.
     failedSpecs = [...failedSpecsUnder(junitRoot), ...failedSpecsUnder(junitRoot, unattributedFailuresFrom)];
   }
-  const evidence = { ...shardEvidence(junitIn, startedIn), downloadFailed: process.env.DOWNLOAD_FAILED === "true" };
+  const evidence = { ...shardEvidence(junitIn, startedIn), downloadFailed: process.env.DOWNLOAD_FAILED === "true",
+    planned: plannedSpecs(process.env.SHARDS), ran: ranSpecsUnder(junitIn) };
 
   const v = selectedGateVerdict({
     select: process.env.SELECT,
@@ -256,6 +332,9 @@ function main(argv = process.argv.slice(2)) {
     draft: process.env.DRAFT,
     reused: process.env.REUSED,
     reusedRun: process.env.REUSED_RUN,
+    groupAccept: process.env.GROUP_ACCEPT,
+    groupRuns: process.env.GROUP_RUNS,
+    groupWhy: process.env.GROUP_WHY,
     failedSpecs,
     evidence,
   });

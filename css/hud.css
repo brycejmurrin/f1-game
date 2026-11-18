@@ -558,6 +558,10 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-energy-fill { background: linear-gradient(90deg in oklab, var(--edit-fill), var(--edit-ink)); }
 #hud-energy[data-ers="deploy"] #hud-energy-fill { animation: pulse var(--hud-pulse) ease-in-out infinite; }
 #hud-energy-n { letter-spacing: 0; margin-left: 0.4em; font-variant-numeric: tabular-nums; }
+/* ERS state glyph (#4270 §5): CSS, not text, so a flip moves neither the label nor hlKey's length; idle keeps the slot. */
+#hud-energy-n::before { content: "▼ "; visibility: hidden; }
+#hud-energy[data-ers] #hud-energy-n::before { visibility: visible; }
+#hud-energy[data-ers="harvest"] #hud-energy-n::before { content: "▲ "; }
 /* TYRES. The compound letter sits OUTSIDE the bar rather than centred in it:
    unlike ENERGY this readout carries two independent facts (which compound, how
    much is left) and stacking them made neither legible at phone width. The fill
@@ -1817,7 +1821,7 @@ body:has(> #pmsettings:not([hidden]) > :where(#pmsettings-inner) > :where(#pm-se
   transform-origin: var(--hl-o, center);
 }
 /* Only automatic cockpit chips relinquish their horizontal offset to touch controls. */
-body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl]:not([data-hl-v4]) {
+body:has(> :where(#hud) > :where(#hud-dock) > .dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl]:not([data-hl-v4]) {
   translate: 0 calc(var(--hl-y, 0) * 1svh / var(--hud-z, 1));
 }
 /* Its PEEK (js/ui/screen-looks.js PEEK_ONLY.hud): the whole race HUD shows

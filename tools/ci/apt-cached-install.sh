@@ -139,32 +139,46 @@ pinned() { awk -v h="$1" '$1 !~ /^#/ { for (i = 2; i <= NF; i++) if ($i == h) f 
 # 57 -> A 7), so three lookups can all come from systemd-resolved's cache and the name be lost mid-apt;
 # a healthy day never gets here (attempt 1 succeeds), an outage day retries with pinned names.
 PIN_OK=1
+# One host: three system lookups, then (when needed) the public resolver. Prints "ANSWERS IP SRC".
+lookup_mirror() {
+  local h=$1 a ip="" src="" answers=0 _
+  for _ in 1 2 3; do
+    a=$(resolve_system "$h")
+    if [[ -n $a ]] && valid_ip "$a"; then answers=$((answers + 1)); ip=$a; fi
+  done
+  if [[ -n $ip ]]; then src="the system resolver ($answers/3 answers)"
+  elif read -r ip src < <(resolve_public "$h") && valid_ip "${ip:-}"; then :
+  else ip=""; src=""; fi
+  echo "$answers ${ip:--} $src"
+}
+# PARALLEL (2026-11-11, run 43054966213): in series the three hosts cost 45 s of every Mesa step when
+# the resolver failed (3 x 3 x 5 s). Each host is looked up in its own background job; the pins are
+# then written in mirror order, one /etc/hosts line each, so the log and the file stay deterministic.
 pin_flaky_mirrors() {
-  local force=${1:-} m h a ip src answers seen=" " _
+  local force=${1:-} m h answers ip src seen=" " dir hosts=()
   [[ $PIN_OK == 1 && ${#MIRRORS[@]} -gt 0 ]] || return 0
   for m in "${MIRRORS[@]}"; do
     h=${m%:*}
     [[ $seen == *" $h "* ]] && continue
     seen+="$h "
-    pinned "$h" && continue
-    answers=0; ip=""
-    for _ in 1 2 3; do
-      a=$(resolve_system "$h")
-      if [[ -n $a ]] && valid_ip "$a"; then answers=$((answers + 1)); ip=$a; fi
-    done
+    pinned "$h" || hosts+=("$h")
+  done
+  [[ ${#hosts[@]} -gt 0 ]] || return 0
+  dir=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/apex-pin.XXXXXX")
+  for h in "${hosts[@]}"; do lookup_mirror "$h" > "$dir/$h" & done
+  wait
+  for h in "${hosts[@]}"; do
+    read -r answers ip src < "$dir/$h" || { answers=0; ip=-; src=""; }
     [[ $answers -eq 3 && -z $force ]] && continue
-    if [[ -n $ip ]]; then src="the system resolver ($answers/3 answers)"
-    else
-      read -r ip src < <(resolve_public "$h") || true
-      if [[ -z ${ip:-} ]] || ! valid_ip "$ip"; then
-        echo "::warning::$LABEL: $h did not resolve through the system resolver (0/3) or a public resolver; not pinned"
-        continue
-      fi
+    if [[ $ip == - ]]; then
+      echo "::warning::$LABEL: $h did not resolve through the system resolver (0/3) or a public resolver; not pinned"
+      continue
     fi
     if echo "$ip $h" | $SUDO tee -a "$HOSTS_FILE" >/dev/null; then
       echo "::warning::$LABEL: $h resolved $answers/3 times through the system resolver; pinned $ip (from $src) in $HOSTS_FILE for this job${force:+ (after a failed apt attempt)}"
     fi
   done
+  rm -rf "$dir"
 }
 if proxied; then PIN_OK=0; fi
 if [[ ${#MIRRORS[@]} -gt 0 && $PIN_OK == 1 ]]; then
@@ -190,7 +204,11 @@ APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::
 if [[ -n $CACHE ]]; then
   mkdir -p "$CACHE" 2>/dev/null || $SUDO mkdir -p "$CACHE"
   $SUDO mkdir -p "$CACHE/partial"
-  APT_OPTS+=(-o "Dir::Cache::Archives=$CACHE/" -o APT::Keep-Downloaded-Packages=true)
+  # Download as root ON PURPOSE into the caller's cache dir (a runner-owned path the `_apt` sandbox
+  # user cannot reach): without this apt does the same and warns "Download is performed unsandboxed as
+  # root as file '…/partial/…deb' couldn't be accessed by user '_apt'" (run 43054966213). Integrity is
+  # unchanged: apt still verifies the signed InRelease and every package hash.
+  APT_OPTS+=(-o "Dir::Cache::Archives=$CACHE/" -o APT::Keep-Downloaded-Packages=true -o APT::Sandbox::User=root)
 fi
 deadline=$((SECONDS + BUDGET))
 APT_LOG=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/apex-apt.XXXXXX")

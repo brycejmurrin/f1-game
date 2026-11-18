@@ -5,9 +5,13 @@
   {
     id: "hungaroring",
     // FIA 2026 Doc 5 circuit map + pit-lane drawing put the pits on the driver's RIGHT
-    // (infield, inside T14); flipping to side 1 needs the authored pit-side scenery
-    // mirrored in the same change (WIP: scratch/w12/hungaroring-pitflip-scenery-wip.diff).
-    pit: { side: -1 },
+    // (infield, the lane leaves on the inside of the right-hand T14). The authored
+    // pit building, paddock, broadcast and kits sit on +1 with it; the covered main
+    // tribune and the T1 / Pit Exit stands face them on -1 (scenery/hungaroring.js).
+    pit: { side: 1 },
+    // Its own covered main tribune faces the pits on -1 (scenery coveredMainTribune);
+    // the generic 7-box -1 pit-straight stand would stand in front of it.
+    ownPitStraight: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.7 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.

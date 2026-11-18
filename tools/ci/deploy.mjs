@@ -70,7 +70,7 @@ import { githubToken } from "./github-token.mjs";
 import { superviseDeployChild } from "./deploy-child.mjs";
 import { request } from "./github-api.mjs";
 import { changedPaths as diffPaths } from "../lib/changed-files.mjs";
-import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
+import { NODE_TEST_TIMEOUT_MS, groupFiles } from "../gen/gen-test-groups.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
@@ -277,7 +277,7 @@ export function gateNodeSuites() {
  *
  * Both halves of the filter are DERIVED, never retyped: the path pattern is
  * geometry-paths.mjs, the ONE copy ci.yml's grep also reads, and the suite list
- * is read out of package.json's test:sweeps by the same match ci.yml uses.
+ * is test:sweeps' roster in tests/groups.json (groupFiles), the copy ci.yml reads.
  * Each half drifted exactly once by being hand-written — ci.yml's suite list
  * was missing scenery-grounding, and this file's path list still matched
  * debris-world's PRE-RENAME location under js/game/ (tools/manifest.cjs's
@@ -290,12 +290,10 @@ export function gateNodeSuites() {
  * list that parses to nothing THROWS rather than quietly matching nothing. */
 
 export function sweepSuites() {
-  let pkg;
-  try { pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")); }
-  catch (e) { throw new Error("deploy: cannot read package.json — the sweep suite list is undefined: " + e.message); }
-  const suites = String((pkg.scripts && pkg.scripts["test:sweeps"]) || "").match(/tests\/unit\/[^\s]+/g) || [];
-  if (!suites.length) throw new Error("deploy: package.json's test:sweeps names ZERO suites — refusing to derive a geometry filter from nothing.");
-  return suites;
+  // tests/groups.json, not package.json: the test:sweeps line is a wrapper since #5427.
+  // groupFiles throws on a missing group or an empty list — never a filter derived from nothing.
+  try { return groupFiles("test:sweeps"); }
+  catch (e) { throw new Error("deploy: the test:sweeps suite list is undefined — refusing to derive a geometry filter from nothing: " + e.message); }
 }
 
 /** Can THIS set of paths move circuit geometry? Shared by the union check and
@@ -362,7 +360,6 @@ const DERIVED_DOCS = ["docs/agent-index.json", "tests/data/impact-map.json", "do
 // in 7 days; system audit 2026-10-26 §7); now only two PRs that move the same
 // rows conflict. Its generator takes ~2 min, so it is not in `npm run gen`: the
 // cure path alone runs it.
-const SCENERY_LOCATIONS = "tools/shot/scenery-locations.json";
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
 export function ratchetMetrics(json) {
@@ -462,10 +459,8 @@ export function cureableConflicts(conflicted) {
   // (gen-agent-index.mjs) are rewritten from the tree; 7 days of merges showed 13/16/6 real conflicts
   // in them that forced hand merges. Same cure: take a side, regenerate.
   const derivedF = conflicted.filter((f) => DERIVED_DOCS.includes(f));
-  // tools/shot/scenery-locations.json (gen-scenery-locations.cjs): same cure,
-  // take ours and regenerate from the merged TRACK_VM sources.
-  const sceneryF = conflicted.filter((f) => f === SCENERY_LOCATIONS);
-  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS)
+  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS, and the
+  // ON_DEMAND_PATHS such as tools/shot/scenery-locations.json since 2026-11-11)
   // conflicts only as modify/delete: the tip deleted the committed copy, an older
   // branch regenerated it. Cure: take the deletion (`git rm --cached`); ensure-built
   // rebuilds the local copy from the merged sources. A RETIRED path (RETIRED_PATHS, e.g.
@@ -476,9 +471,9 @@ export function cureableConflicts(conflicted) {
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length
       + builtF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF };
+  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, builtF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -558,11 +553,11 @@ export async function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, builtF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f) && !builtF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !builtF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -624,12 +619,6 @@ export async function mergeDeployTip() {
     await run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
     must(git(["add", ...derivedF]), "add");
     did.push("derived docs regenerated");
-  }
-  if (sceneryF.length) {
-    must(git(["checkout", "--ours", "--", SCENERY_LOCATIONS]), `checkout --ours ${SCENERY_LOCATIONS}`);
-    await run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
-    must(git(["add", SCENERY_LOCATIONS]), "add");
-    did.push("scenery locations regenerated");
   }
   if (builtF.length) {
     must(git(["rm", "-q", "--cached", "--", ...builtF]), "untrack the built files (they stay gitignored)");

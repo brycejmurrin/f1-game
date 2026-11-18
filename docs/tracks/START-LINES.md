@@ -14,8 +14,11 @@ start/finish line, and 22 of the 40 circuits of that campaign put it inside a co
 | `turns[0]` is the first apex after the line | — | **38 / 40** |
 | circuits building (`verify-track --all`) | 40 | **40** |
 
-**jeddah** moved `0.9625 → 0.9160` on 2026-10-18 (`sceneryStartFrac: 0.9625`
-keeps dressing in place): line straight, first apex LEFT at 256 m, grid ok. The two turn tables that still disagree with the measured first apex
+**jeddah** moved `0.9625 → 0.9160` on 2026-10-18 and that move was WRONG: it
+went 288 m backwards onto the straight BEFORE the T27 hairpin, and the "first
+apex LEFT at 256 m" it reported was T27, not T1. Corrected on 2026-11-15
+(#5507, §jeddah below): the line is on the T27 → T1 pit straight, first apex
+LEFT (the real T1) at 248 m. The two turn tables that still disagree with the measured first apex
 are **sochi** and **jacarepagua** — neither circuit's `startFrac` nor turns were
 touched here, so that mismatch is pre-existing.
 
@@ -160,9 +163,9 @@ on all eleven:
 | okayama | 0.00004 | R | R |
 | korea | 0.00001 | L | L — the lap runs anti-clockwise |
 | jerez | 0.00002 | R | R, Expo '92. Re-surveyed 2026-11-10 (#5078): v0 is NOT the pit straight (it is two corners early), so jerez ships `startFrac: 0.2169` on the real 600 m straight, first apex R at 364 m |
-| donington | 0.00040 | R | R, Redgate — **stale (line now 0.9072): see "Moved 2026-11-10"** |
+| donington | 0.00040 | R | R, Redgate — **stale (line now 0.2551, on the real Wheatcroft straight): see "Moved 2026-11-11"** |
 | anderstorp | 0.00011 | R | R |
-| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "Moved 2026-11-10"** |
+| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "donington, brands_hatch" below** |
 | zolder | 0.00015 | R | R — **stale (line now 0.1226, kept on purpose): see "Zolder: NOT moved"** |
 | dijon | 0.00001 | R | R |
 | buddh | 0.00002 | R | R |
@@ -192,16 +195,30 @@ right, S/F before it); the two readings differ by one corner and both put the
 line before the chicane. Do not move it after the chicane again; a re-survey
 needs a surveyed S/F coordinate, not either reading alone.
 
-**donington, brands_hatch — measured, NOT moved**. The right nodes are known:
-donington **0.2577** (node 25/97, pit straight Goddards → Redgate, grid max |k|
-0.00017, 124 m to Redgate turn-in); brands_hatch **0.2736** (node 29/106, Brabham
-straight, 216 m to the Paddock Hill turn-in). Moving them carries each file's
-`sl()`-keyed frontage onto the real pit straight, into infield scenery authored
-for the old line: donington's clip-audit went 7 → 10 severe (hedge on hedge at
-the new line), brands_hatch 1 → 5 (pits, team offices, retail, tents and the
-Kentagon reach across the ~70-100 m paddock to the Cooper straight's forest edge
-and lock-ups; one house sat on a desire path the old pit complex had
-superseded). Each needs a scenery pass with the move.
+**donington MOVED 2026-11-11; brands_hatch located, NOT moved (#5316 leftovers).**
+Both coordinates are from the driver61 circuit guides' "Start / Finish Line" GPS
+rows, projected with `tools/track/import-circuit-path.mjs` `project()` into the
+committed trace's frame (each OSM ring re-stitched with
+`tools/track/stitch-osm-ring.mjs`; both index-identical to the committed `pts`):
+
+- **brands_hatch** 51°21'37.1"N 0°15'37.2"E ([driver61](https://driver61.com/circuit-guide/brands-hatch-indy))
+  lands 0.9 m from node 29/106 → `startFrac` **0.2736** (the node measured in the
+  earlier pass). NOT shipped: the move was built (frontage re-fitted, every audit at
+  or under baseline) but the turn re-seat command `rotate-markings.cjs --write
+  brands_hatch` was refused by the permission layer, so the change was reverted on
+  the orchestrator's instruction; Bryce's call (PR #5506). The line stays 0.1226.
+  Pit wall on the driver's right; the default `pit.side` +1 already matches.
+- **donington** 52°49'47.3"N 1°22'46.4"W ([driver61](https://driver61.com/circuit-guide/donington/))
+  lands 3.8 m off the 491 m segment 24→25 at t = 0.402, 294 m before node 25 (the
+  earlier candidate 0.2577). One collinear point was added there (`pts[25]`, ≤ 0.01 m
+  off the chord) and `startFrac` 0.9072 → **0.2551** (25/98).
+  **Open:** driver61 puts the pit wall on the driver's LEFT approaching Redgate; the
+  def's default `pit.side` is +1 (right). Not flipped: it is a full re-dress of the
+  frontage, a separate pass.
+
+The scenery stays on its authored frame (`sceneryStartFrac` 0); only the
+line-anchored frontage was re-fitted so no clip, coplanar, ground or props count
+rose (donington: half the garage block, a grass bank, one tree row on steep ground).
 
 **Brands Hatch is over the bar and that is correct.** Its pit straight genuinely
 curves right as it runs to the rim before the track drops into Paddock Hill —
@@ -236,8 +253,8 @@ buenos_aires, jacarepagua — all 0.0, confirmed by both estimators.
 
 ### Not located — do not guess
 
-**jeddah** moved `0.9625 → 0.9160` on 2026-10-18 (`sceneryStartFrac: 0.9625`;
-see `docs/notes/JEDDAH-START-2201-2026-10-18.md`). **bahrain moved 0.2250 → 0.0000 on
+**jeddah** — see §jeddah (2026-11-15) below; the 2026-10-18 move in
+`docs/notes/JEDDAH-START-2201-2026-10-18.md` is superseded. **bahrain moved 0.2250 → 0.0000 on
 2026-10-04** (`sceneryStartFrac: 0.2250` keeps its dressing in place):
 
 - 0.225 sat on a 370 m diagonal after a hairpin, first apex a LEFT; the real
@@ -250,7 +267,39 @@ see `docs/notes/JEDDAH-START-2201-2026-10-18.md`). **bahrain moved 0.2250 → 0.
   `pit.side` flipped −1 → +1 to match; turns re-seated by the
   rotate-markings formula (shift 0.27027); sectors left alone (see §6).
 - jeddah: no usable source found then; its 0.9625 measured **in a corner**
-  (mean |k| 0.0173). Superseded: moved to 0.9160 on 2026-10-18 (top of this page).
+  (mean |k| 0.0173). Superseded twice: 0.9160 on 2026-10-18 (wrong straight),
+  then the pit straight on 2026-11-15 (§jeddah).
+
+### jeddah (2026-11-15, #5507) — bounded, not a surveyed coordinate
+
+No source gives the line's lat/lon (OSM has no `raceway=start/finish` node
+there), so it is placed from four independent bounds that agree. Distances are
+metres along the built lap from the OLD 0.9160 line:
+
+| evidence | where the line is |
+|---|---|
+| F1 live-timing corner markers (`tools/track/official-corners.cjs jeddah`, fit rms 4.7 m) | T27 at 268 m, T1 at 1356 m: the line is between them |
+| OSM main grandstand way 1154622779 (right of the straight) | 868 – 1148 m |
+| OSM pit lane way 1121870473 (left): entry 556 m, tunnel 1228 m, exit after T2 | 556 – 1228 m |
+| OpenF1 car position at each lap's `date_start`, 2025 race, 8 laps | 884 – 908 m; the same method reads 0 – 270 m EARLY on six circuits with a located line, so 856 – 1160 m |
+| published run to Turn 1: 168 m pole → T1 braking point (F1, 2025), 220 m grid → T1 (FIA/RaceFans) | ~1070 – 1130 m |
+
+The line is at **1108 m** (248 m before the T1 apex). `startFrac` is a
+control-point index and the trace had none between 920 m and 1355 m, so
+`path.pts[1]` is a point ADDED on that chord (`[-184.7, -707.6]`; index
+fractions re-derived: `startFrac 0.00658` = 1/152, `sceneryStartFrac 0.9605` =
+146/152, the same physical authoring origin as before). The extra point also
+shortens the spline tangent into T1: the road moves ≤ 1.1 m over 150 m of
+T1's approach and T1's minimum radius goes 6.8 → 9.0 m. A re-import of the
+trace drops the point — re-add it and re-derive both fractions.
+
+`turns` is now the FIA numbering (27, one built |k| peak per marker, within
+25 m except T5, 40 m, and the long sweeps T18 and T20, 60 and 72 m); the sweeper's bank row
+is `{ turn: 14 }` (its frac built 80 m past that apex); `bankZones { turn: 27 }` is the real final hairpin again; sectors
+untouched (§6). In `scenery/jeddah.js` everything that belongs to the line
+goes through `sl()`: pit building, hospitality, S/F stands, both gantries and
+the pit-side canyon gap; the +1 `waterBand` now starts at T1 (it put the sea
+on the main-stand side of the pit straight).
 
 For the record and not as an instruction: the v0 convention — 39/40 straight,
 19/22 coordinate-confirmed — predicts **0.0** for both, and both measure dead
@@ -472,9 +521,10 @@ contract — the shape of an answer that was never physical to begin with.
   future geometry change (a new curvature-scan parameter would otherwise
   silently re-sort `runs` and move a zone) and a real per-corner DRS-zone
   citation to check future corrections against, instead of a bare distance.
-  `bahrain` and `jeddah` are excluded from `AERO_ZONE_TURNS` for the same
-  reason they were excluded from the startFrac fix — their lines were never
-  re-derived, so their turn numbers are not trustworthy.
+  `bahrain` and `jeddah` are excluded from `AERO_ZONE_TURNS`: bahrain's line
+  was never re-derived, and jeddah (turns FIA-numbered since #5507) is not a
+  2026 round, so there is no FIA 2026 zone document to cite — it keeps the
+  length-only `ZONE_COUNT` fallback.
 
 ## Tools
 

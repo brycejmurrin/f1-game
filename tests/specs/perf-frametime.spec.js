@@ -16,6 +16,7 @@ import {
   BASELINE_PATH,
   STRICT,
   compareToBaseline,
+  envOf,
   writeArtifact,
   loadBaseline,
 } from "../helpers/perf-frametime.mjs";
@@ -32,7 +33,7 @@ if (!UPDATING && !fs.existsSync(BASELINE_PATH)) {
 test.describe("perf frametime — SwiftShader race regression", () => {
   test.use({ viewport: SCENARIO.viewport });
 
-  test("records p50/p95/p99, long tasks, and heap vs baseline", async ({ page }) => {
+  test("records p50/p95/p99, long tasks, and heap vs baseline", async ({ page, browser }) => {
     test.setTimeout(600_000);
 
     await pinFactorySeat(page);
@@ -160,15 +161,38 @@ test.describe("perf frametime — SwiftShader race regression", () => {
       heapTotalMB: prep.snap.heapTotalMB,
     };
 
-    const env = await page.evaluate(() => ({
-      build: (document.querySelector('meta[name="apex-build"]') || {}).content || null,
-      sha: (document.querySelector('meta[name="apex-sha"]') || {}).content || null,
-    }));
+    const env = await page.evaluate(() => {
+      const safe = (fn) => { try { return fn(); } catch (_) { return null; } };
+      const state = safe(() => (typeof gfx !== "undefined" && typeof gfx.backendState === "function" ? gfx.backendState() : null));
+      // The adapter from a throwaway canvas: a GL sniff on #game would bind it (__apex.diag's trap).
+      const adapter = safe(() => {
+        const gl = document.createElement("canvas").getContext("webgl2");
+        if (!gl) return null;
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        const name = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+        const lose = gl.getExtension("WEBGL_lose_context");
+        if (lose) lose.loseContext();
+        return name;
+      });
+      return {
+        build: (document.querySelector('meta[name="apex-build"]') || {}).content || null,
+        sha: (document.querySelector('meta[name="apex-sha"]') || {}).content || null,
+        renderer: safe(() => (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend && RendererPicker.liveBackend()) || sessionStorage.getItem("apex26.gfxBound")),
+        api: state && typeof state.api === "string" ? state.api : null,
+        adapter,
+        userAgent: navigator.userAgent,
+        viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+      };
+    });
+    env.browser = browser.browserType().name();
+    env.browserVersion = browser.version();
+    const compared = envOf(env);
 
     const payload = {
       at: new Date().toISOString(),
       scenario: { ...SCENARIO, cars: prep.cars, trackBuilt: prep.track },
       env,
+      compared,
       metrics: measured,
       perfSnapshot: prep.perf,
     };
@@ -191,8 +215,9 @@ test.describe("perf frametime — SwiftShader race regression", () => {
       }
       const body = {
         scenario: payload.scenario,
+        env: compared,
         metrics: measured,
-        _blessed: blessing({ scenario: payload.scenario, metrics: measured }, reason),
+        _blessed: blessing({ scenario: payload.scenario, env: compared, metrics: measured }, reason),
       };
       fs.writeFileSync(BASELINE_PATH, JSON.stringify(body, null, 2) + "\n");
       test.info().annotations.push({ type: "baseline", description: `wrote ${BASELINE_PATH}` });
@@ -201,7 +226,14 @@ test.describe("perf frametime — SwiftShader race regression", () => {
 
     const baseline = loadBaseline();
     expect(baseline).toBeTruthy();
-    const report = compareToBaseline(measured, baseline);
+    const report = compareToBaseline(measured, baseline, compared);
+    if (report.outcome === "not-comparable") {
+      // Neither a pass nor a fail: a different machine measured nothing about the code.
+      const msg = report.mismatches.join("; ");
+      test.info().annotations.push({ type: "perf-not-comparable", description: msg });
+      console.log(`[perf-frametime not comparable] ${msg}`);
+      return;
+    }
     test.info().annotations.push({
       type: "perf-regression-report",
       description: JSON.stringify(report.deltas),

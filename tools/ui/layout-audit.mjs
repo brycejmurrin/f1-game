@@ -43,14 +43,14 @@ import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
-import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { applyScale, appliedTag, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
 import { runDiff, auditCellKey } from "./audit-diff.mjs";
 import { CliArgError } from "../lib/cli-args.mjs";
 import { SCREENS, VIEWPORTS, pickScreens, pickViewports, seedOwnerProfile } from "./menu-screens.mjs";
-import { measurePaintInPage, summarisePaint, paintLine } from "../lib/paint-floor.mjs";
+import { measurePaintInPage, summarisePaint, paintLine, paintInsets } from "../lib/paint-floor.mjs";
 import { resetToTitleState, titleUsable as isTitleUsable } from "./ui-reset.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
 import { parseThemes, themeTag, themeInitScript, rowTheme, THEME_KEY } from "./theme-axis.mjs";
@@ -716,7 +716,7 @@ async function sweepViewport(vpEntry, scale, theme) {
   const vpName = baseName + scaleTag(scale);
   // Log lines and file names carry the theme; the row keeps `viewport` clean
   // and records `theme` on its own (audit-diff's auditCellKey joins them).
-  const vpLabel = vpName + themeTag(theme);
+  let vpLabel = vpName + themeTag(theme);
   const ctx = await browser.newContext({ ...vpOpts, colorScheme: theme });
   await ctx.addInitScript(themeInitScript, { key: THEME_KEY, theme });
   // An owner cell (bryce-*) boots on his live settings export; --scale= still overrides its UI SIZE.
@@ -739,7 +739,8 @@ async function sweepViewport(vpEntry, scale, theme) {
   if (owner) await (await ctx.newCDPSession(page)).send("Emulation.setSafeAreaInsetsOverride", { insets: owner.insets }).catch(() => {});
   let errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 120)));
-  let booted = false;
+  let booted = false, applied = null;
+  const paintBox = paintInsets(vpEntry, owner);
   try {
     // 90s, NOT the 30s default. The three largest desktop viewports
     // (1440x900, 1920x1080, 1920x937) ALL failed `page.goto` at exactly 30000ms
@@ -763,7 +764,9 @@ async function sweepViewport(vpEntry, scale, theme) {
       ).catch(() => {});
     }
     // Persisted to localStorage, so it survives the reload recovery below.
-    await applyScale(page, scale);
+    // The store clamps each slider to its own range (HUD floors at 70 %): the log label names what it applied.
+    applied = await applyScale(page, scale);
+    vpLabel += appliedTag(scale, applied);
     // A cell that cannot be reached should cost seconds, not the 30s default —
     // there are 120 of them and "skipped" is a perfectly good result.
     page.setDefaultTimeout(12000);
@@ -786,6 +789,7 @@ async function sweepViewport(vpEntry, scale, theme) {
   }
   for (const screen of expanded) {
     const cell = { producer: "layout-audit", root: screen.root, viewport: vpName, theme, why, screen: screen.id, screenName: screen.name };
+    if (applied) cell.scaleApplied = applied;
     errors = [];
     if (!booted) cell.skipped = "boot failed";
     else try {
@@ -872,8 +876,8 @@ async function sweepViewport(vpEntry, scale, theme) {
       }
       await ensureTapFloor(page);
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
-      // PAINTED sizes (what the screen shows after zoom), owner cells only: additive, no existing row changes.
-      if (owner) cell.paint = await page.evaluate(measurePaintInPage, { roots: screen.root, insets: owner.insets }).then((raw) => summarisePaint(raw)).catch(() => null);
+      // PAINTED sizes (what the screen shows after zoom), every cell (#5234): additive, no existing row changes.
+      cell.paint = await page.evaluate(measurePaintInPage, { roots: screen.root, insets: paintBox }).then((raw) => summarisePaint(raw)).catch(() => null);
       cell.environment = await page.evaluate(captureAuditEnvironment, { root: screen.root, source, adjustments: ["content-visibility:visible!important"] }).catch(() => null);
       cell.selectorIndex = await page.evaluate(captureAuditSelectors, { root: screen.root, selectors: auditFindingSelectors(cell) }).catch(() => ({}));
       if (wantShots) {

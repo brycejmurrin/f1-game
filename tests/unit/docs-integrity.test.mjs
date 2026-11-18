@@ -18,7 +18,8 @@ import fs from "node:fs";
 import path from "node:path";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { BUILT_PATHS, ON_DEMAND_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { expandScripts } from "../../tools/gen/gen-test-groups.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -168,6 +169,8 @@ function brokenPathsIn(file, re = PATH_RE) {
   if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
   for (const m of new Set(text.match(re) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
+    // An ON_DEMAND_PATHS file is real but gitignored; its reader builds it, so a fresh checkout lacks it until then.
+    if (ON_DEMAND_PATHS.includes(m)) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
   return bad;
@@ -579,8 +582,7 @@ const BARE_JS_ALLOW = new Map([
   // An npm package (steamworks.js), not a file of ours.
   ["steamworks.js", /DESKTOP-TEST-PLAN\.md$/],
 ]);
-test("live docs name only real files in backticked bare `name.js` tokens", () => {
-  if (!TRACKED) return;                         // outside a checkout there is no index to consult
+test("live docs name only real files in backticked bare `name.js` tokens", { skip: !TRACKED && "outside a git checkout: no index to consult" }, () => {
   const built = BUILT_PATHS.filter((f) => fs.existsSync(path.join(ROOT, f)));
   const bases = new Set([...TRACKED.files, ...built].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
@@ -609,8 +611,7 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
 // 7d64f2bdf → e8378538b) sat in the table, unchecked. Same rule as the `name.js` test.
 // CEILING-HISTORY.md is an append-only ledger: it names suites that were later merged away.
 const BARE_TEST_ALLOW = /CEILING-HISTORY\.md$/;
-test("live docs name only real test files in backticked bare `name.test.mjs` / `name.spec.js` tokens", () => {
-  if (!TRACKED) return;
+test("live docs name only real test files in backticked bare `name.test.mjs` / `name.spec.js` tokens", { skip: !TRACKED && "outside a git checkout: no index to consult" }, () => {
   const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
   const bad = [];
@@ -798,7 +799,8 @@ test("every npm test:* group names specs that exist", () => {
   // this repo's groups name well over a hundred files, so a pattern that finds
   // none of them is broken by definition.
   let seen = 0;
-  for (const [name, cmd] of Object.entries(pkg.scripts)) {
+  // Wrapper lines (#5427) read as their tests/groups.json rosters: the paths live there now.
+  for (const [name, cmd] of Object.entries(expandScripts(pkg.scripts))) {
     if (!name.startsWith("test:")) continue;
     for (const m of cmd.matchAll(/tests\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_*-]+\.(?:spec\.js|test\.(?:mjs|cjs))/g)) {
       const ref = m[0];

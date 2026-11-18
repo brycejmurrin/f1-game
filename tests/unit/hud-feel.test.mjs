@@ -1623,16 +1623,20 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
     }
     if (r.key === "uiScale") {
       assert.equal(sizeRow(r.key, 200, r.lim, null, 2).label, "200%", "a sheet painting at the wish adds no note");
-      // #5235 (Bryce 2026-11-10): a phone's UI SIZE stops at 70 %, and the tokens hold text at 12 painted px there.
-      const ph = sizeRow(r.key, 61, r.lim, null, 0, true);
-      assert.deepEqual([ph.min, ph.max, ph.value, ph.label], [r.phoneMin, r.lim.max, r.phoneMin, `${r.phoneMin}%`], "his stored 61 % paints 70 % on a phone");
+      // #5452 (Bryce 2026-11-11, "Down to 50 %"; 70 under #5235): a phone's UI SIZE stops at 50 %, and the tokens hold
+      // text at 12 painted px there. His stored 61 % now paints 61 %; a stored 40 % paints the floor.
+      assert.equal(r.phoneMin, 50);
+      const ph = sizeRow(r.key, 40, r.lim, null, 0, true);
+      assert.deepEqual([ph.min, ph.max, ph.value, ph.label], [r.phoneMin, r.lim.max, r.phoneMin, `${r.phoneMin}%`], "a stored 40 % paints 50 % on a phone");
+      assert.equal(sizeRow(r.key, 61, r.lim, null, 0, true).value, 61, "his stored 61 % is kept on a phone");
       assert.equal(sizeRow(r.key, 61, r.lim, null, 0, false).value, 61, "a desktop keeps 40 %");
       const tok = src("css/tokens.css");
       // The tokens' own arithmetic at the phone minimum: max(rung, floor / scale) * scale painted px, per declaration.
-      const z = r.phoneMin / 100, painted = (name) => [...tok.matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\((\\d+)px / var\\(--ui-scale`, "g"))]
+      const z = r.phoneMin / 100, painted = (name) => [...tok.matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\(([\\d.]+)px / var\\(--ui-scale`, "g"))]
         .map((m) => Math.round(Math.max(+m[1], +m[2] / z) * z * 100) / 100);
       assert.deepEqual(painted("--fs-micro"), [12, 12], "menu text (default and LARGE) paints 12 px at the phone minimum, never under");
-      assert.equal(painted("--tap").pop(), 44, "a touch row (the later, body:not(.desktop) rule) paints 44 px at the phone minimum");
+      // 44.2, not 44 (#5358): 44 / scale snaps to a layout box that painted 43.98 at 70 %.
+      assert.equal(painted("--tap").pop(), 44.2, "a touch row (the later, body:not(.desktop) rule) paints the 44 px floor at the phone minimum, with the snap margin");
     }
   });
 }

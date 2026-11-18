@@ -51,7 +51,8 @@ const CANON = [
   ["never cancel", /NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
   ["commit in two calls", /Commit in two calls: stage in its own command/, "AGENTS.md"],
   ["push without a pipe", /no output pipe/i, "AGENTS.md"],
-  ["no timers", /No\s+sleep or shell-poll loops and no standby wakes/i, "AGENTS.md"],
+  // 2026-11-11 (decision 5, #5429): one reading of check-ins — event-driven, one fallback when the subscription is refused.
+  ["no timers", /No timed\s+check-ins while it works/i, "AGENTS.md"],
   ["dirty ready flip", /ready flip\s+on a (?:dirty PR|CONFLICTING\/DIRTY head)\s+starts no CI/i, ".claude/skills/steward/SKILL.md"],
   ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, ".claude/skills/steward/SKILL.md"],
   ["first claimant fixes", /the first claimant fixes, the rest wait/i, ".claude/skills/steward/SKILL.md"],

@@ -70,7 +70,10 @@ const HudDamage = (function () {
     if (typeof Damage === "undefined" || typeof document === "undefined") return false;
     if (!_el || !_el.isConnected) _el = document.getElementById("hud-damage");
     const r = player ? Damage.get(player) : null;
-    return paint(_el, r, Damage.worst(r) > Damage.SHOW);
+    const show = Damage.worst(r) > Damage.SHOW;
+    // ARRANGE HUD unhides the chip as a sample box; the race tick must not re-hide it under the editor (#5256).
+    if (!show && _el && !_el.hidden && document.body.hasAttribute("data-hud-arrange")) return false;
+    return paint(_el, r, show);
   }
 
   // label stays module-local (paint owns aria-label; tests pin paint/level/text).

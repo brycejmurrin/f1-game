@@ -105,6 +105,7 @@ const rosteredFiles = () => {
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
     ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
     ...(MANIFEST.LAZY_PERF || []),
+    ...(MANIFEST.LAZY_REAL_RACE || []),
   ];
   rosterCache = rostered.filter((rel) => rel !== GAME && !data.has(rel));
   return rosterCache;

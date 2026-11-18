@@ -81,7 +81,7 @@
     min-width: 0;
     min-height: var(--chip-h);
     font: inherit;
-    font-size: 16px; /* iOS: avoid focus zoom */
+    font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1)))); /* iOS: avoid focus zoom, in painted px (#5236) */
     font-weight: 700;
     letter-spacing: var(--ls-3);
     color: var(--text);

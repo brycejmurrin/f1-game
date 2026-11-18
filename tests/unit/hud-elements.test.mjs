@@ -137,6 +137,14 @@ test("broadcast REL default yields to an explicit store override and follows a s
   bcast.HudElements.set("rel", true);
   assert.deepEqual({ ...bcast.__written.hudElements }, {}, "back to the broadcast default: nothing stored");
 
+  const sw = load({ hudProfile: "broadcast" });
+  sw.HudElements.set("rel", false);
+  sw.__setProfile("standard");
+  sw.HudElements.set("speed", false);
+  sw.__setProfile("broadcast");
+  assert.equal(sw.HudElements.isOn("rel"), false, "explicit REL off survives a toggle made under another style");
+  assert.equal(sw.__written.hudElements.rel, "off");
+
   const live = load();
   assert.equal(live.HudElements.isOn("rel"), false);
   live.__setProfile("broadcast");

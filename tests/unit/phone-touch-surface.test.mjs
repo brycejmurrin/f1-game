@@ -811,3 +811,86 @@ test("dock touch labels keep an 11 CSS-px painted floor under --hud-z-dock", () 
   assert.doesNotMatch(String(tap), /touch-label-floor/);
   assert.doesNotMatch(String(hold), /touch-label-floor/);
 });
+
+/* ---- batch #5410 (phone sizes: HUD controls and sheet text): the rules a node VM can see. Live geometry is the
+   hud-layout / ui-scale / profile-survey shards and tools/ui/bryce-paint.mjs. ---- */
+const PAINTED_16 = "max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))))";
+
+test("#5236: every typeable field's iOS focus floor is 16 PAINTED px, and no bare 16px floor is left at the eight sites", () => {
+  const sites = [
+    ["css/editor.css", ".td-input"],
+    ["css/race-setup.css", null], ["css/overlays.css", "#vsfriend .vs-code:not([readonly])"],
+    ["css/appearance-studio.css", null], ["css/carsetup.css", ".cs-liv-ed-name"], ["css/garage-experience.css", null],
+    ["css/tuner.css", "#as-sp-id, #sp-search, #sp-playlist2, #sp-device2"], ["css/select.css", null],
+  ];
+  for (const [file, sel] of sites) {
+    const css = read(file);
+    assert.ok(css.includes("font-size: " + PAINTED_16), `${file}: the painted floor`);
+    if (sel) assert.equal(decl(cssRules(css), sel, "font-size"), PAINTED_16, `${file} ${sel}`);
+  }
+  // Painted px at the UI SIZE rungs a phone reaches (70 today, 61 and 50 once #5452 lowers the floor) and above.
+  for (const ui of [0.5, 0.61, 0.7, 1, 1.09, 1.5]) {
+    const own = Math.max(16, 16 / ui);
+    assert.ok(own * ui >= 16 - 1e-9, `UI ${ui}: ${own * ui} painted`);
+  }
+});
+
+test("#5215: sheet titles and foot buttons floor on the TEXT SIZE ladder, never a fixed px", () => {
+  const rules = cssRules(read("css/components.css"));
+  assert.equal(decl(rules, ".sheet-head h2", "font-size"), "clamp(var(--fs-2), calc(3.6 * var(--vhz)), 24px)");
+  assert.equal(decl(rules, '.sheet[data-density="compact"] .sheet-head h2', "font-size"), "clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px)");
+  assert.equal(decl(rules, ".sheet-foot .bigbtn", "font-size"), "clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px)");
+  // The default rung keeps today's 15 / 14 px floors (no change for a player on TEXT SIZE default).
+  const tokens = read("css/tokens.css");
+  assert.match(tokens, /--fs-micro: 14px;/); assert.match(tokens, /--fs-2: 15px;/);
+});
+
+test("#5215: on a short landscape window a lone foot button takes the head's row and the body gets the foot's row", () => {
+  const css = read("css/components.css");
+  const at = css.indexOf("@media (orientation: landscape) and (max-height: 500px) {\n  .sheet:has(> .sheet-foot > :is(button, a):only-child)");
+  assert.ok(at > 0, "the short-window block exists");
+  const block = css.slice(at, css.indexOf("/* ---------- pane: a scroll region", at));
+  assert.match(block, /grid-template-columns: minmax\(0, 1fr\) auto; grid-template-rows: auto minmax\(0, 1fr\);/);
+  assert.match(block, /> \.sheet-head \{ grid-column: 1; grid-row: 1; \}/);
+  assert.match(block, /> \.sheet-body \{ grid-column: 1 \/ -1; grid-row: 2; \}/);
+  assert.match(block, /> \.sheet-foot \{\s*grid-column: 2; grid-row: 1;/);
+  assert.match(block, /:not\(:has\(> :nth-child\(4\)\)\)/, "only a plain head / body / foot sheet");
+});
+
+test("#5215: a short editor workspace drops the auto-save note so the slider rows keep two rows", () => {
+  assert.equal(decl(cssRules(read("css/tuner.css")), '.editor-workspace[data-density="compact"] .ew-note', "display"), "none");
+});
+
+test("#5256: UI SIZE writes the number on `input` and applies the zoom on `change` (release)", () => {
+  const src = read("js/ui/scale.js");
+  const at = src.indexOf('const uiEl = $("pm-uiscale");');
+  const body = src.slice(at, src.indexOf('const hudEl = $("pm-hudscale");', at));
+  assert.match(body, /uiEl\.onchange = \(e\) => \{ store\.set\("uiScale"/);
+  assert.doesNotMatch(body.match(/uiEl\.oninput = [^\n]*/)[0], /store\.set|applyUiScale/, "input never stores or zooms");
+});
+
+test("#5256: the HUD SIZE help says the MIRROR keeps its own size (ARRANGE HUD)", () => {
+  const html = read("index.html");
+  const at = html.indexOf('id="pm-hudscale"');
+  assert.match(html.slice(at, at + 600), /MIRROR keeps its own size: set it in ARRANGE HUD\./);
+});
+
+test("#5237: a rotation resets the fit's retry budget, at the flip and after the settle window", () => {
+  const src = read("js/ui/hud.js");
+  const at = src.indexOf("const _rotMq");
+  assert.ok(at > 0);
+  const block = src.slice(at, src.indexOf("});", at) + 3).replace(/^const /, "var ").replace(", refitRot =", "; var refitRot =");
+  // Run the listener against a fake matchMedia and timer; it must zero the retry count and drop the fit key twice.
+  let fire = null; const timers = [];
+  const ctx = { window: { matchMedia: () => ({ addEventListener: (t, fn) => { if (t === "change") fire = fn; } }) },
+    setTimeout: (fn, ms) => timers.push([fn, ms]), VP_SETTLE_MS: 2000,
+    _fitRetry: 31, _fitKey: "k", _fitWait: 20, _fitPending: false };
+  vm.createContext(ctx);
+  vm.runInContext(block, ctx, { filename: absSrc("js/ui/hud.js") });
+  assert.equal(typeof fire, "function", "listens for the orientation flip");
+  fire();
+  assert.deepEqual([ctx._fitRetry, ctx._fitKey, ctx._fitWait, ctx._fitPending], [0, "", 0, true], "refits at the flip");
+  assert.equal(timers.length, 1); assert.equal(timers[0][1], 2000);
+  ctx._fitRetry = 31; ctx._fitKey = "k2"; timers[0][0]();
+  assert.deepEqual([ctx._fitRetry, ctx._fitKey], [0, ""], "and again once the viewport settles");
+});

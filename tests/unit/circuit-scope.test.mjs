@@ -85,8 +85,14 @@ test("shard(): i/n shards are a disjoint, order-preserving partition; unset keep
   assert.match(twin, /const GRADE_RUNS = ELEVATION_TRACKS\.filter\(inScope\)\.filter\(inShard\(\)\)/,
     "shard after scope, as a .filter chain (select-budget counts the loop statically)");
   const { declaredTests } = await import("../../tools/ci/select-budget.mjs");
-  assert.equal(declaredTests("tests/unit/elevation-tracks-vm.test.mjs"), declaredTests("tests/specs/elevation-tracks.spec.js"),
-    "the sharded twin must still count every per-circuit test its spec declares");
+  // TK1-16: the browser spec keeps only 3 render()-only cases (TWIN_SUBSET in
+  // tools/ci/twinned-specs.mjs); the twin declares 6 fixed tests, one grade
+  // test per js/circuits/*.js def and the two banked bowls.
+  const defs = fs.readdirSync(path.join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).length;
+  assert.equal(declaredTests("tests/unit/elevation-tracks-vm.test.mjs"), 6 + defs + 2,
+    "the sharded twin must still count one grade test per circuit");
+  assert.ok(declaredTests("tests/unit/elevation-tracks-vm.test.mjs") >= declaredTests("tests/specs/elevation-tracks.spec.js"),
+    "the twin must cover every test its spec declares");
 });
 
 test("every audit CLI's --all resolves its roster through scope()", () => {

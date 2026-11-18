@@ -440,7 +440,8 @@ const SettingDeps = (function () {
     refresh();
   }
   if (doc()) {
-    if (doc().readyState === "loading") doc().addEventListener("DOMContentLoaded", init, { once: true });
+    // #4798 gate: every target sits behind a tap
+    if (doc().readyState !== "complete") doc().addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(init) : init()), { once: true });
     else init();
   }
 

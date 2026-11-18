@@ -19,14 +19,18 @@ const LiveryStations = (function () {
   // Atlas art. `h` carries liverytex's own painters so ink rules stay in one place.
   function paint(ctx, R, h) {
     const { teamId, colors, c1, accent, names, num } = h;
-    if (R.noseTip && on(colors, "noseTip")) h.fillRegion(ctx, R.noseTip, colors.noseTip || accent);
+    // The cap wears the NOSE CAP paint (`nose`) when the livery sets one, else the accent (#5039).
+    if (R.noseTip && on(colors, "noseTip")) h.fillRegion(ctx, R.noseTip, colors.nose || accent);
+    // One atlas region serves both flanks, so the ink must read on every paint the mesh puts
+    // under it: c2 on a left/right split, else the upper / lower zones (car3d: lr wins).
+    const lr = colors.bodySplit === "lr", split = lr ? colors.c2 : null, upper = lr ? null : colors.upper;
     if (R.cockpitSide && on(colors, "cockpitSide")) {
-      const ink = h.inkOn([c1]);
+      const ink = h.inkOn([c1, split, upper, lr ? null : colors.lower].filter(Boolean));
       h.drawWordmark(ctx, driverCode(teamId, num), R.cockpitSide, ink, { align: "center", spacing: 0.12, halo: h.haloIf(ink) });
     }
     if (!names.length) return;   // `clean`: no sponsor text
     if (R.podTop && on(colors, "podTop")) {
-      const ink = h.inkOn([colors.pod || c1]);   // the sidepod shell wears `pod` paint (c1 when unset)
+      const ink = h.inkOn([colors.pod || c1, split, upper].filter(Boolean));   // the sidepod shell wears `pod` paint (c1 when unset)
       h.drawWordmark(ctx, names[0], R.podTop, ink, { align: "center", spacing: 0.05, halo: h.haloIf(ink) });
     }
     if (R.haloTop && on(colors, "haloTop")) {

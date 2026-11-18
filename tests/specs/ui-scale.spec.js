@@ -576,12 +576,22 @@ test.describe("UI scale", () => {
           const scrollY = menu ? menu.scrollHeight - menu.clientHeight : NaN;
           const scrollX = menu ? menu.scrollWidth - menu.clientWidth : NaN;
           const fitLanded = !fitted || (scrollY <= 1 && scrollX <= 1);
-          return { density, anims, brandZoom, scrollY, scrollX,
+          // ...and "does not scroll" is not "the fit has run" (#5578): the five-row touch cluster at the new zoom
+          // overflows the VIEWPORT without scrolling, so frame 0 read ok with the 100 % --tf still on it (CI run
+          // 43989398592: fit 0.971 at zoom 1.49, six doors off screen). That only waited before because every label
+          // lagged its door by a frame under reduced motion. The fit lands by the third frame after a change
+          // (ResizeObserver in one frame, its rAF in the next, read in the one after), so a fit cell is settled
+          // once the cluster's fit and extents have stood still for QUIET frames in a row.
+          const key = menu ? [menu.style.getPropertyValue("--tf"), menu.getAttribute("data-home-rows"), menu.getAttribute("data-home-floor"),
+            getComputedStyle(menu).zoom, scrollY, scrollX, density].join("|") : "";
+          return { density, anims, brandZoom, scrollY, scrollX, key,
             ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 && fitLanded };
         };
-        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, s = snap();
+        const QUIET = fitted ? 3 : 0;
+        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, quiet = 0, s = snap();
         if (s.density === "compact") compactAt = 0;
-        while (!s.ok && n < frames) {
+        while (!(s.ok && quiet >= QUIET) && n < frames + QUIET) {
+          const before = s.key;
           const asked = performance.now();
           let timer = 0;
           const framed = await Promise.race([
@@ -593,9 +603,10 @@ test.describe("UI scale", () => {
           if (!framed) { starved = true; break; }
           n++;
           s = snap();
+          quiet = s.key === before ? quiet + 1 : 0;
           if (compactAt < 0 && s.density === "compact") compactAt = n;
         }
-        return { ...s, frames: n, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
+        return { ...s, frames: n, quiet, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
           uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
       }, { frames: SETTLE_FRAMES, capMs: BOOT_MS, fitted: contract === "fit" });
       const settleDump = JSON.stringify(settle);
@@ -639,6 +650,8 @@ test.describe("UI scale", () => {
           raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
           scrollY: menu.scrollHeight - menu.clientHeight, scrollX: menu.scrollWidth - menu.clientWidth,
           doors: doors.length, off,
+          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`); a phone ships 123 (#5358).
+          doorSize: document.body.dataset.shape === "wide" ? Math.max(1, TitleLayout.current("wide").btns.size / 100) : 1,
         };
       });
       scale.racePainted = scale.raceFont * +scale.geometry;
@@ -648,8 +661,8 @@ test.describe("UI scale", () => {
       expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
       expect(scale.doors, `${name}: destinations are measured ${scaleDump}`).toBeGreaterThan(5);
       if (contract === "fit") {
-        expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.fit, 2);
-        expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 + 0.001);
+        expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.doorSize * scale.fit, 2);
+        expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 * scale.doorSize + 0.001);
         // Both readings here are the compact layout (a phone-sized box is
         // compact at 100% too), so this compares like with like and holds with
         // room: CI run 42303256107 read 18.7 vs 15.5 at 734x343 and 27.7 vs
@@ -1776,7 +1789,7 @@ test.describe("Factory Home on touch", () => {
       desktop: document.body.classList.contains("desktop"),
       custom: localStorage.getItem("apex26.titleLayout"),
       scale: Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")),
-    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 1.09 });
+    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 0.7 });   // 852x393 is a phone: it ships UI SIZE 70 % (#5358)
 
     const cells = [
       { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
@@ -1836,11 +1849,14 @@ test.describe("Factory Home on touch", () => {
         const race = await page.locator("#mb-race").boundingBox();
         const timeTrial = await page.locator("#mb-tt").boundingBox();
         expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
-        expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
+        // A phone's shipped look shears the doors (#5358): a sheared door's bounding box is wider than the door by
+        // height × tan(skew), so neighbours' boxes cross while the doors keep their gap. Compare the doors themselves.
+        const shear = await page.locator("#mb-race").evaluate(el => Math.abs(new DOMMatrix(getComputedStyle(el).transform).c) * el.getBoundingClientRect().height);
+        expect(race.x + race.width - shear).toBeLessThanOrEqual(timeTrial.x + 1);
         const practice = await page.locator("#mb-practice").boundingBox();
         const garage = await page.locator("#mb-garage").boundingBox();
         expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
-        expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
+        expect(practice.x + practice.width - shear).toBeLessThanOrEqual(garage.x + 1);
         const settings = await page.locator("#mb-settings").boundingBox();
         const help = await page.locator("#mb-help").boundingBox();
         expect(Math.abs(settings.y - help.y), "normal landscape keeps utilities in a compact strip").toBeLessThanOrEqual(1);
@@ -1953,12 +1969,14 @@ const widths = (page, sels) => page.evaluate((sels) => sels.map((s) => {
   const el = document.querySelector(s);
   return el ? +el.getBoundingClientRect().width.toFixed(1) : 0;
 }), sels);
-// The audit's method: the slider's own `input` event, then two forced fits a settle period apart (the fit ticks at 10 Hz).
+// The audit's method: the slider's own `input` then `change` (a release; UI SIZE applies on it, #5256), then two
+// forced fits a settle period apart (the fit ticks at 10 Hz).
 async function driveSize(page, id, v) {
   await page.evaluate(async ({ id, v }) => {
     const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
     el.value = String(v);
     el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 2; i++) { GameHud.invalidateFit(); await new Promise((r) => setTimeout(r, 450)); }
   }, { id, v });
 }
@@ -2009,16 +2027,16 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].moves[m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
       });
     }
-    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 70 % on a phone (#5235).
-    test("pm-uiscale (every menu): a phone stops at 70 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
+    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 50 % on a phone (#5452; 70 under #5235).
+    test("pm-uiscale (every menu): a phone stops at 50 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
       const ui = CONTROL_REG.size.find((r) => r.key === "uiScale");
-      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 51 } });
+      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 40 } });
       await page.locator("#mb-settings").click();
       await page.locator("#pm-open-appearance").click();
       await expect(page.locator("#" + ui.id)).toBeVisible();
       const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
       expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: `${ui.phoneMin}%` });
-      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 51 % paints the minimum").toBe(String(ui.phoneMin / 100));
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 40 % paints the minimum").toBe(String(ui.phoneMin / 100));
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage on load").toBe(ui.phoneMin);
       // At the minimum: the open panel's token-sized text paints >= 12 px and its controls >= 44 px.
       const floor = await page.evaluate(() => {
@@ -2038,6 +2056,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
           const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
           el.value = String(v);
           el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));   // UI SIZE applies on release (#5256)
         }, { id: ui.id, v });
         const z = Math.round(Math.min(v / 100, ui.sheetZoom) * 100);
         await expect.poll(sheetZoom, `${v} %: the sheet paints min(wish, ${ui.sheetZoom})`).toBeCloseTo(z / 100, 2);

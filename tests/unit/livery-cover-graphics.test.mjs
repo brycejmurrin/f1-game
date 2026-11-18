@@ -206,6 +206,31 @@ test("inspection contour follows changed fill boundaries only inside actual cove
   assert.equal(outline.contour(a,a,w,h,[{x:0,y:0,w,h}],w,h), null, "no changed fill means no claimed outline");
 });
 
+test("streaks tail ink edges match the crown (pale-cover chase read)", () => {
+  // Crown streaks stroke T.a/T.lw after each fill; the tail arm used to fill only.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/livery-graphics.js"), "utf8");
+  const arms = [...src.matchAll(/id === "streaks"[\s\S]*?(?=else if \(id ===|ctx\.restore\(\))/g)];
+  assert.ok(arms.length >= 2, "crest and tail both paint streaks");
+  for (const m of arms) {
+    assert.match(m[0], /strokeStyle\s*=\s*cssA\(ink,\s*T\.a\(0\.45\)\)/, "each streaks arm strokes the ink edge");
+    assert.match(m[0], /T\.lw\(Math\.max\(1\.2,\s*W \* 0\.008\),\s*W\)/, "each streaks arm uses the crown line width");
+  }
+  const { drawSpineTop, drawTailTop } = painters();
+  const strokes = { crown: 0, tail: 0 };
+  const make = (bucket) => {
+    const ctx = makeRecorder();
+    const baseStroke = Object.getOwnPropertyDescriptor(ctx, "stroke") || { value: ctx.stroke };
+    ctx.stroke = function () { strokes[bucket]++; if (typeof baseStroke.value === "function") baseStroke.value.call(this); };
+    return ctx;
+  };
+  const R = { x: 10, y: 20, w: 400, h: 200 };
+  const ink = [0.06, 0.06, 0.08], acc = [0.0, 0.45, 0.85];
+  drawSpineTop(make("crown"), "streaks", R, [1, 1, 1], acc, ink, "", 0, null, null, {}, false);
+  drawTailTop(make("tail"), "streaks", R, acc, ink, "", {}, [1, 1, 1], false);
+  assert.equal(strokes.crown, 4, "crown strokes four streak edges");
+  assert.equal(strokes.tail, 4, "tail strokes four streak edges");
+});
+
 test("inspection probes do not mutate the draft, survive scratch canvas reuse, and retire transient textures", () => {
   const w = 16, h = 16, raster = new Uint8ClampedArray(w*h*4), probes = [], freed = [], textures = [], draws = [];
   const canvas = { width:w, height:h, getContext: () => ({ getImageData: () => ({ data: Uint8ClampedArray.from(raster) }) }) };

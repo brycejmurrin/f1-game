@@ -22,7 +22,7 @@ paths:
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit
   hook's absorb is a flat 20 lines of growth; an explicit `--auto-raise=N` keeps N (the raise lands as
   `tests/data/ratchets.d/<branch>.json`); more blocks until you extract or shrink. A tree-wide ceiling rises only on Bryce's own `ratchet-raise` label
-  (merge-gate row) with `node tools/check/ratchets.mjs --update --fragment --reason="<why>"` and the reason in the
+  (merge-gate `raise` row: his own click, newer than the last push touching a ratchet file; an agent's never counts) with `node tools/check/ratchets.mjs --update --fragment --reason="<why>"` and the reason in the
   commit; `--update --lower-only` lowers.
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
 - Coordinates, `+k = LEFT`, and `def._sceneryShift`: the nested `js/track/CLAUDE.md` and `js/circuits/CLAUDE.md`

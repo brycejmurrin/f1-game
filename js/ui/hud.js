@@ -471,6 +471,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box), so the paused landscape
+// HUD kept no caps until RESUME. Refit at the flip and once the viewport settles; the paused card's HUD ticks run it.
+const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true; };
+if (_rotMq && typeof _rotMq.addEventListener === "function") _rotMq.addEventListener("change", () => { refitRot(); setTimeout(refitRot, VP_SETTLE_MS); });
 // THE 3 s BACKSTOP RE-FITS ONLY WHAT RESIZED, seen by a ResizeObserver (no layout read); why and the settle window: docs/notes/LIVE-INPUT-H11-2026-10-20.md.
 const FIT_SETTLE_MS = 400, FIT_SKIP_MAX = 9, _fitSeen = new WeakSet(), _fitSize = new WeakMap();
 let _fitObs = null, _fitObsDirty = true, _fitAt = 0, _fitSkips = 0;
@@ -1399,18 +1403,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
           && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
         let leftEdge = 0, rightEdge = vpW();
         const mid = vpW() / 2;
-        for (const dock of [_dockL, _dockR]) {
-          if (!dock) continue;
-          const nodes = dock.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn");
-          for (let i = 0; i < nodes.length; i++) {
-            const el = nodes[i];
-            if (!el || el.hidden) continue;
-            const r = el.getBoundingClientRect();
-            if (!(r.width && r.height)) continue;
-            const cx = (r.left + r.right) / 2;
-            if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
-            else leftEdge = Math.max(leftEdge, r.right);
-          }
+        for (const el of dockButtons()) {   // the cached [dockL…, dockR…] list, not a query per pass (#3108)
+          if (!el || el.hidden) continue;
+          const r = el.getBoundingClientRect();
+          if (!(r.width && r.height)) continue;
+          const cx = (r.left + r.right) / 2;
+          if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
+          else leftEdge = Math.max(leftEdge, r.right);
         }
         // `bottom` is zoom-invariant (span / currentCSSZoom); room is screen px.
         const room = rightEdge - leftEdge - 2 * FIT_AIR;
@@ -2223,7 +2222,7 @@ function updateHud(force, dtMs) {
       hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown) + (pen > 0 ? " +" + pen + "s" : ""));
       hToggle(els.hudLimits, "limits-warn", (cw >= 2 || pen > 0) && cw < 3);
       hToggle(els.hudLimits, "limits-hot", cw >= 3);
-    } else if (!els.hudLimits.hidden) {
+    } else if (!els.hudLimits.hidden && !document.body.hasAttribute("data-hud-arrange")) {   // ARRANGE's sample box stays (#5256)
       els.hudLimits.hidden = true;
       hToggle(els.hudLimits, "limits-warn", false);
       hToggle(els.hudLimits, "limits-hot", false);

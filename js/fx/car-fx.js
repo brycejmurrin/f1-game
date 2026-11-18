@@ -141,12 +141,17 @@ const CarFx = (function () {
     function emit(c, g, dt, state) {
       if (!c || !g || !(dt > 0)) return;
       plank(c, g, dt);
+    }
+
+    // AI lock-up marks persist: game.js calls this ABOVE the frustum cull (#4669).
+    function marks(c, g, dt, state) {
+      if (!c || !g || !(dt > 0)) return;
       if (state === "race" && !c.isPlayer && skids && skids.stampFor) aiMarks(c, g, dt);
     }
 
     function status() { return { sparks: stats.sparks, marks: stats.marks }; }
 
-    return { emit, status, haze };
+    return { emit, marks, status, haze };
   }
 
   // heatHaze / LOCK_MIN / HAZE_TAU stay module-private: create() closes over them;

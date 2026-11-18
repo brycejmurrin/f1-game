@@ -165,7 +165,10 @@ export function gpuMemSnapshot(top, root) {
   const sites = [...st.sites.entries()].map(([site, r]) => ({ site, n: r.n, bytes: r.bytes })).sort((a, b) => b.n - a.n || b.bytes - a.bytes);
   return { api: "webgpu", texMB: mb(texB), bufMB: mb(bufB), texBytes: texB, bufBytes: bufB, tex: st.tex.size, buffers: st.buf.size,
     cat: Object.entries(cat).sort((a, b) => b[1].b - a[1].b || b[1].n - a[1].n).map(([k, v]) => ({ k, n: v.n, mb: mb(v.b), bigMB: mb(v.big) })),
-    big, life: JSON.parse(JSON.stringify(st.life)), unknown: st.unknown.slice(), unknownCount: st.unknownCount,
+    big, life: JSON.parse(JSON.stringify(st.life)),
+    // Every live texture, largest first (#5451: a one-row difference between two boots had only a category count to go on).
+    textures: [...st.tex.values()].sort((a, b) => b.b - a.b)
+      .map((e) => ({ fmt: e.fmt, w: e.w, h: e.h, d: e.d, dim: e.dim, mips: e.mips, samples: e.samples, label: e.label, bytes: e.b })), unknown: st.unknown.slice(), unknownCount: st.unknownCount,
     armedCreates: st.armedCreates, armedBuffers: st.armedBuffers, armedTextures: st.armedTextures, siteOverflow: st.siteOverflow, sites: sites.slice(0, top || 40) };
 }
 

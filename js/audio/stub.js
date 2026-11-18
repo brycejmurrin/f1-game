@@ -77,7 +77,7 @@ var DrivingCues = {
 var RadioVoice = (function () {
   function inert() {
     return {
-      stop: function () {}, speak: () => false, say: function () {}, sayPreRace: () => false, halt: function () {},
+      stop: function () {}, speak: () => false, say: function () {}, sayPreRace: () => false, halt: function () {}, flushDecoded: function () {},
       previewGeneration: () => 0, stopPreviewIfGeneration: () => false,
       prepare: function () {}, unlock: function () {}, enabled: () => false, setEnabled: function () {},
       setVolume: function () {}, volume: () => 0, pack: null, packOn: () => false,

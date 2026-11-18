@@ -48,11 +48,20 @@ export const scaleTag = (pct) => (pct == null ? "" : `@${pct}`);
 // cell (localStorage outlives the document, an injected <style> does not), and
 // if the shipping path ever breaks, the harness is what says so instead of
 // cheerfully measuring a mechanism nobody uses.
+// Returns the percentages the store APPLIED ({ ui, hud }; null at the device default): each slider clamps to its own
+// range, so `--scale=51` asks for HUD 51 % and gets 70 % (issue #5234).
 export async function applyScale(page, pct) {
-  if (pct == null) return;
-  await page.evaluate((p) => {
+  if (pct == null) return null;
+  return page.evaluate((p) => {
     if (!window.__apex || !window.__apex.uiScale) throw new Error("__apex.uiScale missing");
-    window.__apex.uiScale(p);
-    window.__apex.hudScale(p);
+    const ui = window.__apex.uiScale(p), hud = window.__apex.hudScale(p);
+    return { ui: ui && typeof ui.pct === "number" ? ui.pct : null, hud: hud && typeof hud.pct === "number" ? hud.pct : null };
   }, pct);
+}
+
+// Pure: the log-label suffix that says where a slider clamped the requested scale (" ui@N" / " hud@N"), "" when
+// every slider took it as asked. The cell KEY stays `name@requested`, so no baseline row is renamed.
+export function appliedTag(requested, applied) {
+  if (requested == null || !applied) return "";
+  return ["ui", "hud"].filter((k) => applied[k] != null && applied[k] !== requested).map((k) => ` ${k}@${applied[k]}`).join("");
 }

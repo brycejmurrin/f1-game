@@ -2,9 +2,9 @@
 
 ## Claude cloud session (`lane:claude`, the default)
 
-The whole of SKILL.md. `subscribe_pr_activity` on the PR while CI runs on your head; no timers, no bus. A fired
-session's only input is its one-line address (`ISSUE n` / `CONTINUE PR n` / `DEPLOY-RED`); it reads the rest from
-GitHub.
+The whole of SKILL.md. `subscribe_pr_activity` on the PR while CI runs on your head; no timers while it works
+(AGENTS.md rule 13). A fired session's only input is its one-line address (`ISSUE n` / `CONTINUE PR n` /
+`DEPLOY-RED`); it reads the rest from GitHub.
 
 ## Cursor cloud agent (`lane:cursor`, self-contained issues only)
 

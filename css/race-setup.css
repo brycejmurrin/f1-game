@@ -227,6 +227,7 @@
    (nontext-contrast keeps every accent consumer decorative) and off a new raw
    colour (the rawColor ratchet). */
 .trb-custom { background: color-mix(in oklab, var(--gold) 14%, transparent); color: var(--gold); }
+.trb[data-stale] { background: color-mix(in oklab, var(--red) 16%, transparent); color: var(--red); }
 /* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {
@@ -610,7 +611,7 @@
   min-height: var(--chip-h);
   /* 16px floor: iOS Safari auto-zooms the whole page when a focused input's
      font-size is under 16px, and the zoom sticks after the keyboard closes. */
-  font: inherit; font-size: 16px;
+  font: inherit; font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
   background: var(--plate-hover); color: var(--text);
   border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 7px 10px;
 }

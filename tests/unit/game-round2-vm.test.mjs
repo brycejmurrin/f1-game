@@ -236,12 +236,24 @@ test("I-pm-calib: RECALIBRATE takes the zero a beat after the tap, not under the
   const g = await createGame({ track: "monza" });
   try {
     ev(g, `globalThis.__cal = 0; { const real = Input; Input = Object.create(real, { calibrate: { value() { __cal++; return real.calibrate(); } } }); }`);
-    g.apex.setInput({ throttle: true, steer: 0 });
+    await g.race("monza", "day", "dry", { laps: 5 });
+    g.apex.go(); g.apex.setInput({ throttle: true, steer: 0 });
     g.step(30);
-    ev(g, `document.getElementById("pm-calib")`).onclick();
+    const tap = () => ev(g, `document.getElementById("pm-calib")`).onclick();
+    const wait = async () => { for (let i = 0; i < 5; i++) { await new Promise((r) => setTimeout(r, 80)); g.flushTimers(); } };
+    ev(g, `document.getElementById("pausebtn")`).onclick();   // RECALIBRATE lives on the pause card
+    ev(g, "__cal = 0");   // the race start takes its own zero
+    tap(); tap();   // #5027: a double tap is ONE resume
     assert.equal(ev(g, "__cal"), 0, "nothing is zeroed at the instant of the tap");
-    for (let i = 0; i < 5; i++) { await new Promise((r) => setTimeout(r, 80)); g.flushTimers(); }
-    assert.equal(ev(g, "__cal"), 1, "the zero lands once the delay has passed");
+    await wait();
+    assert.equal(ev(g, "__cal"), 1, "the zero lands once the delay has passed, once");
+    assert.equal(g.G.paused, false, "and the race resumes");
+    // #5027: the phone locked inside the 300 ms: the timer must not resume a hidden tab.
+    ev(g, `document.getElementById("pausebtn")`).onclick();
+    tap(); g.sandbox.document.hidden = true; g.sandbox.document._fire({ type: "visibilitychange" });
+    await wait(); g.sandbox.document.hidden = false;
+    assert.equal(g.G.paused, true, "a hidden tab stays paused");
+    assert.equal(ev(g, "__cal"), 1, "and takes no zero mid-motion");
   } finally { g.close(); }
 });
 

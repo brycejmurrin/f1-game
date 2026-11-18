@@ -1,15 +1,8 @@
-/* Apex 26 — WHEEL STATE: torque-balanced per-axle rim speed and slip ratio.
- * Opt-in (default OFF). When OFF, PlayerForces never calls in and tip handling
- * stays byte-identical. When ON, an axle whose brake or drive demand exceeds
- * its tyre's longitudinal capacity (wet, grass, kerb, light load, lateral slip
- * already spending the circle) runs away into lock or spin; the sliding tyre
- * then delivers less than was asked and PlayerForces hands that shortfall back
- * to c.speed, so a lock-up stops LONGER and wheelspin accelerates SLOWER.
- *
- * Demand and capacity come from the caller in accel units (PlayerForces bills
- * the same grip circle the legacy axFrac path does: LONG_GRIP x weather), so a
- * dry BB_REF stop (~0.64 of the circle) never locks. #1628;
- * docs/notes/WHEEL-STATE-2026-10-19.md, plan Tier2 §5.
+/* Apex 26 — WHEEL STATE: torque-balanced per-axle rim speed and slip ratio. Opt-in (#1628), default OFF:
+ * OFF never enters PlayerForces' branch. ON, an axle whose brake or drive demand exceeds its tyre's
+ * longitudinal capacity runs away into lock or spin, and the shortfall goes back to c.speed (a lock-up
+ * stops LONGER, wheelspin accelerates SLOWER). Demand and capacity are accel units on the legacy
+ * LONG_GRIP circle. docs/notes/WHEEL-STATE-2026-10-19.md, plan Tier2 §5.
  */
 const WheelState = (function () {
   "use strict";
@@ -21,10 +14,7 @@ const WheelState = (function () {
   const KAPPA_VMIN = 3;       // m/s floor in κ = (vw−vx)/max(|vx|,…)
   const KAPPA_RELAX_M = 0.4;  // metres of travel to relax toward κ*
   const WHEEL_J = 0.10;       // effective I/m·R² — ~100 ms lock at 40 m/s
-  // Lock / spin telemetry starts PAST the peak (|κ|/KAPPA_PEAK > 1): a tyre
-  // still under its peak is gripping, however hard it is worked, and is full
-  // at κ = 0.25. The first slice keyed this at 0.55 of peak, so every dry stop
-  // read as a lock-up.
+  // Lock / spin telemetry starts PAST the peak (|κ|/KAPPA_PEAK > 1); under it the tyre grips.
   const LOCK_KAPPA = 1;
   const SPIN_KAPPA = 1;
   const LOCK_SPAN = 1.5;
@@ -32,18 +22,87 @@ const WheelState = (function () {
   // a reset, a rescue — not dynamics: the rims re-sync to the new body speed.
   const RESYNC_A = 80;
 
+  // ABS / TC levels (Tier2 §5, #3983): torque clamps with hysteresis. Latch when
+  // |κ| passes the level's threshold, cut the demand by `cut`, hold ABS_HOLD s,
+  // release above threshold + KAPPA_HYST (below it, in |κ| terms). Default "off"
+  // = no clamp, so the opt-in wheel state behaves exactly as before.
+  const KAPPA_HYST = 0.06;
+  const ABS_HOLD = 0.05;
+  const ASSIST = Object.freeze({
+    medium: Object.freeze({ abs: 0.20, tc: 0.22, cut: 0.55 }),
+    full: Object.freeze({ abs: 0.12, tc: 0.14, cut: 0.45 }),
+  });
+  let _level = "off", _levelResolved = false;
+  /** "off" | "medium" | "full"; anything else reads as off. Stored as apex26.wheelAssist. */
+  function assistLevel() {
+    if (!_levelResolved) {
+      _levelResolved = true;
+      try { const r = localStorage.getItem("apex26.wheelAssist"); if (r === "medium" || r === "full") _level = r; } catch (_) { /* blocked storage */ }
+    }
+    return _level;
+  }
+  /** `persist` false = this session only. */
+  function setAssistLevel(v, persist = true) {
+    _levelResolved = true;
+    _level = (v === "medium" || v === "full") ? v : "off";
+    if (persist) { try { localStorage.setItem("apex26.wheelAssist", _level); } catch (_) { /* blocked storage */ } }
+    return _level;
+  }
+  /** The settings row's one value: "off" (classic model) | "on" (wheel state) | "medium" | "full" (wheel state + ABS/TC). */
+  function mode() { return !resolveEnabled() ? "off" : assistLevel() === "off" ? "on" : assistLevel(); }
+  function setMode(m) {
+    setEnabled(m !== "off");
+    if (m !== "off") setAssistLevel(m === "medium" || m === "full" ? m : "off");
+    return mode();
+  }
+
+  /** One clamp: returns the demand to use; `latch` is { on, t } mutated in place. */
+  function clampDemand(latch, k, dirOk, aReq, thr, cut, dt, cap) {
+    const kAbs = dirOk ? Math.abs(k) : 0;
+    if (kAbs > thr) { latch.on = 1; latch.t = ABS_HOLD; }
+    else if (latch.on) {
+      latch.t -= dt;
+      if (latch.t <= 0 && kAbs < Math.max(0, thr - KAPPA_HYST)) latch.on = 0;
+    }
+    // Cut, and never ask more than the tyre can give: a binary pedal's demand sits far above capacity.
+    return latch.on ? Math.sign(aReq) * Math.min(Math.abs(aReq) * (1 - cut), cap * 0.95) : aReq;
+  }
+
   let _enabled = false;
   let _resolved = false;
+
+  // BRAKE THERMAL (#1577, default OFF, needs wheel state): disc heat from brake power, airflow cooling, pad fade past T_FADE0.
+  const T_AMB = 100, T_FADE0 = 650, T_FADE1 = 950, FADE_MAX = 0.35, HEAT_K = 0.07, COOL_0 = 0.03, COOL_V = 0.0012;
+  let _thermal = false, _thermalResolved = false;
+  function thermalEnabled() {
+    if (!_thermalResolved) {
+      _thermalResolved = true;
+      try { _thermal = localStorage.getItem("apex26.brakeThermal") === "1"; } catch (_) { /* blocked storage */ }
+    }
+    return _thermal;
+  }
+  function setThermal(v, persist = true) {
+    _thermalResolved = true;
+    _thermal = !!v;
+    if (persist) { try { localStorage.setItem("apex26.brakeThermal", _thermal ? "1" : "0"); } catch (_) { /* blocked storage */ } }
+    return _thermal;
+  }
+  function fadeOf(T) {
+    const x = clamp((T - T_FADE0) / (T_FADE1 - T_FADE0), 0, 1);
+    return 1 - FADE_MAX * x * x * (3 - 2 * x);
+  }
+  function discStep(T, w, v, dt) {
+    const t = Number.isFinite(T) ? T : T_AMB;
+    return clamp(t + (HEAT_K * w - (COOL_0 + COOL_V * Math.max(v, 0)) * (t - T_AMB)) * dt, T_AMB, 1200);
+  }
 
   function resolveEnabled() {
     if (_resolved) return _enabled;
     _resolved = true;
     try {
-      if (typeof localStorage !== "undefined") {
-        const raw = localStorage.getItem("apex26.wheelState");
-        if (raw === "1" || raw === "on" || raw === "true") _enabled = true;
-        else if (raw === "0" || raw === "off" || raw === "false") _enabled = false;
-      }
+      const raw = localStorage.getItem("apex26.wheelState");
+      if (raw === "1" || raw === "on" || raw === "true") _enabled = true;
+      else if (raw === "0" || raw === "off" || raw === "false") _enabled = false;
     } catch (_) { /* private mode: stay at default OFF */ }
     return _enabled;
   }
@@ -56,13 +115,7 @@ const WheelState = (function () {
     _resolved = true;
     _enabled = !!v;
     if (!persist) return;
-    // Writer for apex26.wheelState (store-registry ratchet). Persistence is
-    // best-effort; private mode keeps the in-memory flag for the session.
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("apex26.wheelState", _enabled ? "1" : "0");
-      }
-    } catch (_) { /* private mode / blocked storage */ }
+    try { localStorage.setItem("apex26.wheelState", _enabled ? "1" : "0"); } catch (_) { /* private mode / blocked storage */ }
   }
 
   /** Sync rim speeds to body speed when missing or non-finite (jump/reset stand-in). */
@@ -135,21 +188,14 @@ const WheelState = (function () {
     // Closed-form κ* for the torque-limited regime: Fx(κ*) ≈ aReq.
     // Linearised near peak: Fx ≈ muLong·(κ/KAPPA_PEAK) while |κ|≪peak and α≈0.
     const kStar = clamp((aReq / muLong) * KAPPA_PEAK, -KAPPA_MAX, KAPPA_MAX);
-    // Longitudinal room left by the lateral slip (ellipse): an axle already at
-    // its cornering peak (|alphaN| ≥ 1) has almost none, so power on a corner
-    // exit spins the rear and a trail-brake at the limit locks the front.
+    // Longitudinal room left by the lateral slip: an axle at its cornering peak has almost none.
     const room = Math.sqrt(Math.max(0.0025, 1 - Math.min(1, alphaN * alphaN)));
     const demandOver = Math.abs(aReq) > muLong * room * 0.98;
 
     if (!demandOver) {
-      // Relax the SLIP toward the κ* that matches demand (no runaway). Relaxing
-      // the rim speed instead left vw trailing an accelerating body by ~1 m/s
-      // at 3 m/s — a phantom lock under full throttle (measured κR −0.16).
+      // Relax the SLIP (not the rim speed: that read a phantom lock under full throttle) toward κ*.
       const travel = Math.max(Math.abs(vx), KAPPA_VMIN) * dt;
       const a = 1 - Math.exp(-travel / KAPPA_RELAX_M);
-      // The slip carried in is the last tick's κ (state.kappa) when known: a
-      // gripping wheel turns with the body, so the body's own acceleration
-      // must not read as slip.
       const k0 = Number.isFinite(state.kappa) ? clamp(state.kappa, -KAPPA_MAX, KAPPA_MAX) : kappa;
       vw = vx + (k0 + (kStar - k0) * a) * Math.max(Math.abs(vx), KAPPA_VMIN);
       // Recompute Fx at the relaxed state for telemetry.
@@ -162,8 +208,7 @@ const WheelState = (function () {
       const share2 = rho2 > 1e-9 ? f2 / rho2 : 0;
       fx = clamp(muLong * share2 * kn2, -muLong, muLong);
     } else {
-      // Runaway: integrate I·ω̇ = (aReq − Fx)·m·R² with impulse clamp so a
-      // step never carries vw back across vx (avoids κ sign chatter).
+      // Runaway: integrate I·ω̇ = (aReq − Fx)·m·R², clamped so vw never crosses vx in one step.
       const dv = ((aReq - fx) / WHEEL_J) * dt;
       let vw1 = vw + dv;
       if (vx >= 0 && vw > vx && vw1 < vx) vw1 = vx;
@@ -185,11 +230,7 @@ const WheelState = (function () {
     const kDir = vx < 0 ? -kappa : kappa;
     o.locked = kDir < 0 ? clamp((knAbs - LOCK_KAPPA) / LOCK_SPAN, 0, 1) : 0;
     o.spinning = kDir > 0 ? clamp((knAbs - SPIN_KAPPA) / LOCK_SPAN, 0, 1) : 0;
-    // Lateral share of the combined force: the tyre makes F(ρ) along its slip
-    // direction, so its lateral part is F(ρ)·|αN|/ρ, against the pure-lateral
-    // F(|αN|) the Fy path already computes. Free roll is 1; a locked or
-    // spinning tyre keeps only the sliding force's sideways share. The first
-    // slice's √(1−κn²) hit its 0.05 floor the instant κ passed the peak.
+    // Lateral share of the combined force: F(ρ)·|αN|/ρ against the pure-lateral F(|αN|). Free roll is 1.
     const aN = Math.abs(alphaN), rhoL = Math.hypot(aN, knAbs);
     const g = (x) => (typeof TyreModel !== "undefined" && TyreModel.lateralCurve)
       ? Math.abs(TyreModel.lateralCurve(x * peakX)) : Math.min(1, x);
@@ -208,29 +249,36 @@ const WheelState = (function () {
   const _rIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5 };
   const _results = { latScaleF: 1, latScaleR: 1, fxF: 0, fxR: 0, shortfall: 0 };
 
-  /**
-   * PlayerForces hook. Mutates rim speeds, kappa, wheelLock, wheelSpin on `c`.
-   * Returns lateral grip scales for the Fy path and `shortfall` ∈ [0, 1]: the
-   * fraction of the longitudinal demand the tyres did NOT deliver this tick
-   * (0 while every axle is torque-limited). No-op contract when !enabled().
-   *
-   * opts: { dt, braking, thrOn, aReqF, aReqR (accel, +drive / −brake),
-   *         muLongF, muLongR (accel capacity), slipF, slipR, csFront, csRear,
-   *         muLatF, muLatR }
-   */
+  /** PlayerForces hook: mutates rim speeds, kappa, wheelLock, wheelSpin on `c`; returns lateral grip scales and `shortfall` ∈ [0, 1] (the demand the tyres did not deliver). opts: Vehicle.wheel. */
   function stepPlayer(c, opts) {
     if (!enabled() || !c || !opts) {
-      _results.latScaleF = 1;
-      _results.latScaleR = 1;
-      _results.fxF = 0;
-      _results.fxR = 0;
-      _results.shortfall = 0;
+      _results.latScaleF = _results.latScaleR = 1;
+      _results.fxF = _results.fxR = _results.shortfall = 0;
       return _results;
     }
     const dt = opts.dt;
     sync(c, dt);
     const vx = c.speed || 0;
-    const aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
+    let thermalKeep = 1;
+    if (thermalEnabled()) {
+      const b = opts.braking, wF = b ? Math.max(-opts.aReqF, 0) : 0, wR = b ? Math.max(-opts.aReqR, 0) : 0;
+      c.brakeTF = discStep(c.brakeTF, wF * vx, vx, dt);
+      c.brakeTR = discStep(c.brakeTR, wR * vx, vx, dt);
+      const fF = fadeOf(c.brakeTF), fR = fadeOf(c.brakeTR);
+      c.brakeFade = wF + wR > 1e-6 ? (fF * wF + fR * wR) / (wF + wR) : Math.min(fF, fR);
+      if (b) thermalKeep = c.brakeFade;
+    }
+    let aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
+    if (assistLevel() !== "off") {
+      const A = ASSIST[_level];
+      const lf = c._absF || (c._absF = { on: 0, t: 0 });
+      const lr = c._tcR || (c._tcR = { on: 0, t: 0 });
+      // ABS: front brake demand while rolling forwards; TC: rear drive demand.
+      if (aReqF < 0 && vx > KAPPA_VMIN) aReqF = clampDemand(lf, c.kappaF, c.kappaF < 0, aReqF, A.abs, A.cut, dt, +opts.muLongF || 0);
+      else lf.on = 0;
+      if (aReqR > 0) aReqR = clampDemand(lr, c.kappaR, c.kappaR > 0, aReqR, A.tc, A.cut, dt, +opts.muLongR || 0);
+      else lr.on = 0;
+    }
     const muLongF = Math.max(1e-3, +opts.muLongF || 0);
     const muLongR = Math.max(1e-3, +opts.muLongR || 0);
 
@@ -265,6 +313,7 @@ const WheelState = (function () {
 
     const want = Math.abs(aReqF) + Math.abs(aReqR);
     _results.shortfall = want > 1e-6 ? clamp(1 - (_fOut.ach + _rOut.ach) / want, 0, 1) : 0;
+    if (thermalKeep < 1) _results.shortfall = 1 - (1 - _results.shortfall) * thermalKeep;
     _results.latScaleF = clamp(_fOut.latScale != null ? _fOut.latScale : 1, 0.05, 1);
     _results.latScaleR = clamp(_rOut.latScale != null ? _rOut.latScale : 1, 0.05, 1);
     _results.fxF = _fOut.fx || 0;
@@ -275,6 +324,7 @@ const WheelState = (function () {
   // ensure/sync/kappaOf + the KAPPA_*/WHEEL_J/LOCK_*/SPIN_*/RESYNC_* knobs are
   // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
-    enabled, setEnabled, axleStep, stepPlayer,
+    enabled, setEnabled, axleStep, stepPlayer, assistLevel, setAssistLevel, mode, setMode,
+    thermalEnabled, setThermal, fadeOf, discStep,
   });
 })();

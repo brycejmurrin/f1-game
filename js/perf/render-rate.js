@@ -31,6 +31,7 @@ const RenderRate = (function () {
   const MODES = ["auto", "off", "half", "45", "30"];
   const WARM_FRAMES = 90;    // race-entry frames the tier never skips
   const MAX_GAP_S = 1 / 20;  // render()'s own dt clamp: one drawn frame never carries more
+  const SETTINGS_HZ = 20;    // paused SETTINGS sheet cadence (#5049)
   let mode = "auto";         // one of MODES
   let credit = 0, live = 0;  // tier: banked draw credit, consecutive racing frames seen
   let mobile = false;
@@ -41,6 +42,7 @@ const RenderRate = (function () {
   let accDt = 0, accMs = 0;  // skipped frames' time, paid into the next drawn frame
   let outDt = 0, outMs = 0;
   let skipped = 0, drawn = 0;
+  let sCredit = 1;           // settle(): banked SETTINGS_HZ draw credit
   // The last gate() verdict. PerfGov.tick() is handed the rAF interval that ENDS at
   // this tick, i.e. the one that began at the PREVIOUS rAF: only when that rAF drew
   // does the interval measure a frame's cost. After a skipped rAF it is just the
@@ -53,7 +55,7 @@ const RenderRate = (function () {
     let v = "";
     try { v = localStorage.getItem(KEY) || ""; } catch (_) { /* no storage: auto */ }
     mode = MODES.indexOf(v) >= 0 ? v : "auto";
-    credit = 0; live = 0;
+    credit = 0; live = 0; sCredit = 1;
     ema = 16.7; fast = 0; half = false; phase = 0; accDt = 0; accMs = 0; skipped = 0; drawn = 0; last = true;
   }
 
@@ -87,7 +89,17 @@ const RenderRate = (function () {
     return true;
   }
   /** A live preview must draw now: flush skipped time and mark this rAF as drawn. */
-  function force(dt, ms) { return (last = draw(dt, ms)); }
+  function force(dt, ms) { sCredit = 1; return (last = draw(dt, ms)); }
+
+  /** Paused SETTINGS over the frozen race (#5049): only the sky moves, so draw at SETTINGS_HZ on the
+   *  wall clock (js/ui/home-world.js's credit idiom), carrying the skipped dt into the drawn frame.
+   *  The first frame after any other draw path draws at once; "off" and an XR session never skip. */
+  function settle(dt, ms, presenting) {
+    if (presenting || mode === "off" || !(ms > 0) || ms > MAX_SANE_MS) { sCredit = 1; return (last = draw(Number.isFinite(dt) && dt > 0 ? dt : 0, ms > 0 && ms <= MAX_SANE_MS ? ms : 16.7)); }
+    sCredit = Math.min(1, sCredit + ms / 1000 * SETTINGS_HZ);
+    if (sCredit < 1 - 1e-6) { accDt += dt; accMs += ms; skipped++; return (last = false); }
+    sCredit -= 1; return (last = draw(dt, ms));
+  }
 
   /** True when this rAF should draw. After a true, dt() / ms() hold the time to render
    *  and update the HUD with (this frame's plus any skipped frame's). `presenting` is
@@ -123,7 +135,7 @@ const RenderRate = (function () {
   }
 
   return {
-    init, observe, gate, force, setMode,
+    init, observe, gate, force, settle, setMode,
     dt: () => outDt,
     drew: () => last,
     ms: () => outMs,

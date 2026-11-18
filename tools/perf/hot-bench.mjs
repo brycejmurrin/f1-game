@@ -4,10 +4,11 @@
 //
 // The renderer is stubbed (tools/lib/game-vm.cjs), so these times are the
 // simulation, not a GPU. Wall-clock on a shared runner moves; a 15% baseline
-// would flake. The gate is therefore a hang ceiling: median ms/call at most
-// GENEROUS_RATIO times the checked-in baseline, and the slowest of three
-// windows at most SPREAD_RATIO times the fastest (a stall mid-bench, not a
-// slow box). APEX_PERF_HOT_STRICT=1 (or APEX_PERF_STRICT=1) tightens the
+// would flake. The gate is therefore a hang ceiling: the fastest window's
+// ms/call at most GENEROUS_RATIO times the checked-in baseline, and the slowest
+// of three windows at most SPREAD_RATIO times the fastest (a stall mid-bench,
+// not a slow box). Every window is at least MIN_WINDOW_MS long so that one
+// scheduler preemption cannot pass for a stall. APEX_PERF_HOT_STRICT=1 (or APEX_PERF_STRICT=1) tightens the
 // ceiling to STRICT_RATIO. Rewrite the baseline only when the hot path
 // changed on purpose:
 //
@@ -31,10 +32,15 @@ export const WARM_STEPS = 80;
 export const SPREAD_RATIO = 4;
 export const GENEROUS_RATIO = 6;
 export const STRICT_RATIO = 1.75;
+// Each window must be long against the box's own off-CPU gaps: a window shorter than a scheduler slice measures
+// whether a preemption landed in it, not a stall in the function (#2394: physState at 200 iters was a ~1.8 ms
+// window, and one 8-25 ms gap made it 5-6x its sibling on a loaded box, 6/30 runs red at 8 busy neighbours).
+// MIN_WINDOW_MS is the floor on baseline msPerCall x iters; the per-call baseline and both ratios are unchanged.
+export const MIN_WINDOW_MS = 20;
 export const BENCHES = {
   step: { iters: 80 },
-  physState: { iters: 200 },
-  nodeAt: { iters: 2000 },
+  physState: { iters: 2800 },
+  nodeAt: { iters: 20000 },
 };
 
 export const STRICT = process.env.APEX_PERF_HOT_STRICT === "1"

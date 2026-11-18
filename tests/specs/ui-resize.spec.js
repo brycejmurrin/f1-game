@@ -784,7 +784,7 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
       null, { polling: 50, timeout: 8_000 });
     const body = await page.evaluate(() => ({ density: document.body.dataset.density, shape: document.body.dataset.shape,
       ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize }));
-    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "1.09", text: "large" });
+    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "0.7", text: "large" });   // that export stores no UI SIZE: a phone ships 70 % (#5358)
     const seen = {};
     for (const [layout, side] of [["grid", null], ["list", null], ["compact", null], ["wide", null], ["sidebar", null], ["grid", "right"], ["sidebar", "right"]]) {
       await page.evaluate(([l, s]) => {
@@ -837,6 +837,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
     await waitReady(page);
     const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    // #5543: music is live in every cell, so the NOW PLAYING line is part of the card the questions below measure.
+    await page.evaluate(() => { localStorage.setItem("apex26.sound", "true"); localStorage.setItem("apex26.music", "true"); });
     await page.reload();
     await waitReady(page);
     await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
@@ -861,7 +863,10 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
           const all = doors.map(rect);
           const resume = document.getElementById("pm-resume"), rr = resume.getBoundingClientRect();
           const hit = document.elementFromPoint(rr.x + rr.width / 2, rr.y + rr.height / 2);
-          return { short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+          const card = document.getElementById("pm-now-card"), cr = card.getBoundingClientRect(), title = document.getElementById("pm-now").getBoundingClientRect();
+          return { now: { shown: shown(card), inSheet: cr.top >= sr.top - 0.5 && cr.bottom <= sr.bottom + 0.5 && cr.left >= sr.left - 0.5 && cr.right <= sr.right + 0.5, titleW: Math.round(title.width),
+              transport: ["pm-prev", "pm-play", "pm-skip"].filter((id) => { const el = document.getElementById(id), r = el.getBoundingClientRect(); return shown(el) && !el.disabled && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el; }) },
+            short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
             bodyScroll: sb.scrollHeight - sb.clientHeight, sheetScroll: sheet.scrollHeight - sheet.clientHeight,
             sheet: { x: Math.round(sr.x), y: Math.round(sr.y), w: Math.round(sr.width), h: Math.round(sr.height), inScreen: sr.top >= 0 && sr.left >= 0 && sr.bottom <= document.documentElement.clientHeight + 0.5 && sr.right <= document.documentElement.clientWidth + 0.5 },
             firstDoor: all[0].id, focus: document.activeElement && document.activeElement.id, hit: hit && hit.id, resumePosition: getComputedStyle(resume).position,
@@ -881,6 +886,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
         expect(cell.resume.area, tag + "no door on the card is larger than RESUME (QUIT may tie it; RESUME alone carries the primary fill)").toBeGreaterThanOrEqual(cell.maxOther * 0.99);
         expect(cell.outside, tag + "every door ends inside the sheet").toEqual([]);
         expect(cell.small, tag + "every door paints the 44 px floor").toEqual([]);
+        expect(cell.now, tag + "NOW PLAYING is on the card with its title and a tappable prev / play / next (#5543)").toMatchObject({ shown: true, inSheet: true, transport: ["pm-prev", "pm-play", "pm-skip"] });
+        expect(cell.now.titleW, tag + "the song title is painted").toBeGreaterThan(0);
         expect(cell.sheet.w, tag + "the card uses the width (the 420 card was 214 px here)").toBeGreaterThanOrEqual(600);
         await page.evaluate(() => document.getElementById("pm-resume").click());
         await page.waitForFunction(() => document.getElementById("pausemenu").hidden, null, { polling: 50, timeout: 8_000 });
@@ -925,7 +932,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells 
         goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - ir.bottom).toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5 };
     });
     const tag = win.name + " select: ";
-    expect(sel, tag + "a compact wide picker at the export's UI SIZE").toMatchObject({ density: "compact", shape: "wide", ui: "1.09" });
+    // That export stores no UI SIZE, so a phone reads its shipped 70 % (#5358; it was 109).
+    expect(sel, tag + "a compact wide picker at the phone's UI SIZE").toMatchObject({ density: "compact", shape: "wide", ui: "0.7" });
     expect(sel.sectionScroll, tag + "the hero section never scrolls").toBeLessThanOrEqual(1);
     expect(sel.verticalScrollers, tag + "no vertical scroller anywhere in the picker").toEqual([]);
     expect(sel.heroOwnH, tag + "the still keeps a real slot (C gets what 283 px leave)").toBeGreaterThanOrEqual(60);
@@ -949,7 +957,11 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells 
         goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - sr.bottom).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 };
     });
     const rtag = win.name + " race settings: ";
-    expect(rs, rtag + "compact like its siblings, the sheet grid kept").toMatchObject({ density: "compact", shape: "wide", compactAt: "480px", display: "grid" });
+    // The sheet decides density in its OWN px (window / UI SIZE against --compact-at): at 70 % the two 390-tall
+    // windows are 557-561 own px, a normal sheet; the 283-tall Safari window (404) stays compact. The contract
+    // below (one scroller, two columns, START RACE fixed and 44 px) holds in both.
+    const rsDensity = win.viewport.height / 0.7 < 480 ? "compact" : "normal";
+    expect(rs, rtag + "the density its own height asks for, the sheet grid kept").toMatchObject({ density: rsDensity, shape: "wide", compactAt: "480px", display: "grid" });
     expect(rs.sheetScroll, rtag + "the sheet itself never scrolls").toBeLessThanOrEqual(1);
     expect(rs.scrollers, rtag + "#rs-body is the ONE scroller").toEqual(["rs-body"]);
     expect(rs.columns, rtag + "two columns on a phone").toBe(2);

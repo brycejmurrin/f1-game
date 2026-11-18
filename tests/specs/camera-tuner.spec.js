@@ -288,6 +288,7 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     const inp = document.getElementById("ct-in-height");
     inp.value = "1.25";
     inp.dispatchEvent(new Event("input"));
+    inp.dispatchEvent(new Event("change"));
   });
   expect((await page.evaluate(() => __apex.camTune("hood"))).height).toBeCloseTo(1.25, 2);
   expect((await page.evaluate(() => __apex.camTune("chase"))).height).toBe(0);
@@ -299,6 +300,9 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     inp.value = "-5";
     inp.dispatchEvent(new Event("input"));
   });
+  // A drag applies live; storage is written once, on release (#5042).
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camComfort") || "{}").fovBias)).toBeUndefined();
+  await page.evaluate(() => document.getElementById("ct-cin-fovBias").dispatchEvent(new Event("change")));
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camComfort") || "{}").fovBias)).toBe(-5);
 
   // ALL CAMS scope writes the global baseline, not the live mode.
@@ -310,6 +314,7 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     const inp = document.getElementById("ct-in-fov");
     inp.value = "3";
     inp.dispatchEvent(new Event("input"));
+    inp.dispatchEvent(new Event("change"));
   });
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camTuneGlobal") || "{}").fov)).toBe(3);
   await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="mode"]').click());

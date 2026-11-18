@@ -72,6 +72,7 @@ const Quali = (function () {
   const PACE_CORNER = 1.1;
 
   const EXEC_SPREAD = 0.012;
+  const QUALI_BIAS = 0.003;
 
   // Time-trial MEDALS as multiples of the reference pole (referencePole below):
   // gold beats the modelled pole, silver is within 3 %, bronze within 7 %.
@@ -211,10 +212,19 @@ const Quali = (function () {
     // driver (skill 1) in the tier-0 car on a flying lap — the same model
     // capFor()/lapTime() grid a field with (both flying laps) — at the
     // current pace, difficulty and weather grip. 0 with no track loaded.
+    // The grip is the WEATHER'S TYRE on today's road, which is what every car in the session runs
+    // (TyreModel.treadOf: no fitted tread => treadFor). A bare G.gripMult() is the slick column — in the wet
+    // a lap no car drives, 0.4 % (wet) to 3.4 % (rain) slower than the field's own pole at Monza (#5585).
+    // Dry is the same number either way.
+    function referenceGrip() {
+      const w = G.trackWetness ? G.trackWetness() : NaN;
+      if (typeof TyreModel === "undefined" || !Number.isFinite(w)) return G.gripMult();
+      return TyreModel.weatherGrip(TyreModel.treadFor(G.raceWeather, w), w);
+    }
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
-      return paceLap(track, freeFor(Teams.TIER_V[0], 1), G.gripMult());
+      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip());
     }
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).
@@ -232,7 +242,9 @@ const Quali = (function () {
       const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
       const spread = EXEC_SPREAD * (1 - r.consistency / 100);
       const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;
-      return base * (1 + draw * 2 * spread);
+      // Quali bias (#1566, style axis): ±QUALI_BIAS of a SIMULATED lap, keyed by driver code like the
+      // spread above (not by which car is the player, or the grid would depend on the seat); a driven lap never gets here.
+      return base * (1 + draw * 2 * spread) * (r.qualiBias ? 1 - QUALI_BIAS * DriverRatings.style01(r.qualiBias) : 1);
     }
 
     function drivenMap(driven) {

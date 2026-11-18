@@ -35,7 +35,7 @@ const GarageCrewService = (function () {
     const lower = leaving ? 1 - phase(t, 1.9, 2.6) : phase(t, 1.9, 2.7);
     const retreat = phase(t, leaving ? 2.6 : 4, leaving ? 4.8 : 5.8);
     for (let i = 0; i < 4; i++) {
-      const [side, z, wx] = WHEELS[i], a = out[i];
+      const w = WHEELS[i], side = w[0], z = w[1], wx = w[2], a = out[i];
       const distance = leaving ? 1.35 * approach - .675 * slide - .675 * retreat : .675 * approach + .675 * slide - 1.35 * retreat;
       a.x = side * (2.8 - distance); a.z = z; a.yaw = -side * Math.PI / 2; a.walkDistance = -distance;
       const grasp = leaving ? phase(t, .7, 1.1) : 1 - phase(t, 3.5, 3.9);
@@ -163,7 +163,7 @@ const GarageCrewService = (function () {
   }
   // Reuse one unit cylinder and matrix for the hanging hose's three spans.
   function cableSpan(rig, gfx, x, y, z, tx, ty, tz, opts) {
-    const m = rig.m, dx = tx - x, dy = ty - y, dz = tz - z, d = Math.hypot(dx, dy, dz), h = Math.hypot(dx, dy);
+    const m = rig.m, dx = tx - x, dy = ty - y, dz = tz - z, d = Math.sqrt(dx * dx + dy * dy + dz * dz), h = Math.sqrt(dx * dx + dy * dy);
     m[0] = dy / h; m[1] = -dx / h; m[2] = 0; m[3] = 0;
     m[4] = dx; m[5] = dy; m[6] = dz; m[7] = 0;
     m[8] = -dx * dz / (h * d); m[9] = -dy * dz / (h * d); m[10] = h / d; m[11] = 0;

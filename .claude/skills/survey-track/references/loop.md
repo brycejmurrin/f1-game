@@ -96,9 +96,9 @@ confirmed defect, intended slope or probe artifact rather than forcing zero flag
 
 - Geometry: `node tools/track/verify-track.cjs <id>` is the local floor; no browser spec runs locally
   (AGENTS.md rule 5). The `circuits` group proves a circuit edit on CI: the PR's selected shard picks
-  the touched circuit's foundation spec when one exists (`node tools/ci/select-specs.mjs --files
-  js/circuits/<id>.js` shows it; not every circuit has one: `ls tests/specs/*-foundation.spec.js`,
-  ids hyphenated). The whole group on the pushed branch: `node tools/ci/remote-group.mjs circuits`
+  the touched circuit's foundation cases when it has some (`node tools/ci/select-specs.mjs --files
+  js/circuits/<id>.js` shows it; not every circuit has them: `ls tests/specs/foundation/` (circuit-foundation.spec.js,
+  run with APEX_CIRCUITS=<id>) and the ADAPTED `tests/specs/*-foundation.spec.js`, ids hyphenated). The whole group on the pushed branch: `node tools/ci/remote-group.mjs circuits`
   (`docs/VERIFICATION.md` §By change).
 - No pixel-golden suite: `tests/manual/tracks-visual.spec.js` is retired. Compare before/after captures.
 - `node tools/gen/gen-shell.mjs --check` (shell/cache: `?v=dev`, no bump; check-changes bump reference, linked from SKILL.md) after any `js/*`/`css/*` edit.

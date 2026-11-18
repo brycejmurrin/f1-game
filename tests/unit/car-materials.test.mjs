@@ -587,7 +587,7 @@ test("hammered cotangent frame follows panel rotation, reflection and screen han
   expandedPins("hammered transformed frame", {
     GLX: ["vec3 hmDP1 = dFdx(vWorldPos), hmDP2 = dFdy(vWorldPos);", "vec2 hmDUV1 = dFdx(hmUV), hmDUV2 = dFdy(hmUV);", "cross(hmDP2, Ngeo)", "hmC1 * hmDUV1.x + hmC2 * hmDUV2.x", "dot(hmDP1, hmC1) < 0.0 ? -1.0 : 1.0", "N = normalize(Ngeo + hmTilt"],
     WGX: ["let hmDP1 = dpdx(in.wpos); let hmDP2 = dpdy(in.wpos);", "let hmDUV1 = dpdx(hmUV); let hmDUV2 = dpdy(hmUV);", "cross(hmDP2, Ngeo)", "hmC1 * hmDUV1.x + hmC2 * hmDUV2.x", "select(1.0, -1.0, dot(hmDP1, hmC1) < 0.0)", "N = normalize(Ngeo + hmTilt"],
-    TLX: ["const hmDP1 = dFdx(wp).toVar(), hmDP2 = dFdy(wp).toVar();", "const hmDUV1 = dFdx(hmUV).toVar(), hmDUV2 = dFdy(hmUV).toVar();", "cross(hmDP2, Ngeo)", "hmC1.mul(hmDUV1.x).add(hmC2.mul(hmDUV2.x))", "select(dot(hmDP1, hmC1).lessThan(0.0), float(-1.0), float(1.0))", "N.assign(normalize(Ngeo.add(hmTilt"],
+    TLX: ["hmDP1.assign(dFdx(wp)); hmDP2.assign(dFdy(wp));", "hmDUV1.assign(dFdx(hmUV)); hmDUV2.assign(dFdy(hmUV));", "If(matU.carFinish.greaterThan(0.5), () => {", "cross(hmDP2, Ngeo)", "hmC1.mul(hmDUV1.x).add(hmC2.mul(hmDUV2.x))", "select(dot(hmDP1, hmC1).lessThan(0.0), float(-1.0), float(1.0))", "N.assign(normalize(Ngeo.add(hmTilt"],
   });
   expandedPins("hammered fade baseline", {
     GLX: ["if (hammerSurface) {\n    N = Ngeo;\n    float hmF"],

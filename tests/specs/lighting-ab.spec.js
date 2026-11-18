@@ -34,6 +34,12 @@ test.describe.configure({ timeout: 420_000 });
 // died on its budget twice over (runs 3495/3497, shard 4). applyRaceSettings
 // writes frame.exposure/sunColor with or without a render; frame.lights is
 // built on the render path, so the lamp-budget test keeps rendering.
+// Condition wait in place of a fixed sleep: n composited frames after the last
+// scene change (awaitPresent is a no-op outside HeadlessChrome GLX).
+async function presentFrames(page, n) {
+  await page.evaluate(async (k) => { for (let i = 0; i < k; i++) await window.__apex.awaitPresent(120000); }, n);
+}
+
 async function boot(page, track, tod, wx, frac, { headless = false } = {}) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -44,7 +50,7 @@ async function boot(page, track, tod, wx, frac, { headless = false } = {}) {
   if (wx) await page.evaluate((w) => window.__apex.weather(w), wx);
   if (frac != null) {
     await page.evaluate((f) => window.__apex.park(f), frac);
-    await page.waitForTimeout(2200);
+    await presentFrames(page, 3);
     // eyeAt() for the POSE, then re-install that same pose through view() with
     // fog: 1. A debug camera is a free-cam for INSPECTING a scene, so js/game.js
     // thins its fog — `frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog
@@ -61,7 +67,7 @@ async function boot(page, track, tod, wx, frac, { headless = false } = {}) {
       const v = window.__apex.eyeAt(f, 0.2, 1.35);
       if (v) window.__apex.view({ eye: v.eye, target: v.target, fov: 60, far: 6000, fog: 1 });
     }, frac);
-    await page.waitForTimeout(1100);
+    await presentFrames(page, 2);
   }
 }
 
@@ -93,7 +99,10 @@ test("weather() applies lighting live (fog mutes sun + lifts exposure)", async (
   await boot(page, "monza", "day", "dry", undefined, { headless: true });
   const before = await page.evaluate(() => window.__apex.lightState());
   await page.evaluate(() => window.__apex.weather("fog"));
-  await page.waitForTimeout(300);
+  await page.waitForFunction((b) => {
+    const l = window.__apex.lightState();
+    return l.exposure >= 1.08 && Math.max(...l.sunColor) < b * 0.8;
+  }, Math.max(...before.sunColor), { polling: 50, timeout: 30000 });
   const after = await page.evaluate(() => window.__apex.lightState());
   // Regression: weather() used to change nothing but the wetness ramp.
   expect(Math.max(...after.sunColor)).toBeLessThan(Math.max(...before.sunColor) * 0.8);

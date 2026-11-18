@@ -269,8 +269,9 @@ const Captions = (function () {
 
   applyDom();
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => { initAppearanceRows(); applyDom(); }, { once: true });
+    // #4798 gate
+    if (document.readyState !== "complete") {
+      document.addEventListener("DOMContentLoaded", () => { applyDom(); typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initAppearanceRows) : initAppearanceRows(); }, { once: true });
     } else initAppearanceRows();
   }
 

@@ -70,7 +70,8 @@ const SettingsNav = (function () {
      instead of running in the DOMContentLoaded task. The queue flushes, in
      registration order, on the first Settings page enter, the first pointerdown
      or keydown anywhere (capture, so it precedes the click / key it serves), or
-     idle (4 s cap). A complete document (tests, late loads) runs fn at once. */
+     idle (4 s cap). A complete document (tests, late loads) runs fn at once.
+     Callers queue from a DCL listener: deferred scripts evaluate at "interactive". */
   let lazyQ = null;
   function flushLazy() {
     const q = lazyQ;
@@ -81,7 +82,10 @@ const SettingsNav = (function () {
   }
   function lazy(fn) {
     if (typeof fn !== "function") return;
-    if (typeof document === "undefined" || document.readyState === "complete") { fn(); return; }
+    if (typeof document === "undefined" || document.readyState === "complete") {
+      if (lazyQ) { lazyQ.push(fn); flushLazy(); } else fn();
+      return;
+    }
     if (lazyQ) { lazyQ.push(fn); return; }
     lazyQ = [fn];
     for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, flushLazy, true);
@@ -136,7 +140,7 @@ const SettingsNav = (function () {
       return true;
     };
     let stopRestore = () => {};
-    const restoreFocus = (el) => {
+    const restoreFocus = (el, scroll) => {
       stopRestore();
       const placed = (typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(el)) || quietFocus(el);
       if (placed && typeof ResizeObserver === "function") {
@@ -145,6 +149,8 @@ const SettingsNav = (function () {
         // Follow those size changes only until the player's next interaction.
         const observer = new ResizeObserver(() => {
           if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
+          // The sheet can change WIDTH between pages (a phone at 70 %): the saved offset only fits the settled one (#5358).
+          if (scroll != null) document.getElementById("pm-settings-body").scrollTop = scroll;
           el.scrollIntoView({ block: "nearest" });
         });
         const events = ["pointerdown", "keydown", "wheel", "touchstart"];
@@ -208,6 +214,7 @@ const SettingsNav = (function () {
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
       stopRestore();
+      flushLazy();
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
       mark("apex:settings:show");
@@ -307,7 +314,7 @@ const SettingsNav = (function () {
         if (body) body.scrollTop = parent.scroll;
         // A rotation or scale change can move the launcher beyond its saved
         // offset. Keep the returning control visible in the current layout.
-        restoreFocus(parent.door) || focusPage(parent.page);
+        restoreFocus(parent.door, parent.scroll) || focusPage(parent.page);
         return false;
       }
       show("home", false);

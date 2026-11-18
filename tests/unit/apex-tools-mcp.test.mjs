@@ -1146,7 +1146,8 @@ test("read-only framing refuses executable shot sources; legacy literals require
 });
 
 test("stdio survives null/scalar/batch/malformed envelopes and invalid arguments", () => {
-  const errors = rpc([
+  // One reply per request line: the count is the request list's, not a literal.
+  const requests = [
     "null", "true", '"text"', "[]", '[{"jsonrpc":"2.0","id":1,"method":"ping"}]',
     "{", { jsonrpc: "1.0", id: 1, method: "ping" },
     { jsonrpc: "2.0", id: {}, method: "ping" },
@@ -1155,8 +1156,9 @@ test("stdio survives null/scalar/batch/malformed envelopes and invalid arguments
     { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: 3 } },
     { jsonrpc: "2.0", id: 99, method: "ping" },
     { jsonrpc: "2.0", id: 100, method: "tools/list" },
-  ]);
-  assert.equal(errors.length, 13);
+  ];
+  const errors = rpc(requests);
+  assert.equal(errors.length, requests.length);
   assert.deepEqual(errors.filter((r) => r.error).map((r) => r.error.code).sort(), [-32600, -32600, -32600, -32600, -32600, -32700, -32600, -32600, -32602, -32602, -32602].sort());
   assert.deepEqual(errors.find((r) => r.id === 99).result, {});
   assert.ok(errors.find((r) => r.id === 100).result.tools.some((t) => t.name === "apex_doctor"));
@@ -2127,10 +2129,11 @@ test("apex_job_status wait holds until the job is done; a capped survey result c
       { cell: "info", kind: "lead", severity: "info", detail: "i" },
       { cell: "worst2", kind: "overlap", severity: "high", detail: "second" },
     ];
+    const SURVEY_TOTAL = findings.length;   // the survey's own count of what it wrote
     fs.writeFileSync(path.join(fake, "artifacts/survey/report.json"), JSON.stringify({ findings }));
     fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
       'setTimeout(() => { const cells = Array.from({ length: 3000 }, (_, i) => ({ c: "c" + i, pad: "x".repeat(20) }));\n'
-      + 'console.log(JSON.stringify({ ok: true, report: "artifacts/survey/report.json", counts: { total: 33 }, cells })); }, 3500);\n');
+      + 'console.log(JSON.stringify({ ok: true, report: "artifacts/survey/report.json", counts: { total: ' + SURVEY_TOTAL + ' }, cells })); }, 3500);\n');
     const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
     const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
       occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
@@ -2144,7 +2147,7 @@ test("apex_job_status wait holds until the job is done; a capped survey result c
     assert.equal(done.state, "done");
     assert.equal(done.stillRunning, undefined);
     assert.equal(done.out.truncated, true);
-    assert.equal(done.out.findingsTotal, 33);
+    assert.equal(done.out.findingsTotal, SURVEY_TOTAL, "the total is the report's, though only ten are shipped");
     assert.equal(done.out.topFindings.length, 10, "the worst ten");
     assert.deepEqual(done.out.topFindings.slice(0, 2).map((f) => f.cell), ["worst", "worst2"], "high before medium before info");
     assert.ok(done.out.topFindings.every((f) => f.detail.length <= 200), "long details are cut");

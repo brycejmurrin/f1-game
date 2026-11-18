@@ -155,6 +155,20 @@ test("a <body> or #hud child is never searched for unscoped (write `:has(> #id�
   assert.deepEqual(bad, []);
 });
 
+// #3108: the head check above saw only a bare `#id`, so `body:has(:is(#install-chip, …))` and
+// `body:has(.dock .touchbtn…)` searched the whole document unnoticed. An unscoped argument may
+// only open with a bare #id that is not a body/#hud child (a deep id, searched on purpose); a
+// `:is()`/`:where()` list, a .class, a [attr] or a tag head must be written as a `> …` chain.
+test("an unscoped body/html :has() argument opens with a deep #id, never :is()/:where()/.class/[attr]/tag", () => {
+  const bad = [];
+  for (const [file, src] of CSS) for (const m of hasArgs(src)) {
+    const arg = m[2].trim();
+    if (arg[0] === ">" || /^dialog\b/.test(arg)) continue;   // scoped; dialog pinned below
+    if (!/^#[\w-]/.test(arg)) bad.push(`${file}: ${m[0]}`);
+  }
+  assert.deepEqual(bad, [], "write the argument as a `> …` child chain through :where() steps");
+});
+
 // `body:has(dialog[open])` / `body:has(dialog:modal)` were the last whole-document searches
 // (selector stats, phone race: a third of all selector time; docs/notes/PERF-P2-2026-10-18.md).
 // Scoped to `> dialog` plus `> :where(#datahub) > dialog`, which holds only while every shell

@@ -15,7 +15,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BENCHES, GENEROUS_RATIO, SPREAD_RATIO, STRICT_RATIO, WINDOWS,
+  BENCHES, GENEROUS_RATIO, MIN_WINDOW_MS, SPREAD_RATIO, STRICT_RATIO, WINDOWS,
   judgeHot, loadBaseline, measureHot, summariseWindows,
 } from "../../tools/perf/hot-bench.mjs";
 import {
@@ -114,6 +114,9 @@ test("the baseline matches the benches this file runs", () => {
   for (const [name, spec] of Object.entries(BENCHES)) {
     assert.equal(base.benches[name].iters, spec.iters, name);
     assert.ok(base.benches[name].msPerCall > 0, name);
+    // #2394: a window shorter than a scheduler slice turns one preemption into a 5x spread. Keep every window long.
+    const windowMs = base.benches[name].msPerCall * spec.iters;
+    assert.ok(windowMs >= MIN_WINDOW_MS, `${name}: ${spec.iters} iters x ${base.benches[name].msPerCall} ms = ${windowMs} ms window, under ${MIN_WINDOW_MS} ms`);
   }
 });
 

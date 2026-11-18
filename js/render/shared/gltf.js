@@ -393,16 +393,24 @@ const GLTF = (function () {
           }
         }
 
-        pos = ensure(pos, (vertBase + vCount) * 3);
-        nrm = ensure(nrm, (vertBase + vCount) * 3);
-        col = ensure(col, (vertBase + vCount) * 3);
+        // Missing NORMAL means flat shading: give each indexed corner its
+        // own vertex so adjacent faces cannot average away a hard edge.
+        for (let i = 0; i < indices.length; i++) {
+          const v = indices[i];
+          if (!Number.isInteger(v) || v < 0 || v >= vCount) throw new Error("GLTF: invalid triangle indices");
+        }
+        const emitted = normals ? vCount : indices.length;
+        pos = ensure(pos, (vertBase + emitted) * 3);
+        nrm = ensure(nrm, (vertBase + emitted) * 3);
+        col = ensure(col, (vertBase + emitted) * 3);
         // transform + emit vertices straight into the typed outputs
         const m0 = world[0], m1 = world[1], m2 = world[2], m3 = world[3];
         const m4 = world[4], m5 = world[5], m6 = world[6], m7 = world[7];
         const m8 = world[8], m9 = world[9], m10 = world[10], m11 = world[11];
         const m12 = world[12], m13 = world[13], m14 = world[14], m15 = world[15];
-        for (let i = 0; i < vCount; i++) {
-          const px = positions[i * 3], py = positions[i * 3 + 1], pz = positions[i * 3 + 2];
+        for (let i = 0; i < emitted; i++) {
+          const vi = normals ? i : indices[i];
+          const px = positions[vi * 3], py = positions[vi * 3 + 1], pz = positions[vi * 3 + 2];
           if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
             throw new Error("GLTF: invalid POSITION accessor");
           }
@@ -432,8 +440,8 @@ const GLTF = (function () {
           let cr = baseCol[0], cg = baseCol[1], cb = baseCol[2];
           if (vcolA) {
             const ncn = vcolA.numComponents;
-            const r = vcolA.data[i * ncn], g = vcolA.data[i * ncn + 1], b = vcolA.data[i * ncn + 2];
-            const a = ncn === 4 ? vcolA.data[i * ncn + 3] : 0;
+            const r = vcolA.data[vi * ncn], g = vcolA.data[vi * ncn + 1], b = vcolA.data[vi * ncn + 2];
+            const a = ncn === 4 ? vcolA.data[vi * ncn + 3] : 0;
             if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b) || (ncn === 4 && !Number.isFinite(a))) {
               throw new Error("GLTF: invalid COLOR_0 accessor");
             }
@@ -442,10 +450,7 @@ const GLTF = (function () {
           col[o] = cr; col[o + 1] = cg; col[o + 2] = cb;
         }
 
-        for (let i = 0; i < indices.length; i++) {
-          const v = indices[i];
-          if (!Number.isInteger(v) || v < 0 || v >= vCount) throw new Error("GLTF: invalid triangle indices");
-        }
+        if (!normals) indices = Uint32Array.from({ length: emitted }, (_, i) => i);
         // Restore counter-clockwise front faces on a mirrored node (swap the
         // 2nd and 3rd index of every triangle) BEFORE any normal is derived
         // from the winding below.
@@ -460,14 +465,14 @@ const GLTF = (function () {
           indices = flipped;
         }
 
-        // compute averaged vertex normals if the primitive had none
+        // Derive flat normals on the now-independent triangle corners.
         if (!normals) {
-          computeVertexNormals(pos, indices, vertBase, vCount, nrm);
+          computeVertexNormals(pos, indices, vertBase, emitted, nrm);
         }
 
         idx = ensure(idx, idxN + indices.length);
         for (let i = 0; i < indices.length; i++) idx[idxN++] = indices[i] + vertBase;
-        vertBase += vCount;
+        vertBase += emitted;
       }
     }
 

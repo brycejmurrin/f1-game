@@ -169,10 +169,20 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     assert.equal(JSON.parse(other.stdout).hookSpecificOutput.additionalContext,
       `protect-files: .claude/allow-protected is ACTIVE in ${dir} — no rule applied to notes.md.${tail}`, "every guarded call announces the hatch");
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
+    // A tree from before ON_DEMAND_PATHS (an older branch's worktree edited from a newer checkout) has no such list:
+    // that is "no on-demand file", not an unreadable list, so the other rules still hold there (2026-11-11, #5427).
+    const gpSrc = fs.readFileSync(path.join(ROOT, "tools/lib/generated-paths.mjs"), "utf8");
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, ""));
+    const older = pf({ agent_id: "a1" });
+    assert.equal(older.status, 2, `an older tree still protects version.json\n${older.stderr}`);
+    assert.equal(older.stderr.startsWith("BLOCKED: version.json is GENERATED — "), true, older.stderr);
+    // Present but unresolvable fails closed, like the other two lists.
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, "export const ON_DEMAND_PATHS = Object.freeze([someVar]);"));
+    assert.equal(pf({ agent_id: "a1" }).stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });
     assert.equal(broken.status, 2);
-    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
+    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -219,7 +229,7 @@ test("mcp-browser-guard.sh: a subagent never drives a browser; the main session 
   } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
 });
 
-test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close and a hold drop, allow the rest", () => {
+test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close, deny a guarded-label drop, allow the rest", () => {
   const gh = (tool_name, tool_input, env = {}) => {
     const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, env);
     if (r.status === 2) return "exit2";
@@ -239,7 +249,16 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "allow", "the ready flip is the Plan gate's and CI's");
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), "allow");
   assert.equal(gh("mcp__github__actions_run_trigger", { method: "run_workflow", workflow_id: "browser-group.yml", ref: "x" }), "allow", "other workflows pass the hook (settings.json asks)");
-  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["hold", "ready"] }), "allow", "labels that keep hold");
+  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "land", "needs-decision", "x"] }), "allow", "labels that keep every guarded label need no lookup");
+  // a fake gh prints the live labels: a replace-write that drops a guarded one is refused (orchestration review rank 14)
+  const fakeGh = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-gh-"));
+  fs.writeFileSync(path.join(fakeGh, "gh"), "#!/bin/sh\nprintf 'config-ok\\nhold\\nready\\n'\n"); fs.chmodSync(path.join(fakeGh, "gh"), 0o755);
+  try {
+    const live = { PATH: `${fakeGh}:${process.env.PATH}` };
+    assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "ready", "lane:claude"] }, live), "allow", "labels that keep the live guarded ones");
+    assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["hold", "ready"] }, live), "deny", "drops config-ok");
+    assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "ready"] }, live), "deny", "drops hold");
+  } finally { fs.rmSync(fakeGh, { recursive: true, force: true }); }
   assert.equal(gh("mcp__github__issue_write", { method: "create", title: "x", labels: ["ready"] }), "allow", "a create has no hold to drop");
   assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, title: "x" }), "allow", "no labels field");
   // labels the hook cannot read (gh fails) → ask; a fake gh at the front of PATH stands in for a logged-out host

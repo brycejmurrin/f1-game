@@ -1032,6 +1032,7 @@ test("the garage's pause never drops the wake lock: the return to the tab re-hol
     assert.ok(await settle(() => h.log.length >= 3, 4000), "the re-acquire on return (the lock was never un-wanted)");
     assert.deepEqual(h.log, ["request:screen", "release", "request:screen"]);
     h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE: closePitWork's own hold coalesces with the held lock
+    h.doc.getElementById("cs-back").onclick();      // BACK plays the pit-out beat (#4745); a second press finishes it
     await h.tick();
     assert.deepEqual(h.log, ["request:screen", "release", "request:screen"], "held, not requested twice");
     assert.equal(g.G.paused, false, "racing again");

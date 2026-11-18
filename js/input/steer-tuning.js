@@ -789,9 +789,18 @@ if ($("pm-preset-rookie")) $("pm-preset-rookie").onclick = () => {
   if (G.onAssistBundle) G.onAssistBundle();
   if (G.soundOn) GameAudio.uiSelect();
 };
-$("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (G.soundOn) GameAudio.uiSelect(); };
-$("pm-preset-standard").onclick = () => { applyPreset("standard"); if (G.soundOn) GameAudio.uiSelect(); };
-$("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (G.soundOn) GameAudio.uiSelect(); };
+// …and every other bundle hands it back: leaving ROOKIE used to keep THROTTLE on
+// AUTO with the GAS pedal hidden under a chip reading STANDARD (#5575).
+const handBackPreset = (name) => () => {
+  const handBack = store.get("autoThrottle", false) === true;
+  if (handBack) store.set("autoThrottle", false);
+  applyPreset(name);
+  if (handBack && G.onAssistBundle) G.onAssistBundle();
+  if (G.soundOn) GameAudio.uiSelect();
+};
+$("pm-preset-relax").onclick = handBackPreset("relax");
+$("pm-preset-standard").onclick = handBackPreset("standard");
+$("pm-preset-pro").onclick = handBackPreset("pro");
 
 /* One shape for every new row: clamp, store, push to Input, repaint, and drop
    the preset chip IF the row is preset-owned — the same acts each existing
@@ -847,6 +856,19 @@ function paintTriggerHapRow() {
   }
 }
 
+// WHEEL LOCK & ABS (#3983): built at runtime, so the static shell (shellNodes ratchet) does not grow.
+const wheelAnchor = typeof WheelState !== "undefined" && $("pm-linemode-jump");
+if (wheelAnchor && wheelAnchor.parentNode && wheelAnchor.parentNode.parentNode && typeof document !== "undefined") {
+  const WHEEL_VALUES = [["off", "OFF"], ["on", "WHEELS"], ["medium", "ABS/TC MED"], ["full", "ABS/TC FULL"]];
+  const built = SettingRow.build("pm-wheelmodel", "WHEEL LOCK & ABS", WHEEL_VALUES);
+  const item = document.createElement("div"), help = document.createElement("p");
+  item.className = "adv-item"; help.className = "adv-help";
+  help.textContent = "OFF is the classic feel. WHEELS models each axle\u2019s wheel speed, so slicks in the wet really lock or spin; dry driving feels the same. ABS/TC MED and FULL add brake and traction control: FULL keeps the wheels turning most.";
+  item.append(built.row, help);
+  wheelAnchor.parentNode.after(item);
+  SettingRow.wire("pm-wheelmodel", { values: WHEEL_VALUES, read: WheelState.mode, write: (m) => { WheelState.setMode(m); if (G.soundOn) GameAudio.uiSelect(); } });
+  SettingRow.paint(built.row, WheelState.mode(), WHEEL_VALUES);
+}
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();
 };

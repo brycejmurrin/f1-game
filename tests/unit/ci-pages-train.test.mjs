@@ -10,6 +10,7 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
+import { decide as rearmDecide } from "../../tools/ci/pages-rearm.mjs";
 import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter } from "../helpers/ci-workflow.mjs";
 
 test("no workflow demotes the change-aware gate to advisory", () => {
@@ -199,12 +200,13 @@ test("pages-reuse-verdict.sh header: merge-commit landings, not squash-only", ()
   assert.match(src, /merge tree == parent 2/);
 });
 
-test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", () => {
+test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", (t) => {
   // A throwaway repo: A -> C on the deploy line; B branches from A; D is B with
   // C merged in. M1 = merge(C, B) has a tree neither parent has (both sides
   // changed). M2 = merge(C, D) has D's tree exactly. A fake `gh` on PATH serves
   // whatever runs FAKE_RUNS names for the head_sha in the URL.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-reuse-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   const write = (f, s) => fs.writeFileSync(path.join(dir, f), s);
   git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
@@ -235,8 +237,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "gh"),
     '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"\n' +
-    'case "$url" in */annotations*) id="${url%/annotations*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_ANN||"{}");const v=m[process.argv[1]];console.log(JSON.stringify(v===undefined?[{title:"apex-guards",message:"mode=full base=none"}]:v))\' "$id"; exit 0;;\n' +
-    '  */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
+    'case "$url" in */annotations*) id="${url%/annotations*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_ANN||"{}");const v=m[process.argv[1]];console.log(JSON.stringify(v===undefined?[{title:"apex-guards",message:"mode=full base=none"}]:v))\' "$id"; exit "${FAKE_ANN_EXIT:-0}";;\n' +
+    '  */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit "${FAKE_JOBS_EXIT:-0}";; esac\n' +
     'sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:(m[process.argv[1]]||[]).map((r)=>({head_sha:process.argv[1],...r}))}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
@@ -271,7 +273,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     // A fast tier whose aggregator has not been created yet (its halves still run).
     22: gateJobs("").filter((j) => j.name !== "Structural guards"),
   };
-  const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
+  const run = (over) => ({ id: 7, run_attempt: 1, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
@@ -329,6 +331,14 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
+  for (const run_attempt of [undefined, null, 0, "garbage"]) {
+    assert.equal(verdict(M2, { [D]: [run({ run_attempt })] }).reuse, "false",
+      `unknown attempt ${run_attempt} cannot prove a first-attempt pass`);
+  }
+  for (const failure of ["FAKE_JOBS_EXIT", "FAKE_ANN_EXIT"]) {
+    assert.equal(verdict(M2, { [D]: [run()] }, { [failure]: "1" }).reuse, "false",
+      `${failure}: valid partial stdout followed by an API failure must run the gate`);
+  }
   // FULL GUARDS, FIRST ATTEMPT (2026-11-10).
   assert.equal(verdict(M2, { [D]: [run({ run_attempt: 2 })] }).reuse, "false",
     "a run that passed only on a re-run failed on this tree once: not a gate (run 42730286157)");
@@ -420,4 +430,53 @@ test("ship filter chooses a successful active deployment, not merely the newest 
   assert.match(shipFilter, /inactive\|failure\|error\|queued\|pending\|in_progress/);
   assert.match(shipFilter, /no successful active github-pages deployment found/);
   assert.doesNotMatch(shipFilter, /j\[0\].*\.sha.*process\.stdout\.write/);
+});
+
+// ── #5530: the queue can drop the TIP's train; the surviving run re-arms it (tools/ci/pages-rearm.mjs) ──
+const OLD = "1c1ac46c".padEnd(40, "0"), TIP = "240426c6".padEnd(40, "0"), PREV = "f74bcc77".padEnd(40, "0");
+const trainRun = (id, head_sha, status, conclusion = null) => ({ id, head_sha, status, conclusion });
+const noJobs = () => 0;
+
+test("the 2026-11-11 pair: the older run survived, the tip's run was replaced while pending → re-arm", () => {
+  // Runs as the REST list showed them when #5108 started: #5106 done, #5108 (this run) in progress, #5109 cancelled
+  // at 18:55:08Z with zero jobs.
+  const runs = [trainRun(43082240074, TIP, "completed", "cancelled"), trainRun(43082235314, OLD, "in_progress"), trainRun(43079958852, PREV, "completed", "success")];
+  const v = rearmDecide({ sha: OLD, tip: TIP, self: 43082235314, runs, jobCount: noJobs });
+  assert.equal(v.rearm, true, v.reason);
+  assert.equal(v.reason, "tip 240426c6 lost its train: run 43082240074 was replaced while pending and nothing is queued for it");
+});
+
+test("the designed queue is left alone: no re-arm without the loss", () => {
+  const no = (q, why) => assert.equal(rearmDecide({ self: 1, jobCount: noJobs, ...q }).rearm, false, why);
+  no({ sha: TIP, tip: TIP, runs: [trainRun(1, TIP, "in_progress")] }, "this run IS the tip's");
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress")] }, "a prose-only tip has no run: the cron's, not ours");
+  for (const st of ["queued", "pending", "in_progress", "waiting", "requested"])
+    no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, st)] }, `the tip's run is ${st}: a train is coming`);
+  for (const c of ["success", "failure", "timed_out"])
+    no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", c)] }, `the tip was gated (${c})`);
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", "cancelled")], jobCount: () => 14 },
+    "a cancel after jobs started is a verdict (AGENTS.md rule 8), not a queue loss");
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", "cancelled"), trainRun(3, TIP, "queued")] },
+    "already re-armed (a re-run of this job must not dispatch twice)");
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", "cancelled"), trainRun(3, TIP, "completed", "success")] },
+    "the re-armed train already finished");
+  no({ sha: OLD, tip: "", runs: [] }, "an unreadable tip decides nothing");
+  no({ sha: OLD, tip: TIP, self: 2, runs: [trainRun(2, TIP, "completed", "cancelled")] }, "this run's own row is never the evidence");
+});
+
+test("pages.yml: one job holds actions: write, runs only the re-arm tool, and cannot turn a train red or wait on the gate", () => {
+  const wf = parseYAML(pagesWorkflow);
+  const job = wf.jobs.rearm;
+  assert.deepEqual(job.permissions, { contents: "read", actions: "write" });
+  for (const [id, j] of Object.entries(wf.jobs)) if (id !== "rearm") assert.notEqual(j.permissions?.actions, "write", `${id} holds no actions: write`);
+  assert.equal(job.needs, "verdict", "after the off-branch refusal, beside the gate, never behind it");
+  assert.deepEqual(job.steps.map((s) => s.run || s.uses.split("@")[0]), ["actions/checkout", "node tools/ci/pages-rearm.mjs --dispatch"]);
+  assert.equal(job.steps[0].with["sparse-checkout"], "tools/ci/pages-rearm.mjs");
+  for (const [id, j] of Object.entries(wf.jobs)) assert.ok(![].concat(j.needs || []).includes("rearm"), `${id} must not wait on rearm`);
+  assert.deepEqual(wf.concurrency, { group: "pages-train-${{ github.ref }}", "cancel-in-progress": false }, "the single-flight group is unchanged");
+  // Never red: with no gh at all every lookup throws, and the job still exits 0 with a warning.
+  const dead = cp.spawnSync(process.execPath, ["tools/ci/pages-rearm.mjs", "--dispatch"], { encoding: "utf8",
+    cwd: new URL("../../", import.meta.url), env: { PATH: "/nonexistent", GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "b", GITHUB_SHA: "0".repeat(40) } });
+  assert.equal(dead.status, 0, "no gh at all (every lookup fails): a warning, never a red job");
+  assert.equal(dead.stdout.split("\n")[0].slice(0, 39), "::warning::pages-rearm: lookup failed (", "and it says so");
 });

@@ -9,13 +9,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require2 = createRequire(import.meta.url);
 const { buildContext } = require2("../../tools/track/verify-track.cjs");
 const Tracks = buildContext();
 // Relative use only — the same model on both sides of every comparison, so
 // no absolute speed here reaches anything (PHYSICS.md §curvature channels).
-const LAT = 22, VMAX = 72, MARGIN = 1.2;
+// The cornering, top-speed, brake and accel budgets are the DRIVING LINE's own
+// build() fallbacks (DrivingLine.DEFAULTS), read from the module, not copied.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+function loadDrivingLine() {
+  const sandbox = { Math, Float32Array, console, M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,
+    { filename: absSrc("js/render/shared/driving-line.js") });
+  return vm.runInContext("DrivingLine", ctx, { filename: "track-line-circuits:evaluate" });
+}
+const DL = loadDrivingLine().DEFAULTS;
+const LAT = DL.latMax, VMAX = DL.vTop, MARGIN = 1.2;
 
 function build(id) {
   const def = Tracks.LIST.find((d) => d.id === id);
@@ -38,7 +55,7 @@ const cornerTime = (k, n, ds) => {
 // corner EXIT counts. cornerTime is grip-limited at every node and cannot see
 // one; on the street circuits it reads the relaxed line as a hair slower than
 // the centreline while this reads it 7-11 % faster (tools/track/line-audit.mjs).
-const BRAKE = 22 * 0.85, ACCEL = 7;
+const BRAKE = DL.brake * DL.brakeMul, ACCEL = DL.accel;
 function lapTime(k, n, ds) {
   const v = new Float64Array(n);
   for (let i = 0; i < n; i++) v[i] = Math.min(VMAX, Math.sqrt(LAT / Math.max(Math.abs(k[i]), 1e-5)));

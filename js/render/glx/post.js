@@ -1153,10 +1153,12 @@ const GLXPost = (function () {
     // Headless soft-present readback from _softReadFB — the buffer the last
     // present() resolved into. SwiftShader resolves asynchronously, so without
     // the finish() the read repeats the previous frame and grade captures go stale.
-    function readbackLdrPixels(buf, w, h) {
+    // `asked`: a caller is waiting to read these pixels (soft.js), so the
+    // software-GL UI defer does not apply (#5380).
+    function readbackLdrPixels(buf, w, h, asked) {
       if (!gl || !buf || w < 1 || h < 1) return false;
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
+        if (!asked && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
       } catch (_) { /* harness */ }
       try {
         gl.finish();

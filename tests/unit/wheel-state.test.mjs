@@ -189,3 +189,52 @@ test("reverse travel: a rim slower than the body is LOCKED, faster is SPINNING (
   const revSpin = run(-80, -10);
   assert.ok(revSpin.spinning > 0 && revSpin.locked === 0, `reverse fast rim reads spinning, got locked=${revSpin.locked} spinning=${revSpin.spinning}`);
 });
+
+test("ABS level: default off; medium/full cap front lock vs off (#3983)", () => {
+  const run = (level) => {
+    const { WheelState } = load();
+    WheelState.setEnabled(true, false);
+    if (level) WheelState.setAssistLevel(level);
+    const c = { speed: 55, vwF: 55, vwR: 55, kappaF: 0, kappaR: 0 };
+    let minK = 0;
+    for (let i = 0; i < 120; i++) {
+      WheelState.stepPlayer(c, opts({ braking: true, aReqF: -40, aReqR: -10, muLongF: 20, muLongR: 20 }));
+      c.speed = Math.max(3.5, c.speed - 20 * DT);
+      minK = Math.min(minK, c.kappaF);
+    }
+    return { minK, level: WheelState.assistLevel() };
+  };
+  const off = run(null), med = run("medium"), full = run("full");
+  assert.equal(off.level, "off");
+  assert.ok(off.minK < -0.5, `off locks: ${off.minK}`);
+  assert.ok(med.minK > off.minK + 0.2, `medium sheds lock: ${med.minK} vs ${off.minK}`);
+  assert.ok(full.minK >= med.minK - 1e-9, `full no worse than medium: ${full.minK} vs ${med.minK}`);
+});
+
+test("setAssistLevel rejects junk to off", () => {
+  const { WheelState } = load();
+  assert.equal(WheelState.setAssistLevel("full"), "full");
+  assert.equal(WheelState.setAssistLevel("bogus"), "off");
+});
+
+test("settings row (#3983): mode off|on|medium|full round-trips and persists, default OFF", () => {
+  const mem = {};
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, Number, isNaN, isFinite, console,
+    localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem() {} },
+  });
+  ctx.window = ctx; seedLog(ctx);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/physics/wheel-state.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+  }
+  const W = vm.runInContext("WheelState", ctx);
+  assert.equal(W.mode(), "off", "default OFF: classic feel");
+  for (const m of ["on", "medium", "full", "off"]) {
+    assert.equal(W.setMode(m), m);
+    assert.equal(W.enabled(), m !== "off");
+  }
+  W.setMode("full");
+  assert.deepEqual([mem["apex26.wheelState"], mem["apex26.wheelAssist"]], ["1", "full"]);
+  assert.equal(W.setMode("on"), "on");
+  assert.equal(mem["apex26.wheelAssist"], "off", "plain WHEELS clears the ABS/TC level");
+});

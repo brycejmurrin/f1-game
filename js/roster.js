@@ -217,9 +217,30 @@
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
     "js/perf/bench-capture.js",
-    "js/perf/bench-run.js"
+    "js/perf/bench-run.js",
+    "js/perf/metrics-panel.js"
   ],
     LAZY_PERF_EDGES: [],
+    LAZY_REAL_RACE: [
+    "js/ui/watch-transport.js",
+    "js/race/real-replay.js",
+    "js/race/real-race-pace.js",
+    "js/race/real-race.js"
+  ],
+    LAZY_REAL_RACE_EDGES: [
+    [
+      "js/ui/watch-transport.js",
+      "js/race/real-replay.js"
+    ],
+    [
+      "js/race/real-replay.js",
+      "js/race/real-race.js"
+    ],
+    [
+      "js/race/real-race-pace.js",
+      "js/race/real-race.js"
+    ]
+  ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",

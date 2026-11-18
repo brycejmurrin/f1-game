@@ -67,13 +67,16 @@ const HudReadouts = (function () {
     return "idle";
   }
 
-  /** {text, label} for the ENERGY bar: "3.2 MJ" in the bar, words for a reader. */
+  /** {text, label} for the ENERGY bar: "3.2 MJ" in the bar, words for a reader.
+   *  The ▼/▲ state glyph is NOT in the text (#4270 §5): css/hud.css draws it as
+   *  #hud-energy-n::before from #hud-energy[data-ers], idle keeping the slot
+   *  unseen, so the label never changes width or text length (hud.js hlKey keys
+   *  on that length; a changed key is a full fit). */
   function energy(e, st) {
     const mj = Math.max(0, Math.min(1, Number.isFinite(e) ? e : 0)) * esMJ();
     const n = mj.toFixed(1);
-    const glyph = st === "deploy" ? "▼ " : st === "harvest" ? "▲ " : "";
     const word = st === "deploy" ? ", deploying" : st === "harvest" ? ", harvesting" : "";
-    return { text: glyph + n + " MJ", label: "Energy " + n + " megajoules" + word };
+    return { text: n + " MJ", label: "Energy " + n + " megajoules" + word };
   }
 
   /** "BB 56%" / "BB 56.5%" from c.brakeBias (front share, 0..1; null = ref). */

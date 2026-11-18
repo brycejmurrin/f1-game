@@ -1934,6 +1934,47 @@ function assetRequestClock() {
   };
 }
 
+// #5555 finding 1: REQUEST_MS is a whole-transfer deadline, so on a slow link the 256 px strip times out and the
+// one same-tier retry timed out again: procedural tarmac for the session. A timed-out load retries at 128 px.
+test("#5555: a pack load that ran out its transfer deadline retries on the low tier; a dropped request keeps its tier", async () => {
+  const manifest = { materials: { size: 4, albedo: "hi.png", layers: [{ mat: 1, scale: 1 }],
+    low: { size: 2, albedo: "lo.png", layers: [{ mat: 1, scale: 1 }] } } };
+  const world = (strip) => {
+    const clock = assetRequestClock(), urls = [], sizes = [];
+    const assets = assetLoader({ ...clock, AbortController,
+      async fetch(url) {
+        if (url.endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+        urls.push(String(url).replace(/^.*\/|\?.*$/g, ""));
+        return strip(urls.length);
+      },
+      async createImageBitmap() { return { close() {} }; },
+    });
+    assets.init({ createTextureArray: (size) => { sizes.push(size); return {}; }, setMaterialMaps() {} });
+    return { assets, clock, urls, sizes };
+  };
+  const good = { ok: true, blob: async () => ({ size: 1 }) };
+
+  const slow = world((n) => (n === 1 ? new Promise(() => {}) : good));   // the first strip never finishes
+  const boot = slow.assets.load();
+  for (let i = 0; i < 20 && !slow.urls.length; i++) await new Promise((r) => setImmediate(r));
+  assert.deepEqual(slow.urls, ["hi.png"], "boot asks for the 256 px strip");
+  slow.clock.fire(15000);
+  assert.equal(await boot, false);
+  assert.match(slow.assets.state().error, /^asset request timed out: .*hi\.png/);
+  assert.equal(slow.assets.retry(), true);
+  assert.equal(await slow.assets.load(), true, "the retry lands");
+  assert.deepEqual(slow.urls, ["hi.png", "lo.png"], "the retry asks for the 128 px strip, not the one that timed out");
+  assert.equal(slow.assets.state().tier, "low");
+  assert.deepEqual(slow.sizes, [2]);
+
+  const flaky = world((n) => { if (n === 1) throw new TypeError("Failed to fetch"); return good; });
+  assert.equal(await flaky.assets.load(), false);
+  assert.equal(flaky.assets.retry(), true);
+  assert.equal(await flaky.assets.load(), true);
+  assert.deepEqual(flaky.urls, ["hi.png", "hi.png"], "a dropped request is not a slow link: same tier");
+  assert.equal(flaky.assets.state().tier, "high");
+});
+
 test("shared model fetch and body deadlines settle stalled work and permit both readiness routes to retry", async () => {
   for (const phase of ["fetch", "body"]) for (const source of [undefined, 'bakedModel("box")']) {
     const clock = assetRequestClock(), stalled = deferredAssetDownload();
@@ -2406,6 +2447,65 @@ test("model admission tail drops decoded payloads across cache generations", asy
   assert.ok(second.pos.length); assert.notStrictEqual(second, first);
   assert.equal(downloads, 2, "next generation obtains its own model");
   assert.equal(await assets.decodeTail(), null);
+});
+
+
+test("GLTF missing normals preserve hard edges, colours and mirrored winding", () => {
+  const gltf = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF",
+    { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
+  // Two perpendicular triangles share an edge. Smooth normals are observably wrong.
+  const floats = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,0,1,
+    1,0,0, 0,1,0, 0,0,1, 1,1,0]);
+  const authored = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
+  const bin = Buffer.concat([Buffer.from(floats.buffer), Buffer.from(new Uint16Array([0,1,2, 0,3,1]).buffer), Buffer.from(authored.buffer)]);
+  for (const sx of [1, -2]) {
+    const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
+      bufferViews: [{buffer:0,byteLength:48}, {buffer:0,byteOffset:48,byteLength:48}, {buffer:0,byteOffset:96,byteLength:12}, {buffer:0,byteOffset:108,byteLength:48}],
+      accessors: [{bufferView:0,componentType:5126,count:4,type:"VEC3"}, {bufferView:1,componentType:5126,count:4,type:"VEC3"}, {bufferView:2,componentType:5123,count:6,type:"SCALAR"}, {bufferView:3,componentType:5126,count:4,type:"VEC3"}, {bufferView:2,componentType:5123,count:3,type:"SCALAR"}],
+      meshes: [{ primitives: [{attributes:{POSITION:0,COLOR_0:1},indices:2}, {attributes:{POSITION:0,COLOR_0:1,NORMAL:3},indices:4}] }],
+      nodes: [{mesh:0,scale:[sx,3,0.5]}], scenes: [{nodes:[0]}] };
+    const j = Buffer.from(JSON.stringify(json)), padded = Buffer.concat([j,Buffer.alloc((4-j.length%4)%4,32)]);
+    const out = Buffer.alloc(28+padded.length+bin.length);
+    out.writeUInt32LE(0x46546c67,0); out.writeUInt32LE(2,4); out.writeUInt32LE(out.length,8);
+    out.writeUInt32LE(padded.length,12); out.writeUInt32LE(0x4e4f534a,16); padded.copy(out,20);
+    out.writeUInt32LE(bin.length,20+padded.length); out.writeUInt32LE(0x004e4942,24+padded.length); bin.copy(out,28+padded.length);
+    const mesh = gltf.toMesh(Uint8Array.from(out).buffer);
+    assert.equal(mesh.pos.length,30,"six split corners followed by four authored-normal vertices");
+    assert.deepEqual(Array.from(mesh.idx.slice(6)).sort((a,b) => a-b), [6,7,8], "next primitive starts after emitted corners, not source vertices");
+    assert.ok(mesh.nrm.slice(18).every((n,i) => n === authored[i]), "next primitive retains its supplied normals (signed zero is equivalent)");
+    assert.deepEqual(Array.from(mesh.pos.slice(18)), [0,0,0, sx,0,0, 0,3,0, 0,0,0.5], "next primitive has its own transformed vertices");
+    for (let t=0;t<2;t++) for (let k=0;k<3;k++) {
+      const v=mesh.idx[t*3+k], n=Array.from(mesh.nrm.slice(v*3,v*3+3));
+      assert.ok(n.every((x,a) => Math.abs(x - (t===0?[0,0,1]:[0,1,0])[a]) < 1e-7),"each face has its geometric normal, including a reflected node");
+    }
+    assert.deepEqual(Array.from(mesh.col), [1,0,0, 0,1,0, 0,0,1, 1,0,0, 1,1,0, 0,1,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0], "duplicated corners and following primitive retain source colours");
+  }
+});
+
+test("GLX material ownership preserves reused textures and releases aliases once", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/render/glx/glx.js"), "utf8");
+  const deleted = [], forgotten = [], alive = new Set();
+  const ctx = vm.createContext({
+    _matGen: 0, matAlbedoTex: null, matNormalTex: null, MAT_TEX_LAYERS: 17,
+    matTexScales: new Float32Array(17), _texForget: t => forgotten.push(t),
+    gl: { deleteTexture(t) { assert.ok(alive.delete(t), "texture cannot be deleted twice"); deleted.push(t); } },
+  });
+  ctx.ctxGone = () => false;
+  const bind = vm.runInContext(fnSource(source, "function freeTexture(t)") + "\n" + fnSource(source, "function setMaterialMaps(maps)") + ";setMaterialMaps", ctx, { filename: absSrc("js/render/glx/glx.js") });
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const a = { cycle, kind: "a" }, n = { cycle, kind: "n" };
+    alive.add(a); alive.add(n);
+    bind({ albedo: a, normal: n, scales: [0,2] });
+    bind({ albedo: a, normal: n, scales: [0,5] });
+    assert.ok(alive.has(a) && alive.has(n), "same-token scale update retains live GPU objects");
+    assert.equal(ctx.matTexScales[1], 5);
+    bind({ albedo: n, normal: n, scales: [0,3] });
+    assert.ok(!alive.has(a) && alive.has(n), "moving a texture between slots preserves ownership");
+    bind(null); bind(null);
+    assert.equal(alive.size, 0);
+  }
+  assert.equal(deleted.length, 6);
+  assert.deepEqual(forgotten, deleted, "census forget matches actual retirement once per texture");
 });
 
 // ---------------------------------------------------------------------------

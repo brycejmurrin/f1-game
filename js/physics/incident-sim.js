@@ -33,8 +33,7 @@ const IncidentSim = (function () {
   // launch and pace 0.5 never promoted a genuine shunt.
   const R3_CAR_V = 15;         // m/s closing (at PACE 1) → resolve via Rapier
   const R2_CAR_V = 24;         // m/s closing (at PACE 1) → a launch (airborne 6-DoF)
-  // Wall hit severity (xOver*60 + speed*0.15, the DebrisWorld severity units) → a
-  // launch. Genuinely hard hits only; ordinary scrapes never trigger.
+  // Wall hit severity (WallClamp, std-scale: no ×PACE) → a launch. Hard hits only.
   const R2_WALL_SEV = 34;
   const C1_MIN_CARS = 3;       // a cluster of this many tangled cars = a pile-up
   const MAX_TAKEOVER = 8;      // hard cap on cars promoted at once (budget guard)
@@ -135,7 +134,7 @@ const IncidentSim = (function () {
     return status();
   }
 
-  // Wall contact. sev is the DebrisWorld severity (xOver*60 + speed*0.15).
+  // Wall contact. sev: see R2_WALL_SEV.
   function notifyWall(c, side, sev) {
     if (!c) return;
     if (!active()) { _rejected.inactive++; return; }

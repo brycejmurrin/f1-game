@@ -6,7 +6,7 @@ description: "Use when you own a PR at any stage: launched on an issue or `CONTI
 # Steward — one PR, from launch to landed
 
 You are one session, one task, one PR. GitHub holds all state: issues are tasks, labels are state, the PR is the work
-and the report, comments are the only messages. GitHub lands the PR; no session merges or arms. Nobody reads your
+and the report, comments are the only record. GitHub lands the PR; no session merges or arms. Nobody reads your
 chat. Everything not here is `AGENTS.md` (rules 3, 4, 8, 9, 12, 13 and §Coordination). Routes: failed-CI triage →
 agent `ci-red-triage`; pre-push validation → skill `check-changes`; live `version.json` or anything on github.io →
 agent `deploy-research`; review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any.
@@ -20,7 +20,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
    stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`gh api -X
-   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list.
+   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list
+   (`github-mcp-guard.sh` refuses one that drops `config-ok`, `hold`, `land` or `needs-decision`).
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
@@ -30,8 +31,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    comment, and re-read the head before every push: if someone else moved it, stand down.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
-5. **Cap.** The brief's `STOP AT` (the worker brief `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan
-   and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
+5. **Cap.** The brief's `STOP AT` (`start+<N>k` is a budget above your first turn's context; the worker brief
+   `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
+   `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options, your pick and the exact line to paste
    (`decision: <option>`), posted when the question is first predictable, not after CI confirms it; then keep working
    on what does not depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label
@@ -84,15 +86,16 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
-   and only when `needs-sync` says so (`conflict | stale-red`); never to
-   "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
+   and only when `needs-sync` says so (`conflict | stale-red | retest-refused`; `tip-red` waits for the fix to land);
+   never to "refresh" a cancelled run and never for clean-behind. `retest-refused` is the gate's `retest` row
+   refusing this head: the sync is that row's cure, no force flag. Red AND conflicting: a `stale-red` syncs first, any other red
    is fixed first, then sync once and ONE push. A PR whose Plan waits on an unmerged PR does not sync on each
    conflict; it syncs once, after that PR merges. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
 
 ## Land
 
 1. Tick or strike every Plan item except `- [ ] land: …`, the `**now:**` item included (an open `now:` fails the
-   gate's plan row). An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
+   gate's plan row): tick it with its evidence, or move what is left of it into the `land:` item. An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
    on a dirty PR starts no CI.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:

@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -41,15 +42,21 @@ test("lapsApart / lapGapText: a lap or more is laps", () => {
   assert.equal(R.lapGapText("▼", "BEA", -3, true), "▼ -3L");
 });
 
-test("energy: MJ of the 4 MJ store, deploy/harvest as glyph and words", () => {
+test("energy: MJ of the 4 MJ store, deploy/harvest as words; the glyph is CSS (#4270 §5)", () => {
   const { R } = load({ PhysicsConsts: { ES_MJ: 4 } });
   assert.equal(R.ersState(true, 0.5, 0.6), "deploy");
   assert.equal(R.ersState(false, 0.51, 0.5), "harvest");
   assert.equal(R.ersState(false, 0.5, 0.5), "idle");
   assert.equal(R.ersState(false, 0.5, NaN), "idle");
   assert.deepEqual({ ...R.energy(0.8, "idle") }, { text: "3.2 MJ", label: "Energy 3.2 megajoules" });
-  assert.equal(R.energy(0.5, "deploy").text, "▼ 2.0 MJ");
+  // One text length in every state: hud.js hlKey keys the fit on it, and a deploy flip was a full fit.
+  assert.deepEqual(["idle", "deploy", "harvest"].map((st) => R.energy(0.5, st).text), ["2.0 MJ", "2.0 MJ", "2.0 MJ"]);
   assert.equal(R.energy(0.5, "harvest").label, "Energy 2.0 megajoules, harvesting");
+  // The glyph the text lost: one slot in every state, unseen while idle, ▲ only for harvest.
+  const rules = cssRules(read("css/hud.css")), N = "#hud-energy-n::before";
+  assert.deepEqual([decl(rules, N, "content"), decl(rules, N, "visibility")], ['"▼ "', "hidden"]);
+  assert.equal(decl(rules, "#hud-energy[data-ers] " + N, "visibility"), "visible");
+  assert.equal(decl(rules, '#hud-energy[data-ers="harvest"] ' + N, "content"), '"▲ "');
 });
 
 test("bbText: the set-up sheet's half-percent steps", () => {
@@ -302,7 +309,7 @@ test("hud.js: ENERGY number + state, BB chip, the energy fill has its own colour
   tick();
   assert.equal($("hud-energy-n").textContent, "2.0 MJ");
   player.deploying = true; tick();
-  assert.equal($("hud-energy-n").textContent, "▼ 2.0 MJ");
+  assert.equal($("hud-energy-n").textContent, "2.0 MJ", "the deploy glyph is css/hud.css ::before, not text");
   assert.equal($("hud-energy").dataset.ers, "deploy");
   assert.equal($("hud-bb").textContent, "BB 56.5%");
   const css = read("css/hud.css");
