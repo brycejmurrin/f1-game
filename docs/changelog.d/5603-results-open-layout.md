@@ -1,0 +1,1 @@
+Fixed: Results sheet: on a slow phone the sheet could paint for a frame or two before its layout settled, with your row drawn over the row entering the bottom of the list; it now lays out before it shows (#5603).

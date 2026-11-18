@@ -419,7 +419,9 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
           const ov = yr.top < tb.bottom ? rows.filter((r) => r !== you).map((r) => +over(r.getBoundingClientRect(), yr).toFixed(1)).filter((v) => v > 1) : [];
           frames.push({ frame: n, ov, pins: T.dataset.pins || null, youClear: T.style.getPropertyValue("--you-clear") || null, paneOwnH: T.clientHeight,
             rowOwnH: +(rows[0].getBoundingClientRect().height / (rows[0].currentCSSZoom || 1)).toFixed(1), density: sheet.dataset.density || null,
-            shape: sheet.dataset.shape || null, scrollTop: T.scrollTop, youTop: +yr.top.toFixed(1), paneBottom: +tb.bottom.toFixed(1) });
+            shape: sheet.dataset.shape || null, scrollTop: T.scrollTop, youTop: +yr.top.toFixed(1), paneTop: +tb.top.toFixed(1), paneBottom: +tb.bottom.toFixed(1),
+            youMarginTop: getComputedStyle(you).marginTop, above: [...T.children].map((k) => (k.getAttribute("data-results-part") || k.id || k.className || k.tagName)
+              .slice(0, 16) + "@" + Math.round(k.getBoundingClientRect().top) + "/" + Math.round(k.getBoundingClientRect().height)).join(" ") });
           if (T.dataset.pins) held++;
         }
         if (held < 30 && ++n < 600) requestAnimationFrame(() => ch.port2.postMessage(0));
@@ -463,7 +465,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
     expect(openFrames.length, tag + "painted frames recorded from the sheet's open").toBeGreaterThanOrEqual(30);
     const overlapping = openFrames.filter((f) => f.ov.length);
     expect(overlapping.map((f) => f.ov), tag + "at open your row lies on no other row on any painted frame (painted px of overlap); first: "
-      + JSON.stringify(overlapping[0] || null)).toEqual([]);
+      + JSON.stringify(overlapping[0] || null) + "; settled: " + JSON.stringify(openFrames[openFrames.length - 1] || null)).toEqual([]);
     expect(cell.youInPane, tag + "your row is pinned inside the pane once the list is in view").toBe(true);
     expect(cell.tableScrolls, tag + "the classification is the one scroller").toBe(true);
   });
