@@ -14704,6 +14704,7 @@
         "tests/unit/session-records-assists.test.mjs"
       ],
       "*": [
+        "tests/unit/ghost.test.mjs",
         "tests/unit/global-registry.test.mjs"
       ]
     },
