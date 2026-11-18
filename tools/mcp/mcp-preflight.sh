@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # @doc Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only.
+#      As a command: `bash tools/mcp/mcp-preflight.sh --all` probes every server in .cursor/mcp.json.
 # @skill mcp-probe
 # mcp-preflight.sh — source this, then call `mcp_preflight [npx-package-name]`.
 #
-# .mcp.json starts every server at session start, concurrently with the
+# .mcp.json / .cursor/mcp.json starts every server at session start, concurrently with the
 # SessionStart hook's `npm install`. A launcher that runs before node_modules
 # exists dies (ERR_MODULE_NOT_FOUND) or stalls on a cold `npx` download, and
 # the client only reports CONNECTION_CLOSED. This turns that race into a
@@ -11,6 +12,10 @@
 #
 # Ready = node_modules/.package-lock.json (npm writes it last) and node_modules/sharp.
 # APEX_MCP_PREFLIGHT_SECS overrides the 60 s bound (0 disables the wait).
+#
+# CLI (`--all`): start each server exactly as .cursor/mcp.json does (through the
+# output-level wrapper), send initialize + tools/list, print one PASS/FAIL line
+# with the reason. Sets APEX_MCP_STDERR_PASS so failure reasons are not swallowed.
 
 mcp_preflight() {
   local root="${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -46,3 +51,39 @@ mcp_preflight() {
   fi
   return 0
 }
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
+  ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+  cd "$ROOT"
+  case "${1:-}" in
+    --all)
+      shift
+      # Surface upstream stderr through output-level-mcp (default retain is private).
+      export APEX_MCP_STDERR_PASS="${APEX_MCP_STDERR_PASS:-1}"
+      # Bound the sourced wait inside each launcher if a cold box races npm install.
+      export APEX_MCP_PREFLIGHT_SECS="${APEX_MCP_PREFLIGHT_SECS:-5}"
+      exec node "$ROOT/tools/mcp/mcp-listing-cost.mjs" --preflight "$@"
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage:
+  . tools/mcp/mcp-preflight.sh && mcp_preflight [npx-package]
+      Bounded wait for node_modules (sourced by MCP launchers; stderr only).
+
+  bash tools/mcp/mcp-preflight.sh --all [--only=NAME] [--config=PATH] [--timeout-ms=N]
+      Start each server in .cursor/mcp.json, send initialize + tools/list,
+      print one PASS/FAIL line with the reason. Exit 1 if any server fails.
+EOF
+      exit 0
+      ;;
+    "")
+      echo "mcp-preflight: pass --all to probe servers, or source this file and call mcp_preflight" >&2
+      exit 2
+      ;;
+    *)
+      echo "mcp-preflight: unknown arg ${1:-} (try --help)" >&2
+      exit 2
+      ;;
+  esac
+fi

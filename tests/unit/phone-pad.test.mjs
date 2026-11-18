@@ -926,10 +926,16 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
   padEnd.pump(0); hostEnd.pump(0);
   const clock = desk.clock;
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => null });
-  const docL = {};
+  const docL = {}, touchOpts = {};
   const hadDoc = Object.prototype.hasOwnProperty.call(globalThis, "document");
   const prevDoc = globalThis.document;
-  globalThis.document = { hidden: false, visibilityState: "visible", addEventListener(t, f) { (docL[t] ||= []).push(f); } };
+  globalThis.document = {
+    hidden: false, visibilityState: "visible",
+    addEventListener(t, f, opts) {
+      (docL[t] ||= []).push(f);
+      if (t === "touchend" || t === "touchcancel") touchOpts[t] = opts;
+    },
+  };
   try {
     const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
       center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
@@ -941,6 +947,8 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
       swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
       acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
     } });
+    assert.deepEqual(touchOpts.touchend, { capture: true, passive: true }, "touchend release net is passive (no scroll/tap latency)");
+    assert.deepEqual(touchOpts.touchcancel, { capture: true, passive: true }, "touchcancel release net is passive");
     assert.deepEqual(await ctl.connect("abc234"), { ok: true });
     const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); };
     const fire = (t, ev) => { for (const f of docL[t] || []) f(ev); };
@@ -967,6 +975,52 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
     assert.equal(link.stats().events, a0, "a hidden page stops the arrow's repeat");
     assert.equal(timers.pending(), 0);
     assert.ok(!dom.buttons.navDown.classes.has("on"));
+    link.close(); frame();
+  } finally {
+    if (hadDoc) globalThis.document = prevDoc; else delete globalThis.document;
+  }
+});
+
+test("pad(): a second finger on a held D-pad arrow does not stop the first (hunt input-touch)", async () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(11) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => null });
+  const hadDoc = Object.prototype.hasOwnProperty.call(globalThis, "document");
+  const prevDoc = globalThis.document;
+  globalThis.document = { hidden: false, visibilityState: "visible", addEventListener() {} };
+  try {
+    const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(),
+      buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])) };
+    const timers = fakeTimers();
+    const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
+      rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+      swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+      acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    } });
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); };
+    const btn = dom.buttons.navUp;
+    btn.dispatch("pointerdown", { pointerId: 7 });
+    for (let i = 0; i < 2; i++) frame();
+    const before = link.stats().events;
+    // Second contact on the same arrow, then lift — used to clear `on` and kill the repeater.
+    btn.dispatch("pointerdown", { pointerId: 8 });
+    btn.dispatch("pointerup", { pointerId: 8 });
+    assert.ok(btn.classes.has("on"), "first thumb still paints pressed");
+    // Same cadence as the menu-pad repeater pin above (delay 380, then 110).
+    timers.advance(379); for (let i = 0; i < 2; i++) frame();
+    assert.equal(link.stats().events, before, "nothing before the delay");
+    timers.advance(1); timers.advance(220); for (let i = 0; i < 3; i++) frame();
+    assert.equal(link.stats().events, before + 2, "repeater keeps firing after the second finger lifts");
+    assert.ok(timers.pending() > 0, "repeat timer still armed");
+    btn.dispatch("pointerup", { pointerId: 7 });
+    assert.ok(!btn.classes.has("on"));
+    const after = link.stats().events;
+    timers.advance(1000); for (let i = 0; i < 2; i++) frame();
+    assert.equal(link.stats().events, after, "first lift stops the repeater");
+    assert.equal(timers.pending(), 0, "and no timer left behind");
     link.close(); frame();
   } finally {
     if (hadDoc) globalThis.document = prevDoc; else delete globalThis.document;

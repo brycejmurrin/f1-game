@@ -228,8 +228,10 @@ const PhonePadPage = (function () {
       document.addEventListener("pointerup", releasePointer, true);
       document.addEventListener("pointercancel", releasePointer, true);
       if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); window.addEventListener("blur", releaseAll); }
-      document.addEventListener("touchend", allUp, true);
-      document.addEventListener("touchcancel", allUp, true);
+      // Passive: these only READ touches.length and never preventDefault, so the
+      // compositor need not wait on them for every lift (same net as input.js).
+      document.addEventListener("touchend", allUp, { capture: true, passive: true });
+      document.addEventListener("touchcancel", allUp, { capture: true, passive: true });
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
     }
     // PedalTravel: 12 px of slop, then 90 px to the 0.12 floor. Moving down
@@ -305,20 +307,40 @@ const PhonePadPage = (function () {
     function edge(el, k, repeat) {
       if (!el) return;
       const r = repeater(k), stop = r.stop;
+      const held = new Set();
       const fire = () => { buzz(); if (session) session.event(k); };
       el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); fire(); } });
       el.addEventListener("pointerdown", (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
+        // Track every contact: a second finger's up/leave used to clear `on` and
+        // stop the repeater while the first thumb was still down (multi-touch).
+        const first = !held.size;
+        held.add(e.pointerId);
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* document release fanout still stops the repeat */ }
         el.classList.add("on");
+        if (!first) return;
         fire();
         if (repeat) r.start();
       });
-      const up = () => { el.classList.remove("on"); stop(); };
-      releases.push(up);   // a lost lift must not repeat a menu step forever (the nets above)
+      const up = (e) => {
+        if (e && typeof e === "object" && "pointerId" in e) {
+          if (!held.delete(e.pointerId)) return;
+          if (held.size) return;
+        } else {
+          held.clear();
+        }
+        el.classList.remove("on");
+        stop();
+      };
+      // Lost lift / blur / last-finger-up: same nets as hold() and the menu stick.
+      releases.push(() => up());
+      pointerReleases.push(up);
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
-      el.addEventListener("pointerleave", up);
+      // No pointerleave: with capture it fires when the thumb slides a few px
+      // and killed a held D-pad repeat; document/window pointerup catches the lift.
+      el.addEventListener("lostpointercapture", (e) => { if (!el.isConnected || !el.getClientRects().length) up(e); });
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     // An action may have more than one button (OT on the grip AND on the face).

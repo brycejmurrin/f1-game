@@ -145,6 +145,13 @@ const InputHaptics = (function () {
       frameEmitted = false;
       const t = clockMs();
       prune(t);
+      // Hot-unplug: padConnected is the decided latch (updated in pollGamepad after
+      // this flush, so the stop lands on the next frame). Do NOT key off
+      // activePad() here — a one-frame getGamepads() hole would cut a live rumble.
+      if (!padConnected()) {
+        if (pulses.length || lastActuator) { pulses.length = 0; nextChange = 0; mixDirty = false; stopActuator(); }
+        return;
+      }
       if (mixDirty || (nextChange && t >= nextChange)) emit(t);
     }
     function prune(t) {
@@ -155,7 +162,8 @@ const InputHaptics = (function () {
       prune(t);
       if (!hapticScale || !pulses.length) return;     // the last effect simply runs out
       const pad = activePad();
-      if (!pad) { pulses.length = 0; return; }
+      // Belt-and-braces with flush()'s hot-unplug path (same stop).
+      if (!pad) { pulses.length = 0; stopActuator(); return; }
       frameEmitted = true;
       const m = { strong: 0, weak: 0, left: 0, right: 0 };
       let first = Infinity, last = 0;
