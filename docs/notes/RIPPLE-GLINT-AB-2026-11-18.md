@@ -31,11 +31,26 @@ low side of camber). The scene that works is placed on purpose:
 
 ## Stills: GLX | TLX before | TLX after (glint box, 1280x720 frame)
 
-![GLX, TLX before the fix, TLX after the fix](img/ripple-glint-glx-tlxbefore-tlxafter.png)
+The stills are NOT in the repo and not published. An image under `docs/` is refused by
+`tests/unit/committed-images.test.mjs` (a first version of this note committed one and turned CI red), and
+`tools/shot/publish-evidence.mjs --publish` was refused for this cloud session ("Creating, editing, or deleting
+releases is not permitted for this session type"). They exist only in the session's container
+(`artifacts/ripple-evidence/`: the GLX | TLX before | TLX after sheet, the x6 difference image, the scene). What they
+show, in words: on all three the puddle carries a bright sun patch about a metre across, broken into ripple rings;
+TLX before and TLX after cannot be told apart by eye at 1:1.
 
 TLX before vs after inside the 400x330 px glint box: 4,879 pixels differ at all, 83 by more than 8 (of 765 summed
 RGB), 5 by more than 30, max 41. Luma in the box: mean 83.7 and p99 144.6 in both. The x6 difference image is faint
 concentric rings with one small bright spot: the lobe now follows the ripples, as designed.
+
+WGX (stills through `gfx-probe`'s readback, `GLX.capturePixels()`; `backend-compare` captures WGX as a black frame
+on this box): the same scene shows the same rippled sun patch before and after; both probes pass with `gpuErrors` 0.
+The change is LARGER on WGX than on TLX, and above its noise floor. Inside the same 400x330 px glint box: two
+captures of the fixed tree differ in 315 pixels by more than 8 and 0 by more than 30 (falling rain streaks); before
+vs after differ in 3,124 by more than 8 and 614 by more than 30 (max 179). Why WGX moves about forty times more
+pixels than TLX in the same scene is NOT explained: `D_GGX`, `V_SmithGGX` and the roughness-to-alpha step read the
+same on both. One candidate is TLX's analytic road micro-normal (a different normal field under the same puddle).
+Open question, recorded on #5777.
 
 ## Dry identity
 
