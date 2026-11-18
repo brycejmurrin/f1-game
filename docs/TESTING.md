@@ -438,6 +438,7 @@ tools directly.)
 | `perf-budget` | `perf-boost-press-pipelines.spec.js` (TLX WebGPU) and `perf-boost-press-pipelines-gl.spec.js` (TLX WebGL2, its own file: a second TLX boot in one Chromium stalls), driven by `tools/perf/boost-press-census.mjs` (A·H17) — BOOST presses 2..N re-mint zero BOOST pipelines, and add no fx-stream re-mints beyond the matched no-BOOST windows; every press must deploy ERS (#3677, #3703; counts, not ms); `perf-sw-cache-hit.spec.js` — the service-worker install already holds every script and stylesheet a first race loads (cache snapshot read inside the worker; dev-only LAZY_AGENT excluded). Count-based perf gates, docs/notes/PERFTEST-HUNT-2026-10-24.md |
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `results-flow` | `results-flow.spec.js` — post-flag path at 844×390: default `finishRace` → `#results`, TT ineligible for ceremony, and (once `#1584` slices 1–4 land) cooldown → parc fermé → podium → results plus SKIP / `data-ceremony-phase` pins. Plan `docs/plans/2026-10-27-cooldown-podium.md` |
+| `shipped-defaults` | `shipped-defaults.spec.js` — the product a player boots, with NO fixture pins (tag `@shipped-defaults` in `tests/helpers/fixtures.js`): the shipped renderer (TLX), TYRE WEAR and WIND on, the GarageDefaults seat. Boot, garage → race settings → START → results, an AI pit stop, the 844×390 touch HUD layout. Every other spec pins GLX, wear off, wind off and/or the factory seat. Nightly rotation |
 | `perf-session` | `perf-session-budgets.spec.js` — one software-GL session (three.js forced to WebGL2): garage first-draw `tapMs`, `race()` to the grid, worst and steady rAF time across the first 30 s, CDP heap across Quit to Menu. Hang ceilings fail; phone lines are recorded unless `APEX_PERF_SESSION_STRICT=1`. Artifact `artifacts/perf-session/perf-session.json`. How to run and what the numbers mean: `docs/notes/PERF-SESSION-BUDGETS.md` |
 | `stall-reload-sw` | `stall-reload-sw.spec.js` — software GL (three + `tlxForceGL`, `?stallwatch=1`): cold `__apex.race("bahrain")` must reach the grid with `apex26.stallReloads` still 0 and no stall `reload` act. Artifact `artifacts/stall-reload-sw/after-fix.json`. |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
@@ -966,8 +967,9 @@ full-suite stamp). There is no cap on ready PRs. GitHub bounds the LEGS
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
 field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
 rotated by run number), so at most LANES selected legs run across every
-PR at once and the rest wait FIFO without holding a runner or being
-cancelled; the train, the nightly and a dispatch get a group of their own
+PR at once and the rest wait without holding a runner or being
+cancelled (in no guaranteed order: the docs' own words); the train, the nightly, a dispatch and every leg of a PR plan of
+at most two legs (`SMALL_RUN_LEGS`, lane -1; #5536, `docs/notes/CI-LANE-WAIT-2026-11-18.md`) get a group of their own
 per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
 2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
 smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only as skill `steward` says (CONFLICTING/DIRTY, via `node tools/ci/sync-pr.mjs <branch>`);

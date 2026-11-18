@@ -221,6 +221,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/ai-solo.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/ai-race.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -695,6 +700,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Strict unreadable false; same SHA false; always exit 0 is not publish permission"
+    },
+    "tools/ci/pages-rearm.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Rearm yes/no with its reason; lookup or dispatch failure is a warning; always exit 0 is not a dispatch"
     },
     "tools/ci/pages-reuse-verdict.sh": {
       "action": "protocol-only",
@@ -2390,11 +2400,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
-    },
-    "tools/shot/scenery-locations.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c5"
     },
     "tools/shot/scenery-source-hash.cjs": {
       "action": "no-direct-output",

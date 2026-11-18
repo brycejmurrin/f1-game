@@ -178,3 +178,19 @@ test("a dependency-greyed row reports its reason, not 'unavailable', and takes f
   const text = h.index.querySelector('[role="status"]').textContent;
   assert.match(text, /HUD is OFF/); assert.doesNotMatch(text, /unavailable/); assert.equal(h.dom.document.activeElement, row);
 });
+
+// #5562: SettingDeps EXPLAIN greys nothing itself; it writes the owner's reason beside the control and points
+// aria-describedby at it, with no data-dep-off row. Search printed "unavailable ... on this device" for those.
+test("an owner-greyed control reports the reason it is described by, not 'unavailable'", () => {
+  const h = boot();
+  const sheet = h.el("section", "own-sheet"), group = h.el("div", "own-gears", sheet), a = h.el("button", "own-gears-auto", group), b = h.el("button", "own-gears-manual", group);
+  const why = h.el("p", "why-gears-why-0", sheet), stale = h.el("p", "own-stale-why", sheet);
+  for (const x of [why, stale]) x.setAttribute("data-dep-reason", "group");
+  why.textContent = "MANUAL needs TILT or a pad"; stale.textContent = "Connect a controller first"; stale.hidden = true;
+  a.disabled = b.disabled = true; b.setAttribute("aria-describedby", "own-help own-stale-why why-gears-why-0");
+  h.ctx.Search.register("own-owner", [{ id: "own-gears", label: "Manual gears", page: "controls", target: "own-gears", aliases: "zzowngears" }]);
+  h.result("zzowngears").onclick();
+  assert.equal(h.index.querySelector('[role="status"]').textContent, "Manual gears is off: MANUAL needs TILT or a pad");
+  assert.equal(h.dom.document.activeElement, why, "focus lands on the reason");
+  assert.equal(h.dom.document.querySelector("#pm-panel-controls").children.length, 0, "no generic note is left on the page");
+});

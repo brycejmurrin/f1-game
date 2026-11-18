@@ -53,6 +53,19 @@ function rectsInPage(ids) {
   return { rects: out, page: [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight] };
 }
 
+/** In-page (#5578): every title door whose label or icon does NOT follow the door's font-size in the same frame. The row
+ *  tier measures labels the moment a size lands; a transition on an inherited font-size hands it the previous one. */
+function labelLagInPage() {
+  const late = [];
+  for (const b of document.querySelectorAll("#menu-buttons .bigbtn")) {
+    if (!(b.getBoundingClientRect().width > 0)) continue;
+    b.style.fontSize = "30px";
+    for (const e of b.querySelectorAll("span, .btn-ico")) if (getComputedStyle(e).fontSize !== "30px" && !e.closest(".mb-sub") && !e.style.fontSize) late.push(b.id + " " + (e.className.baseVal ?? e.className ?? e.tagName) + " " + getComputedStyle(e).fontSize);
+    b.style.fontSize = "";
+  }
+  return { motion: document.documentElement.dataset.motion || null, late };
+}
+
 async function bootPhone(browser, baseURL, entries) {
   const { context, page, preset } = await openBrycePhone(browser, { window: "standalone", dpr: 1, profile: false });
   await context.addInitScript((e) => {
@@ -80,10 +93,12 @@ async function measure(browser, baseURL, entries) {
       await load();
       await s.open(page);
       await page.waitForTimeout(500);
-      // The title's row tier reads label widths, so it is only final once the web fonts are in and the fit is quiet
-      // (CI run 43764591144 read a clean cold boot mid-load: 5 rows, 264 px, against his warm 7 rows, 362 px).
+      // The title's row tier reads label widths, so it is only final once the web fonts are in and the fit is quiet.
+      // The 5-row, 264 px title against 7 rows, 362 px (CI runs 43764591144, 43963990479) was not this wait: under
+      // MOTION REDUCED a label lagged its door's font-size by a frame (#5578, css/responsive.css); `lag` holds that.
       if (s.id === "title") { await page.waitForFunction(() => document.fonts.status === "loaded", null, { polling: 100, timeout: BOOT }); await page.evaluate(settleInPage, 12); }
       out[s.id] = await page.evaluate(rectsInPage, s.ids);
+      if (s.id === "title") out.lag = await page.evaluate(labelLagInPage);
       if (s.id === "garage") out.done = await page.evaluate(() => document.getElementById("cs-done").getBoundingClientRect().height);
     }
     await load();
@@ -112,6 +127,13 @@ test.describe("a clean phone profile paints what the owner's 2026-11-10 export p
     expect(his.vars, "his export reached the page").toEqual({ ui: "0.7", btn: "1.4325", hud: "1" });
     expect(clean.vars, "a clean phone ships his UI SIZE; BUTTON stays at the touch default").toEqual({ ui: "0.7", btn: "1.25", hud: "1" });
     expect(clean.stored, "and a clean profile stored none of them: they are defaults, not writes").toEqual([]);
+
+    // #5578: the suite runs MOTION REDUCED (playwright.config.js reducedMotion), where the title's doors must still hand
+    // the fit their CURRENT label size. Before the fix every door's label read its previous font-size for one frame.
+    for (const [who, m] of [["clean", clean], ["his export", his]]) {
+      expect(m.lag.motion, `${who}: this spec boots with MOTION REDUCED (the state #5578 needs)`).toBe("reduce");
+      expect(m.lag.late, `${who}: a title door's label and icon follow the door's font-size in the same frame`).toEqual([]);
+    }
 
     const screens = [...MENUS.map((s) => [s.id, s.ids]), ["hud", HUD_IDS], ["pause", PAUSE_IDS]];
     for (const [id, ids] of screens) {

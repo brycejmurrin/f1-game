@@ -191,6 +191,8 @@ function fitPins() {
   const prev = parseInt(table.dataset.pins, 10) || 0;
   const next = pinCountFor(ch / rowH, prev);
   if (next !== prev) table.dataset.pins = String(next);
+  // #5580: YOU bottom-sticks only once the list fills the pane (css/overlays.css --you-clear).
+  if (table.style && table.style.setProperty) table.style.setProperty("--you-clear", String(Math.max(1, Math.floor(ch / rowH) - 1)));
 }
 // After a build the rows exist but the sheet may still be hidden; the observer covers the show.
 function fitPinsSoon() {

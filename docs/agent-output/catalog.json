@@ -334,6 +334,15 @@
       ]
     },
     {
+      "path": "tools/check/ai-solo.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/check/ai-strategy-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -1042,6 +1051,12 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/pages-rearm.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/pages-reuse-verdict.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only",
@@ -1263,6 +1278,7 @@
         "test:render",
         "test:results-flow",
         "test:shimmer",
+        "test:shipped-defaults",
         "test:smoke",
         "test:stall-reload-sw",
         "test:tiny",
@@ -3450,11 +3466,6 @@
       ]
     },
     {
-      "path": "tools/shot/scenery-locations.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
       "path": "tools/shot/scenery-source-hash.cjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -4394,6 +4405,10 @@
     {
       "name": "test:shimmer",
       "command": "APEX_SHIMMER=1 node tools/ci/run-playwright.mjs tests/specs/material-shimmer.spec.js"
+    },
+    {
+      "name": "test:shipped-defaults",
+      "command": "node tools/ci/run-playwright.mjs --group test:shipped-defaults"
     },
     {
       "name": "test:smoke",
