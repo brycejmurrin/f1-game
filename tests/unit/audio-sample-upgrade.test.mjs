@@ -274,6 +274,7 @@ test("a pause the game did not ask for lets resume replay the stream at the kept
   GameAudio.init();
   GameAudio.playTrackId("builtin:song2");
   const el = A.els[0];
+  const src0 = el.src;
   assert.equal(typeof el.onpause, "function", "the stream listens for pause");
   el.duration = 180; el.currentTime = 42;
   const plays = el.plays;
@@ -290,7 +291,7 @@ test("a pause the game did not ask for lets resume replay the stream at the kept
   GameAudio.startMusic(0);
   assert.equal(el.plays, plays + 1, "resume plays the stream again");
   assert.equal(el.paused, false);
-  assert.match(el.src, /song2\.mp3$/, "the same track");
+  assert.equal(el.src, src0, "the same track");
   el.currentTime = 0; el.onloadedmetadata();
   assert.equal(el.currentTime, 42, "from where the platform stopped it");
   // The platform resumed it by itself after a pause: `playing` makes the stream live again, so resume leaves it alone.
