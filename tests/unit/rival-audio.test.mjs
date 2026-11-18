@@ -493,7 +493,7 @@ test("Doppler closing speed is the line-of-sight component: zero when level, ful
   assert.ok(Math.abs(justAhead - justBehind) < 4, `crossing arc 0 must not step the closing speed (${justBehind} -> ${justAhead})`);
 });
 
-// ── LAB rivalEps (?lab=rivalEps; OFF by default) ───────────────────────────
+// ── Pass-by aim epsilon (ON by default; ?lab=noRivalEps is the off switch) ─
 // A fake AudioContext whose params COUNT setTargetAtTime calls, driven by a
 // recorded slow-drift sequence: a car 40 m ahead closing at 2 m/s while it
 // eases 1 m across, plus a second car holding station 70 m back; 10 s at 60 fps.
@@ -536,21 +536,13 @@ function drift(search) {
   return { rig, first, drift: rig.calls.n - first };
 }
 
-test("rivalEps OFF (no lab / another lab) keeps the shipped call count on a slow drift", () => {
-  const none = drift(null), other = drift("?lab=audioIdle"), garbage = drift("?lab=%E0%A4%A");
-  // 639 is what the pre-lab rivals.js (d7d7617b) issues on this sequence, with
-  // or without a lab param: the off path must not move it.
-  assert.equal(none.drift, 639, "no location: the shipped aimParam");
-  assert.equal(other.drift, 639, "a different lab leaves rivalEps off");
-  assert.equal(garbage.drift, 639, "a malformed lab param is off, not a throw");
-  assert.equal(none.first, 10, "first frame: 4 params on each of 2 voiced cars, gain on each free voice");
-});
-
-test("rivalEps ON re-aims a slow drift far less, and a large step still issues at once", () => {
-  const on = drift("?lab=rivalEps,audioIdle");
-  assert.equal(on.first, 10, "the first aim is unchanged");
-  // 639 → 26 over 600 frames (1.07 → 0.04 calls per frame). Red on d7d7617b: 639.
+test("by default the pass-by epsilon re-aims a slow drift far less, and a large step still issues at once", () => {
+  const on = drift(null), other = drift("?lab=audioIdle"), garbage = drift("?lab=%E0%A4%A");
+  assert.equal(on.first, 10, "first frame: 4 params on each of 2 voiced cars, gain on each free voice");
+  // 639 → 26 over 600 frames (1.07 → 0.04 calls per frame). Red before the default flip: 639.
   assert.equal(on.drift, 26, "600 drift frames: far fewer calls with the per-param thresholds");
+  assert.equal(other.drift, 26, "a different lab leaves the epsilon on");
+  assert.equal(garbage.drift, 26, "a malformed lab param stays on, not a throw");
   // A big jump (the lead car is suddenly 5 m away) clears every threshold.
   const { rig } = on;
   const leadVoice = rig.RivalAudio.passByVoices().find((x) => x.key === 1);
@@ -566,4 +558,12 @@ test("rivalEps ON re-aims a slow drift far less, and a large step still issues a
   rig.frame(1 / 60);
   assert.equal(leadVoice.gain.gain.value, 0, "an out-of-range voice lands on an exact 0");
   assert.ok(rig.calls.n > n1);
+});
+
+test("?lab=noRivalEps restores the pre-epsilon call count on a slow drift", () => {
+  const off = drift("?lab=noRivalEps"), combo = drift("?lab=noRivalEps,audioIdle");
+  // 639 is what the pre-epsilon rivals.js (d7d7617b) issues on this sequence.
+  assert.equal(off.drift, 639, "the off switch restores the dense aimParam");
+  assert.equal(combo.drift, 639, "…and works beside another lab");
+  assert.equal(off.first, 10, "first aim is unchanged");
 });

@@ -1085,6 +1085,9 @@
         "tests/unit/rival-contact-sfx.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
+      "detach": [
+        "tests/unit/rival-attach-init.test.mjs"
+      ],
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
