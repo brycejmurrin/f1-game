@@ -8592,7 +8592,8 @@
         "tests/unit/title-warm.test.mjs"
       ],
       "stop": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "tick": [
         "tests/unit/garage-arrival.test.mjs",
@@ -11818,6 +11819,9 @@
         "tests/unit/title-warm.test.mjs"
       ],
       "poll": [
+        "tests/unit/title-warm.test.mjs"
+      ],
+      "stop": [
         "tests/unit/title-warm.test.mjs"
       ],
       "*": [
