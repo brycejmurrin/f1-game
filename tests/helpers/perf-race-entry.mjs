@@ -16,7 +16,8 @@ export const SCENARIO = {
 
 /** Soft gate: report in annotations; strict fails when race menu path exceeds this (ms). */
 export const RACE_ENTRY_SOFT_MS = 75000;
-export const STRICT = !!process.env.APEX_PERF_RACE_ENTRY_STRICT;
+export const STRICT = process.env.APEX_PERF_RACE_ENTRY_STRICT === "1"
+  || process.env.APEX_PERF_STRICT === "1";
 
 export function writeArtifact(dir, payload) {
   fs.mkdirSync(dir, { recursive: true });
