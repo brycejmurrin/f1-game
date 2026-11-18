@@ -15,8 +15,8 @@
  *   3. verify  — `node tools/track/verify-track.cjs <id>` on the merged tree.
  *   4. cleanup — `git worktree remove <path>` for the worktree checked out on <branch>
  *                (looked up in `git worktree list --porcelain`; --keep-worktree skips it).
- * Exit 0 only when every step is green. The parent still regenerates
- * tools/shot/scenery-locations.json (`npm run gen`) after the last merge of a campaign.
+ * Exit 0 only when every step is green. tools/shot/scenery-locations.json is built on demand (gitignored since
+ * 2026-11-11): its next reader rebuilds it from the merged circuits, so a campaign commits nothing for it.
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -82,7 +82,7 @@ function main() {
       process.exit(1);
     }
   }
-  console.log(`= merge-surveyor ${id}: merged ${branch} into ${run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim()}; next: npm run gen (scenery-locations.json)`);
+  console.log(`= merge-surveyor ${id}: merged ${branch} into ${run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim()}; the scenery catalog rebuilds on demand (node tools/gen/ensure-built.mjs --with tools/shot/scenery-locations.json)`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
