@@ -30,7 +30,8 @@ API cache TTLs (`TTL_*` in `js/data/api.js`). Refreshing a tab can reuse a cache
 Standings tagged `LAST SEASON · <y> FINAL` are intended only January → opener; mid-season it is a bug →
 `references/season-year.md`.
 
-RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
+The visible Data Hub tab label is WATCH & DRIVE (`id: "race"` in `js/data/hub.js`);
+its loader `js/data/real-race-tab.js` builds one Grand Prix's timing into the
 script `js/race/real-race.js` replays (grid, per-lap pace, stops, flags,
 retirements, rain, passes), shows the race LAP BY LAP (`raceBook` / `lapBoard`,
 both pure) with a JUMP IN and a WATCH on every lap, loads the real positions
