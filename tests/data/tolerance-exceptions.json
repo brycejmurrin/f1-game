@@ -20,6 +20,11 @@
       "file": "tests/unit/mix-duck-radio.test.mjs",
       "line": "n.kind === \"gain\").length >= 5",
       "reason": "Not a widened tolerance: the count is of real graph nodes, and #5294 (audit W19 row 5) deleted one of them, the legacy ERS whine chain (ersOsc/ersHp/ersGain) whose ersGain fed focus. ErsLayer is always defined (real or stub.js), so the chain was unreachable. The five remaining outputs are engine/sub/whine/harvest/reverb, as the message says; audio-tune's 'the engine graph builds no legacy ERS whine' pins the deletion."
+    },
+    {
+      "file": "tests/unit/cockpit-wheels.test.mjs",
+      "line": "mesh.idx.length / 3 <= 1604",
+      "reason": "Not a looser check: the cockpit body gains a deliberate 24-triangle carbon liner inside each shoulder bolster (js/car/car3d.js) so the road no longer shows through the car's sides in COCKPIT/HELMET on wide phones (Bryce 2026-11-18, PR #5745). The exact count is pinned in tests/data/car-wing-foil-tris.json (cockpit 1579 -> 1603) and the occlusion it buys is proven by tests/unit/cockpit-side-occlusion.test.mjs."
     }
   ]
 }
