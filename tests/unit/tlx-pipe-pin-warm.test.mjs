@@ -123,3 +123,31 @@ test("tlx.js wiring: prunePool arms the pin at the first present and sweeps befo
   assert.ok(arm > 0 && arm < cadence, "armed before the 5 s cadence gate, so the first present wraps three's pipeline factory");
   assert.ok(sweep > cadence && sweep < drop, "each sweep pins what was built since, before any wrapper is dropped");
 });
+
+// #5699 row 5: at PIPE_PIN_CAP the oldest pin that nothing else holds (usedTimes 1: the pin is its only use) is
+// released the way three's Pipelines.delete releases a last holder, so the CURRENT world's pipelines still pin after a
+// few tracks. Below the cap nothing is released; a pin a live RenderObject still holds is never released.
+test("at the cap, the oldest pin nothing else holds makes room; held pins are kept (#5699 row 5)", () => {
+  const released = [], progs = [];
+  const caches = new Map();
+  const P = { caches, _releasePipeline: (p) => { released.push(p); caches.delete(p.key); }, _releaseProgram: (g) => progs.push(g) };
+  const mkPipe = (key, used) => ({ key, usedTimes: used, vertexProgram: { usedTimes: used }, fragmentProgram: { usedTimes: used } });
+  const pin = makePin({ _pipelines: P });
+  const first = [];
+  for (let i = 0; i < pin.cap; i++) { const p = mkPipe("p" + i, i === 0 ? 0 : 1); first.push(p); caches.set(p.key, p); }
+  assert.equal(pin.pinPipelines(), pin.cap);
+  assert.deepEqual(released, [], "below/at the cap nothing is released");
+  assert.equal(first[0].usedTimes, 1, "p0's only use is the pin");
+  const next = mkPipe("next", 1); caches.set(next.key, next);
+  assert.equal(pin.pinPipelines(), pin.cap, "the set stays at the cap");
+  assert.deepEqual(released.map((p) => p.key), ["p0"], "exactly the oldest idle pin is released");
+  assert.equal(first[0].usedTimes, 0);
+  assert.deepEqual(progs, [first[0].vertexProgram, first[0].fragmentProgram], "its programs go with it at 0 uses");
+  assert.equal(next.usedTimes, 2, "the new world's pipeline took its pin");
+  assert.equal(first[1].usedTimes, 2, "a held pin keeps its extra use");
+  // Every pin held by a live RenderObject: nothing is released and the newcomer waits.
+  const late = mkPipe("late", 1); caches.set(late.key, late);
+  assert.equal(pin.pinPipelines(), pin.cap);
+  assert.deepEqual(released.map((p) => p.key), ["p0"], "no held pin is released");
+  assert.equal(late.usedTimes, 1, "the newcomer is not pinned while every pin is held");
+});

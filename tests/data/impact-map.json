@@ -15030,6 +15030,9 @@
       "_sameList": [
         "tests/unit/chunked-index-ranges.test.mjs"
       ],
+      "_shadowAllIdx": [
+        "tests/unit/glx-lamp-shadow-slot.test.mjs"
+      ],
       "castShadowChunked": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -16188,6 +16191,12 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
+      "lampStaticBegin": [
+        "tests/unit/tlx-fail-scope.test.mjs"
+      ],
+      "lampStaticEnd": [
+        "tests/unit/tlx-fail-scope.test.mjs"
+      ],
       "prime": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -16336,6 +16345,9 @@
       ],
       "_ssrMrtNode": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "_startSoftBlitRead": [
+        "tests/unit/tlx-round2.test.mjs"
       ],
       "_tagSwap": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -16775,11 +16787,13 @@
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "setSsrMrt": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "updateFrame": [
         "tests/unit/tlx-closures-4674.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
@@ -16990,6 +17004,12 @@
       ]
     },
     "js/render/webgpu/wgx-shadow.js": {
+      "_flushShadowModelUBO": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
+      ],
+      "_frameSubmitList": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
+      ],
       "carShadowBegin": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -17022,9 +17042,6 @@
       ],
       "shadowEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "*": [
-        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/webgpu/wgx.js": {
@@ -17595,6 +17612,9 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/scene-live.test.mjs"
+      ],
+      "window": [
+        "tests/unit/pit-lane.test.mjs"
       ],
       "*": [
         "tests/unit/help-rules-facts.test.mjs",

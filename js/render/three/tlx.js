@@ -507,6 +507,7 @@ const TLX = (function () {
       let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       let _softSubmittedGen = 0, _softShownGen = 0;
+      let _softDarkRun = 0;   // consecutive near-black reads (#5699 row 15)
       const _softPresentWaiters = [];
       // awaitSoftPresent(ms, "frame") on a headed canvas (GLX's M15 contract): no
       // preserveDrawingBuffer, so SAVE SCREENSHOT must read in the task that
@@ -2124,6 +2125,7 @@ const TLX = (function () {
             if (k !== undefined) {
               const v = matCache.get(k);
               matCache.delete(k);
+              if (k.endsWith("|fx")) _fxKeys.delete(k.slice(0, -3));   // its memoised fx key goes with it (#5699 row 14)
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
               _matEvict++;
@@ -4100,8 +4102,27 @@ const TLX = (function () {
       const PIPE_PIN_CAP = 512;
       const _pinnedPipes = new Set();
       let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
+      // AT THE CAP, THE OLDEST PIN NOTHING ELSE HOLDS MAKES ROOM (#5699 row 5). Pins were never released, so after a
+      // few tracks the set filled with freed materials' pipelines and the CURRENT world's went unpinned. Only a
+      // pipeline whose sole use is the pin (usedTimes 1: no live RenderObject) is released, exactly as three's
+      // Pipelines.delete would have at its last holder; below the cap nothing changes.
+      function unpinIdle(P) {
+        for (const q of _pinnedPipes) {
+          if (q.usedTimes > 1) continue;
+          _pinnedPipes.delete(q);
+          q.usedTimes--; q.vertexProgram.usedTimes--; q.fragmentProgram.usedTimes--;
+          if (P && typeof P._releasePipeline === "function" && q.usedTimes === 0) P._releasePipeline(q);
+          if (P && typeof P._releaseProgram === "function") {
+            if (q.vertexProgram.usedTimes === 0) P._releaseProgram(q.vertexProgram);
+            if (q.fragmentProgram.usedTimes === 0) P._releaseProgram(q.fragmentProgram);
+          }
+          return true;
+        }
+        return false;
+      }
       function pinPipe(p) {
-        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        if (!p || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        if (_pinnedPipes.size >= PIPE_PIN_CAP && !unpinIdle(renderer && renderer._pipelines)) return;
         p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
         _pinnedPipes.add(p);
       }
@@ -4208,7 +4229,8 @@ const TLX = (function () {
         try { if (m.parent === instRoot) _instRemove(m); else if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
         if (_warmPending && !_ownershipFreeDepth) {
-          if (!_dropQueue.some((entry) => entry.mesh === m)) {
+          if (!m.__tlxQueued) {   // a flag, not _dropQueue.some(): that scan made a warm's drops O(n^2) (#5699 row 10)
+            m.__tlxQueued = true;
             _dropQueue.push({ mesh: m, ownedGeometry, freedGeo: ownedGeometry || m.geometry });
           }
           return;
@@ -4228,6 +4250,7 @@ const TLX = (function () {
       function flushDropped(force) {
         if ((!force && _warmPending) || !_dropQueue.length) return;
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
+        for (const entry of _dropQueue) entry.mesh.__tlxQueued = false;
         _dropQueue.length = 0;
       }
       // Track switch while a program/mirror warm is in flight: dropWrapper queues
@@ -4283,6 +4306,7 @@ const TLX = (function () {
           const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
           if (!fg || !freedGeos.has(fg)) continue;
           _dropQueue.splice(i, 1);
+          if (e.mesh) e.mesh.__tlxQueued = false;
           ownershipDropQueued(e.mesh, e.ownedGeometry, fg);
         }
         let w = 0;
@@ -4957,7 +4981,10 @@ const TLX = (function () {
               _softImg = _displayCtx.createImageData(w, h);
             }
             const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
-            if (maxPx >= 8) {
+            // A near-black read is held back (a warming RT), but a scene that IS black must present too: after
+            // three in a row it is shown, or awaitSoftPresent waited out its 15 s (#5699 row 15).
+            if (maxPx >= 8 || ++_softDarkRun >= 3) {
+              _softDarkRun = 0;
               _displayCtx.putImageData(_softImg, 0, 0);
               _softShownGen = req.gen;
               _softBlitNotify();
@@ -6017,7 +6044,10 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
-            // Fixed targets: the canvas is present-sized whatever the render scale (W x H is the logical rect).
+            // Read what the canvas holds: fixed targets AND the spatial upscale (wantSpatialUpscale, no fixed targets)
+            // size it presentW x presentH whatever the render scale, so W x H cropped the Photo (#5699 row 12).
+            const bw = gl.drawingBufferWidth | 0, bh = gl.drawingBufferHeight | 0;
+            if (bw > 0 && bh > 0) return readGlCapture(gl, bw, bh);
             return fixedActive() ? readGlCapture(gl, presentW, presentH) : readGlCapture(gl, W, H);
           }
           const rt = _captureRT();

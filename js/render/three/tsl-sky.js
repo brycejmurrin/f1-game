@@ -69,6 +69,10 @@
       fract, floor, dot, mix, smoothstep, clamp, pow, exp,
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
+    // DESCENDING smoothstep (edge0 > edge1 reads 1 below `hi`, 0 above `lo`) written as the ascending builtin
+    // flipped: GLSL ES 3.00 leaves smoothstep undefined for edge0 >= edge1 (#5699 row 8). Same value wherever
+    // the descending form was defined. tests/unit/tlx-hunt3.test.mjs refuses a literal descending call.
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
     // The 0..1 image uv of the scene pass: screenUV, or (fixed targets, #2655)
     // the fragment over the LOGICAL scene size (tsl-viewport.js).
     const imageUV = (ctx && ctx.vp && ctx.sceneView) ? ctx.vp.uv(ctx.sceneView) : screenUV;
@@ -741,7 +745,7 @@
         // Disc, vertically squashed near the horizon (atmospheric refraction).
         const dd = dir.sub(U.sunDir.mul(sd)).toVar();
         const perp = length(vec2(length(dd.xz), dd.y.mul(D.squash))).toVar();
-        const disc = smoothstep(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
+        const disc = smoothstepDown(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
         // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
         const discCore = D.discCore;
         c.addAssign(discCore.mul(disc));
@@ -764,7 +768,7 @@
           const twinkle = U.starTwinkle.mul(0.20).mul(sin(U.time.mul(1.4).add(phase))).add(0.80);
           const giant = step(0.9995, h);                       // rare brighter star
           const srad = mix(float(0.0016), float(0.0028), giant).mul(U.starSize);
-          const star = smoothstep(srad, srad.mul(0.35), d)
+          const star = smoothstepDown(srad, srad.mul(0.35), d)
             .mul(min(0.88, bright.mul(twinkle).mul(giant.mul(0.6).add(1.0))));
           // Cloud occlusion: stars sit BEHIND the deck (cityCov hoisted above).
           c.addAssign(vec3(star).mul(U.starBright).mul(cityCov.oneMinus()));
@@ -777,7 +781,7 @@
         const moonDir = normalize(U.sunDir);
         const md = dot(dir, moonDir).toVar();
         const moonPerp = length(dir.sub(moonDir.mul(max(md, 0.0)))).toVar();
-        const moonDisc = smoothstep(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
+        const moonDisc = smoothstepDown(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
           .mul(U.moon);
         const moonHalo = exp(moonPerp.mul(moonPerp)
           .mul(float(140.0).div(max(U.moonHalo, 0.001))).negate())

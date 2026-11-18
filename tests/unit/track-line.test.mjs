@@ -252,3 +252,22 @@ test("two same-sign corners split by a short gap across node 0 merge into one co
   const t = TL.bake(track(total, 7, (s) => ((s >= 1976 && s < 1992) || (s >= 4 && s < 20) ? 0.02 : 0)));
   assert.equal(t.lineCorners.length, 1, `${t.lineCorners.length} corners; the pair is one corner (gap < MERGE_M)`);
 });
+
+// #5699 row 19: toTurnIn[i] is measured from node i's START. For s past a turn-in that lies inside node i the old
+// subtraction went negative (by up to one node spacing); it now takes the next turn-in, from the next node.
+test("attackAt: past a turn-in inside the node, toTurnIn is the next one, never negative (#5699 row 19)", () => {
+  const n = 100, L = 1000, ds = L / n;          // 10 m nodes
+  const s0a = 50 * ds + 1, s0b = 80 * ds;       // turn-ins at 501 m (inside node 50) and 800 m
+  const toTurnIn = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const s = i * ds; let best = L;
+    for (const s0 of [s0a, s0b]) { let d = s0 - s; if (d < 0) d += L; if (d < best) best = d; }
+    toTurnIn[i] = best;
+  }
+  const t = { n, total: L, attackQ: new Float32Array(n), toTurnIn };
+  assert.equal(TL.attackAt(t, 50 * ds + 0.5).toTurnIn, 0.5, "before the turn-in inside the node: unchanged");
+  assert.equal(TL.attackAt(t, 50 * ds + 3).toTurnIn, s0b - (50 * ds + 3), "2 m past it: the NEXT turn-in, 297 m on");
+  assert.equal(TL.attackAt(t, 40 * ds + 4).toTurnIn, s0a - (40 * ds + 4), "an ordinary node: unchanged");
+  const wrapT = TL.attackAt(t, 80 * ds + 5).toTurnIn;
+  assert.equal(wrapT, L - (80 * ds + 5) + s0a, "past the last turn-in in its own node: round the lap to the first");
+});

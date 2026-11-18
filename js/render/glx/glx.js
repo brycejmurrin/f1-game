@@ -710,10 +710,10 @@ const GLXBackend = (function () {
         try {
           var _onVis = function () {
             if (document.hidden) return;
-            document.removeEventListener("visibilitychange", _onVis);
+            document.removeEventListener("visibilitychange", _onVis); canvas.__glxVisReload = false;
             try { location.reload(); } catch (_) { /* harness */ }
           };
-          document.addEventListener("visibilitychange", _onVis);
+          document.addEventListener("visibilitychange", _onVis); canvas.__glxVisReload = true;   // restore defers to it (#5699 row 16)
         } catch (_) { /* no document events: the restore handler below is the remaining path */ }
         return;
       }
@@ -744,8 +744,8 @@ const GLXBackend = (function () {
     }, false);
     // Restore obeys the same two-reload budget; storage failure must not skip reload.
     canvas.addEventListener("webglcontextrestored", function () {
-      var n = GfxEscalation.reloadCount();
-      if (n > 2) return;
+      if (document.hidden && canvas.__glxVisReload) return;   // the hidden loss's visibility reload covers it (#5699 row 16)
+      var n = GfxEscalation.reloadCount(); if (n > 2) return;
       if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);

@@ -153,3 +153,26 @@ test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
   assert.ok(i >= 0);
   assert.ok(game.slice(i, i + 400).includes('GfxEscalation.resetReloadBudget()'));
 });
+
+// #5699 row 16: a restore that lands while the tab is hidden reloaded at once (no document.hidden test) and uncounted.
+// It now shares the hidden loss's one deferred reload: nothing while hidden, one reload on the way back.
+test("GLX: a restore while hidden waits for the hidden loss's visibility reload — one reload, on return (#5699 row 16)", () => {
+  const h = bootGlx();
+  const doc = h.sandbox.document, vis = [];
+  let reloads = 0;
+  h.sandbox.location.reload = () => { reloads++; };
+  doc.hidden = true;
+  doc.addEventListener = (t, fn) => { if (t === "visibilitychange") vis.push(fn); };
+  doc.removeEventListener = (t, fn) => { const i = vis.indexOf(fn); if (i >= 0) vis.splice(i, 1); };
+  h.sandbox.sessionStorage.removeItem("apex26.ctxLostReloads");
+  h.loseContext();
+  h.restoreContext();
+  for (const timer of h.sandbox.__timers.splice(0)) timer();
+  assert.equal(reloads, 0, "nothing reloads behind a hidden tab");
+  assert.equal(vis.length, 1, "loss and restore share one visibility listener");
+  assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostReloads"), null, "a hidden loss spends no reload budget");
+  doc.hidden = false;
+  vis[0]();
+  assert.equal(reloads, 1, "the tab reloads once when it is visible again");
+  assert.equal(vis.length, 0);
+});

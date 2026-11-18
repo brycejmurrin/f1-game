@@ -2556,6 +2556,21 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
 
+// #5699 row 23: _gpuErrors/_gpuFirstMsg are module-scope (a failed create's post-mortem), and a second create kept the
+// first device's count: past GPU_ERR_LOG_CAP its errors never logged, and gpuFirstError named the old device's.
+test("a second WGX.create starts its GPU-error account clean (#5699 row 23)", async () => {
+  const h = makeGpuHarness();
+  const g1 = await h.create();
+  for (let i = 0; i < 9; i++) h.device.onuncapturederror({ error: { message: "first device " + i } });
+  assert.equal(h.WGX.gpuErrors(), 9);
+  try { g1.destroy && g1.destroy(); } catch (_) { /* harness */ }
+  const g2 = await h.create();
+  assert.equal(h.WGX.gpuErrors(), 0, "the new device starts at 0");
+  h.device.onuncapturederror({ error: { message: "second device" } });
+  assert.equal(h.WGX.gpuErrors(), 1);
+  assert.equal(g2.gpuFirstError(), "second device", "the first error named is the new device's");
+});
+
 test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () => {
   // Same ladder as device.lost: a default-rung boot climbs slim/minimal first.
   // Start on the minimal rung so the cap's destination is GLX, not a reload.

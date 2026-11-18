@@ -733,7 +733,10 @@
         // Disable only the pass that failed: S.enabled is the SUN flag (the sun map,
         // god-rays), and a car/lamp throw must not freeze it.
         if (target === carRT) S.carEnabled = false;
-        else if (target === lampRT || target === lampStaticRT) S.lampEnabled = false;
+        // The lamp STATIC cache is an optimisation: its failure drops the cache (the full lamp pass
+        // takes over), never the lamp shadow for the session (#5699 row 13).
+        else if (target === lampStaticRT) { lampStaticOn = false; _lampStaticValid = false; }
+        else if (target === lampRT) S.lampEnabled = false;
         else S.enabled = false;
         S.depthPassOn = false;
       } finally { renderer.autoClear = autoClear0; }

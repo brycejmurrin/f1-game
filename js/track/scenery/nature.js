@@ -199,7 +199,10 @@ const SceneryNature = (function () {
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (spotTaken(a.c[0], a.c[2])) return;
+      // PROBE, do not reserve: a pine the guards below (or the graph's whole-tree dry run) refuse must not hold its
+      // TREE_GAP spot or register facets, or it blocks and sinks neighbours that would have stood (#5699 row 18).
+      // The spot is reserved, and the facets registered, only once the tree has landed.
+      if (spotOccupied(a.c[0], a.c[2], false)) return;
       // The CROWN's radius from the pit complex, not the trunk's: crown tiers
       // may overhang the complex (js/track/tracks.js onRoadHit), so a pine a
       // def plants just behind the garages — Monza's poplars at the row —
@@ -219,7 +222,7 @@ const SceneryNature = (function () {
         out._mat = MAT.FOLIAGE;
         const landed = ctx.bakedModel("pine_lod0", k, side, dist, { height: h });
         out._mat = 0;
-        if (landed) return;
+        if (landed) { spotTaken(a.c[0], a.c[2]); return; }
       }
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
@@ -293,8 +296,7 @@ const SceneryNature = (function () {
         for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + Math.floor(i / 4) * 0.2;
       }
       if (dz) { o[1] -= dz; for (const F of facets) F[3] -= dz * F[1]; }
-      pineFacetsAdd(a.c[0], a.c[2], reach, facets);
-      ctx.instance(
+      const landed = ctx.instance(
         `pine|${sparse ? 1 : 0}|${tiers}|${leanQ}|${jQ}`,
         { o, r, u: a.u, t: a.t, s: [s, s, s], col },
         (rec) => {
@@ -312,6 +314,9 @@ const SceneryNature = (function () {
         },
         { kind: "pine", k, side, h });
       out._mat = 0;
+      if (!landed) return;
+      spotTaken(a.c[0], a.c[2]);
+      pineFacetsAdd(a.c[0], a.c[2], reach, facets);
     };
     // WIND SWAY: FOLIAGE emitted while out._matAt is set carries a per-vertex
     // weight in its material fraction (TrackGeom.swayMatAt): 0 at height y0 along

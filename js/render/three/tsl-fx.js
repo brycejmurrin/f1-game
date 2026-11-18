@@ -16,6 +16,10 @@
       positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
     } = TSL;
+    // DESCENDING smoothstep (edge0 > edge1 reads 1 below `hi`, 0 above `lo`) written as the ascending builtin
+    // flipped: GLSL ES 3.00 leaves smoothstep undefined for edge0 >= edge1 (#5699 row 8). Same value wherever
+    // the descending form was defined. tests/unit/tlx-hunt3.test.mjs refuses a literal descending call.
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
 
     // Shared FX render state: transparent, no depth write, depth test, and the
     // blend-stage alpha mask (dst alpha preserved — see header). additive ->
@@ -114,8 +118,8 @@
     })();
 
     const markFalloff = (uvv) =>
-      smoothstep(float(1.0), float(0.4), abs(uvv.x))
-        .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
+      smoothstepDown(float(1.0), float(0.4), abs(uvv.x))
+        .mul(smoothstepDown(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
 
     const markMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-mark" }));
     markMat.colorNode = vec3(0.0);

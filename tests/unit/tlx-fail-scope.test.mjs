@@ -27,11 +27,13 @@ const mk = () => {
   });
 };
 
-function boot() {
+function boot(opt = {}) {
   const state = { boom: false };
   const renderer = { backend: {}, getRenderTarget: () => null, setRenderTarget() {},
     render() { if (state.boom) throw new Error("depth pass boom"); }, autoClear: true };
-  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+  if (opt.lampStatic) renderer.copyTextureToTexture = () => {};
+  const ls = opt.lampStatic ? (k) => (k === "apex26.tlxLampStatic" ? "1" : null) : () => null;
+  const ctx = vm.createContext({ window: {}, localStorage: { getItem: ls }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile: false, softwareGL: false });
@@ -58,6 +60,18 @@ test("a throw in the LAMP depth pass disables the lamp pass only (M14)", () => {
   sys.lampShadowBegin(new Float32Array(16), 0);
   sys.lampShadowEnd();
   assert.equal(S.lampEnabled, false);
+  assert.equal(S.enabled, true);
+  assert.equal(S.carEnabled, true);
+});
+
+test("a throw in the lamp STATIC pass drops the static cache, never the lamp shadow (#5699 row 13)", () => {
+  const { sys, S, state } = boot({ lampStatic: true });
+  assert.equal(sys.lampStaticOn, true, "forced on: the static props cache is armed");
+  state.boom = true;
+  sys.lampStaticBegin(new Float32Array(16));
+  sys.lampStaticEnd();
+  assert.equal(sys.lampStaticOn, false, "the failing cache is retired");
+  assert.equal(S.lampEnabled, true, "the full lamp pass keeps the lamp shadow");
   assert.equal(S.enabled, true);
   assert.equal(S.carEnabled, true);
 });
