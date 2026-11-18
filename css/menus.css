@@ -816,24 +816,15 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
   margin: 0; flex: none;
 }
 
-/* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
-   --------------------------------------
-   A 1920x1080 display can use the complete 200% title composition; a 393x659
-   phone cannot. Before this split both got the same whole-subtree zoom. At 200%
-   the phone portrait showed the brand and the top edge of CAREER, and a real
-   Playwright click could not scroll RACE into view. Landscape showed CAREER and
-   halves of the first row. The declared geometry had doubled along with type.
-
-   Browser zoom belongs on this axis too: it reduces the CSS-pixel viewport, so
-   a 1920px monitor at 200% browser zoom enters this media query as roughly
-   960x540. Device-pixel ratio and render resolution do not; neither changes the
-   CSS viewport and neither should change menu geometry.
-
-   Geometry stops at 125%; text receives the residual multiplier. Viewport-unit
-   compensation must use that same geometry scale inside these two zoomed
-   children, otherwise their widths would still divide by the requested 200%
-   while they paint at 125%. The requested --ui-scale remains untouched for the
-   slider, sheet layouts and density classifier. */
+/* HIGH UI SIZE ON A CONSTRAINED VIEWPORT. A 1920x1080 display fits the whole
+   200% title; a 393x659 phone does not (at 200% portrait showed only the brand
+   and CAREER's top edge, and RACE could not be scrolled into view). Browser
+   zoom shrinks the CSS viewport, so a 1920px monitor at 200% enters this query
+   as ~960x540; DPR and render resolution do not and must not move geometry.
+   Geometry stops at 125%; text takes the residual multiplier. Viewport units
+   in these two zoomed children divide by that same geometry scale, else they
+   would divide by 200% while painting at 125%. --ui-scale stays untouched for
+   the slider, sheet layouts and density classifier. */
 @media (max-width: 899px), (max-height: 699px) {
   /* `* var(--tf, 1)` on both: the FIT (css/title.css, js/ui/title-layout.js,
      #5150) rides on whatever zoom a piece carries. The viewport units below
