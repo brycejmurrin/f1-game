@@ -27,8 +27,12 @@ const { scope } = require(path.join(ROOT, "tools/lib/circuit-scope.cjs"));
 // curvature (|k x spacing| >= 0.55: tangent-aimed, capped by design), so the
 // joint cannot meet without stretching a row across the apex. Measured; shrink
 // only. buddh k=759: its next station 761 reads |k x spacing| 3.4 (anchors
-// bunched behind the T4 hairpin) — 6 scaffold rows, 2.6-4.6 m.
-const FOLD_JOINTS = { buddh: [759] };
+// bunched behind the T4 hairpin) — 6 scaffold rows, 2.6-4.6 m. donington k=93
+// (2026-11-18, Bryce `decision: A` on #5303): the terrace's first station sits on
+// the INSIDE of a kink (arc 0.31, curveTier's `folded` guard on) next to k=95,
+// which bends the other way — 3 rows, 0.57-0.93 m (1.14-1.57 m on the pre-#5303
+// engine); the tip's start-line move (05371b6a) put a station there.
+const FOLD_JOINTS = { buddh: [759], donington: [93] };
 
 const USES = /\b(terrace|bleacher|scaffoldStand|tieredBowl)\(/;
 const ROSTER = scope(MANIFEST.CIRCUITS).filter((id) => {

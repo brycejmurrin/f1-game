@@ -43,6 +43,9 @@ const require = createRequire(import.meta.url);
 // where the phantom stand stood (mexico +17 trees, cota +2); and curved stand rows
 // span midpoint to midpoint instead of stopping short (#2204: fuji's back terraces
 // gapped up to 28.8 m). Compaction stays identical on every circuit.
+// 2026-11-18 (#5303, Bryce `decision: A`): hungaroring 213167 -> 214279 (+0.52 %). The
+// deploy tip alone measured 214232 (+0.4996 %); this PR's midpoint-to-midpoint stand
+// rows (stands.js, #2204) add the last 47 tris.
 // 2026-11-10 W5 (#5279): Magny-Cours 249802 -> 240416 (-3.8 %): the Adelaide and
 // Lycée kits moved onto their corners and three treeline/poplar runs were trimmed
 // clear of the relocated stands.
