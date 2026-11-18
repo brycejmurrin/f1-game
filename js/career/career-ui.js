@@ -1221,7 +1221,8 @@ function create(G) {
         el("span", "cr-record-cta", "COST " + I18n.n(st.budgetCost) + " cr  ·  LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
           + "  ·  CAP " + I18n.n(st.budget) + " cr" + shortNote(bShort)));
       cap.onclick = () => {
-        if (!Career.upgradeBudget()) return;
+        // Refused (save conflict, storage full): repaint from the save, which shows why (#5575).
+        if (!Career.upgradeBudget()) { if (G.soundOn) GameAudio.uiReject(); build(); return; }
         if (G.soundOn) GameAudio.uiSelect();
         build();
       };

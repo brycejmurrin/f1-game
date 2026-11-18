@@ -3256,7 +3256,7 @@ const G = {
     paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
-    announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
+    if (autoThrottleOpt) announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
   },
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
@@ -5115,7 +5115,7 @@ function updateCar(c, dt, ranked) {
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // the AI spends it on a car it can attack
+                      : (c.otArmed && raceCtl.level < 2 && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // on a car it can attack; never under a VSC (#5715: held to the delta, it buys nothing; the human still may)
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
                           _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
                           _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed, _aiOtFire.vTop = vT,
@@ -9103,12 +9103,10 @@ function openGarage(from) {
   // agree on all five fields.
   resetSetupCam();
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
-  // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
-  // the module cannot hold the helper itself. The build runs inside the
-  // transition callback — vt's 60 ms drop-safety applies it directly if the
-  // page is not compositing.
   // ENTRY FRAME: endHome() hides #game for the Home→garage gap; draw in the vt
   // callback but reveal only after renderSetupPreview succeeds (not while warming).
+  // Snapshot pseudos are click-through (css/tokens.css), but Chrome hit-tests <html>
+  // until the new frame is captured (seconds on software GL): that path skips vt.
   const revealGarageCanvas = () => {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
@@ -9119,7 +9117,9 @@ function openGarage(from) {
     try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
     try { if (renderSetupPreview(0)) revealGarageCanvas(); } catch (_) { /* mesh/warm may still be settling */ }
   };
+  const presentIsSlow = () => { try { const s = gfx.backendState && gfx.backendState(); return !!(s && (s.softwareGL || s.softAdapter)); } catch (_) { return false; } };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
+  else if (presentIsSlow()) enterGarage();
   else vt(enterGarage);
 }
 $("mb-garage").onclick = () => openGarage("menu");

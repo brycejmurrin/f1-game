@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * @doc One entry for the AI instruments: pace / field / tactics / line / human / ratings / band.
+ * @doc One entry for the AI instruments: pace / solo / field / tactics / line / human / ratings / band.
  * @skill ai-racecraft
  *
  * Dispatches to the measurement CLIs so agents have one name to remember:
  *
  *   node tools/check/ai-race.mjs pace  [--track monza] [--diff normal] [--json]
+ *   node tools/check/ai-race.mjs solo  [--track redbull,spa | --all] [--diff normal] [--laps 2] [--json]
  *   node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
  *   node tools/check/ai-race.mjs tactics [--track monza] [--laps 8] [--runs 5] [--mode human --pace 0.97]
  *   node tools/check/ai-race.mjs line  [--track monza]
@@ -20,7 +21,7 @@
  * anything about stints, pit windows or degradation. Opt in before it does.
  * `ratings` is data-only (no race, no --wear).
  *
- * Direct paths still work (`ai-pace.mjs` / `ai-field.mjs` / `ai-tactics.mjs` / `ai-line.mjs` /
+ * Direct paths still work (`ai-pace.mjs` / `ai-solo.mjs` / `ai-field.mjs` / `ai-tactics.mjs` / `ai-line.mjs` /
  * `ai-human.mjs` / `ai-ratings.mjs` / `ai-band.mjs`).
  * Not player physics — that is tune-physics.
  */
@@ -33,6 +34,7 @@ const cmd = (process.argv[2] || "").toLowerCase();
 const rest = process.argv.slice(3);
 const map = {
   pace: "ai-pace.mjs",
+  solo: "ai-solo.mjs",
   field: "ai-field.mjs",
   tactics: "ai-tactics.mjs",
   line: "ai-line.mjs",
@@ -49,6 +51,7 @@ if (!cmd || map[cmd] === null || !(cmd in map)) {
   console.log(`ai-race — AI field instruments (VM)
 
   node tools/check/ai-race.mjs pace    [args]   # lap-time median per difficulty
+  node tools/check/ai-race.mjs solo    [args]   # each car ALONE: solo best lap, spread, order vs tier x skill
   node tools/check/ai-race.mjs field   [args]   # spread / passes / dwell / clumps
   node tools/check/ai-race.mjs tactics [args]   # intervals (s), stuck, conversion, swap-backs, lap 1 (+ --mode human)
   # --repeat N is --runs N (spread across seeds)

@@ -533,3 +533,32 @@ jobs:
               "" \
               "Opened automatically by pages.yml verify-live.")" \
             --label area:tooling || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"
+
+  # THE TIP NEVER LOSES ITS TRAIN (#5530, 2026-11-16). The `pages-train-<ref>` group admits runs in the order
+  # GitHub evaluates them, not the order of their commits: two merges three seconds apart on 2026-11-11 entered
+  # in reverse, so the TIP's run (#5109, 240426c6) took the pending slot and its parent's run (#5108, 1c1ac46c)
+  # replaced it. No concurrency key can order two arrivals, so the run that survived checks, when it starts,
+  # whether the tip's own run was replaced while pending with nothing queued behind it, and dispatches one
+  # train for the tip (tools/ci/pages-rearm.mjs; the decision is pure and tests/unit/ci-pages-train.test.mjs
+  # replays that pair). The dispatched run is the group's one pending run: no merge waits for a deploy, and
+  # a newer push still replaces it. Never red: a failed lookup or dispatch is a warning, the cron the backstop.
+  # actions: write lives here only, for that one dispatch; the job runs no other repository code.
+  rearm:
+    name: Did the queue drop the tip's train?
+    needs: verdict
+    if: ${{ !cancelled() && needs.verdict.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci/pages-rearm.mjs
+          sparse-checkout-cone-mode: false
+      - name: Re-arm the train for the tip when its run was replaced while pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ci/pages-rearm.mjs --dispatch

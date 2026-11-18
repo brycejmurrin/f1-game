@@ -5,8 +5,8 @@ description: "Use when asked how workers get launched, why an issue was not pick
 
 # Dispatch — a GitHub Action, not a session
 
-Dispatch is `.github/workflows/dispatch.yml` running `tools/ci/dispatch.mjs` (cron plus issue / PR / check-suite /
-comment events, one concurrency group): it plans over GitHub state and `tools/ci/dispatch.json` (the caps), writes
+Dispatch is `.github/workflows/dispatch.yml` running `tools/ci/dispatch.mjs` (cron plus issue / comment events and
+`workflow_run` after CI or a Pages train, one concurrency group): it plans over GitHub state and `tools/ci/dispatch.json` (the caps), writes
 labels, digests, nudges and the Board comment (the issue titled `Board`) with `GITHUB_TOKEN`, fires Bryce's "Apex
 worker" scheduled task once per planned launch with a one-line address (`ISSUE n` / `CONTINUE PR n` / `DEPLOY-RED`),
 and posts the claim comment with the returned session id. The exact rules and line formats are the header of
@@ -25,6 +25,8 @@ session loads skill `steward` §Lane.
 A session that launches workers itself (`create_session`) while the Action is off writes its briefs from
 [`references/orchestrator-brief.md`](references/orchestrator-brief.md): what to check before a wave, the brief
 template, and what to send while workers run.
+Channels, `land` lanes, relayed grants and a shared phone, from a five-worker run:
+[`references/sibling-sessions.md`](references/sibling-sessions.md).
 
 ## Why was issue #n not picked up?
 1. `--plan` output: a `SKIP issue #n: <why>` line names the reason (open PR closing it, live claim, a cap reached,

@@ -611,25 +611,34 @@ const TrackMesh = (function () {
   function nodeGrid(track) {
     if (track._nodeGrid) return track._nodeGrid;
     const n = track.n, px = track.px, pz = track.pz, hw = track.hw;
-    const CELL = 10, OFFSET = 2048, STRIDE = 4096;   // numeric packed key, cf. glx.createChunkedMesh
-    const map = new Map();
-    let maxHw = 0;
+    const CELL = 10;
+    // Dense CSR over the centreline's own cell box (start[cell] .. start[cell + 1] into items, nodes ascending
+    // = the insertion order a per-cell array had): a wide query (a mountain's reach, a backdrop's margin) sweeps
+    // thousands of cells that hold nothing, and each was a Map miss (Monaco: 129 ms of a 925 ms build on that
+    // one lookup). Cells outside the box are empty by construction, so a query clamps to it.
+    let maxHw = 0, cx0 = Infinity, cx1 = -Infinity, cz0 = Infinity, cz1 = -Infinity;
     for (let k = 0; k < n; k++) {
       if (hw[k] > maxHw) maxHw = hw[k];
-      const key = (__M.floor(px[k] / CELL) + OFFSET) * STRIDE + (__M.floor(pz[k] / CELL) + OFFSET);
-      let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(k);
+      const cx = __M.floor(px[k] / CELL), cz = __M.floor(pz[k] / CELL);
+      if (cx < cx0) cx0 = cx; if (cx > cx1) cx1 = cx; if (cz < cz0) cz0 = cz; if (cz > cz1) cz1 = cz;
     }
+    if (!(cx1 >= cx0 && cz1 >= cz0)) { cx0 = cz0 = 0; cx1 = cz1 = -1; }   // no finite node: an empty box
+    const GH = cz1 - cz0 + 1, start = new Int32Array((cx1 - cx0 + 1) * GH + 1), items = new Int32Array(n);
+    const cellOf = (k) => (__M.floor(px[k] / CELL) - cx0) * GH + (__M.floor(pz[k] / CELL) - cz0);
+    for (let k = 0; k < n; k++) { const c = cellOf(k); if (c === c) start[c + 1]++; }
+    for (let c = 0; c < start.length - 1; c++) start[c + 1] += start[c];
+    { const fill = start.slice(); for (let k = 0; k < n; k++) { const c = cellOf(k); if (c === c) items[fill[c]++] = k; } }
     const grid = { maxHw };
     grid.query = (x, z, R, out, doSort) => {
       let cnt = 0;
       const x0 = __M.floor((x - R) / CELL), x1 = __M.floor((x + R) / CELL);
       const z0 = __M.floor((z - R) / CELL), z1 = __M.floor((z + R) / CELL);
-      for (let cx = x0; cx <= x1; cx++)
-        for (let cz = z0; cz <= z1; cz++) {
-          const arr = map.get((cx + OFFSET) * STRIDE + (cz + OFFSET));
-          if (!arr) continue;
-          for (let a = 0; a < arr.length; a++) out[cnt++] = arr[a];
-        }
+      const xa = x0 > cx0 ? x0 : cx0, xb = x1 < cx1 ? x1 : cx1, za = z0 > cz0 ? z0 : cz0, zb = z1 < cz1 ? z1 : cz1;
+      if (za > zb) return 0;
+      for (let cx = xa; cx <= xb; cx++) {
+        const row = (cx - cx0) * GH - cz0;
+        for (let a = start[row + za], e = start[row + zb + 1]; a < e; a++) out[cnt++] = items[a];
+      }
       if (doSort) for (let a = 1; a < cnt; a++) { const v = out[a]; let b = a - 1; while (b >= 0 && out[b] > v) { out[b + 1] = out[b]; b--; } out[b + 1] = v; }
       return cnt;
     };
@@ -653,8 +662,8 @@ const TrackMesh = (function () {
       }
       const aOk = ax0 <= ax1 && az0 <= az1, bOk = bx0 <= bx1 && bz0 <= bz1;
       if (!aOk && !bOk) return 0;
-      const cx0 = aOk ? (bOk ? __M.min(ax0, bx0) : ax0) : bx0, cx1 = aOk ? (bOk ? __M.max(ax1, bx1) : ax1) : bx1;
-      for (let cx = cx0; cx <= cx1; cx++) {
+      const qx0 = __M.max(cx0, aOk ? (bOk ? __M.min(ax0, bx0) : ax0) : bx0), qx1 = __M.min(cx1, aOk ? (bOk ? __M.max(ax1, bx1) : ax1) : bx1);
+      for (let cx = qx0; cx <= qx1; cx++) {
         const inA = aOk && cx >= ax0 && cx <= ax1, inB = bOk && cx >= bx0 && cx <= bx1;
         if (!inA && !inB) continue;
         // One cz interval, or two ascending ones (merged when they touch).
@@ -664,17 +673,12 @@ const TrackMesh = (function () {
           lo0 = fa ? az0 : bz0; hi0 = fa ? az1 : bz1; lo1 = fa ? bz0 : az0; hi1 = fa ? bz1 : az1;
           if (lo1 <= hi0 + 1) { if (hi1 > hi0) hi0 = hi1; lo1 = 1; hi1 = 0; }
         } else if (inA) { lo0 = az0; hi0 = az1; } else { lo0 = bz0; hi0 = bz1; }
-        const key0 = (cx + OFFSET) * STRIDE + OFFSET;
-        for (let cz = lo0; cz <= hi0; cz++) {
-          const arr = map.get(key0 + cz);
-          if (!arr) continue;
-          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
-        }
-        for (let cz = lo1; cz <= hi1; cz++) {
-          const arr = map.get(key0 + cz);
-          if (!arr) continue;
-          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
-        }
+        // Each cz interval clamped to the box; a row's cells are contiguous in items, so an interval is one run.
+        const row = (cx - cx0) * GH - cz0;
+        if (lo0 < cz0) lo0 = cz0; if (hi0 > cz1) hi0 = cz1;
+        if (lo0 <= hi0) for (let i = start[row + lo0], e = start[row + hi0 + 1]; i < e; i++) out[cnt++] = items[i];
+        if (lo1 < cz0) lo1 = cz0; if (hi1 > cz1) hi1 = cz1;
+        if (lo1 <= hi1) for (let i = start[row + lo1], e = start[row + hi1 + 1]; i < e; i++) out[cnt++] = items[i];
       }
       return cnt;
     };

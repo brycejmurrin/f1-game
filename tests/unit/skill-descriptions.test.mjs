@@ -12,6 +12,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
+import { ON_DEMAND_PATHS } from "../../tools/lib/generated-paths.mjs";
+import {
+  collectSkillReferenceFailures,
+  assertNotOwnedSetPresent,
+} from "./skills-references-exist.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SKILLS = path.join(ROOT, ".claude/skills");
@@ -167,6 +172,9 @@ test("every agent, skill, npm script, tool path and doc anchor the agent surface
     // tool paths (a placeholder or glob is allowed)
     for (const m of text.matchAll(/(?<![\w./-])(tools\/[\w./-]+\.(?:json|mjs|cjs|js|sh|py))(?![\w])/g)) {
       if (/[<*{]/.test(m[1])) continue;
+      // An ON_DEMAND_PATHS file is real but gitignored: its reader builds it (ensure-built --with), so a fresh
+      // checkout lacks it until then. It resolves by being on that list, never by a stray local copy.
+      if (ON_DEMAND_PATHS.includes(m[1])) continue;
       if (!fs.existsSync(path.join(ROOT, m[1])) && !NEGATED.test(lineOf(m.index))) bad.push(`${at(m.index)}: ${m[1]} does not exist`);
     }
     // doc anchors: a docs file followed by §Heading or #slug
@@ -186,4 +194,16 @@ test("every agent, skill, npm script, tool path and doc anchor the agent surface
     }
   }
   assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+// Skills-audit path/npm gate (logic in skills-references-exist.mjs). A dedicated
+// skills-references-exist.test.mjs needs a tests/groups.json row; that path is
+// FORBIDDEN / multi-owned on this tip, so the suite rides skill-descriptions.
+test("owned skill markdown paths and npm scripts resolve", () => {
+  const bad = collectSkillReferenceFailures(SCRIPTS);
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("skills-audit NOT OWNED allowlist paths still exist on tip", () => {
+  assert.deepEqual(assertNotOwnedSetPresent(), [], "NOT OWNED skill paths missing on tip");
 });

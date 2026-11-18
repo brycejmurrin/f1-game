@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { readProfile } from "../../tools/lib/bryce-phone.mjs";
 
 test.describe.configure({ mode: "parallel" });
 
@@ -711,7 +712,12 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
 // ROOMY turned the sheet normal, which paired it at 657 own px (a 73-115 px left pane) and at
 // 552 left no scroller at all. On a phone-sized window ROOMY is a request the box clamps: the
 // sheet stays compact, the panes stack, #cr-body is the one scroller, the foot never moves.
-const OWNER_EXPORT = JSON.parse(await readFile(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+// #5580: the export stores no UI SIZE, so a phone reads the shipped 70 % (#5358) and the cells measure THAT layout.
+// At 0.7 the sheet has 520 own px in A and 534 in D, over its --compact-at 480, so it went NORMAL there (head 85.2
+// painted px); the short-touch gate in css/overlays.css holds it compact. Limits that were own px for 1.09 are
+// painted px now (probe 2026-11-16, 0.7 | 1.09): foot 56 | 58.2; head 62.5 | 94.8; body 243.5 in A (218.5 normal).
+// the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
 const CONTRACT_WINDOWS = [
   { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
   { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
@@ -721,7 +727,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("ROOMY is clamped: compact, stacked, one scroller, the foot on screen", async ({ page }) => {
     await boot(page);
-    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -742,10 +748,11 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
         density: inner.dataset.density, pair: inner.dataset.pair, compactAt: getComputedStyle(inner).getPropertyValue("--compact-at").trim(),
         pairAt: getComputedStyle(inner).getPropertyValue("--pair-at").trim(),
         bodyOverflowY: getComputedStyle(body).overflowY, bodyDisplay: getComputedStyle(body).display, scrollers,
-        footPastSheet: +(fr.bottom - ir.bottom).toFixed(1), footOnScreen: fr.top >= 0 && fr.bottom <= innerHeight + 0.5, footOwnH: +(fr.height / z(inner)).toFixed(1),
-        goPaintedH: +gr.height.toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5,
+        footPastSheet: +(fr.bottom - ir.bottom).toFixed(1), footOnScreen: fr.top >= 0 && fr.bottom <= innerHeight + 0.5, footPaintedH: +fr.height.toFixed(1),
+        footBtns: [...foot.querySelectorAll("button")].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return { id: b.id, top: Math.round(r.top), h: +r.height.toFixed(1) }; }),
+        sheetOwnH: +(ir.height / z(inner)).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5,
         head: (() => { const h = $("cr-header"), tb = $("cr-titlebar"), m = $("cr-meters"); const hr = h.getBoundingClientRect();
-          return { ownH: +(hr.height / z(inner)).toFixed(1), cols: getComputedStyle(h).gridTemplateColumns.split(" ").length,
+          return { paintedH: +hr.height.toFixed(1), cols: getComputedStyle(h).gridTemplateColumns.split(" ").length,
             overflow: Math.max(h.scrollWidth - h.clientWidth, tb.scrollWidth - tb.clientWidth, m.scrollWidth - m.clientWidth),
             metersBesideTitle: m.getBoundingClientRect().left >= tb.getBoundingClientRect().right - 1,
             clippedChips: [...h.querySelectorAll(".sel-chip")].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent.trim()) }; })(),
@@ -753,9 +760,9 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
     });
     const tag = win.name + ": ";
     expect(cell.look, tag + "the export's career density is ROOMY").toBe("roomy");
-    expect(cell.ui, tag + "the export's UI SIZE").toBe("1.09");
-    expect(cell.density, tag + "ROOMY never lifts compact on a phone-sized window").toBe("compact");
-    expect(cell.compactAt, tag + "the roomy --compact-at: 1px block is gated off the phone").toBe("480px");
+    expect(cell.ui, tag + "the export stores no UI SIZE: the shipped phone 70 %").toBe("0.7");
+    expect(cell.density, tag + "a phone-sized window is compact at every UI SIZE (" + cell.sheetOwnH + " own px), ROOMY or not").toBe("compact");
+    expect(cell.compactAt, tag + "the roomy --compact-at: 1px block is gated off the phone; the short-touch gate holds compact").toBe("99999px");
     expect(cell.pairAt, tag + "the pair threshold is a desk/tablet value").toBe("99999px");
     expect(cell.pair, tag + "the panes stack").not.toBe("on");
     expect(cell.bodyDisplay, tag + "#cr-body is the stacked flex column").toBe("flex");
@@ -764,14 +771,18 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
     expect(cell.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
     expect(cell.footPastSheet, tag + "the foot ends inside the sheet").toBeLessThanOrEqual(0.5);
     expect(cell.footOnScreen, tag + "the foot is on screen").toBe(true);
-    expect(cell.footOwnH, tag + "a one-row foot").toBeLessThanOrEqual(60);
+    expect(cell.footBtns.map((b) => b.id), tag + "the foot's three buttons").toEqual(["cr-back", "cr-garage", "cr-go"]);
+    expect(new Set(cell.footBtns.map((b) => b.top)).size, tag + "a one-row foot: " + JSON.stringify(cell.footBtns)).toBe(1);
+    expect(cell.footPaintedH, tag + "a one-row foot, painted (was 60 own px at 1.09 = 65.4 painted)").toBeLessThanOrEqual(60);
     expect(cell.goPaintedH, tag + "GO RACING paints the WCAG floor").toBeGreaterThanOrEqual(44);
+    // #5580: before the gate the normal-density foot at 0.7 painted GO RACING 44.2 beside 52 px exits (--tap vs --tap-paint).
+    expect(cell.goPaintedH, tag + "the primary is never shorter than its exits").toBeGreaterThanOrEqual(Math.max(...cell.footBtns.map((b) => b.h)) - 0.5);
     // #5153 gap 16: the BROADCAST LINE (title, team, three meters on one row) fires on every owner window — it keyed on
     // 660 own px and never fired in A (head 116 own); now from 500, away from the 640-760 phone band (contract rule 6).
     expect(cell.head.cols, tag + "title | meters on one row").toBe(2);
     expect(cell.head.metersBesideTitle, tag + "the meters sit beside the title").toBe(true);
     expect(cell.head.overflow, tag + "the broadcast line fits its row (no horizontal overflow)").toBeLessThanOrEqual(0);
     expect(cell.head.clippedChips, tag + "every jump chip reads whole").toEqual([]);
-    expect(cell.head.ownH, tag + "a thin head (measured 87 own; was 116 in A)").toBeLessThanOrEqual(100);
+    expect(cell.head.paintedH, tag + "a thin head, painted (was 100 own px at 1.09 = 109 painted; measured 62.5)").toBeLessThanOrEqual(100);
   });
 });

@@ -730,7 +730,6 @@ export const GENERATED_FILES = Object.freeze({
   "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
   "tools/README.md": { source: "tools/**/@doc headers", always: true },
   "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
-  "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },
   "version.json": { source: "tools/ci/bump-cache.mjs", always: true },
   "index.html": { source: "tools/manifest.cjs", blocks: true },
   "sw.js": { source: "tools/manifest.cjs", blocks: true },
@@ -886,7 +885,7 @@ export function selectSyncMerge(paths, opts = {}) {
 /** Wall-time estimate above which --changed prints the background-with-log hint. */
 export const LONG_RUN_MS = 120_000;
 export const LONG_RUN_HINT =
-  "Long run: run in the background with a log, e.g. nohup npm run test:tooling-fast -- --changed > artifacts/logs/tooling-fast.log 2>&1 & (tool cap is 600 s)";
+  "Long run: run it as ONE background task logging to artifacts/logs/ (AGENTS.md rule 4), e.g. node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet > artifacts/logs/tooling-fast.log 2>&1 (tool cap is 600 s)";
 
 /** Content lines of a unified diff (added/removed only; ignores ---/+++ headers). */
 export function unifiedDiffContentLines(diffText) {

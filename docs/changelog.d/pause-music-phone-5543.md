@@ -1,0 +1,1 @@
+Fixed: the pause menu on a landscape phone shows the song again, as one line with previous / play-pause / next under the doors. With MUSIC on but master sound off it reads "Sound off" and ▶ turns sound on.
