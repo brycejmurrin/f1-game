@@ -32,7 +32,7 @@ Node VM only, no browser.
 4. Improved = at the slow `v` rows, `yaw` rises (or `uF` falls) for the same `steer`, and `uR` stays below saturation
    (rear not the new limit). `skidpad` is steady state and `stepSteer` (`rise_ms`) runs at one high speed only, so "snappier" at slow speed
    is proven as more steady-state yaw, not a faster rise; no slow-speed transient probe exists (a scratch step at `reset(20-30)` copying that block would add one). Report the before/after rows; never assert absolute magnitudes.
-5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold). Browser proof runs on CI: push, then
-   `node tools/ci/remote-group.mjs physics-core` (or `aero` for `understeer-cue.spec.js`); SKILL.md has the mapping.
+5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold). Browser proof runs on CI: push, and the
+   PR's own CI runs `physics-core` (or `aero` for `understeer-cue.spec.js`); SKILL.md has the mapping.
 6. Landing a winner: `setPhysics` is an A/B only; land it where SKILL.md says the defaults live (input-controls owns the
    sliders). Report the win for the phone car and the desktop car separately.

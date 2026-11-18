@@ -11,6 +11,7 @@ import path from "node:path";
 import {
   ARTIFACT_PREFIX,
   ANCESTOR_PACK_LIMIT,
+  revListArgs,
   GITHUB_API_MAX_ATTEMPTS,
   githubApi,
   isGithub5xx,
@@ -216,7 +217,13 @@ test("listPackArtifacts without name walks ancestors via exact ?name= (no repo-w
       && parsed.searchParams.get("name")
       && parsed.searchParams.get("page") == null;
   }), "must never hit unfiltered /actions/artifacts?page=");
-  assert.equal(ANCESTOR_PACK_LIMIT, 20);
+  assert.equal(ANCESTOR_PACK_LIMIT, 40);
+});
+
+// First parents from the wanted sha: walking every parent spent the budget on
+// merged branch commits, which never carry a pack (#5712).
+test("the ancestor walk is first-parent from the wanted sha", () => {
+  assert.deepEqual(revListArgs("abc123", ANCESTOR_PACK_LIMIT), ["rev-list", "--first-parent", "-n40", "abc123"]);
 });
 
 test("listAncestorShas falls back to commits API when git only has the tip", async () => {

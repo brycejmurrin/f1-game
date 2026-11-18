@@ -31,7 +31,7 @@ brief adds only task facts.
 ASK (Bryce's words, with the time): "<quote>"
 TASK: <the one unit; what a player or an agent would see when it is done>
 EVIDENCE: <the measurement or repro, its command, the precedent PR to copy>
-STATE: head <sha> at <time>; open PRs that touch the same paths: <list>; decisions already made: <comment URLs>
+STATE: head <sha> at <time>; open PRs that touch the same paths (shared, not a blocker: D-033): <list>; decisions already made: <comment URLs>
 PROFILE (phone UI only): newest `tests/data/settings-live-export-*.json`, dated <date>; quote it, do not trust a
   number in this brief over that file [16]
 HUMAN STEPS ARRANGED: <e.g. "config-ok: send me the head sha once pushed"> | none
@@ -50,7 +50,7 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
   message. After a shared cure lands, each PR syncs once [4, 5].
 - What needs Bryce goes in ONE list, first line first, each entry a link and the exact `decision:` line or label
   [8, 10]. Worker status does not go to Bryce.
-- Never recommend cancelling a run, to a worker or to Bryce [17].
+- Never tell a worker to cancel, re-run or dispatch a run [17]; your own CI acts follow skill `steward` §CI (logged).
 - A refusal by a hook or the classifier is reported as facts and routed to Bryce with the session link; nobody, the
   orchestrator included, redoes the refused effect by another tool [10].
 - A goal the session cannot finish alone (it waits on Bryce, CI or another session) is answered once with the list

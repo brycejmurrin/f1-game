@@ -83,6 +83,16 @@ test("StormFlash in the rain: a strike sets exposure FROM the base, thunder foll
   assert.ok(Math.abs(thunder[0] - (1 - (1.2 - 1) / 5)) < 1e-12, "thunder volume from the DRAWN delay: " + thunder[0]);
 });
 
+test("GradeTint wet paint is never less lacquered than dry (#4751 row 14, decision A): every clearcoat base, scaled by LT", () => {
+  const GradeTint = load("../../js/fx/grade-tint.js", "GradeTint", {
+    M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
+  });
+  const bases = ["PAINT_WET_NIGHT", "PAINT_WET_DAY", "PAINT_DRY_NIGHT", "PAINT_DRY_DAY"];
+  assert.deepEqual(bases.map((k) => GradeTint[k].clearcoat), [1.0, 1.0, 1.0, 0.9]);
+  const LT = { carGloss: 1, carMetal: 1, carSpecular: 1, carClearcoat: 0.86, carGlow: 1 };   // a shipped preset's carClearcoat
+  assert.deepEqual(bases.map((k) => GradeTint.carPaint(GradeTint[k], LT).clearcoat), [0.86, 0.86, 0.86, 0.9 * 0.86]);
+});
+
 test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk latch on a rising edge", () => {
   const GradeTint = load("../../js/fx/grade-tint.js", "GradeTint", {
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
