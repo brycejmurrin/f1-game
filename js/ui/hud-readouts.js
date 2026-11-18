@@ -339,7 +339,9 @@ const HudReadouts = (function () {
       const d = b >= a ? c.t - (a + (b - a) * (c.p / step - i)) : at(back, i) - a;
       return d >= 0 ? d : NaN;
     }
-    return { sample, gap, reset: () => cars.clear() };
+    /** gap(front, back), or `fallback` while there is none (distance ÷ speed until both cars cross a line). */
+    const gapOr = (front, back, fallback) => { const g = gap(front, back); return g >= 0 ? g : fallback; };
+    return { sample, gap, gapOr, reset: () => cars.clear() };
   }
 
   // GAP_FINE_LT stays module-local (gapDecimals only).

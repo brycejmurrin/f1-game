@@ -422,8 +422,7 @@ function gapForm() {
 function gapText(slot, gap, arrow, o, dist, vFloor) {
   const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
   if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, slot ? -n : n, gap === _gapFormShort); }
-  const t = _gapClk ? (slot ? _gapClk.gap(G.player, o) : _gapClk.gap(o, G.player)) : NaN;   // a time gap at a line (#5678)
-  return gap(arrow, o.code, gapSec(slot, o, t >= 0 ? t : dist / vFloor));
+  return gap(arrow, o.code, gapSec(slot, o, _gapClk ? _gapClk.gapOr(slot ? G.player : o, slot ? o : G.player, dist / vFloor) : dist / vFloor));   // time at a line (#5678)
 } const _gapClk = _ro && _ro.gapClock ? _ro.gapClock() : null;
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
@@ -1123,8 +1122,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
     // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
     // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
-    const bz = vpW() > vpH() && !document.body.classList.contains("desktop") ? 1   // landscape touch: the real 44 px pair; the plate is pinned (css/hud.css, #5256), capRow clears it
-      : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    // Landscape touch: the real 44 px pair; the plate is pinned (css/hud.css, #5256), capRow clears it.
+    const bz = vpW() > vpH() && !document.body.classList.contains("desktop") ? 1 : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
     const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
