@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parkKey, parkPasses, baselineCell, uboFlat, compareParkBaseline, collectBaseline, PARK_MEMORY_KEYS } from "../../tools/gfx/pass-census-lib.mjs";
+import { parkKey, parkPasses, baselineCell, uboFlat, compareParkBaseline, collectBaseline, staleParkNotice, PARK_ADAPTER, PARK_MEMORY_KEYS } from "../../tools/gfx/pass-census-lib.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Rows as the page records them: [pass key, draw calls, triangles] per top-level render().
@@ -87,4 +87,26 @@ test("the committed baseline, when present, was built by --collect from a cited 
   const b = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(typeof b.source.run === "string" && b.source.run.length > 0 && typeof b.source.sha === "string" && b.source.sha.length >= 7, true);
   for (const [key, cell] of Object.entries(b.cells)) assert.deepEqual(compareParkBaseline(b, key, cell), { status: "ok", diffs: [] });
+});
+
+// #5535: Monaco's park held 158,237 output triangles after #5511 moved T2's boards out of view (158,177 measured).
+// A drop is a diff like a rise, and a diff is reported as its own failure naming the park's provenance, the measured
+// count and the regeneration command, so a stale park cannot pass for noise in a continue-on-error job.
+test("a park that drifted, up or down, is reported as a stale park or regression with the measured number", () => {
+  const key = "monaco|chase|desktop|webgpu|at0.1", mem = { renderTargets: 14 };
+  const park = { source: { run: "42979924558", sha: "d2bb399ce726e28e5716775fbbffb957449e4d9a" },
+    cells: { [key]: { passes: { "output 640x360": { calls: [29, 29], tris: [158237, 158237] } }, memory: mem } } };
+  const measured = { passes: { "output 640x360": { calls: [29, 29], tris: [158177, 158177] } }, memory: mem };
+  const cmp = compareParkBaseline(park, key, measured);
+  assert.deepEqual(cmp, { status: "diff", diffs: ['pass "output 640x360" tris [158177,158177] != baseline [158237,158237]'] });
+  assert.equal(staleParkNotice(park, key, cmp, { run: "43103297534", sha: "7e490eb7" }),
+    "STALE PARK OR REGRESSION monaco|chase|desktop|webgpu|at0.1: this tree draws differently from the park collected at "
+    + 'd2bb399ce7 (run 42979924558): pass "output 640x360" tris [158177,158177] != baseline [158237,158237]. A regression: '
+    + "fix the change. An intended change (or one already merged on the tip): regenerate, never hand-edit: download this "
+    + "run's perf-census-webgpu artifact to DIR, then node tools/gfx/pass-census-lib.mjs --collect DIR --run 43103297534 "
+    + "--sha 7e490eb7 > tests/data/pass-census-park.json");
+  const up = { passes: { "output 640x360": { calls: [29, 29], tris: [158300, 158300] } }, memory: mem };
+  assert.equal(compareParkBaseline(park, key, up).status, "diff", "a rise is a diff too");
+  assert.equal(staleParkNotice(park, key, compareParkBaseline(park, key, park.cells[key])), "", "a matching park has no notice");
+  assert.equal(PARK_ADAPTER, "perf-census-webgpu.yml on ubuntu-latest; adapterInfo vendor google, architecture swiftshader (software WebGPU)");
 });
