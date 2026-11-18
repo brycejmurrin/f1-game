@@ -251,6 +251,11 @@ const LightStore = (() => {
       const d = TUNE_DEFS.find((t) => t.id === id);
       if (!d || typeof v !== "number" || !isFinite(v)) return false;
       v = clamp(v, d.min, d.max);
+      // Skip liveEffects when the live value did not move: a no-op slider tick
+      // (or a panel re-write of the current number) used to re-run
+      // applyRaceSettings / null track._lights / re-seed rain every time —
+      // lighting applied twice for one setting.
+      const changed = LT[id] !== v;
       LT[id] = v;
       const k = keyFor(id, key());
       if (k) {
@@ -258,7 +263,7 @@ const LightStore = (() => {
         put(prof, k, d, v);
         if (!Object.keys(prof).length) delete profiles[k];
       }
-      liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
+      if (changed) liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
       return true;
     }
 

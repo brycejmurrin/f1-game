@@ -7319,6 +7319,7 @@
         "tests/unit/car-fx.test.mjs"
       ],
       "rainActive": [
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
