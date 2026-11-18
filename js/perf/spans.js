@@ -33,10 +33,12 @@ const PerfSpans = (() => {
     const spans = Object.create(null);
     let on = false, measure = false;
     let loafObs = null, loafSupported = null;
-    // Fixed LoAF ring: shifting the array on every overflow was O(LOAF_CAP) and
-    // the observer callback already allocates the scripts array; keep writes O(1).
+    // Fixed LoAF ring: shifting the array on every overflow was O(LOAF_CAP).
+    // Top-script picks reuse loafScriptScratch so a LoAF callback avoids
+    // .map().sort().slice() allocating a full scripts array each time.
     const loafBuf = new Array(LOAF_CAP);
     let loafHead = 0, loafLen = 0;
+    const loafScriptScratch = new Array(LOAF_SCRIPTS);
 
     function slot(name) {
       return spans[name] || (spans[name] = { buf: new Float64Array(RING), n: 0, head: 0, max: 0, sum: 0, count: 0, t0: -1, measures: 0 });
@@ -78,9 +80,35 @@ const PerfSpans = (() => {
         if (!loafSupported) return;
         loafObs = new PerformanceObserver((list) => {
           for (const e of list.getEntries()) {
-            const scripts = (e.scripts || []).map((x) => ({
-              sourceURL: x.sourceURL || "", sourceFunctionName: x.sourceFunctionName || "", duration: Math.round(x.duration * 10) / 10,
-            })).sort((a, b) => b.duration - a.duration).slice(0, LOAF_SCRIPTS);
+            const raw = e.scripts || [];
+            for (let i = 0; i < LOAF_SCRIPTS; i++) loafScriptScratch[i] = null;
+            let kept = 0;
+            for (let i = 0; i < raw.length; i++) {
+              const x = raw[i];
+              const d = Math.round(x.duration * 10) / 10;
+              let slot = kept < LOAF_SCRIPTS ? kept : -1;
+              if (slot < 0) {
+                let worst = 0;
+                for (let j = 1; j < LOAF_SCRIPTS; j++) {
+                  if (loafScriptScratch[j].duration < loafScriptScratch[worst].duration) worst = j;
+                }
+                if (d <= loafScriptScratch[worst].duration) continue;
+                slot = worst;
+              }
+              loafScriptScratch[slot] = {
+                sourceURL: x.sourceURL || "",
+                sourceFunctionName: x.sourceFunctionName || "",
+                duration: d,
+              };
+              if (kept < LOAF_SCRIPTS) kept++;
+            }
+            // Copy out of scratch: the next LoAF reuses those slots.
+            const scripts = new Array(kept);
+            for (let i = 0; i < kept; i++) {
+              const s = loafScriptScratch[i];
+              scripts[i] = { sourceURL: s.sourceURL, sourceFunctionName: s.sourceFunctionName, duration: s.duration };
+            }
+            scripts.sort((a, b) => b.duration - a.duration);
             loafBuf[loafHead] = { start: Math.round(e.startTime), duration: Math.round(e.duration * 10) / 10, blockingDuration: Math.round((e.blockingDuration || 0) * 10) / 10, scripts };
             loafHead = (loafHead + 1) % LOAF_CAP;
             if (loafLen < LOAF_CAP) loafLen++;
