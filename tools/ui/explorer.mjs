@@ -160,8 +160,9 @@ export async function main(argv = process.argv.slice(2)) {
   if (opts.help) { console.log(HELP); return 0; }
   if (opts.list) { console.log(JSON.stringify({ modes: MODE_TITLES, missions: MISSIONS.map(({ id, goal }) => ({ id, goal })), screens: SCREENS.map(({ id, root }) => ({ id, root })) }, null, 2)); return 0; }
   if (opts.command === "brief") {
-    if (!opts.url) throw new Error("brief requires --url reachable from the hosted browser; localhost is not shared automatically");
-    const mission = MISSIONS.find((m) => m.id === opts.mission); if (!mission) throw new Error("Unknown --mission");
+    // Invalid invocations exit 2, as the help promises (#5712); a throw here exited 1.
+    if (!opts.url) { console.error("brief requires --url reachable from the hosted browser; localhost is not shared automatically"); return 2; }
+    const mission = MISSIONS.find((m) => m.id === opts.mission); if (!mission) { console.error("Unknown --mission"); return 2; }
     console.log(JSON.stringify(missionBrief(mission, opts.url), null, 2)); return 0;
   }
   if (opts.command === "summarize") {

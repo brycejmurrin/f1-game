@@ -234,12 +234,37 @@ test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
   assert.ok(contact);assert.equal(contact.penLong,4.8-1);assert.equal(contact.penLat,2-.5);
   // D·DP7: unyawed pairs take the LCAR/WCAR closed form — zero trig, same pens.
   assert.equal(calls,0,`unyawed pair still paid extent trigonometry: ${calls}`);
-  // Extents intentionally use yawVis || 0; bodyAngle separately rejects
-  // infinity. Reusing bodyAngle here would silently change this contract.
+  // extentAngle shares bodyAngle's Number.isFinite gate: Infinity is not a
+  // yaw, so the pair stays on the unyawed closed form (finite pens). The old
+  // `yawVis || 0` kept Infinity and wrote NaN into penLong/penLat.
   a.yawVis=Infinity;
   const nonfinite=collision.pairContact(a,b);
-  assert.ok(nonfinite);assert.ok(Number.isNaN(nonfinite.penLong));assert.ok(Number.isNaN(nonfinite.penLat));
+  assert.ok(nonfinite);assert.equal(nonfinite.penLong,4.8-1);assert.equal(nonfinite.penLat,2-.5);
   assert.equal(nonfinite.oriented,false);
+});
+
+// Infinity yawVis used to NaN both cars' prog/s through extentAngle → pairContact
+// → rear-end correction (cos/sin(Infinity)). Fixed dt, seeded poses.
+test("Infinity yawVis does not NaN car positions",()=>{
+  const {collision}=setup(),a=car(0,30),b=car(4,0,.5);
+  a.human=true;a.yawVis=Infinity;
+  collision.resolveCollisions([a,b],1/60);
+  assert.ok(Number.isFinite(a.prog)&&Number.isFinite(a.s)&&Number.isFinite(a.x),`a became nonfinite: prog=${a.prog} s=${a.s} x=${a.x}`);
+  assert.ok(Number.isFinite(b.prog)&&Number.isFinite(b.s)&&Number.isFinite(b.x),`b became nonfinite: prog=${b.prog} s=${b.s} x=${b.x}`);
+});
+
+// A large heading change in one step used to set sweepEligible=false and skip
+// the whole sweep, so a fast car at low fps tunnelled through a parked rival.
+// Twist now falls back to an axis-aligned TOI instead of skipping.
+test("a large yaw step at low fps still catches a swept contact",()=>{
+  const {collision,G}=setup(),a=car(0,600),b=car(9,0);
+  a.human=true;a.yawVis=0.7;
+  collision.resolveCollisions([a,b],0.05);
+  a.prog=a.s=30;a.yawVis=0.9;G.raceT=0.05;
+  collision.resolveCollisions([a,b],0.05);
+  assert.ok(a.prog<b.prog,`tunnelled at 20 fps: a at ${a.prog}, b at ${b.prog}`);
+  assert.ok(b.prog-a.prog>2,`pair still heavily overlapped: gap=${b.prog-a.prog}`);
+  assert.ok(Number.isFinite(a.prog)&&Number.isFinite(b.prog));
 });
 
 // parkedAhead used to keep the minimum signed arc, so the retirement furthest

@@ -19,9 +19,9 @@ Prose-only change (`docs/`, `*.md`): skip 1 and 3, run `node --test tests/unit/d
 tests/unit/agent-config.test.mjs`.
 
 ## Verification — scale it to the change
-What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser tests (rule 5): each draft
-head gets the fast tier plus a selected browser shard, and `node tools/ci/remote-group.mjs <group>`
-runs a whole group on the pushed branch.
+GitHub writes go by MCP, never `gh`. What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser
+tests (rule 5): each draft head gets the fast tier plus a selected browser shard; a whole group
+(`remote-group.mjs`) is Bryce's opt-in.
 
 Session rules (numbers are cited across the repo; a (hook) rule is refused by that hook, whose message says what to
 do instead).
@@ -89,8 +89,8 @@ WGX implement it. Skill `asset-pack`.
 
 ## Git branch & deploy
 Work on the branch you were assigned (`claude/*` in a cloud session), else `cursor/<topic>-<hash>`. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
-ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. A path in an
-open PR's diff belongs to that PR until it merges or closes. A red, a sync, a conflict, opening, flipping ready,
+ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. Paths shared
+with an open PR are fine: work in parallel (D-033). A red, a sync, a conflict, opening, flipping ready,
 `land`: skill `steward`. "Is it live?": skill `check`.
 
 ## Coordination
