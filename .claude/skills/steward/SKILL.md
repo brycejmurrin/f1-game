@@ -19,9 +19,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 (`issue_read` / `pull_request_read`); the Plan and the Hand-off block are the whole brief.
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
-   stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`gh api -X
-   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list
-   (`github-mcp-guard.sh` refuses one that drops `config-ok`, `hold`, `land` or `needs-decision`).
+   stand down. Labels ONLY through MCP `issue_write`: the live list plus or minus ONE name ([`references/labels.md`](references/labels.md);
+   `github-mcp-guard.sh` refuses any other list); never `gh`.
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
@@ -51,8 +50,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
    `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
    --pr`: it opens a READY PR without the template body.
-3. Labels with `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=lane:<host>'` — never the MCP `labels`
-   field. Every draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
+3. Add `lane:<host>` (the one-label recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
+   draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
 
 ## Push
 
@@ -79,8 +78,10 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. A red
    deploy branch is claimed through the Board and fixed by a PR; the deploy branch is never pushed to. Before
    opening a tip fix, list the open PRs of the last hour that name the failing test or carry `deploy:red`; if one
-   exists, comment there instead of opening a second. A path in an open PR's diff belongs to that PR until it merges
-   or closes.
+   exists, comment there instead of opening a second. A path in another open PR's diff is NOT a blocker (D-033):
+   edit it in parallel, keep the hunks small and list the open PRs that share files in the PR body. The PR that
+   merges second syncs through `sync-pr.mjs` (§Red 5) and resolves the conflict in that merge commit, never by a
+   force-push or a rebase.
 4. Fix on the branch, verify at the floor (§Push), ONE push. A flake: AGENTS.md rule 9 (quarantine by name in
    `tests/data/flaky-quarantine.json`). A job that FAILED (infra, setup, timeout) is never re-run on a PR that must
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
@@ -99,8 +100,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    on a dirty PR starts no CI.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
-3. GitHub MCP `update_pull_request` with `draft: false`, then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f
-   'labels[]=land'`.
+3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
+   [`references/labels.md`](references/labels.md)).
 4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by

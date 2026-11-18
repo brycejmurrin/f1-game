@@ -148,6 +148,27 @@ function backendInitScript(pick, o) {
   return lines.join("\n");
 }
 
+/** The selected page's id in a `## Pages` listing ("3: http://… [selected]"), else the last one listed. */
+function pageIdFrom(result) {
+  for (const block of (result && result.content) || []) {
+    if (block.type !== "text") continue;
+    const rows = [];
+    for (const l of String(block.text || "").split("\n")) {
+      const m = /^(\d+):/.exec(l.trim());
+      if (m) rows.push([Number(m[1]), l.includes("[selected]")]);
+    }
+    const sel = rows.find((r) => r[1]);
+    if (sel) return sel[0];
+    if (rows.length) return rows[rows.length - 1][0];
+  }
+  return null;
+}
+/** Does this call need a pageId filled in: its schema takes one, it is not a page-listing tool, and none was given. */
+function withPageId(name, args, schemaOf) {
+  const props = (schemaOf.get(name) || {}).properties || {};
+  return "pageId" in props && name !== "new_page" && name !== "list_pages" && args.pageId == null;
+}
+
 function probeCalls(o) {
   const calls = [{ name: "new_page", arguments: { url: o.url } }];
   if (o.backend) {
@@ -255,9 +276,24 @@ const tools = await send("tools/list", {});
 const names = (tools.result?.tools || []).map((t) => t.name);
 console.log(`TOOLS (${names.length}):`, names.join(", "));
 
+// chrome-devtools-mcp 1.11+ routes by page (`pageIdRouting`): every page tool
+// whose schema has `pageId` needs one, and a probe batch never names it, so
+// `evaluate_script` failed "pageId: expected number, received undefined" right
+// after a good new_page (#5712). Track the page new_page / list_pages report,
+// as tools/mcp/probe-mcp.py does, and fill it in where the schema asks.
+const schemaOf = new Map((tools.result?.tools || []).map((t) => [t.name, t.inputSchema || {}]));
+let pageId = null;
 let toolFailed = false;
 for (const c of calls) {
-  const r = await send("tools/call", { name: c.name, arguments: c.arguments || {} });
+  const args = { ...(c.arguments || {}) };
+  if (withPageId(c.name, args, schemaOf) && pageId == null) {
+    const listed = await send("tools/call", { name: "list_pages", arguments: {} });
+    pageId = pageIdFrom(listed.result);
+  }
+  if (withPageId(c.name, args, schemaOf) && pageId != null) args.pageId = pageId;
+  const r = await send("tools/call", { name: c.name, arguments: args });
+  if (c.name === "new_page" || c.name === "list_pages") pageId = pageIdFrom(r.result) ?? pageId;
+  else if (c.name === "select_page" && args.pageId != null) pageId = args.pageId;
   let out = (r.result?.content || []).map((x) => x.text ?? `[${x.type}]`).join("\n");
   // A console dump is the one result worth filtering rather than truncating: the
   // interesting line is routinely message 26 of 44, past any slice().

@@ -39,7 +39,7 @@ must be AUDIO or VISUAL (body attitude, particles, HUD); shake and haptics alone
    render/audio path. Never regenerate `tests/data/physics-baseline.json` to make it pass.
    No local browser specs (AGENTS.md rule 5): the PR's CI proves the rest. Rendered-frame
    determinism is `tests/specs/agent-determinism-frame.spec.js`; `node tools/ci/pick-tests.mjs`
-   names its group, and `node tools/ci/remote-group.mjs <group>` runs it on the pushed branch.
+   names its group, the PR's own CI runs it; a whole group (`remote-group.mjs`) is Bryce's opt-in.
    The browser characterization traces run in their own CI job. Touching `feel.hitStop`:
    compare `__apex.obs()` and lap time before/after on a seeded run.
 4. See / hear it live at 844×390 touch: skill **mcp-probe**. Kerb state is not in `obs()`/`physState()`:

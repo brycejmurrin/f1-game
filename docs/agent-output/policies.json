@@ -676,6 +676,11 @@
       "presentation": "native",
       "preserve": "Every row's verdict and evidence; the gated head and tip; passed/refused/unknown exit distinct; the receipt path"
     },
+    "tools/ci/merge-train.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every car and dropped PR with its reason; the bisect cap, tip and train head; the final = merge-train line"
+    },
     "tools/ci/needs-sync.mjs": {
       "action": "keep-native",
       "presentation": "native",
