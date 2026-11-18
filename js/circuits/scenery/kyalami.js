@@ -349,7 +349,9 @@
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
       }
       // Pit straight: rail on the pit side (infield), catch fence on the spectator side.
-      guardrail(RACE(-270), RACE(270), -1, 4.0, [0.85, 0.85, 0.88]);
+      // The rail stops at the pit-exit line (+110 m): past it the exit road blends
+      // back across its 4 m and a rail there stood 0.5 m proud of the ground (scenery-seats).
+      guardrail(RACE(-270), RACE(110), -1, 4.0, [0.85, 0.85, 0.88]);
       fence(RACE(-224), RACE(270), 1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.85, 0.68, 0.56, 0.38, 0.26, 0.10]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
