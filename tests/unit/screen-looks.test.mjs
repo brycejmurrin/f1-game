@@ -186,6 +186,17 @@ test("normalize: unknown keys dropped, junk enums read as shipped, ranges clamp 
   assert.deepEqual(plain(M.normalize("nope", {})), {});
 });
 
+test("#4529: GARAGE PANEL WIDTH shrinks to 60 and PANEL HEIGHT 40-100 writes its token", () => {
+  const { M, html } = boot({ stored: { lookGarage: { pw: 10, ph: 3 } } });
+  assert.equal(M.read("garage").pw, 60, "PANEL WIDTH floors at 60 %");
+  assert.equal(M.read("garage").ph, 40, "PANEL HEIGHT floors at 40 %");
+  assert.equal(html.style.getPropertyValue("--look-garage-pw"), "0.6");
+  assert.equal(html.style.getPropertyValue("--look-garage-ph"), "0.4");
+  M.set("garage", "ph", 100);
+  assert.equal(html.style.getPropertyValue("--look-garage-ph"), "", "at its base PANEL HEIGHT writes nothing");
+  assert.equal(html.dataset.lookGaragePh, undefined);
+});
+
 test("density / columns knobs re-run SheetShape so the tier follows at once", () => {
   const b = boot();
   const n0 = b.reclassified;
