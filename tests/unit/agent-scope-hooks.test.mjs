@@ -278,7 +278,7 @@ test("github-mcp-guard.sh: the orchestrator's CI acts (owner request 2026-11-18)
   assert.deepEqual(got, want);
   // the deny names the one route, so the worker is not left guessing
   const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input: { method: "cancel_workflow_run", run_id: 1 } }, who.worker[0]);
-  assert.match(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, /^WORKERS NEVER CANCEL AN ACTIONS RUN .*Only the orchestrator cancels/);
+  assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, "WORKERS NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Only the orchestrator cancels (skill `steward` §CI).");
 });
 
 test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close, labels change by ONE name, allow the rest", () => {
