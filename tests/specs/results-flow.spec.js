@@ -414,12 +414,13 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
         const sheet = document.querySelector("#results > .sheet");
         const rows = [...T.querySelectorAll('[data-results-part="ranking"] > .res-row[role="listitem"]')];
         const you = rows.find((r) => r.classList.contains("you"));
-        if (sheet && sheet.offsetParent && you) {
+        // A frame the player SEES: the sheet laid out and not transparent (results-sheet.js data-reveal-hold).
+        if (sheet && sheet.offsetParent && you && parseFloat(getComputedStyle(sheet).opacity) > 0) {
           const yr = you.getBoundingClientRect(), tb = T.getBoundingClientRect();
           const ov = yr.top < tb.bottom ? rows.filter((r) => r !== you).map((r) => +over(r.getBoundingClientRect(), yr).toFixed(1)).filter((v) => v > 1) : [];
           frames.push({ frame: n, ov, pins: T.dataset.pins || null, youClear: T.style.getPropertyValue("--you-clear") || null, paneOwnH: T.clientHeight,
             rowOwnH: +(rows[0].getBoundingClientRect().height / (rows[0].currentCSSZoom || 1)).toFixed(1), density: sheet.dataset.density || null,
-            shape: sheet.dataset.shape || null, scrollTop: T.scrollTop, youTop: +yr.top.toFixed(1), paneTop: +tb.top.toFixed(1), paneBottom: +tb.bottom.toFixed(1),
+            shape: sheet.dataset.shape || null, opacity: getComputedStyle(sheet).opacity, scrollTop: T.scrollTop, youTop: +yr.top.toFixed(1), paneTop: +tb.top.toFixed(1), paneBottom: +tb.bottom.toFixed(1),
             youMarginTop: getComputedStyle(you).marginTop, above: [...T.children].map((k) => (k.getAttribute("data-results-part") || k.id || k.className || k.tagName)
               .slice(0, 16) + "@" + Math.round(k.getBoundingClientRect().top) + "/" + Math.round(k.getBoundingClientRect().height)).join(" ") });
           if (T.dataset.pins) held++;

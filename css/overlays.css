@@ -1683,6 +1683,9 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
    edges: its containing block is the list, so it cannot leave it to cover the
    story podium above, and it shows at open without results-sheet.js scrolling
    the sheet away from the winner. An open stint fold drops it back into flow. */
+/* #5603 LAY OUT BEFORE REVEAL: results-sheet.js holds the sheet transparent until YOU lies on no other row (cap 600 ms).
+   Opacity, not visibility: focus and layout stand; !important outranks the sheet's own entry animation. */
+#results[data-reveal-hold] > .sheet { opacity: 0 !important; }
 #results-table .res-row.you { position: relative; }
 #results-table [data-results-part="ranking"] > .res-row.you { position: sticky; top: 0; bottom: 0; }
 #results-table .res-row.you:has([data-stint-details][open]) { position: relative; }

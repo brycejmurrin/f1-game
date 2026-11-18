@@ -207,13 +207,51 @@ if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
 // unclassified (D) or compact on a stale pane (A), and YOU lay on the row entering the pane. Whoever un-hides it
 // (ceremony, podium beat, game.js), classify the sheets and fit the pins in the same task, after TopModal's own
 // observer has opened the dialog (a queued microtask runs after every observer callback, still before the paint).
-if (typeof MutationObserver === "function" && typeof queueMicrotask === "function" && G.els && G.els.results) {
+// Then HOLD the sheet transparent (data-reveal-hold, css/overlays.css; opacity only, so focus and layout stand)
+// until a pre-paint check finds YOU on no other row: CI still painted frame 0 compact with --you-clear 5 but YOU's
+// margin-top 0px (the story and pane on their unclassified sizes too), so the check reads the real boxes, not flags.
+// HOLD_MS caps it: the sheet always shows.
+const HOLD_MS = 600;
+function youOnRow() {
+  const table = G.els.resultsTable, sheet = G.els.results.querySelector(":scope > .sheet");
+  // Only the compact wide sheet keeps YOU off the rows at open (css/overlays.css PINNED PODIUM, --you-clear).
+  if (!sheet || sheet.dataset.density !== "compact" || sheet.dataset.shape === "tall") return false;
+  const rows = Array.from(table.querySelectorAll('[data-results-part="ranking"] > .res-row[role="listitem"]'));
+  const you = rows.find((r) => r.classList.contains("you"));
+  if (!you) return false;
+  const yr = you.getBoundingClientRect();
+  if (yr.top >= table.getBoundingClientRect().bottom) return false;
+  return rows.some((r) => {
+    if (r === you) return false;
+    const b = r.getBoundingClientRect();
+    return Math.min(b.bottom, yr.bottom) - Math.max(b.top, yr.top) > 1;
+  });
+}
+function holdUntilLaidOut() {
+  const res = G.els.results, t0 = performance.now();
+  res.setAttribute("data-reveal-hold", "");
+  const step = () => {
+    if (res.hidden) { res.removeAttribute("data-reveal-hold"); return; }
+    fitPins();
+    const late = performance.now() - t0 >= HOLD_MS;
+    if (!youOnRow() || late) {
+      if (late) Log.warn("ui", "results: revealed after " + HOLD_MS + " ms with YOU still on a row");
+      res.removeAttribute("data-reveal-hold");
+      return;
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+if (typeof MutationObserver === "function" && typeof queueMicrotask === "function" && typeof requestAnimationFrame === "function"
+    && G.els && G.els.results && G.els.resultsTable && typeof G.els.resultsTable.querySelectorAll === "function") {
   new MutationObserver(() => {
     if (G.els.results.hidden) return;
     queueMicrotask(() => {
       if (G.els.results.hidden) return;
       if (typeof SheetShape !== "undefined" && SheetShape.reclassify) SheetShape.reclassify();
       fitPins();
+      holdUntilLaidOut();
     });
   }).observe(G.els.results, { attributes: true, attributeFilter: ["hidden"] });
 }
