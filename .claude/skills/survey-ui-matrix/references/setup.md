@@ -20,7 +20,7 @@ mcp__chrome-devtools__emulate      viewport: "844x390x3,mobile,touch,landscape"
 mcp__chrome-devtools__navigate_page  http://127.0.0.1:3456/index.html?stallwatch=0
 ```
 
-Start the server first on 3456 (`npx serve -l 3456 .`, AGENTS.md §The loop; the MCP servers expect it). `?stallwatch=0`: neither MCP browser is `navigator.webdriver`, so the stall watchdog would reload a software-GL race. Then in
+Start the server first on 3456 (`python3 -m http.server -b 127.0.0.1 3456`, AGENTS.md §The loop; the MCP servers expect it). `?stallwatch=0`: neither MCP browser is `navigator.webdriver`, so the stall watchdog would reload a software-GL race. Then in
 `browser_evaluate` / `evaluate_script`:
 
 ```js

@@ -1268,7 +1268,7 @@ const GLXBackend = (function () {
   function freeTexture(t) {
     if (!t) return;
     _texForget(t);
-    if (ctxGone()) return;   // driver already dropped the unit; deleteTexture would be INVALID_OPERATION
+    if (ctxGone()) return;   // a lost context ignores the call (WebGL: default return, no error); skip it
     gl.deleteTexture(t);
   }
 
@@ -1817,7 +1817,7 @@ const GLXBackend = (function () {
     // texture image unit — GLES 3.0 §2.11.7 makes that an INVALID_OPERATION at the
     // next draw, not a link error, so the whole lit pass would draw nothing and
     // the world would vanish under sky + post. Reachable: glx/shadow.js allocates
-    // the blocker as R16F, which needs EXT_color_buffer_float, so a device without
+    // the blocker as R32F, which needs EXT_color_buffer_float, so a device without
     // it fails checkFramebufferStatus and leaves pcssEnabled false forever. The
     // neighbouring uLampShadowMap comment makes this argument correctly for the
     // SAME sampler type; the blocker was the one case it did not cover. Hoisted
