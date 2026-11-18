@@ -402,3 +402,45 @@ test("migrateCareer coerces hostile numeric leaves when the version marker is va
   assert.equal(out.budgetLvl, 0);
   assert.equal(out.facility, 0);
 });
+
+test("deal bonus / term and budgetLvl are clamped to what career.js can award", () => {
+  const SM = load();
+  const mk = (deal, budgetLvl) => SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas", money: 1, deal, budgetLvl });
+  const hi = mk({ team: "haas", bonusPt: 1e308, left: 1e9, years: 99 }, 7);
+  assert.deepEqual([hi.deal.bonusPt, hi.deal.left, hi.deal.years, hi.budgetLvl], [24, 3, 3, 3]);
+  const lo = mk({ team: "haas", bonusPt: -5, left: -2, years: -1 }, -4);
+  assert.deepEqual([lo.deal.bonusPt, lo.deal.left, lo.deal.years, lo.budgetLvl], [0, 0, 0, 0]);
+  const once = JSON.stringify(hi);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
+
+test("BONUS_MAX / BUDGET_LVL_MAX mirror career.js bonusPtFor(tier 0) / BUDGET_UPGRADE.length", () => {
+  const careerSrc = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
+  const L = load().LIMITS;
+  const m = /function bonusPtFor\(team\) \{ return (\d+) \+ \((\d+) - team\.tier\) \* (\d+); \}/.exec(careerSrc);
+  assert.ok(m, "bonusPtFor keeps its shape");
+  assert.equal(Number(m[1]) + Number(m[2]) * Number(m[3]), L.BONUS_MAX);
+  const b = /const BUDGET_UPGRADE = \[([^\]]*)\]/.exec(careerSrc);
+  assert.equal(b[1].split(",").length, L.BUDGET_LVL_MAX);
+});
+
+test("season.round is moved past every stamped result row", () => {
+  const SM = load();
+  const mk = (round, results) => SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas", money: 1,
+    season: { round, pts: {}, teamPts: {}, driverCodes: {} }, results });
+  for (const round of ["1", 1.5, -2, 0]) assert.equal(mk(round, [{ r: 0, p: 5, pts: 10 }]).season.round, 1, JSON.stringify(round));
+  assert.equal(mk(3, [{ r: 0 }, { r: 1 }]).season.round, 3, "a legit round is kept");
+  const once = JSON.stringify(mk(0, [{ r: 2 }]));
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
+
+test("offers and team off Teams.LIST are dropped / defaulted", () => {
+  const SM = load();
+  const base = { v: SM.CAREER_V, flavour: "driver", team: "haas", money: 1 };
+  const c = SM.migrateCareer({ ...base, offers: [{ teamId: "sauber" }, { teamId: "haas" }, { team: "haas" }] });
+  assert.deepEqual(c.offers.map((o) => o.teamId), ["haas"]);
+  assert.equal(SM.migrateCareer({ ...base, team: "sauber" }).team, "haas", "driver");
+  assert.equal(SM.migrateCareer({ ...base, flavour: "myteam", team: "sauber" }).team, "custom", "myteam");
+  const once = JSON.stringify(c);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
