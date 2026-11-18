@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-8QFPswVnZfSwuu5eiLajMKwqFIqHnMSX2u8HlMstII0=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-IPlfQk0gH+8jTiv05Tb1knv0LrHzDJuMoSbWUiQq+/s=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -176,7 +176,7 @@
   #phone-input-options label { flex: none; display: flex; align-items: center; }
   /* 16px: iOS zooms the page on a focused control under 16px. Unlayered, so it beats the coarse-pointer --tap-paint height. */
   #steering-mode { height: 44px; min-height: 44px; padding: 0 6px; font: 700 16px/1 var(--font-ui); color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 10px; }
-  #pad-status { flex: 0 1 34%; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 10px; line-height: 1.15; overflow: hidden; }
+  #pad-status { flex: 0 1 26%; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 10px; line-height: 1.15; overflow: hidden; }
   #input-health { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--warn); font-weight: 700; }
   #input-health::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--warn); }
   #input-health[data-state="good"] { font-size: 0; }   /* the dot alone; the words stay for a screen reader */
@@ -193,6 +193,22 @@
   .grip-keys:empty { display: none; }
   body[data-swap] #left { order: 3; }  body[data-swap] #face { order: 2; }  body[data-swap] #right { order: 1; }
   body[data-swap] #steering-strip { order: 4; }
+  /* MOVED BUTTONS IN A COLUMN: a grip holding keys becomes two columns, the
+     keys stacked down the inner one, the grip's own two controls (UP/DN, or
+     the AUTO OT/BOOST tiles, or BRAKE/GAS) down the other. */
+  body[data-strip="column"] .grip:has(> .grip-keys:not(:empty)) { display: grid; grid-template-columns: minmax(64px, .8fr) 1fr; grid-template-rows: 1fr 1fr; grid-auto-flow: column; }
+  body[data-strip="column"] .grip-keys { grid-row: 1 / 3; grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+  /* PEDALS SIDE BY SIDE: BRAKE | GAS as two tall bars, GAS on the outer edge,
+     like a phone racer's dock. The pedal grip widens to carry them. */
+  body[data-pedals="side"] #ctl { grid-template-columns: minmax(84px, 1fr) minmax(200px, 2fr) minmax(140px, 1.5fr); }
+  body[data-pedals="side"][data-swap] #ctl { grid-template-columns: minmax(140px, 1.5fr) minmax(200px, 2fr) minmax(84px, 1fr); }
+  body[data-pedals="side"] #right { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; grid-auto-flow: row; }
+  body[data-pedals="side"] #right:has(> .grip-keys:not(:empty)) { grid-template-rows: auto 1fr; }
+  body[data-pedals="side"] #right > .grip-keys { grid-column: 1 / -1; grid-row: auto; }
+  body[data-pedals="side"][data-strip="column"] #right:has(> .grip-keys:not(:empty)) { grid-template-columns: minmax(64px, .8fr) 1fr 1fr; grid-template-rows: 1fr; }
+  body[data-pedals="side"][data-strip="column"] #right > .grip-keys { grid-column: auto; grid-row: 1; }
+  body[data-pedals="side"][data-swap] #right { direction: rtl; }   /* pedal grip on the left: GAS on the outer (left) edge */
+  body[data-pedals="side"][data-swap] #right > * { direction: ltr; }
   #b-layout { flex: none; width: 44px; padding: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
   #b-layout svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   #layout-sheet { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
@@ -203,8 +219,9 @@
   #lay-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   #lay-head h2 { margin: 0; font: italic 800 var(--fs-5, 18px)/1 var(--font-ui); letter-spacing: var(--ls-2); }
   #lay-head .bigbtn { margin: 0; width: auto; min-width: 120px; min-height: 44px; }
-  #lay-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-  #lay-presets button, #lay-rows button, #lay-swap { min-height: 44px; font-weight: 800; letter-spacing: .08em; font-size: 13px; }
+  #lay-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  #lay-toggles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+  #lay-presets button, #lay-rows button, #lay-toggles button { min-height: 44px; font-weight: 800; letter-spacing: .08em; font-size: 13px; }
   #lay-presets button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
   #lay-presets small { font-size: 10px; font-weight: 600; letter-spacing: .04em; color: var(--dim); }
   #lay-rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px 16px; }
@@ -516,9 +533,14 @@
     <button type="button" data-preset="right">RIGHT THUMB<small>OT · BOOST · AERO by the pedals</small></button>
     <button type="button" data-preset="left">LEFT THUMB<small>OT · BOOST · AERO by the paddles</small></button>
     <button type="button" data-preset="mirror">MIRRORED<small>pedals left, paddles right</small></button>
+    <button type="button" data-preset="phone">PHONE STYLE<small>tall BRAKE · GAS side by side, OT · BOOST · AERO column</small></button>
   </div>
   <div id="lay-rows" role="group" aria-label="Where each button sits"></div>
-  <button id="lay-swap" type="button">SWAP PEDALS AND PADDLES</button>
+  <div id="lay-toggles">
+    <button id="lay-pedals" type="button">PEDALS SIDE BY SIDE</button>
+    <button id="lay-strip" type="button">MOVED BUTTONS IN A COLUMN</button>
+    <button id="lay-swap" type="button">SWAP PEDALS AND PADDLES</button>
+  </div>
 </div>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
@@ -579,7 +601,7 @@ window.addEventListener("DOMContentLoaded", function () {
       body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
       keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
               look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
-      sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"),
+      sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
     }, { store: (function () { try { return window.localStorage; } catch (e) { return null; } })() });
   } catch (e) { /* the wheel works in its default layout */ }   // the console/test handle, mirroring window.__apex on the game

@@ -682,22 +682,29 @@ const PhonePadPage = (function () {
   // ── phone: WHEEL LAYOUT (#5801) ───────────────────────────────────────────
   // Which thumb each wheel-face key sits under: L (the grip on the left of the
   // screen), C (the face, under the dash) or R. `swap` mirrors the grips, so
-  // paddles go right and pedals left. Saved on the phone as apex26.padLayout;
+  // paddles go right and pedals left. `pedals` "side" stands BRAKE and GAS up
+  // as two tall bars side by side (a phone racer's dock) instead of stacked;
+  // `strip` "column" stacks the keys moved to a grip in a column beside it
+  // instead of a row above it. Saved on the phone as apex26.padLayout;
   // everything else about the wheel is unchanged, and a moved button is the
   // same element (its listeners move with it).
   const LAYOUT_KEYS = Object.freeze(["overtake", "boost", "aero", "camera", "radio", "look", "recover", "pause"]);
   const LAYOUT_LABEL = Object.freeze({ overtake: "OT", boost: "BOOST", aero: "AERO", camera: "CAM", radio: "RADIO", look: "LOOK", recover: "RESET", pause: "PAUSE" });
   const LAYOUT_KEY = "apex26.padLayout";
   const zonesWith = (side, keys) => Object.fromEntries(LAYOUT_KEYS.map((k) => [k, keys.includes(k) ? side : "C"]));
+  const TRIO = ["overtake", "boost", "aero"];
+  const preset = (zone, more) => Object.assign({ zone, swap: false, pedals: "stack", strip: "row" }, more);
   const LAYOUT_PRESETS = Object.freeze({
-    classic: { zone: zonesWith("C", []), swap: false },
-    right: { zone: zonesWith("R", ["overtake", "boost", "aero"]), swap: false },   // OT/BOOST/AERO by the pedals
-    left: { zone: zonesWith("L", ["overtake", "boost", "aero"]), swap: false },    // ... by the paddles
-    mirror: { zone: zonesWith("C", []), swap: true },
+    classic: preset(zonesWith("C", [])),
+    right: preset(zonesWith("R", TRIO)),   // OT/BOOST/AERO above the pedals
+    left: preset(zonesWith("L", TRIO)),    // ... above the paddles
+    mirror: preset(zonesWith("C", []), { swap: true }),
+    phone: preset(zonesWith("R", TRIO), { pedals: "side", strip: "column" }),   // tall BRAKE | GAS, OT/BOOST/AERO in a column beside them
   });
   function normaliseLayout(raw) {
     const r = raw && typeof raw === "object" ? raw : {}, z = r.zone && typeof r.zone === "object" ? r.zone : {};
-    return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true };
+    return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true,
+      pedals: r.pedals === "side" ? "side" : "stack", strip: r.strip === "column" ? "column" : "row" };
   }
   /** The preset a layout equals, or "custom". */
   function layoutPreset(lay) {
@@ -714,11 +721,11 @@ const PhonePadPage = (function () {
       if (el && to && to.appendChild) to.appendChild(el);   // canonical order: appended in LAYOUT_KEYS order
     }
     const b = dom.body && dom.body.dataset;
-    if (b) { if (n.swap) b.swap = "1"; else delete b.swap; }   // gears AUTO keeps its big OT/BOOST tiles on the paddle grip wherever the small keys went
+    if (b) { if (n.swap) b.swap = "1"; else delete b.swap; b.pedals = n.pedals; b.strip = n.strip; }   // gears AUTO keeps its big OT/BOOST tiles on the paddle grip wherever the small keys went
     return n;
   }
   /** The editor sheet. dom adds: sheet, open, done, rows (container), presets ([el with data-preset]),
-   *  swapBtn, doc (document, to build the per-key rows), store (localStorage-like). */
+   *  swapBtn, pedalsBtn, stripBtn (toggles), doc (document, to build the per-key rows), store (localStorage-like). */
   function layout(dom, opts) {
     const store = (opts && opts.store) || null;
     let cur;
@@ -732,7 +739,7 @@ const PhonePadPage = (function () {
         for (const [z, txt] of [["L", "LEFT"], ["C", "MID"], ["R", "RIGHT"]]) {
           const b = dom.doc.createElement("button"); b.type = "button"; b.textContent = txt;
           b.setAttribute("aria-label", LAYOUT_LABEL[k] + " " + (z === "C" ? "under the dash" : txt.toLowerCase() + " grip"));
-          b.addEventListener("click", () => set({ zone: Object.assign({}, cur.zone, { [k]: z }), swap: cur.swap }));
+          b.addEventListener("click", () => set(Object.assign({}, cur, { zone: Object.assign({}, cur.zone, { [k]: z }) })));
           picks[k][z] = b; row.appendChild(b);
         }
         dom.rows.appendChild(row);
@@ -743,6 +750,8 @@ const PhonePadPage = (function () {
       for (const el of dom.presets || []) el.setAttribute("aria-pressed", String(el.dataset.preset === p));
       for (const k of LAYOUT_KEYS) for (const z of ["L", "C", "R"]) if (picks[k]) picks[k][z].setAttribute("aria-pressed", String(cur.zone[k] === z));
       if (dom.swapBtn) dom.swapBtn.setAttribute("aria-pressed", String(cur.swap));
+      if (dom.pedalsBtn) dom.pedalsBtn.setAttribute("aria-pressed", String(cur.pedals === "side"));
+      if (dom.stripBtn) dom.stripBtn.setAttribute("aria-pressed", String(cur.strip === "column"));
     }
     function set(lay) {
       cur = applyLayout(dom, lay);
@@ -750,7 +759,9 @@ const PhonePadPage = (function () {
       paint();
     }
     for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
-    if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set({ zone: cur.zone, swap: !cur.swap }));
+    if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
+    if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
+    if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
     const show = (on) => { if (dom.sheet) dom.sheet.hidden = !on; if (on && dom.done && dom.done.focus) dom.done.focus(); else if (!on && dom.open && dom.open.focus) dom.open.focus(); };
     if (dom.open) dom.open.addEventListener("click", () => show(true));
     if (dom.done) dom.done.addEventListener("click", () => show(false));

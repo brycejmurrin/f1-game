@@ -228,4 +228,14 @@ test('WHEEL LAYOUT (#5801): presets and per-key picks move the face keys between
   const b = mk();
   assert.deepEqual([b.api.get(), b.dom.body.dataset.swap, ids(b.dom, b.dom.grips.L)], [a.api.get(), '1', ['overtake', 'boost', 'aero']], 'a reload restores the saved layout');
   emit(b.dom.open, 'click'); assert.equal(b.dom.sheet.hidden, false); emit(b.dom.done, 'click'); assert.equal(b.dom.sheet.hidden, true);
+  const phoneBtn = element(); phoneBtn.dataset.preset = 'phone';
+  // PHONE STYLE: tall BRAKE | GAS side by side, OT/BOOST/AERO in a column beside them.
+  const e2 = (() => { const keys = Object.fromEntries(L.LAYOUT_KEYS.map((k) => [k, element()])), home = box(); for (const k of L.LAYOUT_KEYS) home.appendChild(keys[k]);
+    const dom = { body: element(), keys, home, grips: { L: box(), R: box() }, presets: [phoneBtn], pedalsBtn: element(), stripBtn: element() };
+    return { dom, api: L.layout(dom, { store }) }; })();
+  emit(phoneBtn, 'click');
+  assert.deepEqual([e2.dom.body.dataset.pedals, e2.dom.body.dataset.strip, ids(e2.dom, e2.dom.grips.R), e2.dom.pedalsBtn['aria-pressed'], L.layoutPreset(e2.api.get())],
+    ['side', 'column', ['overtake', 'boost', 'aero'], 'true', 'phone'], 'PHONE STYLE');
+  emit(e2.dom.stripBtn, 'click');
+  assert.deepEqual([e2.dom.body.dataset.strip, L.layoutPreset(e2.api.get()), plain(L.normaliseLayout({ pedals: 'x', strip: 1 })).pedals], ['row', 'custom', 'stack'], 'a toggle edits one field; junk normalises');
 });
