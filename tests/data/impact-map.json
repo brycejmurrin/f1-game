@@ -17378,6 +17378,9 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
+      "cold": [
+        "tests/unit/build-worker.test.mjs"
+      ],
       "drop": [
         "tests/unit/build-client-drop.test.mjs"
       ],
