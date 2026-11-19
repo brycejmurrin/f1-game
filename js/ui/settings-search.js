@@ -260,23 +260,12 @@ const SettingsSearch = (function () {
     });
   }
   // Escape / pad B (`cancel`) in a non-empty FIND A SETTING clears it first, like the circuit search.
-  // Focus may have moved to a settings door after typing: still clear FIND before
-  // the dialog's data-esc-close / cancel dismisses the sheet (hunt2 ui-menus).
   function onEscape(e) {
     const cancel = e.type === "cancel";
     if ((!cancel && e.key !== "Escape") || e.isComposing || e.defaultPrevented) return;
     const t = cancel ? document.activeElement : e.target;
-    let field = (t && t.value != null && t.closest && t.closest("[data-settings-search]")) ? t : null;
-    if (!field || !field.value) {
-      const box = typeof document !== "undefined" ? document.querySelector("[data-settings-search]") : null;
-      const input = box && box.querySelector && box.querySelector("input");
-      field = input && input.value ? input : null;
-    }
-    if (!field || !field.value) return;
-    // A filled FIND under a closed sheet must not steal Escape on the title.
-    const settings = typeof document !== "undefined" ? document.getElementById("pmsettings") : null;
-    if (settings && settings.hidden) return;
-    field.value = ""; if (field.oninput) field.oninput();
+    if (!t || !t.value || !t.closest || !t.closest("[data-settings-search]")) return;
+    t.value = ""; if (t.oninput) t.oninput();
     e.preventDefault(); e.stopPropagation();
   }
   if (typeof window !== "undefined" && window.addEventListener) {

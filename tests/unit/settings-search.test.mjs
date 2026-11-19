@@ -100,19 +100,6 @@ test("Escape in a non-empty search clears the query and keeps the sheet; an empt
   const b = { type: "cancel", target: h.dom.document.querySelector("#pmsettings"), preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
   h.ctx.Search.onEscape(b);
   assert.equal(h.search.value, ""); assert.equal(b.defaultPrevented, true, "pad B clears the query instead of closing the sheet");
-  // hunt2: focus moved to a door after typing — cancel still clears FIND first.
-  h.result("manual gears");
-  const door = h.dom.document.querySelector("#pm-open-controls");
-  door.focus();
-  assert.equal(h.dom.document.activeElement, door);
-  const away = { type: "cancel", target: h.dom.document.querySelector("#pmsettings"), preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
-  h.ctx.Search.onEscape(away);
-  assert.equal(h.search.value, ""); assert.equal(away.defaultPrevented, true, "pad B with door focus clears FIND before dismiss");
-  h.result("manual gears");
-  h.dom.document.querySelector("#pmsettings").hidden = true;
-  const closed = { type: "cancel", target: door, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
-  h.ctx.Search.onEscape(closed);
-  assert.equal(h.search.value, "manual gears"); assert.equal(closed.defaultPrevented, undefined, "closed sheet does not steal cancel");
 });
 test("successful lazy search still owns BACK and opens ancestor disclosures", async () => {
   const h = boot({ lazy: true }), fold = h.el("details", "audio-fold", h.dom.document.querySelector("#audioset")), target = h.el("input", "as-mvol", fold); target.value = "42";
