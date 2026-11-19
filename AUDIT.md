@@ -317,3 +317,13 @@ simulated start from P11: `-/22` → `11/22` during the countdown.
 
 `js/ui/results-sheet.js:331`: clamps the incident lap to 1, as the debrief and HUD already do. Verified with a
 contact recorded after lights-out and before the line: `LAP 0 · Car contact` → `LAP 1 · Car contact`.
+
+### Fix 7 — share-code undo in a career (finding 7)
+
+`js/ui/share-code.js:312`: the restore filter now also accepts career setup keys
+(`careerSetup.<flavour>.<slot>.<team>`), so UNDO and the rollback after a failed import restore them.
+Verified in Chromium in a driver career (key `careerSetup.driver.0.haas`): setup {3,3,30,45,58}, import
+{11,11,15,80,50}, UNDO → before the fix still {11,…} while reporting success; after it {3,3,30,45,58}. The
+same sequence outside a career still restores correctly. The other two parts of finding 7 are not fixed:
+the setup-comparison overwrite needs a persisted recovery record, and My Team livery import needs a design
+decision about where career liveries live.

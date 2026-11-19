@@ -309,7 +309,7 @@ const ShareCode = (function () {
   function restoreValues(store, rec) {
     let complete = true;
     for (const k of rec.keys) {
-      if (!/^(setup|livery|livery\.custom)\.[a-z0-9_-]+$/.test(String(k))) continue;
+      if (!/^(?:(?:setup|livery|livery\.custom)\.[a-z0-9_-]+|careerSetup\.[a-z0-9_-]+\.\d+\.[a-z0-9_-]+)$/.test(String(k))) continue;
       const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
       if (!durableSet(store, k, v == null ? undefined : v)) complete = false;
     }
