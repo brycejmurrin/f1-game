@@ -215,6 +215,13 @@ const TrackDef = (function () {
       // Opt-in centripetal centreline (tracks.js buildCenterline). Copied only when
       // authored: an absent key keeps every other def's metadata hash unchanged.
       ...(d.splineAlpha != null ? { splineAlpha: d.splineAlpha } : {}),
+      // The LAYOUT revision a saved lap was driven on (session-records.js puts
+      // `[revision || 1, n, total]` in every ghost / input-ghost / time-trial
+      // board context, setup-trial-session.js in a shared setup). Bump it when
+      // a circuit's lap changes in a way n and total do not show — Kyalami's
+      // direction flip kept both — so old laps stop matching rather than
+      // replaying the wrong way round. Copied only when authored, like the key above.
+      ...(d.revision != null ? { revision: d.revision } : {}),
 
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,

@@ -1,6 +1,6 @@
 {
   "name": "Apex 26",
-  "install": "bash tools/env/cloud-agent-install.sh",
+  "install": "bash tools/env/cloud-agent-install.sh && node tools/mcp/lsp-mcp.mjs --install-cloud-cwd-shim",
   "mcpServerAllowlist": [
     {
       "name": "apex-tools",

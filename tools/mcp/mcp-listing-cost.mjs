@@ -10,11 +10,14 @@
  *   node tools/mcp/mcp-listing-cost.mjs                 # table, every server
  *   node tools/mcp/mcp-listing-cost.mjs --only=apex-tools --json
  *   node tools/mcp/mcp-listing-cost.mjs --entry 'raw-apex=bash tools/mcp/apex-tools-mcp.sh serve'   # without the gateway
+ *   node tools/mcp/mcp-listing-cost.mjs --preflight [--json] [--config=.cursor/mcp.json]
+ *   bash tools/mcp/mcp-preflight.sh --all               # same preflight, one PASS/FAIL line each
  *
  * Read-only: it starts no browser (tools/list never launches one) and writes nothing.
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,6 +52,14 @@ export function sizeListing(server, tools, instructions = "") {
   };
 }
 
+/** Prefer upstream launcher lines over the gateway's retain-path summary. */
+export function summarizeStderr(stderr, { max = 240 } = {}) {
+  const lines = String(stderr || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const useful = lines.filter((l) => !/^output-level-mcp:/.test(l) && !/stderr retained at /.test(l));
+  const pick = (useful.length ? useful : lines).slice(0, 4).join(" | ");
+  return pick.slice(0, max);
+}
+
 /** Run initialize + every tools/list page against one stdio command. */
 export function listServer(command, args, { timeoutMs = TIMEOUT_MS, env = process.env } = {}) {
   return new Promise((resolve, reject) => {
@@ -56,7 +67,11 @@ export function listServer(command, args, { timeoutMs = TIMEOUT_MS, env = proces
     let buf = "", stderr = "", nextId = 1, instructions = "";
     const tools = [];
     const waiting = new Map();
-    const timer = setTimeout(() => { child.kill("SIGTERM"); reject(new Error(`timeout after ${timeoutMs} ms; stderr: ${stderr.slice(-400)}`)); }, timeoutMs);
+    const fail = (prefix) => {
+      const detail = summarizeStderr(stderr);
+      reject(new Error(detail ? `${prefix}; ${detail}` : prefix));
+    };
+    const timer = setTimeout(() => { child.kill("SIGTERM"); fail(`timeout after ${timeoutMs} ms`); }, timeoutMs);
     const send = (method, params) => {
       const id = nextId++;
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, ...(params ? { params } : {}) }) + "\n");
@@ -64,7 +79,7 @@ export function listServer(command, args, { timeoutMs = TIMEOUT_MS, env = proces
     };
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("error", (e) => { clearTimeout(timer); reject(e); });
-    child.on("exit", (code) => { if (waiting.size) { clearTimeout(timer); reject(new Error(`exited ${code} mid-listing; stderr: ${stderr.slice(-400)}`)); } });
+    child.on("exit", (code) => { if (waiting.size) { clearTimeout(timer); fail(`exited ${code} mid-listing`); } });
     child.stdout.on("data", (d) => {
       buf += d;
       let nl;
@@ -95,11 +110,52 @@ export function listServer(command, args, { timeoutMs = TIMEOUT_MS, env = proces
   });
 }
 
+/** One-line initialize + tools/list check per server in a Cursor/Claude mcp.json. */
+export async function preflightServers({
+  configPath = path.join(ROOT, ".cursor/mcp.json"),
+  timeoutMs = 45_000,
+  env = process.env,
+  only = null,
+} = {}) {
+  const cfg = JSON.parse(fs.readFileSync(configPath, "utf8")).mcpServers;
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) throw new Error(`no mcpServers in ${configPath}`);
+  const names = only?.length ? only : Object.keys(cfg);
+  const results = [];
+  // Pass stderr through the output-level wrapper so FAIL reasons are the real
+  // upstream lines (missing creds, MODULE_NOT_FOUND), not only the retain path.
+  const childEnv = { ...env, APEX_MCP_STDERR_PASS: env.APEX_MCP_STDERR_PASS || "1" };
+  for (const name of names) {
+    const s = cfg[name];
+    if (!s) {
+      results.push({ server: name, ok: false, tools: 0, reason: `missing from ${path.basename(configPath)}` });
+      continue;
+    }
+    const command = s.command, args = s.args || [];
+    try {
+      const { tools } = await listServer(command, args, { timeoutMs, env: childEnv });
+      results.push({ server: name, ok: true, tools: tools.length, reason: `tools=${tools.length}` });
+    } catch (e) {
+      const reason = String(e.message || e).replace(/\s+/g, " ").trim().slice(0, 240);
+      results.push({ server: name, ok: false, tools: 0, reason: reason || "unknown failure" });
+    }
+  }
+  return results;
+}
+
+export function formatPreflightLine(r) {
+  return `${r.ok ? "PASS" : "FAIL"} ${r.server}: ${r.reason}`;
+}
+
 function parseArgs(argv) {
-  const out = { json: false, only: null, entries: [] };
+  const out = { json: false, only: null, entries: [], preflight: false, config: null, timeoutMs: null, selfTest: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
+    else if (a === "--preflight") out.preflight = true;
+    else if (a === "--self-test") out.selfTest = true;
+    else if (a.startsWith("--config=")) out.config = a.slice(9);
+    else if (a === "--config") out.config = argv[++i] || "";
+    else if (a.startsWith("--timeout-ms=")) out.timeoutMs = Number(a.slice(13));
     else if (a.startsWith("--only=")) out.only = a.slice(7).split(",");
     else if (a === "--entry") {
       const spec = argv[++i] || "", eq = spec.indexOf("=");
@@ -112,8 +168,72 @@ function parseArgs(argv) {
   return out;
 }
 
+/** Cheap fixture probe (no network): fails if stderr stay private or --all cannot see a crash reason. */
+export async function selfTestPreflight({ gateway = path.join(ROOT, "tools/mcp/output-level-mcp.mjs") } = {}) {
+  const okFixture = [
+    "const {createInterface}=require('node:readline');",
+    "const send=m=>process.stdout.write(JSON.stringify(m)+'\\n');",
+    "createInterface({input:process.stdin}).on('line',l=>{const m=JSON.parse(l);",
+    " if(m.method==='initialize')send({jsonrpc:'2.0',id:m.id,result:{protocolVersion:'2025-06-18',capabilities:{tools:{}},serverInfo:{name:'ok',version:'1'}}});",
+    " else if(m.method==='tools/list')send({jsonrpc:'2.0',id:m.id,result:{tools:[{name:'ping',inputSchema:{type:'object'}}]}});});",
+  ].join("\n");
+  const dieFixture = "process.stderr.write('CREDENTIAL_MISSING: demo\\n'); process.exit(3);";
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-preflight-self-"));
+  const cfgPath = path.join(dir, "mcp.json");
+  try {
+    fs.writeFileSync(cfgPath, JSON.stringify({
+      mcpServers: {
+        good: { command: process.execPath, args: [gateway, "--server", "good", "--", process.execPath, "-e", okFixture] },
+        bad: { command: process.execPath, args: [gateway, "--server", "bad", "--", process.execPath, "-e", dieFixture] },
+      },
+    }));
+    const privateEnv = { ...process.env };
+    delete privateEnv.APEX_MCP_STDERR_PASS;
+    let privateHid = false;
+    try {
+      await listServer(process.execPath, [gateway, "--server", "die", "--", process.execPath, "-e", dieFixture], {
+        timeoutMs: 10_000, env: privateEnv,
+      });
+    } catch (e) {
+      privateHid = !/CREDENTIAL_MISSING/.test(String(e.message));
+    }
+    if (!privateHid) throw new Error("default gateway still leaked upstream stderr");
+    const rows = await preflightServers({ configPath: cfgPath, timeoutMs: 15_000 });
+    const good = rows.find((r) => r.server === "good");
+    const bad = rows.find((r) => r.server === "bad");
+    if (!good?.ok || good.tools < 1) throw new Error(`expected PASS good, got ${JSON.stringify(good)}`);
+    if (bad?.ok || !/CREDENTIAL_MISSING: demo/.test(bad?.reason || "")) {
+      throw new Error(`expected FAIL bad with CREDENTIAL_MISSING, got ${JSON.stringify(bad)}`);
+    }
+    if (formatPreflightLine(good) !== `PASS good: tools=${good.tools}`) throw new Error("formatPreflightLine PASS shape");
+    if (!formatPreflightLine(bad).startsWith("FAIL bad:")) throw new Error("formatPreflightLine FAIL shape");
+    return { ok: true, rows };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  if (opts.selfTest) {
+    const r = await selfTestPreflight();
+    process.stdout.write(JSON.stringify(r) + "\n");
+    return;
+  }
+  if (opts.preflight) {
+    const results = await preflightServers({
+      configPath: opts.config || path.join(ROOT, ".cursor/mcp.json"),
+      timeoutMs: Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0 ? opts.timeoutMs : 45_000,
+      only: opts.only,
+    });
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(results, null, 2) + "\n");
+    } else {
+      process.stdout.write(results.map(formatPreflightLine).join("\n") + "\n");
+    }
+    if (results.some((r) => !r.ok)) process.exitCode = 1;
+    return;
+  }
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers;
   const targets = [
     ...Object.entries(cfg).map(([name, s]) => ({ name, command: s.command, args: s.args })),

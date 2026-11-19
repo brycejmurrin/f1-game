@@ -287,6 +287,11 @@ const DockLayout = (function () {
         if (was && !editing && restore !== false && btn.focus) btn.focus();
       }
       if (!editing) {
+        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
+        if (fitRaf) {
+          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
+          fitRaf = 0;
+        }
         if (drag) save(store, bag); // a drag cut short by DONE/Escape keeps its move
         drag = null;
       }

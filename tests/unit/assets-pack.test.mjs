@@ -2581,6 +2581,13 @@ test("a manifest with no models empties the remembered index instead of keeping 
   assert.deepEqual(await rememberedAfter(remembered, { models: null }), { models: {} });
 });
 
+test("diffRoleIndex reads a null manifest or index as empty, never throws", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  assert.deepEqual(diffRoleIndex(idx, null), { indexOnly: ["a", "b"], liveOnly: [], badRole: ["b:bogus"] });
+  assert.deepEqual(diffRoleIndex(null, { models: { c: {} } }), { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex({}, {}), { indexOnly: [], liveOnly: [], badRole: [] });
+});
+
 test("data/packs/model-index.json covers every committed model key once",
   { skip: !hasPack && "no pack installed" }, () => {
   assert.ok(fs.existsSync(ROLE_INDEX_PATH), "data/packs/model-index.json missing");

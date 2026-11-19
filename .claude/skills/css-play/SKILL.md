@@ -63,12 +63,9 @@ An edit that changes nothing on screen: a LATER `@layer` or a more specific rule
    pixel-compared at a tight tolerance (the spec). A font-size, tracking, weight or
    gap change relays text and blows that budget. CI group `baseline` proves it; which
    sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`. Never run the
-   spec locally (AGENTS.md rule 5): push, then request it on the branch on the
-   platform the goldens were captured on (SwiftShader; the spec header says why):
-
-   ```sh
-   node tools/ci/remote-group.mjs baseline --gl swiftshader   # does it still match?
-   ```
+   spec locally (AGENTS.md rule 5). No PR run executes it: the nightly `baseline-trial` job does, on the
+   platform the goldens were captured on (SwiftShader; the spec header says why), so name it not-run in the PR.
+   A whole-group dispatch (`remote-group.mjs baseline --gl swiftshader`) is Bryce's opt-in.
 
    No CI job writes goldens. On a red, download the shard's `playwright-artifacts-baseline-*`
    artifact (`gh run download`), REVIEW each `-actual`/`-diff` PNG, never accept it blind,

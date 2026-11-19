@@ -1251,6 +1251,7 @@
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
         "tests/unit/lsp-factory-member.test.mjs",
+        "tests/unit/lsp-mcp-boot.test.mjs",
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/lsp-navigation-efficiency.test.mjs",
@@ -4553,7 +4554,7 @@
     {
       "path": "js/share/share-card-chips.js",
       "global": "ShareCardChips",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-data.js",

@@ -701,6 +701,12 @@ function buildSetup() {
     const custom = getLiveryId(team.id) !== "default";
     appendTab("livery", pseudoTab("livery", "LIVERY", custom ? "CUSTOM" : "DEFAULT", custom));
   }
+  // Keep the active chip in the stacked strip's scrollport after a rebuild
+  // (portrait / short landscape hide most of the 15 categories off-screen).
+  {
+    const activeTab = tabs.querySelector('[role="tab"][aria-selected="true"]');
+    if (activeTab) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 
   const optsEl = $("cs-options");
   optsEl.textContent = "";
