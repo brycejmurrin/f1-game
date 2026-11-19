@@ -53,12 +53,23 @@ export function validateFaultScenario(raw) {
 }
 
 /** Owns routing only; the caller retains ownership of its session/browser. */
-export async function installFaultSchedule(context, origin, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+// `onSlowCall({ op, pendingMs, events, calls })` fires once when context.route or context.unroute is still pending
+// after `slowMs` (#5542: a stall there sat to the test timeout with nothing recorded). Evidence only: the call is
+// awaited exactly as before. The watchdog uses the real clock, never the injected one, so fake clocks are untouched.
+export async function installFaultSchedule(context, origin, { setTimer = setTimeout, clearTimer = clearTimeout, slowMs = 5000, onSlowCall = null } = {}) {
   if (new URL(origin).origin !== origin) fail('Fault origin must be an HTTP(S) origin');
   if (!['http:', 'https:'].includes(new URL(origin).protocol)) fail('Fault origin must be HTTP(S)');
-  const holds = new Map(), events = [];
+  const holds = new Map(), events = [], calls = [], t0 = Date.now();
   let closed = false;
-  const event = (h, state) => events.push({ id: h.id, path: h.path, state });
+  const event = (h, state) => events.push({ id: h.id, path: h.path, state, t: Date.now() - t0 });
+  const timed = async (op, call) => {
+    const c = { op, start: Date.now() - t0, end: null }; calls.push(c);
+    const watchdog = typeof onSlowCall === 'function' ? setTimeout(() => {
+      try { onSlowCall({ op, pendingMs: Date.now() - t0 - c.start, events: structuredClone(events), calls: structuredClone(calls) }); } catch { /* evidence only */ }
+    }, slowMs) : null;
+    watchdog?.unref?.();
+    try { return await call(); } finally { clearTimeout(watchdog); c.end = Date.now() - t0; }
+  };
   const get = id => { const h = holds.get(id); if (!h) throw new Error(`Unknown fault ${id}`); return h; };
   const finish = (h, outcome) => {
     if (h.outcome) return;
@@ -93,9 +104,9 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
     timer = setTimer(() => stop('transfer-timeout'), h.timeoutMs);
     return { promise, cancel: () => stop('cancelled') };
   };
-  await context.route('**/*', handler);
+  await timed('route', () => context.route('**/*', handler));
   return {
-    events,
+    events, calls,
     hold(input) {
       const a = faultAction({ ...input, type: 'faultHold' });
       if (closed || holds.size >= 4 || holds.has(a.id) || [...holds.values()].some(h => h.path === a.path)) throw new Error('Fault schedule closed, duplicated or full');
@@ -132,7 +143,7 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
       if (closed) return;
       closed = true;
       for (const h of holds.values()) finish(h, 'cleanup');
-      try { await context.unroute('**/*', handler); }
+      try { await timed('unroute', () => context.unroute('**/*', handler)); }
       finally { await Promise.all([...holds.values()].filter(h => h.request).map(h => h.completed)); }
     },
   };
@@ -158,7 +169,7 @@ export async function replayFaultScenario(session, raw, { performAction, matches
     try { await faults.close(); }
     catch (error) { failure = failure ? new AggregateError([failure, error], 'Fault replay and cleanup failed') : error; }
   }
-  const evidence = { scenario, events: structuredClone(faults.events) };
+  const evidence = { scenario, events: structuredClone(faults.events), calls: structuredClone(faults.calls) };
   if (failure) { failure.faultEvidence = evidence; throw failure; }
   return evidence;
 }

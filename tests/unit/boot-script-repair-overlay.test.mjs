@@ -7,6 +7,7 @@ import test from "node:test";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { EventEmitter } from 'node:events';
 import { validateFaultScenario, installFaultSchedule, replayFaultScenario } from '../../tools/ui/explorer/fault-schedule.mjs';
+import { bootSummary, routeStallReporter, STALL_ANNOTATION } from '../helpers/stall-diag.js';
 
 const lazyPath = '/js/circuits/monaco.js';
 const faultHold = () => ({ type: 'faultHold', id: 'circuit', path: lazyPath, timeoutMs: 1000 });
@@ -244,4 +245,50 @@ test("pinned overlay (second scriptRetry pass) still shows even if __apexScriptR
   }
   assert.equal(overlay && overlay.style.display, "block");
   assert.equal(overlay.textContent.indexOf("Module failed to load") >= 0, true);
+});
+
+// #5542: the evidence names WHICH interception call stalled, and when each fault event happened.
+test('fault schedules time their events and route calls, and report a call still pending past slowMs', async () => {
+  const f = faultRig(), slow = [];
+  let releaseUnroute;
+  const unroute = f.context.unroute;
+  f.context.unroute = (p, h) => new Promise(resolve => { releaseUnroute = () => resolve(unroute(p, h)); });
+  const s = await installFaultSchedule(f.context, 'http://localhost', { ...f.clock, slowMs: 20, onSlowCall: info => slow.push(info) });
+  s.hold(faultHold()); f.expire();
+  assert.deepEqual(s.events.map(e => e.state), ['armed', 'timeout']);
+  assert(s.events.every(e => Number.isFinite(e.t) && e.t >= 0));
+  const closing = s.close();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(slow.length, 1);
+  assert.equal(slow[0].op, 'unroute');
+  assert(slow[0].pendingMs > 0); // timer granularity: setTimeout(20) may read 19 ms on Date.now()
+  assert.deepEqual(slow[0].events.map(e => e.state), ['armed', 'timeout']);
+  assert.deepEqual(slow[0].calls.map(c => [c.op, c.end === null]), [['route', false], ['unroute', true]]);
+  releaseUnroute(); await closing;
+  assert.deepEqual(s.calls.map(c => [c.op, Number.isFinite(c.end)]), [['route', true], ['unroute', true]]);
+  assert.deepEqual(f.calls, ['unroute']);
+  assert.equal(slow.length, 1, 'a call that settles before slowMs reports nothing');
+});
+
+// #5599/#5542: the one job-log line names each boot milestone and the cause indicators, in one line.
+test('stall diagnostics summarise a slow boot and a pending route call in one line each', () => {
+  const diag = { error: 'Timeout 45000ms exceeded.', worker: { boots: 4, lastTitle: 'a race on the shipped renderer finishes' },
+    census: { otherContexts: [] }, network: { navigatedAt: 1900, pending: [{ url: 'http://127.0.0.1:3456/js/render/glx/glx.js?v=dev', age: 70100 }], consoleTail: [] },
+    slow: null, final: { firstLogT: 2100, probe: { dcl: 2000, apexNull: 75300, apexSet: null, apexRace: null, maxTickGap: 70200, long: [[3000, 900], [4200, 70100]] },
+      sw: { controller: null, regs: [] } } };
+  const line = bootSummary('boot', 78000, diag);
+  assert.equal(line, 'stall-diag boot 78.0s FAILED: nav 1.9s dcl 2.0s first-log 2.1s game.js-done 75.3s __apex — race —'
+    + ' | longest task 70.1s@4.2s tick-gap 70.2s | pending 1 (/js/render/glx/glx.js?v=dev 70.1s) | sw ctl=none regs=0'
+    + ' | other contexts 0 | worker boot #4 after "a race on the shipped renderer finishes"');
+  assert(!line.includes('\n'));
+  const info = { annotations: [], attach: async () => {} };
+  routeStallReporter(info, null)({ op: 'unroute', pendingMs: 5000, events: [{ state: 'armed', t: 0 }, { state: 'timeout', t: 1001 }], calls: [] });
+  assert.equal(info.annotations.length, 1);
+  assert.equal(info.annotations[0].type, STALL_ANNOTATION);
+  // Structural, field by field (no page, so no census field): head | events | worker boot #<n>[ after "…"].
+  const parts = info.annotations[0].description.split(' | ');
+  assert.deepEqual(parts.slice(0, 2), ['stall-diag context.unroute still pending after 5.0s', 'events armed@0.0s timeout@1.0s']);
+  assert.equal(parts.length, 3);
+  assert.equal(parts[2].slice(0, 13), 'worker boot #');
+  assert.ok(Number.isInteger(Number(parts[2].slice(13).split(' ')[0])), 'the worker boot count is a number');
 });

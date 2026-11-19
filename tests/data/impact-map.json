@@ -15370,6 +15370,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/comment-citations.test.mjs",
