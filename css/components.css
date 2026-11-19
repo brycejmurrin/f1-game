@@ -325,6 +325,17 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px); }
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
+/* Phone landscape short: compact sheet-head chrome before data-density lands
+   (#5750 vs phone-shipped-defaults.spec.js). Title width/height compares both. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  body:not(.desktop) .sheet-head {
+    padding-top: calc(var(--pad) * 0.28); padding-bottom: calc(var(--pad) * 0.2);
+    gap: calc(var(--gap) * 0.6);
+  }
+  body:not(.desktop) .sheet-head h2 {
+    font-size: clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px);
+  }
+}
 .sheet-foot .bigbtn {
   width: auto; min-width: min(100%, 110px); margin: 0; flex: 1 1 0;
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is

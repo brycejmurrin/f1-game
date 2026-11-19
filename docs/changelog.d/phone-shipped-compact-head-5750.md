@@ -1,0 +1,1 @@
+Fixed: a clean phone and the owner's export paint the same race-settings and select sheet titles at 852×393 after #5750.

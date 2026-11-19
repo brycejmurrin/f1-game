@@ -275,6 +275,20 @@ window.SheetShape = (function () {
   function classifyDensity(el, hOwn) {
     const raw = getComputedStyle(el).getPropertyValue("--compact-at");
     const at = parseFloat(raw) || SHORT_DEFAULT;
+    /* select.css / race-setup.css set 99999px on a touch landscape phone so
+       compact is the only layout there. Room and hysteresis cannot change that
+       answer; measuring them first let a clean boot read NORMAL sheet heads for
+       a frame while the owner's export was already compact (phone-shipped-
+       defaults.spec.js after #5750). */
+    if (at >= 99998) {
+      if (el.dataset.density !== "compact") el.dataset.density = "compact";
+      if (el.classList.contains("lt-show-help")) {
+        el.classList.remove("lt-show-help");
+        const help = el.querySelector("#lt-help-on, #ct-help-on");
+        if (help) help.checked = false;
+      }
+      return;
+    }
     const was = el.dataset.density === "compact";
     const h = roomOwn(el, hOwn);
     const now = was ? h < at + SHORT_HYST : h < at;
