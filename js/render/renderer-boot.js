@@ -170,7 +170,7 @@ function reloadOnceIntoGlx(disarm) {
 }
 let gfx = null;
 let _claimSkipped = false;
-let _initOwner = null;
+let /** @type {ReturnType<typeof Gfx.createInitOwner> | null} */ _initOwner = null;
 let _createHung = false;
 let pref = "webgl2", pick = "", why = "";
 try {

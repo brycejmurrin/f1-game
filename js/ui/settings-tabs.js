@@ -93,7 +93,7 @@ const SettingsNav = (function () {
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
-    let current = "home", generation = 0, search = null;
+    let current = "home", generation = 0, /** @type {ReturnType<typeof SettingsSearch.create> | null} */ search = null;
     let originDoor = null, direct = false;
     const stack = [];
 

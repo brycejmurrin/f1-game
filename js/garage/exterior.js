@@ -183,7 +183,7 @@ const GarageExterior = (function () {
       const current = () => job === mine && selected && geometryKey(selected) === geomKey;
       mine.promise = queue.catch(() => {}).then(async () => {
         const owned = {};
-        let iterator = null;
+        let /** @type {ReturnType<typeof GarageExteriorGeometry.buildSteps> | null} */ iterator = null;
         try {
           if (!current()) return false;
           const def = await wait(load(Object.assign({}, s)));

@@ -504,7 +504,7 @@ function resetSetupCam() {
   setupPreviewFree = false;
   setSetupSpin(true);
 }
-let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
+let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, /** @type {ReturnType<typeof GarageDepartureWheels.create> | null} */ departureWheels = null;
 let _spWheelDistance = 0, _spWheelSteer = 0;
 let _flapBustAt = 0;
 const _pk = { now: [], was: [], val: null };
@@ -571,7 +571,7 @@ function getSetupPreviewMesh() {
   }
   return _spMesh;
 }
-let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
+let /** @type {ReturnType<typeof GarageExterior.create> | null} */ exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
 let homeScene = null;

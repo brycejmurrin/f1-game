@@ -157,7 +157,7 @@ const RaceControl = (function () {
 
   function create(G) {
     const { store } = G;
-    let stopSrc = null;
+    let /** @type {ReturnType<typeof StoppedCars.create> | null} */ stopSrc = null;
     return createControl(Object.freeze({
       get state() { return G.state; }, get session() { return G.session; },
       get timeTrial() { return G.timeTrial; }, get _s8Stamp() { return G._s8Stamp; },

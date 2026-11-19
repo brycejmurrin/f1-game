@@ -17,7 +17,7 @@ const GarageCrew = (function () {
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
   const RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];
-  let look = "classic", lookMesh = null, motionRig = null, serviceRig = null, choreoProps = null;
+  let look = "classic", lookMesh = null, /** @type {ReturnType<typeof GarageCrewMotion.create> | null} */ motionRig = null, /** @type {ReturnType<typeof GarageCrewService.create> | null} */ serviceRig = null, /** @type {ReturnType<typeof GarageCrewChoreo.createProps> | null} */ choreoProps = null;
   const J0 = { foot: [0.11, 0.05, 0.03], knee: [0.11, 0.50, 0.02], hip: [0.10, 0.92, 0], pelvis: [0, 0.95, 0],
     chest: [0, 1.32, 0], neck: [0, 1.46, 0], head: [0, 1.62, 0], shoulder: [0.22, 1.38, 0],
     elbow: [0.26, 1.10, 0], hand: [0.27, 0.84, 0.03] };

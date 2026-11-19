@@ -94,7 +94,7 @@ const CockpitPreview = (function () {
     const rig = M4.ident(), worldRig = new Float32Array(16), digit = M4.ident(), worldDigit = new Float32Array(16);
     const wheel = M4.ident(), worldWheel = new Float32Array(16);
     const paint = { doubleSided: true, roughness: .55, specular: .3 }, fx = { doubleSided: true, emissive: 1, specular: 0 };
-    let state = null, body = null, tyres = [], bodyKey = null, disposed = false;
+    let state = null, /** @type {ReturnType<typeof GLX.createMesh> | null} */ body = null, tyres = [], bodyKey = null, disposed = false;
     window.AppearanceOpts = { units: () => state && state.units || "kmh", speed: (v) => Math.round(state && state.units === "mph" ? v * .621371 : v) };
     function draw() {
       if (!state || disposed) return;

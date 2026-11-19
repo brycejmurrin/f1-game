@@ -26,7 +26,7 @@ const DesignerBridges = (function () {
     function bridges() { return current && Array.isArray(current.design.bridges) ? current.design.bridges : []; }
     function selected() { return current && Number.isInteger(current.sel) && current.sel >= 0 && current.sel < current.design.pts.length; }
     function measure(d) {
-      let built = null;
+      let /** @type {ReturnType<typeof TrackValidate.build> | null} */ built = null;
       try { built = TrackValidate.build(d); } catch (_) {  }
       const total = built && built.tr && built.tr.total;
       if (Number.isFinite(total) && total > 0) return total;

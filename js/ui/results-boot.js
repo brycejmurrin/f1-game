@@ -29,7 +29,7 @@ function ensureSheet() {
 
 function create(G) {
   Log.info("ui", "GameResults.create");
-  let real = null;
+  let /** @type {ReturnType<typeof GameResultsSheet.create> | null} */ real = null;
   function ensure() {
     if (real) return Promise.resolve(real);
     return ensureSheet().then((ok) => {

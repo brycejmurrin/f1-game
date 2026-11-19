@@ -434,7 +434,7 @@ const TrackBuildProps = (function () {
         return region.whole({ center: f.c, size: [Math.abs(s.span || f.hw * 2 + 6) + 2 * Math.abs(s.offset || 0), height, Math.abs(s.depth || 1.4) + 4], basis: [f.r, f.u, f.t] }, () => span(spec));
       };
     }
-    let sceneryTheme = null, landmarkKit = null, circuitKit = null;
+    let sceneryTheme = null, /** @type {ReturnType<typeof LandmarkKit.create> | null} */ landmarkKit = null, /** @type {ReturnType<typeof CircuitKit.create> | null} */ circuitKit = null;
     try {
       if (typeof SceneryThemes !== "undefined" && SceneryThemes &&
           typeof SceneryThemes.resolve === "function") {

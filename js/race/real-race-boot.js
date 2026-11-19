@@ -33,7 +33,7 @@ const RealRace = (function () {
 
   function create(G) {
     Log.info("game", "RealRace.create (boot stub)");
-    let mine = null;
+    let /** @type {ReturnType<typeof RealRaceBody.create> | null} */ mine = null;
     const body = () => {
       if (mine || typeof RealRaceBody === "undefined") return mine;
       mine = RealRaceBody.create(G);

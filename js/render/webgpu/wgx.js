@@ -303,7 +303,7 @@ const WGX = (function () {
       canvas = _gpuCanvas;
       try { Log.info("gfx", "WGX soft-present on"); } catch (_) {  }
     }
-    let _cssSizeCache = null, _pageListenersOff = null;
+    let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
       try { if (_pageListenersOff) _pageListenersOff(); } catch (_) {  }
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) {  }
@@ -567,9 +567,9 @@ const WGX = (function () {
     const _litPending = new WeakMap();
     const _litPipelineKeys = [];
     let _pipeAtFirstPresent = -1;
-    let SHD = null;
-    let CHK = null;
-    let PST = null;
+    let /** @type {ReturnType<typeof WGXShadow.init> | null} */ SHD = null;
+    let /** @type {ReturnType<typeof WGXChunked.init> | null} */ CHK = null;
+    let /** @type {ReturnType<typeof WGXPost.init> | null} */ PST = null;
 
     let envCubeView = null, ssrView = null;
     let _ssrReady = false;

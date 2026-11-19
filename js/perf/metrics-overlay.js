@@ -144,7 +144,7 @@ function store(key, val, pinRe) {
   GameStore.store.rawSet(key, val);
 }
 
-let _impl = null;
+let /** @type {ReturnType<typeof GameMetricsPanel.create> | null} */ _impl = null;
 let _panelAsked = false;
 function panel() {
   if (!_impl && typeof GameMetricsPanel !== "undefined")

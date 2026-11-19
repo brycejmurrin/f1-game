@@ -226,7 +226,7 @@ const RealReplay = (function () {
   function create(G) {
     let run = null;
     let captionGeneration = 0;
-    let transport = null;
+    let /** @type {ReturnType<typeof WatchTransport.create> | null} */ transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
     const bc = typeof Broadcast !== "undefined" ? Broadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c), cameraOwner: () => run && run.cameraOwner }) : null;

@@ -37,7 +37,7 @@ var RaceRadio = (function () {
     let comm = readSetting("commentary", COMM, "tv");
 
     let battleOn = !!(store && store.get && store.get("battleEarcon", false));
-    let battle = null;
+    let /** @type {ReturnType<typeof BattleEarcon.create> | null} */ battle = null;
     function battleService() {
       if (!battle && typeof BattleEarcon !== "undefined" && typeof GameAudio !== "undefined") battle = BattleEarcon.create(GameAudio);
       return battle;

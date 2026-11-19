@@ -5,7 +5,7 @@ const GLXBackend = (function () {
 
   let gl = null;
   let canvas = null;
-  let Soft = null;
+  let /** @type {ReturnType<typeof GLXSoft.create> | null} */ Soft = null;
   const IS_MOBILE = GLX.isMobile;
   const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false, _lossCounted = false;
@@ -126,7 +126,7 @@ const GLXBackend = (function () {
   let decalProg = null, decalU = null;
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
 
-  let core = null, PST = null, SHD = null, CHK = null;
+  let core = null, /** @type {ReturnType<typeof GLXPost.init> | null} */ PST = null, /** @type {ReturnType<typeof GLXShadow.init> | null} */ SHD = null, /** @type {ReturnType<typeof GLXChunked.init> | null} */ CHK = null;
   Soft = GLXSoft.create({
     getGl: () => gl,
     getCanvas: () => canvas,
@@ -647,7 +647,7 @@ const GLXBackend = (function () {
   function wantSpatialUpscale() {
     return spatialUpscale && renderScale < 0.98 && !!(PST && PST.spatialOk && PST.spatialOk());
   }
-  let cssSizeCache = null;
+  let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ cssSizeCache = null;
   function watchCanvasSize() {
     cssSizeCache = CanvasCssSize.create(canvas, { settleFrames: 8 });
   }

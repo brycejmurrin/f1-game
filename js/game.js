@@ -279,7 +279,7 @@ function deployTaper(c) {
 }
 function regenSpeedK(c) { return clamp(vStd(c.speed) / REGEN_FULL_V, 0, 1); }
 
-let aeroZ = null;
+let /** @type {ReturnType<typeof AeroZones.create> | null} */ aeroZ = null;
 function inAeroZone(c) { return !!aeroZ.at(wrapS(c.s)); }
 
 let _simSeed = 1;
@@ -369,7 +369,7 @@ function dirtyAirMul(wake, speed) {
 
 let state = "menu", titleVisit = 0;
 function setState(next, why) { if (next !== state) Log.info("game", "State " + state + "->" + next + " why=" + why + " raceT=" + (+raceT || 0).toFixed(1)); if (next !== state) titleVisit++; state = next; }
-let track = null, builtTrackId = null, builtTrackNight = null;
+let /** @type {ReturnType<typeof Tracks.build> | null} */ track = null, builtTrackId = null, builtTrackNight = null;
 let gridPreOrdered = false;
 let builtGridSlots = null, builtTrackBare = false;
 const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(builtTrackId);
@@ -379,10 +379,10 @@ let pendingFinishQuit = false;
 const postFinish = { solo: false, since: -1 };
 const _gridIdleOpts = { soundOn: false, wet: false, step: true };
 let launchT0 = 0;
-let raceCtl = null;
-let wxArc = null;
-let tyres = null;
-let pits = null;
+let /** @type {ReturnType<typeof RaceControl.create> | null} */ raceCtl = null;
+let /** @type {ReturnType<typeof WeatherArc.create> | null} */ wxArc = null;
+let /** @type {ReturnType<typeof TyreModel.create> | null} */ tyres = null;
+let /** @type {ReturnType<typeof PitLane.create> | null} */ pits = null;
 let _pitCrewDrawn = () => 0;
 const postLim = { r: 0, l: 0, minOut: 0, side: 0 };
 const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5)
@@ -408,7 +408,7 @@ function blueFlagCall(ev) {
   if (soundOn) GameAudio.penalty();
 }
 const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
-let engineer = null;
+let /** @type {ReturnType<typeof RaceEngineer.create> | null} */ engineer = null;
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -484,7 +484,7 @@ const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 const CHAMP_GRID_RULES = ["champ", "tier", "revchamp", "random"];
 let champGrid = store.get("champGrid", raceGrid === "revchamp" ? "revchamp" : "champ");
 if (CHAMP_GRID_RULES.indexOf(champGrid) < 0) champGrid = "champ";
-let qualiNet = null;
+let /** @type {ReturnType<typeof QualiNet.create> | null} */ qualiNet = null;
 let raceWeather = "dry";
 let raceTimeOfDay = "default";
 const lapRec = LapRecord.create();
@@ -522,7 +522,7 @@ let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let playerAeroLoad = 0.5;
 let playerErs = { deploy: 0.5, regen: 0.5 };
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
-let lastFrame = 0, raceMessageHistory = null, controllerProfileUi = null, raceMixUi = null, setupTrialSession = null;
+let lastFrame = 0, /** @type {ReturnType<typeof RaceMessageHistory.create> | null} */ raceMessageHistory = null, /** @type {ReturnType<typeof ControllerProfileControls.create> | null} */ controllerProfileUi = null, /** @type {ReturnType<typeof RaceMixControls.create> | null} */ raceMixUi = null, /** @type {ReturnType<typeof SetupTrialSession.create> | null} */ setupTrialSession = null;
 const banner = AnnounceBanner.create({
   els: () => els, player: () => player, state: () => state, hudProfile: () => hudProfile,
   camMode: () => camMode, camModes: () => CAM_MODES, radioVoice: () => radioVoice,
@@ -531,7 +531,7 @@ const banner = AnnounceBanner.create({
 let radioVoice = RadioVoice.inert();
 function announce(msg, dur, kind, still, quiet) { return banner.announce(msg, dur, kind, still, quiet); }
 let announcer = Announcer.inert();
-let skids = null;
+let /** @type {ReturnType<typeof SkidMarks.create> | null} */ skids = null;
 const { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY } = GradeTint;
 function carPaintMat(base) { return GradeTint.carPaint(base, LT); }
 function hueRotateTint(rgb, deg) { return GradeTint.hue(rgb, deg); }
@@ -1719,9 +1719,9 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));
 }
 
-let ltStore = null;
+let /** @type {ReturnType<typeof LightStore.create> | null} */ ltStore = null;
 
-let raceSettings = null, customTeam = null, titleMenu = null, uiExperience = null, photoStudio = null;
+let /** @type {ReturnType<typeof RaceSettings.create> | null} */ raceSettings = null, /** @type {ReturnType<typeof CustomTeam.create> | null} */ customTeam = null, /** @type {ReturnType<typeof TitleMenu.create> | null} */ titleMenu = null, /** @type {ReturnType<typeof UiExperience.create> | null} */ uiExperience = null, /** @type {ReturnType<typeof PhotoStudio.create> | null} */ photoStudio = null;
 
 const G = {
   $, els,
@@ -5124,7 +5124,7 @@ function openSettings() {
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
   requestAnimationFrame(() => requestAnimationFrame(() => focusSettingsHub()));
 }
-let keyBinds = null;
+let /** @type {ReturnType<typeof KeyBinds.create> | null} */ keyBinds = null;
 function closeSettings() { settingsNav.invalidate(); if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
