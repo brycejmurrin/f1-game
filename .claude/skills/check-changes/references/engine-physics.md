@@ -8,7 +8,8 @@ any left unrun as not-run in the PR.
 1. Plan: `node tools/ci/verify-change.mjs --plan <your paths>`; its `batches` are YOUR groups (a
    consts/game.js edit lists many; a single physics file fewer — read the plan, not this page).
 2. The one spec: `tests/specs/physics-characterization.spec.js` is the master gate near game.js; for another
-   file `node tools/ci/select-specs.mjs --since origin/claude/f1-game-project-26h3ng` names it. It runs on the
+   file `node tools/ci/select-specs.mjs --files <path>` names it (`floor: null` means only the groups cover it;
+   `--since <ref>` reads an edit already made). It runs on the
    PR's selected shard, never locally (AGENTS.md rule 5).
 3. The plan's groups: the PR's own CI runs the selected shard; the rest named not-run (a whole group is Bryce's opt-in).
 4. Static checks that belong with this change:

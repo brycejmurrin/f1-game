@@ -31,7 +31,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
 5. **Cap.** The brief's `STOP AT` (`start+<N>k` is a budget above your first turn's context; the worker brief
-   `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
+   `tools/ci/worker-prompt.md`, its `Caps:` paragraph) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
    `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options, your pick and the exact line to paste
    (`decision: <option>`), posted when the question is first predictable, not after CI confirms it; then keep working
@@ -44,7 +44,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 ## Open
 
-1. Branch `cursor/<topic>-<hash>` from the deploy tip; commit in two calls (AGENTS.md rule 12); `git push -u origin
+1. Work on the branch you were assigned (`claude/*` in a cloud session), else branch `cursor/<topic>-<hash>` from the
+   deploy tip (AGENTS.md §Git branch); commit in two calls (AGENTS.md rule 12); `git push -u origin
    <branch>` alone.
 2. Open a DRAFT PR into `claude/f1-game-project-26h3ng` (GitHub MCP `create_pull_request`, `draft: true`) from
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt

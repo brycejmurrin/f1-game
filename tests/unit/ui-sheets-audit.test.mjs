@@ -1351,3 +1351,37 @@ test("translated stint accessibility and craft debrief localise prose ranges and
   const debrief = box.children.find(e => e.classList.contains("craft"));
   assert.deepEqual(debrief.children.map(e => e.textContent), ["Bremse: 1.000", "Runde 1.000, 2.000"]);
 });
+
+// #5672: CLEAR GHOST deleted the PB ghost AND its medal on one tap, and YOUR PB read +0.000s on every record
+// (Ghost.finishLap had already made this lap the ghost). The clear arms first; the PB row compares with the
+// best the record replaced (meta.prevBest, written by session-records.js before finishLap).
+function bootTT(meta) {
+  let cleared = 0;
+  const ghost = { snapshot: () => null, hasGhost: () => true, bestTime: () => 131.055, meta: () => meta, medal: () => null, clear() { cleared++; } };
+  const h = bootResults({ season: null, cars: [], seasonMode: false, globals: { Ghost: ghost } });
+  const armed = new Set(), labels = [];
+  Object.assign(h.G, {
+    player: { best: 131.0552 }, ttNewRecord: true, ttSessionTs: 10,
+    records: { board: () => [{ t: 131.055, code: "AAA", name: "Alpha", teamId: "red", ts: 11 }] }, teamById: () => null,
+    // game.js armConfirm's contract: the first press arms (label swap), the second runs the action.
+    armConfirm: (btn, text, action) => { if (!armed.has(btn)) { armed.add(btn); labels.push(text); btn.textContent = text; return false; } armed.delete(btn); action(); return true; },
+  });
+  h.api.buildTTResults();
+  return { h, labels, cleared: () => cleared };
+}
+const ttRow = (h, name) => rowsOf(h.els.resultsTable).find((r) => nameOf(r) === name);
+const ttPts = (row) => row.children.find((c) => c.classList.contains("res-pts")).textContent;
+
+test("TIME TRIAL: YOUR PB shows the gain over the replaced best on a new record (#5672)", () => {
+  assert.equal(ttPts(ttRow(bootTT({ prevBest: 132.252 }).h, "YOUR PB")), "-1.197s");
+  assert.equal(ttPts(ttRow(bootTT({}).h, "YOUR PB")), "+0.000s", "an old ghost with no prevBest (the first lap ever) keeps the old row");
+});
+
+test("TIME TRIAL: CLEAR GHOST arms on the first tap and clears only on the second (#5672)", () => {
+  const t = bootTT({ prevBest: 132.252 });
+  const btn = () => t.h.els.resultsTable.children.find((c) => c.id === "res-ghost-clear");
+  btn().onclick();
+  assert.deepEqual([t.cleared(), btn().textContent, t.labels], [0, "TAP AGAIN TO CLEAR", ["TAP AGAIN TO CLEAR"]]);
+  btn().onclick();
+  assert.equal(t.cleared(), 1);
+});
