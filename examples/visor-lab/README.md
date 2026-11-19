@@ -14,10 +14,13 @@ credentials are required in source.
 
 `index.html`, `app.js`, `style.css` and `shots.json` preserve the original static
 112-shot comparison gallery. Its additional full-resolution and thumbnail images
-are capture output and are not duplicated in this directory. Export into the
-existing gallery directory to retain them; exporting to an empty directory alone
-does not reconstruct those captured variants. Animated optics remains usable
-with the eight originals after runtime aliases have been exported.
+are capture output and are not duplicated in this directory. The authoring
+checkout therefore starts on Original; missing tinted files fall back to
+`*--off.webp`, and missing thumbs fall back to the full frame, so the divider
+works without the exported gallery. Export into the existing gallery directory
+to retain tinted variants; exporting to an empty directory alone does not
+reconstruct those captured variants. Animated optics remains usable with the
+eight originals after runtime aliases have been exported.
 
 Scene images decode before either side changes. Older asynchronous loads cannot
 overwrite a newer selection. Reduced-motion users start with stationary water;

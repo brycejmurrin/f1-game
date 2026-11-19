@@ -50,6 +50,14 @@
     } catch (e) {
       manifest = { unavailable: String(e.message || e) };
     }
+    // Keep page URL / manifest even when a mid-boot inspect() throws: agents
+    // need identity evidence more than a hard failure that drops both.
+    let inspection;
+    try {
+      inspection = inspect();
+    } catch (e) {
+      inspection = { unavailable: String(e.message || e) };
+    }
     return clone({
       schema: "f1-dev-diagnostic/v1",
       capturedAt: new Date().toISOString(),
@@ -60,15 +68,59 @@
         controller,
       },
       manifest,
-      inspection: inspect(),
+      inspection,
     });
   }
   function hex(bytes) {
     return [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, "0")).join("");
   }
-  async function checkAssets(urls, { timeoutMs = 15000 } = {}) {
+  // Release checks target version.json / shell / game.js (sub-MiB today). Cap
+  // far above that so a misconfigured or hostile body cannot arrayBuffer() the
+  // tab into an OOM while still fitting documented checkout assets.
+  const MAX_ASSET_BYTES = 8 * 1024 * 1024;
+  async function readBoundedBody(response, maxBytes, signal) {
+    const declared = response.headers.get("content-length");
+    if (declared != null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
+      try { await response.body?.cancel?.("too large"); } catch (_) {}
+      return { tooBig: true, bytes: null };
+    }
+    if (!response.body || typeof response.body.getReader !== "function") {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength > maxBytes) return { tooBig: true, bytes: null };
+      return { tooBig: false, bytes };
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+      for (;;) {
+        if (signal?.aborted) {
+          const err = new Error("The operation was aborted.");
+          err.name = "AbortError";
+          throw err;
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        const part = value instanceof Uint8Array ? value : new Uint8Array(value);
+        total += part.byteLength;
+        if (total > maxBytes) {
+          try { await reader.cancel("too large"); } catch (_) {}
+          return { tooBig: true, bytes: null };
+        }
+        chunks.push(part);
+      }
+    } finally {
+      try { reader.releaseLock(); } catch (_) {}
+    }
+    const bytes = new Uint8Array(total);
+    let off = 0;
+    for (const chunk of chunks) { bytes.set(chunk, off); off += chunk.byteLength; }
+    return { tooBig: false, bytes };
+  }
+  async function checkAssets(urls, { timeoutMs = 15000, maxBytes = MAX_ASSET_BYTES } = {}) {
     if (!Array.isArray(urls) || !urls.length || urls.length > 64) throw new Error("Supply 1..64 asset URLs.");
     if (!Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 120000) throw new Error("timeoutMs must be 100..120000");
+    if (!Number.isFinite(maxBytes) || maxBytes < 1024 || maxBytes > 32 * 1024 * 1024) throw new Error("maxBytes must be 1024..33554432");
     if (typeof fetch !== "function" || !globalThis.crypto?.subtle) throw new Error("This browser has no fetch or Web Crypto support.");
     const results = [];
     for (const raw of urls) {
@@ -81,7 +133,14 @@
       const started = performance.now();
       try {
         const response = await fetch(url.href, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const body = await readBoundedBody(response, maxBytes, controller.signal);
+        if (body.tooBig) {
+          results.push({ url: response.url || url.href, requestedUrl: url.href, redirected: !!response.redirected, ok: false, status: response.status,
+            contentType: response.headers.get("content-type"), contentLength: response.headers.get("content-length"),
+            error: "too_big", maxBytes, elapsedMs: Math.round(performance.now() - started) });
+          continue;
+        }
+        const bytes = body.bytes;
         results.push({ url: response.url || url.href, requestedUrl: url.href, redirected: !!response.redirected, ok: response.ok, status: response.status,
           contentType: response.headers.get("content-type"), contentLength: response.headers.get("content-length"),
           cacheControl: response.headers.get("cache-control"), etag: response.headers.get("etag"),
@@ -113,8 +172,22 @@
     if (!repro.track || !repro.cars?.length) throw new Error("Enter a race before capturing a scene.");
     return { schema: "f1-dev-scene/v1", repro: clone(repro), inspection: inspect() };
   }
-  async function restore(scene) {
+  async function withTimeout(thenable, timeoutMs, message) {
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve(thenable),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  async function restore(scene, { timeoutMs = 60000 } = {}) {
     if (scene?.schema !== "f1-dev-scene/v1" || !scene.repro?.track) throw new Error("Invalid scene document.");
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 300000) throw new Error("timeoutMs must be 100..300000");
     const a = api(), b = scene.repro, current = a.repro(), frame = scene.inspection?.frame;
     const fail = () => { throw new Error("Invalid scene document. No scene applied."); };
     if (b.v !== 1 || typeof b.track !== "string" || !Tracks.LIST.some(t => t.id === b.track) ||
@@ -144,7 +217,7 @@
     }
     const info = a.info();
     if (info.track !== b.track || !["race", "count"].includes(info.state)) {
-      await a.race(b.track, b.tod, b.wx);
+      await withTimeout(a.race(b.track, b.tod, b.wx), timeoutMs, "Scene race() timed out before the grid was ready.");
       a.go();
     }
     // Native repro(cam) persists resolved knobs and flattens raw/global inheritance.

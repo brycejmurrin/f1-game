@@ -23,7 +23,8 @@ interface RaceControlPort {
     level: number; sector: number; frac: number; cause: string;
     total: number; sectors: number[]; sinceT: number; phase: string;
   }) => void;
-  readonly announce: (text: string, seconds: number, kind: string) => unknown;
+  /** Same boolean contract as GameCtx.announce — false means absent/rejected (retry). */
+  readonly announce: (text: string, seconds: number, kind: string) => boolean;
   readonly wetness: () => number | undefined;
   /** Per-frame RETIRED-card tick (js/race/retired-card.js); optional. */
   readonly playerWait?: () => void;

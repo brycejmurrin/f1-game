@@ -3,7 +3,7 @@
 **Setting:** DAY, green theme (upstate New York hardwood in autumn). ~5.44 km, 11 turns, clockwise. GP-era Boot layout (`lengthKm` 5.4); do not swap in the NASCAR short-course Bus Stop geometry.
 
 ## 1. Setting
-A hillside above Seneca Lake in the Finger Lakes, home of the United States Grand Prix until 1980. Two things define it. First, the **fall colour**: this is the only circuit in the game where the trees are actively turning, and the scarlet-and-amber hardwood is the whole look. Second, the club-built infrastructure: poured-concrete garages with roll-up doors, an open angle-iron **2006 control tower** with contiguous officials / timing / broadcast booths, Nazareth Speedway timber stands relocated as the **Pit Terrace**, and bare plank bleachers greyed by upstate winters. The lap's landmarks are the plunging **Esses** (Sahlen hillside spectators) and **the Boot**, the long loop added in 1971 that drops away into the woods and climbs back out.
+A hillside above Seneca Lake in the Finger Lakes, home of the United States Grand Prix until 1980. Two things define it. First, the **fall colour**: this is the only circuit in the game where the trees are actively turning, and the scarlet-and-amber hardwood is the whole look. Second, the club-built infrastructure: poured-concrete garages with roll-up doors, an open angle-iron **2006 control tower** with contiguous officials / timing / broadcast booths, Nazareth Speedway timber stands relocated as the **Pit Terrace**, and bare plank bleachers greyed by upstate winters. The lap's landmarks are the uphill **Esses** (Sahlen hillside spectators) and **the Boot**, the long loop added in 1971 that drops away into the woods and climbs back out.
 
 ## 2. Atmosphere & palette
 Cool clear autumn light with a golden cast. Deep hardwood greens shot through with turning maple and sumac.
@@ -16,8 +16,7 @@ Cool clear autumn light with a golden cast. Deep hardwood greens shot through wi
 
 ## 3. Elevation
 Large — the circuit runs over a hillside and the Boot is a descent and a climb in one. Keep real hills; no knife-edge grade spikes.
-- s≈0.11: **9 m climb** out of Turn 1.
-- s≈0.30: **12 m drop** down through the Esses.
+- s≈0.10–0.27: **12 m climb** from Turn 1's exit up through the Esses (T2–T4), easing down the back straight into the Outer Loop (one hill, `{ s: 0.27, halfM: 900 }`; was a 9 m bump and a 12 m drop until 2026-11-18, #5316).
 - s≈0.52: 8 m further down into **the Boot**.
 - s≈0.70: **13 m climb** back out of it — the biggest single rise on the lap.
 - s≈0.90: 5 m drop to the front straight.
@@ -33,7 +32,7 @@ Large — the circuit runs over a hillside and the Boot is a descent and a climb
 | 0.00–0.15 | both | near | Bare **timber plank bleachers** on raked post pairs, no roof and no back wall, a guard rail across the back |
 | 0.090 | R | near | Turn 1 / the 90: gravel apron + red tyre wall |
 | 0.20–0.30 | R | mid | **Sahlen Esses hillside** — `spectatorHill` grass bank (positive rise) plus timber `glen-esses-hill` stand. Sources: theglen.com / TheGlenRace.com Sahlen Esses Grandstand |
-| 0.245 | L | near | **The Esses** gravel + blue tyre wall; 4.5° camber through the drop |
+| 0.245 | L | near | **The Esses** gravel + blue tyre wall; 4.5° camber on T3, the middle left |
 | 0.24–0.34 | both | near | Front rank of **turning sugar maple** — broad lobed low crowns of scarlet on pale grey trunks; staghorn sumac along the verge, the loudest orange in the woods |
 | 0.365 | — | over | Timber-and-steel **footbridge** over the circuit on concrete piers |
 | 0.45–0.48 | — | — | Entry to **the Boot**, pinched to 6.2 m |
@@ -45,7 +44,7 @@ Large — the circuit runs over a hillside and the Boot is a descent and a climb
 | — | ring | far | Finger Lakes hills: wooded, rolling, closing the horizon in every direction |
 
 ## 5. Track features
-- The **Esses**: a fast downhill left-right sequence with real camber — the corner the circuit is known for.
+- The **Esses**: a fast uphill right-left-right sequence (T2–T4) with real camber — the corner the circuit is known for.
 - **The Boot**: a long descending-then-climbing loop through the woods, narrowest part of the lap (GP layout; NASCAR short course omitted).
 - Real gravel and real armco throughout; the crowd stood on banks rather than in stands for most of the lap.
 - Wide, old-surface tarmac; kerbs modest, nothing modern or sausage-shaped.
@@ -55,7 +54,7 @@ Large — the circuit runs over a hillside and the Boot is a descent and a climb
 - Mix, don't uniformly recolour: turned scarlet and amber against unturned green with dark conifer behind. A wholly orange forest looks like a filter, not a fall.
 - Everything built here is a public-works building that races happen to be run from — concrete, angle iron, plywood, weathered lumber. Booth glass on the 2006 tower only.
 - Stands are open bare timber or Nazareth scaffold. Sky through the frame and grey weathering are the point. Rows must rise away from the track (positive slope).
-- Exaggerate the Esses drop and the climb out of the Boot; those two moves carry the circuit.
+- Keep the Esses climb and the climb out of the Boot; those two moves carry the circuit.
 - Scatter the woodland camps in clearings well off the racing line — informal, not laid out. Seat tents on local `terrainYAt`; do not lift a whole clearing to its high corner (that floats the fire pit).
 
 ## Research pass — sourced vs uncertain
@@ -72,3 +71,23 @@ Large — the circuit runs over a hillside and the Boot is a descent and a climb
 - Exact booth count / tower storey height — silhouette only; three contiguous cabins are a readable stand-in, not a measured survey.
 - Exact Nazareth bay inventory on the Pit Terrace — bay count is compositional.
 - Watkins Glen gorge is in the state park in town, not visible from the circuit hilltop — does not belong trackside.
+
+## Turn list and Esses fix 2026-11-18 (#5316 CIRC4-07/08)
+
+`turns` was the 11 strongest curvature peaks: no apex in the Esses or the Outer
+Loop (a 2.4 km T1→T2 gap), the Boot and the last two corners double-counted. It
+is now one apex per real corner, each on its built curvature peak: T1 the 90
+0.0643 (R) · T2–T4 the Esses 0.1263 (R) / 0.1750 (L) / 0.2449 (R) · T5 Outer
+Loop 0.4051 (R 135°) · T6–T9 the Boot 0.5055 (L) / 0.5970 (R) / 0.7312 (R) /
+0.7919 (L) · T10 0.8663 (L) · T11 0.9255 (R). The Boot's L-R-R-L order is
+Wikipedia's description of the 1971 extension; the numbering follows the
+nasaspeed.news lap guide (T2-T4 Esses, T5, T6 Laces / T7 Toe / T8 Heel). The
+three bank rows are keyed by turn (Esses T3, Toe T7, Anvil T11). The Esses
+climb: nasaspeed.news ("the uphill Esses", T1 "uphill on the exit") and
+nascar.com ("ascent through the esses"); the 12 m magnitude is the def's old
+figure, not a survey.
+
+Sources: https://nasaspeed.news/columns/driver-instruction/one-lap-around-watkins-glen-international-raceway/ ·
+https://www.nascar.com/news-media/2018/08/01/analyzing-each-turn-at-watkins-glen-international/ ·
+https://en.wikipedia.org/wiki/Watkins_Glen_International
+
