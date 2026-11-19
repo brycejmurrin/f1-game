@@ -146,3 +146,13 @@ test("gap 23: SETTINGS › HIGH CONTRAST solidifies the hub card, as the OS pref
   assert.equal(inGame.decls.get("background"), "var(--surf-1)");
   assert.ok(!inGame.context.some((c) => /^@media/.test(c)), "unconditional: the setting, not a media query, decides: " + JSON.stringify(inGame.context));
 });
+
+test("mobile-ui: ICS row share + howto/quali overrides in data.css", () => {
+  assert.equal(
+    decl(rules, '[data-ics="weekend"], [data-ics="season"]', "flex"),
+    "1 1 calc(50% - var(--gap) / 2)"
+  );
+  const howtoAt = DATA_CSS.indexOf("#howtoplay-inner #htp-contents");
+  const qualiAt = DATA_CSS.indexOf('#quali .sheet:not([data-shape="tall"]) #q-table');
+  assert.equal(howtoAt >= 0 && qualiAt > howtoAt, true);
+});

@@ -11,7 +11,8 @@ __apex.lightState()
 //   ambientSky:    [r,g,b]   → uAmbSky
 //   ambientGround: [r,g,b]   → uAmbGround
 //   sunColor:      [r,g,b]   → directional sun
-//   exposure:      number    → tone-map multiplier
+//   exposure:      number    → the time-of-day base (G.frame.exposure); the EXPOSURE knob (exposureMul) is applied
+//                             later at present time, so this field never shows an exposureMul edit: read lightTune()
 //   numLights:     number    → G.frame.lights only (point lights); NOT per-chunk lamps
 //   perChunkLights, bakedLights, perChunkHeld, tlxLampGrid → the per-chunk / baked lamp path
 //   sunY:          number    → sin(elevation); 1 = zenith
@@ -21,13 +22,14 @@ __apex.lightState()
 // }
 ```
 
-`tools/shot/apex-eval.mjs` and `tools/shot/apex-capture.mjs` launch Chromium via
+`tools/shot/apex-capture.mjs`, and `tools/shot/apex-eval.mjs` without `--vm`, launch Chromium via
 Playwright — they need a browser install. Do not run them while a Playwright
-group is already in flight.
+group is already in flight. `apex-eval … --vm` boots a Node VM instead (no lamps: `numLights` 0,
+`meanLampRGB`/`meanPerChunkRGB` null).
 
 ```sh
-node tools/shot/apex-eval.mjs vegas "a.lightState()"
-node tools/shot/apex-eval.mjs monaco "a.lightState()"
+node tools/shot/apex-eval.mjs vegas "a.lightState()" --vm
+node tools/shot/apex-eval.mjs monaco "a.lightState()" --vm
 ```
 
 Monza has `night:false` — prefer vegas/singapore for night probes (night command: SKILL.md Workflow
@@ -37,10 +39,10 @@ the floodlight row below.
 ## Before/after a code change
 
 ```sh
-node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw --vm > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
 # (no cache bump: .claude/rules/game-code.md cache busting); then:
-node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw --vm > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```
 
@@ -64,7 +66,7 @@ A timing sleep alone does not prove presented pixels.
 | Night looks like day | `ambientSky` too bright, `numLights` = 0 | Inspect shipped `LightPresets["track\|tod\|weather"]` first; then `lightTune({ambientMul})` / night ambient cap. Track may not trigger a dark rebuild |
 | Floodlights not firing | `numLights === 0` AND `perChunkLights`/`bakedLights` 0 on a dark track | No `def.night` guard in `buildTrackLights` (every circuit gets lamps). The gate is `isFloodActiveSession()` (game.js: tod night/dusk/dawn, or `default` + `def.night`) `\|\| LT.floodDay > 0`; `raceTimeOfDay` must be set BEFORE `applyRaceSettings`. On TLX after a night→day race, read `lightState().tlxLampGrid`: the previous track's lamp cells can stay pinned. |
 | Floodlights dim at dusk/dawn | `numLights` > 0 but pools weak | Dusk/dawn level scales `lampLevel` by `twilightFloor`/`twilightRamp` against `sunY` (game.js); a shipped `"<track>\|dusk\|<wx>"` row with low `lampLevel` or `twilightFloor` reads as off. Caps: `lampCull`, `lampDensity`, `lampBake`. `slider-effect.mjs --group LAMPS` lists them (no browser) |
-| Floodlight masts invisible | `floodEmit === 0` | Night emissive in `buildProps`; `lightTune({floodEmitMul})` |
+| Floodlight masts invisible | `floodEmit === 0` | `floodEmit()` in `js/lighting/atmosphere.js` (LT.floodEmitMul × 0.78 at night); `lightTune({floodEmitMul})`. Under `--vm` no frame renders, so `perChunkLights: 0` / `perChunkHeld: "day"` there is not evidence |
 | Dawn sun too high | `sunY` close to 1.0 | `lightTune({sunElev: -N})`; structural default in `applyRaceSettings` |
 | Washed out / bloom too strong | `exposure` / bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; check shipped presets |
 | Night washed out (milky, lifted blacks) | `ambientSky/Ground` high, `exposure` up | Read BOTH rows (SKILL.md §Gotchas): the shared `"*\|night\|dry"` stamp and the track's row. |

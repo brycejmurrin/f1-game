@@ -270,7 +270,9 @@ const TitleLayout = (function () {
       // The offset clamp: the overrun past an edge, the near edge winning. It reads what PAINTS: the doors are
       // skewX(-6deg), so a door's drawn box overhangs the cluster's layout box by ~2.3 px a side, and clamping the
       // layout box let them cross the safe edge by 2-3 px (#5385, UI SIZE 50-61 on a phone).
-      const z = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1;
+      // currentCSSZoom is exact; rect / offsetHeight divides by a ROUNDED integer, and through the ~427 px pull-back
+      // of a far stored X that missed the safe edge by 1 px (#5622: brand at 58.1 with a 59 inset, 852x393).
+      const z = el.currentCSSZoom > 0 ? el.currentCSSZoom : (el.offsetHeight > 0 ? r.height / el.offsetHeight : 1);
       r = painted(el, r);
       let dx = 0, dy = 0;
       if (r.right > box.r) dx = box.r - r.right;

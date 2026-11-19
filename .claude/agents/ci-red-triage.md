@@ -2,6 +2,7 @@
 name: ci-red-triage
 description: Read-only triage of a red GitHub Actions run (ci.yml, pages.yml, gpu-census.yml). Use when a CI or Pages run is red and the question is WHICH test, WHICH assertion, WHICH lane, and whether the base was already red — before anyone re-runs or "fixes" anything. Returns a one-line SHA · run · RED status line. Never re-runs tests locally.
 model: sonnet
+omitClaudeMd: true
 maxTurns: 20
 background: true
 disallowedTools: Write, Edit, NotebookEdit
@@ -19,7 +20,7 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 
 ## The job
 
-0. No run, id or SHA given? Resolve the current deploy tip and latest Pages
+0. No run, id or SHA given? Resolve the current deploy tip (`claude/f1-game-project-26h3ng`) and latest Pages
    run, then current open PR heads and each head's latest CI runs. Select a
    current failure and say which. Do not filter history to `status=failure`
    first: that can revive an old red after a newer successful run. If current
@@ -75,8 +76,9 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 5. Was it already red? Find the same workflow's last run on the base (the
    deploy tip for a PR, the previous tip for a ship push) and say
    `already-red-on-base` or `new-on-this-push`, or `unknown` when you did not read
-   that previous run (never write `new-on-this-push` for an unread base). `tools/ci/base-verdict.sh`
-   and `bash tools/ci/pages-live-sha.sh <url>` exist for this.
+   that previous run (never write `new-on-this-push` for an unread base). The run's own
+   "Base verdict" step summary (`tools/ci/base-verdict.sh`, a CI step) answers it when present; you cannot run
+   that script or `pages-live-sha.sh` (your hook refuses `bash <script>`): the live sha is agent `deploy-research`'s read.
 6. **Stale generated files (not a rerun):** when logs or node suites mention
    `gen:check`, `agent-indexes.test.mjs`,
    missing keys in `tests/data/impact-map.json`, or the ARCHITECTURE.md module

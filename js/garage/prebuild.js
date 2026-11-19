@@ -356,7 +356,9 @@ const GaragePrebuild = (function () {
       Log.info("game", "garage released for the race");
       return true;
     }
-    _instance = { run, start, stop, markOpen, timed, state, setEnabled, release };
+    // RACE SETTINGS moved its circuit, weather or hour: key the drive-out's exterior on it now (#5660).
+    const prewarmExterior = () => { if (cam.prewarmExterior) cam.prewarmExterior(); };
+    _instance = { run, start, stop, markOpen, timed, state, setEnabled, release, prewarmExterior };
     return _instance;
   }
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).

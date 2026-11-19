@@ -5,8 +5,8 @@ orbit PNGs. The hook tables and corner-name rules are in track-geometry.md.
 
 ## One-off queries
 
-Session only: in a subagent bash-guard refuses these `tools/shot/*.mjs` calls even with `--vm`
-(use a `scratch/` `createGame` script, track-geometry.md).
+In a subagent only the `--vm` forms of these `tools/shot/*.mjs` calls run (a browser form throws from
+`launchChromium` under `APEX_SUBAGENT`); otherwise use a `scratch/` `createGame` script (track-geometry.md).
 
 ```sh
 # official turn count vs curvature peaks:
@@ -51,8 +51,8 @@ node tools/shot/apex-capture.mjs tracks scratch/captures/apex-capture/tracks    
 node tools/shot/apex-capture.mjs tracks scratch/captures/apex-capture/tracks spa monza  # just these two
 ```
 Main session only (it boots a browser). The manifest flags any `blank:true` render. For geometry regressions
-`terrain-over-road.spec.js` and the `tracks-walls*.spec.js` specs (CI group `circuits`, on the pushed branch:
-`node tools/ci/remote-group.mjs circuits`) are the assertions; these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
+`terrain-over-road.spec.js` and the `tracks-walls*.spec.js` specs (CI group `circuits`, run by the PR's own CI;
+a whole-group run is Bryce's opt-in) are the assertions; these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
 `node tools/track/verify-track.cjs <id>` first (see the **new-track** skill).
 
 ## Terrain-over-road sweep (VM)

@@ -13,7 +13,7 @@
  *   node tools/ci/pick-tests.mjs --staged        # only what is staged
  *   node tools/ci/pick-tests.mjs --since HEAD~3
  *   node tools/ci/pick-tests.mjs js/car/parts.js js/ui/hud.js   # explicit paths
- *   node tools/ci/pick-tests.mjs --bg            # print only the remote-group.mjs commands
+ *   node tools/ci/pick-tests.mjs --bg            # print only the remote-group.mjs commands (Bryce's opt-in to run)
  *   node tools/ci/pick-tests.mjs --json         # machine-readable, for CI
  *
  * `--json` exists because the human output is PROSE and a CI selector reading
@@ -480,12 +480,42 @@ export function sharedUiSpecs(files) {
   return hit ? SHARED_UI_LAYER.specs.map((spec) => ({ spec, module: hit })) : [];
 }
 
-/** Every spec to name for a diff, with why: standalone loaders then the shared UI layer (deduped by spec). */
+// AN ASSET DIFF (audit 2026-11-09 W31, #5334): RULES send every assets/ path to `hooks` (the baked pack loader),
+// so an assets/sfx/ edit never ran audio-smoke.spec.js, the one spec that asserts the engine sample is fetched.
+// A spec whose source names `assets/<dir>/` (as a path or as an escaped regex) is named for a changed file there.
+const ASSET_DIR = /^assets\/([^/]+)\//;
+
+/** Specs whose source names the assets/ subdirectory of a changed file. @returns {{spec:string,module:string}[]} */
+export function assetSpecs(files, opts = {}) {
+  const dirs = new Map();
+  for (const f of files) { const m = ASSET_DIR.exec(f); if (m && !dirs.has(m[1])) dirs.set(m[1], f); }
+  if (!dirs.size) return [];
+  const dir = opts.specsDir || path.join(ROOT, "tests/specs");
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".spec.js")).sort(); } catch (_) { return []; }
+  const read = opts.read || ((n) => fs.readFileSync(path.join(dir, n), "utf8"));
+  const out = [];
+  for (const n of names) {
+    let text = "";
+    try { text = read(n); } catch (_) { continue; }
+    for (const [d, f] of dirs) {
+      if (text.includes(`assets/${d}/`) || text.includes(`assets\\/${d}\\/`)) out.push({ spec: `tests/specs/${n}`, module: f });
+    }
+  }
+  return out;
+}
+
+/** Every spec to name for a diff, with why: standalone loaders, the shared UI layer, then asset readers (deduped by spec). */
 export function extraSpecs(files, opts = {}) {
   const seen = new Map();
   for (const r of standaloneSpecs(files, opts)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "loads-module-standalone" });
   for (const r of sharedUiSpecs(files)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "shared-ui-layer" });
-  return [...seen.values()].filter((r) => fs.existsSync(path.join(opts.root || ROOT, r.spec)) || opts.read);
+  for (const r of assetSpecs(files, opts)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "names-asset-dir" });
+  const selected = new Set(opts.selected || []);
+  return [...seen.values()]
+    .filter((r) => fs.existsSync(path.join(opts.root || ROOT, r.spec)) || opts.read)
+    // A spec a selected group already runs is named, whatever rule picked the group (#5674: data-lifecycle in hooks).
+    .filter((r) => !specOwners(r.spec, opts.groups).some((g) => selected.has(g)));
 }
 
 // NEW-MODULE / NEW-GLOBAL CHECKLIST. The same five-point list is one paragraph in .claude/rules/game-code.md.
@@ -607,8 +637,8 @@ function changedFiles(argv) {
 }
 
 /** Prose for the specs the group rules cannot name, and the new-module checklist when the diff adds one. */
-function printExtras(files, argv) {
-  const specs = extraSpecs(files);
+function printExtras(files, argv, selected = []) {
+  const specs = extraSpecs(files, { selected });
   if (specs.length) {
     console.log(`\n${specs.length} spec(s) the group rules do not name (the PR's selected shard runs them; one group on the pushed branch: node tools/ci/remote-group.mjs <group>; never run them locally, AGENTS.md rule 5):`);
     for (const r of specs) console.log(`    ${r.spec}  (${r.kind === "shared-ui-layer" ? "shared UI layer" : "loads"} ${r.module})`);
@@ -635,7 +665,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   (no args)     groups for files not yet on ${DEPLOY_BRANCH} (origin/, else local; neither: exit 4), plus the working tree and untracked files
   --staged      only staged files
   --since <ref> files changed since <ref>
-  --bg          print tools/ci/remote-group.mjs commands only (one per browser group)
+  --bg          print tools/ci/remote-group.mjs commands only (one per browser group; dispatching is Bryce's opt-in)
   --json        machine-readable {reason,files,groups} (asserted by pick-tests.test.mjs)
   --help        this message
 
@@ -705,13 +735,14 @@ An unknown option prints this usage and exits 2.`;
   // Browser groups run on GitHub's runners, never on this box (AGENTS.md rule 5,
   // 2026-11-03): the PR's tiers run what these rules name on every push, and
   // `remote-group.mjs <group>` answers "is this whole group green on my pushed
-  // branch?" on four llvmpipe shards. The local floor stays `tooling-fast --changed`.
+  // branch?" on four llvmpipe shards, but dispatches only with Bryce's own
+  // APEX_GH_OWNER_WRITE=1 (#5524). The local floor stays `tooling-fast --changed`.
   const cmds = names.filter((g) => groupsJson()[`test:${g}`]?.kind === "browser").map((g) => `node tools/ci/remote-group.mjs ${g}`);
   if (argv.includes("--bg")) {
     console.log("\n" + cmds.join("\n"));
   } else if (cmds.length) {
-    console.log(`\nthe PR run covers them; one whole group on the PUSHED branch (never locally):`);
+    console.log(`\nthe PR run covers them (never locally); a whole group on the pushed branch is Bryce's opt-in (APEX_GH_OWNER_WRITE=1, his alone):`);
     for (const c of cmds) console.log(`    ${c}`);
   }
-  printExtras(files, argv);
+  printExtras(files, argv, names);
 }

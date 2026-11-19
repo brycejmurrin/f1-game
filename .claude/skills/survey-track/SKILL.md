@@ -30,7 +30,7 @@ circuits run in parallel or the diagnosis would flood this context.
 ## Workflow (parent)
 
 1. Read `docs/tracks/<id>.md` (the per-circuit brief: theme, elevation, landmarks-by-lap-position)
-   and the source pair. Several circuits (`$ARGUMENTS` = circuit ids in `Tracks.LIST`, optional
+   and the source pair. Several circuits (the circuit ids in `Tracks.LIST` the request names, optional
    target year): follow [campaign.md](references/campaign.md) instead.
 2. Baseline, browser-free (run again after all pair edits):
    ```sh
@@ -79,7 +79,7 @@ built on demand (gitignored since 2026-11-11), so nothing is regenerated or comm
   prompt to fill).
 - [references/evidence-template.json](references/evidence-template.json) — read when building a
   circuit's evidence packet.
-- [references/campaign.md](references/campaign.md) — read when `$ARGUMENTS` names several circuits
+- [references/campaign.md](references/campaign.md) — read when the request names several circuits
   or a reusable realism campaign.
 - [references/campaign-workflow.md](references/campaign-workflow.md) — read during a campaign for
   research, ownership, budgets and acceptance.

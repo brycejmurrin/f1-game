@@ -170,7 +170,10 @@ export function publishEvidence(receiptPath, run = runDefault) {
   return { ...saved, receiptPath };
 }
 
-export function main(argv = process.argv.slice(2)) {
+/** --publish is a GitHub write on the gh token, recorded as the owner's own act (owner decision 2026-11-11; PR #5524, 4B). */
+export const OWNER_WRITE_REFUSAL = "--publish creates a GitHub release with the gh token, which GitHub records as the repository owner's own act: only Bryce opts in (APEX_GH_OWNER_WRITE=1 in his own environment; an agent never sets it). An agent packages locally (no flag) and publishes through archive-evidence.yml (docs/EVIDENCE-STORAGE.md).";
+
+export function main(argv = process.argv.slice(2), env = process.env) {
   const opts = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -182,6 +185,7 @@ export function main(argv = process.argv.slice(2)) {
   if (opts.plan && opts.publish) throw new Error("--plan cannot publish");
   if (opts.receipt && (opts.dir || opts.label || opts.plan || !opts.publish)) throw new Error("--receipt requires --publish and cannot be combined with --dir, --label or --plan");
   if (!opts.receipt && (!opts.dir || !opts.label)) throw new Error("--dir and --label are required");
+  if (opts.publish && env.APEX_GH_OWNER_WRITE !== "1") throw new Error(OWNER_WRITE_REFUSAL);
   const result = opts.receipt ? publishEvidence(path.resolve(opts.receipt))
     : opts.plan ? inspectEvidence(opts)
       : (() => {
