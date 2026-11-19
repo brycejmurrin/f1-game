@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   planDispatch, batchMembers, batchLandsAfter, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
-  DIGEST_MARKER, ANTHROPIC_VERSION, readState, landedCount, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
+  DIGEST_MARKER, ANTHROPIC_VERSION, readState, landedCount, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment, DISPATCH_BOT,
   addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS, PLATFORM_STEP, platformFailure, liveAdoption, ciGreen,
 } from "../../tools/ci/dispatch.mjs";
 
@@ -327,6 +327,27 @@ test("fire: the POST carries the bearer token, anthropic-version and {text: addr
   assert.deepEqual(skipped.filter((l) => l.startsWith("= fire")), ["= fire skipped: WORKER_FIRE_URL unset", "= fire skipped: WORKER_FIRE_URL unset"]);
 });
 
+test("fire: a 200 without a claude_code_session_id still started a worker, so it is claimed (no session named), counted, and a CONTINUE is not adopted", async () => {
+  const env = { WORKER_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_abc/fire", WORKER_FIRE_TOKEN: "sk-ant-oat01-test" };
+  const bare = async () => ({ status: 200, json: async () => ({ type: "routine_fire" }), headers: { get: () => null } });
+  const writes = [], out = [];
+  const api = (p, o) => { if (o?.method) writes.push(`${o.method} ${p}${o.body?.body ? " " + o.body.body : ""}`); return { json: {} }; };
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { labels: ["needs-owner"], updated_at: ago(0.1) })] }), cfg(), NOW);
+  assert.deepEqual(p.launches.map((l) => l.address), ["CONTINUE PR 20", "ISSUE 10"]);
+  const r = await applyPlan(p, { api, config: cfg(), log: (s) => out.push(s), now: NOW, fire: true, env, fetchImpl: bare });
+  assert.deepEqual(r, { writes: 3, fired: 2 }, "the Board and two claims; no adoption without a session");
+  assert.deepEqual(writes.filter((w) => !w.startsWith("PATCH") && !w.includes("issues/1/comments")),
+    [`POST issues/20/comments dispatch: launched claude:[Worker] CONTINUE PR #20 PR 20 for #20 at ${ISO}`, "DELETE issues/20/labels/needs-owner",
+      `POST issues/10/comments dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`]);
+  assert.deepEqual(out.filter((l) => l.startsWith("=") && !l.startsWith("= board")),
+    ["= launched CONTINUE PR 20: 200 without a claude_code_session_id — claimed without a session id", "= needs-owner removed from #20",
+      "= launched ISSUE 10: 200 without a claude_code_session_id — claimed without a session id"]);
+  // The next cycle reads that claim as a live worker: nothing is launched again.
+  const claim = { author: DISPATCH_BOT, body: `dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`, created_at: ISO };
+  const again = planDispatch(state({ issues: [board(), issue(10, ["ready"], { comments: [claim] })] }), cfg(), NOW + 60_000);
+  assert.deepEqual([again.launches.length, again.live], [0, 1]);
+});
+
 test("finding 7: a merged or closed PR, a closed issue, or a non-Claude push inside 60 min is refused right before the fire, and applyPlan says why", async () => {
   const recheckApi = (pull, commits = [], issueState = "open") => (p) => p.startsWith("pulls/20/commits") ? { json: commits } : p.startsWith("pulls/") ? { json: pull } : { json: { state: issueState } };
   const cont = { kind: "continue", number: 20 }, iss = { kind: "issue", number: 10 };
@@ -561,4 +582,15 @@ test("#5420 F3: a DRAFT deploy:red PR whose CI is green is nudged at once (once 
     fixer(83, { checks: undefined }), fixer(84, { draft: false }), fixer(85, { labels: ["deploy:red", "hold"] }), pr(86, { updated_at: ago(0.1), checks: ok })] }), SHIPPED, NOW);
   assert.deepEqual([quiet.nudges, quiet.launches], [[], []]);
   assert.deepEqual([ciGreen({ checks: ok }), ciGreen({ checks: [] }), ciGreen({}), ciGreen({ checks: [{ id: 1, name: "a", status: "completed", conclusion: "cancelled" }] })], [true, false, false, false]);
+});
+
+test("rule 1: a claimed issue with no open PR, no live launch and no comment for staleHours is an ORPHAN skip line, never a launch", () => {
+  const claim = (h) => ({ author: "brycejmurrin", body: "claims #10 — claude:session_x", created_at: ago(h) });
+  const orphan = planDispatch(state({ issues: [board(), issue(10, ["ready", "claimed"], { comments: [launched(10, 9), claim(8.9)] })] }), cfg(), NOW);
+  assert.equal(orphan.launches.length, 0);
+  assert.deepEqual(skips(orphan), ["issue #10: claimed but orphaned: no open PR closes it and no claim or comment for 9h — remove `claimed` to relaunch"]);
+  const quiet = (issues, prs = []) => skips(planDispatch(state({ issues: [board(), ...issues], prs }), cfg(), NOW)).filter((s) => /orphan/.test(s));
+  assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(1)] })]), [], "a claim younger than staleHours is alive");
+  assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9)] })], [pr(20, { body: "Closes #10" })]), [], "an open PR that closes it owns it");
+  assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9), launched(10, 1)] })]), [], "a live launch claim");
 });

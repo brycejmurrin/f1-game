@@ -234,7 +234,8 @@ tilt axis across all four rotations are all shipped.
    continuous input to `requestAnimationFrame`, so we get ~1 `pointermove` per
    frame regardless of the digitizer's 120 Hz. `getCoalescedEvents()` recovers the
    merged samples with their true timestamps — which the One-Euro filter is
-   already timestamp-driven and would consume for free. Chromium-only; feature-detect.
+   already timestamp-driven and would consume for free. Chromium 58+ and Safari 18.2+
+   (corrected 2026-11-17; this said "Chromium-only"); feature-detect.
    **Do not use `getPredictedEvents` for steering** — prediction overshoot on a
    direction reversal is exactly the failure mode that makes a car feel twitchy.
 

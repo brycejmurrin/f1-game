@@ -44,6 +44,9 @@
     night: false,
     theme: "green",
     lengthKm: 3.998,
+    // The 1993 European GP ran 76 laps (motorsportmagazine.com, "20 - 1993 GP of
+    // Europe"); 3.998, the projected trace, derived 77.
+    gpLaps: 76,
     tyreSeverity: 1,  // UK permanent; calendar-neutral proxy
     baseHW: 7,
     sceneryCoordinates: "racing",

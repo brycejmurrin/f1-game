@@ -18,7 +18,9 @@ The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
 
 - Session only: `mcp-browser-guard.sh` refuses every `mcp__js-debugger__*` call
-  inside a subagent, status reads included (AGENTS.md rule 10). No hook covers the shell
+  inside a subagent except the no-browser set (`debugger_node_test`, `output_read`, `debugger_logpoint_read`,
+  `debugger_exception_log`, `debugger_instances`, `debugger_state`: `JS_DEBUGGER_TREE` in
+  `.claude/hooks/mcp_browser_rules.py`) (AGENTS.md rule 10). No hook covers the shell
   wrapper: by that rule a subagent uses only its `list-tools` / `status` (references/setup.md).
 - One browser at a time: never beside a Playwright test run, `playwright-official`
   `browser_*` or chrome-devtools. Attached here, profile with `debugger_profile`
@@ -42,7 +44,9 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
   locals in one reply, paused with a token (or `resume:true`).
 - A `condition` is an expression evaluated IN the paused frame: write `c.speed`, not `speed`. A
   condition that throws never pauses, and `debugger_break` just times out (its `timeoutMs`;
-  `list-tools` gives default and max), so dry-run it with `debugger_collect` (same expression as a logpoint) first.
+  `list-tools` gives default and max), so dry-run it with `debugger_collect` (same expression as a logpoint) first on an attached page; on
+  `debugger_node_test` a throwing condition is just as silent (`hits: 0`, no error), so dry-run the probe with no
+  condition (or an expression-only probe) first.
   A per-car function (`updateCar` runs for every car, every tick) needs `c.isPlayer &&` (a VS FRIEND rival is also `c.human`); worked
   in-race example: [references/step-loop.md](references/step-loop.md) §Pause the player at a speed.
 - "How often, with what values" on a running page → `debugger_collect {logpoints, trigger}`.

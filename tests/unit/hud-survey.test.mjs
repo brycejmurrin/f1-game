@@ -382,7 +382,7 @@ test("desktop-1440x900: a named 16:10 device, its own short id, not a matrix axi
 test("--settings: a LOAD SETTINGS export seeds every boot; anything else is refused before a browser", () => {
   const p = parseArgs(["--device", "phone-landscape-844x390", "--settings", "tests/data/settings-defaults-export.json"]);
   assert.equal(p.settings.format, "apex26-settings-v1");
-  assert.equal(p.settings.settings.display.hudBtnScale, 245, "the owner's phone export, read whole");
+  assert.equal(p.settings.settings.display.hudBtnScale, 245, "the legacy export, read whole");
   assert.equal(parseArgs(["--device", "phone-landscape-844x390"]).settings, null, "no flag: the shipped store");
   const rf = (text) => () => text;
   assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("{\"format\":\"other\"}") }), /apex26-settings-v1/);

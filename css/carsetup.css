@@ -449,9 +449,13 @@
   scroll-snap-align: start;
   scroll-snap-stop: normal;
 }
-/* One line per compact tab: the fitted part is named in the list below and the cyan
-   underline still marks an upgrade (design pass 3d). */
-#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-cur { display: none; }
+/* One line per compact OR tall-stacked tab: the fitted part is named in the
+   list below and the cyan underline still marks an upgrade (design pass 3d).
+   Tall portrait used to keep .cs-tab-cur, so each chip was ~116 px and SUSP
+   sat past the 323 px strip (cw 323 / sw 1861, susp.left 364 — hunt measure
+   393×852). Hiding the subtitle matches compact and brings SUSP on-screen. */
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-cur,
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs .cs-tab-cur { display: none; }
 @media (orientation: landscape) {
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
     grid-column: 2; grid-row: 1;
@@ -510,7 +514,9 @@
     white-space: nowrap;
     border: 0;
   }
-  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+  /* break-word, not anywhere: anywhere split "Schumacher" mid-glyph on the
+     compact title row (hunt 2026-11-17). Soft wrap at spaces/hyphens first. */
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: break-word; }
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row { flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; }
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget { line-height: 1.2; }
 }
@@ -563,12 +569,14 @@
 /* The garage team card is the only .team-card in a ~260px option pane; the
    select-screen ellipsis ("MCL · Mercedes en…") hides the engine. Wrap the
    name/sub spans (not a second .tm-name/.tm-sub definition — that coupling
-   would have to be listed in COMPONENTS.md). */
+   would have to be listed in COMPONENTS.md).
+   break-word, not anywhere: anywhere carved "Schumache / r" on live Pages
+   (hunt 2026-11-17). Same precedent as .team-tile in css/select.css. */
 #cs-team-card span {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* ---------- category tabs ---------- */
@@ -610,16 +618,18 @@
    tabSub() to drop — and the 1280 rail ellipsised it to "Ferrari 066…". The
    ENGINE line may take a second line instead; two at most, then ellipsis. */
 .cs-tab[data-cs-cat="engine"] .cs-tab-cur {
-  white-space: normal; overflow-wrap: anywhere;
+  white-space: normal; overflow-wrap: break-word;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
 
 /* #3335: the pair RAIL is vertical and scrolls, so every subtitle may take a
    second line like ENGINE above ("Keynes Brake Pack", "Circuit Adaptive" were
    cut to "Keynes Br…" at 140px). The stacked strip stays one line: it is a row
-   and a taller tab there costs list height. */
+   and a taller tab there costs list height.
+   break-word, not anywhere: anywhere wrapped TEAM's "Schumacher" to
+   "Schumache / r" in the rail (hunt 2026-11-17). */
 #cs-inner[data-pair="on"] .cs-tab-cur {
-  white-space: normal; overflow-wrap: anywhere;
+  white-space: normal; overflow-wrap: break-word;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
 
@@ -1872,15 +1882,20 @@ body:not(.desktop) #carsetup #cs-customize {
    half that has to agree. */
 @media (orientation: portrait) {
   /* Reserve an actual row for Camera/Active Aero. A floating row underneath
-     the sheet lost hit testing to Close Garage on short portrait phones. */
+     the sheet lost hit testing to Close Garage on short portrait phones.
+     Stretch the sheet through the fr row: the old `start` + `max-height: 70vh`
+     left a ~188 px dead gap above #cs-stack on a 393×852 phone (innerH 596,
+     stackT 796) that read as an empty ghosted 3D band while SUSP / options
+     stayed clipped inside the capped sheet (hunt 2026-11-17). The stack row
+     still owns the camera chrome; the canvas shows beside glass / under it. */
   #carsetup {
-    place-items: start stretch;
+    place-items: stretch stretch;
     grid-template-rows: minmax(0, 1fr) auto;
     row-gap: var(--gap);
   }
   #cs-inner {
     grid-row: 1;
-    width: 100%; height: 100%; min-height: 0; max-height: 70vh;
+    width: 100%; height: 100%; min-height: 0; max-height: none;
     position: relative; z-index: 3;
     --compact-at: 560px;
   }
