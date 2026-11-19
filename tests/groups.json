@@ -911,6 +911,8 @@
     "// Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).",
     "tests/unit/ratchet-merge-hotspot.test.mjs",
     "tests/unit/ratchets-fold-schedule.test.mjs",
+    "// mergeBase mid-merge is the base the merge commit will have (a sync keeps the branch's own tree lowering).",
+    "tests/unit/ratchets-merge-base.test.mjs",
     "tests/unit/ratchets.test.mjs",
     "// ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP",
     "// (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the",
