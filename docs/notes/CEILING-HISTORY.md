@@ -11,6 +11,12 @@ each: `js/perf/quality-preset.js` +943 (`syncPack` and its pause/race `MutationO
 from the eager `GfxQuality.set`) and `js/render/shared/assets.js` +688 (`followQuality` and the
 forced-tier `_pinned` flag). A lazy bundle (option B) was declined: both hook the eager preset
 path. Fragment: `tests/data/ratchets.d/claude--pack-tier-follows-quality-5561.json`.
+## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
+
+`(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
+explained them were the bytes over the tip, so they were cut and the fragment records the
+lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
+inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
 
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
