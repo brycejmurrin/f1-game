@@ -11652,6 +11652,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "init": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
@@ -15665,6 +15666,9 @@
       ],
       "credits": [
         "tests/specs/assets-api.spec.js"
+      ],
+      "followQuality": [
+        "tests/unit/assets-pack.test.mjs"
       ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
