@@ -328,7 +328,7 @@ function buildResults(order, race) {
     const card = document.createElement("div"); card.className = "res-personal"; card.id = "res-incidents";
     const heading = document.createElement("strong"); heading.textContent = tr("results.incidents", null, "INCIDENTS & PENALTIES");
     const detail = document.createElement("span");
-    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: trN(e.lap) }, "LAP {lap}") + " · " + e.text).join("  ·  ");
+    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: trN(Math.max(1, e.lap | 0)) }, "LAP {lap}") + " · " + e.text).join("  ·  ");
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
   const coaching = G.coach && G.coach.feedback && G.coach.feedback();
