@@ -443,7 +443,6 @@ const FULL = [
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
   "js/share/share-card.js",
-  "js/share/share-card-chips.js", // ShareCardChips: the SHARE CARD chip on results, standings, champion and THE YEAR
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -1360,10 +1359,13 @@ const LAZY_UI_PRESETS = [
 ];
 const LAZY_UI_PRESETS_EDGES = [];
 
-// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~54 KB). endRace and the
+// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~62 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
-// ensureResultsSheet so buildResults stays synchronous at the flag.
+// ensureResultsSheet so buildResults stays synchronous at the flag. The SHARE
+// CARD chip (ShareCardChips) rides here: results-sheet and career-ui's THE YEAR
+// card are its only callers, both behind a typeof check (deploy red, boot wall).
 const LAZY_RESULTS_SHEET = [
+  "js/share/share-card-chips.js",
   "js/ui/results-sheet.js",
 ];
 const LAZY_RESULTS_SHEET_EDGES = [];
