@@ -39,6 +39,7 @@
       "js/render/three/tlx-shadow.js",
       "js/render/three/tlx-chunked.js",
       "js/render/three/tlx-post.js",
+      "js/render/three/tlx-mem.js",
       "js/render/three/tlx.js"
     ]
   },

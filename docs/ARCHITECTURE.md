@@ -705,6 +705,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
 | `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
+| `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 
 **`js/agent/`**
