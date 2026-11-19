@@ -668,9 +668,11 @@ function buildTTResults() {
     els.resultsTable.appendChild(note);
   }
   if ((guestGhost || Ghost.hasGhost()) && isFinite(best)) {
-    const ghostBest = replayGhost.bestTime();
+    const ghostBest = replayGhost.bestTime(), pm = guestGhost || typeof Ghost.meta !== "function" ? null : Ghost.meta();
+    // A record this session IS the ghost now: compare with the PB it replaced (#5672).
+    const prevBest = pm && typeof pm.prevBest === "number" && isFinite(pm.prevBest) && Math.abs(ghostBest - best) < 0.0006 ? pm.prevBest : null;
     if (isFinite(ghostBest)) {
-      const delta = best - ghostBest;
+      const delta = best - (prevBest != null ? prevBest : ghostBest);
       const gr = document.createElement("div");
       gr.className = "res-row";
       const gl = document.createElement("span"); gl.className = "res-name";
@@ -843,7 +845,8 @@ function buildTTResults() {
     clrBtn.className = "sel-chip";
     clrBtn.id = "res-ghost-clear";
     clrBtn.textContent = guestGhost ? tr("results.clearRivalGhost", null, "✕ CLEAR RIVAL GHOST") : tr("results.clearGhost", null, "✕ CLEAR GHOST");
-    clrBtn.onclick = () => {
+    // Arm-then-confirm (G.armConfirm): one tap deleted the PB ghost AND its medal (#5672).
+    clrBtn.onclick = () => G.armConfirm(clrBtn, tr("results.clearGhostConfirm", null, "TAP AGAIN TO CLEAR"), () => {
       if (guestGhost) GhostShare.clearGuest();
       else Ghost.clear(track.def.id);
       const remaining = G.records.board(track.def.id);
@@ -851,7 +854,7 @@ function buildTTResults() {
       // The rebuild destroys this button: keep focus on its slot (js/ui/modal.js).
       if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(els.results, buildTTResults);
       else buildTTResults();
-    };
+    });
     els.resultsTable.appendChild(clrBtn);
   }
 
