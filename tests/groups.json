@@ -1475,6 +1475,7 @@
     "// Weather×time grid (tools/shot/lib/wx-grid.mjs): 6×4 layout incl. storm, Rec.709 luminance, lighting ratios. Pure, no browser.",
     "tests/unit/wx-grid.test.mjs",
     "tests/unit/xr-backend-pin.test.mjs",
+    "tests/unit/xr-boot-window-raf.test.mjs",
     "tests/unit/xr-cull-union.test.mjs",
     "tests/unit/xr-visibility-pause.test.mjs",
     "// Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer",

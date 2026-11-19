@@ -20572,6 +20572,7 @@
       ],
       "bind": [
         "tests/unit/real-replay-transport.test.mjs",
+        "tests/unit/xr-boot-window-raf.test.mjs",
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
@@ -20583,6 +20584,7 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "chainWindowRaf": [
+        "tests/unit/xr-boot-window-raf.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "comfort": [
