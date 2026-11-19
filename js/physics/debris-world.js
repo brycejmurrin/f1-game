@@ -17,6 +17,11 @@ let _enabled = false;    // user opt-in flag
 let _active = false;     // _enabled && rapier ready — the ONE boolean game.js reads
 let _loadState = 0;      // 0 idle | 1 loading | 2 ready | -1 failed
 let _loadErr = null;
+// True when the import failed because this realm cannot import at all — the
+// Node VM twin (tools/lib/game-vm.cjs) runs scripts with no dynamic-import
+// loader, so debris never loads there and every hazard reads 0. Reported so an
+// agent reading caution()/debris() under --vm sees why, not a silent zero (#5712).
+let _loadUnsupported = false;
 let _loadPromise = null; // shared by the idle kick and race-entry prerequisite
 let _loadTries = 0;      // imports started (a retry asks for a fresh URL: see _load)
 // Race entry waits on the import at most this long (Assets.modelsReady's cap):
@@ -182,6 +187,7 @@ function _load(retry) {
     }))
     .catch((e) => {
       _loadState = -1; _loadErr = String(e); _active = false;
+      _loadUnsupported = !!(e && /^ERR_VM_DYNAMIC_IMPORT/.test(e.code || ""));
       Log.warn("game", "DebrisWorld load failed: " + ((e && e.message) || e));
       return false; // optional debris must never reject race entry
     });
@@ -1278,6 +1284,7 @@ function status() {
     ready: _loadState === 2,
     loadState: _loadState,
     error: _loadErr,
+    vmUnsupported: _loadUnsupported,
     active: _active,
     live: liveCount(),          // impact-debris ONLY (cap spec asserts live===16)
     queued: _queue.length,      // impacts owned by this episode, awaiting step
