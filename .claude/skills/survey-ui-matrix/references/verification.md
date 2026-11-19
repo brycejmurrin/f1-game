@@ -8,7 +8,7 @@
 
 ## Default-first visual verification
 
-Bryce's profile first (`ios-iphone-landscape-844`, touch). Then fresh shipped appearance and device input
+Bryce's cells first (`bryce-standalone` / `bryce-safari`, touch; `ios-iphone-landscape-844` is the generic iPhone cell). Then fresh shipped appearance and device input
 defaults (AGENTS.md §Seeing the game); stress scales, imported settings and legacy looks are separately
 labelled comparisons. Record requested scale and painted zoom.
 
@@ -32,7 +32,7 @@ and focus/rotation checkpoints. Show individual original captures when reporting
    clipped/offscreen/docOverflowX/tinyTaps/underHardware/starved/error finding; a skipped cell is listed
    as unmeasured, never a pass.
 4. Add `fit-audit.mjs --scale=` for type/spacing floors (no exit code); pixel identity is the CI `baseline`
-   group (on the PR, or `node tools/ci/remote-group.mjs baseline` on the pushed branch; AGENTS.md rule 5).
+   group (the nightly `baseline-trial` job, not a PR run; a whole-group dispatch is Bryce's opt-in; AGENTS.md rule 5).
 5. Record baseline path, scope and the `= diff` line.
 
 ## Capture identity
@@ -54,7 +54,7 @@ Shape: one parent, at most two reviewers. The parent runs the survey as ONE back
 run. Reviewers return defect tables with screenshot paths and missing cells; the parent applies fixes via
 `css-play` or `ui-menu-a11y`.
 
-Publish the selected captures with
-`node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`
-(`docs/EVIDENCE-STORAGE.md`); the PR body links the release assets, lists unmeasured cells as not run,
+Package the selected captures with
+`node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug>` and publish through
+`archive-evidence.yml` (`docs/EVIDENCE-STORAGE.md`; `--publish` is Bryce's own opt-in, a gh-token write); the PR body links the release assets, lists unmeasured cells as not run,
 and records the `= diff` line when proving no regression.

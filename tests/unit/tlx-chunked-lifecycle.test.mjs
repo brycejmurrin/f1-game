@@ -615,3 +615,36 @@ test("mergeVisible: the set sliding along the arc by one chunk uploads that chun
   let drive = 0;
   for (let k = 5; k <= 20; k++) drive += step(k, k + W);  assert.ok(drive <= 16 * chunkB + 2 * setB, `16 steps uploaded ${drive} B, the old rule ${16 * setB} B`);
 });
+
+test("fineCells: a merged record as its cells, each index a view of its block, merged like chunks and freed with the record", () => {
+  const sys = mergeFactory("2"), mesh = sys.build(gridMesh(), 72);
+  const fine = sys.fineCells(mesh);
+  assert.equal(fine.chunks.length, 36, "3x3 draw blocks -> the 36 cells");
+  assert.equal(sys.fineCells(mesh), fine, "built once per record");
+  const blocks = new Set(mesh.chunks.map((c) => c.geo.index.array.buffer));
+  let n = 0;
+  const tris = [];
+  for (const c of fine.chunks) {
+    const a = c.geo.index.array;
+    assert.ok(blocks.has(a.buffer), "a cell's index is a view of its block's index, not a copy");
+    assert.equal(a.length, 70 * 3);
+    assert.ok(c.max[0] - c.min[0] <= 72 && c.max[2] - c.min[2] <= 72, "a cell keeps its own box");
+    for (let i = 0; i < a.length; i += 3) tris.push(a[i] + "," + a[i + 1] + "," + a[i + 2]);
+    n += a.length;
+  }
+  assert.equal(n, mesh.count);
+  assert.deepEqual(tris.sort(), triSet(mesh), "the cells cover exactly the record's triangles");
+  // The mirror's merge: two cells of one block draw those cells only, with the record's vertex attributes.
+  sys.visList[0] = fine.chunks[0]; sys.visList[1] = fine.chunks[1];
+  const g = sys.mergeVisible(fine, 2, 1);
+  assert.equal(g.drawRange.count, 140 * 3, "two cells, not their whole 2x2 block (280 triangles)");
+  assert.deepEqual(Object.keys(g.attributes), Object.keys(mesh.chunks[0].geo.attributes));
+  const want = [...fine.chunks[0].geo.index.array, ...fine.chunks[1].geo.index.array];
+  assert.deepEqual(Array.from(g.index.array.subarray(g.drawRange.start, g.drawRange.start + g.drawRange.count)), want);
+  assert.equal(mesh._tlxMv, undefined, "the record's own merge slots are untouched");
+  const freed = new Set();
+  sys.free(mesh, freed);
+  assert.ok(freed.has(g), "the fine merge slot is freed with the record");
+  assert.equal(fine.chunks, null);
+  assert.equal(sys.fineCells(mergeFactory("1").build(gridMesh(), 72)), null, "merge 1: the chunks already are the cells");
+});

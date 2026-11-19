@@ -54,6 +54,11 @@ test("jsconfig.json makes js/ one script project with checkJs off", () => {
   assert.equal(cfg.compilerOptions.allowJs, true);
   assert.equal(cfg.compilerOptions.noEmit, true);
   assert.equal(cfg.compilerOptions.checkJs, false, "checkJs on reports ~39k strict errors (docs/notes/LSP-MCP-2026-10-18.md)");
+  // Match tsconfig.checkjs.json so // @ts-check files are not drowned in TS7006 /
+  // empty-object TS2339 noise under apex-lsp's jsconfig project (CHECKJS-ROLLOUT).
+  assert.equal(cfg.compilerOptions.noImplicitAny, false);
+  assert.equal(cfg.compilerOptions.strictNullChecks, true);
+  assert.deepEqual(cfg.compilerOptions.types, []);
   assert.ok(cfg.include.includes("js/**/*.js"));
 });
 

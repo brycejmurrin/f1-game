@@ -194,6 +194,17 @@ const Ghost = (function () {
       ? Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])])) : v;
     return JSON.stringify(stable(value));
   }
+  // The circuit LAYOUT revision a comparable-class key was recorded on: the
+  // first entry of its `layout` ([def.revision || 1, n, total], set by
+  // js/race/session-records.js). A key without one — the pre-v2 legacy rows,
+  // or anything unparsable — was recorded on revision 1.
+  function layoutRevision(key) {
+    if (typeof key !== "string" || !key) return 1;
+    try {
+      const c = JSON.parse(key), rev = c && Array.isArray(c.layout) ? c.layout[0] : null;
+      return Number.isFinite(rev) && rev >= 1 ? rev : 1;
+    } catch (_) { return 1; }
+  }
   function valid(g) {
     if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
     const { t, s, x } = g;
@@ -403,7 +414,7 @@ const Ghost = (function () {
   }
 
   return {
-    setTrack, startLap, record, finishLap, at, timeAt, contextKey, MAX_LAP_S, HZ,
+    setTrack, startLap, record, finishLap, at, timeAt, contextKey, layoutRevision, MAX_LAP_S, HZ,
     context: () => context, track: () => trackId,
     hasGhost, bestTime, snapshot, meta, medal, clear, speedAt, flush,
   };

@@ -1,0 +1,1 @@
+Fixed: Madrid's 24 % banked La Monumental is on the real corner now — the long right straight after the Turn 10/11 chicane — with its stands, arcade and flood masts; the ordinary left late in the lap that carried the bank and the bowl is flat again.

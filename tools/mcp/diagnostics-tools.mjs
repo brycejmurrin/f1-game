@@ -28,7 +28,7 @@ const DIAGNOSTIC_CAPABILITIES = {
   jobs: DIAGNOSTIC_JOB_KINDS,
   memory: 'Post-GC heap/retained track/three object/audio census. At least 3 cycles. Growth is a lead; retaining paths and repeated equivalent lifecycles are needed to establish a leak.',
   runtimeMemory: 'tools/perf/runtime-memory.mjs: feature-detected Runtime.getHeapUsage, Memory.getDOMCounters and Performance.getMetrics on an existing parent-owned CDP session; no forced GC or worker termination.',
-  cpuAndCopies: 'apex_profile modes spans|cpu|hitch|trace; apex_profile_query. CPU sampling attributes runtime costs; backing-store bytes and renderer allocation counts answer different questions.',
+  cpuAndCopies: 'apex_profile modes spans|cpu|hitch|trace; saved profiles: node tools/perf/query.mjs <file>. CPU sampling attributes runtime costs; backing-store bytes and renderer allocation counts answer different questions.',
   gpu: 'Requested WebGL2 allocation estimates only; default shader links are stubbed (realLink:true opts in). Hardware GPU timings/residency unavailable here; run real-device WebGL timer queries/WebGPU timestamp queries separately.',
   sourceDebugging: 'Existing debugger_* attach/inspect/logpoints/listeners/instances on one parent-owned local Chrome, then detach.',
   unsupported: ['Raw heap snapshot streaming/allocation profiling capture (use parent-owned DevTools/CDP workflow)', 'Automatic leak classification', 'Driver GPU memory residency', 'Software-browser FPS as player GPU evidence'],

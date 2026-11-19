@@ -58,6 +58,7 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "as-master": "AudioPanel builds the MASTER SOUND row with SettingRow.build above the MUSIC & SOUND folds (#5584; the shell's node count is a shrink-only ratchet); its one read goes through SettingRow.paint, which is null-guarded",
   "ga-shots-row": "GarageArrival buildRows() makes the GARAGE ENTER & LEAVE camera / shot-length / after-race rows from its tables (the shell's node count is a shrink-only ratchet); every read in bindSettings is null-guarded",
   "ga-slowmo": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-sound": "GarageArrival buildRows(), same table and the same null-guarded reads",
@@ -81,6 +82,9 @@ export const RUNTIME_IDS = {
   "ga-carspeed": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-endbeat": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-after": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-start": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
+  "ga-pit-in": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
+  "ga-pit-out": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
   "ga-crew-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-result": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-preview-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
