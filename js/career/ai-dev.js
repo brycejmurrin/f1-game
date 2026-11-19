@@ -1,6 +1,6 @@
-/* Apex 26 — AI constructor part development over career winters
- * (docs/notes/CAREER-CEILING-FIX-2026-09-22.md §1). Each real team gets a
- * `career.aiParts[teamId]` bag (owned ids + fitted setup), advanced ONE legal
+/* Apex 26 — AI constructor part development over career winters.
+ * Per docs/notes/CAREER-CEILING-FIX-2026-09-22.md §1, each real team gets a
+ * `career.aiParts[teamId]` bag (owned ids, fitted set), advanced ONE legal
  * step (Parts.isOptionAvailable) per winter on dice and constructors' form.
  * No aiParts → callers use Parts.getFactorySetup, byte-identical. */
 const CareerAiDev = (function () {
