@@ -39,6 +39,17 @@ explained them were the bytes over the tip, so they were cut and the fragment re
 lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
 inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
 
+## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
+
+`(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is this PR's eager code from its
+merge base: `js/career/save-migrate.js` +874 (import range clamps), `js/physics/collide.js` +518
+(pace-normalised contact severity), `js/career/career-ui.js` +358 (NEW CAREER code check),
+`js/input/steer-tuning.js` +355 (DRIVING HELP reads OFF only at gain 0), and
+`js/physics/aero-zones.js` +264, `js/physics/consts.js` +190 and `js/physics/ai-band.js` +175
+(fix 6, the stale-text corrections). About +1379 of it is whole-line comments, which carry
+fix 6's corrected facts. Fragment: `ratchets.d/claude--gameplay-hunt-1118.json`.
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
 `(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the
