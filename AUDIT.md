@@ -537,3 +537,10 @@ keeping whatever speed it had. Verified in a simulated Bahrain race with full th
 three times a second for a lap: before, that lap took 97.19 s (valid, no penalty, player up to P1); after,
 the car is held at 16 m/s and did not complete the lap in the time the same test allows (P22). A single
 recover still gives a stopped car its 16 m/s push. The wrong-way auto-rescue uses the same function.
+
+### Fix 23 — the circuit search now selects what it shows (addendum A25)
+
+`js/ui/select-screen.js` `applyTrackSearch`: when the selected circuit is filtered out, the first visible
+match is selected, as the filter chips already do. Verified in Chromium: typing "monza" left BAHRAIN selected
+and RACE SETUP opened "BAHRAIN · … · 3 LAPS" → MONZA is selected, previewed and opened; typing keeps focus in
+the search box; a query with no match leaves the selection alone and shows the empty message.

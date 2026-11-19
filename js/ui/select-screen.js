@@ -451,6 +451,10 @@ function applyTrackSearch(value) {
   }
   const empty = document.getElementById("sel-track-empty");
   if (empty) empty.hidden = rows.some((row) => !row.hidden);
+  if (trackQuery) {
+    const active = rows.find((row) => row.classList.contains("active"));
+    if (!active || active.hidden) { const first = rows.find((row) => !row.hidden); if (first) first.click(); }
+  }
   ScrollFadeRefresh();
 }
 
