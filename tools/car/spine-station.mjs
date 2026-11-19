@@ -186,10 +186,15 @@ export function sweep(A, { team, logo, sides, grid = GRID, hiddenAt = null, fiel
   };
 }
 
+// A design 24-36 % behind the rear tyre read "clear" while only >= 50 % was
+// flagged, so McLaren's half-hidden wordmark passed the survey (#5712). Any
+// share at or over 5 % of the design's own ink is called out.
+export const HIDDEN_PART = 0.05;
 const row = (name, r, om) => {
   if (!r || !r.px) return `  ${name.padEnd(10)}  (paints nothing on this crown)`;
   const note = [r.v0 <= 0.02 ? "crease" : "", r.v1 >= 0.98 ? "sidepod" : "",
-    r.vMid > 0.6 ? "low" : "", r.hidden >= 0.5 ? "MOSTLY HIDDEN" : ""].filter(Boolean).join("+") || "clear";
+    r.vMid > 0.6 ? "low" : "", r.hidden >= 0.5 ? "MOSTLY HIDDEN" : r.hidden >= HIDDEN_PART ? "PART HIDDEN" : ""]
+    .filter(Boolean).join("+") || "clear";
   return `  ${name.padEnd(10)} ${r.u0.toFixed(2)}  ${r.u1.toFixed(2)}   `
     + `${r.v0.toFixed(2)}  ${r.v1.toFixed(2)}  ${r.vMid.toFixed(2)}  ${r.share.toFixed(2)}`
     + (om ? `  ${(r.hidden * 100).toFixed(0).padStart(5)}%` : "") + `   ${note}`;
@@ -197,7 +202,7 @@ const row = (name, r, om) => {
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("usage: node tools/car/spine-station.mjs [--team=<id>|all] [--logo=<id>] [--occlude] [--png]\n  Metric survey of the spine crown lettering boxes across the grid (no browser).");
+    console.log("usage: node tools/car/spine-station.mjs [--team=<id>|all] [--logo=<id>] [--side=<id>,...] [--occlude] [--png=<dir>]\n  Metric survey of the spine crown lettering boxes across the grid (no browser).");
     return;
   }
   const arg = (k, d) => { const h = process.argv.find((a) => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };

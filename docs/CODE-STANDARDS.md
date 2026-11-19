@@ -16,10 +16,17 @@ tree-wide sweep.
 ## 0. What never changes in a style pass
 
 A style pass preserves behaviour byte-for-byte where a test can see it. Before
-renaming or deleting ANY symbol, grep for it outside its file:
+renaming or deleting ANY JS symbol, ask MCP `apex-lsp` (`lsp_definition`,
+`lsp_callers`, `lsp_references`) — that is the one home for a named symbol
+(AGENTS.md §Agent extensions; `.claude/rules/js-nav.md`; skill `code-nav`).
+Shell: `tools/mcp/lsp-mcp.sh <cmd> <target>`. Grep stays for text, comments,
+log strings, CSS, DOM ids, and for tests that read a function by source:
 
 ```sh
-grep -rn "<symbol>" js tests tools docs types css index.html
+# JS symbol → apex-lsp (not grep)
+tools/mcp/lsp-mcp.sh callers Tracks.curvature
+# text / tests that quote source by name
+grep -rn "function quitToMenu" tests/
 ```
 
 Frozen surfaces (rename = a broken guard or a broken player save):
@@ -30,7 +37,7 @@ Frozen surfaces (rename = a broken guard or a broken player save):
 | `G` façade member names and `Module.create(G)` shape | `check-gctx.mjs`, `types/game-ctx.d.ts` |
 | `window.__apex` hook names | `hooks-documented.test.mjs`, `docs/DEBUG-HOOKS.md` |
 | The `scenery(api)` contract (its size is `CONTRACT_SIZE`) | `scenery-api-contract.test.mjs` |
-| Cross-file method names (`Tracks.curvature`, `M4.clamp`, …) | `scan-globals.mjs` + the caller |
+| Cross-file method names (`Tracks.curvature`, `M4.clamp`, …) | `apex-lsp` callers + `scan-globals.mjs` |
 | `apex26.*` localStorage keys, DOM ids and CSS classes | player saves; `shell-ids.mjs`, `css-*` tests |
 | Shader uniform/attribute names, GLSL/WGSL/TSL source | `backend-surface-parity`, render specs |
 | Physics numbers, the order of float operations, `dt` clamps | `physics-characterization`, `*-vm` tests |

@@ -1,0 +1,351 @@
+#!/usr/bin/env node
+// merge-train.mjs — batch up to TRAIN_MAX green `land` PRs into ONE train PR that gets one CI run and one gate.
+// @doc Merge train: folds green `land` PRs onto the deploy tip as a `train/*` PR; the gate checks each car's own rows.
+// @section runner
+// @skill steward
+//
+// Why (docs/notes/MERGE-TRAIN-2026-11-18.md, Bryce 2026-11-18 ~10:15Z "Merge train (Recommended)"): 91 open PRs, 23 at `land`, about 20 concurrent
+// free runners, and every merge moves the tip, so each other `land` PR re-gates: 4–6 merges an hour. A train merges
+// its cars onto the tip with merge commits (`Merge pull request #n …`, a clean merge each, a conflicting car is left
+// out), opens that branch as an ordinary PR with `land`, and lets the EXISTING route land it: CI on the train head,
+// land.yml's `gate`, arm, a merge commit into the deploy branch. Each car's head is then in the deploy branch, so
+// GitHub marks that car merged. Nothing here merges, arms, pushes the deploy branch or changes a ruleset.
+//
+// THE TRAIN PR'S GATE (merge-gate.mjs, evaluate): a PR whose head branch starts `train/` carries a manifest
+// (TRAIN_MARK) naming its base and its cars. Its config and raise rows become the cars' rows (trainRow): the head
+// must be EXACTLY the fold of the car heads onto `base` (verifyTrain: first-parent chain, second parents, each tree
+// the clean merge-tree of its parents), `base` must be on the deploy branch, and every car must still be open with
+// that head, carry `land`, and pass its OWN trusted rows (open, hold, plan, ci, config, raise; carVerdict). So no row
+// binding a PR is lost: Bryce's `config-ok`/`ratchet-raise` are read per car, a `hold` on any car vetoes the train.
+// open, hold, plan, ci, base, gen, ratchets and retest are the train's own, measured on its head and merge result.
+//
+//   node tools/ci/merge-train.mjs --plan [--max <n>]     dry run: print the next train from live state, write nothing
+//   node tools/ci/merge-train.mjs --build [--max <n>]    land.yml `train` job: close a finished train, open the next
+//
+// Bisect on red (trainHistory): a closed, unmerged train of n cars caps the next train at floor(n/2) cars, so the
+// suspect set halves each round; a car that was alone in a red train is left out until its head changes. A train
+// closed because a car moved or lost `land` is `stale`, not red. One train is open at a time.
+//
+// Exit: 0 done (or nothing to do), 1 usage, API or git error.
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { api, DEPLOY, REPO } from "./github-api.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+/** A train PR's head branch prefix: merge-gate treats only these as trains. */
+export const TRAIN_PREFIX = "train/";
+/** The label the builder adds to a train PR (with `land`), so boards and the dispatcher can tell it apart. */
+export const TRAIN_LABEL = "train";
+/** Cars per train (Bryce: "about 5 PRs at a time"; 2026-11-18 ~19:50Z "Bigger trains 5→10"). */
+export const TRAIN_MAX = 10;
+/** How far back closed trains count for the bisect (hours). */
+export const HISTORY_H = 24;
+/** The manifest in a train PR body: one JSON object, `{"base":sha,"cars":[{"pr":n,"head":sha,"ref":branch}]}`. */
+export const TRAIN_MARK = /<!-- merge-train (\{[^\n]*\}) -->/;
+/** The outcome a builder appends when it closes a train: `{"outcome":"red"|"stale","why":"…"}`. */
+export const RESULT_MARK = /<!-- merge-train-result (\{[^\n]*\}) -->/;
+/** The trusted rows a car must pass on its own. `base` is the train's (a red tip holds the train, not the car). */
+export const CAR_ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "raise"]);
+
+const SHA = /^[0-9a-f]{40}$/;
+const labelNames = (labels) => (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+const gitIn = (cwd) => (args, extra = {}) => spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
+
+// ---- manifest -------------------------------------------------------------------------------------------
+
+/** Parse the manifest from a train PR body; null when absent or malformed. Pure. */
+export function trainManifest(body) {
+  const m = TRAIN_MARK.exec(String(body || ""));
+  if (!m) return null;
+  let j;
+  try { j = JSON.parse(m[1]); } catch { return null; }
+  const base = String(j?.base || "").toLowerCase();
+  if (!SHA.test(base) || !Array.isArray(j.cars) || !j.cars.length) return null;
+  const cars = [];
+  for (const c of j.cars) {
+    const pr = Number(c?.pr), head = String(c?.head || "").toLowerCase();
+    if (!Number.isInteger(pr) || pr < 1 || !SHA.test(head)) return null;
+    cars.push({ pr, head, ref: String(c?.ref || "") });
+  }
+  if (new Set(cars.map((c) => c.pr)).size !== cars.length) return null;
+  return { base, cars };
+}
+
+export const renderManifest = ({ base, cars }) =>
+  `<!-- merge-train ${JSON.stringify({ base, cars: cars.map(({ pr, head, ref }) => ({ pr, head, ref })) })} -->`;
+
+/** A closed train's recorded outcome; null when none. Pure. */
+export function trainResult(body) {
+  const m = RESULT_MARK.exec(String(body || ""));
+  if (!m) return null;
+  try { const j = JSON.parse(m[1]); return j?.outcome === "red" || j?.outcome === "stale" ? { outcome: j.outcome, why: String(j.why || "") } : null; } catch { return null; }
+}
+
+/** The train PR body: Goal, a closed Plan (the gate's plan row) with the gate-exempt `land:` item, the manifest. Pure. */
+export function trainBody({ base, cars, dropped = [] }) {
+  const lines = [
+    "## Goal", "",
+    `Merge train (docs/notes/MERGE-TRAIN-2026-11-18.md): ${cars.length} green \`land\` PR${cars.length === 1 ? "" : "s"} merged onto the deploy tip \`${base.slice(0, 12)}\` with merge commits, so one CI run and one \`gate\` land them all. Each car's own rows (hold, plan, ci, config, raise) are re-read by the gate.`, "",
+    "## Plan", "",
+    ...cars.map((c) => `- [x] #${c.pr} \`${c.head.slice(0, 12)}\` merged clean`),
+    "- [ ] land: CI green on this head, then `gate` (each car's own rows) arms it", "",
+  ];
+  if (dropped.length) lines.push("## Not in this train", "", ...dropped.map((d) => `- #${d.pr}: ${d.why}`), "");
+  lines.push("Built by `tools/ci/merge-train.mjs --build`; nobody pushes to this branch.", "", renderManifest({ base, cars }));
+  return lines.join("\n");
+}
+
+// ---- picking --------------------------------------------------------------------------------------------
+
+/** Candidate cars from open PRs (pulls list rows), in landing order: `priority` first, then oldest. Pure. */
+export function carCandidates(pulls, { exclude = new Set(), gateOk = new Set() } = {}) {
+  const out = [], skipped = [];
+  for (const p of pulls || []) {
+    const n = p?.number, names = labelNames(p?.labels), head = String(p?.head?.sha || "").toLowerCase(), ref = String(p?.head?.ref || "");
+    if (!names.includes("land")) continue;
+    const why = p.state !== "open" ? "not open" : p.draft ? "draft" : names.includes("hold") ? "hold" : ref.startsWith(TRAIN_PREFIX) ? "a train itself"
+      : p.head?.repo?.full_name && p.base?.repo?.full_name && p.head.repo.full_name !== p.base.repo.full_name ? "a fork"
+      : p.base?.ref && p.base.ref !== DEPLOY ? `base is ${p.base.ref}` : exclude.has(`${n}@${head}`) ? "alone in a red train at this head"
+      : gateOk.has(n) ? "its own gate already passed (it arms alone)" : "";
+    if (why) skipped.push({ pr: n, why }); else out.push({ pr: n, head, ref, priority: names.includes("priority"), created: String(p.created_at || "") });
+  }
+  out.sort((a, b) => (b.priority - a.priority) || a.created.localeCompare(b.created) || a.pr - b.pr);
+  return { cars: out.map(({ pr, head, ref }) => ({ pr, head, ref })), skipped };
+}
+
+/** A car's own trusted gate (merge-gate evaluate --trusted): every CAR_ROWS row ok. Pure. */
+export function carVerdict(v, head = "") {
+  if (!v || v.error) return { ok: false, why: `gate error: ${v?.error || "no verdict"}` };
+  if (head && v.head && v.head !== head) return { ok: false, why: `head moved to ${v.head.slice(0, 8)}` };
+  const bad = CAR_ROWS.filter((k) => !v.rows?.[k]?.ok);
+  return bad.length ? { ok: false, why: bad.map((k) => `${k}: ${String(v.rows?.[k]?.evidence || "missing").slice(0, 120)}`).join("; ") } : { ok: true, why: "" };
+}
+
+/** Closed, unmerged trains newest first ({cars, outcome, closed}) → the next train's cap and the cars left out. Pure. */
+export function trainHistory(closed, { now = Date.now(), hours = HISTORY_H, max = TRAIN_MAX } = {}) {
+  const recent = (closed || []).filter((t) => t && now - Date.parse(t.closed) <= hours * 3600_000);
+  const exclude = new Set();
+  for (const t of recent) if (t.outcome === "red" && t.cars.length === 1) exclude.add(`${t.cars[0].pr}@${t.cars[0].head}`);
+  const last = recent.find((t) => t.outcome === "red" || t.outcome === "merged");
+  const cap = last?.outcome === "red" ? Math.max(1, Math.floor(last.cars.length / 2)) : max;
+  return { cap: Math.min(cap, max), exclude };
+}
+
+// ---- git: fold and verify -------------------------------------------------------------------------------
+
+/** The commit message of one car's merge, as GitHub writes it. Pure. */
+export const carMessage = (c, owner = REPO.split("/")[0]) => `Merge pull request #${c.pr} from ${owner}/${c.ref || `pr-${c.pr}`}\n\nmerge-train car #${c.pr}`;
+
+/** Fold the car heads onto `base` in order: one clean merge commit each, a conflicting car is dropped. Writes only
+ *  git objects (merge-tree + commit-tree): no worktree, no checkout, no hooks, no PR code. */
+export function foldCars({ base, cars, cwd = ROOT, git = gitIn(cwd), max = TRAIN_MAX, env = {} }) {
+  let cur = base;
+  const kept = [], dropped = [];
+  const cenv = { ...process.env, GIT_AUTHOR_NAME: "merge-train", GIT_AUTHOR_EMAIL: "merge-train@users.noreply.github.com",
+    GIT_COMMITTER_NAME: "merge-train", GIT_COMMITTER_EMAIL: "merge-train@users.noreply.github.com", ...env };
+  for (const c of cars) {
+    if (kept.length >= max) break;
+    if (git(["cat-file", "-e", `${c.head}^{commit}`]).status !== 0) { dropped.push({ pr: c.pr, why: `head ${c.head.slice(0, 8)} not fetched` }); continue; }
+    if (git(["merge-base", "--is-ancestor", c.head, cur]).status === 0) { dropped.push({ pr: c.pr, why: "already on the tip" }); continue; }
+    const mt = git(["merge-tree", "--write-tree", "--name-only", "--no-messages", cur, c.head]);
+    if (mt.status !== 0) {
+      const files = String(mt.stdout || "").split("\n").slice(1).filter(Boolean);
+      dropped.push({ pr: c.pr, why: mt.status === 1 ? `conflicts${files.length ? ` in ${files.slice(0, 4).join(", ")}` : ""} (sync-pr.mjs)` : `merge-tree failed: ${String(mt.stderr || "").trim().split("\n")[0]}` });
+      continue;
+    }
+    const tree = String(mt.stdout).split("\n")[0].trim();
+    const ct = git(["commit-tree", tree, "-p", cur, "-p", c.head, "-m", carMessage(c)], { env: cenv });
+    if (ct.status !== 0) return { error: `commit-tree for #${c.pr} failed: ${String(ct.stderr || "").trim()}` };
+    cur = ct.stdout.trim();
+    kept.push(c);
+  }
+  return { head: cur, cars: kept, dropped };
+}
+
+/** The gate's purity check: `head` is exactly the fold of `cars` onto `base`, and `base` is on `tip`. git only. */
+export function verifyTrain({ base, head, cars, tip, cwd = ROOT, git = gitIn(cwd) }) {
+  if (!cars?.length) return { ok: false, why: "the manifest names no car" };
+  for (const s of [base, head, ...cars.map((c) => c.head)]) if (git(["cat-file", "-e", `${s}^{commit}`]).status !== 0) return { ok: false, why: `${String(s).slice(0, 8)} is not in this clone` };
+  if (tip && git(["merge-base", "--is-ancestor", base, tip]).status !== 0) return { ok: false, why: `base ${base.slice(0, 8)} is not on the deploy branch` };
+  const rl = git(["rev-list", "--first-parent", "--parents", head, `^${base}`]);
+  if (rl.status !== 0) return { ok: false, why: `rev-list failed: ${String(rl.stderr || "").trim()}` };
+  const chain = rl.stdout.trim().split("\n").filter(Boolean).map((l) => l.split(" ")).reverse();
+  if (chain.length !== cars.length) return { ok: false, why: `head has ${chain.length} commit(s) past base on its first-parent line, the manifest names ${cars.length} car(s)` };
+  let prev = base;
+  for (let i = 0; i < chain.length; i++) {
+    const [sha, p1, p2, extra] = chain[i];
+    if (p1 !== prev || p2 !== cars[i].head || extra) return { ok: false, why: `commit ${sha.slice(0, 8)} is not the merge of #${cars[i].pr} ${cars[i].head.slice(0, 8)} onto ${prev.slice(0, 8)}` };
+    const mt = git(["merge-tree", "--write-tree", "--no-messages", p1, p2]);
+    const tree = git(["rev-parse", `${sha}^{tree}`]).stdout.trim();
+    if (mt.status !== 0 || mt.stdout.split("\n")[0].trim() !== tree) return { ok: false, why: `commit ${sha.slice(0, 8)} (#${cars[i].pr}) is not the clean merge of its parents` };
+    prev = sha;
+  }
+  return { ok: true, why: `${head.slice(0, 8)} is the clean fold of ${cars.map((c) => `#${c.pr}`).join(" ")} onto ${base.slice(0, 8)}` };
+}
+
+/** merge-gate's config/raise rows for a train PR. `carGate(pr)` is merge-gate evaluate({pr, trusted:true}). */
+export function trainRow({ manifest, head, headRef, tip, verify, carGate, carPull }) {
+  if (!manifest) return { ok: false, evidence: `a ${TRAIN_PREFIX} branch (${headRef}) with no valid merge-train manifest in its body` };
+  const pure = verify({ base: manifest.base, head, cars: manifest.cars, tip });
+  if (!pure.ok) return { ok: false, evidence: `train is not a pure merge of its cars: ${pure.why}` };
+  const bad = [];
+  for (const c of manifest.cars) {
+    const p = carPull(c.pr);
+    if (p.error) return { error: `car #${c.pr}: ${p.error}` };
+    const pull = p.json || {};
+    const now = String(pull.head?.sha || "").toLowerCase();
+    if (now !== c.head) { bad.push(`#${c.pr} head moved to ${now.slice(0, 8)}`); continue; }
+    if (pull.merged_at) continue; // landed on its own with this very head: its own gate passed
+    if (String(pull.head?.ref || "").startsWith(TRAIN_PREFIX)) { bad.push(`#${c.pr} is a train`); continue; }
+    if (!labelNames(pull.labels).includes("land")) { bad.push(`#${c.pr} no longer carries land`); continue; }
+    const v = carVerdict(carGate(c.pr, c.head), c.head);
+    if (!v.ok) bad.push(`#${c.pr} ${v.why}`);
+  }
+  return bad.length ? { ok: false, evidence: `car rows: ${bad.join(" | ")}`.slice(0, 900) }
+    : { ok: true, evidence: `${pure.why}; every car passes open, hold, plan, ci, config and raise on its own` };
+}
+
+// ---- live state (--plan / --build) ----------------------------------------------------------------------
+
+function listPulls(request, state) {
+  const rows = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = request(`pulls?state=${state}&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}${state === "closed" ? "&sort=updated&direction=desc" : ""}`);
+    if (r.error) return { error: r.error };
+    rows.push(...(r.json || []));
+    if ((r.json || []).length < 100 || state === "closed") break;
+  }
+  return { rows };
+}
+
+const gateState = (sha, request) => {
+  const r = request(`commits/${sha}/statuses?per_page=100`);
+  return r.error ? "" : ((r.json || []).find((s) => s.context === "gate")?.state || "");
+};
+
+/** The next train from live state. Reads GitHub and fetches car heads into `cwd`; writes only git objects. */
+export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, now = Date.now(), log = () => {} } = {}) {
+  const { evaluate } = await import("./merge-gate.mjs");
+  const open = listPulls(request, "open");
+  if (open.error) return { error: `open PRs: ${open.error}` };
+  const running = open.rows.filter((p) => String(p.head?.ref || "").startsWith(TRAIN_PREFIX));
+  const closed = listPulls(request, "closed");
+  if (closed.error) return { error: `closed PRs: ${closed.error}` };
+  const past = closed.rows.filter((p) => String(p.head?.ref || "").startsWith(TRAIN_PREFIX) && p.closed_at).map((p) => {
+    const m = trainManifest(p.body);
+    return m && { cars: m.cars, closed: p.closed_at, outcome: p.merged_at ? "merged" : trainResult(p.body)?.outcome || "red" };
+  }).filter(Boolean);
+  const hist = trainHistory(past, { now, max });
+  const landing = open.rows.filter((p) => labelNames(p.labels).includes("land") && !p.draft);
+  const gateOk = new Set(landing.filter((p) => gateState(p.head.sha, request) === "success").map((p) => p.number));
+  const { cars: cands, skipped } = carCandidates(open.rows, { exclude: hist.exclude, gateOk });
+  const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
+  const tip = String(tipR.json?.commit?.sha || "").toLowerCase();
+  if (!tip) return { error: `deploy tip: ${tipR.error || "no sha"}` };
+  const git = gitIn(cwd);
+  const f = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${DEPLOY}:refs/remotes/origin/${DEPLOY}`]);
+  if (f.status !== 0) return { error: `fetch ${DEPLOY}: ${String(f.stderr || "").trim()}` };
+  const ready = [];
+  for (const c of cands) {
+    if (ready.length >= hist.cap * 2) break; // enough spares for conflicts
+    const v = carVerdict(evaluate({ pr: c.pr, sha: c.head, request, trusted: true }), c.head);
+    log(`car #${c.pr} ${c.head.slice(0, 8)}: ${v.ok ? "ok" : v.why}`);
+    if (!v.ok) { skipped.push({ pr: c.pr, why: v.why }); continue; }
+    git(["fetch", "--quiet", "--no-tags", "origin", `+refs/pull/${c.pr}/head:refs/remotes/origin/pr/${c.pr}`]);
+    ready.push(c);
+  }
+  const fold = foldCars({ base: tip, cars: ready, cwd, git, max: hist.cap });
+  if (fold.error) return { error: fold.error };
+  const min = hist.cap >= 2 ? 2 : 1;
+  return { tip, cap: hist.cap, running: running.map((p) => p.number), cars: fold.cars, head: fold.head, dropped: [...fold.dropped, ...skipped], enough: fold.cars.length >= min };
+}
+
+/** The newest CI workflow run on a head ({ status, conclusion }) from an actions/workflows/ci.yml/runs page; null
+ *  when there is none. Newest by run id: a re-run keeps its id, a new run on the same head gets a higher one. Pure. */
+export function newestRun(json) {
+  const runs = (json?.workflow_runs || []).filter((r) => r && Number.isFinite(Number(r.id)));
+  if (!runs.length) return null;
+  const r = runs.reduce((a, b) => (Number(b.id) > Number(a.id) ? b : a));
+  return { status: String(r.status || ""), conclusion: String(r.conclusion || "") };
+}
+
+/** Close an open train the builder can see is finished: a car moved (stale) or its CI/gate went red (red). Pure.
+ *  `ciRun` is the head's newest CI workflow run, read when no `CI` check-run has completed (PR #5809: train #5814's
+ *  run was cancelled at 01:33Z, no `CI` check ever completed, and the builder waited on it for an hour, holding every
+ *  later train). A completed run that was cancelled closes the train `stale` (nothing failed, so no bisect); a
+ *  failure, timeout or startup failure closes it `red`. */
+export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null }) {
+  if (!manifest) return { close: true, outcome: "stale", why: "no manifest" };
+  const moved = manifest.cars.filter((c) => { const p = cars.get(c.pr); return !p || (!p.merged_at && (String(p.head?.sha || "").toLowerCase() !== c.head || !labelNames(p.labels).includes("land") || p.state !== "open")); });
+  if (moved.length) return { close: true, outcome: "stale", why: `car${moved.length > 1 ? "s" : ""} ${moved.map((c) => `#${c.pr}`).join(" ")} moved, closed or lost land` };
+  if (ciConclusion && ciConclusion !== "success") return { close: true, outcome: "red", why: `CI ${ciConclusion} on the train head` };
+  if (!ciConclusion && ciRun?.status === "completed") {
+    if (ciRun.conclusion === "cancelled") return { close: true, outcome: "stale", why: "the CI run on the train head was cancelled before its CI check completed" };
+    if (["failure", "timed_out", "startup_failure"].includes(ciRun.conclusion)) return { close: true, outcome: "red", why: `the CI run on the train head ended ${ciRun.conclusion} before its CI check completed` };
+  }
+  if (gate === "failure") return { close: true, outcome: "red", why: "gate failure on the train head (gen, ratchets, retest or a car row)" };
+  return { close: false };
+}
+
+const USAGE = `usage: node tools/ci/merge-train.mjs --plan|--build [--max <n>]
+  --plan   print the next train from live GitHub state (cars, dropped with why, bisect cap); writes nothing but git objects
+  --build  land.yml's train job: close a finished train (red or stale), else push train/<stamp> and open its PR with
+           \`land\` + \`${TRAIN_LABEL}\` (needs GH_TOKEN = LAND_TOKEN so CI runs on it). One open train at a time.`;
+
+export async function main(argv, { request = api, cwd = ROOT, log = console.log, now = Date.now() } = {}) {
+  if (argv.includes("--help") || argv.includes("-h") || !(argv.includes("--plan") || argv.includes("--build"))) { log(USAGE); return argv.includes("--help") || argv.includes("-h") ? 0 : 1; }
+  const i = argv.indexOf("--max");
+  const max = i >= 0 ? Math.max(1, Math.min(10, Number(argv[i + 1]) || TRAIN_MAX)) : TRAIN_MAX;
+  const build = argv.includes("--build");
+  if (build) {
+    const open = listPulls(request, "open");
+    if (open.error) { log(`= merge-train error — ${open.error}`); return 1; }
+    const trains = open.rows.filter((p) => String(p.head?.ref || "").startsWith(TRAIN_PREFIX));
+    for (const t of trains) {
+      const m = trainManifest(t.body);
+      const cars = new Map();
+      for (const c of m?.cars || []) { const r = request(`pulls/${c.pr}`); if (!r.error) cars.set(c.pr, r.json); }
+      const runs = request(`commits/${t.head.sha}/check-runs?check_name=CI&per_page=20`);
+      const ci = (runs.json?.check_runs || []).find((r) => r.app?.slug === "github-actions");
+      const ciConclusion = ci?.status === "completed" ? ci.conclusion : "";
+      let ciRun = null, runNote = "";
+      if (!ciConclusion) {
+        const wr = request(`actions/workflows/ci.yml/runs?head_sha=${t.head.sha}&per_page=20`);
+        if (wr.error) runNote = ` (its CI run could not be read: ${wr.error})`;
+        else ciRun = newestRun(wr.json);
+      }
+      const d = trainDisposition({ manifest: m, cars, ciConclusion, gate: gateState(t.head.sha, request), ciRun });
+      if (!d.close) { log(`= merge-train waiting — train #${t.number} is still running${runNote}`); return 0; }
+      const body = `${t.body || ""}\n<!-- merge-train-result ${JSON.stringify({ outcome: d.outcome, why: d.why })} -->`;
+      for (const [p, b] of [[`pulls/${t.number}`, { body, state: "closed" }], [`issues/${t.number}/comments`, { body: `merge-train: closed (${d.outcome}) — ${d.why}. ${d.outcome === "red" ? "The next train takes half these cars (bisect); a car alone in a red train waits for a new head." : "The next train is rebuilt from the current state."}\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_` }]]) {
+        const r = request(p, { method: p.endsWith("comments") ? "POST" : "PATCH", body: b });
+        if (r.error) { log(`= merge-train error — ${p}: ${r.error}`); return 1; }
+      }
+      request(`git/refs/heads/${t.head.ref}`, { method: "DELETE" });
+      log(`= merge-train closed #${t.number} (${d.outcome}): ${d.why}`);
+    }
+  }
+  const plan = await planTrain({ request, cwd, max, now, log: build ? log : () => {} });
+  if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
+  for (const d of plan.dropped) log(`  - #${d.pr}: ${d.why}`);
+  const line = `cars=${plan.cars.map((c) => `#${c.pr}`).join(",") || "none"} cap=${plan.cap} tip=${plan.tip.slice(0, 12)} head=${plan.head.slice(0, 12)}`;
+  if (!build) { log(`= merge-train plan — ${line}${plan.running.length ? ` (train #${plan.running.join(",")} is open: --build waits for it)` : ""}${plan.enough ? "" : " (too few cars: no train)"}`); return 0; }
+  if (!plan.enough) { log(`= merge-train idle — ${line}: too few cars`); return 0; }
+  const stamp = new Date(now).toISOString().replace(/[-:]/g, "").slice(0, 13);
+  const ref = `${TRAIN_PREFIX}${stamp}-${plan.cars.map((c) => c.pr).join("-")}`;
+  const push = gitIn(cwd)(["push", "--quiet", "origin", `${plan.head}:refs/heads/${ref}`], { timeout: 300_000 });
+  if (push.status !== 0) { log(`= merge-train error — push ${ref}: ${String(push.stderr || "").trim()}`); return 1; }
+  const pr = request("pulls", { method: "POST", body: { title: `merge train: ${plan.cars.map((c) => `#${c.pr}`).join(" ")}`, head: ref, base: DEPLOY, body: trainBody({ base: plan.tip, cars: plan.cars, dropped: plan.dropped }) } });
+  if (pr.error) { log(`= merge-train error — open PR: ${pr.error}`); return 1; }
+  const lab = request(`issues/${pr.json.number}/labels`, { method: "POST", body: { labels: ["land", TRAIN_LABEL] } });
+  if (lab.error) { log(`= merge-train error — labels on #${pr.json.number}: ${lab.error}`); return 1; }
+  log(`= merge-train opened #${pr.json.number} — ${line}`);
+  return 0;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // No top-level await: merge-gate imports this module, and a dynamic import of it from a module still awaiting its
+  // own top level never settles (the entry would wait on itself).
+  main(process.argv.slice(2)).then((c) => { process.exitCode = c; }, (e) => { console.log(`= merge-train error — ${e?.stack || e}`); process.exitCode = 1; });
+}

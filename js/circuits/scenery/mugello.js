@@ -468,9 +468,11 @@
       // San Donato is T1, braking from 0.13 to the apex at 0.155. This group
       // was authored 0.08 early (at 0.07, mid main straight) — against some
       // earlier centreline, since no start-line frame puts it on the corner.
-      groundPatch(K(0.140), 1, 6, [38, 0.18, 52], GRAVEL,
+      // T1 is a RIGHT-hander: gravel and tyre wall stand on its outside (-1);
+      // they were on +1, the inside (corner-frames, #5652).
+      groundPatch(K(0.140), -1, 6, [38, 0.18, 52], GRAVEL,
         { id: "mugello-san-donato-gravel", samples: 8 });
-      tyreWall(0.135, 0.170, 1, 5, [0.86, 0.20, 0.18]);
+      tyreWall(0.135, 0.170, -1, 5, [0.86, 0.20, 0.18]);
       terrazza(0.128, 0.178, -1, 18, { rows: 9 });          // San Donato bowl
       marshalPost(K(0.155), -1, 10);
 
@@ -701,8 +703,8 @@
       // Turn signage and broadcast towers.
       signBoard(K(0.150), -1, 8, "corner", 1);
       signBoard(K(0.312), -1, 8, "corner", 5);   // Borgo San Lorenzo = turns[4] (apex 0.3187; was "6", Casanova is 0.386)
-      signBoard(K(0.521), 1, 8, "corner", 9);   // Arrabbiata 2 = T9 = turns[8] (FIA 2020 map)
-      signBoard(K(0.880), 1, 8, "corner", 15);
+      signBoard(K(0.518), 1, 8, "corner", 9);   // Arrabbiata 2 = T9 = turns[8] (FIA 2020 map; apex 0.518)
+      signBoard(K(0.857), 1, 8, "corner", 15);
       sponsorHoarding(0.930, 0.060, -1, 3.6, { h: 1.2, step: 10,
         palette: [ROSSO, [0.94, 0.92, 0.88], [0.10, 0.34, 0.20], [0.96, 0.76, 0.06]] });
       cameraTower(K(0.030), -1, 26, { h: 16 });

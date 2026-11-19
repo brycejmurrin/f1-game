@@ -2,9 +2,9 @@
 
 The authored HTML, CSS and JavaScript used by the
 [Apex 26 Design Lab](https://apex26-design-lab.goofy-angel-9204.chatgpt.site).
-These three files match Site source commit
-`676631f645a3d6a3bc52ec91d97f9f1db2578c56` exactly. They are review-site
-source, separate from the game's root HTML and deployment.
+They are review-site source, separate from the game's root HTML and deployment.
+(The earlier byte-pin to Site commit `676631f645a3` no longer holds after the
+preview-sidecar hardening in this tree.)
 
 The gallery starts with the recorded color/finish studies. Its controls browse
 palette, body, finish and light, with separate views for native screenshots,
@@ -19,10 +19,14 @@ and its relative paths together:
 
 - `captures.json`: the existing Design Lab `{source, items}` record, including
   per-image metadata and provenance.
-- `assets/`: the images referenced by that record, reference boards and the
-  locally hosted fonts under `assets/fonts/`.
+- `assets/`: the images referenced by that record and reference boards.
 - `collection/`: the portable collection built by `capture-gallery.mjs`, linked
   from the gallery footer.
+
+Fonts in `styles.css` load from the game's `/assets/fonts/*.woff2` (root-
+absolute) so a raw `sites/design-lab/` preview under the repo static server
+does not 404 on missing Site-only TTFs. A Site publish that keeps its own
+`assets/fonts/` can layer a Site font sheet on top.
 
 Capture data and generated images remain in the Site source and ignored artifact
 directories, following the repository's evidence-storage policy. They are not
@@ -31,6 +35,13 @@ not a self-contained image archive. Do not point it at a matrix manifest: a
 matrix's `gallery.json` and the Design Lab's `captures.json` have different roles.
 
 ## Preview with the existing Site assets
+
+Serving `sites/design-lab/` alone from this game checkout is presentation-only:
+`captures.json`, `assets/` and `collection/` are **not** committed here. The page
+shows a PREVIEW notice, hides the portable-collection link when `collection/`
+404s, and soft-hides reference `<img class="site-asset">` rows that fail to load
+so the console is not flooded with missing-font/image 404s. Fonts are no longer
+preloaded from this tree for the same reason.
 
 From the game checkout, with the Design Lab source checkout available:
 

@@ -1011,11 +1011,14 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
      stands it down (setup vs framing, see the top of this file). */
   /* Nor are #lt-preview and #lt-profile (#5562): the rail needs 640 own px and a docked phone sheet is 380, so
      this tier IS the phone, and hiding them left no TIME / WEATHER chips and no "MONZA · DAY · DRY" label there.
-     Both sit in the folded tools disclosure, which scrolls: no slider height while it is closed. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(
-    #ct-profile, .lt-help-toggle
-  ) {
+     Both sit in the folded tools disclosure, which scrolls: no slider height while it is closed.
+     Nor is #ct-profile (#5218): at UI SIZE 70 on his phone this tier hid the only line naming what the sliders edit
+     and how much is tuned ("HELMET (default framing)", "TRACK MONZA (2 overrides)"). It stays one clipped line. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] .lt-help-toggle {
     display: none;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #ct-profile {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
 /* ---------- short AND wide: put the chrome in a rail ----------
