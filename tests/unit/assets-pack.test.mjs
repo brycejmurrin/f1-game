@@ -2561,6 +2561,13 @@ test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", ()
   assert.deepEqual(pruneRememberedIndex(remembered, null), { models: {} });
 });
 
+test("diffRoleIndex reads a null manifest or index as empty, never throws", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  assert.deepEqual(diffRoleIndex(idx, null), { indexOnly: ["a", "b"], liveOnly: [], badRole: ["b:bogus"] });
+  assert.deepEqual(diffRoleIndex(null, { models: { c: {} } }), { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex({}, {}), { indexOnly: [], liveOnly: [], badRole: [] });
+});
+
 test("rememberPayload keeps only content-addressed model rows", () => {
   const live = {
     models: {

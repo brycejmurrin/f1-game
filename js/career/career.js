@@ -1293,7 +1293,9 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
                  + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  const matePts = mate && scored(mate) ? (table[order.indexOf(mate)] || 0) : 0;
+  // paid(), not scored(): a DSQ mate can still be classified, and the sponsor
+  // "double" means both cars banked points — the same gate as matePrize.
+  const matePts = mate && paid(mate) ? (table[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !player.dsq && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
@@ -1704,7 +1706,7 @@ function rollover() {
   const original = JSON.parse(JSON.stringify(career));
   const seasonRef = career.season;
   const result = rolloverApply();
-  if (lastSave && lastSave.ok) return result;
+  if (lastSave && lastSave.ok && lastSave.durable) return result;
   const reason = (lastSave && lastSave.reason) || "conflict";
   const replace = (target, source) => {
     for (const key of Object.keys(target)) if (!Object.prototype.hasOwnProperty.call(source, key)) delete target[key];
@@ -1856,7 +1858,10 @@ function rolloverApply() {
   career.obj = null;
   career.objPick = null;
   career.paidSponsors = [];
-  save();
+  // Season boundary is one-way: a quota-refused session-only write must not
+  // leave year++ / winter transfers that vanish on reload (adoption uses the
+  // same requireDurable gate).
+  save({ requireDurable: true });
   return { year: career.year, champion: entry.champion, summary: entry,
            offers: career.offers, history: career.history, moves: career.moves };
 }

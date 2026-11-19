@@ -24,6 +24,21 @@ your change touches → the skill that drives it.
 **If you are a person:** [`../README.md`](../README.md) → [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md)
 → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
+## How to — docs-only change
+
+A change that only edits `docs/`, `*.md`, or `README.md` (no `js/` / `css/` /
+`tests/` / `tools/`): skip `pick-tests` and the browser groups. After the edits,
+run once:
+
+```sh
+node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
+```
+
+That is the AGENTS.md prose-only path. If `npm run gen` rewrote a generated doc
+you touched (for example [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md)),
+include those files in the same commit. For anything beyond docs, use
+[VERIFICATION.md](VERIFICATION.md).
+
 ## Area docs (load one on demand)
 
 | Doc | Covers |

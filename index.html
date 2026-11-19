@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-XeiMgVBBIOohpDMAxzjosnyJNSt/NUAkqds6MEH5AnM=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -131,19 +131,19 @@
 <link rel="stylesheet" href="css/responsive.css?v=dev">
 <link rel="stylesheet" href="css/menu-destinations.css?v=dev">
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print">
-<link rel="stylesheet" href="css/career.css?v=dev" media="print">
-<link rel="stylesheet" href="css/data.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career.css?v=dev" media="print" data-route="career career-offers career-guide career-history quali results standings">
+<link rel="stylesheet" href="css/data.css?v=dev" media="print" data-route="datahub track-detail trackdesigner results spotifypanel">
 <link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print">
 <link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print">
-<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print" data-route="career results ceremony-podium">
+<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print" data-route="carsetup customize">
+<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print" data-route="photo-studio">
 <link rel="stylesheet" href="css/experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/editor.css?v=dev" media="print">
+<link rel="stylesheet" href="css/editor.css?v=dev" media="print" data-route="trackdesigner">
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
 <link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <link rel="stylesheet" href="css/helmet-visor.css?v=dev" media="print">
-<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
+<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]:not([data-route])'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -4085,7 +4085,6 @@
 <script defer crossorigin="anonymous" src="js/share/share-card-data.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/share/share-card-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/share/share-card.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/share/share-card-chips.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>

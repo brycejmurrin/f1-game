@@ -112,7 +112,7 @@ shot as UI evidence.
 ## 5. Ship
 
 When the look is right: `node tools/gen/gen-shell.mjs --check` (last edit),
-then push and request the groups `node tools/ci/pick-tests.mjs` names (`node tools/ci/remote-group.mjs <group>`; never locally) if the change is more than a token. One-screen
+then push: the PR's own CI runs the groups `node tools/ci/pick-tests.mjs` names (never locally; a whole group is Bryce's opt-in). One-screen
 play is not a matrix proof.
 
 ## Mistakes
