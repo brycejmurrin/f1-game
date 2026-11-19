@@ -1,15 +1,8 @@
-/* Apex 26 — AI constructor part development over career winters.
- *
- * Factory presets alone + decaying tdev leave the grid static while the player
- * climbs the catalog (docs/notes/CAREER-CEILING-FIX-2026-09-22.md §1). This
- * module gives each real team a sparse `career.aiParts[teamId]` bag of owned
- * option ids and a fitted setup, advanced ONE legal step per winter when the
- * dice and constructors' form allow it. Era legality is Parts.isOptionAvailable
- * — the same predicate regulations already install for factory resolution.
- *
- * Absent aiParts → callers keep using Parts.getFactorySetup (byte-identical
- * for saves that never rolled a winter under this code).
- */
+/* Apex 26 — AI constructor part development over career winters
+ * (docs/notes/CAREER-CEILING-FIX-2026-09-22.md §1). Each real team gets a
+ * `career.aiParts[teamId]` bag (owned ids + fitted setup), advanced ONE legal
+ * step (Parts.isOptionAvailable) per winter on dice and constructors' form.
+ * No aiParts → callers use Parts.getFactorySetup, byte-identical. */
 const CareerAiDev = (function () {
   "use strict";
 
@@ -20,9 +13,7 @@ const CareerAiDev = (function () {
     return (mods.speed || 1) + (mods.accel || 1) + (mods.cornering || 1) + (mods.braking || 1);
   }
 
-  // Real F1's Aerodynamic Testing Restrictions sliding scale (#5760): the
-  // constructors' leader develops at ATR_LEAD of the baseline rate, last place at
-  // ATR_LAST, linear between, re-read from the standings every winter.
+  // F1's ATR sliding scale (#5760): leader ×ATR_LEAD … last ×ATR_LAST, linear.
   const ATR_LEAD = 0.75, ATR_LAST = 1.15;
   function atrScale(pos, field) {
     const n = Math.max(2, field | 0);
@@ -92,9 +83,8 @@ const CareerAiDev = (function () {
     return cat ? cat.options.find((o) => o.id === id) || null : null;
   }
 
-  /** One catalog step that raises summed mods and stays under `cap`. Tyres are
-   *  never a step (#5760): an AI car races the class tyre draw, so a fitted
-   *  Hyper Soft paid its pace (cornering 1.36) and never its wear (life 0.30). */
+  /** One step raising summed mods under `cap`. Never tyres (#5760): AI races the
+   *  class tyre draw, so Hyper Soft paid pace and never wear. */
   function pickStep(team, fitted, cap) {
     const baseScore = scoreMods(Parts.getMods(fitted, team));
     let best = null;
@@ -118,13 +108,9 @@ const CareerAiDev = (function () {
     return best;
   }
 
-  /**
-   * Winter development pass. Mutates `career.aiParts`. `rnd(…parts)` is
-   * Career.rnd. `tStand` is constructors' standings from rollover.
-   * `expected` is Map teamId → expected position (Career.expectedConstructor).
-   * `diceYear`, when passed, is the season that just ended — rollover
-   * increments career.year before this runs, and the stream must not move.
-   */
+  /** Winter pass; mutates `career.aiParts`. rnd = Career.rnd, tStand = rollover
+   *  standings, expected = Career.expectedConstructor Map. diceYear = the season
+   *  just ended (rollover bumps career.year first; the stream must not move). */
   function developWinter(career, tStand, expected, rnd, diceYear) {
     if (!career || typeof Parts === "undefined") return;
     const year = diceYear != null ? diceYear : career.year;
@@ -134,9 +120,7 @@ const CareerAiDev = (function () {
       if (!Teams.isReal || !Teams.isReal(team)) continue;
       const pos = posOf.get(team.id) || 11;
       const exp = (expected && expected.get(team.id)) || 11;
-      // Over-performance raises the chance; backmarkers still get a floor so
-      // the field does not freeze on the factory shelf. The ATR scale then
-      // throttles it by this winter's constructors' place (#5760).
+      // Over-performance raises the chance; a floor keeps backmarkers moving; ATR scales it.
       const shove = exp - pos;
       const chance = clamp(0.30 + shove * 0.12, 0.12, 0.80) * atrScale(pos, field);
       if (rnd(year, "aidev", team.id) > chance) continue;
@@ -158,17 +142,13 @@ const CareerAiDev = (function () {
     }
   }
 
-  /** Run after every applyRegs() at rollover. It never fits the ERA-RESOLVED
-   *  factory row and never drops a part from `owned`: the old scrub did both,
-   *  so a banned works engine or floor became the DEFAULT for the rest of the
-   *  career. Race-time resolution (Career.aiSetup → fittedOf →
-   *  Parts.resolveSetup → _resolve) already enforces the era every race, so a
-   *  banned id may stay fitted. Per category it touches only three cases:
-   *  the fitted id is banned, a banned id was shelved there, or a works id is
-   *  missing from `owned` (a pre-fix save's scar; seeding owns every works id).
-   *  Each fits the best-scoring LEGAL part the bag owns there when that beats
-   *  what is fitted, shelving a banned id it displaces — so the works part
-   *  returns the winter its era lapses. No ban, no shelf: a no-op. */
+  /** After every rollover applyRegs(). Never fits the ERA-RESOLVED factory row or
+   *  drops an owned part (the old scrub did, so a banned works engine became the
+   *  career default); Parts.resolveSetup enforces the era each race. Per category,
+   *  only when the fitted id is banned, one is shelved, or a works id is missing
+   *  from `owned` (pre-fix scar): fit the best LEGAL owned part if it beats the
+   *  fitted one, shelving a displaced ban, so works parts return when the era
+   *  lapses. No ban, no shelf: a no-op. */
   function scrubFitted(career) {
     if (!career || !career.aiParts || typeof Parts === "undefined") return;
     for (const team of Teams.LIST) {
