@@ -306,7 +306,35 @@ export class Lsp {
     const s = JSON.stringify(o); this.proc.stdin.write(`Content-Length: ${Buffer.byteLength(s)}\r\n\r\n${s}`);
   }
   notify(method, params) { this.send({ jsonrpc: "2.0", method, params }); }
-  request(method, params) {
+  async request(method, params) {
+    const result = await this.rawRequest(method, params);
+    if (method !== "textDocument/references" || (result != null && !Array.isArray(result))) return result;
+    return this.withLexicalRefs(params, result || []);
+  }
+  withLexicalRefs(params, result) {
+    let file;
+    try { file = this.rel(params.textDocument.uri); } catch { return result; }
+    if (!/\.(?:js|mjs|cjs)$/.test(file) || !this.mtimes.has(file)) return result;
+    const t = this.textOf(file), line = t.lines[params.position.line];
+    if (line == null) return result;
+    let col = params.position.character;
+    while (col > 0 && /[\w$]/.test(line[col - 1])) col--;
+    const variable = this.lexicalRefs(file).get(t.starts[params.position.line] + col);
+    if (!variable || !variable.scope || variable.scope.type === "global") return result;
+    const uri = params.textDocument.uri, have = new Set(result.filter(r => r.uri === uri).map(r => `${r.range.start.line}:${r.range.start.character}`));
+    const declared = new Set(variable.identifiers.map(id => id.range[0])), added = [];
+    const ids = [...(params.context?.includeDeclaration === false ? [] : variable.identifiers), ...variable.references.map(r => r.identifier)];
+    for (const id of ids) {
+      if (params.context?.includeDeclaration === false && declared.has(id.range[0])) continue;
+      const start = { line: id.loc.start.line - 1, character: id.loc.start.column }, key = `${start.line}:${start.character}`;
+      if (have.has(key)) continue;
+      have.add(key);
+      added.push({ uri, range: { start, end: { line: id.loc.end.line - 1, character: id.loc.end.column } } });
+    }
+    if (added.length) this.lexicalAdded = (this.lexicalAdded || 0) + added.length;
+    return added.length ? [...result, ...added] : result;
+  }
+  rawRequest(method, params) {
     return new Promise((resolve, reject) => {
       if (!this.proc) return reject(Error("tsc --lsp is not running"));
       const id = ++this.seq;
@@ -806,7 +834,7 @@ export class Lsp {
   async at(args, method, extra = {}) {
     await this.prepare();
     const c = await this.candidates(args);
-    if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length === 2 && this.facadeOf(c.parts[0])) return { ...c, ...(await this.facade(c.parts, method, extra)) };
     if (c.parts.length > 1) {
       const owner = c.parts.slice(0, -1).join(".");
       if (this.windowDecl(owner) || this.repeatedIifeDecl(owner)) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
@@ -823,7 +851,7 @@ export class Lsp {
       first ??= { p, result };
       if (answered(result)) return { ...c, p, result, note: p.note };
     }
-    if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length === 2 && this.facadeOf(c.parts[0])) return { ...c, ...(await this.facade(c.parts, method, extra)) };
     if (c.parts.length > 1 && first?.p.note && !(this.windowDecl(c.parts.slice(0, -1).join(".")) || this.repeatedIifeDecl(c.parts.slice(0, -1).join(".")))) return { ...c, ...first, note: first.p.note };
     if (c.parts.length > 1) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
     if (c.parts.length === 1 && method === "textDocument/definition") {
@@ -844,18 +872,19 @@ export class Lsp {
   }
   windowDecl(h, all = false) {
     const esc = h.replace(/[$.]/g, "\\$&"), declarations = [];
-    const win = new RegExp(`(?:^|[;{}])\\s*window\\.${esc}\\s*=`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
+    const win = new RegExp(`(?:^|[;{}])\\s*(?:window|self|globalThis)\\.${esc}\\s*=(?!=)`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
     for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(h)) continue;
       for (const [re, kind] of [[win, "window"], ...(text.includes("module.exports") ? [[cjs, "cjs"]] : [])]) {
         re.lastIndex = 0;
         for (const m of text.matchAll(re)) {
-          const pos = this.posOf(f, m.index + (kind === "window" ? m[0].indexOf("window") : 0));
+          const globalHead = kind === "window" ? /window|self|globalThis/.exec(m[0]) : null;
+          const pos = this.posOf(f, m.index + (globalHead ? globalHead.index : 0));
           if (this.nonCode(f, pos.line0, pos.col0)) continue;
           if (kind === "window") {
             let globalWindow = false;
-            visit(this.astOf(f), n => { if (n.type === "Identifier" && n.name === "window" && n.loc.start.line - 1 === pos.line0 && n.loc.start.column === pos.col0) globalWindow = this.isGlobalHead(f, n, "window"); });
+            visit(this.astOf(f), n => { if (n.type === "Identifier" && n.name === globalHead[0] && n.loc.start.line - 1 === pos.line0 && n.loc.start.column === pos.col0) globalWindow = this.isGlobalHead(f, n, globalHead[0]); });
             if (!globalWindow) continue;
           }
           const d = { file: f, ...pos, kind };
@@ -902,7 +931,7 @@ export class Lsp {
       const candidates = [];
       visit(this.astOf(owner.file), n => {
         if (n.loc.start.line - 1 !== owner.line0 || n.loc.start.column !== owner.col0) return;
-        if (owner.kind === "window" && n.type === "AssignmentExpression" && objectName(n.left) === `window.${h}`) candidates.push(n.right);
+        if (owner.kind === "window" && n.type === "AssignmentExpression" && [`window.${h}`, `self.${h}`, `globalThis.${h}`].includes(objectName(n.left))) candidates.push(n.right);
         if (["cjs", "script"].includes(owner.kind) && n.type === "VariableDeclaration") for (const v of n.declarations) {
           if (objectName(v.id) !== h) continue;
           if (owner.kind === "script" && (v.id.loc.start.line - 1 !== owner.idLine0 || v.id.loc.start.column !== owner.idCol0)) continue;
@@ -924,6 +953,17 @@ export class Lsp {
         }
       }
     }
+    const assigned = new RegExp(`(?:^|[;{}])\\s*(?:(?:window|self|globalThis)\\.)?${h.replace(/[$.]/g, "\\$&")}\\.(${member.replace(/[$]/g, "\\$")})\\s*=(?!=)`, "gm");
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
+      const { text } = this.textOf(f);
+      if (!text.includes(`${h}.${member}`)) continue;
+      for (const m of text.matchAll(assigned)) {
+        const pos = this.posOf(f, m.index + m[0].lastIndexOf(member, m[0].lastIndexOf("=")));
+        if (this.nonCode(f, pos.line0, pos.col0)) continue;
+        if (!defs.some(x => x.uri === this.uriOf(f) && x.range.start.line === pos.line0 && x.range.start.character === pos.col0))
+          defs.push({ uri: this.uriOf(f), range: { start: { line: pos.line0, character: pos.col0 } } });
+      }
+    }
     if (!defs.length) throw Error(`${d.kind === "window" ? `window.${h}` : h} (${d.file}:${d.line0 + 1}) has no member ${member}`);
     const qualifications = [];
     if (owners.length > 1 || defs.length > 1) qualifications.push("multiple assignments/member contributions; candidates shown; runtime load order may determine the winner");
@@ -937,6 +977,10 @@ export class Lsp {
     const refs = await this.textRefs(parts, def, extra.context?.includeDeclaration !== false);
     if (extra.context?.includeDeclaration !== false) for (const other of defs.slice(1)) if (!refs.some(r => r.uri === other.uri && r.range.start.line === other.range.start.line && r.range.start.character === other.range.start.character)) refs.push(other);
     return { p, result: refs, note };
+  }
+  facadeOf(h) {
+    const facade = FACADES[h];
+    return facade && fs.existsSync(path.join(this.root, facade.file)) ? facade : null;
   }
   async facade([h, member], method, extra) {
     const { iface, file } = FACADES[h], lines = this.textLines(file);
@@ -962,6 +1006,27 @@ export class Lsp {
     return [`0 semantic uses, but ${hits.length} text match${hits.length === 1 ? "" : "es"} of .${name} (a member on an object the checker cannot type, e.g. a factory's return; verify each): ${at}${hits.length > 6 ? ", …" : ""}`];
   }
 
+  outsideFiles() {
+    if (this._outside) return this._outside;
+    const out = [];
+    const add = (dir, re) => { try { for (const x of fs.readdirSync(path.join(this.root, dir)).sort()) if (re.test(x)) out.push(path.join(dir, x)); } catch {  } };
+    add("", /\.(?:html|js|mjs)$/); add("worker", /\.(?:js|mjs)$/);
+    return this._outside = out.filter(f => !f.startsWith(`${this.src}/`));
+  }
+  outsideNote(a, p) {
+    const symbol = a.symbol || /^[\w$]+/.exec((this.textLines(p.file)[p.line0] || "").slice(p.col0))?.[0];
+    if (!symbol || !/^[\w$.]+$/.test(symbol)) return [];
+    const parts = symbol.split("."), esc = x => x.replace(/[$]/g, "\\$");
+    const re = new RegExp(`(?<![\\w$])${parts.map(esc).join("\\s*\\??\\.\\s*")}(?![\\w$])`, "g"), hits = [];
+    for (const f of this.outsideFiles()) {
+      let text;
+      try { text = fs.readFileSync(path.join(this.root, f), "utf8"); } catch { continue; }
+      if (!text.includes(parts.at(-1))) continue;
+      for (const m of text.matchAll(re)) hits.push(`${f}:${text.slice(0, m.index).split("\n").length}`);
+    }
+    if (!hits.length) return [];
+    return [`${hits.length} text match${hits.length === 1 ? "" : "es"} of ${symbol} outside ${this.src}/ (inline scripts, service worker, other pages; not indexed, verify each): ${hits.slice(0, 6).join(", ")}${hits.length > 6 ? ", …" : ""}`];
+  }
   memberTextHits(name) {
     if (!/^[A-Za-z_$][\w$]*$/.test(name || "")) return [];
     const re = new RegExp(`\\.${name.replace(/\$/g, "\\$")}(?![\\w$])`, "g"), out = [];
@@ -1007,7 +1072,7 @@ export class Lsp {
           ? !!lexicalOwner && n?.type === "Identifier" && this.lexicalRefs(f).get(n.range[0]) === lexicalOwner
           : this.isGlobalHead(f, n, head)
         : this.isGlobalHead(f, n, head);
-      if (parts.length < 2 || FACADES[head]) usesOf(f, direct, name.length);
+      if (parts.length < 2 || this.facadeOf(head)) usesOf(f, direct, name.length);
       else visit(this.astOf(f), n => {
         if (n.type !== "MemberExpression" || !validHead(n.object)) return;
         const member = n.computed && n.property.type === "Literal" ? n.property.value : !n.computed && n.property.type === "Identifier" ? n.property.name : null;
@@ -1224,6 +1289,7 @@ export async function callTool(lsp, name, a = {}) {
         });
         locs.length = 0; locs.push(...uses);
         if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
+        if (p) notes.push(...lsp.outsideNote(a, p));
         const unfiltered = locs.length;
         if (scope) {
           const scopedLocs = locs.filter(l => inScope(lsp.rel(l.uri), scope));
@@ -1263,6 +1329,7 @@ export async function callTool(lsp, name, a = {}) {
           notes.push(/^[\w$]/.test(ln[p.col0] || "") ? `nothing resolvable at ${pos(p)} ("${w}")` : `${pos(p)} is not on a name (column ${p.col0 + 1} of "${ln.trim().slice(0, 60)}"); point the column at the symbol`);
         }
         if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
+        if (!isDef && p) notes.push(...lsp.outsideNote(a, p));
         const viaAlias = r.list.filter(l => l.via).length;
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);
         const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
