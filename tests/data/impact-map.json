@@ -18251,6 +18251,7 @@
     },
     "js/ui/appearance-studio.js": {
       "applyPreset": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "applySnapshot": [
@@ -18287,6 +18288,7 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "reset": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "saveProfile": [
@@ -18305,6 +18307,7 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "undo": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "*": [
@@ -19164,6 +19167,7 @@
     },
     "js/ui/layout-presets.js": {
       "apply": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/layout-presets.test.mjs"
       ],
       "current": [
@@ -19175,10 +19179,20 @@
       "mount": [
         "tests/unit/layout-presets.test.mjs"
       ],
+      "normalizeShapes": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
+      "restore": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
+      "setShapeMode": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
       "snapshot": [
         "tests/unit/layout-presets.test.mjs"
       ],
       "undo": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/layout-presets.test.mjs"
       ]
     },
@@ -20099,6 +20113,9 @@
       "panel": [
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "presets": [
+        "tests/unit/player-tools-ui.test.mjs"
       ],
       "show": [
         "tests/unit/player-tools-ui.test.mjs",

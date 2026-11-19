@@ -433,8 +433,8 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
     Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
     MutationObserver: class {
-      constructor(cb) { this.cb = cb; observers.push(this); }
-      observe() {}
+      constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+      observe(t) { this.targets.push(t); }
     },
     ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
     matchMedia: () => ({ matches: false }),
@@ -444,9 +444,12 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
   vm.runInContext(source, context);
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   sceneHits.length = 0; // attach() refreshes the live Home scene once; this test is about OPEN
-  assert.equal(observers.length, 1, "studio watches the appearance panel");
+  // The other observer is the PORTRAIT & LANDSCAPE watch on body[data-shape] (#4529).
+  const watching = observers.filter((o) => o.targets.includes(panel));
+  assert.equal(watching.length, 1, "studio watches the appearance panel");
+  assert.equal(observers.filter((o) => o.targets.includes(dom.document.body)).length, 1, "one orientation watch");
   panel.hidden = false;
-  observers[0].cb([{ attributeName: "hidden" }]);
+  watching[0].cb([{ attributeName: "hidden" }]);
   assert.equal(panel.getAttribute("aria-busy"), "true");
   assert.equal(sceneHits.length, 0, "preview must not run on the same turn as the open click");
   assert.ok(rafQueue.length >= 1);
@@ -480,8 +483,8 @@ test("closing Appearance cancels a pending store debounce so sceneChanged cannot
     clearTimeout(id) { if (timers[id - 1]) { timers[id - 1].dead = true; timers[id - 1].fn = null; } },
     requestAnimationFrame: (fn) => { fn(); return 1; },
     MutationObserver: class {
-      constructor(cb) { this.cb = cb; observers.push(this); }
-      observe() {}
+      constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+      observe(t) { this.targets.push(t); }
     },
     ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
     matchMedia: () => ({ matches: false }),
@@ -498,7 +501,8 @@ test("closing Appearance cancels a pending store debounce so sceneChanged cannot
   for (const fn of subs) fn({ key: "homeScene" });
   assert.equal(timers.filter((t) => t.fn && t.ms === 80).length, 1, "store change armed the debounce");
   panel.hidden = true;
-  observers[0].cb([{ attributeName: "hidden" }]);
+  // The panel's own observer (the #4529 orientation watch on body is another).
+  observers.find((o) => o.targets.includes(panel)).cb([{ attributeName: "hidden" }]);
   assert.ok(timers.every((t) => !t.fn || t.dead), "hide clearTimeouts the pending debounce");
   for (const t of timers) if (t.fn) t.fn();
   assert.equal(sceneHits.length, 0, "no preview after Appearance closed");

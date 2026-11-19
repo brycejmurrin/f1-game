@@ -1730,6 +1730,7 @@
       "kind": "browser",
       "files": [
         "tests/specs/agent-determinism.spec.js",
+        "tests/specs/appearance-orientation.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/bryce-phone-paint.spec.js",
