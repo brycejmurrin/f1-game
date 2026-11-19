@@ -468,6 +468,6 @@ test("WATCH AUTO: a seek past the followed car's DNF moves the picture to a runn
     const follow = RR.status().replay.follow;
     assert.notEqual(follow, code18, "off the retired car at once");
     const running = [63, 16].map((n) => script.drivers.find((d) => d.num === n).code);
-    assert.ok(running.includes(follow), "onto a running car: " + follow);
+    assert.ok(running.some((code) => code === follow), "onto a running car: " + follow);
   } finally { g.close(); }
 });
