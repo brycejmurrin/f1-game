@@ -85,8 +85,9 @@ CARVIEW.clearLights()
 ## Gotchas
 
 - Decals need reflected handedness. The in-race model matrix is a reflection
-  (det −1); the viewer draws through `REFLECT_X`. `carview.html`'s
-  `carDecalData()` mirrors `js/game.js` — change one, update the other.
+  (det −1); the viewer draws through `REFLECT_X`. `carDecalData()`
+  is one shared function (`js/car/car-mesh.js`, reached through `CarMesh.getCarDecalMesh`); what mirrors is the
+  reflection: `REFLECT_X` in `tools/carview.html` and `MAT_REFLECT_X` in `js/game.js` — change one, update the other.
 - Part geometry only shows when you force the option (`--gearbox=f1_spec`);
   the default build is the baseline look.
 - A blank/near-black frame usually means the server is down or

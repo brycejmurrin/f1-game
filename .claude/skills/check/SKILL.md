@@ -33,13 +33,15 @@ third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structura
    show as `mergeable_state dirty` in step 1.
 3. The `gate` line: `gh api repos/brycejmurrin/f1-game/commits/<head>/statuses`, newest `context: gate` (ci-watch does not
    read statuses). Absent on a draft or a PR without `land` is expected; for one PR's land readiness (Plan, LAND/WAIT)
-   `node tools/ci/pr-board.mjs --pr <n>`.
+   `node tools/ci/pr-board.mjs --pr <n>` (its GATE column is the `Structural guards` / ready-gate verdict, not this
+   `gate` status).
 4. Only when `artifacts/logs/` has a log newer than the head commit: its closing `= …` line
    (`= tooling-fast passed|failed …`; a `test-bg` log's verdict is `= bg exit N`). No closing line = still running.
-5. Live build, only when liveness is asked: agent `deploy-research` returns the live `apex-sha` (never curl
+5. Live build, only when liveness is asked. An OPEN, unmerged PR is not live (`merged: false` settles it). Otherwise agent `deploy-research` returns the live `apex-sha` (never curl
    github.io from the main context; steward `references/ci-verdicts.md`). Then `git merge-base --is-ancestor <head> <live sha>` — exit 0
    means live; exit 1 means not live only in a full clone. If `git rev-parse --is-shallow-repository` prints
-   `true`, first run `git fetch --deepen=200 origin claude/f1-game-project-26h3ng` (or `--unshallow`) and retry.
+   `true`, first run `git fetch --deepen=200 origin claude/f1-game-project-26h3ng` (or `--unshallow`) and retry; a head
+   that is not on the deploy branch also needs `git fetch origin pull/<n>/head` before merge-base can see it.
    Any other result — an empty live read, a missing commit, exit 128 — is unknown, never "not live". A merged
    topic commit can be live while the local branch is still a topic branch.
 
