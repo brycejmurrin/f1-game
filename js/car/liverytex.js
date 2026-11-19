@@ -2071,10 +2071,14 @@ const LiveryTex = (function () {
     // stripe's aft end disappearing behind the wheel is a stripe, a sponsor
     // name's aft end disappearing behind the wheel is half a word. `su` is the
     // band axis, `sc` the content axis, and they differ only where a crown has
-    // taken the front — every other team's lettering is where it always was.
+    // taken the front. On every crown the content axis also STOPS at
+    // FLANK_SEEN: the wordmark and duo boxes once ran to u 0.94/0.96 on a bare
+    // flank and McLaren's shipped wordmark was 24 % behind the rear tyre (duo
+    // 36 %, spine-station --occlude), so a box past the seen strip is clamped
+    // to it rather than trusted (#5712).
     const sideTo = sideFrom ? FLANK_SEEN : 1;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
-    const sc = (F, u) => F.fx(sideFrom + u * (sideTo - sideFrom));
+    const sc = (F, u) => F.fx(Math.min(FLANK_SEEN, sideFrom + u * (sideTo - sideFrom)));
     const sbox = (F, u0, u1, v0, v1) => {
       const xa = sc(F, u0), xb = sc(F, u1);
       return { x: Math.min(xa, xb), y: F.R.y + v0 * F.R.h, w: Math.abs(xb - xa), h: (v1 - v0) * F.R.h };
@@ -2181,7 +2185,7 @@ const LiveryTex = (function () {
       // BULL.top freed above the animal's back. Under a saddle it STAYS on the
       // saddle panel (aft of ~u 0.50 leaves the rake onto bare cover).
       eachFlank((F) => {
-        let box = sbox(F, 0.06, 0.94, 0.12, 0.48);
+        let box = sbox(F, 0.04, 0.60, 0.12, 0.48);
         if (sideFrom) box = sbox(F, 0.02, 0.98, 0.03, 0.30);
         else if (spineLogo === "saddle") box = sbox(F, 0.04, 0.50, 0.12, 0.48);
         const ink = sideFrom ? inkMark : inkFlank;
@@ -2217,10 +2221,13 @@ const LiveryTex = (function () {
             { align: "center", pad: 4, halo: flankHalo(inkFlank) });
           return;
         }
-        drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.14, 0.50), inkFlank,
-          { align: "center", pad: 8, halo: flankHalo(inkFlank) });
-        drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.16, 0.46), inkFlank,
+        // A bare flank stacks too: abreast, the title had to sit aft of u 0.40
+        // and ran to 0.96, a third of it behind the rear tyre. Stacked inside
+        // the seen strip, the title keeps the wider upper row.
+        drawWordmark(ctx, names[0] || "", sbox(F, 0.04, 0.60, 0.10, 0.32), inkFlank,
           { align: "center", pad: 6, halo: flankHalo(inkFlank) });
+        drawWordmark(ctx, names[1] || "", sbox(F, 0.10, 0.54, 0.34, 0.52), inkFlank,
+          { align: "center", pad: 4, halo: flankHalo(inkFlank) });
       });
     } else if (spineSide === "title") {
       // Title sponsor ON a contrasting board — distinct from bare wordmark / PLATE.

@@ -150,10 +150,24 @@ const AgentCorners = (function () {
     function roadShapeAt(s, entryS, exitS, dir) {
       const track = G.track, out = {};
 
-      let bankRad = 0;
-      const bk = Tracks.banking ? Tracks.banking(track, wrapS(s), 0) : null;
-      if (bk && bk.roll) bankRad = bk.roll;
-      else if (Tracks.bankAngle) bankRad = Tracks.bankAngle(track, wrapS(s)) || 0;
+      // The PEAK roll over the corner, not the roll at the detector's apex:
+      // a bank zone does not centre on that s (Zandvoort T3 read 9.9° at the
+      // apex where its 18° zone peaks at 17.7°, #5712). Signed, so the camber
+      // test below still reads the side the road tilts to.
+      const rollAt = (q) => {
+        const bk = Tracks.banking ? Tracks.banking(track, wrapS(q), 0) : null;
+        if (bk && bk.roll) return bk.roll;
+        return Tracks.bankAngle ? (Tracks.bankAngle(track, wrapS(q)) || 0) : 0;
+      };
+      let bankRad = rollAt(s);
+      if (entryS != null && exitS != null) {
+        let span = exitS - entryS; if (span < 0) span += track.total;
+        const n = Math.max(1, Math.ceil(span / 2));
+        for (let i = 0; i <= n; i++) {
+          const r = rollAt(entryS + span * i / n);
+          if (Math.abs(r) > Math.abs(bankRad)) bankRad = r;
+        }
+      }
       const bankDeg = r1(bankRad * 180 / Math.PI);
       out.bankingDeg = bankDeg;
       if (Math.abs(bankDeg) < 1.5 || (dir !== "L" && dir !== "R")) {
