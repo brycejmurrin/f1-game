@@ -73,13 +73,16 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
     await startRace(page, "madrid");
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+      // Sample the steepest bank zone from the def (La Monumental, 13.5°), not a
+      // literal frac: #5316 moved it 0.75 → 0.456 and stranded the old literal.
+      const bankFrac = def.bankZones.reduce((a, b) => (b.angleDeg > a.angleDeg ? b : a)).frac;
       const track = Tracks.buildCenterline(def);
-      const trackRoll = Tracks.banking(track, 0.75 * track.total, 0)?.roll || 0;
-      window.__apex.jump(0.75, 30, 0);
+      const trackRoll = Tracks.banking(track, bankFrac * track.total, 0)?.roll || 0;
+      window.__apex.jump(bankFrac, 30, 0);
       window.__apex.camera("chase");
       window.__apex.snapCam();
       const bankedRoll = window.__apex.camState().roll;
-      window.__apex.orbit(0.75, 45, 18, 45);
+      window.__apex.orbit(bankFrac, 45, 18, 45);
       const debugRoll = window.__apex.camState().roll;
       window.__apex.camera("chase");
       window.__apex.jump(0.60, 30, 0);

@@ -710,6 +710,15 @@
   box-shadow: var(--edge);
 }
 .cs-opt.locked .cs-opt-name { color: var(--dim); }
+/* The RESEARCH pill is ~114 px and nowrap, and .cs-opt-main shrinks to one glyph
+   (min-width 0 + overflow-wrap anywhere), so in the phone's ~198 px column the
+   pill took its width first: the text broke letter by letter in a 47 px column,
+   each row 694-1,177 px tall and the pill centred under RETURN TO CAREER (#5672).
+   A 16ch basis puts the pill on its own line whenever text and pill do not fit
+   side by side; a wide column keeps one line. */
+.cs-opt.locked { flex-wrap: wrap; }
+.cs-opt.locked .cs-opt-main { flex: 1 1 16ch; }
+.cs-opt.locked .cs-opt-cost.research { margin-inline-start: auto; }
 .cs-opt.locked .cs-opt-dot { border-style: dashed; border-color: var(--plate-line); }
 /* The pill is a PRICE tag, not the spec number the other rows carry there, so it
    gets a chip shape and the buy colour instead of plain dim text. */

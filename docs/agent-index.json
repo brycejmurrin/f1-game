@@ -4968,7 +4968,7 @@
     {
       "path": "js/ui/quali-sheet.js",
       "global": "QualiSheet",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/ui/race-message-history.js",

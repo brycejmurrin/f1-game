@@ -137,6 +137,13 @@
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
+/* tuner.css sets .adv-help { opacity: 0.6 } on --text — on a 225px card that
+   is low-contrast grey. Restore full ink inside Settings; dim via --steel. */
+#pmsettings-inner .adv-help {
+  opacity: 1;
+  color: var(--steel);
+  font-size: var(--fs-2);
+}
 /* KEYBOARD / CONTROLLER rows (#pm-keys, #pm-pad, js/ui/key-binds.js): the two
    slots are chips that show a key or button name, not the chevron squares — a
    name needs width. An armed slot (waiting for input) wears the selected
@@ -300,6 +307,19 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
     width: auto;
     height: 100%;
     align-self: stretch;
+  }
+}
+/* A touch phone held upright keeps the door LIST (ui-redesign "balanced
+   control rows"): #5640's uncapped --sheet-w lifts its sheet past 24rem
+   (~33rem own px at UI 70), where the grid left a half-width orphan
+   mid-list. Tablets (>= 40rem) and desktop keep the grid. Keyed on the
+   viewport's orientation, not the sheet's data-shape: SheetShape writes that
+   a frame after the open (ResizeObserver + rAF), so a sheet opened right
+   after a rotation still read "wide" and painted the grid (ready run
+   44479875495, ui-redesign:989). */
+@media (orientation: portrait) {
+  @container sheet (min-width: 24rem) and (max-width: 39.99rem) {
+    body:not(.desktop) #pmsettings-inner #pm-settings-index { display: flex; }
   }
 }
 /* A wide sheet (laptop and up) reads nine doors as three columns, not a
@@ -581,6 +601,28 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   letter-spacing: var(--ls-2);
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
+}
+/* HUD & CAMERA / MUSIC folds read as plain text links on a tall phone card.
+   A quiet plate marks them as the same family as the door tiles above.
+   :hover/:active too: the plain-fold hover/active rules above (higher
+   specificity) set border:none, so hover shrank the box 2px; a cursor in its
+   bottom 2px then flipped hover every frame (ui-button-touch "not stable"). */
+#pmsettings-inner .pm-group details > summary,
+#pmsettings-inner .pm-group details > summary:active {
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  margin-block: calc(var(--gap) * 0.15);
+  padding-block: calc(var(--gap) * 0.35);
+}
+@media (hover: hover) and (pointer: fine) {
+  #pmsettings-inner .pm-group details > summary:hover {
+    background: var(--surf-1);
+    border: 1px solid var(--plate-line);
+  }
+}
+#pmsettings-inner .pm-group details {
+  border-bottom: 0;
 }
 /* #5358: under 100 % UI the sheet zoom paints --chip-h (48) below 44 (33.6 px at the phone's 70 %). Re-floor
    the touch folds on the PAINTED 44, as #3334 did for the garage chips; 100 %+ is unchanged. */

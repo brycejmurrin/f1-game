@@ -1602,6 +1602,24 @@ test("a caution makes the same stop cheaper, by the same formula", () => {
   assert.ok(sc >= pits.zoneOf().boxS, "never less than the time on the jacks");
 });
 
+test("estimate gapS is at OUR pace — a crawling car behind cannot invent a free stop", () => {
+  // 40 m behind at 80 m/s is 0.5 s. At the behind car's crawl of 2 m/s the same
+  // metres read as 20 s and marginS went positive against a ~15 s pit loss.
+  const { pits, car, G } = commitSession();
+  G.cautionInfo = () => ({ level: 2 });
+  const me = car(0); me.prog = 1000; me.speed = 80;
+  const behind = { prog: 960, speed: 2, retired: false, finished: false };
+  G.cars = [me, behind];
+  const est = pits.estimate(me);
+  assert.ok(est && est.gapS != null, "a car behind yields a gap");
+  assert.ok(Math.abs(est.gapS - 0.5) < 1e-9, `gapS at our 80 m/s is 0.5 s, got ${est.gapS}`);
+  assert.ok(est.marginS < 0, `a half-second gap is not a free stop (margin ${est.marginS})`);
+  // Same metres, same crawl behind — still our pace if we are the ones boxing.
+  me.speed = 40;
+  const slow = pits.estimate(me);
+  assert.ok(Math.abs(slow.gapS - 1) < 1e-9, `at our 40 m/s the gap is 1 s, got ${slow.gapS}`);
+});
+
 // ── `held`: how long the lane's rules apply ──────────────────────────────────
 // One predicate for everything the lane forbids — the speed cap, and now
 // overtake and X-mode, which are not a driver's to use between the lines. It is
