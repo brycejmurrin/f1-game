@@ -2179,6 +2179,8 @@ const Input = (function () {
     dragFilterClear(); hideDragAnchor();
     // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
     _viewLong = 0;
+    // The dock re-lays out under a held thumb: every hold lets go (a latch is kept, as on a lift).
+    holdReleaseAll(true);
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
@@ -2298,8 +2300,8 @@ const Input = (function () {
       // latch outright rather than toggling it (see holdReleaseAll).
       if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
       else btnThrottle = v;
-    }, function (l) { btnThrottleVal = l; });
-    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; });
+    }, function (l) { btnThrottleVal = l; }, { sibling: "btn-brake" });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { sibling: "btn-throttle" });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -2308,11 +2310,11 @@ const Input = (function () {
     wireHold("btn-steer-left", function (v) {
       if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
       btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
-    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1 });
+    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1, sibling: "btn-steer-right" });
     wireHold("btn-steer-right", function (v) {
       if (v && !btnSteerRight) btnSteerRightSeq = ++btnSteerSeq;
       btnSteerRight = v; if (!v) btnSteerRightVal = 0;
-    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1 });
+    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1, sibling: "btn-steer-left" });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
