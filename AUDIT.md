@@ -44,13 +44,18 @@ the following Content Security Policy directive" for each on every load. What is
 
 Likely cause: the inline scripts were edited (their comments are gone) without recomputing the hashes.
 
-### 2. After the first track-limits penalty, every further excursion costs another 5 s — **ran**
+### 2. Track limits: one long excursion counts as several strikes, and the HUD implies a reset — **ran**
 
-`js/game.js:3377-3384`. The strike counter `cutWarn` is reset at 4 in time trial and qualifying, but in a
-race the `>= 4` branch adds 5 s and never resets, while the HUD shows "TRACK LIMITS n/4". Simulated race:
-excursions 1–3 warn, the 4th gives +5 s, the 5th +10 s total, the 7th +15 s, the 8th +20 s. Because
-`c.offT = -2` (`:3373`) re-arms while the car is still off the road, one continuous 8 s on the grass counted
-three strikes (+15 s).
+`js/game.js:3368-3389`. In a race the fourth strike costs 5 s and so does every strike after it. That part
+is the documented rule — How To Play says "the fourth and every one after it in the race cost five seconds
+each" (`index.html:2482`) — so it is **not** a bug, and I did not change it. (An earlier draft of this audit
+ranked it as one; reading the help text corrected that.) What remains:
+
+- `c.offT = -2` (`:3373`) re-arms the timer while the car is still off the road, so one continuous 8 s on the
+  grass counted three strikes (+15 s once past the fourth). A player who spins onto the grass and takes time
+  to rejoin is charged repeatedly for one mistake.
+- The HUD shows four dots and "TRACK LIMITS n/4" (`js/ui/hud.js:1359-1367`), which reads as a counter that
+  starts again after the penalty; time trial and qualifying do reset it at four (`js/game.js:3380`).
 
 ### 3. The gap to the car ahead/behind is not a time gap and swings about 3× within a lap — **ran**
 
