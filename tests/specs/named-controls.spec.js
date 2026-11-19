@@ -10,9 +10,9 @@
 // files survived — and asserts the judge names the control. A gate that cannot fail is not a gate.
 //
 // The cell: iPhone Home Screen app in landscape, 852x393, real env() insets 59/21/59 through CDP, touch, the
-// settings export tests/data/settings-defaults-export.json (BUTTON 245 %, HUD 155 %, buttons steering). The
-// renderer stays the fixture's pinned GLX: this is a layout cell. When PR #5282's tools/lib/bryce-phone.mjs
-// lands, the setup below moves onto its `openBrycePhone` (one preset); the assertions do not change.
+// legacy settings export (tools/lib/bryce-phone.mjs `legacy`: BUTTON 245 %, HUD 155 %, buttons steering; the
+// October 2026 file, a heavy fixture, not his phone today). The renderer stays the fixture's pinned GLX: this is
+// a layout cell.
 //
 // Sizes: 44 px (WCAG 2.5.5 AAA / Apple HIG) for the race, pause and settings controls; 24 px (WCAG 2.5.8 AA)
 // for the title doors, whose utility row (SETTINGS, HELP, SAVES, PHONE PAD) measured 40 px tall at this cell on

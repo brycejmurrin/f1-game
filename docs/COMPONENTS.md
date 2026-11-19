@@ -239,7 +239,7 @@ missing class, a file that left, or a file that joined.
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
 - `.screen` — `carsetup` + `components` + `dialog-platform` + `dialogs` + `experience` + `hud` + `overlays` + `responsive` + `watch-transport`. The full-viewport overlay primitive.
-- `.sheet` — `career` + `career-experience` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `select` + `settings` + `settings-controls` + `tokens`
+- `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `select` + `settings` + `settings-controls` + `tokens`
 - `.sheet-head` — `career` + `carsetup` + `components` + `data` + `dialogs` + `editor` + `overlays` + `photo-studio` + `race-setup` + `select` + `settings`
 - `.sheet-foot` — `appearance-studio` + `career` + `carsetup` + `components` + `dialogs` + `overlays` + `photo-studio` + `race-setup` + `select` + `settings` + `tuner`. The most-shared component class in the project.
 - `.sheet-body` — `career` + `components` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.

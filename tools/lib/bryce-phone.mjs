@@ -34,6 +34,13 @@ export const OWNER_PROFILES = Object.freeze({
 });
 export const OWNER_EXPORT = OWNER_PROFILES.live;
 export const LEGACY_EXPORT = OWNER_PROFILES.legacy;
+/** A profile's whole export file, parsed: the one reader for every spec and tool that seeds a profile through
+ *  SettingsExport.applySettings, so no spec spells an export path of its own (#5218). */
+export function readProfile(name = "live", root = ROOT) {
+  const file = OWNER_PROFILES[name];
+  if (!file) throw new Error(`bryce-phone: unknown profile "${name}" (${Object.keys(OWNER_PROFILES).join(" | ")})`);
+  return JSON.parse(fs.readFileSync(root + file, "utf8"));
+}
 /**
  * The UI SIZE axis of the owner acceptance layer: 50, the phone floor (js/ui/scale.js UI_PHONE_MIN, #5452: Bryce
  * "Down to 50 %"; it was 70 under #5235 / #5384), 70 (his stored value, the floor until #5452), then the touch default.

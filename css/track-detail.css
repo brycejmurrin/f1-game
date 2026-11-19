@@ -95,10 +95,14 @@
   padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
 }
 .tdc-num { font-weight: 700; color: var(--text); min-width: 22px; }
-.tdc-fast   { color: #4ade80; font-size: var(--fs-micro); }
-.tdc-medium { color: #facc15; font-size: var(--fs-micro); }
-.tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
-.tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
+/* Corner class inks: CvdPalette cnr* off shades (canvas via track-maps.js
+   hex(); DOM chips stay literal until --cnr-* tokens + CSS_OF rows exist —
+   var(--faster)/--sec-slow would diverge from the map). font-size lives on
+   .tdc-corner. */
+.tdc-fast   { color: #4ade80; }
+.tdc-medium { color: #facc15; }
+.tdc-slow   { color: #fb923c; }
+.tdc-hairpin{ color: #f87171; }
 #track-detail-legend {
   flex: none; align-self: stretch;
   display: flex; flex-wrap: wrap;

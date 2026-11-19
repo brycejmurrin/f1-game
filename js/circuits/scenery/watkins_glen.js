@@ -487,7 +487,12 @@
         });
       }
       {
-        const a = anchor(K(0.28), 1, 92), b = [a.r, a.u, a.t];
+        // Seated on the pasture, not at road height: since the Esses climb
+        // (2026-11-18) the road here is ~12 m up a hill the pasture 92 m out
+        // does not share, and a road-height anchor hung the silo 16 m up.
+        const a0 = anchor(K(0.28), 1, 92), b = [a0.r, a0.u, a0.t];
+        const gyF = terrainYAt(a0.c[0], a0.c[2]);
+        const a = gyF == null ? a0 : Object.assign({}, a0, { c: [a0.c[0], gyF, a0.c[2]] });
         modelGroup("glen-dairy-farm", {
           center: vadd(a.c, a.u, 8), size: [28, 22, 48], basis: b,
         }, (stage) => {
@@ -499,7 +504,8 @@
           stage._mat = MAT.WOOD;
           seat.box(stage, vadd(vadd(a.c, a.t, -15.2), a.u, 6.5), [4.0, 1.4, 0.4], [0.36, 0.32, 0.28], b);
           stage._mat = MAT.CONCRETE;
-          const silo = vadd(a.c, a.r, 10);
+          const silo0 = vadd(a.c, a.r, 10), gyS = terrainYAt(silo0[0], silo0[2]);
+          const silo = gyS == null ? silo0 : [silo0[0], gyS, silo0[2]];
           // Footing sunk 1 m: the pasture falls away under the silo, so a flush base hung 0.7 m off the grass.
           seat.cyl(stage, vadd(silo, a.u, -1), 2.6, 16, [0.30, 0.40, 0.34], 10, b);   // glazed tile
           stage._mat = MAT.METAL;
