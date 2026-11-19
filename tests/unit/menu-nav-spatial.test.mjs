@@ -318,6 +318,21 @@ test("step(): ArrowDown off the last control of a scroll pane lands on the foot 
   assert.equal(step(last, 0, 1, [top, last, back]).id, "back");
 });
 
+// #5584: MUSIC & SOUND's TEST RACE MIX sits 480 px under the last Spotify button. With that button low in the pane the
+// fixed BACK under the pane was the nearer box in its band, so Down went to BACK and nothing ever went Down to the test.
+test("step(): Down inside a scroll pane prefers the pane's own control, however far, over a nearer foot in the band", () => {
+  const { step } = loadMenuNav();
+  const remote = el("remote", 153, 650, 484, 44);
+  const mix = el("mix", 153, 1133, 484, 44);
+  const back = el("back", 582, 718, 116, 61);
+  const pane = { contains: (n) => n === remote || n === mix };
+  remote.closest = mix.closest = () => pane;
+  assert.equal(step(remote, 0, 1, [remote, mix, back]).id, "mix", "the scrolled-away control of the same pane, not BACK");
+  const up = el("remote", 153, 49, 484, 44), shown = el("mix", 153, 532, 484, 44);   // the same pane, scrolled to its end
+  up.closest = shown.closest = () => ({ contains: (n) => n === up || n === shown });
+  assert.equal(step(shown, 0, 1, [up, shown, back]).id, "back", "the pane's last control still lands on the foot");
+});
+
 test("step(): the pane's foot never beats an in-band successor, and Down from the foot does not enter the pane", () => {
   const { step } = loadMenuNav();
   const top = el("first", 153, 40, 320, 40);

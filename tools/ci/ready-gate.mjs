@@ -163,14 +163,16 @@ export function draftProblem(pull) {
 export function nextAction(state, pr, repo = "brycejmurrin/f1-game") {
   const n = Number(pr);
   if (!Number.isInteger(n) || n < 1) return null;
+  // The MCP recipe, never `gh` (PR #5809): a `gh` label write is refused by bash-guard.sh or recorded as Bryce's click.
+  const land = `next: GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${n}  labels=<the live list from issue_read get_labels, plus "land">   (one label per call, skill steward references/labels.md)`;
   if (state === "passed") {
     return [
       `next: GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${n}  draft:false`,
-      `next: gh api -X POST repos/${repo}/issues/${n}/labels -f 'labels[]=land'`,
+      land,
     ];
   }
   if (state === "not-draft") {
-    return [`next: gh api -X POST repos/${repo}/issues/${n}/labels -f 'labels[]=land'   (already ready: flip nothing; add land only)`];
+    return [`${land}   (already ready: flip nothing; add land only)`];
   }
   return null;
 }

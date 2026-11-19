@@ -29,7 +29,11 @@
 @media (hover: hover) and (pointer: fine) {
   .watch-transport button:hover { border-color: var(--red); background: var(--plate-on); }
 }
-.watch-transport :is(button, select, input):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Inset ring + ui-scale floor (tokens.css). Was outset 2px and out-specified the house ring. */
+.watch-transport :is(button, select, input):focus-visible {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+}
 .watch-transport button:disabled { opacity: 0.45; }
 .watch-transport label { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); min-width: 0; }
 .watch-transport label > span { color: var(--dim); font-size: var(--fs-micro); white-space: nowrap; }
@@ -108,7 +112,10 @@ body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-trans
     font: 700 var(--fs-3) var(--font-ui); line-height: 1;
   }
   .watch-transport [data-wt="more"] > summary::-webkit-details-marker { display: none; }
-  .watch-transport [data-wt="more"] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .watch-transport [data-wt="more"] > summary:focus-visible {
+    outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+    outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+  }
   .watch-transport [data-wt="more"][open] > summary { border-color: var(--red); background: var(--plate-on); }
   .watch-transport [data-wt="more-box"] {
     position: absolute; right: 0; bottom: calc(100% + var(--gap)); z-index: 1;
@@ -137,13 +144,17 @@ body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-trans
   .watch-transport [data-wt="caption"] { gap: calc(var(--gap) / 3); }
   .watch-transport [data-wt="director"] { display: none; }
 }
-@media (max-height: 520px) and (max-width: 740px) {
+/* Below PHONE_BAR min-width only. Was max-width:740 and undid phone-bar nowrap on 600–740×≤520. */
+@media (max-height: 520px) and (max-width: 599px) {
   .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
 }
 
 .watch-transport [data-wt="chapters"] { margin-top: calc(var(--gap) / 2); min-width: 0; }
 .watch-transport [data-wt="chapters"] > summary { cursor: pointer; min-height: var(--tap); display: list-item; align-content: center; font-size: var(--fs-micro); }
-.watch-transport [data-wt="chapters"] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.watch-transport [data-wt="chapters"] > summary:focus-visible {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+}
 .watch-transport [data-wt="chapter-field"] { max-width: 100%; }
 .watch-transport [data-wt="chapter"] { min-height: var(--tap); }
 

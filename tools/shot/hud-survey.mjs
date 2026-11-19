@@ -4,10 +4,12 @@
 // @doc Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery.
 // @skill survey-ui-matrix
 //
-//   node tools/shot/hud-survey.mjs --matrix quick                 # 13 cells, 3 boots, ~10 min here
+//   Cell and boot counts per matrix: `--plan --matrix <name>` prints them (no browser);
+//   they are not written here because they drift whenever a device or preset joins.
+//   node tools/shot/hud-survey.mjs --matrix quick                 # the smallest matrix, ~10 min here
 //   node tools/shot/hud-survey.mjs --matrix quick --only chase-default
-//   node tools/shot/hud-survey.mjs --matrix full                  # pairwise, 33 cells / 20 boots, ~45 min
-//   node tools/shot/hud-survey.mjs --matrix exhaustive --list     # ~440 cells / ~49 boots: CI shards it
+//   node tools/shot/hud-survey.mjs --matrix full                  # pairwise, ~45 min
+//   node tools/shot/hud-survey.mjs --matrix exhaustive --list     # every combination: CI shards it
 //   node tools/shot/hud-survey.mjs --matrix exhaustive --shard 2/8 --no-shots --out artifacts/hud-survey/s2
 //   node tools/shot/hud-survey.mjs --merge artifacts/hud-survey/s1 artifacts/hud-survey/s2 --out artifacts/hud-survey/all
 //   node tools/shot/hud-survey.mjs --matrix scratch/my-matrix.json --no-shots

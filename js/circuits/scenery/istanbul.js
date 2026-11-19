@@ -233,7 +233,8 @@
       // Silver 3 — uncovered stand on the right after Turn 6, before the T8
       // amphitheatre (grandprixgrandtours Turkey circuit guide; Biletix 2021
       // seating map: Silver 3 at Turn 6 / 6–7, open-top numbered seats).
-      grandstandEx(0.290, 1, 24, 48, null, null,
+      // (Was s=0.290, 113 m short of def T4 and 399 m before T6: re-seated after T6.)
+      grandstandEx(0.372, 1, 24, 48, null, null,
         { livery: "sandstone", roof: "none", endWalls: true });
 
       groundPatch(K(0.055), -1, 6, [34, 0.18, 48], GRAVEL,
@@ -250,7 +251,7 @@
 
       groundPatch(K(0.905), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "istanbul-t13-gravel", samples: 6 });
-      tyreWall(0.888, 0.920, -1, 4, [0.85, 0.78, 0.20]);   // a stack at 0.922 (T14 apex) stood on the road
+      tyreWall(0.888, 0.920, -1, 4, [0.85, 0.78, 0.20]);   // T13 outside (left of a right-hander), beside the t13 gravel; ends 0.920 because a stack at 0.922 stood on the road
       // Silver 8 — final-corner complex (guide: Silver 8 at T12–14 / final
       // corner). Was grandstandEx(0.900, 1, 20, 76): every crowdBank riser
       // hit the neighbouring-leg fold (rejBox) → hollow 2-prim shell, slope 0
@@ -310,7 +311,7 @@
         cameraTower(K(s), side, gap, { h: 16, col: [0.62, 0.58, 0.52] });
 
       {
-        const a = anchor(K(0.930), -1, 44);   // 52 overhung the T13 carriageway (0.912) inside the loop
+        const a = anchor(K(0.930), -1, 44);   // just past T14; gap 52 overhung the carriageway at 0.912 inside the loop
         const b = [a.r, a.u, a.t];
         modelGroup("istanbul-stone-portal", {
           center: vadd(a.c, a.u, 9), size: [12, 22, 34], basis: b,

@@ -57,12 +57,8 @@ const TrackGraph = (function () {
     const models = new Map();   // key -> { key, ops, geo, verts, aabb }
     const nodes = [];
     let dropped = 0;
-    // A recorded op with no rec.mat() inherits out._mat at replay time, but the
-    // canonical mesh an instanced batch uploads bakes it as mat 0: inline and
-    // instanced disagree whenever the register is non-zero at the call (city
-    // facade rails/mullions/panes, H27's sibling). replay() raises this when it
-    // happens; instance() records it per node and stats().matInherit counts it
-    // (tools/track/graph-parity.cjs asserts zero).
+    // replay() sets this when an unstamped op inherits a non-zero out._mat (city
+    // facades, H27's sibling); instance() keeps it per node. See recorder().
     let inheritHit = false;
     // BAKED-MESH placements (build-props bakedModel): a pack model placed N
     // times used to be N copies in the props soup. Here it is one compacted
@@ -493,8 +489,7 @@ const TrackGraph = (function () {
         const e = byKind[kind];
         e.reuse = e.uniqueVerts > 0 ? e.fusedVerts / e.uniqueVerts : 0;
       }
-      // Nodes whose inline replay inherited a non-zero out._mat the canonical
-      // (instanced) mesh does not carry — must be 0; keyed by model for triage.
+      // Inline/instanced mat mismatches by model; must be 0 (graph-parity).
       const matInherit = { nodes: 0, byModel: {} };
       for (const node of nodes) {
         if (!node.matInherit) continue;

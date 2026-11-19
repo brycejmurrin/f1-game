@@ -239,9 +239,80 @@ test("mcp-browser-guard.sh: a subagent never drives a browser; the main session 
   } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
 });
 
+test("github-mcp-guard.sh: the orchestrator's CI acts (owner request 2026-11-18) pass, a cloud one as a child with APEX_ORCH_ENV (#5819); a worker, a bare child or a subagent is denied", () => {
+  // An isolated project and HOME: the guard reads their settings files (#5819: a settings `env` never makes an orchestrator).
+  const box = fs.mkdtempSync(path.join(ROOT, "artifacts", "guard-env-"));
+  const proj = path.join(box, "p"), home = path.join(box, "h");
+  for (const d of [proj, home]) fs.mkdirSync(path.join(d, ".claude"), { recursive: true });
+  const ISO = { CLAUDE_PROJECT_DIR: proj, HOME: home };
+  const decide = (tool_input, env, extra = {}) => {
+    const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input, ...extra }, { ...env, ...ISO });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "allow";
+  };
+  const ORCH = { APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "", APEX_ORCH_ENV: "" };
+  // #5819 (Bryce's "decision: A", 2026-11-19): a cloud orchestrator is a child session; it passes with APEX_ORCH_ENV.
+  const CLOUD_ORCH = { APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1", APEX_ORCH_ENV: "env_01AbCdEfGh" };
+  const who = {
+    orchestrator: [ORCH, {}],
+    cloudOrchestrator: [CLOUD_ORCH, {}],
+    child: [{ APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1", APEX_ORCH_ENV: "" }, {}],
+    childBadEnvShape: [{ ...CLOUD_ORCH, APEX_ORCH_ENV: "1" }, {}],
+    workerWithEnvOnly: [{ ...CLOUD_ORCH, APEX_ROLE: "" }, {}],
+    worker: [{ APEX_ROLE: "", CLAUDE_CODE_CHILD_SESSION: "1", APEX_ORCH_ENV: "" }, {}],
+    plain: [{ APEX_ROLE: "", CLAUDE_CODE_CHILD_SESSION: "", APEX_ORCH_ENV: "" }, {}],
+    wrongValue: [{ APEX_ROLE: "Orchestrator", CLAUDE_CODE_CHILD_SESSION: "", APEX_ORCH_ENV: "" }, {}],
+    subagent: [ORCH, { agent_id: "a1" }],
+    cloudSubagent: [CLOUD_ORCH, { agent_id: "a1" }],
+  };
+  const ORCHS = new Set(["orchestrator", "cloudOrchestrator"]);
+  const DEPLOY = "claude/f1-game-project-26h3ng";
+  // [input, the orchestrator's decision]; every other column is "deny" unless the row says "all"
+  const table = [
+    [{ method: "cancel_workflow_run", run_id: 1 }, "allow"],
+    [{ method: "force_cancel_workflow_run", run_id: 1 }, "allow"],
+    [{ method: "rerun_failed_jobs", run_id: 1 }, "allow"],
+    [{ method: "rerun_workflow_run", run_id: 1 }, "deny"],
+    [{ method: "run_workflow", workflow_id: "ci.yml", ref: "feature" }, "allow"],
+    [{ method: "run_workflow", workflow_id: ".github/workflows/ci.yml", ref: "feature" }, "allow"],
+    [{ method: "run_workflow", workflow_id: "pages.yml", ref: DEPLOY }, "allow"],
+    [{ method: "run_workflow", workflow_id: "pages.yml", ref: "refs/heads/" + DEPLOY }, "allow"],
+    [{ method: "run_workflow", workflow_id: "pages.yml", ref: "feature" }, "deny"],
+    [{ method: "run_workflow", workflow_id: "123", ref: DEPLOY }, "deny"],
+    [{ method: "run_workflow", workflow_id: "browser-group.yml", ref: "feature" }, "all"],
+  ];
+  const got = [], want = [];
+  for (const [input, orch] of table)
+    for (const [k, [env, extra]] of Object.entries(who)) {
+      got.push(`${k} ${JSON.stringify(input)} → ${decide(input, env, extra)}`);
+      want.push(`${k} ${JSON.stringify(input)} → ${orch === "all" ? "allow" : ORCHS.has(k) ? orch : "deny"}`);
+    }
+  assert.deepEqual(got, want);
+  // A session can write a settings `env` block with both keys (orchestrator review, 2026-11-19): the guard reads the
+  // project, local and user settings and never trusts APEX_ROLE / APEX_ORCH_ENV while any of them names either key.
+  const cancel = { method: "cancel_workflow_run", run_id: 1 };
+  const plant = (file, env) => fs.writeFileSync(file, JSON.stringify({ env }));
+  const local = path.join(proj, ".claude", "settings.local.json"), shared = path.join(proj, ".claude", "settings.json"), user = path.join(home, ".claude", "settings.json");
+  const planted = [];
+  for (const [file, env] of [[local, { APEX_ROLE: "orchestrator", APEX_ORCH_ENV: "env_01AbCdEfGh" }], [shared, { APEX_ORCH_ENV: "env_01AbCdEfGh" }], [user, { APEX_ROLE: "orchestrator" }]]) {
+    plant(file, env);
+    planted.push(`${path.relative(box, file)}: ${decide(cancel, CLOUD_ORCH)} ${decide(cancel, ORCH)}`);
+    fs.rmSync(file);
+  }
+  assert.deepEqual(planted, ["p/.claude/settings.local.json: deny deny", "p/.claude/settings.json: deny deny", "h/.claude/settings.json: deny deny"]);
+  plant(shared, { CLAUDE_CODE_DISABLE_AUTO_MEMORY: "0" });
+  assert.equal(decide(cancel, CLOUD_ORCH), "allow", "an unrelated settings env key changes nothing");
+  fs.writeFileSync(shared, "{ not json");
+  assert.equal(decide(cancel, CLOUD_ORCH), "deny", "an unreadable settings file fails closed");
+  fs.rmSync(box, { recursive: true, force: true });
+  // the deny names the one route, so the worker is not left guessing
+  const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input: { method: "cancel_workflow_run", run_id: 1 } }, who.worker[0]);
+  assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, "WORKERS NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Only the orchestrator cancels (skill `steward` §CI).");
+});
+
 test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close, labels change by ONE name, allow the rest", () => {
   const gh = (tool_name, tool_input, env = {}) => {
-    const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, env);
+    const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, { APEX_ROLE: "", ...env });
     if (r.status === 2) return "exit2";
     assert.equal(r.status, 0, r.stderr);
     return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "allow";

@@ -86,6 +86,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `tests/data/flaky-quarantine.json`). A job that FAILED (infra, setup, timeout) is never re-run on a PR that must
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
+   The orchestrator's infra re-run (§CI) gives a verdict only; the PR still lands on a fresh commit.
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
    and only when `needs-sync` says so (`conflict | stale-red | retest-refused`; `tip-red` waits for the fix to land);
    never to "refresh" a cancelled run and never for clean-behind. `retest-refused` is the gate's `retest` row
@@ -116,9 +117,38 @@ silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR 
 check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
 (agent `deploy-research`; skill `check`), never a green PR.
 
+## CI — the orchestrator only
+
+The orchestrator is the session Bryce steers in his own chat that launches workers with `create_session` (skill
+`dispatcher` [`references/orchestrator-brief.md`](../dispatcher/references/orchestrator-brief.md)); every other session,
+a launched worker or a subagent, is a worker and never cancels, re-runs or dispatches. Owner request 2026-11-18: the
+orchestrator acts on Actions runs for Bryce, ONLY through the GitHub MCP `actions_run_trigger` (a `gh` write from a
+shell is recorded as Bryce's own click; `bash-guard.sh` refuses it for every session):
+- **Cancel** (`cancel_workflow_run`; `force_cancel_workflow_run` for a run that ignores it) a run on a superseded head,
+  a run stuck past its job's `timeout-minutes`, or a queue jam that keeps runners from the deploy tip. Never the
+  running Pages train on the deploy tip; a run on a live owner's head: message the owner first.
+- **Re-run failed jobs** (`rerun_failed_jobs`, never a whole run) only for an INFRA failure (runner lost, checkout,
+  set-up) to get a verdict. Never to turn a test failure green: a pass on the re-run is still a red named in the PR
+  (AGENTS.md rule 9), and merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)).
+- **Dispatch** (`run_workflow`): `ci.yml` (a group run) on any branch, `pages.yml` on the deploy branch only, by file
+  name, never a numeric id.
+- **Log every act** in ONE PR comment (an issue comment when there is no PR): the run link, the act and why.
+
+How the hooks know (`github-mcp-guard.sh`): its OWN process environment holds `APEX_ROLE=orchestrator`, which Bryce
+sets on the orchestrator's cloud environment and no agent sets, and either not `CLAUDE_CODE_CHILD_SESSION=1`, which
+the platform sets on every `create_session` child (measured 2026-11-18), or, for a cloud orchestrator that runs as a
+child, `APEX_ORCH_ENV=env_…` beside it (the orchestrator environment's id, Bryce-set; #5819, his `decision: A` of
+2026-11-19; no platform variable carries the id, so the hook checks its shape only); the payload carries no
+`agent_id`; and no project, local or user settings file's `env` names either key (any session can write one, so the
+hook never trusts them from there). That environment never hosts workers: launch them with an explicit worker
+`environment_id`. A seatbelt,
+not a boundary: a routine-fired session in an environment with `APEX_ROLE` would pass too, so the worker routine runs
+in one without it. `settings.json` still asks on `actions_run_trigger`.
+
 ## Gotchas
 
-- Never merge, arm, rebase, force-push, cancel a run, `--no-verify`, or push to the deploy branch.
+- Never merge, arm, rebase, force-push, `--no-verify`, or push to the deploy branch; never cancel a run (§CI: the
+  orchestrator's acts).
 - Sweeping many PRs is the dispatch Action's job; `pr-board.mjs --json` (read-only; exit 3 = no token) tells you who
   owns a red. A session does not take over another lane's PR.
 - Reviewer subagents run `model: sonnet`; a subagent never starts a browser (AGENTS.md rule 10).
