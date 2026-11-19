@@ -7,8 +7,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { parseDurations, median, foldTable, predictShards } from "../../tools/ci/tooling-timings.mjs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { parseDurations, median, foldTable, predictShards, USAGE } from "../../tools/ci/tooling-timings.mjs";
 import { TOOLING_FAST_FILES, TIMINGS_FILE, CI_SHARDS, applyFileShard } from "../../tools/ci/tooling-fast.mjs";
+
+const TOOL = path.resolve("tools/ci/tooling-timings.mjs");
+
+test("--help exits 0 with usage and never hits the Actions API; unknown flag exits 2", () => {
+  // Hunt TOOLING-HUNT-2026-11-09 #12: bare --help harvested six CI logs (~37 s).
+  // assert.equal(/re/.test(x), true) on purpose — avoid the match() pin shape (assertPinsAll).
+  const t0 = Date.now();
+  const help = spawnSync(process.execPath, [TOOL, "--help"], { encoding: "utf8", timeout: 5000 });
+  assert.equal(help.status, 0);
+  assert.equal(/usage:[\s\S]*tooling-timings/.test(help.stdout) && /--runs/.test(USAGE) && help.stderr === "", true);
+  assert.equal(Date.now() - t0 < 3000, true, `help took ${Date.now() - t0} ms — must not harvest CI`);
+  const bad = spawnSync(process.execPath, [TOOL, "--nope"], { encoding: "utf8", timeout: 5000 });
+  assert.equal(bad.status, 2);
+  assert.equal(/unknown flag --nope/.test(bad.stderr) && /usage:/.test(bad.stderr), true);
+});
 
 const LOG = [
   "2026-10-24T01:36:39.8806444Z [tooling-fast] PASS  1/285 fx-a duration=158ms exit=0 loadavg=1.96 0.62 0.22",

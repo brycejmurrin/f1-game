@@ -230,8 +230,8 @@ edge in portrait, and only a portrait sweep catches it.
 Then run the batch instrument to cover what you did not: `node tools/ui/layout-audit.mjs`
 (add `--shots` for a PNG per cell, `--scale=100,130,150` to add the scale axis).
 Then `node tools/ci/pick-tests.mjs --staged` names the groups; they run on the PR
-(AGENTS.md rule 5), or request one on the pushed branch with
-`node tools/ci/remote-group.mjs <group>`. The `gallery` group's `ui-audit.spec.js`
+(AGENTS.md rule 5); a whole group (`remote-group.mjs`)
+is Bryce's opt-in. The `gallery` group's `ui-audit.spec.js`
 is a capture harness that **asserts nothing**: read its PNGs, not its pass count.
 Expect the `baseline` group's `menu-baseline.spec.js` snapshots to change whenever
 menu geometry does; re-bless them deliberately rather than by reflex.

@@ -68,7 +68,7 @@ a footprint touching tarmac drops the **entire shape**. Too-close props silently
   racing line" bug: `building()`/`neonTower`/masts testing an inner-face point on a curving street).
 - **`RAW.*` (engine-internal, not on the circuit `api`) bypasses the guard.** Crowd spectators via `RAW.addBox` are not
   footprint-tested; only place them behind a shell.
-- **Regression:** `tests/specs/props-over-road.spec.js` — CI group `circuits` (`node tools/ci/remote-group.mjs circuits`, pushed branch).
+- **Regression:** `tests/specs/props-over-road.spec.js` — CI group `circuits` (the PR's own CI; a whole group is Bryce's opt-in).
   One track: `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots` (browser, parent only).
 
 ## Terrain anchoring

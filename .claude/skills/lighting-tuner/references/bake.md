@@ -105,7 +105,7 @@ Values are partial `{knobId: number}` maps (only non-default knobs).
    ```
    Every key and knob must pass the script validator.
 
-4. **Smoke (optional):** `node tools/ci/remote-group.mjs smoke` on the pushed branch
+4. **Smoke:** the PR's ready tier runs it; a whole-group dispatch (`remote-group.mjs smoke`) is Bryce's opt-in.
 
 5. **Commit** `js/lighting/presets.js` on the active feature branch (two calls, AGENTS.md rule 12),
    message `Bake lighting presets: <which tracks/conditions>`.

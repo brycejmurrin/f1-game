@@ -48,7 +48,7 @@ const VIEWPOINTS = {
   "jeddah-flagpole": { authored: .300, source: "js/circuits/scenery/jeddah.js anchor K(0.30)" },
   "jeddah-fountain": { authored: .200, source: "js/circuits/scenery/jeddah.js anchor K(0.20)" },
   "jerez-ovni": { racing: .002, source: "js/circuits/scenery/jerez.js anchor K(sl(0.002))" },
-  "kyalami-headgear": { authored: .340, source: "js/circuits/scenery/kyalami.js anchor K(0.34)" },
+  "kyalami-headgear": { authored: .660, source: "js/circuits/scenery/kyalami.js anchor K(0.66)" },
   "magny-cours-ferme": { authored: .340, source: "js/circuits/scenery/magny_cours.js anchor K(0.34)" },
   "magny-cours-bourg": { authored: .620, source: "js/circuits/scenery/magny_cours.js anchor K(0.62)" },
   "mexico-peraltada-stand": { authored: .935, source: "js/circuits/scenery/mexico.js anchor K(0.935)" },

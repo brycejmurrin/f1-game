@@ -21,10 +21,12 @@ import vm from "node:vm";
 
 const ROOT = resolve(new URL("../../../../", import.meta.url).pathname);
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.log(`Usage: node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs [dir|file]
+  console.log(`Usage: node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs [dir|file] [--check|--dry-run] [--json]
 
 SAFE merge of LightEdits / proposal deltas into js/lighting/presets.js.
 Default target: artifacts/lighting/proposals
+  --check / --dry-run  validate and report the merge, write nothing
+  --json               machine-readable report
 `);
   process.exit(0);
 }

@@ -172,8 +172,9 @@ test("remapPoints sanitises the per-round and finish records, not only pts", () 
       roundPts: { "haas:0": [25, "18", -4, null], bogus: "x" },
       finishes: { "haas:0": [1, "2", 0.5, -1] } },
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 0, 0, 0] });
-  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 0, 0, 0] });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 18, 0, 0] },
+    "digit strings coerce like scoreMap; junk and negatives still zero");
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 2, 0, 0] });
   const bare = SaveMigrate.migrateCareer({ v: 1, season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });
   assert.deepEqual(JSON.parse(JSON.stringify(bare.season.roundPts)), {});
   assert.deepEqual(JSON.parse(JSON.stringify(bare.season.finishes)), {});

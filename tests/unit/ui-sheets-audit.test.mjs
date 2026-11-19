@@ -28,6 +28,7 @@ import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { gameSource } from "../helpers/game-source.mjs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
@@ -560,7 +561,7 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
     radioFxLevel: () => 1,
     setRadioFx: (v) => v,
   };
-  const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => track.name : k === "musicSource" ? () => track.source
+  const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => track.name : k === "musicStalled" ? () => !!track.stalled : k === "musicSource" ? () => track.source
     : k === "sourceCounts" ? () => ({ builtin: 4, user: 0 }) : k === "setMusicSource" ? (v) => v
     : TONE_STUB[k] ? TONE_STUB[k]
     : k === "setMusicVolume" || k === "setSfxVolume" ? (v) => v : (...a) => { calls.push([k, ...a]); }) });
@@ -580,6 +581,7 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
   for (const [id, label] of [["as-music", "MUSIC"], ["as-sound", "SOUND EFFECTS"], ["as-src", "SOURCE"], ["as-p", "PROFILE"]]) {
     dom.body.appendChild(SettingRow.build(id, label).row);
   }
+  dom.byId("audioset-inner").appendChild(dom.makeElement("details"));   // a fold: MASTER SOUND goes above it
   seedDom(ctx);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: absSrc("js/audio/panel.js") });
   const store = stubStore();
@@ -587,8 +589,61 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
   // SOUND ON reads falling rain. Match the live game.js facade in this fixture.
   const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0, viewRainfall: () => 0 };
   const api = vm.runInContext("AudioPanel", ctx).create(G);
-  return { dom, G, api, calls, track, tone, layers, counts, observers, timers };
+  return { dom, G, api, calls, track, tone, layers, counts, observers, timers, ctx };
 }
+
+// #5584: Bryce's export (master SOUND off, MUSIC on). Every row read ON, the hints named rows that were already
+// ON, a stepper never writes an unchanged value, and the page had no master control: no way to make a sound.
+test("MUSIC & SOUND has a MASTER SOUND row that reads the master and lifts it; a muted bus says MUTED and no hint names a dead row", () => {
+  const h = bootAudio({ soundOn: false, musicEnabled: true });
+  // Voices present, so the radio / announcer notes reach their master-off branch (with none they say so instead).
+  h.G.radio = { available: () => true };
+  h.G.announcer = { available: () => true };
+  h.api.init();
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  const fold = (id) => h.dom.byId(id).innerHTML.replace(/<[^>]+>/g, "");
+  const inner = h.dom.byId("audioset-inner"), row = h.dom.byId("as-master"), sel = h.dom.byId("as-master-sel");
+  assert.equal(inner.children[0], row, "the master row is the first thing on the page, above the folds");
+  assert.equal(h.dom.byId("as-master-label").textContent, "MASTER SOUND");
+  assert.equal(sel.value, "off", "it reads the master, which is off");
+  assert.equal(!!sel.disabled, false);
+  assert.equal(fold("as-music-sum"), "MUSIC · MUTED · DEFAULT", "the closed MUSIC fold no longer claims ON");
+  assert.equal(fold("as-sound-sum"), "SOUND · MUTED");
+  for (const id of ["as-radio-note", "as-ann-note"]) {
+    assert.equal(h.dom.byId(id).textContent, "Master sound is off \u2014 MASTER SOUND ON, at the top of this page, turns it on.", id + " names the control that works");
+  }
+  h.dom.byId("as-master-next").onclick();   // the row wraps: either arrow flips it
+  assert.equal(h.G.soundOn, true, "one tap on the row turns master sound on");
+  assert.equal(h.G.store.get("sound"), true, "and saves it");
+  assert.equal(sel.value, "on");
+  assert.equal(h.G.musicEnabled, true, "the buses keep their saved state");
+  assert.equal(fold("as-music-sum"), "MUSIC · ON · DEFAULT");
+  assert.equal(h.dom.byId("as-now").textContent, "Song A", "and music is live");
+  h.dom.byId("as-master-next").onclick();
+  assert.equal(h.G.soundOn, false, "the same row turns it off again");
+  assert.equal(h.dom.byId("as-now").textContent, "Sound off");
+});
+
+// #5584: offline in the installed app every shipped track fails (sw.js leaves music Range requests to the network).
+test("NOW PLAYING does not name a track when the whole list failed to load", () => {
+  const h = bootAudio({ soundOn: true, musicEnabled: true, followPause: true });
+  h.api.init();
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Song A");
+  h.track.stalled = true;
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Music could not load", "no track name over silence");
+  assert.equal(h.dom.byId("as-skip").disabled, true, "nothing to skip to");
+  assert.equal(h.dom.byId("pm-now").textContent, "Music could not load", "the pause card says the same");
+  assert.equal(h.dom.byId("as-play").textContent, "\u25b6", "a stalled list shows play, not pause");
+  vm.runInContext("this.navigator = { onLine: false }", h.ctx);
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Music needs a connection", "offline: it names what is missing");
+  h.track.stalled = false;
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Song A", "a track that plays again is named again");
+  assert.equal(h.dom.byId("as-play").textContent, "\u275a\u275a", "and its button reads pause again");
+});
 
 test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT", () => {
   const h = bootAudio({ soundOn: false, musicEnabled: true });
@@ -994,6 +1049,41 @@ test("friend-race results are honest: RACE AGAIN (SOLO), a NEW FRIEND ROOM door,
   assert.equal(solo.els.resNext.textContent, "RACE AGAIN");
   assert.equal(solo.els.resMenu.textContent, "MENU");
   assert.equal(solo.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room"), undefined);
+});
+
+// #5739 row 1: the guest's BYE can land after the sheet is built. NEW FRIEND ROOM must still open a room,
+// so the click reads what buildResults painted (dataset.friend), never netPlay.active() at click time.
+test("#5739 row 1: NEW FRIEND ROOM opens VS FRIEND even after the guest leaves; MENU stays MENU", () => {
+  const { cars } = tiedSeason();
+  let live = true;
+  const h = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => live, ownsClassification: () => false, peerResult: () => null } });
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "NEW FRIEND ROOM");
+  assert.equal(h.els.resMenu.dataset.friend, "1");
+  // The handler game.js installs, run as written against stubs.
+  const src = gameSource();
+  const m = src.match(/els\.resMenu\.onclick = (\(\) => \{[\s\S]*?\n\});/);
+  assert.ok(m, "game.js wires #res-menu");
+  const run = (els) => {
+    const calls = [];
+    const fn = new Function("els", "netPlay", "quitToMenu", "$", "return " + m[1].replace(/;$/, ""))(
+      els, { active: () => live }, () => calls.push("quit"), (id) => (id === "mb-vs" ? { click: () => calls.push("mb-vs") } : null));
+    fn();
+    return calls;
+  };
+  live = false;   // the guest's BYE: NetPlay is down while the sheet still says NEW FRIEND ROOM
+  assert.deepEqual(run(h.els), ["quit", "mb-vs"], "the label's action: a fresh room");
+  clear(h.els.resultsTable);
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "MENU");
+  assert.equal(h.els.resMenu.dataset.friend, "");
+  live = true;    // a live peer at click time cannot turn MENU into a room either
+  assert.deepEqual(run(h.els), ["quit"]);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  live = true; clear(h.els.resultsTable); h.api.buildResults(cars.slice());
+  clear(h.els.resultsTable); h.api.buildTTResults();
+  assert.equal(h.els.resMenu.dataset.friend, "", "TT clears the friend action with the label");
 });
 
 test("friend-race labels do not outlive the race: the next solo build restores MENU", () => {

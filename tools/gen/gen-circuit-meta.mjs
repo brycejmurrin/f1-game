@@ -41,6 +41,9 @@ export const META_KEYS = Object.freeze([
   "sunAzimBias", "baseHW", "sceneryCoordinates", "sceneryLapMirror",
   "ownPitStraight", "undulate", "flatTerrain", "terrainOuter",
   "terrainFalloffStart", "terrainMat",
+  // The layout revision: the picker's best-time star counts only laps driven
+  // on the current one (js/ui/select-screen.js liveBoard).
+  "revision",
 ]);
 
 function loadRaw(id, root, manifest) {

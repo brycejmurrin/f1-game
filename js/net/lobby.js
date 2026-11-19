@@ -2229,6 +2229,11 @@ const NetLobby = (function () {
         const e = els();
         if (transports.size > 0 && e.roomStep && e.roomStep.hidden) { backToRoom(); return; }
         cancel();
+        // A friend's link that arrived while this room was up was deferred, and the
+        // status line said CLOSE opens it: do that now, so it is neither lost nor
+        // left in the URL to prefill JOIN on the next launch (#5739 row 2).
+        const waiting = deferredInvite; deferredInvite = null;
+        if (waiting && NetHandshake.inviteFromUrl() === waiting) openFromUrl();
       });
       // BACK from a HOST / JOIN / code step with nobody connected: tear down
       // only this attempt (cancel() minus the close) and return to the choice.
@@ -2293,6 +2298,7 @@ const NetLobby = (function () {
     // down by a link — the fragment waits for the player instead.
     let hashWired = false;
     let urlInvite = null;          // the code last opened from the URL
+    let deferredInvite = null;     // a link that arrived while in a room: CLOSE opens it
     function openFromUrl() {
       const code = NetHandshake.inviteFromUrl();
       if (!code) return false;
@@ -2307,9 +2313,10 @@ const NetLobby = (function () {
       const hosting = role === "host" && (!!transport || !!codeRoom);
       if (racing || session || transports.size > 0 || hosting) {
         Log.info("net", "lobby invite link ignored: " + (racing ? "racing" : "in a room"));
+        if (!racing && e.screen && !e.screen.hidden) { deferredInvite = code; say("A friend's invite link arrived — CLOSE this room to join it."); }
         return false;
       }
-      urlInvite = code;
+      urlInvite = code; deferredInvite = null;
       // open() can refuse (title sheet already up); do not join() into a hidden lobby.
       if (!open()) return false;
       join();

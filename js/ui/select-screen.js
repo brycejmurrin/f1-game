@@ -19,6 +19,11 @@ if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) Gfx
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
 const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
+// The best-time star counts only laps of the circuit's CURRENT layout: a lap
+// saved before a layout revision (Kyalami's direction flip, revision 2) stays
+// stored but is a lap of a different circuit, so it is not shown as the record.
+const liveBoard = (t) => typeof Ghost === "undefined" ? ttBoard(t.id)
+  : ttBoard(t.id).filter((e) => Ghost.layoutRevision(e.context) === (t.revision || 1));
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -955,7 +960,7 @@ function buildSelect(opts) {
     // Tiles are cached per roster signature (#4671, re-landed): a re-open re-attaches the same
     // nodes and flips .active/aria-pressed only, no flag SVG re-parse per tile.
     const sig = [+ttc, +cues, calIds ? Array.from(calIds).join(",") : "-", shown.map((i) => {
-      const t = Tracks.LIST[i], bd = ttc ? ttBoard(t.id) : [];
+      const t = Tracks.LIST[i], bd = ttc ? liveBoard(t) : [];
       return [i, t.id, t.name, t.country, +!!t.night, +!!t.street, +!!t.custom, +favs.includes(t.id), bd.length ? bd[0].t : "-"].join(":");
     }).join("|")].join("#");
     if (tileCache.sig === sig && tileCache.rows) {
@@ -979,7 +984,7 @@ function buildSelect(opts) {
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
       if (ttc) {
-        const board = ttBoard(t.id);
+        const board = liveBoard(t);
         const rec = board.length ? board[0].t : Infinity;
         const recEl = document.createElement("span");
         recEl.className = "track-row-rec"; recEl.title = "Best across setups and conditions";
@@ -1427,7 +1432,7 @@ function updateTrackPreview() {
       ? "Final standings · " + SeasonCal.rounds() + " rounds"
       : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
   } else {
-    const board = ttBoard(t.id);
+    const board = liveBoard(t);
     const rec = board.length ? board[0].t : Infinity;
     els.selPreviewRec.textContent = isFinite(rec) ? "Best across setups  ★ " + fmtTime(rec)
       : ttChrome() ? "No time set" : "";
