@@ -143,7 +143,7 @@ const GameStore = (function () {
       v = String(v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
-      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); return false; }
+      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); this._notifyRawFail(k, e); return false; }
     },
     rawDel(k) {
       if (!careerWriteStatus(k).ok) return false;
@@ -152,12 +152,18 @@ const GameStore = (function () {
       this.rawRev++;
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
-      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); return false; }
+      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); this._notifyRawFail(k, e); return false; }
     },
     subscribe(fn) {
       if (typeof fn !== "function") return () => {};
       this._listeners.add(fn);
       return () => { this._listeners.delete(fn); };
+    },
+    _notifyRawFail(k, e) {
+      if (this._rawFailNotifying) return;
+      this._rawFailNotifying = true;
+      try { this._notify({ key: k, durable: false, reason: this.broken || (e && e.name) || "Error", local: true, raw: true }); }
+      finally { this._rawFailNotifying = false; }
     },
     _notify(change) {
       for (const fn of this._listeners) {

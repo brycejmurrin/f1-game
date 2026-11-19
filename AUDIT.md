@@ -300,3 +300,10 @@ The tool's diagnostics report 0 new errors in `js/game.js`.
 "Illegal invocation"; the surrounding `catch` returned false, so the garage and race-setup screens never
 counted as cover. Now called on `document` directly. Verified in Chromium by feeding the watchdog six 1.5 s
 frame gaps, sheds before → after: garage open 1 → 0, race setup open 1 → 0, neither open 1 → 1 (control).
+
+### Fix 4 — failed settings writes now raise the "not saving" warning (finding 9)
+
+`js/core/store.js`: `rawSet` and `rawDel` notify subscribers when the write fails, as `write()` already did
+(guarded against re-entry, in case a subscriber writes in response). Verified in Chromium with localStorage
+filled to quota, before → after: `rawSet` still returns false and nothing reaches disk in both, but
+`#save-warning` hidden → shown. The title screen boots with no page errors.
