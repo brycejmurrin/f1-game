@@ -309,6 +309,13 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
     align-self: stretch;
   }
 }
+/* A touch phone held upright keeps the door LIST (ui-redesign "balanced
+   control rows"): #5640's uncapped --sheet-w lifts its sheet past 24rem
+   (~33rem own px at UI 70), where the grid left a half-width orphan
+   mid-list. Tablets (>= 40rem) and desktop keep the grid. */
+@container sheet (min-width: 24rem) and (max-width: 39.99rem) {
+  body:not(.desktop) #pmsettings-inner[data-shape="tall"] #pm-settings-index { display: flex; }
+}
 /* A wide sheet (laptop and up) reads nine doors as three columns, not a
    long two-up list with a half-width orphan. */
 @container sheet (min-width: 52rem) {
