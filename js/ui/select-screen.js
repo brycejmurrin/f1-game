@@ -1269,20 +1269,33 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
-/** The outline's slot inside the hero: 62 % of its width, ~60 % of its height —
-    capped at the map button's CONTENT box, which the phone card (css/select.css,
-    compact + wide) pads so the lower-third numbers band stays clear of the
-    outline (#5153 gap 13). */
+/** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
+    button's content box (padded to the free band by fitPreviewMapBand, #5656). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
   const btn = map && map.parentElement;
-  if (compact && btn && btn.clientHeight > 0) {
+  if (btn && btn.clientHeight > 0) {
+    fitPreviewMapBand(btn);
     const bs = getComputedStyle(btn);
     const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
     if (room > 0) slotH = Math.min(slotH, room);
   }
   return { slotW: hero.clientWidth * 0.62, slotH };
+}
+/** Pad the map button to the free band, centred; k = UI SIZE zoom. */
+function fitPreviewMapBand(btn) {
+  const br = btn.getBoundingClientRect();
+  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
+  const k = br.height / btn.offsetHeight;
+  const over = [];
+  for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
+    if (e) over.push(e.getBoundingClientRect());
+  }
+  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
+  btn.style.alignItems = "center";
+  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
+  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
 }
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
@@ -1695,6 +1708,21 @@ function calendarIdSet(cal) {
   for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
   return ids.size ? ids : null;
 }
+/** Preview free band (#5656), pure: overlays in `box`'s upper half push the
+    top down, lower half pull the bottom up; empty/outside ones are ignored.
+    Returns top/bottom insets plus `margin`. */
+function previewMapBand(box, over, margin) {
+  const mid = (box.top + box.bottom) / 2;
+  let top = box.top, bot = box.bottom;
+  for (const r of over || []) {
+    if (!r || !(r.bottom > r.top) || !(r.right > r.left)) continue;
+    if (r.bottom <= box.top || r.top >= box.bottom || r.right <= box.left || r.left >= box.right) continue;
+    if ((r.top + r.bottom) / 2 < mid) top = Math.max(top, r.bottom);
+    else bot = Math.min(bot, r.top);
+  }
+  const m = Math.max(0, +margin || 0);
+  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+}
 /** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {
   if (!t) return null;
@@ -1703,6 +1731,6 @@ function calendarGroup(t, ids) {
   return t.classic ? "classic" : "season";
 }
 
-return { create, calendarIdSet, calendarGroup };
+return { create, calendarIdSet, calendarGroup, previewMapBand };
 })();
 Object.freeze(Menus);
