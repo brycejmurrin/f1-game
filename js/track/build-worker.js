@@ -87,7 +87,9 @@ function adoptTeam(team) {
 // The scenery closure's source text: the model ids it names are this
 // circuit's set (Assets.modelIds), exactly as js/core/lazy-bundles.js derives it.
 function scenerySrc(def) {
-  return TrackDef.scenerySource(def, self.TrackScenery);
+  if (typeof TrackDef !== "undefined") return TrackDef.scenerySource(def, self.TrackScenery);
+  const fn = def.scenery || (self.TrackScenery && self.TrackScenery[def.id]);   // no TrackDef loaded (a harness): the closure text alone
+  return fn ? String(fn) : "";
 }
 // Which of this circuit's model ids are resident here — what the build stamped.
 const residentModels = (src) => (typeof Assets === "undefined" || !Assets.modelIds ? []
