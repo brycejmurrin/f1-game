@@ -1668,9 +1668,6 @@
       ]
     },
     "js/camera/extra-rigs.js": {
-      "localBattles": [
-        "tests/unit/extra-rigs.test.mjs"
-      ],
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
       ],
@@ -1727,7 +1724,6 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "read": [
-        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
@@ -10046,9 +10042,6 @@
       ]
     },
     "js/lighting/frame-lights.js": {
-      "_hshOf": [
-        "tests/unit/frame-lights-release.test.mjs"
-      ],
       "appendCarTailLights": [
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/frame-lights-release.test.mjs",
@@ -15851,9 +15844,6 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "keepNearest": [
-        "tests/unit/godray-keep-nearest.test.mjs"
-      ],
-      "makeDirtCanvas": [
         "tests/unit/godray-keep-nearest.test.mjs"
       ],
       "roadReflection": [

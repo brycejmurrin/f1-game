@@ -89,10 +89,6 @@ const TrackSpline = (function () {
 
   function sample(track, s, out) {
     const n = track.n, L = track.total;
-    // Leave `out` untouched on a bad query: writing NaN into a pooled sample
-    // (cvA in vantage, cam-avoid _rs, …) poisons the next finite frame until it
-    // is overwritten, and L===0 / non-finite s used to do exactly that via `%`.
-    if (!(n > 0) || !(L > 0) || !isFinite(s)) return out;
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
@@ -113,7 +109,6 @@ const TrackSpline = (function () {
   // Match sample's wrapping/index/lerp exactly; the other six channels stay untouched.
   function sampleXZ(track, s, out) {
     const n = track.n, L = track.total;
-    if (!(n > 0) || !(L > 0) || !isFinite(s)) return out;
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
@@ -153,7 +148,6 @@ const TrackSpline = (function () {
     const cv = track.curv;
     if (!cv) return curvatureRaw(track, s);
     const n = track.n, L = track.total;
-    if (!(n > 0) || !(L > 0) || !isFinite(s)) return 0;
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
@@ -219,18 +213,8 @@ const TrackSpline = (function () {
     return (track._segGrid = { px, pz, n, x0, z0, gnx, gnz, start, list });
   }
 
-  // Optional `out` ({ s, lat, k, heading, dist }) avoids a fresh object per call.
-  // Flyby offRoad alone does 25 projects per prop box; cam-avoid / flyby-clear
-  // hit this every blocked broadcast frame. Callers that omit `out` still get a
-  // new object (stashed returns in tests stay independent).
-  function project(track, wx, wz, hint, wy, out) {
-    const n = track.n, L = track.total;
-    if (!(n > 0) || !(L > 0)) {
-      const o = out || { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
-      o.s = 0; o.lat = 0; o.k = 0; o.heading = 0; o.dist = Infinity;
-      return o;
-    }
-    const ds = L / n;
+  function project(track, wx, wz, hint, wy) {
+    const n = track.n, L = track.total, ds = L / n;
     const px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, tx = track.tx, tz = track.tz;
     // Height is only usable when BOTH the query carries one and the track has a
     // profile; a track built without py must behave exactly as before.
@@ -306,9 +290,7 @@ const TrackSpline = (function () {
     const h0 = tx[bestK] + (tx[j] - tx[bestK]) * bestT;
     const h2 = tz[bestK] + (tz[j] - tz[bestK]) * bestT;
     const heading = Math.atan2(h0, h2);
-    const dist = Math.sqrt(bestD2);
-    if (out) { out.s = s; out.lat = lat; out.k = bestK; out.heading = heading; out.dist = dist; return out; }
-    return { s, lat, k: bestK, heading, dist };
+    return { s, lat, k: bestK, heading, dist: Math.sqrt(bestD2) };
   }
 
   // Driving boundary (max |lateral| from the centreline) at arc-length s on a
