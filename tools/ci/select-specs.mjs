@@ -66,16 +66,37 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 /** Browser-leg LANES (2026-10-15): ci.yml's `selected` job carries a job-level
  *  concurrency group `selected-lane-<lane>` with `queue: max` on pull requests,
- *  so at most LANES selected legs run fleet-wide at once and the rest wait in
- *  FIFO order WITHOUT holding a runner or being cancelled (up to 100 pending per
- *  group; https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
- *  `concurrency.queue`). No tool caps whole ready RUNS any more (#3013);
+ *  so at most LANES selected legs run fleet-wide at once and the rest wait
+ *  WITHOUT holding a runner or being cancelled (up to 100 pending per group).
+ *  The order is by the time each leg started waiting, and "ordering is not
+ *  guaranteed" (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
+ *  `concurrency.queue`, read 2026-11-18): plan on no order. No tool caps whole ready RUNS any more (#3013);
  *  this caps legs in GitHub.
  *  24, measured 2026-10-15 22:43Z: 17 ready runs held 2–22 legs each (median
  *  ~9, not the ~4 the first value of 12 assumed), 55 legs sat pending in lanes
  *  while only 17–22 of the 40 Linux slots ran. 24 lanes + the train's own legs
  *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
 export const LANES = 24;
+
+/** SMALL RUNS SKIP THE LANES (#5536, 2026-11-18). A plan of at most this many legs
+ *  gets lane NO_LANE, and ci.yml gives each of its legs a group of its own
+ *  (`selected-run-<run_id>-<index>`, the train's), so it pays only the runner queue.
+ *  Measured 11-16 12:43Z to 11-17 16:26Z (#5536 comment of 2026-11-18): the 39 PR runs of 1-2 legs
+ *  were 0.7 % of all leg job-minutes, yet their 1-minute legs queued p90 62.6 min
+ *  behind wide runs (11+ legs, 97 % of leg-minutes, up to 68) that put 2-3 legs into
+ *  every lane at once; run wall p90 67.6 min, estimated 20.7 without the lane.
+ *  The legs, specs, caps and retries are unchanged: only the group differs. */
+export const SMALL_RUN_LEGS = 2;
+export const NO_LANE = -1;
+
+/** A MERGE TRAIN SKIPS THE LANES (PR #5809, orchestrator 2026-11-18 22:17Z): a `train/*` head
+ *  (tools/ci/merge-train.mjs TRAIN_PREFIX) is an ordinary `pull_request` run, so its 40-odd legs were
+ *  queued in the shared PR lanes (train #5804: 42 legs pending 2.7 h behind 717). Every train leg gets
+ *  NO_LANE, i.e. a group of its own per leg, so a train pays only the runner queue, as the lane comment in
+ *  ci.yml always said. Read from GITHUB_HEAD_REF (set on pull_request events only); main() passes it. */
+export function trainHead(env = process.env) {
+  return String(env.GITHUB_HEAD_REF || "").startsWith("train/");
+}
 
 /** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
  *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
@@ -849,7 +870,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  cache key (two "Unable to reserve cache") and uploaded three artifacts
  *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
  *  `selected-<i>`, and a final pass suffixes any repeat. */
-export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase()) {
+export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase(), train = false) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
@@ -953,7 +974,8 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       circuits: (r.circuits || []).join(","),
       // The leg's concurrency lane on a pull request (ci.yml `selected`): legs
       // cycle through LANES groups from laneBase(), so a run's own legs never
-      // queue behind each other and runs do not all pile into lane 0.
+      // queue behind each other and runs do not all pile into lane 0. A plan of
+      // SMALL_RUN_LEGS or fewer legs gets NO_LANE below.
       lane: (base + i) % LANES };
   });
   // Unique names: a matrix name keys ci.yml's timings artifact, and a repeat
@@ -964,6 +986,7 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     seen.set(j.name, n);
     if (n > 1) j.name = `${j.name}-${n}`;
   }
+  if (train || out.length <= SMALL_RUN_LEGS) for (const j of out) j.lane = NO_LANE;
   // The budgeted `selected-<i>` jobs first: the ones a reader looks for.
   const isSel = (j) => j.name.startsWith("selected-");
   return out.sort((a, b) => (isSel(a) === isSel(b) ? 0 : isSel(a) ? -1 : 1));
@@ -1701,6 +1724,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
+  if (trainHead()) for (const j of r.shards) j.lane = NO_LANE; // a merge train never queues in the PR lanes (PR #5809)
   r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed);
   // AGENTS.md rule 3's pre-push floor is ONE spec. Name it only when the diff evidences one (edited, failed before,
   // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.

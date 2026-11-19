@@ -164,13 +164,14 @@ export function presentMcpResult(result, { root = process.cwd(), tool = 'mcp', l
     }
     return { ...result, content: [...(result.content || []), { type: 'text', text: `Presentation error: could not retain original output: ${error.message}. Full original output follows in this result.` }], presentationError: error.message };
   }
-  if (level === 'full') return result;
+  const native = { ...result, _meta: { ...result._meta, 'apex/agent-output': { outputLevel: level, artifact } } };
+  // full: the original content untouched, plus the same artifact receipt (never clobber an inner gateway's).
+  if (level === 'full') return Object.hasOwn(result._meta ?? {}, 'apex/agent-output') ? result : native;
   const envelope = { outputLevel: level, summary: summarizeOutput(result, { level }), artifact };
   // Preserve useful small native answers and their outputSchema. The receipt
   // is transport metadata, not an extra copy of the original payload.
   // A summary no smaller than the complete original saves nothing (measured 2026-10-19: compact
   // exceeded full on 1-6 KB results across apex-tools and apex-lsp), so the original wins there too.
-  const native = { ...result, _meta: { ...result._meta, 'apex/agent-output': { outputLevel: level, artifact } } };
   const wrapped = { content: [{ type: 'text', text: JSON.stringify(envelope) }], structuredContent: envelope, ...(Object.hasOwn(result, 'isError') ? { isError: result.isError } : {}) };
   // Both sides as sent. A summary that saves under a third is not worth the excerpt: measured
   // 2026-10-19, lsp_definition body:true compacted 2451 -> ~2050 B but cut the requested body,

@@ -1640,7 +1640,8 @@ test("a preempted transmission leaves nothing rendering", async () => {
   // so re-entry is the normal path and not an edge one.
   for (let i = 0; i < 12; i++) GameAudio.radioSting("radio", 2);
   GameAudio.radioStingStop();
-  endAll();
+  // radioStingStop itself must disconnect the bed filter chain — do NOT rely on
+  // onended (a closed / suspended context never fires it).
   assert.equal(live.size, before,
     "twelve preempts left " + (live.size - before) + " nodes wired into sfxBus — a Gain still connected keeps rendering for ever");
 });
@@ -2753,7 +2754,7 @@ async function idleRig(search) {
 test("?lab=noAudioIdle leaves the layer graph plugged in through a menu cycle", async () => {
   const sig = (r) => r.all.map((n) => n.kind + ":" + n.connections.length + ":" + n.unplugs).join(",");
   const runs = [];
-  for (const search of ["?lab=noAudioIdle", "?lab=rivalEps,noAudioIdle", "?lab= noAudioIdle"]) {
+  for (const search of ["?lab=noAudioIdle", "?lab=noRivalEps,noAudioIdle", "?lab= noAudioIdle"]) {
     const r = await idleRig(search);
     assert.equal(r.CrowdAudio.inspect().attached, true, "precondition: the crowd bed is built");
     assert.equal(r.ErsLayer.attached(), true, "precondition: the ERS layer is built");

@@ -38,7 +38,7 @@ import { processTree, killTreeAndWait, alive } from "../lib/process-tree.mjs";
 export { processTree, killTreeAndWait } from "../lib/process-tree.mjs";
 import { DIAGNOSTIC_JOB_KINDS, diagnosticsJobSpec } from "./diagnostics-tools.mjs";
 import { carFilterArgv } from "./catalog-discovery.mjs";
-import { jobOwnerGone, publishJobManifest, takeJobAdmission } from "./job-admission.mjs";
+import { jobOwnerGone, publishJobFileOnce, publishJobManifest, takeJobAdmission } from "./job-admission.mjs";
 
 /** An MCP image block for a PNG: a 640-px JPEG thumbnail, so an agent sees the
  *  frame in the result instead of spending a Read on it. */
@@ -629,7 +629,7 @@ export function createExtras(ctx) {
         }
         if (m.state === "failed" && logAbs && !fs.existsSync(exitAbs)) {
           const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8")).out;
-          if (o && o.ok === true) { m.state = "done"; m.exit = 0; fs.writeFileSync(mf, JSON.stringify(m, null, 2) + "\n"); }
+          if (o && o.ok === true) { m.state = "done"; m.exit = 0; publishJobManifest(mf, m); }
         }
       } catch { /* unreadable manifest: leave it */ }
     }
@@ -873,8 +873,8 @@ export function createExtras(ctx) {
       // the root exits. Keep the snapshot durable if this canceller dies.
       const tree = [...new Set([...(readCancellation(j.id)?.cleanup?.pids || []), ...processTree(j.child?.pid || j.pid)])];
       const marker = { state: "cancelled", ended: Date.now(), exit: j.exit ?? null, cleanup: { pids: tree, identities: tree.map((pid) => ({ pid, birth: processBirth(pid) })), complete: false } };
-      try { fs.writeFileSync(jobCancelPath(j.id), JSON.stringify(marker) + "\n", { flag: "wx" }); }
-      catch (e) { if (e.code !== "EEXIST") throw e; }
+      // First canceller wins; a peer canceller reads the complete marker or none (#5695).
+      publishJobFileOnce(jobCancelPath(j.id), marker);
       j.cancelTree = readCancellation(j.id)?.cleanup?.pids || tree;
       reconcileCancellation(j);
       const cancellation = readCancellation(j.id);
@@ -885,9 +885,7 @@ export function createExtras(ctx) {
       survivors = remaining.length;
       const finished = { ...cancellation, cleanup: { ...cleanup, complete: survivors === 0, survivors: remaining } };
       // Atomic replacement prevents other owners observing a truncated marker.
-      const temporary = `${jobCancelPath(j.id)}.${randomUUID()}.tmp`;
-      try { fs.writeFileSync(temporary, JSON.stringify(finished) + "\n", { flag: "wx" }); fs.renameSync(temporary, jobCancelPath(j.id)); }
-      finally { fs.rmSync(temporary, { force: true }); }
+      publishJobManifest(jobCancelPath(j.id), finished);
       j.ended = Date.now();
       writeJobManifest(j);
       if (survivors === 0) releaseJobLock(j);

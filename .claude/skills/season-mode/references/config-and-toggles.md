@@ -6,7 +6,8 @@ Symbols are in `js/career/season-cal.js` unless named; locate them with apex-lsp
 
 `config()` / `setConfig()` are the SETUP PREFERENCES. A live season races its OWN frozen config:
 `activeCfg` (= `season.config`), and every format accessor reads `rulesConfig()`, which returns
-`activeCfg` in flow `"season"`, never the preferences. Only APPLY changes it:
+`activeCfg` in flow `"season"` (it falls back to the preferences only while `activeCfg` is null, i.e. after
+`clear()`). Only APPLY changes it:
 `#ss-apply` → `SeasonCal.applyConfig(draft)` (returns `{season,ok,durable,reason}`; it sets the
 preferences AND `activeCfg`). Use it rather than `setConfig()` + `restart()` + `save()`.
 
@@ -32,7 +33,8 @@ preferences AND `activeCfg`). Use it rather than `setConfig()` + `restart()` + `
   `sprintOn` false (the SETUP note counts the marked rounds).
 - Sprint distance: `lapsFor()` divides the race laps (`SPRINT_FRAC`, floor `SPRINT_MIN`) only on the
   sprint stage; NEXT ROUND's distance is `roundLaps()` (both called from `js/game.js`).
-- Consumers: `js/game.js`, `js/race/pit-lane.js`, `js/audio/announcer.js`, `js/ui/results-sheet.js` `midWeekend`.
+- Consumers (through `SeasonCal.stage`/`lapsFor`/`roundLaps`/`midWeekend`; `sprintOn` itself is called only inside
+  `js/career/season-cal.js`): `js/game.js`, `js/race/pit-lane.js`, `js/audio/announcer.js`, `js/ui/results-sheet.js` `midWeekend`.
 
 ## Quali on/off
 

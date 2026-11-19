@@ -1835,3 +1835,28 @@ test("rtc pump allocates no batch copy: the inbox alternates between two arrays"
     h.done();
   }
 });
+
+// #4770: with a private relay configured the ICE-restart courier must not
+// fall back to the public Nostr relays (rendezvous.js: "a security boundary").
+test("a private relay leaves the default ICE-restart courier off the public Nostr relays (#4770)", async () => {
+  const calls = [];
+  const spy = (...a) => { calls.push(a); return new Promise(() => {}); };
+  const run = async (privateRelay) => {
+    calls.length = 0;
+    globalThis.NetNostr = { available: () => true, directExchange: spy };
+    globalThis.NetRendezvous = { usingPrivateRelay: () => privateRelay };
+    const h = restartPair(undefined);
+    try {
+      await h.connect();
+      // A positive expectation waits for its condition (the digest settles off the microtask queue); the negative
+      // one runs the same bounded wait, so it would see a call as late as the control does.
+      await h.until(() => calls.length > 0, privateRelay ? 500 : 5000);
+    } finally {
+      h.done();
+      delete globalThis.NetNostr; delete globalThis.NetRendezvous;
+    }
+    return calls.length;
+  };
+  assert.equal(await run(true), 0, "private relay: directExchange never called");
+  assert.equal((await run(false)) > 0, true, "control: public default still listens");
+});

@@ -16,6 +16,9 @@
     night: false,
     theme: "green",
     lengthKm: 4.3,
+    // The 1995-98 Argentine GPs ran 72 laps of 4.259 km (grandprix.com 1998
+    // race report, https://www.grandprix.com/gpe/rr617.html); 4.3 derived 71.
+    gpLaps: 72,
     tyreSeverity: 0.98,  // Historic permanent; near-neutral proxy
     baseHW: 7.5,
     sceneryCoordinates: "racing",

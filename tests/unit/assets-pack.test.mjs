@@ -2515,7 +2515,7 @@ test("GLX material ownership preserves reused textures and releases aliases once
 // against a live manifest so dead keys / stale md5s cannot linger.
 // ---------------------------------------------------------------------------
 const ROLE_INDEX_PATH = path.join(ROOT, "data", "packs", "model-index.json");
-const { pruneRememberedIndex, rememberPayload, diffRoleIndex } =
+const { diffRoleIndex } =
   await import(pathToFileURL(path.join(ROOT, "js/assets/pack-index.mjs")).href);
 
 function sceneryPlacedModelIds() {
@@ -2536,11 +2536,24 @@ function sceneryPlacedModelIds() {
   return ids;
 }
 
-test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", () => {
+async function rememberedAfter(stored, live) {
+  const store = stored === undefined ? {} : { "apex26.packIndex": JSON.stringify(stored) };
+  const assets = assetLoader({
+    localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
+    fetch: async () => ({ ok: true, json: async () => live }),
+  });
+  assert.deepEqual(await assets.manifest(), live);
+  return JSON.parse(store["apex26.packIndex"] || "null");
+}
+
+test("the shipped rememberPack prunes dead keys, stale md5s and junk fields from apex26.packIndex", async () => {
   const live = {
     models: {
-      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      keep: { file: "models/keep.bin", md5: "a".repeat(32), verts: 3 },
       renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+      noMd5: { file: "models/x.bin" },
+      badMd5: { file: "models/y.bin", md5: "zz" },
+      noFile: { md5: "f".repeat(32) },
     },
   };
   const remembered = {
@@ -2554,28 +2567,25 @@ test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", ()
       bad: { file: "models/keep.bin", md5: "not-an-md5" },
     },
   };
-  assert.deepEqual(pruneRememberedIndex(remembered, live), {
-    models: { keep: { file: "models/keep.bin", md5: "a".repeat(32) } },
-  });
-  assert.deepEqual(pruneRememberedIndex(null, live), { models: {} });
-  assert.deepEqual(pruneRememberedIndex(remembered, null), { models: {} });
+  const expect = { models: {
+    keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+    renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+  } };
+  assert.deepEqual(await rememberedAfter(remembered, live), expect, "only the live manifest's content-addressed rows survive");
+  assert.deepEqual(await rememberedAfter(undefined, live), expect, "a first visit stores the same rows");
 });
 
-test("rememberPayload keeps only content-addressed model rows", () => {
-  const live = {
-    models: {
-      ok: { file: "models/ok.bin", md5: "e".repeat(32), verts: 3 },
-      noMd5: { file: "models/x.bin" },
-      badMd5: { file: "models/y.bin", md5: "zz" },
-    },
-  };
-  assert.deepEqual(rememberPayload(live), {
-    models: { ok: { file: "models/ok.bin", md5: "e".repeat(32) } },
-  });
-  assert.deepEqual(
-    pruneRememberedIndex(rememberPayload(live), live).models.ok,
-    live.models.ok && { file: live.models.ok.file, md5: live.models.ok.md5 },
-  );
+test("a manifest with no models empties the remembered index instead of keeping the last pack's guesses", async () => {
+  const remembered = { models: { gone: { file: "models/gone.bin", md5: "c".repeat(32) } } };
+  assert.deepEqual(await rememberedAfter(remembered, { version: 2 }), { models: {} });
+  assert.deepEqual(await rememberedAfter(remembered, { models: null }), { models: {} });
+});
+
+test("diffRoleIndex reads a null manifest or index as empty, never throws", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  assert.deepEqual(diffRoleIndex(idx, null), { indexOnly: ["a", "b"], liveOnly: [], badRole: ["b:bogus"] });
+  assert.deepEqual(diffRoleIndex(null, { models: { c: {} } }), { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex({}, {}), { indexOnly: [], liveOnly: [], badRole: [] });
 });
 
 test("data/packs/model-index.json covers every committed model key once",
@@ -2663,4 +2673,19 @@ test("resizeBilinear clamps to the edge when upscaling: no negative weights, no 
   assert.equal(big[(7 * 7 - 1) * 4], 0);
   // Downscaling is unchanged (no sample falls outside the source).
   assert.deepEqual([...resizeBilinear(px(0, 100, 200, 255), 4, 1, 2, 1)].filter((_, i) => i % 4 === 0), [50, 228]);
+});
+
+// #5629: sw.js answers the manifest from the cache at once only under the PAGE's
+// build key, so the loader must send the shell's own build, and nothing else.
+test("the manifest is asked for under the page's build, bare without one", async () => {
+  for (const [build, want] of [[1695, "assets/pack/manifest.json?b=1695"], [0, "assets/pack/manifest.json"], ["x", "assets/pack/manifest.json"]]) {
+    const requests = [];
+    const assets = assetLoader({
+      __APEX_BUILD: build,
+      async fetch(url) { requests.push(url); return { ok: true, json: async () => ({}) }; },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    await assets.load();
+    assert.equal(requests[0], want);
+  }
 });

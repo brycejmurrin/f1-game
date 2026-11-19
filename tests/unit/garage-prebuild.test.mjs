@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { symbolSource, GAME_REL } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -1099,4 +1100,160 @@ test('#4964: closing a mid-race pit garage frees the bay on the next tick (the r
   vm.runInNewContext(fn + '\nclosePitWork(); $().hidden = false;', sb, { filename: absSrc('js/game.js') });
   for (const f of timers) f();
   assert.deepEqual(calls, ['leave'], 'a garage back on screen is not released');
+});
+
+// ── #5660: the garage drive-out / drive-in shows the SESSION's circuit and weather from its first frame ──
+// Bryce (iPhone, 2026-11-18): the view outside the open garage was "not always" the real circuit and
+// weather. Measured in the container (his export, 852x393 touch): the exterior had been pre-built for the
+// menu's dry/default selection, RACE! re-keyed it to his rain/dusk, and the drive-out played its whole
+// 33 s with the exterior `loading` (never visible): nothing waited for it, and its build ran one generator
+// step per rendered frame. These run the real code and pin the ORDER: the cover lifts (game.js
+// studioShown) and an arrival's clock moves only once the exterior built for this session's circuit /
+// weather / hour is ready, never on a fixed delay.
+const flushTasks = async (n = 40) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+
+/** The setup camera's exterior section (pick, prepare, settled) over the REAL GarageExterior. */
+function exteriorSection({ steps = 3, supported = true, hang = false } = {}) {
+  const clock = { t: 1000 }, warns = [], yields = [];
+  const tracks = [{ id: "bahrain", night: true }, { id: "monza", night: false }];
+  const c = vm.createContext({
+    performance: { now: () => clock.t }, Date: { now: () => clock.t }, Promise,
+    setTimeout: (f) => { yields.push(clock.t); setImmediate(f); },   // the module's own yieldTask: one per slice Math, Object, Array, JSON, Number, String,
+    Log: { warn: (ns, msg) => warns.push(msg), info() {} },
+    G: { teamIdx: 0, trackIdx: 0, raceWeather: "rain", raceTimeOfDay: "dusk" },
+    Teams: { LIST: [{ id: "redbull" }] }, Tracks: { LIST: tracks },
+    home: { active: false }, driveOut: null, arrival: { state: null },
+    ctx: { track: tracks[1], studio: false },
+    GarageExteriorGeometry: {
+      sampleHeight: () => 0,
+      *buildSteps(def) {
+        for (let i = 0; i < steps; i++) { clock.t += 1; yield { i }; }
+        if (!supported) return { supported: false, reason: "no bay" };
+        const geo = () => ({ pos: [0, 0, 7, 1, 0, 7, 0, 1, 7], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+        return { ground: geo(), road: geo(), props: geo(), stats: { trackId: def.id }, anchor: { side: 1, yaw: 0 } };
+      },
+    },
+  });
+  c.garageCtx = () => c.ctx;
+  c.gfx = { createMesh: (d) => ({ d }), freeMesh() {}, draw() {} };
+  c.deps = { prepareExterior: (id) => hang ? new Promise(() => {}) : Promise.resolve(tracks.find((t) => t.id === id) || null) };
+  vm.runInContext(read("js/garage/exterior.js"), c, { filename: absSrc("js/garage/exterior.js") });
+  const cam = read("js/garage/setup-camera.js");
+  const a = cam.indexOf("// Optional, detached circuit slice"), b = cam.indexOf("function releaseExterior()");
+  assert.ok(a > 0 && b > a, "the exterior section is where this test reads it");
+  vm.runInContext(cam.slice(a, b), c, { filename: absSrc("js/garage/setup-camera.js") });
+  const run = (expr) => vm.runInContext(expr, c, { filename: absSrc("js/garage/setup-camera.js") });
+  return { c, clock, warns, yields, tracks, run, state: () => run("exterior ? exterior.state() : null") };
+}
+
+test("a drive-out keys the exterior on the SESSION's circuit, weather and hour, not the garage's next race", async () => {
+  const h = exteriorSection();
+  h.run("driveOut = { t: 0 }");
+  assert.equal(h.run("prepareExterior(ctx, { active: true, door: 0 })"), false, "not ready on the first frame");
+  await flushTasks();
+  const st = h.state();
+  assert.deepEqual([st.status, st.trackId, st.weather, st.tod], ["ready", "bahrain", "rain", "dusk"], "trackIdx's circuit (not ctx.track monza), the session's chips");
+  assert.equal(h.run("prepareExterior(ctx, { active: true, door: 0 })"), true, "the shutter is still closed: shown");
+});
+
+test("the way home keeps the circuit, weather and hour the race ended in", async () => {
+  const h = exteriorSection();
+  h.run("arrival.state = { active: true }; homeScene = { track: Tracks.LIST[1], weather: 'wet', tod: 'night' }");
+  h.c.G.raceWeather = "dry"; h.c.G.raceTimeOfDay = "day";   // the next session's chips moved meanwhile
+  h.run("prepareExterior(ctx, { active: true, door: 0 })");
+  await flushTasks();
+  const st = h.state();
+  assert.deepEqual([st.status, st.trackId, st.weather, st.tod], ["ready", "monza", "wet", "night"]);
+  h.run("arrival.state = { active: false }");
+  const idle = h.run("exteriorPick(ctx)");
+  assert.deepEqual([idle.trackId, idle.weather, idle.tod], ["monza", "dry", "day"], "no sequence: the garage's own view");
+});
+
+test("a race-settings prewarm keys the exterior exactly as the RACE! drive-out will", () => {
+  const h = exteriorSection();
+  const warm = h.run("prepareExterior(ctx, null, true), exteriorSelection");
+  h.run("driveOut = { t: 0 }");
+  const out = h.run("exteriorPick(ctx)");
+  assert.equal(out, warm, "the same selection object: no re-key, no rebuild at RACE!");
+  assert.deepEqual([out.trackId, out.weather, out.tod, out.night], ["bahrain", "rain", "dusk", false]);
+});
+
+test("the cover lifts on the first frame the session's exterior is ready, and that frame shows it", async () => {
+  const h = exteriorSection();
+  h.run("driveOut = { t: 0 }");
+  const events = [];
+  const g = vm.createContext({
+    _studio: { n: 1, cardUp: true, info: { id: "x" }, at: 0 }, gfx: {}, introNow: () => h.clock.t,
+    sheetRelease: () => events.push("sheet"),
+    loadingScreen: { garage: () => events.push({ at: h.clock.t, exterior: h.state(), shown: h.run("prepareExterior(ctx, { active: true, door: 0 })") }) },
+  });
+  vm.runInContext(symbolSource("function studioShown()"), g, { filename: absSrc(GAME_REL) });
+  // Each held garage frame (cardUp): prepareExterior, then render() calls studioShown only on a frame the
+  // exported renderSetupPreview reports drawn — false while driveOutCovered(true).
+  const frame = () => { h.run("prepareExterior(ctx, { active: true, door: 0 })"); if (!h.run("driveOutCovered(true)")) vm.runInContext("studioShown()", g); };
+  frame();
+  assert.equal(g._studio.cardUp, true, "loading: the cover stays");
+  assert.deepEqual(events, []);
+  await flushTasks();
+  frame();
+  assert.equal(g._studio.cardUp, false);
+  assert.equal(events.length, 2);
+  const at = events[1];
+  assert.deepEqual([at.exterior.status, at.exterior.trackId, at.exterior.weather, at.exterior.tod, at.shown], ["ready", "bahrain", "rain", "dusk", true],
+    "the drive-out's first visible frame has the session's circuit outside");
+  assert.equal(g._studio.at, at.at, "the car's clock starts on that frame");
+});
+
+test("an exterior that cannot be built never holds the show; a stuck load releases it after the cap, logged once", async () => {
+  const none = exteriorSection({ supported: false });
+  none.run("driveOut = { t: 0 }; prepareExterior(ctx, { active: true, door: 0 })");
+  await flushTasks();
+  assert.equal(none.state().status, "unsupported");
+  assert.equal(none.run("exteriorSettled()"), true);
+  const stuck = exteriorSection({ hang: true });
+  stuck.run("driveOut = { t: 0 }; prepareExterior(ctx, { active: true, door: 0 })");
+  await flushTasks();
+  assert.equal(stuck.run("exteriorSettled()"), false);
+  stuck.clock.t += stuck.run("EXTERIOR_WAIT_MS") - 1;
+  assert.equal(stuck.run("exteriorSettled()"), false, "still inside the cap");
+  stuck.clock.t += 1;
+  assert.equal(stuck.run("exteriorSettled()"), true);
+  assert.equal(stuck.run("exteriorSettled()"), true);
+  assert.equal(stuck.warns.length, 1);
+});
+
+test("a show held on the exterior shares a slice between steps; an unheld prewarm yields every step", async () => {
+  const h = exteriorSection({ steps: 30 });
+  h.run("driveOut = { t: 0 }; prepareExterior(ctx, { active: true, door: 0 })");
+  assert.equal(h.run("exteriorSettled()"), false, "the cover holds on this build");
+  await flushTasks(80);
+  assert.equal(h.state().status, "ready");
+  // 31 next() calls at 1 ms each in 6 ms slices = 6 build yields, then one per uploaded mesh (3).
+  assert.equal(h.yields.length, 6 + 3);
+  // A race-settings / select-screen prewarm under the live setup garage: nothing waits, so one step per yield
+  // (sliced, it starved the garage's frames and livery picks rebuilt no car: garage-pick-cost on #5720).
+  const w = exteriorSection({ steps: 30 });
+  w.run("prepareExterior(ctx, null, true)");
+  await flushTasks(120);
+  assert.equal(w.state().status, "ready");
+  assert.equal(w.yields.length, 31 + 3);
+});
+
+test("an arrival held for its exterior waits on its first pose, then plays from it", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/garage/crew-draw.js"), ctx, { filename: absSrc("js/garage/crew-draw.js") });
+  vm.runInContext(read("js/garage/arrival.js"), ctx, { filename: absSrc("js/garage/arrival.js") });
+  const Arrival = vm.runInContext("GarageArrival", ctx);
+  const els = new Map();
+  const $ = (id) => { if (!els.has(id)) els.set(id, { hidden: true, textContent: "", classList: { toggle() {} }, setAttribute() {}, focus() {} }); return els.get(id); };
+  let now = 0;
+  const arrival = Arrival.create($, () => false, () => Arrival.DEFAULT, () => now);
+  arrival.start();
+  const first = arrival.state;
+  for (let i = 0; i < 100; i++) { now += 0.1; arrival.step(0.1, true); }
+  assert.equal(arrival.state, first, "ten held seconds: the same first pose");
+  assert.deepEqual([arrival.state.z, arrival.state.door, arrival.state.active], [13, Arrival.pose(0).door, true]);
+  now += 0.1; arrival.step(0.1, false);
+  assert.equal(arrival.state.z, Arrival.pose(0.1).z);
+  assert.equal(arrival.state.door, Arrival.pose(0.1).door, "released: 0.1 s of show, not the held ten");
 });

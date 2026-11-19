@@ -56,11 +56,11 @@ function standVertsNear(pos, eye, roadY, radius, yLo = 8, yHi = 22) {
 
 test("kyalami main grandstand + S/F terrace gaps clear dual_lite orbit (~28 m)", () => {
   const src = fs.readFileSync(SRC, "utf8");
-  const gs = src.match(/Main grandstand[\s\S]*?const side = -1, dist = (\d+)/);
+  const gs = src.match(/Main grandstand[\s\S]*?const side = 1, dist = (\d+)/);
   assert.ok(gs, "main grandstand dist authored");
   assert.ok(Number(gs[1]) >= 32,
     `main grandstand dist ${gs[1]} must be ≥ 32 to clear dual_lite orbit (~28 m); was 16 in #3316`);
-  const terrace = src.match(/ironTerrace\("kyalami-terrace-main",\s*K\(0\.005\),\s*-1,\s*(\d+)/);
+  const terrace = src.match(/ironTerrace\("kyalami-terrace-main",\s*K\(RACE\(-?\d+\)\),\s*1,\s*(\d+)/);
   assert.ok(terrace, "terrace-main call present");
   assert.ok(Number(terrace[1]) >= 32,
     `terrace-main dist ${terrace[1]} must be ≥ 32; was 13 in #3316`);
