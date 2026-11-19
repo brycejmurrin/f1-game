@@ -1076,7 +1076,12 @@ const HudLayout = (function () {
     paintAll();
   }
 
-  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); }
+  function watchPointerKind() {
+    if (typeof MutationObserver !== "function" || !doc.body) return;
+    let wasTouch = touch();
+    new MutationObserver(() => { if (touch() !== wasTouch) { wasTouch = touch(); apply(); } }).observe(doc.body, { attributes: true, attributeFilter: ["class"] });
+  }
+  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); watchPointerKind(); }
   apply();
   _pub = true;
   if (doc) {
