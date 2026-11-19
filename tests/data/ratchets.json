@@ -32,7 +32,7 @@
       "lines": 2892
     },
     "js/track/tracks.js": {
-      "lines": 869
+      "lines": 847
     },
     "js/ui/hud.js": {
       "codeLines": 1446,
@@ -65,7 +65,7 @@
       "slack": 5
     },
     "eagerBytes": {
-      "ceiling": 8014951,
+      "ceiling": 8015847,
       "slack": 0
     },
     "eagerScripts": {
