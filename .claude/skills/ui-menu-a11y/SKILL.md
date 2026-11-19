@@ -48,7 +48,9 @@ node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the local floor
 
 No browser spec runs locally (AGENTS.md rule 5): the PR run covers the picked groups. `tests/specs/ui-audit.spec.js`
 (group `gallery`) asserts nothing — it is a capture harness; read its PNGs from the CI artifacts.
-FLOWS (door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
+Focus return after a close is `js/ui/modal.js` (`lastFocus` / `opener` WeakMaps, `onLayerShow` takes the opener from
+`document.activeElement`, `onLayerHide` restores it; iOS does not focus a tapped button, Chromium does). FLOWS
+(door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
 844×390 touch: `node tools/ui/flows.mjs [--checks=…] [--diff=<old flows.json>]` (parent-only browser; `--list`/`--help` none).
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 `docs/notes/ARCHITECTURE-REVIEW.md`. First tap silent on iPhone (audio unlock on a user gesture) → **audio-debug**.

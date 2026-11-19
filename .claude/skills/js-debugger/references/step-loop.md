@@ -6,7 +6,7 @@
    `targetId` using `debugger_attach`. On a game page establish identity with
    `__apex.info()` and call `__apex.agentHelp()` once per page session.
 2. Find the function through `code-nav` (`lsp_definition {symbol, body:true}`;
-   fallback `bash tools/mcp/lsp-mcp.sh def Ghost.snapshot --body`), then narrow
+   fallback `node tools/mcp/lsp-mcp.mjs def Ghost.snapshot --body`), then narrow
    `debugger_scripts` by the returned file name, then use `debugger_source` with
    that row's `scriptId` (or its exact `url`) to find the statement. For a breakpoint, drop the query suffix.
    Source lines/columns are one-based; frame indices are zero-based. A URL without a query

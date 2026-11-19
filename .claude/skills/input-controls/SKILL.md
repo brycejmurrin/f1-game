@@ -34,7 +34,9 @@ paired stays here. Escape/focus paths → **ui-menu-a11y**.
 4. Route the symptom to its reference (below) and fix there.
 5. Changed a default or a slider? Add the `STEER_SCHEMA` step and check `tests/specs/steer-migration.spec.js`
    → [references/assists.md](references/assists.md).
-6. Verify: the node pins locally; the browser specs (`test:input`) run on the PR, never locally (AGENTS.md rule 5):
+6. Verify: the node pins locally; the browser specs (`test:input`) run on the PR only as far as `select-specs`
+   selects them (gamepad, tilt, drag specs often land in overflow: then `node tools/ci/remote-group.mjs input`), never
+   locally (AGENTS.md rule 5):
 
 ```sh
 node --test tests/unit/key-binds.test.mjs tests/unit/ui-improve-pass.test.mjs   # node pins

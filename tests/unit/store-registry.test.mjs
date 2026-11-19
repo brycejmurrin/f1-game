@@ -35,7 +35,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import * as espree from "espree";
-import { ROOT, jsFiles } from "../helpers/store-key-scan.mjs";
+import { ROOT, jsFiles, walk, lsWrappers } from "../helpers/store-key-scan.mjs";
 
 const STORE_RX = /\b(store|G\.store|GameStore\.store|s|st|S|this\._store|_store)\.(get|set|write|raw|rawSet|rawDel)\(\s*(["'`])([A-Za-z0-9_.\-]+)\3\s*(?:,\s*([^)]{0,80}))?/g;
 const LS_RX = /localStorage\.(getItem|setItem|removeItem)\(\s*(["'`])(apex26\.[A-Za-z0-9_.\-]+)\2\s*(?:,\s*([^)]{0,60}))?/g;
@@ -146,11 +146,33 @@ function indirectWriters(src, file) {
   return records;
 }
 
+// #5532: a key passed to a file-local localStorage wrapper (`const on = (k) => localStorage.getItem(k)`,
+// tlx-post.js _fmtOn) is a read or write of that key. The wrapper set comes from the helper the
+// save-schema tripwire uses, so the two scans see the same wrappers. Literal and const-alias keys only.
+function wrapperSites(src, file) {
+  const ast = espree.parse(src, { ecmaVersion: "latest", sourceType: "module", loc: true, range: true });
+  const wrappers = lsWrappers(ast), alias = new Map(), out = [];
+  if (!wrappers.size) return out;
+  walk(ast, (n) => {
+    if (n.type === "VariableDeclarator" && n.id && n.id.type === "Identifier" && n.init
+      && n.init.type === "Literal" && typeof n.init.value === "string") alias.set(n.id.name, n.init.value);
+  });
+  walk(ast, (n) => {
+    if (n.type !== "CallExpression" || !n.callee || n.callee.type !== "Identifier" || !wrappers.has(n.callee.name)) return;
+    const a0 = n.arguments[0], op = wrappers.get(n.callee.name).op;
+    const key = a0 && a0.type === "Literal" && typeof a0.value === "string" ? a0.value
+      : a0 && a0.type === "Identifier" && alias.has(a0.name) ? alias.get(a0.name) : null;
+    if (!key || !key.startsWith("apex26.") || !(READ.has(op) || WRITE.has(op) || op === "removeItem")) return;
+    out.push({ key: key.replace(/^apex26\./, ""), lane: "ls", op, at: `${file}:${n.loc.start.line}`, extra: "", proof: "wrapper " + n.callee.name });
+  });
+  return out;
+}
+
 function inventory(files = jsFiles()) {
   const recs = [];
   for (const f of files) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8");
-    recs.push(...indirectWriters(src, f));
+    recs.push(...indirectWriters(src, f), ...wrapperSites(src, f));
     src.split("\n").forEach((ln, i) => {
       let m;
       STORE_RX.lastIndex = 0;
@@ -177,14 +199,17 @@ function inventory(files = jsFiles()) {
   return { keys: by.size, sites: recs.length, writerless: writerless.sort(), defaults };
 }
 
-// Measured at 78cb4831b. Remove a name when its key gains a writer or goes away.
-const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pileup career debris debrisCap devApi
-  digitalRate dragSmooth fieldLod forceMobileTier gfxBootStepMs gfxDebug glErrDrain glxInstPerPass glxPerspScalar grLite haptics homeCamera homeScene iceRelayOnly
-  inputDebug instCellCache marbleGrip mirrorBodyLod mirrorInstEvery modelInst moonShadowCadence motion multiDraw musicStream nostrRelays padCurve
-  padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
+// Measured at 78cb4831b; pruned at #5532 (14 names had gained a writer or gone). Remove a name when its key
+// gains a writer or goes away: the stale-name test below fails by name until you do.
+// tlxMir11 / tlxTag8 / tlxGodray11 are hand-set phone format trims (#2649), read through tlx-post.js _fmtOn.
+const WRITERLESS = new Set(`backgroundMotion breakBarriers c1Pileup career debris debrisCap devApi
+  fieldLod forceMobileTier gfxBootStepMs gfxDebug glErrDrain glxInstPerPass grLite homeCamera homeScene iceRelayOnly
+  inputDebug instCellCache marbleGrip mirrorBodyLod mirrorInstEvery modelInst moonShadowCadence multiDraw musicStream nostrRelays
+  propsUnchunked r2Airborne r3Contact spatialUpscaleGather tlxArrayNearest
   tlxChunkMerge tlxChunkRelease tlxForceBatches tlxForceHw tlxInstPad tlxLampStatic tlxMirLampCap tlxMirrorSweep tlxMobile tlxPack
-  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxSkyCache tlxTagLess tlxViz ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxSharedTex tlxAttrInst tlxDynUsage liveryAsync tlxCasterAttr tlxMirWarmLazy tlxPad4 tlxMirMips tlxDepthDiscard tlxTagDiscard tlxScene11 tlxDrawWarm tlxWarmFx tlxWarmPlus glxChunkAlign touchCurve touchDragSpeed touchRange gfxBootStepMs tlxMaterialDetail tlxSharpenLimit tlxFixedTargets
-  turn turnApi wgxInsetInPass wgxPackAsync wgxTransient carWarmSlice tlxWarmBeforePack tlxPackAsync`.split(/\s+/).filter(Boolean));
+  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxSkyCache ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxSharedTex tlxAttrInst tlxDynUsage liveryAsync tlxCasterAttr tlxMirWarmLazy tlxPad4 tlxMirMips tlxDepthDiscard tlxTagDiscard tlxScene11 tlxDrawWarm tlxWarmFx tlxWarmPlus glxChunkAlign tlxMaterialDetail tlxSharpenLimit tlxFixedTargets
+  turn turnApi wgxInsetInPass wgxPackAsync wgxTransient carWarmSlice tlxWarmBeforePack tlxPackAsync
+  tlxMir11 tlxTag8 tlxGodray11`.split(/\s+/).filter(Boolean));
 // tlxSharpenLimit is a manual default-off TLX post-chain prototype; see docs/DEBUG-HOOKS.md.
 // mirrorBodyLod is a manual reload-only experiment, disabled by default; see docs/DEBUG-HOOKS.md.
 // padDeadzone needs no exception: wireTune forwards its literal key to store.set (steer-tuning.js).
@@ -218,6 +243,14 @@ test("RATCHET: no new apex26.* key without a writer in code", () => {
   assert.ok(inv.writerless.length <= WRITERLESS.size, `${inv.writerless.length} writer-less keys > ${WRITERLESS.size}`);
 });
 
+// #5532: a WRITERLESS name whose key gained a writer or went away is a parked entry nobody re-reads;
+// it hides the next real writer-less key under a list that looks full. Prune it by name.
+test("WRITERLESS holds no stale name (every listed key is still read and still writer-less)", () => {
+  const live = new Set(inv.writerless);
+  assert.deepEqual([...WRITERLESS].filter((k) => !live.has(k)).sort(), [],
+    "these WRITERLESS names now have a writer in js/ or are no longer read: remove them from the list");
+});
+
 test("RATCHET: no new key read with two different defaults", (t) => {
   const known = [...inv.defaults.keys()].filter((k) => MIXED_DEFAULTS.has(k)).sort();
   t.diagnostic(`known mixed defaults (ratcheted, ${known.length}):`);
@@ -245,6 +278,34 @@ test("the scanner sees a second default and a writer-less key in every lane", ()
     assert.deepEqual(got.writerless, ["lsFlag", "rawFlag", "twoDefs"], "an aliased const and a written key are not writer-less");
     assert.equal(got.keys, 5);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// #5532: tlx-post.js read three flags through `_fmtOn = (k) => localStorage.getItem(k) === "1"` and the
+// inventory never saw them. A key read only through a wrapper must be writer-less; one written through a
+// wrapper, or directly, is not; a wrapper over a non-apex26 key and a dynamic argument add nothing.
+test("keys read or written through a local localStorage wrapper are in the inventory", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "sr-wrap-"));
+  try {
+    const f = path.relative(ROOT, path.join(dir, "probe.js"));
+    fs.writeFileSync(path.join(ROOT, f), [
+      'const on = (k) => { try { return localStorage.getItem(k) === "1"; } catch (_) { return false; } };',
+      'function lsSet(key, v) { localStorage.setItem(key, v); }',
+      'const K_ALIASED = "apex26.wrapAliasRead";',
+      'const a = on("apex26.wrapReadOnly"), b = on(K_ALIASED), c = on("other.notOurs"), d = on(dynamicKey);',
+      'lsSet("apex26.wrapWritten", "1"); const e = on("apex26.wrapWritten");',
+      'localStorage.setItem("apex26.directWritten", "1"); const g = on("apex26.directWritten");',
+    ].join("\n"));
+    const got = inventory([f]);
+    assert.deepEqual(got.writerless, ["wrapReadOnly"],
+      "a wrapper read of a never-written key is writer-less; K_ALIASED is a const alias (registered), the written keys are not");
+    assert.equal(got.keys, 4, "wrapReadOnly, wrapAliasRead, wrapWritten, directWritten");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the tlx-post.js phone format trims are seen through _fmtOn", () => {
+  const file = "js/render/three/tlx-post.js", got = inventory([file]);
+  const trims = got.writerless.filter((k) => /^tlx(Mir11|Tag8|Godray11)$/.test(k));
+  assert.deepEqual(trims, ["tlxGodray11", "tlxMir11", "tlxTag8"], "the three trims are read through _fmtOn and have no writer");
 });
 
 test("indirect writers require a lexical path to a real storage write", () => {
