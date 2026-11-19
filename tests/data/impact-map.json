@@ -14680,6 +14680,9 @@
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
+      ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
@@ -17650,7 +17653,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -17891,6 +17895,7 @@
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
@@ -17941,6 +17946,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -17951,11 +17957,13 @@
         "tests/unit/scenery-kits.test.mjs"
       ],
       "overheadSpan": [
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
       "scratch": [
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "sealGeometry": [
@@ -17967,6 +17975,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
@@ -18863,6 +18872,9 @@
       ]
     },
     "js/ui/hud-skin.js": {
+      "skinAccent": [
+        "tests/unit/hud-skin-ink.test.mjs"
+      ],
       "*": [
         "tests/unit/hud-feel.test.mjs"
       ]
@@ -19612,7 +19624,8 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "summary": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/results-story.test.mjs"
       ],
       "*": [
         "tests/unit/podium-beat.test.mjs",
@@ -20628,6 +20641,9 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "recenter": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "seed": [
         "tests/unit/xr-phase0.test.mjs"
       ],
       "sessionInit": [

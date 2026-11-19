@@ -53,12 +53,20 @@ export function validateFaultScenario(raw) {
 }
 
 /** Owns routing only; the caller retains ownership of its session/browser. */
-export async function installFaultSchedule(context, origin, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+// `callMs` bounds every await nothing else bounds (#5542): route/unroute and the held route's own fallback/abort.
+// One that never settles rejects with its name (`Fault schedule unroute did not settle within …`) instead of sitting
+// to the test timeout. Real clock, so injected fake clocks are untouched; the call is abandoned, not cancelled.
+export async function installFaultSchedule(context, origin, { setTimer = setTimeout, clearTimer = clearTimeout, callMs = 10000 } = {}) {
   if (new URL(origin).origin !== origin) fail('Fault origin must be an HTTP(S) origin');
   if (!['http:', 'https:'].includes(new URL(origin).protocol)) fail('Fault origin must be HTTP(S)');
   const holds = new Map(), events = [];
   let closed = false;
   const event = (h, state) => events.push({ id: h.id, path: h.path, state });
+  const bounded = async (op, promise) => {
+    let deadline; // not unref'd: a pending await keeps the process alive to its named failure
+    const stalled = new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error(`Fault schedule ${op} did not settle within ${callMs} ms`)), callMs); });
+    try { return await Promise.race([promise, stalled]); } finally { clearTimeout(deadline); }
+  };
   const get = id => { const h = holds.get(id); if (!h) throw new Error(`Unknown fault ${id}`); return h; };
   const finish = (h, outcome) => {
     if (h.outcome) return;
@@ -93,7 +101,7 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
     timer = setTimer(() => stop('transfer-timeout'), h.timeoutMs);
     return { promise, cancel: () => stop('cancelled') };
   };
-  await context.route('**/*', handler);
+  await bounded('route', context.route('**/*', handler));
   return {
     events,
     hold(input) {
@@ -117,7 +125,7 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
       if (!h.waited || h.outcome) throw new Error(`Fault ${id} requires an observed, unreleased hold`);
       const transfer = watchTransfer(h);
       try {
-        finish(h, outcome); await h.completed;
+        finish(h, outcome); await bounded(`route.${outcome === 'continue' ? 'fallback' : 'abort'} for ${id}`, h.completed);
         if (h.error) throw new Error(`Fault ${id} route failed: ${h.error}`);
         const terminal = await transfer.promise; event(h, terminal);
         if (terminal !== (outcome === 'continue' ? 'finished' : 'failed')) throw new Error(`Fault ${id} unexpected transfer: ${terminal}`);
@@ -132,8 +140,8 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
       if (closed) return;
       closed = true;
       for (const h of holds.values()) finish(h, 'cleanup');
-      try { await context.unroute('**/*', handler); }
-      finally { await Promise.all([...holds.values()].filter(h => h.request).map(h => h.completed)); }
+      try { await bounded('unroute', context.unroute('**/*', handler)); }
+      finally { await bounded('held-route drain', Promise.all([...holds.values()].filter(h => h.request).map(h => h.completed))); }
     },
   };
 }
@@ -156,7 +164,9 @@ export async function replayFaultScenario(session, raw, { performAction, matches
   } catch (error) { failure = error instanceof Error ? error : new Error(String(error)); }
   finally {
     try { await faults.close(); }
-    catch (error) { failure = failure ? new AggregateError([failure, error], 'Fault replay and cleanup failed') : error; }
+    // The cleanup's name goes in the message (a spec's toThrow reads only that), never the replay's: a stalled unroute
+    // must not pass a test that expects the replay failure (#5542).
+    catch (error) { failure = failure ? new AggregateError([failure, error], `Fault replay and cleanup failed (cleanup: ${error?.message || error})`) : error; }
   }
   const evidence = { scenario, events: structuredClone(faults.events) };
   if (failure) { failure.faultEvidence = evidence; throw failure; }
