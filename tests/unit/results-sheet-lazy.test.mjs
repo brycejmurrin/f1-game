@@ -17,8 +17,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 test("manifest keeps results-sheet.js lazy and results-boot.js eager", () => {
   const m = createRequire(import.meta.url)("../../tools/manifest.cjs");
   assert.deepEqual(
-    { boot: m.FULL.includes("js/ui/results-boot.js"), sheet: m.FULL.includes("js/ui/results-sheet.js"), lazy: m.LAZY_RESULTS_SHEET },
-    { boot: true, sheet: false, lazy: ["js/ui/results-sheet.js"] },
+    { boot: m.FULL.includes("js/ui/results-boot.js"), sheet: m.FULL.includes("js/ui/results-sheet.js"),
+      chips: m.FULL.includes("js/share/share-card-chips.js"), lazy: m.LAZY_RESULTS_SHEET },
+    { boot: true, sheet: false, chips: false, lazy: ["js/share/share-card-chips.js", "js/ui/results-sheet.js"] },
   );
 });
 
