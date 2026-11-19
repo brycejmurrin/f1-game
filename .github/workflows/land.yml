@@ -856,7 +856,7 @@ jobs:
             fi
           done 3< <(printf '%s\n' "$lands")
 
-  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 5 green `land` PRs whose own trusted rows pass (open, hold,
+  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 10 (TRAIN_MAX) green `land` PRs whose own trusted rows pass (open, hold,
   # plan, ci, config, raise) are merged onto the deploy tip with merge commits on a `train/*` branch, opened as an
   # ordinary PR with `land` + `train`; that PR then lands through the same CI → `gate` → arm route as any other, and
   # each car's head reaching the deploy branch marks the car merged. merge-gate reads a train's config and raise rows

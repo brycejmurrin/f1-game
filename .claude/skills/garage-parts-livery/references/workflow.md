@@ -28,7 +28,8 @@ Verify in-race via [agent-view state hooks](../../agent-view/references/state.md
 
 ## Career ownership is a write/UI gate
 
-`Parts._resolve` / `getMods` / `getCost` are **career-blind**. The garage greys
+`Parts._resolve` / `getMods` / `getCost` are **ownership-blind** (`_resolve` still applies a career era's
+regulation predicate `_legal` through `isOptionAvailable`). The garage greys
 locked rows via `Parts.isOptionAvailable(opt, team, owned)` where `owned` comes
 from `Career.owned()` / `G.careerOwned()`. Do not thread ownership into physics
 resolution.
@@ -71,8 +72,8 @@ resolution.
    ```
    `--plan` prints the matrix as JSON and exits before Chromium — do that
    first, the product multiplies fast. (It is `--plan`, not `--dry-run`: any bare unknown flag,
-   `--dry-run` included, exits 2 before Chromium. A `--field=value` or `--part.*` typo is validated
-   IN-PAGE, after the boot — so run `--plan` first.)
+   `--dry-run` included, exits 2 before Chromium. A `--field=value` or `--part.*` typo is rejected in
+   Node by `--plan` (`invalid part.aero: …`, exit 1) — so run `--plan` first.)
    Parts are `--part.<category>=<id>[,<id>]`, one flag per category, with
    `--part.<category>=all` expanding to the catalog; ids are checked against
    `isOptionAvailable` for the team being shot, because a part locked to
@@ -90,7 +91,7 @@ resolution.
    **Look-only vs new stats — decide first.** A new wing LOOK (no physics change) is a `STYLES` row in
    `js/car/parts.js` — a 6-tuple `[category, equivalent, id, label, desc, visualOverrides]` that copies
    cost and all stats from its `equivalent` and is open to every team (`style_aero_spoon`,
-   `style_aero_twinplane` are the pattern); preview with the `build-viewer.mjs --sheet=parts:aero:<team>
+   `style_aero_twinplane` are the pattern); preview with the `node tools/viewer/build-viewer.mjs --sheet=parts:aero:<team>
    --match=^style_` line above `STYLES`. Only NEW stats mean a full `CATALOG` row, which is a balance
    change `parts-ladder` judges.
    **A new visual field** (say a new `fw*` key) needs THREE edits: an entry in

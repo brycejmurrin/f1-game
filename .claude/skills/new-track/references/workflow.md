@@ -99,8 +99,8 @@ Load from the SKILL.md index when the task needs this detail.
         `"<id>"` rows of `tests/data/scenery-audit-baseline.json` (`ground-audit.cjs`; `tests/unit/scenery-ground-audit.test.mjs`)
         at EXACTLY the measured
         value. A cap above the measurement fails as loudly as one below, and an
-        absent id means a cap of 0 — so omit the row when the circuit measures
-        clean rather than writing a 0,
+        absent id means a cap of 0 — so a clean circuit needs no row (the shipped
+        baselines also carry explicit 0 rows; both pass),
      7. `tests/data/def-factory-golden.json` `hashes` — one row per shipped circuit
         (`tests/unit/track-def-factory.test.mjs` fails "no golden row" and asserts rows ==
         shipped circuits). To capture it, add the row with a placeholder value, run that
@@ -129,7 +129,7 @@ Load from the SKILL.md index when the task needs this detail.
 4. **Visual check** — `__apex.tracks()` lists the id; then load and screenshot it
    (the `playwright-probe` skill's `shot.mjs`; main session only — in a subagent list this step as not run, AGENTS.md rule 10):
    ```js
-   __apex.race("<id>"); __apex.park(0.1);          // stationary at 10% lap
+   await __apex.race("<id>"); __apex.park(0.1);    // stationary at 10% lap (unawaited, race() leaves the previous track)
    __apex.orbit(0.1, 45, 15, 40);                  // inspect from all sides
    __apex.trackProfile();                          // [{frac,y,k,hw,slope}] elevation/curvature sanity
    ```
@@ -180,12 +180,15 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
   - `_sceneryShift` is nonzero ONLY when the def names `sceneryStartFrac`; with none, `s` is a plain racing-lap fraction.
   - With it: `racing = authored + _sceneryShift - sceneryStartFrac` (read imola's def for a worked case).
   - Never add `sceneryStartFrac` to compensate; never read `b.s`/`e.s` raw in new code, add `+ (def._sceneryShift || 0)`.
-- **Audits that move** (no browser): `verify-track <id>` (throws); `clip-audit` and `coplanar-audit` (a bridge deck adds overhead faces: `--overhead`); `float-audit` and `props-tris` (pillars, re-seated props); `tests/unit/elevation-smoothness.test.mjs` (grade cap; baked ids only, skips bridge windows); `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape).
+- **Audits that move** (no browser): `verify-track <id>` (throws); `clip-audit` and `coplanar-audit` (a bridge deck adds overhead faces: `--overhead`); `float-audit` and `props-tris` (pillars, re-seated props); `tests/unit/elevation-smoothness.test.mjs` (grade cap; baked ids only, skips bridge windows); `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape, and the gate for an elevation edit: it pins where Spa's and Monaco's
+  extremes fall and Spa's 18 % grade cap at Raidillon).
   - Baselines: the `"<id>"` rows of `tools/track/*-baseline.json` (props-tris is a ceiling; float absent = 0).
   - Node-VM twin (heavy: background it, AGENTS.md rule 4): `tests/unit/elevation-tracks-vm.test.mjs`.
   - Browser-only, in CI group `circuits` (the PR's own CI; a whole group is Bryce's opt-in): `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `circuit-foundation.spec.js` (APEX_CIRCUITS=<id> on a circuit-only PR).
   - `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not the numbers you typed.
-- **Reading heights/curvature with no browser:** `require("tools/lib/track-build-vm.cjs").buildContext().Tracks.buildCenterline(def)` returns `{n,total,py,curv,...}` (`py[k]`, `curv[k]` per point; `__apex.trackProfile()` is the browser twin). Mutating `def.elevations` on the VM's def before the call previews a bump without editing the circuit.
+- **Reading heights/curvature with no browser:** `require("./tools/lib/track-build-vm.cjs")` (from the repo root).buildContext().Tracks.buildCenterline(def)` returns `{n,total,py,curv,...}` (`py[k]`, `curv[k]` per point; `__apex.trackProfile()` is the browser twin). Mutating `def.elevations` on the VM's def before the call previews a bump without editing the circuit; edit it
+  before the first build (the lazy `points` getter re-maps `elevations[].s` in place, so a value written after it, or on a
+  shallow copy of a cold def, lands ~0.0125 lap off).
 - **Hand-off note** to leave in the PR: which key, `s`/`halfM`/`rise`, the measured audit counts before and after, and which baseline rows you updated.
 
 ## Gotchas
