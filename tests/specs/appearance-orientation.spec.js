@@ -6,7 +6,7 @@
 //   2. SEPARATE (opt-in): a settled portrait boot loads the lazy LayoutPresets and swaps in portrait's copy once.
 // Chromium emulation: not WebKit, not his device (bryce-phone `limits`).
 import { test, expect } from "@playwright/test";
-import { openBrycePhone } from "../../tools/lib/bryce-phone.mjs";
+import { openBrycePhone, brycePhone } from "../../tools/lib/bryce-phone.mjs";
 
 const BOOT = 60000;
 const PORTRAIT = { width: 393, height: 852 }, LANDSCAPE = { width: 852, height: 393 };
@@ -43,10 +43,11 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
   test.setTimeout(180000);
 
   test("SHARED: a rotation and a stale portrait launch change no stored key and no painted size", async ({ browser, baseURL }) => {
+    let before;
     const { context, page } = await boot(browser, baseURL);
     try {
       await settled(page);
-      const before = await page.evaluate(stateInPage);
+      before = await page.evaluate(stateInPage);
       expect(before.shape).toBe("wide");
       expect(before.keys["apex26.appearanceShapes"], "SHARED is the absent key").toBeUndefined();
       await page.setViewportSize(PORTRAIT);
@@ -83,7 +84,8 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
       expect(s.shape).toBe("tall");
       expect(JSON.parse(s.keys["apex26.uiScale"])).toBe(85);
       const stored = JSON.parse(s.keys["apex26.appearanceShapes"]);
-      expect(stored.park.uiScale, "landscape's 70 is parked").toBe(70);
+      // Landscape's live UI SIZE is the seeded profile's (bryce-phone `live`), now parked.
+      expect(stored.park.uiScale, "landscape's profile UI SIZE is parked").toBe(brycePhone().uiScale);
       expect(await page.evaluate(() => typeof LayoutPresets)).toBe("object");
     } finally { await context.close(); }
   });
