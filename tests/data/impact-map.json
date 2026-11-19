@@ -17598,6 +17598,9 @@
       ]
     },
     "js/track/core/mesh.js": {
+      "banking": [
+        "tests/unit/elevation-tracks-vm.test.mjs"
+      ],
       "bankingProfile": [
         "tests/unit/bank-zone-claim.test.mjs"
       ],
