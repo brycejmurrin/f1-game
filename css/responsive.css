@@ -170,12 +170,10 @@
   animation-iteration-count: 1 !important;
   animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
-}
-/* …BUT NEVER ON GEOMETRY THE TITLE FIT MEASURES (#5150,#5578). 0.01ms on `all` replays prior box/font one frame
-   (fit() mis-read doors; PRACTICE clipped); paint keeps 0.01ms, geometry instant. */
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons),
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) :is(*, *::before, *::after) {
-  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+  /* …PAINT ONLY (#5812). On the initial `all`, 0.01ms replays the previous box for a frame after every class flip,
+     and fit code reads it (title doors #5150/#5578, results YOU on P1 #5603). Geometry is instant; !important so
+     no later-layer `transition:` shorthand puts width/top/zoom/transform back. */
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow !important;
 }
 /* #hud-restore's display:none lives in deferred touch-controls.css; until it
    lands (~19 s on Slow 4G) the bare button sat top-left over the title. */
