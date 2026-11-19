@@ -35,7 +35,7 @@ locate with apex-lsp (skill code-nav).
 1. Classify the change: calendar or format (table above), and confirm the flow gate it needs.
 2. For a toggle bug, run the FIRST CHECK: compare the frozen config's `.sprint` / `.sprintIds` /
    `.quali` with `SeasonCal.config()`. `G` is game.js's closure (not on the page, not in `__apex`): on
-   the live page read the save `G.season` came from, `GameStore.get("season").config` (lags after a
+   the live page read the save `G.season` came from, `GameStore.store.get("season", null).config` (lags after a
    `durable:false` APPLY), or in a unit test `SeasonCal.load().config`. They differ → the APPLY step,
    not the chip or a consumer. Then follow the sprint or quali chain in `references/config-and-toggles.md`.
 3. For wrong sprint points, start with the unit test `a sprint scores its own table` (a green fixture
@@ -54,13 +54,13 @@ node tools/ci/pick-tests.mjs                    # the groups this change needs
 ```
 
    No agent runs a browser spec locally (AGENTS.md rule 5). The chips (`season.spec.js`,
-   `season-format.spec.js`) are proven by the `modes` group on the PR; to run it on the pushed branch:
-   `node tools/ci/remote-group.mjs modes`, only when `pick-tests` names it.
+   `season-format.spec.js`) are proven by the `modes` group on the PR; a whole-group dispatch
+   (`remote-group.mjs modes`) is Bryce's opt-in.
 
 ## References
 
 - `references/config-and-toggles.md` — read when a sprint or quali toggle is ignored, a weekend shows
-  the wrong sessions, APPLY/restart/resume behaves oddly, or you need the consumers of `sprintOn` /
+  the wrong sessions, APPLY/restart/resume behaves oddly, or you need the consumers of the sprint chain /
   `quali()`.
 - `references/sprint-scoring.md` — read when sprint points (or the fastest-lap point, or a short-race
   payout) look wrong.

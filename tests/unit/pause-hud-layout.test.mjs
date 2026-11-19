@@ -105,7 +105,10 @@ test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no 
   const exp = fs.readFileSync(path.join(ROOT, "css/experience.css"), "utf8");
   assert.match(exp, /#pm-quick-doors\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap/);
   assert.match(exp, /#pm-quick-doors\s*>\s*\*\s*\{[^}]*flex:\s*1\s+1\s+calc\(/, "every tile grows, so a short last row fills the tray");
-  assert.match(exp, /#pm-quick-doors\s*>\s*details\[open\]\s*\{[^}]*flex-basis:\s*100%/, "an open disclosure tile takes the tray's full width");
+  assert.ok(
+    /#pm-quick-doors\s*>\s*details\[open\]\s*\{[^}]*flex-basis:\s*100%/.test(exp)
+      && !/#pm-quick-doors #pm-howto \{[^}]*grid-column/.test(exp),
+    "an open disclosure tile takes the tray's full width; no leftover grid-column on a flex tray tile");
 });
 
 test("the phone pause card (#5153 gap 10) is keyed on the body's own density + shape, for every layout", () => {

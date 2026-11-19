@@ -616,3 +616,26 @@ test("Ghost.finishLap refuses a trace that fails validation", () => {
   assert.equal(Ghost.finishLap(Infinity), false);
   assert.equal(Ghost.hasGhost(), false);
 });
+
+test("a layout revision segregates saved laps: a revision-1 ghost is not the revision-2 class's ghost", () => {
+  // #5316 CIRC2-05: Kyalami flipped direction with n and total unchanged, so
+  // only def.revision (the first `layout` entry, js/race/session-records.js)
+  // tells the two laps apart.
+  const { Ghost } = createHarness();
+  const cfg = (rev) => Ghost.contextKey({ circuit: "kyalami", layout: [rev, 1120, 4480.07], physics: 1 });
+  const old = cfg(1), now = cfg(2);
+  assert.notEqual(old, now);
+  assert.equal(Ghost.layoutRevision(old), 1);
+  assert.equal(Ghost.layoutRevision(now), 2);
+  assert.equal(Ghost.layoutRevision(null), 1, "a legacy row with no class was driven on revision 1");
+  assert.equal(Ghost.layoutRevision("not json"), 1);
+  Ghost.setTrack("kyalami", old);
+  Ghost.startLap();
+  for (let i = 0; i <= 40; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  assert.equal(Ghost.hasGhost(), true);
+  Ghost.setTrack("kyalami", now);
+  assert.equal(Ghost.hasGhost(), false, "the clockwise lap is not offered on the anticlockwise layout");
+  Ghost.setTrack("kyalami", old);
+  assert.equal(Ghost.hasGhost(), true, "and it is still stored, untouched");
+});

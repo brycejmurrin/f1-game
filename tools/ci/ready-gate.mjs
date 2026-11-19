@@ -157,6 +157,29 @@ export function draftProblem(pull) {
   return null;
 }
 
+/** One clear next-step line for the agent after a --pr verdict. Pure.
+ *  Draft+green → flip ready then add `land`; already ready (`not-draft`) → add `land` only (do not flip again). */
+export function nextAction(state, pr, repo = "brycejmurrin/f1-game") {
+  const n = Number(pr);
+  if (!Number.isInteger(n) || n < 1) return null;
+  // The MCP recipe, never `gh` (PR #5809): a `gh` label write is refused by bash-guard.sh or recorded as Bryce's click.
+  const land = `next: GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${n}  labels=<the live list from issue_read get_labels, plus "land">   (one label per call, skill steward references/labels.md)`;
+  if (state === "passed") {
+    return [
+      `next: GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${n}  draft:false`,
+      land,
+    ];
+  }
+  if (state === "not-draft") {
+    return [`${land}   (already ready: flip nothing; add land only)`];
+  }
+  return null;
+}
+
+/** --max-behind was the old distance-row knob; name its replacement in one line. Pure. */
+export const MAX_BEHIND_GONE =
+  "= ready-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)";
+
 export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
   if (sha) {
     const r = git("git", ["rev-parse", "--verify", sha], { cwd: ROOT, encoding: "utf8" });
@@ -338,6 +361,8 @@ const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] 
   A failed PR-files fetch fails closed. --wait polls a pending Structural guards every 30 s (default 30 min; a new
   head aborts). --local uses artifacts/logs/tooling-fast-ready.sha + tooling-fast-suite.log only (no GitHub API).
   A --pr run writes artifacts/ready-gate/<n>.json (pass or refuse), which the hooks require before the flip.
+  On exit 0 (draft + green) prints \`next:\` flip ready then add \`land\`; on \`not-draft\` prints \`next:\` add \`land\` only.
+  --max-behind is gone (distance row retired): sync only when needs-sync.mjs says conflict|stale-red|retest-refused.
   Exit 1 refused, 3 no token / API error.`;
 
 /** sha256 of the PR body's `## Plan` section, the half of the ready receipt's key that is not the head (the receipt
@@ -361,6 +386,7 @@ export function planHash(body) {
 export function main(argv, { request = api, resolve = resolveSha, judge = evaluate, receipt = (d) => writeReceipt(ROOT, "ready", d), sleep = (s) => spawnSync("sleep", [String(s)]), now = Date.now, log = console.log, advisory = null } = {}) {
   exitIfHelp(argv, USAGE);
   const say = (...a) => log("[ready-gate]", ...a);
+  if (argv.includes("--max-behind")) { say(MAX_BEHIND_GONE); return 1; }
   // The receipt github-mcp-guard.sh / bash-guard.sh require before a draft→ready flip: written for a --pr run only,
   // pass or refuse, so the hook can say WHY the last gate run refused.
   const record = (pr, head, ok, evidence) => { try { receipt({ pr, head, ok, evidence, planHash: planHash(resolved.body) }); } catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); } };
@@ -372,7 +398,12 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   if (resolved.error) { say(`= ready-gate unknown — ${resolved.error}`); return 3; }
   if (resolved.pr) {
     const dp = draftProblem({ state: resolved.state, draft: resolved.draft, merged: resolved.merged });
-    if (dp) { say(`= ready-gate ${dp.state} — ${dp.evidence} sha=${resolved.sha}`); record(resolved.pr, resolved.sha, false, `${dp.state}: ${dp.evidence}`); return 1; }
+    if (dp) {
+      say(`= ready-gate ${dp.state} — ${dp.evidence} sha=${resolved.sha}`);
+      for (const line of nextAction(dp.state, resolved.pr) || []) say(line);
+      record(resolved.pr, resolved.sha, false, `${dp.state}: ${dp.evidence}`);
+      return 1;
+    }
     // mergeability: `unknown` is re-read up to 3 times (2, 4, 8 s), `dirty` refuses with its own row.
     for (let i = 0; i < 3 && resolved.mergeableState === "unknown"; i++) {
       sleep(2 ** (i + 1));
@@ -399,14 +430,16 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   const v = withMemory(withPlan(judged, resolved.body), resolved.files,
     { body: resolved.body || "", labels: resolved.labels || [], filesError: resolved.filesError || null });
   if (resolved.pr) record(resolved.pr, v.sha, v.code === 0, v.code === 0 ? "" : `${v.state}: ${v.evidence}`);
-  if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
+  if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null, next: resolved.pr ? nextAction(v.code === 0 ? "passed" : v.state, resolved.pr) : null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);
-    if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip (update_pull_request draft:false), then add `land`; if it ages out, re-run ready-gate");
+    if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip ready and add `land` in one step (next: lines); if it ages out, re-run ready-gate");
     // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs). The CLI
     // passes it in: merge-gate imports this module, and preflip-probe (with pick-tests) stays out of the gate's
     // import closure, so both are ROUTINE config paths (D-034).
     if (resolved.pr && advisory) say(advisory(resolved.pr, v.sha));
+    // next: before the `= ready-gate` verdict so the verdict stays the final line (ready-gate.test.mjs).
+    if (resolved.pr && v.code === 0) for (const line of nextAction("passed", resolved.pr) || []) say(line);
     say(verdictLine(v));
   }
   return v.code;

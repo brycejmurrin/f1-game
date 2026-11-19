@@ -14,6 +14,9 @@ export function normalizeOwnedPath(p) {
   const result = parts.filter((x) => x !== ".").join("/");
   return result && result !== "/" ? result : null;
 }
+/** Every open PR, not a sample: at 50 a 62-PR board was `complete:false` on every run, so the tool could never
+ *  pass (#5712). 300 = three 100-row pages; `--max-prs N` lowers it for a quick look. */
+export const MAX_PRS = 300;
 const touches = (a, b) => a === b || (a.endsWith("/") && b.startsWith(a)) || (b.endsWith("/") && a.startsWith(b));
 
 /** Input {owned,forbidden?,prs:[{number,head,owner,files}],assignments?,complete,issues?}.
@@ -48,7 +51,7 @@ export function comparePaths(input = {}) {
     else if (!out.truncatedOverlaps) { out.truncatedOverlaps = true; issue("Overlap output limit reached: at most 200 matches retained"); }
   };
   for (const a of owned) for (const b of forbidden) if (touches(a, b)) add("brief-contradiction", a, b, {});
-  for (const pr of limited(input.prs, "PR", 50)) {
+  for (const pr of limited(input.prs, "PR", MAX_PRS)) {
     if (!pr || typeof pr !== "object") { issue("Invalid PR row"); continue; }
     out.checkedPrs++;
     if (pr.complete === false) issue(`PR #${pr.number}: incomplete changed-file coverage`);
@@ -70,7 +73,7 @@ export function comparePaths(input = {}) {
 }
 
 /** Bounded live snapshot; errors retain observed overlaps but never establish a clean reservation. */
-export function collectOverlap(brief, { request = api, maxPages = 3, maxPrs = 50 } = {}) {
+export function collectOverlap(brief, { request = api, maxPages = 3, maxPrs = MAX_PRS } = {}) {
   const input = { ...brief, prs: [], complete: true, issues: [] };
   const pages = (base) => {
     const all = [];
@@ -121,16 +124,18 @@ function readBoundedJSON(file) {
 function main(argv) {
   for (let i = 0; i < argv.length; i++) {
     if (["--help", "--json"].includes(argv[i])) continue;
-    if (!["--brief", "--fixture"].includes(argv[i])) throw new Error(`Unknown argument ${argv[i]}`);
+    if (!["--brief", "--fixture", "--max-prs"].includes(argv[i])) throw new Error(`Unknown argument ${argv[i]}`);
     if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`Missing value for ${argv[i]}`);
     i++;
   }
   const value = (flag) => argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : null;
-  if (argv.includes("--help")) { console.log("Usage: path-overlap.mjs --brief brief.json [--fixture snapshot.json] [--json]\nbrief: {owned:[literal paths],forbidden:[],assignments:[],ignorePr?:N}. Directories end in /. No globs. Incomplete evidence exits 2; overlap is advisory."); return; }
+  if (argv.includes("--help")) { console.log("Usage: path-overlap.mjs --brief brief.json [--fixture snapshot.json] [--max-prs N] [--json]\n--max-prs: inspect at most N open PRs (default " + MAX_PRS + "; fewer than open = incomplete).\nbrief: {owned:[literal paths],forbidden:[],assignments:[],ignorePr?:N}. Directories end in /. No globs. Incomplete evidence exits 2; overlap is advisory."); return; }
   const file = value("--brief");
   if (!file) throw new Error("Supply --brief brief.json");
   const brief = readBoundedJSON(file), fixture = value("--fixture");
-  const result = fixture ? comparePaths({ ...readBoundedJSON(fixture), ...brief }) : collectOverlap(brief);
+  const maxPrs = value("--max-prs") == null ? MAX_PRS : Number(value("--max-prs"));
+  if (!Number.isInteger(maxPrs) || maxPrs < 0 || maxPrs > MAX_PRS) throw new Error(`--max-prs must be an integer 0..${MAX_PRS}`);
+  const result = fixture ? comparePaths({ ...readBoundedJSON(fixture), ...brief }) : collectOverlap(brief, { maxPrs });
   console.log(argv.includes("--json") ? JSON.stringify(result, null, 2) : `${result.state}: ${result.overlaps.length} observed overlaps; complete=${result.complete}\n${result.issues.join("; ")}`);
   if (!result.complete) process.exitCode = 2;
 }
