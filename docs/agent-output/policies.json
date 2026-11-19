@@ -776,6 +776,11 @@
       "presentation": "shared-levels",
       "preserve": "Dry-run versus apply; protected/open refs; partial failures and unarchived kept refs"
     },
+    "tools/ci/pool-share.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Read-only census; the closing = pool-share line; API failure exit 3"
+    },
     "tools/ci/queue-depth.mjs": {
       "action": "keep-native",
       "presentation": "native",

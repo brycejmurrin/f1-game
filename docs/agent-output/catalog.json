@@ -1126,6 +1126,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/pool-share.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/pr-board.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",

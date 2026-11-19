@@ -3504,13 +3504,17 @@
       "hasGhost": [
         "tests/unit/mechanics-coherence.test.mjs"
       ],
+      "medal": [
+        "tests/unit/session-records-medal-keep.test.mjs"
+      ],
       "migrateKey": [
         "tests/unit/storage-key-prefix.test.mjs"
       ],
       "record": [
         "tests/specs/time-trial.spec.js",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/race-insights.test.mjs"
+        "tests/unit/race-insights.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "scheduleSave": [
         "tests/specs/time-trial.spec.js"
@@ -3519,7 +3523,8 @@
         "tests/specs/time-trial.spec.js",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/race-insights.test.mjs"
+        "tests/unit/race-insights.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "speedAt": [
         "tests/unit/race-insights.test.mjs"
@@ -3528,7 +3533,8 @@
         "tests/specs/time-trial.spec.js",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/race-insights.test.mjs"
+        "tests/unit/race-insights.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "timeAt": [
         "tests/specs/time-trial.spec.js",
@@ -11646,6 +11652,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "init": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
@@ -13327,6 +13334,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/title-menu-even.test.mjs"
       ],
@@ -13350,6 +13358,7 @@
         "tests/specs/menu-baseline.spec.js",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "plan": [
@@ -13363,6 +13372,7 @@
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "select": [
@@ -13374,11 +13384,13 @@
         "tests/unit/share-card.test.mjs"
       ],
       "shareResult": [
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "shareText": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "stop": [
         "tests/unit/daily-challenge.test.mjs",
@@ -13431,63 +13443,64 @@
         "tests/unit/damage.test.mjs"
       ]
     },
+    "js/race/driving-coach-boot.js": {
+      "create": [
+        "tests/unit/driving-coach-lazy.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/s8-once-per-frame.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/driving-coach-lazy.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/s8-once-per-frame.test.mjs"
+      ],
+      "setPracticeGoal": [
+        "tests/unit/driving-coach-lazy.test.mjs"
+      ]
+    },
     "js/race/driving-coach.js": {
-      "advice": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "armPractice": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "beginSetupTrial": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "canArm": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
       "captureCar": [
         "tests/unit/coach-clone.test.mjs"
       ],
       "create": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-voice.test.mjs",
-        "tests/unit/s8-once-per-frame.test.mjs"
+        "tests/unit/s8-once-per-frame.test.mjs",
+        "tests/unit/session-stub-surface.test.mjs"
       ],
       "feedback": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "jsonClone": [
         "tests/unit/coach-clone.test.mjs"
       ],
-      "mark": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
       "paint": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "reset": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "retry": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "setPracticeGoal": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "status": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "toggle": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "update": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
@@ -14010,7 +14023,8 @@
     },
     "js/race/quali-model.js": {
       "begin": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
@@ -14032,7 +14046,11 @@
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
+      ],
+      "medalFor": [
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "order": [
         "tests/specs/quali.spec.js",
@@ -14793,6 +14811,7 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-trial-session.test.mjs"
       ]
     },
@@ -14802,7 +14821,8 @@
       ],
       "begin": [
         "tests/unit/ghost-share.test.mjs",
-        "tests/unit/radio-voice.test.mjs"
+        "tests/unit/radio-voice.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "board": [
         "tests/unit/ghost-share.test.mjs"
@@ -14815,6 +14835,7 @@
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/session-records-assists.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-trial-session.test.mjs"
       ],
       "current": [
@@ -14823,7 +14844,8 @@
         "tests/unit/session-records-assists.test.mjs"
       ],
       "finish": [
-        "tests/unit/ghost-share.test.mjs"
+        "tests/unit/ghost-share.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "prepareDaily": [
         "tests/unit/daily-challenge.test.mjs",
@@ -15644,6 +15666,9 @@
       ],
       "credits": [
         "tests/specs/assets-api.spec.js"
+      ],
+      "followQuality": [
+        "tests/unit/assets-pack.test.mjs"
       ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
