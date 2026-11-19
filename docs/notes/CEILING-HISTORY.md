@@ -1,5 +1,19 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-19 — PR #5296 (claude/audit-fix-hud-perf-covers): audit W22/W25/W32 fixes on eager scripts
+
+`(tree) eagerBytes` 8015286 → **8016511** (+1225). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. Measured on the
+sync merge c48f7b1e against tip dec94440, the growth is this PR's own net change to eager
+scripts: onboard +727 (REPEAT CONTROL REMINDERS keeps harvest and races), css-zoom +502
+(local-rect zoom product), race-entry-profile +473 (`bindGame` + `readbackCover`),
+tv-graphics +445 and broadcast +386 (fastest-lap banner), sporting-regs +180
+(`blueFlagCar` export), game +162, governor +112, loop-health +109,
+save-schema-registry +67; offset by hud −1081, announce-banner −391, hud-readouts −322,
+visor-optics −144. An earlier head had already trimmed the hud.js comment block
+(6bd07fa1: +2,693 → +1,225 B); the remaining added comments are short. Fragment:
+`ratchets.d/claude--audit-fix-hud-perf-covers.json`.
+
 
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
