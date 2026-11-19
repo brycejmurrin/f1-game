@@ -2018,6 +2018,15 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.deepEqual(plain(calls), [["raceIntro"], ["startRace"], ["quit"]], "never a frozen race");
   assert.equal(b.D.isOpen(), true);
   assert.match(msgText(b), /could not start/);
+  // Hunt #5743 D3: TEST HERE on another point while a range is selected drops the
+  // range — the way back must not restore "point 10 → old span end 6".
+  b.D.selectRange(2, 6);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [2, 6]);
+  calls.length = 0; b.G.state = "results";
+  assert.equal(await b.D.testHere(10), false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(b.D.isOpen(), true);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [10, -1], "the point driven from, no stale span");
   // A red design is refused before anything moves.
   calls.length = 0;
   b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));

@@ -324,6 +324,25 @@ test("the retired flag is the ONLY discriminator between the two rounds", () => 
     "same classified order, different retired flag — the double facts must differ");
 });
 
+test("a DSQ mate is not a double even when still classified in the points", () => {
+  // paid() gates prize and the player's pts; the sponsor "double" must use the
+  // same gate. scored() alone would still count a DSQ that kept classified.
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const mk = (id, fields) => Object.assign({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 }, fields);
+  const player = mk("custom", {});
+  const mate = mk("custom", { dsq: "one dry compound", classified: true });
+  const order = [mk("haas", {}), mk("haas", {}), player, mk("haas", {}), mate];
+  for (let i = 0; i < 15; i++) order.push(mk("haas", { retired: i < 5 }));
+  const res = Career.settleRound(order, player);
+  assert.ok(res);
+  assert.equal(res.matePrize, 0, "a DSQ mate earns no prize");
+  assert.equal(career.results[0].double, false, "DSQ mate is not both cars in the points");
+});
+
 // ── the contract binds, and the budget ladder moves (F1 25 research fixes) ───
 // A DRIVER career this time, because the two contract rules under test are
 // excluded for MY TEAM by design. Its own context: rollover() reaches
@@ -452,6 +471,64 @@ test("rollover clears the weekend-started stamp: next season's same round is not
   Career.rollover();
   assert.equal("startedRound" in career.season, false, "the stamp is last season's");
   assert.equal(Career.objectiveLocked(), false);
+});
+
+test("rollover restores the season when durable storage refuses the winter write", () => {
+  // requireDurable: a quota-refused session-only year++ would vanish on reload
+  // while the hub already showed the new season. Mirror adoption's gate.
+  const stored = new Map();
+  const flatRating = { pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 };
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    GameStore: {
+      CAREER_V: 3,
+      store: {
+        get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+        set: (k, v) => stored.set(k, v),
+        write(k, v, options) {
+          if (options && options.requireDurable) return { ok: false, durable: false, reason: "QuotaExceededError" };
+          stored.set(k, v);
+          return { ok: true, durable: true, reason: null };
+        },
+      },
+      seasonDriverId: (teamId, i) => teamId + ":" + i,
+      migrateCareer: (c) => c,
+    },
+    Teams: {
+      POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      isReal: (t) => !!t && !t.custom && !t.legends,
+      LIST: [
+        { id: "haas", tier: 4, color: 0xffffff, name: "Haas",
+          drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] },
+        { id: "mclaren", tier: 1, color: 0xff6600, name: "McLaren",
+          drivers: [{ name: "C", code: "CCC", num: 3 }, { name: "D", code: "DDD", num: 4 }] },
+      ],
+    },
+    Parts: { getFactorySetup: () => ({}), getCost: () => 1000, CATALOG: [], setLegality() {} },
+    Tracks: { LIST: [], SEASON: new Array(3).fill({}) },
+    DriverRatings: {
+      get: (code) => Object.assign({ code }, flatRating),
+      overall: () => 80,
+      AXES: ["pace", "craft", "awareness", "consistency", "experience"],
+    },
+  });
+  seedLog(ctx);
+  seedHash32(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx, { filename: absSrc("js/career/season-cal.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/regulations.js"), "utf8"), ctx, { filename: absSrc("js/career/regulations.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx, { filename: absSrc("js/career/career.js") });
+  const Career = vm.runInContext("Career", ctx);
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  const year = career.year;
+  const money = career.money;
+  assert.equal(Career.rollover(), null, "refused winter must not report success");
+  assert.equal(career.year, year, "year must not advance when the write was not durable");
+  assert.equal(career.money, money);
+  assert.equal(Career.conflicted(), true);
 });
 
 test("a multi-year contract suppresses the winter market until it expires", () => {

@@ -161,7 +161,13 @@ const SaveMigrate = (function () {
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
       if (k === "__proto__" || !Array.isArray(o[k])) continue;
-      out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+      // Coerce digit strings the way scoreMap/numMap do: a JSON roundPts row
+      // that landed as "18" must keep 18 for netPts, not be zeroed (zeroing
+      // avoided "25"+0 concatenation only when the raw row reached netPts).
+      out[k] = o[k].map((v) => {
+        const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      });
     }
     return out;
   }
@@ -170,7 +176,10 @@ const SaveMigrate = (function () {
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
       if (k === "__proto__" || !Array.isArray(o[k])) continue;
-      out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
+      out[k] = o[k].map((v) => {
+        const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN;
+        return Number.isInteger(n) && n > 0 ? n : 0;
+      });
     }
     return out;
   }

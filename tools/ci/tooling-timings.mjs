@@ -25,12 +25,25 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { api, REPO } from "./github-api.mjs";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
 import { TOOLING_FAST_FILES, TIMINGS_FILE, CI_SHARDS, applyFileShard, scheduleLongestFirst } from "./tooling-fast.mjs";
 
-const relFile = (f) => (path.isAbsolute(f) ? path.relative(process.cwd(), f) : f);
+// Anchor to the repo root: `process.cwd()` broke absolute PASS paths when the
+// tool was run from a subdirectory (keys missed the committed timings table).
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const relFile = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f);
+
+/** Hunt TOOLING-HUNT-2026-11-09 #12: `--help` used to hit the Actions API (~37 s here). */
+export const USAGE = `usage: node tools/ci/tooling-timings.mjs [--runs N] [--write] [--branch <name>] [--log <file>]...
+  Refresh tests/data/tooling-fast-timings.json from green CI guards-shard PASS lines (median per-file).
+  --runs N       newest N green runs (default 6)
+  --write        rewrite the timings table (files still in TOOLING_FAST_FILES only)
+  --branch name  only that branch's runs
+  --log file     use a saved job log instead of the API (repeatable)`;
+export const KNOWN_FLAGS = ["--runs", "--write", "--branch", "--log"];
 
 /** ci.yml guards-a..d (four since 2026-10-24, B2). A run older than that has no tooling D; it still counts if its own shards all passed. */
 export const GUARD_JOBS = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards (tooling C)", "Structural guards (tooling D)"];
@@ -107,8 +120,12 @@ export function harvestFromActions(runs, { log = () => {}, branch = null } = {})
 }
 
 function main(argv) {
-  const val = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
-  const logs = argv.flatMap((a, i) => (a === "--log" ? [argv[i + 1]] : []));
+  // --help / unknown flags before any network (strictFlags exits 0 / 2).
+  // Hunt #12: bare --help used to harvest six CI logs (~37 s).
+  const flags = strictFlags(argv, KNOWN_FLAGS, USAGE);
+  if (!flags) return;
+  const val = (k, d) => flags.flag(k, d);
+  const logs = argv.flatMap((a, i) => (a === "--log" ? [argv[i + 1]] : [])).filter(Boolean);
   const old = JSON.parse(fs.readFileSync(TIMINGS_FILE, "utf8"));
   let samples = {};
   let source;
@@ -116,7 +133,7 @@ function main(argv) {
     for (const p of logs) parseDurations(fs.readFileSync(p, "utf8"), samples);
     source = `${logs.length} log file(s)`;
   } else {
-    const h = harvestFromActions(Number(val("--runs", "6")), { log: (s) => console.error(s), branch: val("--branch", null) });
+    const h = harvestFromActions(Number(val("--runs", "6")), { log: (s) => console.error(s), branch: flags.has("--branch") ? val("--branch", null) : null });
     samples = h.samples;
     source = `ci.yml runs ${h.runs.join(" ")}`;
   }
@@ -129,7 +146,7 @@ function main(argv) {
   console.log(`= coverage old ${files.filter((f) => typeof old.ms[f] === "number").length}/${files.length}  new ${Object.keys(ms).length}/${files.length}  sampled ${files.filter((f) => samples[f]).length}`);
   console.log(`= predicted shard walls (min) old ${fmt(before)}  max ${(Math.max(...before) / 60000).toFixed(2)}`);
   console.log(`= predicted shard walls (min) new ${fmt(after)}  max ${(Math.max(...after) / 60000).toFixed(2)}`);
-  if (argv.includes("--write")) {
+  if (flags.has("--write")) {
     fs.writeFileSync(TIMINGS_FILE, JSON.stringify({ _doc: old._doc, jobs: CI_JOBS, ms }, null, 2) + "\n");
     console.log(`= wrote ${TIMINGS_FILE}`);
   }

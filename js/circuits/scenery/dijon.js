@@ -9,11 +9,11 @@
      4  s=0.055 +1  paddock: motorhomes, transporters, service boxes, apron
      5  s=0.105 -1  bare outfield: close armco, stock fence, billboard pair
      6  s=0.160 -1  spectator hill + upper terrace, hedge, isolated trees, farm
-     7  s=0.210 +1  Courbe de Pouas inside: tyre wall, marshal post, billboard
-     8  s=0.240 -1  Pouas outside: run-off patch, armco, hill, horizon ridges
+     7  s=0.210 +1  Double Droite de Villeroy (T1) inside: tyre wall, marshal post, billboard
+     8  s=0.240 -1  Villeroy outside: run-off patch, armco, hill, horizon ridges
      9  s=0.300 +1  Combe de Pouilly drop: cut limestone ridges, hedge, trees
     10  s=0.365 -1  open valley: hedgerow fields, vineyard, hamlet, tree clumps
-    11  s=0.420 +1  Double Droite de Villeroy: armco, tyre wall, timing boxes
+    11  s=0.420 +1  the long left (built 0.410-0.454): armco, tyre wall, timing boxes
     12  s=0.545 +1  esses: limestone spoil, hedge run, marshal, armco, gravel
     13  s=0.645 +1  Virage de la Bretelle: tyre wall, armco, camera tower
     14  s=0.846 -1  Parabolique outside (long right s 0.805-0.887): armco, tyre wall, hoarding, bank
@@ -333,7 +333,7 @@
       //    straight, taken over a crest. The inside stays LOW so the corner
       //    disappears over the rise: tyre wall, marshal post, one billboard,
       //    a pale apron and a stock fence. Nothing here breaks the skyline.
-      // Pouas inside: single short tyre stack (was two abutting runs —
+      // Villeroy (T1) inside: single short tyre stack (was two abutting runs —
       // flatCoplanar cap×cap @ frac 0.206, #3348).
       tyreWall(0.204, 0.216, 1, 10, CAP);
       marshalPost(K(0.192), 1, 13);
@@ -724,7 +724,7 @@
       // Worked parcels between the boundaries — the colour variation that
       // makes the far side of a 3.8 km lap read as farmland at distance.
       // Dropped 0.486/0.524@-1 (overlap with esses plough / each other) and
-      // 0.466@1 near Villeroy drapes (#3348 flatCoplanar).
+      // 0.466@1 near the 0.41-0.45 left's drapes (#3348 flatCoplanar).
       for (const [s, side, gap, w, d, c] of [
         [0.058,  1,  86, 40, 56, WHEAT], [0.092,  1, 110, 44, 58, STUB],
         [0.130,  1,  92, 38, 52, PLOUGH], [0.188,  1,  78, 36, 50, MEADOW],

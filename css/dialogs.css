@@ -474,12 +474,22 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
    own cssText). Fixed above the bottom safe edge, never wider than the safe
    viewport, and it WRAPS: four buttons, a scrub bar and the time label are
    ~600px in one row, which clipped EXIT and the label on a 390px portrait
-   phone. Plain tokens so the LIGHT theme and the text size follow. */
+   phone. Plain tokens so the LIGHT theme and the text size follow.
+   CENTRED BY MARGINS, NOT left:50% + translate: a fixed box at left:50% has
+   only half the viewport to shrink-fit into, so at 844x390 (Bryce's profile)
+   it wrapped to 422px wide and 5 rows, 246px = 63% of the height (#5694 I1).
+   UNZOOMED: the dock is a <body> child, outside the `zoom: var(--ui-scale)`
+   sheets, so the inherited `52px / --ui-scale` paint tokens over-sized it
+   (74px buttons at UI SIZE 70). Re-resolve them at scale 1 here. */
 #pm-replay-dock {
+  --tap-paint: max(24px, var(--tap-paint-at));
+  --tap: max(44px, var(--tap-paint-at));
   position: fixed;
-  left: 50%;
+  left: calc(var(--safe-l) + var(--gap));
+  right: calc(var(--safe-r) + var(--gap));
+  width: fit-content;
+  margin-inline: auto;
   bottom: calc(var(--safe-b) + var(--gap));
-  transform: translateX(-50%);
   z-index: 40;
   box-sizing: border-box;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
@@ -497,6 +507,13 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 #pm-replay-dock button { min-height: var(--tap-paint); padding-inline: var(--gap); }
 #pm-replay-scrub { flex: 1 1 12rem; width: 12rem; min-width: 0; max-width: 100%; }
 #pm-replay-label { min-width: 4ch; text-align: end; font-variant-numeric: tabular-nums; }
+/* A THUMB SCRUBS THE REPLAY (#5694 I1, after .watch-transport [data-wt="seek"]):
+   on touch or a short window the slider takes its own full-width row at the
+   tap floor, first, and the buttons below drop to a tighter inline pad. */
+@media (pointer: coarse), (max-height: 520px) {
+  #pm-replay-scrub { order: -1; flex: 1 0 100%; width: 100%; height: max(32px, var(--tap)); margin: 0; accent-color: var(--red); }
+  #pm-replay-dock button { padding-inline: calc(var(--gap) * 0.5); }
+}
 } /* @layer components */
 
 /* ---- VS Friend chrome (@layer overlays on purpose) ----

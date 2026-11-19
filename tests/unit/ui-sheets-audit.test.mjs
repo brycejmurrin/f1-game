@@ -28,6 +28,7 @@ import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { gameSource } from "../helpers/game-source.mjs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
@@ -994,6 +995,41 @@ test("friend-race results are honest: RACE AGAIN (SOLO), a NEW FRIEND ROOM door,
   assert.equal(solo.els.resNext.textContent, "RACE AGAIN");
   assert.equal(solo.els.resMenu.textContent, "MENU");
   assert.equal(solo.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room"), undefined);
+});
+
+// #5739 row 1: the guest's BYE can land after the sheet is built. NEW FRIEND ROOM must still open a room,
+// so the click reads what buildResults painted (dataset.friend), never netPlay.active() at click time.
+test("#5739 row 1: NEW FRIEND ROOM opens VS FRIEND even after the guest leaves; MENU stays MENU", () => {
+  const { cars } = tiedSeason();
+  let live = true;
+  const h = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => live, ownsClassification: () => false, peerResult: () => null } });
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "NEW FRIEND ROOM");
+  assert.equal(h.els.resMenu.dataset.friend, "1");
+  // The handler game.js installs, run as written against stubs.
+  const src = gameSource();
+  const m = src.match(/els\.resMenu\.onclick = (\(\) => \{[\s\S]*?\n\});/);
+  assert.ok(m, "game.js wires #res-menu");
+  const run = (els) => {
+    const calls = [];
+    const fn = new Function("els", "netPlay", "quitToMenu", "$", "return " + m[1].replace(/;$/, ""))(
+      els, { active: () => live }, () => calls.push("quit"), (id) => (id === "mb-vs" ? { click: () => calls.push("mb-vs") } : null));
+    fn();
+    return calls;
+  };
+  live = false;   // the guest's BYE: NetPlay is down while the sheet still says NEW FRIEND ROOM
+  assert.deepEqual(run(h.els), ["quit", "mb-vs"], "the label's action: a fresh room");
+  clear(h.els.resultsTable);
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "MENU");
+  assert.equal(h.els.resMenu.dataset.friend, "");
+  live = true;    // a live peer at click time cannot turn MENU into a room either
+  assert.deepEqual(run(h.els), ["quit"]);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  live = true; clear(h.els.resultsTable); h.api.buildResults(cars.slice());
+  clear(h.els.resultsTable); h.api.buildTTResults();
+  assert.equal(h.els.resMenu.dataset.friend, "", "TT clears the friend action with the label");
 });
 
 test("friend-race labels do not outlive the race: the next solo build restores MENU", () => {

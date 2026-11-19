@@ -5,11 +5,47 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC } from "../../tools/ci/wait-for.mjs";
+import { fileURLToPath } from "node:url";
+import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC, resolveCondPaths, mergedOnDeploy } from "../../tools/ci/wait-for.mjs";
 import { readStatus, waitStatus, stamp } from "../../tools/lib/deploy-status.mjs";
 
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "wf-"));
 const fakeClock = () => { let t = 0; return { now: () => t, sleep: async (ms) => { t += ms; } }; };
+
+test("resolveCondPaths anchors relative file/log paths to a root; absolute stay", () => {
+  const root = "/repo";
+  const out = resolveCondPaths([
+    { kind: "file", path: "artifacts/logs/x.log" },
+    { kind: "log", path: "a.log", re: /x/ },
+    { kind: "file", path: "/abs/y.log" },
+    { kind: "pid", pid: 1 },
+  ], root);
+  assert.equal(out[0].path, path.resolve(root, "artifacts/logs/x.log"));
+  assert.equal(out[1].path, path.resolve(root, "a.log"));
+  assert.equal(out[2].path, "/abs/y.log");
+  assert.equal(out[3].pid, 1);
+});
+
+test("mergedOnDeploy defaults cwd to the repo root, not process.cwd()", () => {
+  // From /tmp, process.cwd()-based git returned status 128 and the waiter
+  // falsely reported "not yet on deploy" for a tip sha (cwd bug).
+  const seen = [];
+  const run = (_cmd, _args, opts) => {
+    seen.push(opts.cwd);
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const prev = process.cwd();
+  try {
+    process.chdir("/tmp");
+    assert.equal(mergedOnDeploy("abcdef0", { run }), true);
+  } finally {
+    process.chdir(prev);
+  }
+  assert.equal(seen.length, 2, "fetch + merge-base --is-ancestor");
+  assert.ok(seen.every((c) => path.resolve(c) === REPO_ROOT), `cwd=${seen.join(",")}`);
+  assert.ok(seen.every((c) => path.resolve(c) !== path.resolve("/tmp")));
+});
 
 test("parseArgs: conditions, both flag spellings, defaults", () => {
   const a = parseArgs(["--load-below", "2.8", "--file-nonempty=x.log", "--pid-gone", "42", "--timeout=5"]);

@@ -9225,7 +9225,7 @@ $("cs-unlimited").onclick = () => {
   buildSetup();
 };
 els.resMenu.onclick = () => {
-  const room = netPlay.active();   // read BEFORE the quit: results are shown with NetPlay still live (NEW FRIEND ROOM)
+  const room = els.resMenu.dataset.friend === "1";   // the label buildResults painted (NEW FRIEND ROOM), not the live peer: a guest BYE after results must not turn it into MENU
   quitToMenu();
   if (room && $("mb-vs")) $("mb-vs").click();   // the title's own VS FRIEND door: a fresh room, since the race ended this one
 };

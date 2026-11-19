@@ -1264,6 +1264,7 @@
       "connect": [
         "tests/specs/music-library.spec.js",
         "tests/unit/audio-mix-improvements.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -1276,6 +1277,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "disconnect": [
+        "tests/unit/load-order.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -1347,8 +1349,7 @@
         "tests/unit/spotify-refresh.test.mjs"
       ],
       "*": [
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/audio/stub.js": {
@@ -1813,6 +1814,9 @@
       ],
       "preview": [
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "show": [
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/camera/flyby-panel.js": {
@@ -2401,6 +2405,9 @@
       ]
     },
     "js/camera/replay-buf.js": {
+      "adjacentFrame": [
+        "tests/unit/replay-buf.test.mjs"
+      ],
       "apply": [
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -4220,6 +4227,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -4789,6 +4797,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4938,6 +4947,7 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "scored": [
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "setConfig": [
@@ -5423,6 +5433,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
@@ -5467,6 +5478,9 @@
       ],
       "ensureRealRace": [
         "tests/unit/real-race-lazy.test.mjs"
+      ],
+      "ensureRouteCss": [
+        "tests/unit/load-order.test.mjs"
       ],
       "ensureScenery": [
         "tests/unit/assets-pack.test.mjs",
@@ -8589,7 +8603,8 @@
         "tests/unit/title-warm.test.mjs"
       ],
       "stop": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "tick": [
         "tests/unit/garage-arrival.test.mjs",
@@ -9854,6 +9869,9 @@
       ],
       "encodeSample": [
         "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "encodeSuspend": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "fmtLap": [
@@ -11829,6 +11847,9 @@
       "poll": [
         "tests/unit/title-warm.test.mjs"
       ],
+      "stop": [
+        "tests/unit/title-warm.test.mjs"
+      ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js"
       ]
@@ -13094,6 +13115,7 @@
       ],
       "stop": [
         "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
@@ -13763,6 +13785,7 @@
         "tests/specs/pit-lane.spec.js",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -13994,6 +14017,9 @@
       ],
       "resetOnQuitWithCancel": [
         "tests/unit/quali-persist.test.mjs"
+      ],
+      "resetSoft": [
+        "tests/unit/net-authority.test.mjs"
       ],
       "waiting": [
         "tests/unit/net-authority.test.mjs",
@@ -14719,6 +14745,7 @@
         "tests/unit/session-records-assists.test.mjs"
       ],
       "*": [
+        "tests/unit/ghost.test.mjs",
         "tests/unit/global-registry.test.mjs"
       ]
     },
@@ -19480,11 +19507,16 @@
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
+      "sayCards": [
+        "tests/unit/results-sheet-lazy.test.mjs"
+      ],
+      "spokenText": [
+        "tests/unit/results-sheet-lazy.test.mjs"
+      ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs",
-        "tests/unit/results-sheet-lazy.test.mjs"
+        "tests/unit/mobile-native-download.test.mjs"
       ]
     },
     "js/ui/results-story.js": {

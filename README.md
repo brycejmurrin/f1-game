@@ -16,9 +16,11 @@ Recent merges: [CHANGELOG.md](CHANGELOG.md).
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-on low-poly 3D tracks, across a season on the real 2026 calendar (23 rounds,
-Albert Park to Abu Dhabi), with the original 24-round calendar still
-available. The season rounds:
+on low-poly 3D tracks. Season setup defaults to **2026 REAL** (23 rounds,
+Albert Park to Abu Dhabi — `SeasonCal.REAL_2026` in `js/career/season-cal.js`;
+tested in `tests/unit/season-calendar-default.test.mjs`). **SEASON SETUP**
+still offers the **24-ROUND** preset (`Tracks.SEASON`: every circuit without
+`classic: true`). The season rounds:
 Bahrain, Monaco, Silverstone, Spa, Monza, Suzuka, Singapore, COTA,
 Interlagos, Las Vegas, Madrid, Jeddah, Albert Park, Shanghai, Miami,
 Montreal, Red Bull Ring, Hungaroring, Baku, Mexico City, Qatar, Abu Dhabi,
@@ -125,8 +127,9 @@ a corner and the front washes wide (understeer); loosen the rear and it steps ou
 
 **SETTINGS** (from the pause menu or title) opens pages for **CONTROLS**,
 **DRIVING AIDS**, **HUD & CAMERA**, **APPEARANCE**, **ACCESSIBILITY**,
-**MUSIC & SOUND**, **SAVES & DATA**, **GRAPHICS**, **VISUAL STUDIO** and
-**PROGRESS** (the page list is `SettingsNav` in `js/ui/settings-tabs.js`).
+**MUSIC & SOUND**, **SAVES & DATA**, **GRAPHICS**, **VISUAL STUDIO**,
+**PROGRESS** and **ABOUT & CREDITS** (the page list is `SettingsNav` in
+`js/ui/settings-tabs.js`).
 **CONTROLS** holds **STEERING INPUT**, **STEERING** feel, **TILT
 SENSITIVITY**, **THROTTLE** and the keyboard and controller bindings, with
 lock, speed steer and the fine curves on its **ADVANCED INPUT & HANDLING**
