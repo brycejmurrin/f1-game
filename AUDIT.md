@@ -353,3 +353,11 @@ stream) and allows a 1.5 s grace after a quiet period so callbacks queued behind
 The SHA-256 check is unchanged. Verified in Chromium with caches off: fast network, loads in 0.1 s before
 and after; 2 Mbps, the 4.0 MB announcer pack failed at exactly 15.0 s → loads in 16.7 s; a binary that never
 arrives still fails (15.0 s → 16.5 s).
+
+### Fix 11 — Settings uses the full width of a phone (addendum A2)
+
+`css/settings.css:3`: the sheet width was computed in unscaled pixels and then shrunk again by the sheet's
+`zoom` (phones default to 70 % UI scale), so Settings rendered about 58 % as wide as the screen. The width
+is now divided by the scale, the same pattern `css/carsetup.css:11` uses. Verified in Chromium, rendered
+width before → after: iPhone 13 portrait 225 → 322 px of 390; landscape 496 → 708 px of 750; desktop
+1280×720 unchanged at 1020 px; no horizontal overflow at any size.

@@ -1,6 +1,6 @@
 @layer components {
 #pmsettings {
-  --sheet-w: min(1020px, calc(var(--safe-w) - var(--pad) * 2));
+  --sheet-w: min(1020px, calc((var(--safe-w) - var(--pad) * 2) / var(--sheet-scale, var(--ui-scale))));
 }
 #pmsettings-inner {
   --fit-at: 300px;
