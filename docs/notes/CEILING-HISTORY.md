@@ -1,6 +1,17 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
+
+`(tree) eagerBytes` 8,015,949 → **8,017,580** (+1,631 B). Deliberate raise; Bryce chose it with
+`decision: A` on #5576 (2026-11-19T15:08Z), and the tree-wide ceiling still needs his
+`ratchet-raise` label on the PR. The growth is #5561's feature code in two FULL (eager) files,
+measured on the sync merge with tip `734d0a2d` after trimming the PR's own comments to one line
+each: `js/perf/quality-preset.js` +943 (`syncPack` and its pause/race `MutationObserver`, called
+from the eager `GfxQuality.set`) and `js/render/shared/assets.js` +688 (`followQuality` and the
+forced-tier `_pinned` flag). A lazy bundle (option B) was declined: both hook the eager preset
+path. Fragment: `tests/data/ratchets.d/claude--pack-tier-follows-quality-5561.json`.
+
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
 `(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the

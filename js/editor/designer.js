@@ -1225,9 +1225,12 @@ const TrackDesigner = (function () {
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
   }
-  /** The `apex26.track` file envelope for the current design (what EXPORT writes). */
+  /** The `apex26.track` file envelope for the current design (what EXPORT writes).
+   *  Gated like SHARE / CARD: a RED design must not leave the machine as a file. */
   async function exportEnvelope() {
     if (!design || !design.pts.length) return null;
+    if (previewT || !verdict) runPreview();
+    if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before exporting", true); return null; }
     const d = copy(design);
     const code = await TrackCodec.encode(d);
     if (!code) return null;
@@ -1236,7 +1239,7 @@ const TrackDesigner = (function () {
   }
   async function exportFile() {
     const env = await exportEnvelope();
-    if (!env) { message("Nothing to export yet", true); return false; }
+    if (!env) { if (!verdict || verdict.ok) message("Nothing to export yet", true); return false; }
     const name = fileStem(env.design) + ".apextrack.json";
     const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
     try {
