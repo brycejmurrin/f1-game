@@ -415,3 +415,21 @@ test("sheetFit is SheetShape.layoutProbe behind an element, a selector or the fi
   assert.equal(g.apex.sheetFit(), null, "no argument and no painted .sheet / .fit-managed answers null");
   assert.equal(g.apex.sheetFit(0), null, "a non-element, non-string argument answers null");
 });
+
+// #5654 LP-13/LP-16: at the title GameAudio is the eager stub (no profiles()), and audio()
+// threw a TypeError instead of the documented no_audio answer; carState()[i].best was
+// Infinity before a lap, the only non-finite number any hook returned.
+test("audio() at the title answers no_audio, and carState() holds only finite numbers or null", async () => {
+  const fresh = await createGame({});
+  try {
+    assert.equal(fresh.sandbox.GameAudio._stub, true, "the title loads the audio stub");
+    const a = fresh.apex.audio();
+    assert.equal(a.ok, false);
+    assert.equal(a.error, "no_audio");
+  } finally { fresh.close(); }
+  await load("monza", 0.05, 40);
+  const cs = g.apex.carState();
+  assert.equal(cs[0].best, null, "no lap yet: best is null, not Infinity");
+  const bad = cs.flatMap((o) => Object.entries(o)).filter(([, v]) => typeof v === "number" && !Number.isFinite(v));
+  assert.equal(bad.length, 0, JSON.stringify(bad));
+});

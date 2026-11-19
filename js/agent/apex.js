@@ -107,9 +107,9 @@ function apiHook(base, path, fix) {
   return F1API.request(base + path, 0, { cache: false });
 }
 
-const noAudio = () => (typeof GameAudio === "undefined"
-  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
-  : null);
+// The eager title stub (js/audio/stub.js, `_stub`) has no profiles()/voices(): it counts as not loaded.
+const noAudio = () => (typeof GameAudio === "undefined" || GameAudio._stub
+  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded (title stub)", fix: "start a race, or open a menu that loads audio" } : null);
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
         applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
@@ -926,10 +926,10 @@ const api = {
   // that is to diff the actual objects across two resets. Strings, objects and
   // functions are skipped (team records, driver names, the launch plan) — they
   // are identity, not episode state, and stringifying them would swamp the
-  // diff that matters.
+  // diff that matters. A non-finite number (best = Infinity before a lap) is null, as JSON would make it.
   carState: () => G.cars.map((c) => {
     const o = {};
-    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    for (const k in c) { const v = c[k]; if (typeof v === "boolean") o[k] = v; else if (typeof v === "number") o[k] = Number.isFinite(v) ? v : null; }
     return o;
   }),
   cars: () => G.cars.map((c, i) => ({
