@@ -50,7 +50,10 @@ const MAX_EAGER_SCRIPTS = 313;
 // 8,014,025: deploy red — #5714 (ROUTE SHEETS watcher in eager lazy-bundles.js) + #5634 (eager ui/race growth) ate
 // the room; tip 9b75df12 8,022,147 raw (over by 3,663). share-card-chips.js → LAZY_RESULTS_SHEET: 8,022,147 →
 // 8,014,025 (−8,122). Zero room: growth spent the owner's room, and freed bytes are not handed out.
-const MAX_EAGER_BYTES = 8_014_025;
+// 8,017,936: tip 08886fdb boots 8,017,936 raw against 8,014,025 (+3,911). #5815 merged before re-measure; growth
+// from #5582 and other merges onto the red tip (8a9d0796: 8,026,058 raw before the move). Still under Bryce's
+// 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
+const MAX_EAGER_BYTES = 8_017_936;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
