@@ -113,6 +113,9 @@ const UiExperience = (function () {
   // so a stale completion cannot be mistaken for an owned preparation failure.
   const cancelledPhotoSwaps = new WeakSet();
   function openPhoto(G, deps) {
+    // Already open: a second open would close the first without its restore (paused, pause card hidden) (#5743 P4).
+    const ps = deps.photoStudio;
+    if (ps && typeof ps.state === "function" && ps.state().open) return true;
     let source = deps.source;
     if (source === "home" && deps.trackHome) {
       if (deps.trackReady === false) { if (deps.onWaiting) deps.onWaiting(); return false; }
@@ -358,6 +361,13 @@ const UiExperience = (function () {
     });
     window.addEventListener("apex26:photo-background", stamp);
     stamp();
+    // Resize used to sit inside the Home signature (innerWidth/Height + pane),
+    // so every narrow rotate tore down beginHome and blacks the canvas for
+    // seconds while the garage rebuilds. Signature is scene-only; viewport
+    // changes debounce to setSize/aspect (gfx.resize) + one forced present.
+    const HOME_RESIZE_MS = 120;
+    const PREVIEW_MAX_EDGE = 512;
+    let homeViewGen = 0, resizeTimer = 0;
     function stopHome(preservePhoto = false) {
       // Clear FX/post `_last` ONLY when tearing down a live Home present.
       // renderHome() calls stopHome() every race frame once the overlay is
@@ -372,6 +382,10 @@ const UiExperience = (function () {
       world.end();
       home = false; signature = ""; elapsed = 0; painted = false;
       overlay.removeAttribute("data-home-ready");
+      // A resize armed while Home was up must not settle after START RACE: the
+      // debounce would bump homeViewGen, clear painted, and call gfx.resize()
+      // mid-race. Cancel the pending timer on leave.
+      if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = 0; }
       // Home garage presents drawGlow with no blob shadows / car decals. While
       // TLX is still warming, render() can bail and leave that present's FX
       // counters in __tlx.fxState() — M6 on Metal then waited on glow alone and
@@ -385,13 +399,6 @@ const UiExperience = (function () {
         } catch (_) { /* probe hygiene — never block leaving Home */ }
       }
     }
-    // Resize used to sit inside the Home signature (innerWidth/Height + pane),
-    // so every narrow rotate tore down beginHome and blacks the canvas for
-    // seconds while the garage rebuilds. Signature is scene-only; viewport
-    // changes debounce to setSize/aspect (gfx.resize) + one forced present.
-    const HOME_RESIZE_MS = 120;
-    const PREVIEW_MAX_EDGE = 512;
-    let homeViewGen = 0, resizeTimer = 0;
     // The layout viewport (UI contract 2026-11-06 rule 1): innerWidth/Height is the
     // visual viewport on iOS and can hold the portrait pair at a landscape launch.
     const icb = () => {
@@ -401,6 +408,8 @@ const UiExperience = (function () {
     let [lastViewportW, lastViewportH] = icb();
     function settleHomeViewport() {
       resizeTimer = 0;
+      // Belt after stopHome's clearTimeout: never resize/paint Home while racing.
+      if (!home && !(world.active && world.active())) return;
       homeViewGen++;
       painted = false;
       elapsed = 0;
@@ -410,6 +419,7 @@ const UiExperience = (function () {
       const [w, h] = icb();
       if (w === lastViewportW && h === lastViewportH) return;
       lastViewportW = w; lastViewportH = h;
+      if (!home && !(world.active && world.active())) return;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(settleHomeViewport, HOME_RESIZE_MS);
     }

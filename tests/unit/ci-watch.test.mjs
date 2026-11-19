@@ -10,15 +10,27 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
+import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, cancelledExternal, supersededByPr, fileState, waitingJobs, USAGE } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 import * as ciWatch from "../../tools/ci/ci-watch.mjs";
 import fs from "node:fs";
 import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
+
+test("USAGE points at skill steward — not a nonexistent AGENTS.md §Watching CI and Pages", () => {
+  // Hunt TOOLING-HUNT-2026-11-09 #18. equal+/re/.test keeps assertPinsAll flat.
+  const r = spawnSync(process.execPath, [nodePath.resolve("tools/ci/ci-watch.mjs"), "--help"], { encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0);
+  assert.equal(
+    /skill steward/.test(USAGE) && !/§Watching CI and Pages/.test(USAGE)
+      && /skill steward/.test(r.stdout) && !/§Watching CI and Pages/.test(r.stdout),
+    true,
+  );
+});
 
 test("the newest run per workflow wins, so a superseded push run is not a red", () => {
   const runs = latestPerWorkflow([

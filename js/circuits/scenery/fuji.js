@@ -357,7 +357,7 @@
         { tiers: 2, h: 18, roof: "cantilever", roofCol: ROOF_D, fasciaCol: CLAD_W });
       terrace(0.196, 0.234, -1, 84, { rows: 8, rise: 1.5, depth: 2.8, density: 0.4,
         conc: CONC_D, concAlt: CONC });
-      // Spectator village behind the T1 bank: food units, toilets, a screen.
+      // Spectator village behind the T1 braking-zone stands: food units, toilets, a screen.
       for (const [s1, g, w, h1, d] of [[0.198, 114, 12, 5, 26], [0.216, 118, 14, 6, 30],
                                        [0.236, 112, 11, 5, 22]])
         building(K(s1), -1, g, w, h1, d, { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0 });
@@ -502,7 +502,7 @@
       terrace(0.886, 0.944, -1, 42, { rows: 8, rise: 1.5, depth: 2.7, density: 0.45, conc: CONC, step: 12 });
       terrace(0.904, 0.940, -1, 52, { rows: 6, rise: 1.5, depth: 2.7, density: 0.4,
         conc: CONC_D, concAlt: CONC, step: 12 });
-      // Depth behind the last corner's seating.
+      // Hall set back behind the Panasonic terraces (they run on past the apex).
       building(K(0.912), -1, 84, 16, 9, 66, { kind: "hall", wall: CLAD_D, window: GLASS, neon: 0 });
       // Skips 0.866-0.873: the 120 m rank there reaches ~12 m off the 0.771
       // road (the flick doubles back), leaving a culled cedar's crown 18 m up.

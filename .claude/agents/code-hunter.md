@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 35
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -53,7 +53,7 @@ tool, and the parent saves it.
    exactly so, one path per call (`git log --oneline -15 -- js/net/`), never
    with `git -C`, a pipe or a second command after it.
 2. For each suspect: follow `code-nav` for named JS definitions/references/callers;
-   without attached LSP tools use `bash tools/mcp/lsp-mcp.sh` through Bash.
+   without attached LSP tools use `node tools/mcp/lsp-mcp.mjs` through Bash (the `.sh` wrapper is refused by your hook).
    Follow factory instances, aliases and callbacks where a static binding stops;
    use bounded text cross-checks for HTML/string consumers, tools and tests.
    A clipped caller page is not complete coverage. Find the guard and the test

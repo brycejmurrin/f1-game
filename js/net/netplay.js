@@ -178,8 +178,21 @@ const NetPlay = (function () {
         try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }, head + JSON.stringify(to) + "}"); } catch (e) { /* peer closed */ }
       }
     }
-    const sessionList = () => [...sessions.values()];
-    const _pumpBuf = [];               // tick()'s per-frame snapshot, refilled in place
+    // Scratch snapshots — tick already used _pumpBuf; broadcast/status used to
+    // allocate a fresh array via spread on every call (hot while racing).
+    const _pumpBuf = [];
+    const _sessBuf = [];
+    const _remoteBuf = [];
+    const sessionList = () => {
+      _sessBuf.length = 0;
+      for (const s of sessions.values()) _sessBuf.push(s);
+      return _sessBuf;
+    };
+    const remoteList = () => {
+      _remoteBuf.length = 0;
+      for (const r of remotes.values()) _remoteBuf.push(r);
+      return _remoteBuf;
+    };
     const PEER_ONE = "peer";
     let session = null;
     function broadcast(type, data) {
@@ -197,7 +210,6 @@ const NetPlay = (function () {
     let localCar = null;
     let raceOpts = null;
     const remotes = new Map();
-    const remoteList = () => [...remotes.values()];
     // GUEST ONLY: wireId -> remote for an AI car the HOST simulates. Kept apart
     // from `remotes` (the human rivals), which seats, arming and status read.
     const aiRemotes = new Map();

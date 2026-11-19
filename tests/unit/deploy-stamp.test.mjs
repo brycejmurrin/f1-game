@@ -179,8 +179,12 @@ test("staged title CSS preloads carry the same SHA-256 integrity as their styles
     assert.equal(run("--apply").status, 0);
     const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
     const want = sri(rel);
-    assert.ok(/rel="preload" href="fx\/a\.css\?v=[0-9a-f]{12}" as="style"/.test(html) && html.includes(`integrity="${want}"`));
-    assert.ok(/rel="stylesheet" href="fx\/a\.css\?v=[0-9a-f]{12}"/.test(html) && html.includes(`integrity="${want}"`));
+    // Per tag, not per page: the stylesheet carries the same SRI string, so a page-wide
+    // includes() stayed green when the preload lost its integrity (audit U-50).
+    const integrityOf = (rel) => [...html.matchAll(/<link\b[^>]*>/g)].map((m) => m[0])
+      .filter((t) => t.includes(`rel="${rel}"`)).map((t) => (t.match(/\bintegrity="([^"]*)"/) || [])[1] || null);
+    assert.deepEqual(integrityOf("preload"), [want], "the preload tag carries the stylesheet's SRI");
+    assert.deepEqual(integrityOf("stylesheet"), [want], "the stylesheet tag carries its SRI");
     assert.equal(run("--check").status, 0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

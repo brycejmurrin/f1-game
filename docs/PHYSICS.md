@@ -42,7 +42,7 @@ that is what makes low pace more forgiving.
 (`axEstTarget` is `ACCEL * PACE * …`), so an acceleration compared against a
 hard-coded number is pace-sensitive in precisely the way a speed is. It is
 written as the divisor (`a / max(PACE, 0.05)`) rather than `vStd`'s
-`VMAX / vTop()` round trip, so at pace 5 it is the identity to the bit. This
+`VMAX / vTop()` round trip, so at PACE 1 (notch 14) it is the identity to the bit. This
 shape is easy to miss because the lint only sees `.speed`: A16's launch-smoke
 defect was reached sideways, by flagging the speed window on the same line.
 
@@ -1260,7 +1260,7 @@ grip or racing-line read, 2026-11-10).
 | `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
-| `js/perf/soak-run.js` | `probe` + the `control` look-ahead loop (AUTO SOAK) | **assist-gated** | a soak-only INPUT SYNTHESISER, the same law as `tests/specs/autopilot.spec.js`: it writes `G._testInput` (the seam `inputOf()` reads for the local car) and nothing else on the car. It exists only between `SoakRun.start()` and `finish()`; the sole caller of `start()` is PhoneRecorder's AUTO SOAK button, and it is not a setting, persists nothing, and clears `_testInput` on completion, quit, or a hidden page. A normal race never reaches it, with assists on or off |
+| `js/perf/soak-run.js` | `probe` + the `control` look-ahead loop (AUTO SOAK) | **assist-gated** | a soak-only INPUT SYNTHESISER, the same law as `tests/specs/autopilot.spec.js`: it writes `G._testInput` (the seam `inputOf()` reads for the local car) and nothing else on the car. It exists only between `SoakRun.start()` and `finish()`; `start()` is called only by perf harnesses a person starts (PhoneRecorder's AUTO SOAK button, `js/perf/bench-run.js` BENCHMARK legs, `js/perf/gpu-test-run.js`), and it is not a setting, persists nothing, and clears `_testInput` on completion, quit, or a hidden page. A normal race never reaches it, with assists on or off |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/editor/validate.js` | `straightRun` (TrackPit's `PIT_K` walk from the start line) + the built `curv` LUT in `judge` | **broadcast-only** | the track designer's validator: judges a design's BUILT centreline for the editor's issue list (radius, kink, fold, start straights, lap estimate) and the picker's baked turns, read once per edit in a menu — the race that follows builds its own LUT and no car reads these numbers |
 | `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick; `buildRoad` racing-line wear band (reads `track.line`, the line LUT TrackLine.bake derived from curv) | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself; the wear band is vertex COLOUR along the baked line, a picture on the asphalt no car reads |
@@ -1280,6 +1280,15 @@ player's `driverDelta` from own-state only (`vLat`, yaw rate, speed, `muF`)
 behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
 asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
 identity.
+
+**The Flyby hero car** (`js/camera/flyby-seq.js` `driveHero`, ~:932) is a classified exception in the
+**broadcast-only** channel, not a table row, because it reads the racing line (`TrackLine.at`,
+`DrivingLine.speedAt`) and no curvature (the no-ghosts check would reject the row): during the pre-race
+Flyby, while the loading screen is up in the menu state (`js/race/start-lights.js` hands it `G.cars` only
+then, via `setHeroCars`), it POSES the hero car on the line at the filmed corner (`placeHero` writes its
+drawn position and speed) and `restoreHero()` puts the saved state back when the cars are handed back. No
+force or steer input is read or written; no driving happens in that state. Flagged by the 2026-11-18
+physics-contract audit (#5716).
 
 **Localized rain** (`js/race/rain-cells.js`, read by `js/race/weather-arc.js`
 `wetnessAt`) is a classified exception in the **surface** channel, not a

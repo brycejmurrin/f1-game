@@ -11,7 +11,7 @@ driver or race is **data-hub** (one home: this file).
 
 ## Workflow
 
-1. `node --test --test-name-pattern "replay fixture plan is offline and bounded" tests/unit/capture-tools-regressions.test.mjs`
+1. `node --test --test-name-pattern "replay fixture plan is offline and bounded" tests/unit/capture-tools-replay.test.mjs`
    (the bounded offline replay-fixture contract).
 
 **HIGHLIGHTS is not what the probe runs.** `replay-camera-probe.mjs` launches
@@ -25,7 +25,7 @@ exported pure functions in `js/race/real-replay.js`).
 the user saw: the snap itself (by design), the wrong subject after it (follow/lock), or a bad
 blend after the snap.
 
-2. Parent only (`bash-guard.sh` refuses this probe in a subagent, even `--plan`): `node tools/shot/replay-camera-probe.mjs --fixture default --track baku --backend three --viewport 640x360 --frames 1 --seed 42 --timeout-ms 900000 --out artifacts/replay-camera --plan`
+2. A subagent may run `--plan` (no browser); the real run is parent only (`launchChromium` throws under `APEX_SUBAGENT`): `node tools/shot/replay-camera-probe.mjs --fixture default --track baku --backend three --viewport 640x360 --frames 1 --seed 42 --timeout-ms 900000 --out artifacts/replay-camera --plan`
 3. When a browser is available and no other rendering run is active (AGENTS.md
    rule 4), the parent runs the same probe without `--plan` as ONE
    background Bash task, log in `artifacts/logs/replay-camera.log`. If it fails

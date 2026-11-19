@@ -34,7 +34,8 @@
     // bankZones fracs are in the SCENERY frame (+0.1015 lap to racing, sceneryStartFrac above);
     // racing frac / corner in brackets, from the measured corner table (survey 2026-10-15).
     bankZones: [
-      { frac: 0.0425, angleDeg: 3.0, widthM: 180 },   // [racing 0.144] mid-straight T2 -> hairpin, no apex within 60 m (engine re-seat rule; unmeasured)
+      // (removed 2026-11-18, #5652: frac 0.0425 = racing 0.144 sat 246 m past T2 on an
+      //  unnumbered right bend (smoothed k -0.0095) with no curated apex and no measured bank.)
       { frac: 0.1509, angleDeg: 3.0, widthM: 120 },   // [racing 0.252] T3-T4 north hairpin (left)
       { frac: 0.5777, angleDeg: 5.0, widthM: 240 },   // [racing 0.679] T7-T9 banked long left (4 deg measured)
       { frac: 0.7453, angleDeg: 3.0, widthM: 110 },   // [racing 0.847] T14 left

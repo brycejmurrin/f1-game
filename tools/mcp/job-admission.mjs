@@ -10,6 +10,19 @@ export function publishJobManifest(file, meta) {
   finally { fs.rmSync(temporary, { force: true }); }
 }
 
+/** Create `file` once, complete or not at all: the bytes land in a sibling temp
+ * file first and link(2) publishes it, so a reader never sees a partial body
+ * (writeFileSync wx creates the name before its bytes). False when it exists. */
+export function publishJobFileOnce(file, meta) {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, JSON.stringify(meta) + "\n", { flag: "wx" });
+    fs.linkSync(temporary, file);
+    return true;
+  } catch (e) { if (e.code === "EEXIST") return false; throw e; }
+  finally { fs.rmSync(temporary, { force: true }); }
+}
+
 export function jobOwnerGone(owner, processBirth) {
   if (!owner || !Number.isInteger(owner.pid) || owner.pid <= 0) return false;
   if (!alive(owner.pid)) return true;
