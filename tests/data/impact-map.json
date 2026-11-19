@@ -2746,7 +2746,8 @@
         "tests/unit/net-roster.test.mjs"
       ],
       "decalBytes": [
-        "tests/unit/car-draw-decal-sweep.test.mjs"
+        "tests/unit/car-draw-decal-sweep.test.mjs",
+        "tests/unit/livery-hires-starved.test.mjs"
       ],
       "decalTextureFor": [
         "tests/unit/livery-tier.test.mjs"
@@ -2758,6 +2759,7 @@
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/livery-hires-starved.test.mjs",
         "tests/unit/livery-tex-dispose.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -7894,7 +7896,8 @@
         "tests/specs/touch-buttons.spec.js",
         "tests/specs/touch-pedals.spec.js",
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "sheetRelease": [
         "tests/unit/daily-intro-session-late.test.mjs",
@@ -9382,6 +9385,12 @@
       "holdReleasePointer": [
         "tests/unit/key-binds-hunt.test.mjs"
       ],
+      "press": [
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "release": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9690,6 +9699,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
@@ -9731,6 +9741,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -17345,7 +17356,8 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/unit/css-has-scope.test.mjs"
+        "tests/unit/css-has-scope.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
