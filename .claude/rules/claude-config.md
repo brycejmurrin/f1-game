@@ -31,7 +31,8 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
 - `protect-files.sh` (Write/Edit/NotebookEdit) refuses a hand edit of a generated file or block (AGENTS.md rule 11;
   the list is derived from `tools/lib/generated-paths.mjs` and the generators' target lists, and an unreadable list
   refuses), a linked worktree's shared-contract file, and any guard file or `.claude/allow-*` hatch written by a
-  subagent. The one hatch: an untracked `.claude/allow-protected` a MAIN session creates for the assigned edit and
+  subagent; a MAIN session writes a guard only under the hatch (#5849: editing a guard to lift a refusal is a
+  retry). The one hatch: an untracked `.claude/allow-protected` a MAIN session creates for the assigned edit and
   removes after; it never lifts a rule for a subagent, and while it exists every guarded call and the SessionStart
   line say so.
 - `bash-guard.sh` (Bash) refuses kills by name (`pkill`, `killall`, `pgrep`/`pidof` into `kill`) and a kill of a
