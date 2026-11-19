@@ -150,7 +150,11 @@ const SettingsNav = (function () {
         const observer = new ResizeObserver(() => {
           if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
           // The sheet can change WIDTH between pages (a phone at 70 %): the saved offset only fits the settled one (#5358).
-          if (scroll != null) document.getElementById("pm-settings-body").scrollTop = scroll;
+          // Null-guard: a missing body must not throw — that would skip stop() and leave the window capture listeners.
+          if (scroll != null) {
+            const body = document.getElementById("pm-settings-body");
+            if (body) body.scrollTop = scroll;
+          }
           el.scrollIntoView({ block: "nearest" });
         });
         const events = ["pointerdown", "keydown", "wheel", "touchstart"];

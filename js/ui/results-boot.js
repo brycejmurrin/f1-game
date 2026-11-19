@@ -31,27 +31,24 @@ function ensureSheet() {
 
 function create(G) {
   Log.info("ui", "GameResults.create");
-  let real = null;
-  function ensure() {
-    if (real) return Promise.resolve(real);
-    return ensureSheet().then((ok) => {
-      if (!ok) return null;
-      if (!real) real = GameResultsSheet.create(G);
-      return real;
-    });
-  }
+  let real = null, quali = null;
   function readyReal() {
     if (!real && typeof GameResultsSheet !== "undefined") real = GameResultsSheet.create(G);
     return real;
   }
+  // The #quali painter rides the same bundle: it only paints after a session ran.
+  function readyQuali() {
+    if (!quali && typeof QualiSheet !== "undefined") quali = QualiSheet.create(G);
+    return quali;
+  }
   // Prefetch at boot (sync create): startRace awaits ensureLoaded; menu taps
   // usually hit a warm bundle.
   ensureSheet();
-  function wrap(name) {
+  function wrap(name, ready = readyReal) {
     return (...args) => {
-      const r = readyReal();
+      const r = ready();
       if (r) return r[name](...args);
-      ensure().then((impl) => { if (impl) impl[name](...args); });
+      ensureSheet().then((ok) => { const impl = ok && ready(); if (impl) impl[name](...args); });
     };
   }
   return {
@@ -59,6 +56,7 @@ function create(G) {
     buildTTResults: wrap("buildTTResults"),
     buildStandings: wrap("buildStandings"),
     buildChampion: wrap("buildChampion"),
+    quali: { build: wrap("build", readyQuali), open: wrap("open", readyQuali), close: wrap("close", readyQuali) },
   };
 }
 

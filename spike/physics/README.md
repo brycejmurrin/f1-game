@@ -1,8 +1,8 @@
 # Rapier physics-engine evaluation spike
 
 > **Status:** the recommendation shipped — the side-world is
-> `js/game/debrisworld.js` and the bounded takeover layer is
-> `js/game/incidentsim.js`. `DEEP-DIVE.md` (this directory) is the follow-up;
+> `js/physics/debris-world.js` and the bounded takeover layer is
+> `js/physics/incident-sim.js`. `DEEP-DIVE.md` (this directory) is the follow-up;
 > it RETRACTS the "~2× understeer" number below and corrects the load-scaling
 > row of the API-fit table.
 
@@ -18,8 +18,8 @@ compares to the bespoke model. Data below, recommendation at the end.
 |---|---|
 | engine | `@dimforge/rapier3d-compat` **0.19.3** (the game's own `vendor/rapier-0.19.3/`, WASM inlined as base64, no network) |
 | runtime | Node 22.22.2, pure `node`, no browser |
-| geometry | **real** track geometry, browser-free: `build-geometry.cjs` replays the `tools/manifest.cjs` `TRACK_VM` file list in a Node VM (the `tools/verify-track.cjs` pattern), calls `Tracks.build(def)`, exports the road mesh + centreline |
-| track | Singapore: 23,250 road verts, 42,778 tris, 4,906 m lap, 1,227 centreline nodes (`geometry-singapore.json`, 3.6 MB) |
+| geometry | **real** track geometry, browser-free: `build-geometry.cjs` replays the `tools/manifest.cjs` `TRACK_VM` file list in a Node VM (the `tools/track/verify-track.cjs` pattern), calls `Tracks.build(def)`, exports the road mesh + centreline |
+| track | Singapore: 26,492 road verts, 44,228 tris, 4,906 m lap, 1,227 centreline nodes (`geometry-singapore.json`, ~4.0 MB; regenerable) |
 | collider | `RAPIER.ColliderDesc.trimesh(Float32Array, Uint32Array, TriMeshFlags.FIX_INTERNAL_EDGES)` on a fixed body — the flag suppresses internal-edge ghost bumps on the tessellated road |
 | timestep | fixed 1/60 s, gravity −9.81 |
 
@@ -120,20 +120,20 @@ broad-phase warm-up is why warm-up steps are excluded.
 
 ## e. API fit — bespoke bicycle model vs DynamicRayCastVehicleController
 
-The bespoke model (constants near the top of `js/game.js`; see CLAUDE.md
-"Physics"): per-axle bicycle model where the player is a world-space rigid body
-(`px/pz/head` authoritative), `(s,x)` read back locally per frame by
+The bespoke model (`js/physics/consts.js` + `js/physics/drive-tune.js`; see
+`docs/PHYSICS.md`): per-axle bicycle model where the player is a world-space
+rigid body (`px/pz/head` authoritative), `(s,x)` read back locally per frame by
 `trackFrom()`, with a **combined-slip friction ellipse** — `LONG_GRIP = 34 m/s²`
 longitudinal axis, `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scaling lateral
 grip (trail-braking rotates the car; hard braking mid-corner understeers).
 
-| bespoke knob (js/game.js) | value | Rapier vehicle-controller equivalent | fit |
+| bespoke knob (`consts.js` / `drive-tune.js`) | value | Rapier vehicle-controller equivalent | fit |
 |---|---|---|---|
 | `LONG_GRIP` friction ellipse (combined slip) | 34 m/s² | **none** — engine/brake and side friction are resolved independently (Bullet-style raycast vehicle) | **lost**: no trail-braking rotation, no braking-kills-cornering coupling |
 | `CS_FRONT` / `CS_REAR` cornering stiffness (slip-angle model) | 130 / 175 | `setWheelFrictionSlip`, `setWheelSideFrictionStiffness` — impulse clamps, not slip-angle curves | **lost**: no tyre slip model at all; wheels are rays, not patches |
-| `FRONT_GRIP` axle balance | 0.89 | per-wheel `frictionSlip` bias front vs rear | partial |
+| `FRONT_GRIP` axle balance | 0.94 | per-wheel `frictionSlip` bias front vs rear | partial |
 | `DRIFT` progressive rear looseness 0..1 | 0 | lower rear `frictionSlip`/`sideFrictionStiffness` | partial — breakaway is abrupt, not progressive |
-| `YAW_DAMP` / `YAW_INERTIA` (yaw-axis shaping) | 1.0 / 0.7 | chassis inertia via collider mass properties; `setAngularDamping` is scalar (damps roll+pitch too) | **lost** as per-axis knobs; needs manual torques |
+| `YAW_DAMP` / `YAW_INERTIA` (yaw-axis shaping) | 1.0 / 0.58 | chassis inertia via collider mass properties; `setAngularDamping` is scalar (damps roll+pitch too) | **lost** as per-axis knobs; needs manual torques |
 | `WHEELBASE` (turn-in response slider) | 3.2 m | wheel connection points (pure geometry) | partial — response emerges, not tunable independently |
 | `STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF` | 2.4 / 0.32 / 60 | input shaping stays game-side; `setWheelSteering(rad)` takes the final angle | parity (shaping was never the model's job) |
 | `PLAYER_GRIP`, `gripMult` (weather/kerb/banking), `PACE` | 1.15 / — / 1.0 | per-wheel `frictionSlip` settable per frame; `PACE` external | workable |
@@ -177,7 +177,7 @@ the ~2.2 MB compat bundle vs the game's no-build IIFE loading, and per-platform
 
 ## Files
 
-- `build-geometry.cjs` — browser-free geometry extractor (VM pattern from `tools/verify-track.cjs`)
+- `build-geometry.cjs` — browser-free geometry extractor (VM pattern from `tools/track/verify-track.cjs`)
 - `geometry-singapore.json` — road mesh `{pos,nrm,idx}` + centreline `px/py/pz/tx/ty/tz/hw` (regenerable)
 - `rapier-eval.mjs` — all tests above (`node spike/physics/rapier-eval.mjs [trackId]`)
 - *(no `vendor/`)* — these harnesses import the game's own `vendor/rapier-0.19.3/rapier.mjs`

@@ -135,6 +135,27 @@
     const date = new Date(raw);
     return Number.isNaN(date.valueOf()) ? String(raw) : new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Los_Angeles' }).format(date) + ' PT';
   }
+  function markMissingAsset(img) {
+    const host = img.closest('figure') || img;
+    host.hidden = true;
+    img.removeAttribute('src');
+  }
+  async function probeSidecars() {
+    const notice = $('preview-notice');
+    const collection = $('collection-link');
+    // captures.json is probed by load() — do not HEAD it again (that doubled the
+    // console 404 when the Site sidecar is absent from this checkout).
+    if (collection) {
+      try {
+        const res = await fetch(collection.href || 'collection/', { method: 'HEAD' });
+        if (!res.ok) { collection.hidden = true; if (notice) notice.hidden = false; }
+      } catch { collection.hidden = true; if (notice) notice.hidden = false; }
+    }
+    document.querySelectorAll('img.site-asset').forEach((img) => {
+      if (img.complete && img.naturalWidth === 0) { markMissingAsset(img); if (notice) notice.hidden = false; return; }
+      img.addEventListener('error', () => { markMissingAsset(img); if (notice) notice.hidden = false; }, { once: true });
+    });
+  }
   async function load() {
     $('load-error').hidden = true;
     $('empty-state').hidden = true;
@@ -165,7 +186,9 @@
       const cpuCount = state.items.filter(item => item.geometryOnly).length;
       $('source-backend').textContent = `${state.items.length - cpuCount} native screenshots / ${cpuCount} CPU previews`;
       $('source-note').textContent = 'Native screenshots retain their individual branch revisions. The geometry catalog is pinned to deploy snapshot '+String(source.revision || '').slice(0,12)+'. These sources are separate; appearance and triangle counts belong to the recorded recipe.';
-      ['all', ...Object.keys(categories)].forEach(category => $('count-' + category).textContent = state.items.filter(item => (state.scope === 'all' || item.status === 'current') && (category === 'all' || item.category === category)).length);
+      // Tab counts are owned by render()'s inScope filter — do not write a
+      // second, scope-blind tally here (it was immediately overwritten and
+      // disagreed with the gallery for status=archive rows).
       const branches = Array.isArray(source.branches) ? source.branches.filter(branch => branch && typeof branch.branch === 'string' && typeof branch.sha === 'string') : [];
       $('branch-details').hidden = !branches.length;
       $('branch-summary').textContent = `Included branch heads (${branches.length})`;
@@ -197,6 +220,8 @@
       grid.replaceChildren();
       $('load-error').hidden = false;
       $('results-summary').textContent = 'Capture collection unavailable';
+      const notice = $('preview-notice');
+      if (notice) notice.hidden = false;
     } finally {
       grid.setAttribute('aria-busy', 'false');
     }
@@ -244,5 +269,6 @@
       event.preventDefault(); $('search').focus();
     }
   });
+  probeSidecars();
   load();
 })();

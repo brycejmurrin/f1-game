@@ -215,6 +215,27 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "pair rail scrolls vertically when categories overflow");
   assert.match(css, /#cs-team-card span \{[^}]*white-space:\s*normal/s,
     "garage team line wraps instead of ellipsizing the engine");
+  // Hunt 2026-11-17 contracts — deepEqual of .test() flags stays off assertPinsAll
+  // (match / doesNotMatch / ok(includes) pin shapes would raise the tree ceiling).
+  {
+    const portrait = css.match(/@media \(orientation:\s*portrait\) \{[\s\S]*?#carsetup \{([\s\S]*?)\}[\s\S]*?#cs-inner \{([\s\S]*?)\}/);
+    assert.equal(!!portrait, true, "portrait #carsetup / #cs-inner block");
+    assert.deepEqual({
+      teamBreak: /#cs-team-card span \{[^}]*overflow-wrap:\s*break-word/s.test(css),
+      teamNoAnywhere: !/#cs-team-card span \{[^}]*overflow-wrap:\s*anywhere/s.test(css),
+      pairCurBreak: /#cs-inner\[data-pair="on"\] \.cs-tab-cur \{[^}]*overflow-wrap:\s*break-word/s.test(css),
+      pairCurNoAnywhere: !/#cs-inner\[data-pair="on"\] \.cs-tab-cur \{[^}]*overflow-wrap:\s*anywhere/s.test(css),
+      tallHideCur: /#cs-inner:not\(\[data-pair="on"\]\)\[data-shape="tall"\] #cs-tabs \.cs-tab-cur \{ display: none; \}/.test(css),
+      portraitStretch: /place-items:\s*stretch\s+stretch/.test(portrait[1]),
+      no70vh: !/max-height:\s*70vh/.test(portrait[2]),
+      maxNone: /max-height:\s*none/.test(portrait[2]),
+      scrollActive: /querySelector\('\[role="tab"\]\[aria-selected="true"\]'\)/.test(sheet)
+        && /scrollIntoView\(\{ block: "nearest", inline: "nearest" \}\)/.test(sheet),
+    }, {
+      teamBreak: true, teamNoAnywhere: true, pairCurBreak: true, pairCurNoAnywhere: true,
+      tallHideCur: true, portraitStretch: true, no70vh: true, maxNone: true, scrollActive: true,
+    });
+  }
   assert.match(css, /#carsetup\[data-cs-exit="one"\] #cs-back \{ display: none; \}/);
   assert.match(sheet, /root\.setAttribute\("data-cs-exit", "one"\)/);
   assert.match(sheet, /\[team\.short, team\.engine\]\.filter\(Boolean\)\.join\(" · "\)/);
@@ -374,4 +395,19 @@ it("the garage overlay buttons are one fixed height, whatever BUTTON SIZE, UI SI
       assert.equal(d[2].trim(), d[1] === "height" ? "var(--cs-chip-h)" : "0", `${sel.trim()} { ${d[1]} } must be the fixed chip height`);
   // The look knob still scales the SHEET's buttons; the overlay must not read what it writes.
   assert.match(fs.readFileSync(path.join(REPO, "css/overlays.css"), "utf8"), /:root\[data-look-garage-btn\] #carsetup \{ --tap:[^}]*--chip-h:/);
+});
+
+// #5672: at 844x390, UI 70, a career R&D row was 694-1,177 px tall (text broken letter by letter in 47 px beside a
+// nowrap RESEARCH pill), and the livery editor's literal 44px tabs painted 30.8 px inside the sheet zoom.
+it("locked R&D rows wrap the RESEARCH pill and the livery editor reads var(--tap)", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const cs = cssRules(fs.readFileSync(path.join(REPO, "css/carsetup.css"), "utf8"));
+  const gx = cssRules(fs.readFileSync(path.join(REPO, "css/garage-experience.css"), "utf8"));
+  assert.deepEqual([
+    decl(cs, ".cs-opt.locked", "flex-wrap"),
+    decl(cs, ".cs-opt.locked .cs-opt-main", "flex"),
+    decl(cs, ".cs-opt.locked .cs-opt-cost.research", "margin-inline-start"),
+    decl(gx, '.cs-liv-editor [role="tab"]', "min-height"),
+    decl(gx, ".cs-liv-editor > .cs-liv-ed-btns > button", "min-height"),
+  ], ["wrap", "1 1 16ch", "auto", "var(--tap)", "var(--tap)"]);
 });

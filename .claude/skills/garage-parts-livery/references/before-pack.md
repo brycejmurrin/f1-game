@@ -7,7 +7,7 @@ on llvmpipe and is why **Garage before** exists.
 ```sh
 node tools/garage-angles-fetch.mjs                  # merge-base with ship
 node tools/garage-angles-fetch.mjs --sha HEAD --out artifacts/garage-before
-gh workflow run garage-before.yml -f ref=claude/f1-game-project-26h3ng
+# dispatch garage-before.yml with ref=claude/f1-game-project-26h3ng: GitHub MCP actions_run_trigger, never gh workflow run
 ```
 
 The pack is `garage-before-<sha>` (MANIFEST.json: team, preset, file, sha,

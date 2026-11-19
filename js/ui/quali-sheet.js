@@ -53,9 +53,13 @@ function create(G) {
     // LICENCE BADGES: a DRIVEN pole only — a simulated time for a player who
     // never ran a lap is not one (js/career/badges.js).
     // The banner toast is hidden behind this sheet, so the unlock is a card on
-    // it, kept across rebuilds until the sheet closes.
+    // it. Keep it across rebuilds that still show a driven pole (Badges.onPole
+    // may already be empty after the award), but drop it when SIMULATE / a peer
+    // update leaves the player off driven P1 while #quali stays open.
     const me = rows.find((r) => r.isPlayer);
-    if (me && me.pos === 1 && me.human && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
+    const drivenPole = !!(me && me.pos === 1 && me.human);
+    if (drivenPole && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
+    else if (!drivenPole) poleNew = false;
     if (poleNew) {
       const card = document.createElement("div"); card.className = "res-personal";
       const head = document.createElement("strong"); head.textContent = I18n.t("results.badgeUnlocked", null, "BADGE UNLOCKED");

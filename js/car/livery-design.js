@@ -53,7 +53,7 @@ const LiveryDesign = (function () {
   const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
   function lumArr(c) {
     if (!Array.isArray(c) || c.length < 3) return null;
-    const f = (v) => { v = Math.max(0, Math.min(1, +v)); return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const f = (v) => { v = Math.max(0, Math.min(1, +v)); return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };   // the sRGB 0.04045 knee liverytex.js lin() uses (#5743)
     return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
   }
   function contrastArr(a, b) {

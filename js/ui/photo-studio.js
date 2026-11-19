@@ -6,6 +6,7 @@
 const PhotoStudio = (function () {
 const KEY = "apex26.photoBackground", DB = "apex26.photoLibrary", LIMIT = 6;
 const ASPECTS = { scene: 0, wide: 16 / 9, square: 1, portrait: 4 / 5 };
+const CAPTURE_MS = 8000;   // a frame readback that has not come back by then never will (a hidden tab, a stalled loop)
 // TIME and WEATHER are the engine's own discrete sets (js/race/weather-arc.js VALID, setTimeOfDay): no continuous clock exists.
 const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
 const WXS = [["dry", "Dry"], ["overcast", "Overcast"], ["fog", "Fog"], ["wet", "Wet"], ["rain", "Rain"], ["storm", "Storm"]];
@@ -476,7 +477,18 @@ function create(G, deps) {
       const p = fc.panel ? fc.panel() : G.$("freecam-inner"); if (p) p.hidden = true;
       if (fc.setOverlaysVisible) fc.setOverlaysVisible(false);
     }
-    if (st.source === "home-track" && deps.borrowCar) releaseCar = deps.borrowCar();
+    if (st.source === "home-track" && deps.borrowCar) {
+      // borrowCar rethrows a makeCars failure: undo the camera handover above, or FreeCam and photo mode
+      // stay on behind a hidden panel that close() (st.open still false) never restores (#5743 P1).
+      try { releaseCar = deps.borrowCar(); } catch (e) {
+        Log.warn("ui", "photo studio: no car to borrow", e && e.message);
+        const fc = camera(), prior = st.borrowed;
+        if (fc && fc.setOverlaysVisible) fc.setOverlaysVisible(true);
+        if (fc && fc.close) fc.close(false, !!(prior && prior.photo)); else if (fc && fc.cmd) fc.cmd(false);
+        st.borrowed = null; releaseCar = null;
+        return false;
+      }
+    }
     st.open = true; st.generation++; root.hidden = false;
     carGroup.hidden = !hasCar();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
@@ -568,11 +580,20 @@ function create(G, deps) {
     if (gfx && gfx.capturePixels) {
       let read;
       try { read = gfx.capturePixels(); } catch (e) { read = Promise.reject(e); }
+      // WGX resolves the read only from a later present(): a stalled loop or a hidden tab left CAPTURING…
+      // forever and every retry "capture already pending". Give up after CAPTURE_MS and free the slot (#5743 P3).
+      let capTimer = 0;
+      const late = new Promise((_, reject) => { capTimer = setTimeout(() => {
+        if (gfx.cancelCapture) gfx.cancelCapture("capture timed out");
+        reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
+      }, CAPTURE_MS); });
+      read = Promise.race([read, late]).finally(() => clearTimeout(capTimer));
       // Observe both immediately, even when one rejects before the other is
       // ready. The raw pixels are captured now; software presentation may finish later.
       const [presented, captured] = await Promise.allSettled([pending || Promise.resolve(), read]);
       if (presented.status === "rejected") throw presented.reason;
       if (captured.status === "fulfilled") pixels = captured.value;
+      else if (captured.reason && captured.reason.timedOut) throw captured.reason;
       else {
         // Native WebGPU canvases can compose directly even when a backend has
         // no readback render target. Draw and copy in this same task instead.
