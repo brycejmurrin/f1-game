@@ -15,6 +15,11 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ZERO = "0".repeat(40);
+// Hermetic hooks: the role env a session may carry (APEX_ROLE=orchestrator + APEX_ORCH_ENV, set on an
+// environment by Bryce) flips github-mcp-guard's verdicts, and every spawned hook inherits it. Every hook
+// spawn below starts from HOOK_ENV; a case that wants a role sets it on purpose.
+const ROLE_VARS = ["APEX_ROLE", "APEX_ORCH_ENV", "APEX_GH_OWNER_WRITE", "CLAUDE_CODE_CHILD_SESSION"];
+const HOOK_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !ROLE_VARS.includes(k)));
 
 // Run the real adapters against a disposable delegated guard, including failures
 // that a live GitHub call must never be used to reproduce.
@@ -28,7 +33,7 @@ function adapterFixture(adapter, delegate, script, payload = {}) {
     }
     return spawnSync("bash", [path.join(dir, adapter)], {
       input: JSON.stringify(payload), encoding: "utf8", cwd: dir, timeout: 5000,
-      env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+      env: { ...HOOK_ENV, CLAUDE_PROJECT_DIR: dir },
     });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
@@ -108,7 +113,7 @@ test("the three doors guard the same GitHub tool set", () => {
 });
 
 const guard = (payload) => spawnSync("bash", [path.join(ROOT, ".cursor/hooks/shell-guard.sh")],
-  { input: JSON.stringify(payload), encoding: "utf8", env: { ...process.env, CLAUDECODE: "" } });
+  { input: JSON.stringify(payload), encoding: "utf8", env: { ...HOOK_ENV, CLAUDECODE: "" } });
 
 test("the shell adapter blocks what bash-guard blocks, from Cursor's and Codex's payload shapes", () => {
   const cursor = guard({ command: "pkill -f chrome", cwd: ROOT });
@@ -129,7 +134,7 @@ test("Cursor's MCP door: merges, arms and cancels are denied (exit 2), a close a
   const mcp = (tool_name, input) => {
     const r = spawnSync("bash", [path.join(ROOT, ".cursor/hooks/mcp-guard.sh")],
       { input: JSON.stringify({ tool_name, tool_input: JSON.stringify(input), mcp_server_name: "github" }), encoding: "utf8",
-        env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT } });
+        env: { ...HOOK_ENV, CLAUDE_PROJECT_DIR: ROOT } });
     return { status: r.status, permission: JSON.parse(r.stdout).permission };
   };
   for (const method of ["cancel_workflow_run", "force_cancel_workflow_run", "rerun_failed_jobs"])
@@ -143,13 +148,35 @@ test("Cursor's MCP door: merges, arms and cancels are denied (exit 2), a close a
   assert.deepEqual(mcp("pull_request_read", { method: "get", pullNumber: 1 }), { status: 0, permission: "allow" });
 });
 
+// The other side of HOOK_ENV: the role env set on purpose. A child session is the orchestrator only with a
+// well-formed APEX_ORCH_ENV; a merge stays denied for it too.
+test("both MCP doors judge the role env: the orchestrator may cancel, a malformed APEX_ORCH_ENV is a worker, nobody merges", () => {
+  const cancel = { method: "cancel_workflow_run", run_id: 1 };
+  const doors = (role) => {
+    const env = { ...HOOK_ENV, CLAUDE_PROJECT_DIR: ROOT, ...role };
+    const cur = (tool_name, input) => JSON.parse(spawnSync("bash", [path.join(ROOT, ".cursor/hooks/mcp-guard.sh")],
+      { input: JSON.stringify({ tool_name, tool_input: JSON.stringify(input), mcp_server_name: "github" }), encoding: "utf8", env }).stdout).permission;
+    const cdx = (tool_name, input) => {
+      const out = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
+        { input: JSON.stringify({ tool_name: "mcp__github__" + tool_name, tool_input: input, hook_event_name: "PreToolUse" }), encoding: "utf8", env }).stdout.trim();
+      return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : null;
+    };
+    return { cursorCancel: cur("actions_run_trigger", cancel), codexCancel: cdx("actions_run_trigger", cancel),
+      cursorMerge: cur("merge_pull_request", { pullNumber: 1, merge_method: "merge" }), codexMerge: cdx("merge_pull_request", { pullNumber: 1, merge_method: "merge" }) };
+  };
+  const orch = { APEX_ROLE: "orchestrator", APEX_ORCH_ENV: "env_test123", CLAUDE_CODE_CHILD_SESSION: "1" };
+  assert.deepEqual(doors(orch), { cursorCancel: "allow", codexCancel: null, cursorMerge: "deny", codexMerge: "deny" }, "a child orchestrator with a well-formed env id");
+  assert.deepEqual(doors({ ...orch, APEX_ORCH_ENV: "env_x" }), { cursorCancel: "deny", codexCancel: "deny", cursorMerge: "deny", codexMerge: "deny" }, "a malformed env id is a worker");
+  assert.deepEqual(doors({}), doors({ ...orch, APEX_ROLE: "" }), "no role is a worker");
+});
+
 // Codex reads Claude's hookSpecificOutput JSON but cannot "ask" (it fails the hook and continues the call:
 // https://learn.chatgpt.com/docs/hooks), so the wrapper turns every ask into a deny.
 test("Codex's MCP door guards legacy and hosted GitHub operations: an ask becomes a deny, every merge is denied", () => {
   const mcp = (tool_name, input) => {
     const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
       { input: JSON.stringify({ tool_name, tool_input: input, hook_event_name: "PreToolUse" }), encoding: "utf8",
-        env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT } });
+        env: { ...HOOK_ENV, CLAUDE_PROJECT_DIR: ROOT } });
     assert.equal(r.status, 0, r.stderr);
     return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : null;
   };
@@ -190,7 +217,7 @@ test("Codex MCP adapter leaves unrelated hosted providers and read operations ou
   }
 });
 
-const gitEnv = (extra = {}) => ({ ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ...extra });
+const gitEnv = (extra = {}) => ({ ...HOOK_ENV, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ...extra });
 
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "prepush-"));
@@ -200,7 +227,7 @@ test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-fo
     git("commit", "-q", "--allow-empty", "-m", "a"); const a = git("rev-parse", "HEAD");
     git("commit", "-q", "--allow-empty", "-m", "b"); const b = git("rev-parse", "HEAD");
     git("checkout", "-q", "-b", "side", a); git("commit", "-q", "--allow-empty", "-m", "c"); const c = git("rev-parse", "HEAD");
-    const push = (line, extra = {}) => { const env = { ...process.env, ...extra }; if (!("GITHUB_ACTIONS" in extra)) delete env.GITHUB_ACTIONS; return spawnSync("bash", [path.join(ROOT, ".githooks/pre-push"), "origin", "x"], { cwd: dir, input: line + "\n", encoding: "utf8", env }); };
+    const push = (line, extra = {}) => { const env = { ...HOOK_ENV, ...extra }; if (!("GITHUB_ACTIONS" in extra)) delete env.GITHUB_ACTIONS; return spawnSync("bash", [path.join(ROOT, ".githooks/pre-push"), "origin", "x"], { cwd: dir, input: line + "\n", encoding: "utf8", env }); };
     assert.equal(push(`refs/heads/x ${b} refs/heads/cursor/t-1 ${a}`).status, 0, "fast-forward");
     assert.equal(push(`refs/heads/x ${b} refs/heads/cursor/t-1 ${ZERO}`).status, 0, "new branch");
     assert.equal(push(`refs/heads/x ${c} refs/heads/cursor/t-1 ${b}`).status, 1, "rewrite (force push)");
@@ -276,7 +303,7 @@ test("pre-push refuses a push over another author's fresh commits; own, old, fir
 });
 
 test("pre-commit only honours the explicit guards-maintenance bypass", () => {
-  const r=spawnSync("bash",[path.join(ROOT,".githooks/pre-commit")],{cwd:ROOT,encoding:"utf8",env:{...process.env,CLAUDECODE:"1",APEX_SKIP_GUARDS:"1"}});
+  const r=spawnSync("bash",[path.join(ROOT,".githooks/pre-commit")],{cwd:ROOT,encoding:"utf8",env:{...HOOK_ENV,CLAUDECODE:"1",APEX_SKIP_GUARDS:"1"}});
   assert.equal(r.status,0,r.stderr);
   const src=fs.readFileSync(path.join(ROOT,".githooks/pre-commit"),"utf8");
   assert.doesNotMatch(src,/\[ -n "\$\{CLAUDECODE:-\}" \] && exit 0/);
@@ -285,7 +312,7 @@ test("a real worktree commit isolates guard fixtures while preserving its branch
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "precommit-context-"));
   const base = path.join(dir, "base"), linked = path.join(dir, "linked"), other = path.join(dir, "other");
-  const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", CLAUDECODE: "", APEX_SKIP_GUARDS: "" };
+  const env = { ...HOOK_ENV, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", CLAUDECODE: "", APEX_SKIP_GUARDS: "" };
   // The regression itself must also be safe when a caller runs it from a hook.
   for (const name of execFileSync("git", ["rev-parse", "--local-env-vars"], { cwd: ROOT, encoding: "utf8" }).trim().split(/\s+/)) delete env[name];
   const git = (cwd, ...args) => execFileSync("git", args, { cwd, env, encoding: "utf8" }).trim();
@@ -325,7 +352,7 @@ test("a real worktree commit isolates guard fixtures while preserving its branch
 });
 
 test("Cursor's preToolUse routes MCP:<tool> (the cloud-agent spelling) through the GitHub table; Codex guards apply_patch edits", () => {
-  const cur = (payload) => spawnSync("bash", [path.join(ROOT, ".cursor/hooks/edit-guard.sh")], { input: JSON.stringify(payload), encoding: "utf8" });
+  const cur = (payload) => spawnSync("bash", [path.join(ROOT, ".cursor/hooks/edit-guard.sh")], { input: JSON.stringify(payload), encoding: "utf8", env: HOOK_ENV });
   const merge = cur({ tool_name: "MCP:merge_pull_request", tool_input: { pullNumber: 1 } });
   assert.equal(merge.status, 2); assert.equal(JSON.parse(merge.stdout).permission, "deny");
   assert.equal(JSON.parse(cur({ tool_name: "MCP:update_pull_request", tool_input: { pullNumber: 1, state: "closed" } }).stdout).permission, "ask");
@@ -335,10 +362,10 @@ test("Cursor's preToolUse routes MCP:<tool> (the cloud-agent spelling) through t
   assert.ok(edit && /\.codex\/hooks\/edit-guard\.sh/.test(edit.hooks[0].command), "Codex wires the edit guard on apply_patch");
   for (const g of codex) assert.match(g.hooks[0].command, /git rev-parse --show-toplevel/, "no cwd-relative hook command");
   const patch = (body) => spawnSync("bash", [path.join(ROOT, ".codex/hooks/edit-guard.sh")],
-    { input: JSON.stringify({ tool_name: "apply_patch", tool_input: { command: `*** Begin Patch\n${body}\n*** End Patch\n` } }), encoding: "utf8", cwd: ROOT });
+    { input: JSON.stringify({ tool_name: "apply_patch", tool_input: { command: `*** Begin Patch\n${body}\n*** End Patch\n` } }), encoding: "utf8", cwd: ROOT, env: HOOK_ENV });
   assert.equal(patch("*** Update File: version.json\n@@\n-a\n+b").status, 2, "a generated file");
   assert.equal(patch("*** Update File: index.html\n@@\n-a\n+b").status, 2, "a generated-block file is refused in this host");
   assert.equal(patch("*** Update File: docs/PHYSICS.md\n@@\n-a\n+b").status, 0, "an authored file");
   assert.equal(patch("*** Add File: scratch/new-note.md\n+x").status, 0, "a new authored file");
-  assert.equal(spawnSync("bash", [path.join(ROOT, ".codex/hooks/edit-guard.sh")], { input: "junk", encoding: "utf8" }).status, 2, "fail closed");
+  assert.equal(spawnSync("bash", [path.join(ROOT, ".codex/hooks/edit-guard.sh")], { input: "junk", encoding: "utf8", env: HOOK_ENV }).status, 2, "fail closed");
 });

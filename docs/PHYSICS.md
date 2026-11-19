@@ -1281,6 +1281,15 @@ behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
 asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
 identity.
 
+**The Flyby hero car** (`js/camera/flyby-seq.js` `driveHero`, ~:932) is a classified exception in the
+**broadcast-only** channel, not a table row, because it reads the racing line (`TrackLine.at`,
+`DrivingLine.speedAt`) and no curvature (the no-ghosts check would reject the row): during the pre-race
+Flyby, while the loading screen is up in the menu state (`js/race/start-lights.js` hands it `G.cars` only
+then, via `setHeroCars`), it POSES the hero car on the line at the filmed corner (`placeHero` writes its
+drawn position and speed) and `restoreHero()` puts the saved state back when the cars are handed back. No
+force or steer input is read or written; no driving happens in that state. Flagged by the 2026-11-18
+physics-contract audit (#5716).
+
 **Localized rain** (`js/race/rain-cells.js`, read by `js/race/weather-arc.js`
 `wetnessAt`) is a classified exception in the **surface** channel, not a
 table row, because it reads no curvature (the no-ghosts check would reject the
