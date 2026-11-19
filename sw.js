@@ -725,7 +725,7 @@ self.addEventListener("activate", (event) => {
 
 const GENERATION_NET_MS = 300;
 async function localGeneration() {
-  if (_cacheNameKnown) return cacheBuild(_cacheNameKnown);
+  if (_cacheNameKnown && await caches.match(INSTALL_SETTLED_URL, { cacheName: _cacheNameKnown })) return cacheBuild(_cacheNameKnown);
   let best = 0;
   for (const n of await caches.keys()) {
     const b = cacheBuild(n);
