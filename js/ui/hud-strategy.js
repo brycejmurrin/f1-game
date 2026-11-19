@@ -114,7 +114,7 @@ const HudStrategy = (function () {
     ctx.hasRival = !!a && !a.retired;
     if (ctx.hasRival) {
       const dist = (a.prog || 0) - (player.prog || 0);
-      ctx.gapS = dist / vFloor;
+      ctx.gapS = typeof HudReadouts !== "undefined" && HudReadouts.gaps ? HudReadouts.gaps.between(a, player, G.raceT || 0, dist / vFloor) : dist / vFloor;
       ctx.rivalLapped = total > 0 && dist >= total;
       ctx.rivalInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(a);
       ctx.rivalWear = tyres.spent(a);

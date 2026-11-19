@@ -250,7 +250,9 @@ function gapForm() {
 function gapText(slot, gap, arrow, o, dist, vFloor) {
   const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
   if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, slot ? -n : n, gap === _gapFormShort); }
-  return gap(arrow, o.code, gapSec(slot, o, dist / vFloor));
+  const rough = dist / vFloor;
+  const timed = _ro && _ro.gaps ? (slot ? _ro.gaps.between(G.player, o, G.raceT || 0, rough) : _ro.gaps.between(o, G.player, G.raceT || 0, rough)) : rough;
+  return gap(arrow, o.code, gapSec(slot, o, timed));
 }
 const _gapFormShort = (arrow, code, t) => arrow + " " + t;
 function gapsEmptySync() {
@@ -1108,6 +1110,7 @@ function updateHud(force, dtMs) {
   if (G.frozen && !force) return;
   const paint = !hudPaintHidden();
   if (_trace && G.track) _trace.sample(player, G.track.total);
+  if (_ro && _ro.gaps) _ro.gaps.sample(G.cars, G.raceT || 0);
   if (!paint) {
     const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
     const modeId = modes && modes[G.camMode] ? modes[G.camMode].id : "chase";

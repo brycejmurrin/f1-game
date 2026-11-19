@@ -219,8 +219,48 @@ const HudReadouts = (function () {
     } else if (el.dataset.flagCue != null) delete el.dataset.flagCue;
   }
 
+  const GAP_STEP_M = 5, GAP_CAP = 1024;
+  function gapClock() {
+    let hist = new WeakMap(), lastT = -1;
+    function sample(cars, t) {
+      if (!cars || !(t >= 0)) return;
+      if (t < lastT) hist = new WeakMap();
+      if (t === lastT) return;
+      lastT = t;
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i], p = c && c.prog;
+        if (!Number.isFinite(p)) continue;
+        let h = hist.get(c);
+        if (!h) { h = { p: new Float64Array(GAP_CAP), t: new Float64Array(GAP_CAP), n: 0, at: 0 }; hist.set(c, h); }
+        if (h.n) {
+          const last = h.p[(h.at + GAP_CAP - 1) % GAP_CAP];
+          if (p < last - GAP_STEP_M) { h.n = 0; h.at = 0; }
+          else if (p < last + GAP_STEP_M) continue;
+        }
+        h.p[h.at] = p; h.t[h.at] = t; h.at = (h.at + 1) % GAP_CAP; if (h.n < GAP_CAP) h.n++;
+      }
+    }
+    function timeAt(c, p) {
+      const h = hist.get(c);
+      if (!h || h.n < 2) return NaN;
+      const first = (h.at + GAP_CAP - h.n) % GAP_CAP, at = (k) => (first + k) % GAP_CAP;
+      if (p < h.p[at(0)] || p > h.p[at(h.n - 1)]) return NaN;
+      let lo = 0, hi = h.n - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (h.p[at(m)] <= p) lo = m; else hi = m; }
+      const p0 = h.p[at(lo)], p1 = h.p[at(hi)], t0 = h.t[at(lo)], t1 = h.t[at(hi)];
+      return t0 + (t1 - t0) * (p - p0) / Math.max(1e-6, p1 - p0);
+    }
+    function between(ahead, behind, now, fallback) {
+      if (!ahead || !behind || !Number.isFinite(behind.prog)) return fallback;
+      const t = timeAt(ahead, behind.prog);
+      return Number.isFinite(t) && now >= t ? now - t : fallback;
+    }
+    return { sample, between, reset() { hist = new WeakMap(); lastT = -1; } };
+  }
+  const gaps = gapClock();
+
   function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
-  return { inPit, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
+  return { inPit, gaps, gapClock, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };

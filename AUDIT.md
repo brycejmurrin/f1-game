@@ -487,3 +487,14 @@ the service worker.
 settled. Verified with `version.json` at 1696, the shell at 1695 and the worker restarted: reported
 generation 1696 → 1695, and TRACK DESIGNER went from refused ("UPDATE READY — RELOAD TO CONTINUE", with the
 reload serving 1695 again) to opening. A normal install (634 files) and an offline reload still work.
+
+### Fix 19 — the gap readouts are now time gaps (finding 3)
+
+`js/ui/hud-readouts.js` gains a small per-car history of (race distance, race time), sampled on the HUD
+tick. The gap to a car is "now minus the time the car ahead was where the car behind is now"; it replaces
+distance ÷ the player's current speed in the gap readout (`js/ui/hud.js`), the relative tower
+(`js/ui/hud-relative.js`) and the undercut cue (`js/ui/hud-strategy.js`). When the history does not reach
+(more than about a lap apart, or a lapped car) the old estimate is still used. Verified in the same seeded
+4-lap Bahrain race, comparing the displayed gap ahead with a true time gap recorded every physics step
+(249 samples): 90th-percentile error 0.26 s → 0.06 s, worst 0.49 s → 0.13 s. The remainder is the readout's
+existing smoothing.
