@@ -1,6 +1,7 @@
 # UI-matrix CLIs: commands, flags, axes, which tool
 
-Every call below is parent-only, `--help` included for layout-audit/fit-audit (SKILL.md §Gotchas).
+No hook matches these CLIs by name. A subagent runs only `--help`/`--list`/`--plan`; a launching run throws from
+`launchChromium` under `APEX_SUBAGENT` (`tools/lib/harness.mjs`) and is parent-only (AGENTS.md rule 10).
 
 ## Contents
 - layout-audit commands
@@ -27,7 +28,7 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 ```
 
 `apex_ui_mission_plan` is NOT a matrix planner: it takes a named player mission (first-race,
-customize-car, return-settings) and writes one explorer replay scenario. Use it only for a guided flow;
+customize-car, return-settings, settings-persistence: `tools/ui/explorer/catalog.mjs`) and writes one explorer replay scenario. Use it only for a guided flow;
 plan the matrix with `--list`.
 
 ## Flags

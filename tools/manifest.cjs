@@ -1124,6 +1124,7 @@ const LAZY_RACE = [
   "js/garage/entrance-motion.js",
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
+  "js/garage/arrival-rows.js",   // the GARAGE ENTER & LEAVE tuner's extra rows (#5660: off the boot wall)
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,

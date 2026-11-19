@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-Wxfah3tXog1BivJ4fF+VeEs7298qCmsAGvdrZ2XtpnI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-ythJjfRrXWl+2hj9vNtyGobV+7IBRmpEt28Izdmwnes=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -54,10 +54,11 @@
   buttons are the in-race controls a pad has.
 
   A separate ROOT page like bench.html, deliberately: the phone needs the
-  signalling and transport half of js/net plus two input modules — nine files,
-  no renderer, no game — and boots in under a second on any phone that has a
-  camera app. js/input/phone-pad.js owns the behaviour; this page owns the DOM
-  and hands every element in (the shell-id contract stays index.html's).
+  signalling and transport half of js/net plus the pad/input modules —
+  MANIFEST.CONTROLLER (16 script tags; tools/manifest.cjs), no renderer, no
+  game — and boots in under a second on any phone that has a camera app.
+  js/input/phone-pad.js owns the behaviour; this page owns the DOM and hands
+  every element in (the shell-id contract stays index.html's).
   `controller.html?demo` paints a sample dash without a link, for a look.
 
   Why this is not Bluetooth: a web page cannot advertise as a Bluetooth
@@ -161,13 +162,94 @@
      phone's roll; the controls stay put under the thumbs. */
   #ctl { position: absolute; inset: 0; display: none; perspective: 900px;
          padding: calc(6px + var(--sat)) calc(6px + var(--sar)) calc(6px + var(--sab)) calc(6px + var(--sal));
-         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
+         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
   body.linked #ctl { display: grid; }
-  #phone-input-options { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px; font-size: 11px; text-align: center; }
-  #phone-input-options label { display: flex; align-items: center; gap: 6px; }
-  #steering-mode { min-height: 32px; color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 4px; }
-  #input-age { color: var(--dim); font-variant-numeric: tabular-nums; }
-  #steering-strip { flex-basis: 100%; height: 44px; line-height: 42px; border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); }
+  /* THE PAD BAR — one slim strip under the keys, never a row of its own
+     (#5801: a full-width CENTRE TILT bar, a LINKED line and a STEERING +
+     "INPUT GOOD 100 ms since acknowledged sample" row took ~150 of the 390px a
+     landscape phone has, and the dash clipped its gear digit to pay for it).
+     CENTRE TILT stays one thumb away mid-drive; the steering pick is a 44px
+     select; the link health is a dot that spells itself out only when it is
+     NOT good (data-state from phone-pad-page.js onHealth). The age line is a
+     diagnostic: written, not shown. */
+  #phone-input-options { display: flex; align-items: stretch; gap: 8px; height: 44px; min-width: 0; flex: none; font-size: 11px; letter-spacing: .08em; }
+  #b-center { flex: 1 1 0; min-width: 64px; padding: 0 8px; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #phone-input-options label { flex: none; display: flex; align-items: center; }
+  /* 16px: iOS zooms the page on a focused control under 16px. Unlayered, so it beats the coarse-pointer --tap-paint height. */
+  #steering-mode { height: 44px; min-height: 44px; padding: 0 6px; font: 700 16px/1 var(--font-ui); color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 10px; }
+  #pad-status { flex: 0 1 26%; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 10px; line-height: 1.15; overflow: hidden; }
+  #input-health { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--warn); font-weight: 700; }
+  #input-health::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--warn); }
+  #input-health[data-state="good"] { font-size: 0; }   /* the dot alone; the words stay for a screen reader */
+  #input-health[data-state="good"]::before { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  #input-health:is([data-state="reconnecting"], [data-state="disconnected"]) { color: var(--bad); }
+  #input-health:is([data-state="reconnecting"], [data-state="disconnected"])::before { background: var(--bad); }
+  #input-health:not([data-state="good"]) ~ #link { display: none; }   /* the warning takes the chip */
+  #input-age { display: none; }
+  /* WHEEL LAYOUT (#5801, PhonePadPage.layout): any face key can sit under
+     either thumb. A grip's .grip-keys strip (top of the grip) takes the keys
+     moved there, in a row that wraps; empty, it is gone. MIRRORED swaps the
+     grips by grid order. The gear in the pad bar opens the sheet. */
+  .grip-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr)); gap: 8px; flex: none; }
+  .grip-keys:empty { display: none; }
+  body[data-swap] #left { order: 3; }  body[data-swap] #face { order: 2; }  body[data-swap] #right { order: 1; }
+  body[data-swap] #steering-strip { order: 4; }
+  /* MOVED BUTTONS IN A COLUMN: a grip holding keys becomes two columns, the
+     keys stacked down the inner one, the grip's own two controls (UP/DN, or
+     the AUTO OT/BOOST tiles, or BRAKE/GAS) down the other. */
+  body[data-strip="column"] .grip:has(> .grip-keys:not(:empty)) { display: grid; grid-template-columns: minmax(64px, .8fr) 1fr; grid-template-rows: 1fr 1fr; grid-auto-flow: column; }
+  body[data-strip="column"] .grip-keys { grid-row: 1 / 3; grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+  /* PEDALS SIDE BY SIDE: BRAKE | GAS as two tall bars, GAS on the outer edge,
+     like a phone racer's dock. The pedal grip widens to carry them. */
+  body[data-pedals="side"] #ctl { grid-template-columns: minmax(84px, 1fr) minmax(200px, 2fr) minmax(140px, 1.5fr); }
+  body[data-pedals="side"][data-swap] #ctl { grid-template-columns: minmax(140px, 1.5fr) minmax(200px, 2fr) minmax(84px, 1fr); }
+  body[data-pedals="side"] #right { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; grid-auto-flow: row; }
+  body[data-pedals="side"] #right:has(> .grip-keys:not(:empty)) { grid-template-rows: auto 1fr; }
+  body[data-pedals="side"] #right > .grip-keys { grid-column: 1 / -1; grid-row: auto; }
+  body[data-pedals="side"][data-strip="column"] #right:has(> .grip-keys:not(:empty)) { grid-template-columns: minmax(64px, .8fr) 1fr 1fr; grid-template-rows: 1fr; }
+  body[data-pedals="side"][data-strip="column"] #right > .grip-keys { grid-column: auto; grid-row: 1; }
+  body[data-pedals="side"][data-swap] #right { direction: rtl; }   /* pedal grip on the left: GAS on the outer (left) edge */
+  body[data-pedals="side"][data-swap] #right > * { direction: ltr; }
+  #b-layout { flex: none; width: 44px; padding: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  #b-layout svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  #layout-sheet { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+                  display: flex; flex-direction: column; gap: 10px; background: var(--bg);
+                  padding: calc(10px + var(--sat)) calc(14px + var(--sar)) calc(12px + var(--sab)) calc(14px + var(--sal)); }
+  #layout-sheet[hidden] { display: none; }
+  #layout-sheet * { touch-action: manipulation; }
+  #lay-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #lay-head h2 { margin: 0; font: italic 800 var(--fs-5, 18px)/1 var(--font-ui); letter-spacing: var(--ls-2); }
+  #lay-head .bigbtn { margin: 0; width: auto; min-width: 120px; min-height: 44px; }
+  #lay-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  #lay-toggles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+  #lay-presets button, #lay-rows button, #lay-toggles button { min-height: 44px; font-weight: 800; letter-spacing: .08em; font-size: 13px; }
+  #lay-presets button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  #lay-presets small { font-size: 10px; font-weight: 600; letter-spacing: .04em; color: var(--dim); }
+  #lay-rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px 16px; }
+  .lay-row { display: grid; grid-template-columns: 64px repeat(3, 1fr); align-items: center; gap: 6px; }
+  .lay-row span { font-weight: 800; font-size: 13px; letter-spacing: .08em; }
+  .lay-row button { padding: 0 4px; font-size: 11px; }
+  #layout-sheet button[aria-pressed="true"] { border-color: var(--red); background: color-mix(in oklab, var(--red) 22%, var(--plate-opaque)); color: var(--text); }
+  /* MOVE & SIZE (PhonePadPage.layout arrange): a placed control is offset by
+     `translate` and sized by `scale` (inline, from apex26.padLayout place) on
+     top of its grid slot. While arranging every control is outlined, a drag
+     moves it, a pinch or the bar's − / + sizes it (never under 44px), and the
+     pad sends nothing: the stage swallows the pointers in the capture phase. */
+  .placed { position: relative; z-index: 2; }
+  body.arranging :is(#ctl button, #ctl .pedal, #screen) { outline: 2px dashed color-mix(in oklab, var(--text) 45%, transparent); outline-offset: -2px; }
+  body.arranging .clash { outline: 3px solid var(--bad); background-color: color-mix(in oklab, var(--bad) 18%, var(--plate-opaque)); }
+  body.arranging .picked { outline: 3px solid var(--red) !important; z-index: 3; }
+  body.arranging #ctl { touch-action: none; }
+  #arrange-bar { position: absolute; z-index: 6; top: calc(4px + var(--sat)); left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 6px;
+                 padding: 4px; border-radius: 12px; background: var(--plate-opaque); border: 1px solid var(--plate-line); box-shadow: 0 6px 20px rgba(0,0,0,.5); max-width: calc(100vw - 16px); }
+  #arrange-bar[hidden] { display: none; }
+  #arrange-bar button { min-width: 44px; min-height: 44px; padding: 0 10px; font-weight: 800; letter-spacing: .06em; font-size: 13px; }
+  #arrange-bar .bigbtn { margin: 0; width: auto; }
+  #arr-name { min-width: 0; padding: 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lay-arrange { border-color: var(--red); }
+  /* TOUCH STRIP steering: its own row under the wheel only while chosen ([hidden] otherwise, so no row and no gap). */
+  #steering-strip { grid-column: 1 / -1; height: 44px; line-height: 42px; text-align: center; font-size: 11px; letter-spacing: .08em;
+                    border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); position: relative; z-index: 1; }
   #steering-strip:focus-visible { outline: 2px solid var(--team-c); outline-offset: 1px; }
   /* The rim sits BEHIND opaque controls and shows only in the gaps, so its
      turn reads as the wheel moving, never as the face bending. */
@@ -204,7 +286,7 @@
   body.gears-auto .shift { display: none; }
   body.gears-auto .tap { display: flex; }
   body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; }   /* on the grip instead */
-  body.throttle-auto #gas { pointer-events: none; flex-direction: column; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
+  body.throttle-auto #gas { pointer-events: none; flex-direction: column; align-items: center; justify-content: flex-end; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
   body.throttle-auto #gas::before { border-color: var(--card-line); }
   body.throttle-auto #gas small { display: block; color: color-mix(in oklab, var(--dim) 55%, transparent); }
   body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
@@ -285,20 +367,22 @@
   #leds span:nth-child(n+11).on { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
   #screen.redline ~ #leds span { animation: strobe .12s steps(2) infinite; }
   @keyframes strobe { to { opacity: .25; } }
+  /* container-type: the digits below cap themselves on the screen's own
+     height (cqh), so a short screen shrinks the gear instead of clipping it. */
   #screen { flex: 1 1 0; min-height: 0; border-radius: 12px; border: 3px solid var(--card-line); background: #05060a;
             box-shadow: inset 0 0 24px rgba(0,0,0,.9), 0 0 0 1px #000; padding: 6px 10px;
-            display: grid; grid-template-rows: auto 1fr auto auto; gap: 2px; overflow: hidden;
-            font-family: var(--font-hud); }
+            display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 2px; overflow: hidden;
+            container-type: size; font-family: var(--font-hud); }
   #screen .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
   #screen .top span { font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--team-c); white-space: nowrap; }
   #h-flag { color: var(--dim); }
   #screen.caution #h-flag { color: var(--warn); background: rgba(246,210,0,.14); padding: 0 6px; border-radius: 4px; animation: strobe .5s steps(2) infinite; }
   #screen .mid { justify-content: center; gap: 6%; }
-  #h-gear { font-size: clamp(48px, 22vh, 120px); line-height: .9; font-weight: 800; color: #fff; min-width: 1ch; text-align: center;
+  #h-gear { font-size: min(clamp(48px, 22vh, 120px), 50cqh); line-height: .9; font-weight: 800; color: #fff; min-width: 1ch; text-align: center;
             text-shadow: 0 0 18px rgba(255,255,255,.25); }
   #screen.redline #h-gear { color: var(--bad); }
   .spd { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
-  #h-speed { font-size: clamp(28px, 11vh, 60px); font-weight: 700; font-variant-numeric: tabular-nums; }
+  #h-speed { font-size: min(clamp(28px, 11vh, 60px), 30cqh); font-weight: 700; font-variant-numeric: tabular-nums; }
   .spd small { font-size: 11px; letter-spacing: .14em; color: var(--dim); }
   #screen .bot span { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--dim); white-space: nowrap; }
   #screen.ot-ready #h-ot { color: var(--ok); }  #screen.ot-on #h-ot { color: #fff; background: var(--ok); padding: 0 6px; border-radius: 4px; }
@@ -311,13 +395,13 @@
   /* THE KEYS ARE THUMB-SIZED, the screen takes what is left. They sat at 40px
      under a screen that ate the face; on a phone that was a strip of slivers
      under two thumbs' worth of gear digit. Sized on the viewport height so a
-     taller phone gets taller keys, never smaller than a 48px tap target. */
+     taller phone gets taller keys, never smaller than a 48px tap target.
+     16vh (62px at 390) since the pad bar gave back its row (#5801). */
   #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  #keys button { padding: 0; min-height: clamp(48px, 14vh, 80px); font-weight: 800; font-size: clamp(12px, 3.2vh, 18px); letter-spacing: .08em; border-radius: 14px;
+  .grip-keys button, #keys button { padding: 0; min-height: clamp(48px, 16vh, 88px); font-weight: 800; font-size: clamp(12px, 3.6vh, 20px); letter-spacing: .08em; border-radius: 14px;
                  background: var(--plate-opaque); border: 1px solid var(--plate-line); color: var(--text); }
-  #keys button.on { border-color: var(--team-c); color: var(--team-c); }
-  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: clamp(36px, 9vh, 52px); font-size: clamp(11px, 2.6vh, 14px); color: var(--dim); }
-  #link { font-size: 10px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
+  .grip-keys button.on, #keys button.on, #b-center.on { border-color: var(--team-c); color: var(--team-c); }
+  #link { min-width: 0; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* touch-action is NOT inherited: body's `none` does not reach the pedal
      divs, and Safari decides double-tap zoom on the touched element. Every
      part of the wheel owns its touches. */
@@ -422,6 +506,7 @@
        the gears (UP over DN) and, with gears on AUTO, the taps instead; the
        RIGHT thumb has the pedals, BRAKE over GAS. -->
   <div id="left" class="grip">
+    <div id="left-keys" class="grip-keys"></div>
     <button id="b-shiftUp" class="shift" type="button" aria-label="Shift up">&#9650;<small>UP</small></button>
     <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
     <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
@@ -444,20 +529,46 @@
       <button id="b-look" type="button">LOOK</button>
       <button id="b-recover" type="button">RESET</button>
       <button id="b-pause" type="button">PAUSE</button>
-      <button id="b-center" type="button" class="wide">CENTRE TILT</button>
     </div>
-    <div id="link" role="status"></div>
+    <div id="phone-input-options">
+      <button id="b-center" type="button">CENTRE TILT</button>
+      <button id="b-layout" type="button" aria-label="Wheel layout" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+      <label><select id="steering-mode" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH</option></select></label>
+      <div id="pad-status"><span id="input-health" data-state="waiting" role="status" aria-live="polite">WAITING FOR INPUT ACK</span><span id="input-age" aria-live="off"></span><span id="link" role="status"></span></div>
+    </div>
   </div>
   <div id="right" class="grip">
+    <div id="right-keys" class="grip-keys"></div>
     <div id="brake" class="pedal" role="button" tabindex="0" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" tabindex="0" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
-  <div id="phone-input-options">
-    <label>STEERING <select id="steering-mode" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH STRIP</option></select></label>
-    <div><span id="input-health" role="status" aria-live="polite">WAITING FOR INPUT ACK</span> <span id="input-age" aria-live="off"></span></div>
-    <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
-  </div>
+  <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
 </section>
+<div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
+  <div id="lay-head"><h2 id="lay-title">WHEEL LAYOUT</h2><button id="lay-done" class="bigbtn" type="button">DONE</button></div>
+  <div id="lay-presets" role="group" aria-label="Layout presets">
+    <button type="button" data-preset="classic">CLASSIC</button>
+    <button type="button" data-preset="right">RIGHT THUMB<small>OT · BOOST · AERO by the pedals</small></button>
+    <button type="button" data-preset="left">LEFT THUMB<small>OT · BOOST · AERO by the paddles</small></button>
+    <button type="button" data-preset="mirror">MIRRORED<small>pedals left, paddles right</small></button>
+    <button type="button" data-preset="phone">PHONE STYLE<small>tall BRAKE · GAS side by side, OT · BOOST · AERO column</small></button>
+  </div>
+  <div id="lay-rows" role="group" aria-label="Where each button sits"></div>
+  <div id="lay-toggles">
+    <button id="lay-pedals" type="button">PEDALS SIDE BY SIDE</button>
+    <button id="lay-strip" type="button">MOVED BUTTONS IN A COLUMN</button>
+    <button id="lay-swap" type="button">SWAP PEDALS AND PADDLES</button>
+    <button id="lay-arrange" type="button">MOVE &amp; SIZE BUTTONS</button>
+  </div>
+</div>
+<div id="arrange-bar" role="toolbar" aria-label="Move and size buttons" hidden>
+  <span id="arr-name" role="status">TAP A CONTROL</span>
+  <button id="arr-minus" type="button" aria-label="Smaller">&minus;</button>
+  <button id="arr-plus" type="button" aria-label="Bigger">+</button>
+  <button id="arr-reset" type="button">RESET</button>
+  <button id="arr-reset-all" type="button">RESET ALL</button>
+  <button id="arr-done" class="bigbtn" type="button">DONE</button>
+</div>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dev-flags.js?v=dev"></script>
@@ -510,7 +621,22 @@ window.addEventListener("DOMContentLoaded", function () {
     },
     onClose: function () { $("link").textContent = "LINK CLOSED"; },
   });
-  window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
+  window.__apexPad = ctl;
+  // WHEEL LAYOUT: which thumb each face key sits under, saved on this phone.
+  try {
+    window.__apexPadLayout = PhonePadPage.layout({
+      body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
+      keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
+              look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
+      sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
+      presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
+      stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
+      resetOne: $("arr-reset"), resetAll: $("arr-reset-all"), arrangeDone: $("arr-done"),
+      arrange: { screen: $("screen"), shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), otBig: $("b-ot-big"), boostBig: $("b-boost-big"),
+                 overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"), look: $("b-look"),
+                 recover: $("b-recover"), pause: $("b-pause"), brake: $("brake"), gas: $("gas") },
+    }, { store: (function () { try { return window.localStorage; } catch (e) { return null; } })() });
+  } catch (e) { /* the wheel works in its default layout */ }   // the console/test handle, mirroring window.__apex on the game
   // LANDSCAPE LOCK where the platform has one. Android needs fullscreen before
   // screen.orientation.lock, and both need a user gesture, so they ride the
   // CONNECT tap. iOS has neither: the #rotate card above is what it gets.

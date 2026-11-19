@@ -90,7 +90,7 @@ resolution.
    **Look-only vs new stats — decide first.** A new wing LOOK (no physics change) is a `STYLES` row in
    `js/car/parts.js` — a 6-tuple `[category, equivalent, id, label, desc, visualOverrides]` that copies
    cost and all stats from its `equivalent` and is open to every team (`style_aero_spoon`,
-   `style_aero_twinplane` are the pattern); preview with the `build-viewer.mjs --sheet=parts:aero:<team>
+   `style_aero_twinplane` are the pattern); preview with the `node tools/viewer/build-viewer.mjs --sheet=parts:aero:<team>
    --match=^style_` line above `STYLES`. Only NEW stats mean a full `CATALOG` row, which is a balance
    change `parts-ladder` judges.
    **A new visual field** (say a new `fw*` key) needs THREE edits: an entry in

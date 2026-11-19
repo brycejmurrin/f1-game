@@ -55,7 +55,7 @@
       { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T16 (was 0.1866 + shift 0.7236)
       { frac: 0.5044, angleDeg: 3.0, widthM: 80 },    // T6
       { frac: 0.6070, angleDeg: 3.0, widthM: 90 },    // T8
-      { frac: 0.6275, angleDeg: 3.0, widthM: 100 },   // T9
+      { turn: 9, angleDeg: 3.0, widthM: 100 },        // T9 (was frac 0.6275, which built on T8 at 0.6073)
       { frac: 0.6928, angleDeg: 6.0, widthM: 120 },   // T11
       { frac: 0.7311, angleDeg: 5.0, widthM: 140 },   // T11-T12 link
     ],

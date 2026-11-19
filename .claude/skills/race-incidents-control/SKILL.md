@@ -40,7 +40,7 @@ Do **not** use this for:
 |---|---|
 | `js/physics/debris-world.js` | Rapier side-world for render/cosmetic-plus debris; never writes car pose, `(s,x)`, speed, or heading |
 | `js/physics/incident-sim.js` | High-risk layer; may move cars only inside finite, bounded takeover windows with fallback |
-| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`, plus the storm SC (`stormTick`) and scripted `hold()`; host-owned in multiplayer |
+| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()` and stopped cars (`js/race/stopped-cars.js`), plus the storm SC (`stormTick`) and scripted `hold()`; host-owned in multiplayer |
 | `js/race/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
 
 **What `hazards()` counts** (`DebrisWorld.hazards`, read its body): only SLEEPING debris shards, disturbed

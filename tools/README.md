@@ -194,6 +194,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
+| **check/boot-wall.mjs** | Boot wall size (eager <script> count and raw bytes), live or at a git ref: the eager* tree ratchets. | — |
 | **check/brake-cue-calibrate.mjs** | Brake-cue calibration (VM): cue call point vs AiDrive.brakeTarget, dry/rain on slicks, conditionCues off/on. | tune-physics |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-js-types.mjs** | Type-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit). | check-changes |
@@ -712,6 +713,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/lib/deploy-tip.mjs** | Is the deploy tip red on code? Newest completed pages.yml run + its jobs; a Pages-side publish failure is not. |
 | **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
+| **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
 | **ci/merge-train.mjs** | Merge train: folds green `land` PRs onto the deploy tip as a `train/*` PR; the gate checks each car's own rows. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| retest-refused \| tip-red \| no. |
