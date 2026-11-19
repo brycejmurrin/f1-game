@@ -17,7 +17,7 @@ noble-secp256k1 — MIT — signing for Trystero's Nostr signalling — https://
 Spector.js 0.9.30 — MIT — opt-in GPU frame capture (developer tool) — https://spector.babylonjs.com (vendor/gpu-capture/SPECTOR-LICENSE.txt)
 webgl-lint 1.11.4 — MIT — opt-in WebGL checker (developer tool) — https://github.com/greggman/webgl-lint (vendor/gpu-capture/WEBGL-LINT-LICENSE.md)
 Snapdragon Game Super Resolution 1 — BSD-3-Clause — upscaling shader, adapted — https://github.com/SnapdragonStudios/snapdragon-gsr (vendor/sgsr/LICENSE)
-Capacitor 8.5.2 — MIT — Android app wrapper (Android build only) — https://capacitorjs.com (mobile/licenses/capacitor-LICENSE)
+Capacitor 8.6.2 — MIT — Android app wrapper (Android build only) — https://capacitorjs.com (mobile/licenses/capacitor-LICENSE)
 Capacitor Filesystem 8.1.5 — MIT — saving files in the Android app — https://capacitorjs.com/docs/apis/filesystem (mobile/licenses/capacitor-filesystem-LICENSE)
 Capacitor Share 8.0.2 — MIT — the share sheet in the Android app — https://capacitorjs.com/docs/apis/share (mobile/licenses/capacitor-share-LICENSE)
 Titillium Web — OFL-1.1 — typeface — https://fonts.google.com/specimen/Titillium+Web (assets/fonts/titillium-web-OFL.txt)
