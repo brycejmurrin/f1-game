@@ -1,6 +1,16 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5679 (claude/picker-outline-centre-5656): select preview outline centred
+
+`(tree) eagerBytes` 8,015,938 → **8,017,320** (+1,382 B). Deliberate raise past the absorb by
+Bryce's `decision: A` on #5679 (2026-11-19 18:29Z); the tree-wide ceiling still needs his
+`ratchet-raise` label. Measured on the sync merge with tip `99c7832f`: the PR grew eager
+`js/ui/select-screen.js` +2,057; trimming its own new comments took back 675. The rest is the fix's
+code: the pure `previewMapBand` (free band between caption and stats row), `fitPreviewMapBand`
+(pads and centres the map button), its export, and `previewMapSlot` now applying on every layout.
+Fragment: `tests/data/ratchets.d/claude--picker-outline-centre-5656.json`.
+
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
 `(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the

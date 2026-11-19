@@ -1269,11 +1269,8 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
-/** The outline's slot inside the hero: 62 % of its width, ~60 % of its height —
-    capped at the map button's CONTENT box. fitPreviewMapBand pads that box to
-    the band the caption and the numbers leave free, and centres the canvas in
-    it (#5656: the compact card's `align-items: flex-start` from the old
-    caption-at-the-bottom layout put the outline under the title row). */
+/** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
+    button's content box (padded to the free band by fitPreviewMapBand, #5656). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
@@ -1286,9 +1283,7 @@ function previewMapSlot(hero, sheet, map) {
   }
   return { slotW: hero.clientWidth * 0.62, slotH };
 }
-/** Pad the map button (inset over the still) to the free band and centre the
-    outline in it. Rects are viewport px; padding is the button's own px (the
-    UI SIZE zoom is their ratio). */
+/** Pad the map button to the free band, centred; k = UI SIZE zoom. */
 function fitPreviewMapBand(btn) {
   const br = btn.getBoundingClientRect();
   if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
@@ -1713,13 +1708,9 @@ function calendarIdSet(cal) {
   for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
   return ids.size ? ids : null;
 }
-/** The circuit preview's free band (#5656), pure. `box` is the still's rect,
-    `over` the rects painted over it (caption, badges, numbers band). An
-    overlay whose centre is in the upper half pushes the band's top down to its
-    bottom edge, one in the lower half pulls the band's bottom up to its top
-    edge; an empty or outside rect is ignored. Returns the insets from the
-    box's top and bottom edges, each plus `margin`, so the outline centred in
-    what is left never touches the title row or the stats row. */
+/** Preview free band (#5656), pure: overlays in `box`'s upper half push the
+    top down, lower half pull the bottom up; empty/outside ones are ignored.
+    Returns top/bottom insets plus `margin`. */
 function previewMapBand(box, over, margin) {
   const mid = (box.top + box.bottom) / 2;
   let top = box.top, bot = box.bottom;
