@@ -28,7 +28,17 @@
     ownPitStraight: true,
     banked: true,
     bankZones: [
-      { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
+      // La Monumental = madring.com Curve 12 (547.82 m, 24 % banking), the
+      // semicircle straight after the Curve 10/11 chicane (built R 0.378 /
+      // L 0.398) and before Curve 13, the slow ~84° corner (built L 0.572,
+      // 82°). On this trace that is the 207° right built 2246-2666 m (0.4205-
+      // 0.4991), which `turns` splits into two apexes, T10 0.433 / T11 0.447.
+      // 0.456 is the arc's middle pulled to within 60 m of T11
+      // (corner-frames). widthM is the real curve's length (547.82 m), the
+      // designer's convention; the bank is a cosine window, so it peaks
+      // mid-arc. It sat at 0.75, on an ordinary 67° left, until 2026-11-18
+      // (#5316 CIRC2-02).
+      { frac: 0.456, angleDeg: 13.5, widthM: 548 }, // La Monumental, T10/T11 in this list; 24% grade = atan(0.24)
       { frac: 0.0524, angleDeg: 3.0, widthM: 180 },
       { frac: 0.3990, angleDeg: 3.5, widthM: 110 },
       { frac: 0.5711, angleDeg: 3.0, widthM: 90 },
@@ -61,7 +71,7 @@
       // precinct zones so each zone states its full kind set (the
       // new-hooks Madrid foundation spec pins these two zones).
       { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
-      { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
+      { kinds: ["city", "foliage", "lighting"], s0: 0.41, s1: 0.51 },  // La Monumental bowl
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],
