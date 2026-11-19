@@ -494,7 +494,7 @@ const CustomTracks = (function () {
       }
       if (generation !== hashGeneration || location.hash !== hash) return false;
       try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(hash)); } catch (_) {  }
-      if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
+      if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); say("THAT TRACK LINK IS INCOMPLETE OR CORRUPT"); return false; }
       Log.info("track", "share link opened " + r.id);
       TrackDesigner.open({ design: r.design, shared: true });
       return true;

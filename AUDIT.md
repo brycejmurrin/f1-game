@@ -327,3 +327,11 @@ Verified in Chromium in a driver career (key `careerSetup.driver.0.haas`): setup
 same sequence outside a career still restores correctly. The other two parts of finding 7 are not fixed:
 the setup-comparison overwrite needs a persisted recovery record, and My Team livery import needs a design
 decision about where career liveries live.
+
+### Fix 8 — broken track links now say so (finding 10)
+
+`js/editor/custom-tracks.js:497`: a `#track=` link that fails to decode announces "THAT TRACK LINK IS
+INCOMPLETE OR CORRUPT", matching what setup and ghost links already do. Verified in Chromium with a
+truncated code and a garbage code: no message → the message appears (banner and screen-reader live region);
+the hash is still removed; a bad `#share=` link behaves as before. The silent rename when saving a shared
+copy of your own circuit is not fixed — it needs a prompt, which is a design decision.
