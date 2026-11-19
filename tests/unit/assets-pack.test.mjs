@@ -2674,3 +2674,18 @@ test("resizeBilinear clamps to the edge when upscaling: no negative weights, no 
   // Downscaling is unchanged (no sample falls outside the source).
   assert.deepEqual([...resizeBilinear(px(0, 100, 200, 255), 4, 1, 2, 1)].filter((_, i) => i % 4 === 0), [50, 228]);
 });
+
+// #5629: sw.js answers the manifest from the cache at once only under the PAGE's
+// build key, so the loader must send the shell's own build, and nothing else.
+test("the manifest is asked for under the page's build, bare without one", async () => {
+  for (const [build, want] of [[1695, "assets/pack/manifest.json?b=1695"], [0, "assets/pack/manifest.json"], ["x", "assets/pack/manifest.json"]]) {
+    const requests = [];
+    const assets = assetLoader({
+      __APEX_BUILD: build,
+      async fetch(url) { requests.push(url); return { ok: true, json: async () => ({}) }; },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    await assets.load();
+    assert.equal(requests[0], want);
+  }
+});
