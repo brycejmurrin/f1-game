@@ -1463,9 +1463,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       }
       let sabPx = 0;
       try { sabPx = parseFloat(getComputedStyle(root).getPropertyValue("--sab")) || 0; } catch (_) { /* */ }
-      // BUTTON SIZE grows the ladder (#5061). The stack stands on the steer row (`row`, painted px: the CSS
-      // max(112px, row / zoom)), and it and TYRES stay between the buttons beside them: each side's extent
-      // from the centre line it zooms about, against the nearest button edge on that side, 1 px of air.
+      // #5061 BUTTON SIZE: the stack and TYRES stand on the steer row, between the side buttons (1 px air).
       const mid = vpW() / 2, phoneBtns = document.body.classList.contains("steer-buttons") && vpW() < 744;
       let lo = mid, hi = mid, row = 0, capSide = Infinity;
       for (const c of _hudBottom.children) {
