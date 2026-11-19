@@ -866,3 +866,46 @@ judged against, and autoShed (not tier, which folds in the crash floor and
 the player's GRAPHICS preset) says what the governor shed on its own
 evidence.
 ```
+
+### gov-39
+
+Above `function _shedDprBoost() {` (#5222).
+
+```text
+RESOLUTION MAX's DPR boost (gfx.setDprBoost, TLX only) is what a missed
+frame budget or a thermal drift takes back first, ahead of the scale and
+feature rungs (a drift's 45 Hz rate cap still comes before it): one step
+down to the tier's DPR cap. Never restored by the governor: it stays off
+until the player picks a RESOLUTION again or reloads (UiScale re-applies
+it). In UiScale only MAX carries a `dpr`; every other mode passes 0 and
+drops the boost. MAX is HIGH's scale plus the device's own pixel ratio (up
+to 3) instead of the phone's 1.5 DPR cap; no default picks it.
+```
+
+### gov-40
+
+Inside `function sentinelResume() {`, above `_sinceUp = -1;` (moved 2026-11-19, #5675).
+
+```text
+A CLIMB CANNOT BE ON PROBATION ACROSS TIME NOBODY MEASURED. `_sinceUp`
+ages only inside tick(), which never runs while the tab is hidden, so a
+climb accepted before a ten-minute background stint came back reading as
+seconds old — and the first cut after the resume then charged it the full
+doubling penalty for load the climb was never tested against. That is the
+same reasoning that keeps this function from resetting the EMAs: a tab
+return is not evidence. Drop the probation instead of charging it.
+```
+
+### gov-41
+
+Above `function _setCrashFloor() {` (moved 2026-11-19, #5675).
+
+```text
+Re-derive the crash floor from the strike counter. When it DROPS, _perfTier
+may be sitting on the OLD one (init() seeds it there, and the degrade branch
+steps from _floorTier(), so it absorbs whatever floor was live when it fired).
+Release it to the new CRASH floor and let the governor re-earn any shed from
+its own measurements. Not _floorTier(): that folds in the GRAPHICS preset, so
+one strike paid down on MEDIUM (2 > 2 is false) left autoTier() pinned at the
+old floor for the session (#3294). tier() still applies the preset at read time.
+```

@@ -219,6 +219,7 @@
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ],
@@ -247,7 +248,6 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
-        "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchets.test.mjs",
@@ -15182,6 +15182,7 @@
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
@@ -15193,7 +15194,6 @@
       "*": [
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/garage-before.test.mjs",
-        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },
@@ -16073,6 +16073,7 @@
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "flushBlobs": [
@@ -16103,7 +16104,6 @@
       ],
       "*": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/perf-governor.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
@@ -16591,6 +16591,7 @@
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/render-effective-res.test.mjs",
@@ -16629,6 +16630,9 @@
       ],
       "disposePooled": [
         "tests/unit/tlx-texture-release.test.mjs"
+      ],
+      "dprCapFor": [
+        "tests/unit/render-effective-res.test.mjs"
       ],
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -16684,9 +16688,6 @@
       ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "labDprCap": [
-        "tests/unit/tlx-lite-lab.test.mjs"
       ],
       "lineIndex": [
         "tests/unit/tlx-fx-warm.test.mjs"
@@ -16755,6 +16756,9 @@
         "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
+      ],
+      "reCapDpr": [
+        "tests/unit/perf-governor.test.mjs"
       ],
       "read": [
         "tests/unit/ctx-lost-notice.test.mjs",
@@ -16834,6 +16838,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "resizeNow": [
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
       "retireTexture": [
@@ -16926,7 +16931,6 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
-        "tests/unit/perf-governor.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/validation-cli-check.test.mjs"
       ]
@@ -17302,6 +17306,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -19754,6 +19759,7 @@
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
