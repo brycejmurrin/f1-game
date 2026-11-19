@@ -555,7 +555,8 @@ test("startRace awaits the LAZY_RACE light presets before its first applyRaceSet
 
 // Hunt #5779 (1): a throwing applyLightTuneIfReady after the presets landed
 // rejected ensureLightPresets; ensureCircuit fires it and forgets → overlay.
-test("ensureLightPresets: a throwing tune hook resolves true and leaves no unhandled rejection", async () => {
+// Now the chain ends in .catch(() => false): it can resolve false, never reject.
+test("ensureLightPresets: a throwing tune hook never rejects (no unhandled rejection overlay)", async () => {
   const rejections = [];
   const onRej = (e) => rejections.push(String((e && e.message) || e));
   process.on("unhandledRejection", onRej);
