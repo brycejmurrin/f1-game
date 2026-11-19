@@ -598,4 +598,4 @@ overlay left up → dismissed.
   circuit (A5); wind in time-trial record keys (A16, changes which existing records match); career import
   validation (A17); voice language options (A18); load weight and unreferenced assets (17, 18).
 - **Small and safe but left for lack of time:** the results-announcement observer (A31), the text and unit
-  inconsistencies (A19), the 22-versus-20 remaining broadcast defects (15), and the iOS banner (A9).
+  inconsistencies (A19), the two remaining broadcast-graphics defects (15), and the iOS banner (A9).
