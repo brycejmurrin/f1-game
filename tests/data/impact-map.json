@@ -14680,6 +14680,9 @@
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
+      ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
@@ -18863,6 +18866,9 @@
       ]
     },
     "js/ui/hud-skin.js": {
+      "skinAccent": [
+        "tests/unit/hud-skin-ink.test.mjs"
+      ],
       "*": [
         "tests/unit/hud-feel.test.mjs"
       ]
@@ -19612,7 +19618,8 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "summary": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/results-story.test.mjs"
       ],
       "*": [
         "tests/unit/podium-beat.test.mjs",
@@ -20628,6 +20635,9 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "recenter": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "seed": [
         "tests/unit/xr-phase0.test.mjs"
       ],
       "sessionInit": [
