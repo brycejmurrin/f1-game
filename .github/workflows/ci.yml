@@ -2670,7 +2670,8 @@ jobs:
     # run's queued legs). The docs order a queue by when each job started
     # waiting and add "ordering is not guaranteed": plan on no order (#5536). A run's own legs cycle through the lanes from a start
     # rotated by run number (laneBase), so they never queue behind each other
-    # and runs spread over every lane. The train, the nightly and a dispatch get
+    # and runs spread over every lane. The train (its `train/*` PR head: select-specs
+    # trainHead gives every leg lane -1, PR #5809), the nightly and a dispatch get
     # a group of their own per leg (`run_id` + job index): a gate never waits
     # behind PR legs. So does every leg of a SMALL PR plan (#5536, 2026-11-18):
     # select-specs gives a plan of at most SMALL_RUN_LEGS (2) legs lane -1, so a

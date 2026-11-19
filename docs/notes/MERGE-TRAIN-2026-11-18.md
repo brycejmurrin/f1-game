@@ -54,6 +54,10 @@ that is not a clean merge of the named heads onto a deploy-branch commit refuses
   At least 2 cars, unless the bisect cap is 1.
 - One train is open at a time. The builder closes a train when a car moved (`stale`: rebuilt from the current state)
   or when its CI or `gate` failed (`red`).
+  With no completed `CI` check-run, it reads the head's newest CI workflow run: cancelled closes the train `stale`,
+  failure / timed_out / startup_failure close it `red` (PR #5809; train #5814 waited an hour on a cancelled run).
+- A train's browser legs skip the shared PR lanes: select-specs `trainHead` gives every leg of a `train/*` head
+  lane -1, a group of its own per leg (PR #5809; train #5804's 42 legs waited 2.7 h in the lanes).
 - Bisect: a red train of n cars caps the next at floor(n/2). A car alone in a red train is left out until its head
   changes. A merged train resets the cap to `TRAIN_MAX`, 10 (5 until Bryce's 2026-11-18 ~19:50Z "Bigger trains 5→10"): a red
   train of 10 bisects to 5, 2, then 1. The window is 24 h of closed trains.

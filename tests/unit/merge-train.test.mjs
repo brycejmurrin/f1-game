@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
+  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, newestRun, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
@@ -96,6 +96,19 @@ test("trainDisposition: stale when a car moved, red on CI or gate failure, else 
   assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "failure" }).outcome, "red");
   assert.deepEqual(trainDisposition({ manifest: m, cars: new Map([[5, p(sha("d"))], [7, p(sha("c"))]]), ciConclusion: "failure" }), { close: true, outcome: "stale", why: "car #5 moved, closed or lost land" });
   assert.deepEqual(trainDisposition({ manifest: m, cars: new Map([[5, p(sha("b"), { state: "closed", merged_at: "x" })], [7, p(sha("c"))]]), ciConclusion: "success", gate: "success" }), { close: false }, "a car that landed alone is not a move");
+  // PR #5809 (train #5814, run 44429435124): a cancelled CI run and no completed CI check-run closes the train
+  const run = (status, conclusion) => ({ status, conclusion });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "cancelled") }),
+    { close: true, outcome: "stale", why: "the CI run on the train head was cancelled before its CI check completed" });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "timed_out") }),
+    { close: true, outcome: "red", why: "the CI run on the train head ended timed_out before its CI check completed" });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("in_progress", "") }), { close: false });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "success") }), { close: false }, "a green run waits for its gate");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: null }), { close: false }, "an unreadable run keeps waiting");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "failure", gate: "", ciRun: run("completed", "cancelled") }), { close: true, outcome: "red", why: "CI failure on the train head" }, "a completed CI check wins");
+  assert.deepEqual(newestRun({ workflow_runs: [{ id: 9, status: "completed", conclusion: "cancelled" }, { id: 12, status: "queued", conclusion: null }] }), { status: "queued", conclusion: "" });
+  assert.equal(newestRun({ workflow_runs: [] }), null);
+  assert.equal(newestRun(null), null);
 });
 
 // ---- git fixtures: a real repo, exact shas compared -------------------------------------------------------
