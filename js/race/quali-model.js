@@ -216,12 +216,13 @@ const Quali = (function () {
     // times skill times the level's `corner` (AiDrive's ctx.diffCorner). A stub
     // row without `corner` reads 1.
     function cornerFor(skill) { const dc = diffRow().corner; return skill * (dc > 0 ? dc : 1); }
-    // ...and the car's wing: AiDrive scales lateral grip by aeroGrip(aeroLoad) (planner and
-    // actuator, js/physics/ai-drive.js lateralScale / brakeTarget), so corner speed goes with its root.
-    // A HUMAN's car (the player, a VS FRIEND rival) reads the NEUTRAL wing, factor 1: on track a human pays for
-    // wing in top speed (mods.speed / mods.accel) and the AI does not (#5791), so a simulated human time must not
-    // move with a setup slider — maximum wing, SIMULATE, then race on any wing would buy grid places.
-    function wingFor(c) { return !c.human && typeof AiDrive !== "undefined" && AiDrive.aeroGrip ? Math.sqrt(AiDrive.aeroGrip(c.aeroLoad)) : 1; }
+    // ...and the car's wing: AiDrive scales lateral grip by aeroGrip(aeroLoad) (js/physics/ai-drive.js), so corner
+    // speed goes with its root. A HUMAN's car (player, VS FRIEND rival) reads the SEAT's wing, the one the AI there
+    // runs: a human pays for wing in top speed and the AI does not (#5791), so a setup slider must not buy grid
+    // places, and the sheet must not depend on which seat is the player (career.spec grid isolation).
+    // Not the neutral wing: that moved the player's row as a career on the device moved the seats (#5786).
+    function seatWing(t) { const s = t && typeof Parts !== "undefined" && (Career.inCareer() && Career.aiSetup && Career.aiSetup(t) || Parts.getFactorySetup(t)); return s ? Parts.aeroLoad(s, t) : 0.5; }
+    function wingFor(c) { return typeof AiDrive !== "undefined" && AiDrive.aeroGrip ? Math.sqrt(AiDrive.aeroGrip(c.human ? seatWing(c.team) : c.aeroLoad)) : 1; }
     function calibFor(track) {
       const id = track && track.def && track.def.id;
       return id != null && Object.prototype.hasOwnProperty.call(CALIB, id) ? CALIB[id] : CALIB_DEFAULT;
@@ -262,13 +263,9 @@ const Quali = (function () {
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).
     //
-    // The seed is passed in rather than taken from Career.rnd(), which hashes on
-    // `career.seed` with no inCareer() gate. A career save is LOADED AT BOOT (so the
-    // title can offer CONTINUE), so a one-off Grand Prix was drawing its grid off
-    // whichever career happened to be on the device, at whatever round it was
-    // sitting on: delete the career and the same sim seed produced a different
-    // grid, and two players on the same seed never agreed. Career.hash is exported
-    // for exactly this substitution — js/race/reliability.js already does it.
+    // The seed is passed in, not Career.rnd() (career.seed, no inCareer() gate): a career save is LOADED AT
+    // BOOT, so a one-off Grand Prix drew its grid off whichever career sat on the device, and two players on
+    // the same seed never agreed. Career.hash is exported for this substitution (as js/race/reliability.js).
     function simLap(c, track, grip, round, seed) {
       // A FLYING lap, like the player's (js/race/flying-start.js): no standing start to charge.
       const base = carLap(c, track, grip);

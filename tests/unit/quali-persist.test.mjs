@@ -757,7 +757,7 @@ test("carLap: a calendar circuit reads its own factor, an unmeasured one the cal
 // The wing term is the AI's (#5786): AiDrive.aeroGrip is what the driven AI's lateral grip carries. A human's
 // simulated time must not move with their own wing level (they pay for wing on track; a free wing on the sheet
 // would be a setup exploit, in VS FRIEND too), and the AI rows must not move with the human's setup.
-test("carLap: an AI car reads its wing level, a human's car the neutral wing", () => {
+test("carLap: an AI car reads its wing level, a human's car its seat's wing (neutral with no Parts)", () => {
   const { q, G, ctx } = loadQuali();
   ctx.AiDrive = { aeroGrip: (load) => 1 + ((load != null ? load : 0.5) - 0.5) * 0.16 };
   const me = G.cars[0], ai = G.cars[1];
@@ -777,5 +777,45 @@ test("carLap: an AI car reads its wing level, a human's car the neutral wing", (
   assert.deepEqual(sheetAt(0), sheetAt(1), "the whole sheet, AI rows included, is the same whatever the human's wing");
   me.human = false;
   assert.ok(at(me, 1) < neutral, "the same car driven by the AI (the calibration and the parity test) does read it");
+
+  // With Parts: the human reads the wing the AI in that seat runs (its team's factory build), never its own
+  // setup, so the sheet is the same whichever car is the player (career.spec grid isolation, #5786).
+  const works = { me: 0.9, rb: 0.1 };
+  ctx.Parts = { getFactorySetup: (t) => ({ team: t.id }), aeroLoad: (setup) => works[setup.team] };
+  for (const c of G.cars) c.aeroLoad = works[c.team.id];
+  const sheet = (humanIdx, setupWing) => {
+    G.cars.forEach((c, i) => { c.human = c.isPlayer = i === humanIdx; if (i === humanIdx) c.aeroLoad = setupWing; });
+    const rows = q.preview(0).map((r) => [r.code, r.t]);
+    G.cars.forEach((c) => { c.aeroLoad = works[c.team.id]; });
+    return rows;
+  };
+  const allAi = sheet(-1);
+  assert.ok(allAi[0][1] < allAi[1][1] - 1, "precondition: the two seats' works wings give different laps " + JSON.stringify(allAi));
+  for (const idx of [0, 1]) for (const w of [0, 1]) assert.deepEqual(sheet(idx, w), allAi, `car ${idx} as the player on wing ${w}: the all-AI sheet`);
+});
+
+// The career.spec isolation test in the REAL game (#5786): a career on the device points the shared car UI at
+// its seat, and __apex.race() keeps that seat, so the player is NOR, then BEA, then SAI. The simulated grid
+// must not move with it. Failed on ff67146a: the player's row read the neutral wing, so NOR P12 → P4 and BEA P20 → P17.
+test("a one-off GP's simulated grid is the same whichever career is on the device (game VM)", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g.apex;
+    const gridFor = async (opts) => {
+      if (opts) a.career(opts); else a.careerReset();
+      a.seed(1234);
+      await a.race("monza");
+      const rows = a.qualiSim();
+      return { codes: rows.map((r) => r.code).join(","), me: (rows.find((r) => r.isPlayer) || {}).code };
+    };
+    const none = await gridFor(null);
+    const haas = await gridFor({ teamId: "haas", seat: 1, seed: 4242 });
+    const williams = await gridFor({ teamId: "williams", seat: 0, seed: 99 });
+    assert.equal(new Set([none.me, haas.me, williams.me]).size, 3, `the precondition: three different player seats (${none.me}, ${haas.me}, ${williams.me})`);
+    assert.equal(none.codes.split(",").length, 22);
+    assert.equal(haas.codes, none.codes, "a Haas career on the device");
+    assert.equal(williams.codes, none.codes, "a Williams career on the device");
+  } finally { g.close(); }
 });
 
