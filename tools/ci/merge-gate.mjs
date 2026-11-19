@@ -31,6 +31,10 @@
 //             run's commit, so the `ci` row's green was earned on top of the red tip; (2) `deploy:red` or `priority`
 //             last added by Bryce in person after the red run started. An agent's label without the proof does not
 //             count. An infrastructure red holds too and clears on a re-run, the pages.yml cron or route (1).
+//             When that run is not on the base tip's own sha (Pages queued or cancelled in a backlog: #5714 + #5634
+//             red the tip on 2026-11-19 and eight PRs merged onto it), the tip's own budget tests decide on a worktree
+//             of the tip (tools/ci/lib/tip-gate.mjs; ~4 s, cached per sha): a red WAITs like a Pages red, a gate
+//             that cannot run WAITs as `unverified`, and the fixer routes are the same with the tip sha as the red.
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
 //             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and every push after it must leave the
@@ -81,6 +85,7 @@ import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
+import { runTipGate, tipView } from "./lib/tip-gate.mjs";
 import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain } from "./merge-train.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -123,7 +128,7 @@ export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.
  *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
  *  host's hooks and settings. */
 export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
-  "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/lib/deploy-tip\\.mjs$", "tools/ci/ready-gate\\.mjs$",
+  "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/lib/deploy-tip\\.mjs$", "tools/ci/lib/tip-gate\\.mjs$", "tools/ci/ready-gate\\.mjs$",
   "tools/ci/github-api\\.mjs$", "tools/ci/merge-train\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
   "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
   "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
@@ -198,7 +203,7 @@ export function fixerProof({ redSha, head, request }) {
  *  a label he set for an earlier red, or `priority` set for scheduling, does not wave through a later red.
  *  Any other state passes. `events` null honours no owner escape; `proof` null honours no proof. Pure. */
 export function baseVerdict(tip, labels, events = null, owner = OWNER, proof = null) {
-  if (tip?.state !== "code-red") return row(true, tip?.evidence || "deploy tip state not given");
+  if (tip?.state !== "code-red" && tip?.state !== "unverified") return row(true, tip?.evidence || "deploy tip state not given");
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name));
   const sha8 = String(tip.sha || "").slice(0, 8) || "?";
   if (names.includes(FIXER_LABEL) && proof?.contains === true) {
@@ -878,7 +883,7 @@ export function trainGate({ pr, pull, head, base, request, root = ROOT, owner = 
   });
 }
 
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate } = {}) {
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -906,11 +911,18 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     if (retry.error) return { error: retry.error };
     rows.ci = retry.ok ? row(true, rows.ci.evidence) : retry;
   }
-  const deployTip = readDeployTip(base, request);
-  if (deployTip.error) return { error: deployTip.error };
+  const pages = readDeployTip(base, request);
+  if (pages.error) return { error: pages.error };
+  // The tip itself (#5714 + #5634, 2026-11-19): Pages lags the tip by hours in a backlog, so when no completed run
+  // covers the tip's sha its own cheap unit gate decides (tools/ci/lib/tip-gate.mjs). Read once: trusted's tip too.
+  const br = request(`branches/${encodeURIComponent(base)}`);
+  if (br.error) return { error: `branch ${base}: ${br.error}` };
+  const baseTip = String(br.json?.commit?.sha || "").toLowerCase();
+  if (!baseTip) return { error: `branch ${base}: no tip sha` };
+  const deployTip = tipView(pages, { tipSha: baseTip, tipAt: br.json?.commit?.commit?.committer?.date || null, gate: () => tipCheck({ sha: baseTip, base, root }) });
   // The fixer's proof: one compare read, only on a code red and only for a PR that claims to be the fixer.
   let proof = null;
-  if (deployTip.state === "code-red" && (pull.labels || []).some((l) => (typeof l === "string" ? l : l?.name) === FIXER_LABEL)) {
+  if ((deployTip.state === "code-red" || deployTip.state === "unverified") && (pull.labels || []).some((l) => (typeof l === "string" ? l : l?.name) === FIXER_LABEL)) {
     proof = fixerProof({ redSha: deployTip.sha, head, request });
     if (proof.error) return { error: proof.error };
   }
@@ -949,11 +961,9 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   if (!rows.open.ok) {
     for (const k of order.filter((r) => LOCAL_ROWS.includes(r))) rows[k] = row(false, "not evaluated: the PR is not open and ready");
   } else if (trusted) {
-    // GitHub only (no git, no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592).
-    const b = request(`branches/${encodeURIComponent(base)}`);
-    if (b.error) return { error: `branch ${base}: ${b.error}` };
-    tip = String(b.json?.commit?.sha || "").toLowerCase();
-    if (!tip) return { error: `branch ${base}: no tip sha` };
+    // GitHub only (no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592). The base
+    // row's tip gate ran deploy-branch code on this same sha, never the PR's.
+    tip = baseTip;
   } else {
     // The re-test compares against the green CI run's creation (the merge ref it tested is that old or newer).
     const ciAt = rows.ci.ok ? String(ciRun?.created_at || "") : null;

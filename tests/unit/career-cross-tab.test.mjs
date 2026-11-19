@@ -1039,10 +1039,13 @@ test("writer acquisition discards pre-lock reads and owner quota failures preser
   await h.store.mirror.ready;
   assert.equal(h.Career.data().money, 999);
   h.Career.engage(true); blocked = true;
-  h.Career.grant(10); h.Career.grant(20);
-  assert.equal(h.Career.data().money, 1029);
+  // Session progress is a settlement's model (a raced round cannot be redone), so the
+  // probe is a raw save(); a player DECISION such as grant() refuses instead (#5657).
+  h.Career.data().money += 30; h.Career.save();
   assert.equal(h.Career.saveStatus().ok, true);
   assert.equal(h.Career.saveStatus().durable, false);
+  assert.equal(h.Career.grant(10), null, "a decision is never kept session-only");
+  assert.equal(h.Career.data().money, 1029);
   blocked = false; assert.equal(h.store.retryFailed().durable, true);
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 1029);
 });

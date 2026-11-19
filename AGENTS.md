@@ -7,7 +7,7 @@ GitHub Pages. `CLAUDE.md` imports this file; Cursor and Codex load it directly (
 
 ## The loop — every change, in order
 ```sh
-npx serve -l 3456 .                         # serve locally
+python3 -m http.server -b 127.0.0.1 3456  # serve (npx serve leaks fds)
 node tools/ci/pick-tests.mjs                # 1. which groups this change needs (they run on the PR)
 #                                             2. make ALL edits, then verify ONCE (rule 2)
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. the local floor (rule 3); a circuit: tools/track/verify-track.cjs <id>

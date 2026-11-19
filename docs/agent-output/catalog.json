@@ -386,6 +386,11 @@
       ]
     },
     {
+      "path": "tools/check/boot-wall.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/check/brake-cue-calibrate.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -994,6 +999,14 @@
       "path": "tools/ci/lib/provenance.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/ci/lib/tip-gate.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
     },
     {
       "path": "tools/ci/live-run-check.mjs",

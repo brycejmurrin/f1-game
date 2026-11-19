@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
+  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, newestRun, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
@@ -69,7 +69,12 @@ test("carVerdict: every CAR_ROWS row must pass; base and the merge rows are the 
 test("trainHistory bisects: a red train of n caps the next at floor(n/2); a lone red car is left out", () => {
   const now = Date.parse("2026-11-18T12:00:00Z");
   const car = (pr) => ({ pr, head: sha(String(pr % 10)) });
-  assert.deepEqual(trainHistory([], { now }), { cap: TRAIN_MAX, exclude: new Set() });
+  assert.equal(TRAIN_MAX, 10, "Bryce 2026-11-18 ~19:50Z: bigger trains 5→10");
+  assert.deepEqual(trainHistory([], { now }), { cap: 10, exclude: new Set() });
+  const red = (n, closed = "2026-11-18T11:00:00Z") => ({ cars: Array.from({ length: n }, (_, i) => car(i + 1)), outcome: "red", closed });
+  assert.equal(trainHistory([red(10)], { now }).cap, 5, "a red train of 10 halves to 5");
+  assert.equal(trainHistory([red(5, "2026-11-18T11:30:00Z"), red(10)], { now }).cap, 2, "then a red 5 halves to 2");
+  assert.equal(trainHistory([red(2, "2026-11-18T11:45:00Z"), red(5, "2026-11-18T11:30:00Z"), red(10)], { now }).cap, 1, "then a red 2 halves to 1");
   assert.equal(trainHistory([{ cars: [1, 2, 3, 4, 5].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, 2);
   assert.equal(trainHistory([{ cars: [1, 2].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, 1);
   const h = trainHistory([
@@ -91,6 +96,19 @@ test("trainDisposition: stale when a car moved, red on CI or gate failure, else 
   assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "failure" }).outcome, "red");
   assert.deepEqual(trainDisposition({ manifest: m, cars: new Map([[5, p(sha("d"))], [7, p(sha("c"))]]), ciConclusion: "failure" }), { close: true, outcome: "stale", why: "car #5 moved, closed or lost land" });
   assert.deepEqual(trainDisposition({ manifest: m, cars: new Map([[5, p(sha("b"), { state: "closed", merged_at: "x" })], [7, p(sha("c"))]]), ciConclusion: "success", gate: "success" }), { close: false }, "a car that landed alone is not a move");
+  // PR #5809 (train #5814, run 44429435124): a cancelled CI run and no completed CI check-run closes the train
+  const run = (status, conclusion) => ({ status, conclusion });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "cancelled") }),
+    { close: true, outcome: "stale", why: "the CI run on the train head was cancelled before its CI check completed" });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "timed_out") }),
+    { close: true, outcome: "red", why: "the CI run on the train head ended timed_out before its CI check completed" });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("in_progress", "") }), { close: false });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "success") }), { close: false }, "a green run waits for its gate");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: null }), { close: false }, "an unreadable run keeps waiting");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "failure", gate: "", ciRun: run("completed", "cancelled") }), { close: true, outcome: "red", why: "CI failure on the train head" }, "a completed CI check wins");
+  assert.deepEqual(newestRun({ workflow_runs: [{ id: 9, status: "completed", conclusion: "cancelled" }, { id: 12, status: "queued", conclusion: null }] }), { status: "queued", conclusion: "" });
+  assert.equal(newestRun({ workflow_runs: [] }), null);
+  assert.equal(newestRun(null), null);
 });
 
 // ---- git fixtures: a real repo, exact shas compared -------------------------------------------------------
@@ -128,6 +146,21 @@ test("foldCars merges clean cars in order, drops a conflicting one, and verifyTr
     // max caps the train; an already-merged car is dropped with why
     assert.deepEqual(foldCars({ base: r.base, cars, cwd: r.dir, max: 1 }).cars.map((c) => c.pr), [1]);
     assert.deepEqual(foldCars({ base: r.h1, cars: cars.slice(0, 1), cwd: r.dir }).dropped, [{ pr: 1, why: "already on the tip" }]);
+  } finally { r.rm(); }
+});
+
+test("foldCars takes up to TRAIN_MAX (10) clean cars by default and caps an 11th", () => {
+  const r = repo();
+  try {
+    const cars = Array.from({ length: 11 }, (_, i) => {
+      const n = i + 10;
+      r.g("switch", "-qc", `car${n}`, r.base); fs.writeFileSync(path.join(r.dir, `f${n}.txt`), `${n}\n`); r.g("add", "."); r.g("commit", "-qm", `car${n}`);
+      return { pr: n, head: r.g("rev-parse", "HEAD"), ref: `car${n}` };
+    });
+    r.g("switch", "-q", "main");
+    const f = foldCars({ base: r.base, cars, cwd: r.dir });
+    assert.deepEqual(f.cars.map((c) => c.pr), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    assert.equal(verifyTrain({ base: r.base, head: f.head, cars: f.cars, tip: r.base, cwd: r.dir }).ok, true);
   } finally { r.rm(); }
 });
 

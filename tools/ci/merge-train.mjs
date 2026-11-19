@@ -37,8 +37,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const TRAIN_PREFIX = "train/";
 /** The label the builder adds to a train PR (with `land`), so boards and the dispatcher can tell it apart. */
 export const TRAIN_LABEL = "train";
-/** Cars per train (Bryce: "about 5 PRs at a time"). */
-export const TRAIN_MAX = 5;
+/** Cars per train (Bryce: "about 5 PRs at a time"; 2026-11-18 ~19:50Z "Bigger trains 5→10"). */
+export const TRAIN_MAX = 10;
 /** How far back closed trains count for the bisect (hours). */
 export const HISTORY_H = 24;
 /** The manifest in a train PR body: one JSON object, `{"base":sha,"cars":[{"pr":n,"head":sha,"ref":branch}]}`. */
@@ -261,12 +261,29 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
   return { tip, cap: hist.cap, running: running.map((p) => p.number), cars: fold.cars, head: fold.head, dropped: [...fold.dropped, ...skipped], enough: fold.cars.length >= min };
 }
 
-/** Close an open train the builder can see is finished: a car moved (stale) or its CI/gate went red (red). Pure. */
-export function trainDisposition({ manifest, cars, ciConclusion, gate }) {
+/** The newest CI workflow run on a head ({ status, conclusion }) from an actions/workflows/ci.yml/runs page; null
+ *  when there is none. Newest by run id: a re-run keeps its id, a new run on the same head gets a higher one. Pure. */
+export function newestRun(json) {
+  const runs = (json?.workflow_runs || []).filter((r) => r && Number.isFinite(Number(r.id)));
+  if (!runs.length) return null;
+  const r = runs.reduce((a, b) => (Number(b.id) > Number(a.id) ? b : a));
+  return { status: String(r.status || ""), conclusion: String(r.conclusion || "") };
+}
+
+/** Close an open train the builder can see is finished: a car moved (stale) or its CI/gate went red (red). Pure.
+ *  `ciRun` is the head's newest CI workflow run, read when no `CI` check-run has completed (PR #5809: train #5814's
+ *  run was cancelled at 01:33Z, no `CI` check ever completed, and the builder waited on it for an hour, holding every
+ *  later train). A completed run that was cancelled closes the train `stale` (nothing failed, so no bisect); a
+ *  failure, timeout or startup failure closes it `red`. */
+export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null }) {
   if (!manifest) return { close: true, outcome: "stale", why: "no manifest" };
   const moved = manifest.cars.filter((c) => { const p = cars.get(c.pr); return !p || (!p.merged_at && (String(p.head?.sha || "").toLowerCase() !== c.head || !labelNames(p.labels).includes("land") || p.state !== "open")); });
   if (moved.length) return { close: true, outcome: "stale", why: `car${moved.length > 1 ? "s" : ""} ${moved.map((c) => `#${c.pr}`).join(" ")} moved, closed or lost land` };
   if (ciConclusion && ciConclusion !== "success") return { close: true, outcome: "red", why: `CI ${ciConclusion} on the train head` };
+  if (!ciConclusion && ciRun?.status === "completed") {
+    if (ciRun.conclusion === "cancelled") return { close: true, outcome: "stale", why: "the CI run on the train head was cancelled before its CI check completed" };
+    if (["failure", "timed_out", "startup_failure"].includes(ciRun.conclusion)) return { close: true, outcome: "red", why: `the CI run on the train head ended ${ciRun.conclusion} before its CI check completed` };
+  }
   if (gate === "failure") return { close: true, outcome: "red", why: "gate failure on the train head (gen, ratchets, retest or a car row)" };
   return { close: false };
 }
@@ -291,8 +308,15 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
       for (const c of m?.cars || []) { const r = request(`pulls/${c.pr}`); if (!r.error) cars.set(c.pr, r.json); }
       const runs = request(`commits/${t.head.sha}/check-runs?check_name=CI&per_page=20`);
       const ci = (runs.json?.check_runs || []).find((r) => r.app?.slug === "github-actions");
-      const d = trainDisposition({ manifest: m, cars, ciConclusion: ci?.status === "completed" ? ci.conclusion : "", gate: gateState(t.head.sha, request) });
-      if (!d.close) { log(`= merge-train waiting — train #${t.number} is still running`); return 0; }
+      const ciConclusion = ci?.status === "completed" ? ci.conclusion : "";
+      let ciRun = null, runNote = "";
+      if (!ciConclusion) {
+        const wr = request(`actions/workflows/ci.yml/runs?head_sha=${t.head.sha}&per_page=20`);
+        if (wr.error) runNote = ` (its CI run could not be read: ${wr.error})`;
+        else ciRun = newestRun(wr.json);
+      }
+      const d = trainDisposition({ manifest: m, cars, ciConclusion, gate: gateState(t.head.sha, request), ciRun });
+      if (!d.close) { log(`= merge-train waiting — train #${t.number} is still running${runNote}`); return 0; }
       const body = `${t.body || ""}\n<!-- merge-train-result ${JSON.stringify({ outcome: d.outcome, why: d.why })} -->`;
       for (const [p, b] of [[`pulls/${t.number}`, { body, state: "closed" }], [`issues/${t.number}/comments`, { body: `merge-train: closed (${d.outcome}) — ${d.why}. ${d.outcome === "red" ? "The next train takes half these cars (bisect); a car alone in a red train waits for a new head." : "The next train is rebuilt from the current state."}\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_` }]]) {
         const r = request(p, { method: p.endsWith("comments") ? "POST" : "PATCH", body: b });
