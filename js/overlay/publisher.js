@@ -99,10 +99,12 @@ const OverlayPublisher = (function () {
       try { field = apex.field(); } catch (_) { /* not ready: no track */ }
       try { info = apex.info(); } catch (_) { /* not ready */ }
       try { sectors = apex.sectorState(); } catch (_) { /* not ready */ }
-      if (field && field.ok === false) field = null;
       // Expire silent peers: report() otherwise runs only on an incoming message, so a crashed overlay tab kept this loop alive.
       if (typeof deps.bridge.peers === "function") deps.bridge.peers();
       if (deps.bridge.takeFresh()) differ.reset();
+      // Transient __apex.field() failures ({ ok:false }) used to map to an empty
+      // ranked list and wipe the tower for a tick. Hold the last good publish.
+      if (field && field.ok === false) return null;
       latest = ++seq;
       const frame = OverlayFeed.frame(input({ seq, field, info, sectors, caption, teams: deps.teams }));
       const patch = differ.next(frame, Date.now());

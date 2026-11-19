@@ -22,6 +22,7 @@
  *   node tools/mcp/lsp-mcp.mjs                      # stdio MCP (the .mcp.json entry)
  *   node tools/mcp/lsp-mcp.mjs def Liveries.forTeam # the same tools from a shell
  *   node tools/mcp/lsp-mcp.mjs refs Tracks.curvature | sym GameHud | hover X.y | diag js/game.js
+ *   node tools/mcp/lsp-mcp.mjs --install-cloud-cwd-shim  # Cursor Cloud: /agent host cwd → tools/mcp/*
  */
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
@@ -33,6 +34,75 @@ import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+// Cursor Cloud's exec-daemon cwd is `/agent` while the checkout lives at
+// `/agent/repos/<name>`. `.cursor/mcp.json` launches `bash tools/mcp/…` with a
+// relative path, so without a shim every stdio MCP exits 127 before initialize
+// (measured 2026-11-18: apex-lsp host discovery failed; shell from /agent
+// reproduced `No such file or directory`). The shim re-execs the real script
+// by absolute path; output-level-mcp.sh then `cd`s to the repo for children.
+export const CLOUD_CWD_SHIM_SCRIPTS = Object.freeze(["output-level-mcp.sh", "lsp-mcp.sh"]);
+
+/** @returns {{ host: string, reposDir: string, repo: string } | null} */
+export function cloudAgentLayout(repoRoot = ROOT) {
+  const repo = path.resolve(repoRoot);
+  const reposDir = path.dirname(repo);
+  const host = path.dirname(reposDir);
+  if (path.basename(reposDir) !== "repos") return null;
+  return { host, reposDir, repo };
+}
+
+/** Ensure `dir` exists and is writable (Cursor Cloud `/agent` is root-owned). */
+export function ensureWritableDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return { dir, escalated: false };
+  } catch (e) {
+    // `/agent` on Cursor Cloud is root-owned; passwordless sudo is available in the VM.
+    try {
+      execFileSync("sudo", ["-n", "mkdir", "-p", dir], { stdio: ["ignore", "pipe", "pipe"] });
+      execFileSync("sudo", ["-n", "chown", `${process.getuid()}:${process.getgid()}`, dir], { stdio: ["ignore", "pipe", "pipe"] });
+      const parent = path.dirname(dir);
+      try { fs.accessSync(parent, fs.constants.W_OK); }
+      catch {
+        try { execFileSync("sudo", ["-n", "chown", `${process.getuid()}:${process.getgid()}`, parent], { stdio: ["ignore", "pipe", "pipe"] }); }
+        catch { /* parent may stay root-owned; shimDir writable is enough */ }
+      }
+      fs.accessSync(dir, fs.constants.W_OK);
+      return { dir, escalated: true };
+    } catch (e2) {
+      throw Error(`cannot create writable ${dir}: ${e.message}; sudo: ${e2.message}`);
+    }
+  }
+}
+
+/** Install relative-path proxies under `<host>/tools/mcp/` for Cursor Cloud. */
+export function installCloudCwdShim({ repoRoot = ROOT, hostCwd, scripts = CLOUD_CWD_SHIM_SCRIPTS } = {}) {
+  const layout = cloudAgentLayout(repoRoot);
+  const host = hostCwd ? path.resolve(hostCwd) : layout?.host;
+  const repo = layout?.repo ?? path.resolve(repoRoot);
+  if (!host) throw Error("install-cloud-cwd-shim needs a Cursor Cloud /agent/repos/<repo> layout (or hostCwd)");
+  const shimDir = path.join(host, "tools/mcp");
+  const ensured = ensureWritableDir(shimDir);
+  const written = [];
+  for (const name of scripts) {
+    const target = path.join(repo, "tools/mcp", name);
+    if (!fs.existsSync(target)) throw Error(`missing ${path.relative(repo, target) || target}`);
+    const shim = path.join(shimDir, name);
+    // Absolute re-exec so the real script's ROOT=$(dirname $0)/../.. resolves inside the repo.
+    const body = [
+      "#!/usr/bin/env bash",
+      `# Cursor Cloud host-cwd shim for apex-lsp (and any MCP that hops through ${name}).`,
+      "set -euo pipefail",
+      `exec bash ${JSON.stringify(target)} "$@"`,
+      "",
+    ].join("\n");
+    fs.writeFileSync(shim, body, { mode: 0o755 });
+    written.push(shim);
+  }
+  return { host, repo, shimDir, written, escalated: ensured.escalated };
+}
 const SRC = "js";
 const ANCHOR = "js/core/log.js";   // tsgo searches open projects only: one open file loads jsconfig's
 const KIND = { 5: "class", 6: "method", 7: "property", 8: "field", 9: "constructor", 12: "function", 13: "variable", 14: "constant" };
@@ -404,6 +474,19 @@ export class Lsp {
     if (memberTag) return memberTag;
     const lines = this.textLines(file);
     return classify(lines[line0] || "", col0, lines.slice(line0 + 1, line0 + 9).join("\n"));
+  }
+  // `call` when the name (or the member expression ending in it) is a callee: `f()`, `M.f()`, `new F`.
+  useKind(file, line0, col0) {
+    const t = this.textOf(file);
+    if (!t.callees) {
+      t.callees = new Set();
+      visit(this.astOf(file), n => {
+        if (n.type !== "CallExpression" && n.type !== "NewExpression") return;
+        const id = n.callee.type === "MemberExpression" && !n.callee.computed ? n.callee.property : n.callee;
+        if (id.type === "Identifier") t.callees.add(id.range[0]);
+      });
+    }
+    return t.callees.has(t.starts[line0] + col0) ? "call" : "other";
   }
   // `file:line:col  [tag] source`, the source clipped to ~120 chars around the match.
   row(file, line0, col0, tag = true, { where = null, source = true } = {}) {
@@ -794,7 +877,13 @@ export class Lsp {
       if (line > count) throw Error(`${f} has ${count} line${count === 1 ? "" : "s"}; line ${line} is out of range`);
       const len = lines[line - 1].replace(/\r$/, "").length;
       if ((column || 1) > len + 1) throw Error(`line ${line} of ${f} has ${len} character${len === 1 ? "" : "s"}; column ${column} is past its end`);
-      return { cands: [{ file: f, line0: line - 1, col0: (column || 1) - 1 }], parts: [] };
+      // Snap to the identifier's first character: a column inside a name (or one past its end) asks about that
+      // name. Without it the zero notes cut the name from the column ("ineCells") and lost the text-match warning.
+      const ln = lines[line - 1], word = (ch) => /[\w$]/.test(ch || "");
+      let col0 = Math.max(0, (column || 1) - 1);
+      if (!word(ln[col0]) && word(ln[col0 - 1])) col0--;
+      while (col0 > 0 && word(ln[col0]) && word(ln[col0 - 1])) col0--;
+      return { cands: [{ file: f, line0: line - 1, col0 }], parts: [] };
     }
     if (!symbol) throw Error("pass symbol (Name or Head.member) or file+line[+column]");
     const parts = symbol.split("."), name = parts.at(-1), cands = [];
@@ -1193,7 +1282,7 @@ export const TOOLS = [
   def("lsp_references", "Who uses it? Every reference across js/, sorted by file, each row tagged [def|export|alias|use] and naming its enclosing function `(Module › fn)`. Semantic (skips comments, strings, same-named members of other objects); window.X globals and G.<member> fall back to labelled text matches that follow `const { x } = Head` destructures. files: true prints only per-file counts.",
     { ...where, ...scoped, includeDeclaration: { type: "boolean", description: "Include the declaration itself (default true)" }, ...page, ...format,
       files: { type: "boolean", description: "Only the per-file counts (every file), no rows: who uses it, at a glance" } }),
-  def("lsp_callers", "Impact before an edit: the functions that use the symbol, one compact row per caller `file:line  Module › fn  ×N (lines …)`, grouped from its references (uses only, not the declaration or export/alias rows). format accepts detailed or concise for consistency; caller rows are already concise.",
+  def("lsp_callers", "Impact before an edit: the functions that use the symbol, one compact row per caller `file:line  Module › fn  ×N (lines …)`, grouped from its references (uses only, not the declaration or export/alias rows; calls counted separately). format accepts detailed or concise for consistency; caller rows are already concise.",
     { ...where, ...scoped, ...page, ...format, files: { type: "boolean", description: "Only per-file use/function counts across the entire selected scope, no caller rows" } }),
   def("lsp_outline", "A module's shape without reading it: `symbol` (an IIFE global such as Liveries, or a window.X object) or `file` → its members, exported ones first, each with kind, line and its first source line. all: true also lists internal members.",
     { symbol: str("A top-level global, e.g. Liveries, GameHud, PhysicsConsts"), file: where.file, all: { type: "boolean", description: "List internal (non-exported) members too" }, ...page, ...format }),
@@ -1251,8 +1340,21 @@ export async function callTool(lsp, name, a = {}) {
     } else if (name === "lsp_outline") {
       text = await lsp.outline({ file: a.file, symbol: a.symbol, all: a.all, offset, limit, concise: a.format === "concise" });
     } else if (name === "lsp_hover") {
-      const { p, result, note } = await lsp.at(a, "textDocument/hover");
-      const c = result?.contents, body = typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x.value || x).join("\n") : c?.value;
+      let { p, result, note } = await lsp.at(a, "textDocument/hover");
+      const bodyOf = r => { const c = r?.contents; return typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x.value || x).join("\n") : c?.value; };
+      const docless = b => !b || !b.replace(/```[\s\S]*?```/g, "").trim();
+      let body = bodyOf(result);
+      // A use site (or the export shorthand it resolves to) carries no JSDoc: one hop to the [def] and hover there.
+      if (p && docless(body)) {
+        const defs = [].concat((await lsp.request("textDocument/definition", { textDocument: { uri: lsp.uriOf(p.file) }, position: { line: p.line0, character: p.col0 } }).catch(() => null)) || []);
+        await lsp.followExports(defs);
+        const d = defs.map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l).find(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "def");
+        if (d) {
+          lsp.ensureOpen(lsp.rel(d.uri));
+          const there = bodyOf(await lsp.request("textDocument/hover", { textDocument: { uri: d.uri }, position: d.range.start }).catch(() => null));
+          if (!docless(there)) { body = there; note = [note, `docs from ${lsp.rel(d.uri)}:${d.range.start.line + 1}`].filter(Boolean).join("; "); }
+        }
+      }
       text = `${body || "(no type information)"}${p ? `\nat ${lsp.row(p.file, p.line0, p.col0)}` : ""}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
     } else {
       const isDef = name === "lsp_definition", callers = name === "lsp_callers";
@@ -1327,11 +1429,12 @@ export async function callTool(lsp, name, a = {}) {
         const groups = new Map();
         for (const l of locs) {
           const f = lsp.rel(l.uri), owner = lsp.lexicalOwner(f, l.range.start.line, l.range.start.character), w = `${owner.label}${l.via ? ` (via ${l.via})` : ""}`, k = `${f}\u0000${owner.key}${l.via ? `\u0000${l.via}` : ""}`;
-          if (!groups.has(k)) groups.set(k, { f, w, lines: [] });
+          if (!groups.has(k)) groups.set(k, { f, w, lines: [], calls: 0 });
           groups.get(k).lines.push(l.range.start.line + 1);
+          groups.get(k).calls += lsp.useKind(f, l.range.start.line, l.range.start.character) === "call";
         }
         const rows = [...groups.values()].sort((x, y) => x.f.localeCompare(y.f) || x.lines[0] - y.lines[0])
-          .map(g => { const u = [...new Set(g.lines)]; return `${g.f}:${g.lines[0]}  ${g.w}  ×${g.lines.length}${g.lines.length > 1 ? `  (line${u.length === 1 ? "" : "s"} ${u.slice(0, 12).join(", ")}${u.length > 12 ? ", …" : ""})` : ""}`; });
+          .map(g => { const u = [...new Set(g.lines)]; return `${g.f}:${g.lines[0]}  ${g.w}  ×${g.lines.length}${g.calls !== g.lines.length ? ` (${g.calls} call${g.calls === 1 ? "" : "s"})` : ""}${g.lines.length > 1 ? `  (line${u.length === 1 ? "" : "s"} ${u.slice(0, 12).join(", ")}${u.length > 12 ? ", …" : ""})` : ""}`; });
         const files = new Set([...groups.values()].map(g => g.f)).size;
         const summary = new Map();
         if (a.files) for (const g of groups.values()) {
@@ -1341,7 +1444,8 @@ export async function callTool(lsp, name, a = {}) {
         const rendered = a.files
           ? [...summary].sort(([a], [b]) => a.localeCompare(b)).map(([f, n]) => `${f} ${n.uses} use${n.uses === 1 ? "" : "s"} in ${n.functions} function${n.functions === 1 ? "" : "s"}`).join("\n")
           : `${rows.slice(offset, offset + limit).join("\n")}${more(rows.length, Math.min(limit, rows.length - offset))}`;
-        text = `${locs.length} use${locs.length === 1 ? "" : "s"} in ${groups.size} function${groups.size === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"} ${head.replace("%SELF%", `query at ${p ? pos(p) : "—"}`)}\n${rendered}`;
+        const calls = [...groups.values()].reduce((n, g) => n + g.calls, 0);
+        text = `${locs.length} use${locs.length === 1 ? "" : "s"}${calls !== locs.length ? ` (${calls} call${calls === 1 ? "" : "s"})` : ""} in ${groups.size} function${groups.size === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"} ${head.replace("%SELF%", `query at ${p ? pos(p) : "—"}`)}\n${rendered}`;
       } else {
         let resolved = result;
         if (scope) {
@@ -1447,6 +1551,15 @@ async function cli([cmd, target, ...rest]) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   if (argv[0] === "--list-tools") process.stdout.write(JSON.stringify(TOOLS, null, 2) + "\n");
+  else if (argv[0] === "--install-cloud-cwd-shim") {
+    try {
+      const r = installCloudCwdShim();
+      process.stdout.write(`cloud-cwd-shim: ${r.written.length} script(s) under ${r.shimDir}\n`);
+    } catch (e) {
+      process.stderr.write(`cloud-cwd-shim: ${e.message}\n`);
+      process.exitCode = 1;
+    }
+  }
   else if (!argv.length || argv[0] === "serve") serve().catch(e => { process.stderr.write(e.message + "\n"); process.exitCode = 1; });
   else cli(argv).then(c => { process.exitCode = c; });
 }

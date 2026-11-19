@@ -14,7 +14,7 @@ Node checks, subagent-safe unless marked:
 | field effect | `ai-race.mjs tactics` / `stuck` `--runs 5` (VM, below) |
 
 `node tools/ci/pick-tests.mjs` names the browser groups for an `ai-drive.js` edit; the PR run
-proves them (never locally); one on the pushed branch: `node tools/ci/remote-group.mjs <group>`.
+proves them (never locally); a whole group (`remote-group.mjs`) is Bryce's opt-in.
 
 ## Field instruments (VM, no browser)
 
@@ -24,6 +24,7 @@ logging to `artifacts/logs/` (AGENTS.md rule 4), never a foreground wait.
 ```sh
 # One dispatcher:
 node tools/check/ai-race.mjs pace    [--track monza] [--diff normal]
+node tools/check/ai-race.mjs solo    [--track monza] [--laps 2]   # each car ALONE: field spread, order vs tier x skill
 node tools/check/ai-race.mjs field   [--track monza] [--seconds 240] [--runs 5]
 node tools/check/ai-race.mjs tactics [--track monza] [--laps 8] [--runs 5] [--mode human --pace 0.97]  # intervals (s), stuck, swap-backs, lap 1
 node tools/check/ai-race.mjs line    [--track monza]

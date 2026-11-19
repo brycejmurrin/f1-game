@@ -261,6 +261,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/check/boot-wall.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes) for the eager* tree ratchets; no CLI output"
+    },
     "tools/check/brake-cue-calibrate.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -666,6 +671,11 @@
       "presentation": "native",
       "preserve": "Library: byOwner / isDecisionComment / ownerSet verdicts and the paginated event and comment readers; no CLI output"
     },
+    "tools/ci/lib/tip-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: runTipGate / tipView verdicts (state, tip sha, failed test names, evidence) for merge-gate's base row; no CLI output"
+    },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -675,6 +685,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Every row's verdict and evidence; the gated head and tip; passed/refused/unknown exit distinct; the receipt path"
+    },
+    "tools/ci/merge-train.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every car and dropped PR with its reason; the bisect cap, tip and train head; the final = merge-train line"
     },
     "tools/ci/needs-sync.mjs": {
       "action": "keep-native",
@@ -2535,6 +2550,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c7"
+    },
+    "tools/track/footprint-rejected.cjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Every NEW and STALE row with its circuit and modelGroup id, and the exact --json baseline map."
     },
     "tools/track/footprint-support.cjs": {
       "action": "no-direct-output",

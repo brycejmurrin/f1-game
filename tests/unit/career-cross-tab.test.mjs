@@ -172,8 +172,9 @@ test("remapPoints sanitises the per-round and finish records, not only pts", () 
       roundPts: { "haas:0": [25, "18", -4, null], bogus: "x" },
       finishes: { "haas:0": [1, "2", 0.5, -1] } },
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 0, 0, 0] });
-  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 0, 0, 0] });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 18, 0, 0] },
+    "digit strings coerce like scoreMap; junk and negatives still zero");
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 2, 0, 0] });
   const bare = SaveMigrate.migrateCareer({ v: 1, season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });
   assert.deepEqual(JSON.parse(JSON.stringify(bare.season.roundPts)), {});
   assert.deepEqual(JSON.parse(JSON.stringify(bare.season.finishes)), {});
@@ -1038,10 +1039,13 @@ test("writer acquisition discards pre-lock reads and owner quota failures preser
   await h.store.mirror.ready;
   assert.equal(h.Career.data().money, 999);
   h.Career.engage(true); blocked = true;
-  h.Career.grant(10); h.Career.grant(20);
-  assert.equal(h.Career.data().money, 1029);
+  // Session progress is a settlement's model (a raced round cannot be redone), so the
+  // probe is a raw save(); a player DECISION such as grant() refuses instead (#5657).
+  h.Career.data().money += 30; h.Career.save();
   assert.equal(h.Career.saveStatus().ok, true);
   assert.equal(h.Career.saveStatus().durable, false);
+  assert.equal(h.Career.grant(10), null, "a decision is never kept session-only");
+  assert.equal(h.Career.data().money, 1029);
   blocked = false; assert.equal(h.store.retryFailed().durable, true);
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 1029);
 });

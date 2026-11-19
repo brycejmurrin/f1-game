@@ -245,7 +245,8 @@
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",
     "js/lighting/presets.js",
-    "js/garage/garage-data.js"
+    "js/garage/garage-data.js",
+    "js/garage/arrival-rows.js"
   ],
     LAZY_RACE_SESSION: [
     "js/data/garage-departure-motion.js",
@@ -829,7 +830,9 @@
   ],
     LAZY_UI_PRESETS_EDGES: [],
     LAZY_RESULTS_SHEET: [
-    "js/ui/results-sheet.js"
+    "js/share/share-card-chips.js",
+    "js/ui/results-sheet.js",
+    "js/ui/quali-sheet.js"
   ],
     LAZY_RESULTS_SHEET_EDGES: [],
     LAZY_TRACK_BUILD: [

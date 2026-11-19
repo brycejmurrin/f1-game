@@ -462,6 +462,51 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
   assert.ok(sceneHits.length >= 1, "garage preview runs after the sheet has a frame");
 });
 
+test("closing Appearance cancels a pending store debounce so sceneChanged cannot fire after hide", () => {
+  const dom = makeDom();
+  const panel = dom.byId("pm-panel-appearance");
+  const settings = dom.byId("pmsettings");
+  panel.hidden = false; settings.hidden = false;
+  panel.prepend = (node) => panel.insertBefore(node, panel.firstChild);
+  const observers = [];
+  const timers = [];
+  const sceneHits = [];
+  const subs = [];
+  const store = {
+    get: (_k, d) => d, set: () => true,
+    subscribe(fn) { subs.push(fn); },
+  };
+  const context = vm.createContext({
+    document: dom.document, GameStore: { store },
+    Log: { info() {}, warn() {} },
+    setTimeout(fn, ms) { timers.push({ fn, ms, dead: false }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) { timers[id - 1].dead = true; timers[id - 1].fn = null; } },
+    requestAnimationFrame: (fn) => { fn(); return 1; },
+    MutationObserver: class {
+      constructor(cb) { this.cb = cb; observers.push(this); }
+      observe() {}
+    },
+    ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
+    matchMedia: () => ({ matches: false }),
+    innerWidth: 1000, innerHeight: 500,
+  });
+  context.window = context;
+  // Force initUI now (document complete) so the MutationObserver and store.subscribe wire.
+  Object.defineProperty(dom.document, "readyState", { value: "complete" });
+  vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
+  assert.ok(subs.length >= 1 && observers.length >= 1);
+  sceneHits.length = 0;
+  // A live visual key change schedules the 80 ms debounce that calls sceneChanged.
+  for (const fn of subs) fn({ key: "homeScene" });
+  assert.equal(timers.filter((t) => t.fn && t.ms === 80).length, 1, "store change armed the debounce");
+  panel.hidden = true;
+  observers[0].cb([{ attributeName: "hidden" }]);
+  assert.ok(timers.every((t) => !t.fn || t.dead), "hide clearTimeouts the pending debounce");
+  for (const t of timers) if (t.fn) t.fn();
+  assert.equal(sceneHits.length, 0, "no preview after Appearance closed");
+});
+
 test("M2: Studio edits never pin motion:'on' and write only the keys that changed", () => {
   const { studio, values, writes } = load();
   studio.setScene("garage");

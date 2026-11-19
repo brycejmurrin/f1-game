@@ -1971,6 +1971,17 @@ test("lanes: a plan of 1 or 2 legs gets NO_LANE; 3 legs keep lanes; nothing else
   assert.deepEqual(withoutLane(shards(probePlan(2), EMPTY, new Set(), 5)), withoutLane(shards(probePlan(3), EMPTY, new Set(), 5)).slice(0, 2));
 });
 
+// PR #5809: a merge train's legs never queue in the shared PR lanes: every leg of a `train/*` head gets NO_LANE.
+test("lanes: a train/* head gets NO_LANE on every leg; any other head keeps its lanes", async () => {
+  const { trainHead } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "train/20261118-2215" }), true);
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "claude/ci-trains-junit-5802" }), false);
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "x/train/1" }), false);
+  assert.equal(trainHead({}), false, "push, schedule and dispatch runs have no head ref");
+  assert.deepEqual(shards(probePlan(3), EMPTY, new Set(), 5, true).map((j) => j.lane), [-1, -1, -1]);
+  assert.deepEqual(shards(probePlan(3), EMPTY, new Set(), 5, false).map((j) => j.lane), [5, 6, 7]);
+});
+
 test("spec-less js dirs route to a module-specific spec, and a dir with no coverage at all is named (ci-7d C7)", async () => {
   const { specsAffectedBySource, jsCoverageGaps, GENERIC_BOOT_SPECS, nodeTestsNaming } = await import("../../tools/ci/select-specs.mjs");
   assert.deepEqual(specsAffectedBySource(["js/track/build-worker.js"]).sort(),

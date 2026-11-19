@@ -92,9 +92,12 @@ const AiStrategy = (function () {
   const MIN_STINT = 2;
   const ONE_SET_LAPS = 5;
   function degCost(n, life) {
-    const L = Math.max(0.5, life);
-    const over = Math.max(0, n - L);
-    const inLife = Math.min(n, L);
+      // NaN life/n: Math.max(0.5, NaN) is NaN and poisons stintPlan's cost
+      // (hunt-physics; fixed inputs in unit test).
+      const L = Math.max(0.5, Number.isFinite(life) ? life : 0.5);
+      const nn = Number.isFinite(n) ? n : 0;
+      const over = Math.max(0, nn - L);
+      const inLife = Math.min(nn, L);
     // The drop summed over the stint, as TyreModel.gripFor charges it: the
     // linear slope inside the life, then EVERY lap past it carries the full
     // DEG_LIN plus the cliff. Leaving out that DEG_LIN·over priced a 50 %
