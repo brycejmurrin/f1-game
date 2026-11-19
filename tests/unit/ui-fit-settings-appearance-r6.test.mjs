@@ -129,3 +129,10 @@ test("mobile-ui: Settings sheet-w is 1020; wide compact-at is 620", () => {
   assert.equal(decl(sRules, 'body:not(.desktop) #pmsettings-inner:not([data-shape="tall"])', "--compact-at"), "620px");
   assert.equal(decl(sRules, '#pmsettings-inner:not([data-shape="tall"])', "--compact-at"), null, "desktop keeps the 480 compact-at");
 });
+
+test("mobile-ui: the Settings fold plate keeps its border on :hover/:active (no hover layout loop)", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8");
+  // In order: the plain-fold hover (border: none), the plate covering :active, then a gated :hover plate that
+  // follows the plain-fold hover (same specificity) so it wins.
+  assert.match(css, /#rs-body details > summary:hover \{[^}]*border: none[\s\S]*#pmsettings-inner \.pm-group details > summary,\s*#pmsettings-inner \.pm-group details > summary:active\s*\{[^}]*border:\s*1px solid var\(--plate-line\)[\s\S]*@media \(hover: hover\) and \(pointer: fine\) \{\s*#pmsettings-inner \.pm-group details > summary:hover\s*\{[^}]*border:\s*1px solid var\(--plate-line\)/, "gated :hover keeps the plate, after the plain-fold hover");
+});

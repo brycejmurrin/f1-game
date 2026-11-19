@@ -590,13 +590,23 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
 /* HUD & CAMERA / MUSIC folds read as plain text links on a tall phone card.
-   A quiet plate marks them as the same family as the door tiles above. */
-#pmsettings-inner .pm-group details > summary {
+   A quiet plate marks them as the same family as the door tiles above.
+   :hover/:active too: the plain-fold hover/active rules above (higher
+   specificity) set border:none, so hover shrank the box 2px; a cursor in its
+   bottom 2px then flipped hover every frame (ui-button-touch "not stable"). */
+#pmsettings-inner .pm-group details > summary,
+#pmsettings-inner .pm-group details > summary:active {
   background: var(--surf-1);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
   margin-block: calc(var(--gap) * 0.15);
   padding-block: calc(var(--gap) * 0.35);
+}
+@media (hover: hover) and (pointer: fine) {
+  #pmsettings-inner .pm-group details > summary:hover {
+    background: var(--surf-1);
+    border: 1px solid var(--plate-line);
+  }
 }
 #pmsettings-inner .pm-group details {
   border-bottom: 0;
