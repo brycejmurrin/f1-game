@@ -253,6 +253,47 @@ and lighting, career flows in the UI, practice and daily modes, data hub and sha
 contact and incident staging, long-session soak, debug surfaces, vendored code, first-run experience, and an
 adversarial re-check of the findings above) are added below as they report.
 
+## Addendum — findings from the later sub-audits
+
+Not folded into the ranking above; the first three would sit in the top ten.
+
+- **A1. Voice packs fail on slow connections and re-download every 30 s** — **ran**. `js/audio/voice-pack.js`
+  used one 15 s timer for the manifest, the whole binary and the hash check; the default announcer pack is
+  4.0 MB, so anything under about 2.1 Mbps got a silent announcer. Fixed (fix 10).
+- **A2. Settings uses about 58 % of a phone's width** — **ran**. `css/settings.css:3`. Fixed (fix 11).
+- **A3. On desktop the keyboard and controller binding tables are hidden** — **ran**. `js/ui/key-binds.js:249`;
+  settings search says the bindings are "unavailable on this device". Fixed (fix 12).
+- **A4. A daily-challenge link announces one circuit and opens another** — **ran**.
+  `js/ui/title-flow.js:105-109`: when the link's day is not the recipient's local day, the banner still names
+  the sender's track ("Daily challenge — MONACO") while the recipient's own daily (Albert Park in the test)
+  opens. The help text says the daily is "the same for every player" (`index.html:2527`); it is keyed on the
+  local date (finding 14).
+- **A5. Practice "saved best" is shared across circuits and cars in races** — **ran**.
+  `js/race/race-insights.js:104` keys on `G.records.key()`, which is only set in time trial
+  (`js/game.js:1454`); a braking drill in a Monaco race overwrote the Bahrain entry. The braking score is raw
+  stopping distance, so braking from a lower speed always sets a "NEW BEST" (`:150-152`).
+- **A6. One play with a wrong device clock wipes daily history and freezes the streak** — **executed**.
+  `js/race/daily-challenge.js:46-55`: a day dated a year ahead prunes every earlier day and the streak cannot
+  grow until that date arrives.
+- **A7. In toggle-throttle mode a controller that drops out silently comes back accelerating** — **ran**.
+  `js/input/input.js` (`pollGamepad`, the no-pad branch around `:1118-1140`) clears the throttle but not the
+  toggle latch, and does not pause the game as a real disconnect event does.
+- **A8. RESET GARAGE TO DEFAULTS deletes career car setups** — **read**. `js/ui/settings-export.js:412,630`
+  matches the `careerSetup.` prefix, while its tooltip says "Career and settings are never touched" (`:1042`).
+- **A9. The iOS "Add to Home Screen" banner covers title buttons and passes taps through** — **ran**.
+  `css/touch-controls.css:79-88` (`pointer-events: none`), `js/ui/platform-session.js:57-87`. At a real
+  Safari viewport (390×664) it covers HOW TO PLAY and SAVES & DATA; tapping the banner opens the hidden
+  button underneath.
+- **A10. Focus is lost after visiting race setup** — **ran**. Title → RACE → RACE SETUP → Escape → Escape
+  leaves focus on `<body>` (likely `js/ui/modal.js:202` recording a stale opener).
+- **A11. Smaller:** Data Hub tab labels collide at 320 px wide without touch; at 320×568 seven title
+  destinations hide behind the sticky bottom row with no scroll cue; five text styles fail WCAG AA contrast
+  (`css/carsetup.css:313,354`, `css/data.css:296`); `GameAudio.collision` throws on a non-finite side value
+  (`js/audio/engine.js:1894`, not reachable with finite car positions); turning sound off as the very first
+  click still downloads 3.6 MB of audio; `ReplayBuf.lerpCar` loops forever on an infinite heading
+  (`js/camera/replay-buf.js:51`, no producer found); the same race seed only reproduces on the first race
+  after a page load (`js/game.js:1341,1522,3446`).
+
 ## Fixes
 
 See "Fix log" at the end of this file; each fix is its own commit with how it was verified.
