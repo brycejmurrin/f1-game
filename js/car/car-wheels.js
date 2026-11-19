@@ -85,8 +85,7 @@ const CarWheels = (function () {
     const opts = { doubleSided: true };
     function draw(base, distance, steer, material) {
       if (!meshes) return;
-      // The garage turntable passes the same paint mat every frame; re-linking
-      // the prototype on a hit deopts V8 and rewrites the shape for no gain.
+      // Same mat every turntable frame: re-link only on change (a re-link deopts V8).
       if (material !== matRef) { Object.setPrototypeOf(opts, material || null); matRef = material; }
       // angle = distance / R (same as integrating v/R·dt along the path).
       const spin = (distance || 0) / WHEEL_R, cp = Math.cos(spin), sp = Math.sin(spin);

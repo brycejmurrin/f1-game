@@ -63,7 +63,7 @@ test("the cache is capped and frees the OLDEST colour's mesh", () => {
   // An evicted colour is rebuilt, not returned freed.
   const again = CarMesh.getCrewMesh(colour(0));
   assert.equal(made.length, N + 1);
-  assert.ok(!freed.includes(again));
+  assert.equal(new Set(freed).has(again), false, "the re-minted colour is live, not freed");
 });
 
 test("no GaragePrims: nothing is built or cached", () => {
@@ -137,7 +137,7 @@ test("compound ring cache is capped and frees the OLDEST colour's mesh", () => {
   assert.equal(made.length, N, "newest colour stays resident");
   const again = CarMesh.getCompoundRing(colour(0));
   assert.equal(made.length, N + 1);
-  assert.ok(!freed.includes(again));
+  assert.equal(new Set(freed).has(again), false, "the re-minted colour is live, not freed");
 });
 
 // Exhaust flame quads: join(",") without toFixed minted a new mesh for every

@@ -530,11 +530,16 @@ function getSpinDisc() {
 // on (js/physics/tyre-model.js AI_CLASS colour): one flat ring per colour,
 // cached by its rgb, laid on each wheel's outer face like the brake ring —
 // outside the brake ring's band, so the two never overlap.
-// FIFO-capped like getCrewMesh: the parts catalog alone has dozens of band
-// colours, and a garage / custom tyre edit mints more — an uncapped map kept
-// every stripe's GPU buffers for the page's life.
+// Drop a mesh cache's oldest entries (Map order = insertion) past `max`, freeing
+// their GPU buffers: a livery/part edit mints a key per colour (#5753).
+function _capCache(map, max) {
+  while (map.size > max) {
+    const k = map.keys().next().value, v = map.get(k);
+    map.delete(k);
+    for (const m of Array.isArray(v) ? v : [v]) if (m && _gfx.freeMesh) _gfx.freeMesh(m);
+  }
+}
 const _compoundRings = new Map();
-const COMPOUND_CACHE_MAX = 64;
   function getCompoundRing(col) {
     const key = colKey3(col);   // per wheel per car per frame: the memoised key
     let m = _compoundRings.get(key);
@@ -557,12 +562,7 @@ const COMPOUND_CACHE_MAX = 64;
     }
     m = _gfx.createMesh(out);
     _compoundRings.set(key, m);
-    if (_compoundRings.size > COMPOUND_CACHE_MAX) {
-      const old = _compoundRings.keys().next().value;
-      const om = _compoundRings.get(old);
-      _compoundRings.delete(old);
-      if (om && _gfx.freeMesh) _gfx.freeMesh(om);
-    }
+    _capCache(_compoundRings, 64);
     return m;
   }
 
@@ -574,9 +574,7 @@ const COMPOUND_CACHE_MAX = 64;
 // drawPitCrew). Built from GaragePrims' blocks; a VM without them draws
 // nothing. CREW_PEOPLE is the body-block count the browser spec pins so a
 // kit-only regression cannot silently ship again.
-// FIFO-capped like getAeroFlap: the key is the team colour, and a livery
-// editor or custom team mints a new colour per edit, so an uncapped map kept
-// every one's GPU buffers for the page's life. Map order IS insertion order.
+// Keyed by team colour; FIFO-capped (_capCache).
 const _crewMeshes = new Map();
 const CREW_CACHE_MAX = 32;   // one per team colour on the grid, with room for custom liveries
 const CREW_PEOPLE = 6;       // four gunmen + front and rear jack ops
@@ -630,12 +628,7 @@ function getCrewMesh(col) {
   m._crewPeople = CREW_PEOPLE;
   m._crewVerts = out.pos.length / 3;
   _crewMeshes.set(key, m);
-  if (_crewMeshes.size > CREW_CACHE_MAX) {
-    const old = _crewMeshes.keys().next().value;
-    const om = _crewMeshes.get(old);
-    _crewMeshes.delete(old);
-    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
-  }
+  _capCache(_crewMeshes, CREW_CACHE_MAX);
   return m;
 }
 
@@ -650,25 +643,15 @@ function _flatQuadData(w, h, col) {
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
   return out;
 }
-// Exhaust flame quad, keyed by fuel fxFlame colour. FIFO-capped: the fuel
-// catalog alone has ~20 distinct burns, and join(",") without toFixed minted a
-// new GPU mesh for every float spelling of the same colour.
-const _exhaustMeshes = {};
-const _exhaustOrder = [];
-const EXHAUST_CACHE_MAX = 32;
+const _exhaustMeshes = new Map();   // per fuel fxFlame colour (colKey3: one per colour, not per float spelling)
 function getExhaustFlame(color) {
   const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
   const key = colKey3(R);
-  if (_exhaustMeshes[key]) return _exhaustMeshes[key];
-  const mesh = _gfx.createMesh(_flatQuadData(0.035, 0.030, R));
-  _exhaustMeshes[key] = mesh;
-  _exhaustOrder.push(key);
-  while (_exhaustOrder.length > EXHAUST_CACHE_MAX) {
-    const old = _exhaustOrder.shift(), om = _exhaustMeshes[old];
-    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
-    delete _exhaustMeshes[old];
-  }
-  return mesh;
+  let m = _exhaustMeshes.get(key);
+  if (m) return m;
+  _exhaustMeshes.set(key, m = _gfx.createMesh(_flatQuadData(0.035, 0.030, R)));
+  _capCache(_exhaustMeshes, 32);
+  return m;
 }
 let boostMesh = null;
 function getBoostFlame() {
@@ -850,23 +833,15 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only, surface, rearCol) 
 // track a dim night sky/road (≈0.01–0.04) so the lens does not read as a day
 // env card. Cached per (quads, night).
 const _mirrorFbMeshes = new Map();
-const MIRROR_FB_CACHE_MAX = 32;   // one slot per cockpitMirrorGlass scale; FIFO+free like crew
 // Day sky tint (legacy) and night env tint — night TOP stays under ~1.5× a
 // typical night road luma (~0.05) once the matte emissive opts are applied.
 const _FB_DAY = { TOP: [0.62, 0.72, 0.84], MID: [0.40, 0.48, 0.58], BOT: [0.20, 0.23, 0.27] };
 const _FB_NIGHT = { TOP: [0.045, 0.050, 0.070], MID: [0.028, 0.032, 0.042], BOT: [0.014, 0.016, 0.022] };
-function _mirrorFbEvict() {
-  while (_mirrorFbMeshes.size > MIRROR_FB_CACHE_MAX) {
-    const oldQ = _mirrorFbMeshes.keys().next().value, old = _mirrorFbMeshes.get(oldQ);
-    _mirrorFbMeshes.delete(oldQ);
-    if (old && _gfx.freeMesh) { if (old[0]) _gfx.freeMesh(old[0]); if (old[1]) _gfx.freeMesh(old[1]); }
-  }
-}
 function getMirrorFallback(quads, night) {
   const key = night ? 1 : 0;
   let slot = _mirrorFbMeshes.get(quads);
   if (slot && slot[key]) return slot[key];
-  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); _mirrorFbEvict(); }
+  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); _capCache(_mirrorFbMeshes, 32); }
   const band = night ? _FB_NIGHT : _FB_DAY;
   const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = band.TOP, MID = band.MID, BOT = band.BOT;
   const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);   // per-axis mix of two corners
@@ -897,7 +872,6 @@ function getMirrorFallback(quads, night) {
 // has no createTexMesh (the caller then lays the fallback).
 const MIRROR_GLASS_V = [0.22, 0.78];
 const _mirrorGlassMeshes = new Map();
-const MIRROR_GLASS_CACHE_MAX = 32;
 function getMirrorGlass(quads) {
   if (_mirrorGlassMeshes.has(quads)) return _mirrorGlassMeshes.get(quads);
   let m = null;
@@ -913,11 +887,7 @@ function getMirrorGlass(quads) {
     m = _gfx.createTexMesh(out);
   }
   _mirrorGlassMeshes.set(quads, m);
-  while (_mirrorGlassMeshes.size > MIRROR_GLASS_CACHE_MAX) {
-    const oldQ = _mirrorGlassMeshes.keys().next().value, om = _mirrorGlassMeshes.get(oldQ);
-    _mirrorGlassMeshes.delete(oldQ);
-    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
-  }
+  _capCache(_mirrorGlassMeshes, 32);
   return m;
 }
 // 7-seg digit table, shared by the gear and speed LCD readouts.
@@ -1088,22 +1058,7 @@ function primeWheelExtras(m) {
 // ~5 Hz is the 2026 "MGU-K recharging" fast flash — the pattern a stationary car
 // holding full charge shows, which is the blinking on every real grid.
 function gridStrobe(countT) { return ((countT * 5.0) % 1) < 0.5; }
-// REAR LIGHTS, 2026 spec. The car carries three of them, not one: the oval Rear
-// Impact Structure light in the centre of the crash structure, and — new for
-// 2026 — a red light on each rear wing endplate that MIRRORS the RIS flash
-// pattern. That is why a modern car reads as three flashing points from behind
-// rather than a single dot, and why they share one emissive here.
-//
-// Endplate anchor: Car3D.endplate(aLvl) puts the plates at x +-0.50 with their
-// rear face at z -2.69 at EVERY aero level; only the vertical extent moves
-// (y 0.475..0.755 at level 0, 0.525..1.105 at level 4). y 0.62 is inside the
-// plate at all five, so this needs no per-car aero lookup. z -2.705 clears the
-// face by the same 15 mm the RIS light uses against its own housing.
-// ONE mesh, ONE draw per car: the three quads used to be three draws of two
-// meshes through a per-light matrix, three render objects per lit car. Their
-// car-local offsets are constants, so they are baked into the vertices
-// (mat * (v + o) == (mat * T(o)) * v, identical up to float32 rounding of the
-// baked position). Order inside the mesh is the old draw order: RIS, left, right.
+// REAR LIGHTS (RIS + two endplate lights, one mesh): docs/CAR-MESH-RATIONALE.md §cm-1.
 const REAR_LIGHTS = Object.freeze({
   ris: Object.freeze([0, 0.50, -2.615]),        // 0.50 up, 2.615 back: 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight
   endplate: Object.freeze([0.50, 0.62, -2.705]), // x +-0.50, see the endplate anchor note above
