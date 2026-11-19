@@ -7,12 +7,12 @@ whether the defect is a shader at all.
 
 | Layer | Path | Notes |
 |---|---|---|
-| Backend factory | `js/render/gfx.js` | `Gfx.create(canvas, opts)` returns the resolved pick (TLX or WGX) or `null` on absence or any failure; game.js then falls back to GLX and stores `gfx` on `G` |
+| Backend factory | `js/render/gfx.js` | `Gfx.create(canvas, opts)` returns the resolved pick (TLX or WGX) or `null` on absence or any failure; `js/render/renderer-boot.js` then falls back to GLX and stores `gfx` on `G` |
 | TLX (default) | `js/render/three/tlx.js`, `tsl-*.js`, `tlx-post.js` | `TLX.create`; pin with `apex26.gfxBackend` / `apex26.tlxForceGL` |
 | GLX fallback | `js/render/glx/glx.js`, `glsl-*.js` | WebGL2 path; `GLX.create` |
 | WGX opt-in | `js/render/webgpu/wgx.js`, `wgsl-chunks.js` | `WGX.create`; failures land in `apex26.gfxWgxFail` |
 | Shared assets | `js/render/shared/assets.js` | PBR pack layers — **asset-pack** |
-| Soft present (CI) | `js/render/gfx.js` + `#game-soft` | Headless blit; probes use `awaitSoftPresent()` |
+| Soft present (CI) | `js/render/glx/soft.js` (GLX) / `js/render/three/tlx.js` (TLX) + `#game-soft` | Headless blit; probes use `awaitSoftPresent()` |
 | Scene bridge | `js/game.js` | Per-frame `gfx` draw/update; garage uses the same `gfx` in `js/garage/scene.js` |
 | Screen-space FX overlays | `js/fx/visor-optics.js`, `js/fx/droplets.js` | DOM canvases `#fx-visor` / `#fx-droplets` over `#game`: `VisorOptics.clear()`, `VisorOptics.stats()` |
 | Car body meshes | `js/car/car-body-geom.js`, `js/car/car3d.js` | geometry the backends draw; not a shader layer |

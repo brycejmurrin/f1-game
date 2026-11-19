@@ -64,6 +64,21 @@ on:
         required: false
         default: ""
         type: string
+      # THE BLESS ROUTE (#5734, decision A on #5732). A committed perf/physics baseline is measured on the lane that
+      # compares against it, and agents never run a browser test locally (AGENTS.md rule 5), so the writer runs HERE:
+      # `update_baseline` sets APEX_UPDATE_BASELINE=1 (each spec that honours it writes its tests/data/ baseline
+      # instead of comparing) and the "Blessed baselines" step uploads what it wrote, to be committed unchanged.
+      # Dispatch it without `pr`: a bless run compares nothing, so it must never count as a #5480 green.
+      update_baseline:
+        description: "re-bless: run with APEX_UPDATE_BASELINE=1 and upload the baseline the specs write (needs baseline_reason)"
+        required: false
+        default: false
+        type: boolean
+      baseline_reason:
+        description: "with update_baseline: the reason line stamped into the baseline's _blessed block"
+        required: false
+        default: ""
+        type: string
 
 # The group and branch are in the run's name, so the CLI (and a human in the
 # Actions tab) can tell dispatches apart.
@@ -87,6 +102,17 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(inputs.plan).matrix }}
+    # GROUP LANES (#5848, 2026-11-19): every shard joins one of 8 fleet-wide groups with `queue: max`, so at most 8
+    # group shards hold runners at once across every dispatch; the rest wait PENDING, holding no runner. Before this,
+    # nine group runs could fill the account's 40-slot pool and land.yml's gate jobs queued behind them (measured by
+    # tools/ci/pool-share.mjs). remote-group.mjs gives each shard `lane` 1..8 (withLanes, GROUP_LANES); a plan
+    # without one (a hand dispatch) falls back to its shard number. `queue: max` holds up to 100 pending jobs per
+    # group and cannot be combined with cancel-in-progress in one block; the workflow-level group above still
+    # replaces a superseded dispatch, pending shards included.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+    concurrency:
+      group: browser-group-lane-${{ matrix.lane || matrix.shard }}
+      queue: max
     steps:
       # `pr` is text from whoever dispatched: digits or nothing, checked before it names a ref (env, never inline).
       - name: Validate the pr input
@@ -138,6 +164,8 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           APEX_GL: llvmpipe
+          APEX_UPDATE_BASELINE: ${{ inputs.update_baseline && '1' || '' }}
+          APEX_BASELINE_REASON: ${{ inputs.baseline_reason }}
           APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
           LIBGL_ALWAYS_SOFTWARE: 1
           GL: llvmpipe
@@ -153,6 +181,8 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GL: swiftshader
+          APEX_UPDATE_BASELINE: ${{ inputs.update_baseline && '1' || '' }}
+          APEX_BASELINE_REASON: ${{ inputs.baseline_reason }}
           APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
           GROUP: ${{ inputs.group }}
           PLAN: ${{ inputs.plan }}
@@ -160,6 +190,20 @@ jobs:
           TOTAL: ${{ matrix.total }}
           WORKERS: ${{ inputs.workers }}
         run: node tools/ci/remote-group.mjs --run-shard
+      # The bless route's output: the files the two APEX_UPDATE_BASELINE writers produce (perf-frametime.spec.js,
+      # physics-characterization.spec.js) plus the perf run's own JSON, for a commit. Named, not a glob: a glob also
+      # ships every unrelated committed baseline (run 44298961521 carried four), which hides what was written.
+      - name: Blessed baselines
+        if: always() && inputs.update_baseline
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: blessed-baselines-${{ inputs.group }}-${{ matrix.shard }}
+          path: |
+            tests/data/perf-frametime-baseline.json
+            tests/data/physics-baseline.json
+            artifacts/perf-frametime/
+          retention-days: 7
+          if-no-files-found: error
       - name: Failure artifacts
         if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

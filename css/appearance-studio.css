@@ -219,7 +219,10 @@
 #pmsettings:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) #pmsettings-inner > .sheet-foot {
   min-height: var(--tap);
 }
-#pmsettings-inner:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) {
+/* Landscape / roomy sheets keep the studio's wider card. On a tall phone the
+   rest of Settings paints at the shared --sheet-w; a second, wider panel here
+   made Appearance the odd one out (~480 own vs ~278). */
+#pmsettings-inner:not([data-shape="tall"]):has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) {
   --sheet-w: min(calc(var(--tap) * 25), calc(100 * var(--vwz) - var(--pad)));
   max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad)));
 }

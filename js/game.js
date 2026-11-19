@@ -3492,7 +3492,7 @@ const onboard = Onboard.create(G),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
-const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
+const { buildResults, buildTTResults, buildStandings, buildChampion, quali: qualiSheet } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
@@ -3554,7 +3554,7 @@ customTeam = CustomTeam.create({
   getLivDraftOverride: () => customLiv.livDraftOverride,
   setLivDraftOverride: (v) => { customLiv.livDraftOverride = v; },
   getSoundOn: () => soundOn,
-  GameAudio,
+  GameAudio, announce,
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },
@@ -3575,7 +3575,7 @@ const careerUi = CareerUI.create(G);
 const seasonUi = SeasonUI.create(G);
 // QUALIFYING — the model (js/race/quali-model.js: the flying lap plus the simulated field,
 // holding the classification between session and grid) and its sheet (quali-sheet.js).
-const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
+const quali = Quali.create(G);
 qualiNet = QualiNet.create({
   $, fmtTime, isQuali,
   getPlayer: () => player,
@@ -4006,11 +4006,11 @@ function raceIntroFromSheet(go, sheet, btn) {
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
-  // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
-  // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
+  // A DAILY picked before LAZY_RACE_SESSION's hook ran the stub's no-op prepareDaily; the hook then moves
+  // teamIdx/driverIdx/difficulty (entrySettings): the intro went stale, no garage-out (#3591). `records`, not the
+  // global: the bundle reinjects SessionRecords before its hook swaps the instance (#5813).
   const sessionLate = typeof GarageDepartureMotion === "undefined" || typeof GarageDepartureWheels === "undefined"
-    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub);
+    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && !!(records && records._stub));
   try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
@@ -5115,7 +5115,7 @@ function updateCar(c, dt, ranked) {
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // the AI spends it on a car it can attack
+                      : (c.otArmed && raceCtl.level < 2 && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // on a car it can attack; never under a VSC (#5715: held to the delta, it buys nothing; the human still may)
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
                           _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
                           _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed, _aiOtFire.vTop = vT,
@@ -9225,7 +9225,7 @@ $("cs-unlimited").onclick = () => {
   buildSetup();
 };
 els.resMenu.onclick = () => {
-  const room = netPlay.active();   // read BEFORE the quit: results are shown with NetPlay still live (NEW FRIEND ROOM)
+  const room = els.resMenu.dataset.friend === "1";   // the label buildResults painted (NEW FRIEND ROOM), not the live peer: a guest BYE after results must not turn it into MENU
   quitToMenu();
   if (room && $("mb-vs")) $("mb-vs").click();   // the title's own VS FRIEND door: a fresh room, since the race ended this one
 };

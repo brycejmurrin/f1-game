@@ -400,10 +400,15 @@ async function run() {
   // Pin scale and kill the governor. Without this every phase moves the tier and
   // the numbers describe the governor, not the renderer.
   apex.renderScale(1);
+  // Backend account. GLX has no `.backend` property and no `__tlx` hook
+  // (lsp_callers __tlx → symbol not found; TLX retired). The old readers always
+  // fell through to a hardcoded "webgl2" / null. Read backendState().api
+  // instead — the same shape __apex.diag() uses (js/render/glx/glx.js).
+  const gfxState = gval(win, "GLX && typeof GLX.backendState === 'function' && GLX.backendState()");
   const env = {
     build: (win.document.querySelector('meta[name="apex-build"]') || {}).content || null,
     sha: (win.document.querySelector('meta[name="apex-sha"]') || {}).content || null,
-    backend: gval(win, "GLX && GLX.backend") || (gval(win, "GLX && GLX.__tlx") ? "three" : "webgl2"),
+    backend: (gfxState && gfxState.api) || "unknown",
     ua: navigator.userAgent,
     dpr: window.devicePixelRatio,
     canvas: (() => { try { const c = win.document.getElementById("game"); return c.width + "x" + c.height; } catch (e) { return null; } })(),
@@ -423,11 +428,9 @@ async function run() {
     // stopped trying to climb back. tier() is a max() of all three, so only the
     // parts tell you which one is binding.
     perf: (() => { try { return apex.perf(); } catch (e) { return { err: String(e.message).slice(0, 80) }; } })(),
-    // WHICH BACKEND THREE ACTUALLY BOUND, and whether the canvas ended up
-    // alpha-composited. `canvasAlpha: true` is the see-through-car defect,
-    // read back off the live context rather than inferred from what we asked
-    // for. Null means three bound WebGPU and there is no gl to ask.
-    three: gval(win, "GLX && GLX.__tlx ? GLX.__tlx.backendState() : null"),
+    // Live GLX account (api, softPresent, softwareGL, …). Kept under `gfx`
+    // rather than the retired `three` / `__tlx` names.
+    gfx: gfxState || null,
   };
 
   // SAY WHAT WAS ACTUALLY MEASURED. The iframe is a fraction of the screen, so

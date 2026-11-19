@@ -105,6 +105,8 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
   vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(read("js/race/session-phys.js"), w.ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
+  // FULL before the group, as in the shell: the coach body reads its façade's GOALS at eval (#4748).
+  vm.runInContext(read("js/race/driving-coach-boot.js"), w.ctx, { filename: absSrc("js/race/driving-coach-boot.js") });
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
   assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");
   assert.equal(hooks, 0, "no hook on an incomplete group");
@@ -551,4 +553,58 @@ test("startRace awaits the LAZY_RACE light presets before its first applyRaceSet
   // Behaviour: the real LazyBundles.create surface exposes ensureLightPresets (not a source pin).
   const w = world({ body: () => "" });
   assert.equal(typeof w.lb.ensureLightPresets, "function", "lazy-bundles exports ensureLightPresets");
+});
+
+// Hunt #5779 (1): a throwing applyLightTuneIfReady after the presets landed
+// rejected ensureLightPresets; ensureCircuit fires it and forgets → overlay.
+// Now the chain ends in .catch(() => false): it can resolve false, never reject.
+test("ensureLightPresets: a throwing tune hook never rejects (no unhandled rejection overlay)", async () => {
+  const rejections = [];
+  const onRej = (e) => rejections.push(String((e && e.message) || e));
+  process.on("unhandledRejection", onRej);
+  try {
+    let fail = true;
+    const w = world({
+      globals: { Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true } },
+      body: () => "",
+      deps: {
+        applyLightTuneIfReady() { throw new Error("tune boom"); },
+        // First ask fails (lightFailed), the second lands the presets.
+        loadBackendScripts: async () => { if (fail) { fail = false; return false; } w.ctx.LightPresets = {}; return true; },
+      },
+    });
+    assert.equal(await w.lb.ensureLightPresets(), false, "the failed fetch");
+    await w.lb.ensureCircuit(0);   // re-asks for the presets, fire-and-forget
+    await tick(); await tick();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.ok(w.ctx.LightPresets, "the retry landed");
+    assert.equal(await w.lb.ensureLightPresets(), true);
+    assert.deepEqual(rejections, []);
+  } finally { process.off("unhandledRejection", onRej); }
+});
+
+// Hunt #5779 (2): a REJECTED circuit load stayed memoised, so the circuit was
+// stuck until reload. The rejection still reaches the caller.
+test("ensureCircuit: a rejected payload load rejects, is not memoised, and the next ask retries", async () => {
+  let calls = 0, resident = false;
+  const w = world({
+    globals: {
+      Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => resident, hydrate: () => { resident = true; return true; } },
+      TrackDefs: [],
+    },
+    body: () => "",
+    deps: {
+      applyLightTuneIfReady() {},
+      loadBackendScripts: async () => {
+        calls++;
+        if (calls === 1) throw new Error("network down");
+        w.ctx.TrackDefs.push({ id: "monza", path: { pts: [[0, 0]] } });
+        return true;
+      },
+    },
+  });
+  await assert.rejects(w.lb.ensureCircuit(0), /network down/);
+  await w.lb.ensureCircuit(0);
+  assert.equal(calls, 2, "the second ask fetched again");
+  assert.equal(resident, true);
 });

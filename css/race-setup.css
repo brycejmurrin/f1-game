@@ -263,6 +263,11 @@
   --_sheet-z: var(--ui-scale);
   zoom: var(--ui-scale);
 }
+/* A SHORT TOUCH SCREEN KEEPS IT COMPACT AT EVERY UI SIZE (#5632), the career hub's #5580 gate (css/overlays.css): at the
+   shipped 70 % 393 / 0.7 hands it 539 own px (534 at 844x390), over its 480, so it went NORMAL on the owner's phone. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #race-settings > .sheet { --compact-at: 99999px; }
+}
 /* A TALL task (an upright phone) reads as one page: wrapped context and
    stacked actions must not reserve most of its viewport outside the settings
    scroller. So does a sheet too SHORT for fixed chrome (data-page="on", above).
@@ -573,9 +578,26 @@
   height: max(var(--chip-h), 1.6em);
   min-height: max(var(--chip-h), 1.6em);
   line-height: 1.3;
-  flex-basis: 7rem;
-  width: 7rem;
-  padding-inline: calc(var(--gap) * 0.3);
+  /* 7.25rem keeps DEFAULT / STABLE / PACE ORDER inside the box on a 2-col
+     852×393 sheet (7rem clipped DEFAULT to "DEFAUL" once letter-spacing and
+     the ‹ › chrome ate the padding). flex:none stops STABLE's column from
+     growing the value past its neighbours. */
+  flex: 0 0 7.25rem;
+  flex-basis: 7.25rem;
+  width: 7.25rem;
+  max-width: 7.25rem;
+  box-sizing: border-box;
+  padding-inline: calc(var(--gap) * 0.25);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Short landscape: presets + About lines eat the body. Drop captions and
+   tighten the grid so FIELD is not trapped in a postage-stamp scroller. */
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #race-settings > .sheet { --page-at: 280px; }
+  #rs-presets > .preset-btn small { display: none; }
+  #rs-presets > .preset-btn { min-height: var(--chip-h); padding-block: calc(var(--gap) * 0.25); }
+  #rs-body { row-gap: calc(var(--gap) * 0.25); }
 }
 
 /* The row's own 8rem value, NOT wider for the long GRID names: at 9rem every

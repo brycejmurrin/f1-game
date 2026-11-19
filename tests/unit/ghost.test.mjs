@@ -25,7 +25,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function createHarness(opts = {}) {
   const store = new Map(Object.entries(opts.disk || {}));
   const microtasks = [];
-  const timers = [];
+  const timers = [], timerMs = [];
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
     setItem(k, v) {
@@ -47,7 +47,7 @@ function createHarness(opts = {}) {
     queueMicrotask: (fn) => { microtasks.push(fn); },
     console,
   };
-  if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
+  if (opts.deferWrites) sandbox.setTimeout = (fn, ms) => { timers.push(fn); timerMs.push(ms); return timers.length; };
   const idles = [], listeners = {};
   if (opts.clock) sandbox.Date = { now: () => opts.clock.t };
   if (opts.idle) {
@@ -67,6 +67,7 @@ function createHarness(opts = {}) {
     store: mockLocalStorage,
     flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
     flushTimers: () => { while (timers.length) timers.shift()(); },
+    timerMs,
     runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
     idleQueued: () => idles.length,
     fire: (type) => { for (const f of listeners[type] || []) f(); },
@@ -615,4 +616,42 @@ test("Ghost.finishLap refuses a trace that fails validation", () => {
   for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, 0);
   assert.equal(Ghost.finishLap(Infinity), false);
   assert.equal(Ghost.hasGhost(), false);
+});
+
+// iOS Safari has no requestIdleCallback. A 0 ms timer ran the store write in the task right behind the
+// lap-line frame of a PB lap; the fallback waits as long as the idle path's cap instead.
+test("without requestIdleCallback a PB write waits seconds, not for the next task", () => {
+  const { Ghost, store, flushTimers, timerMs } = createHarness({ deferWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  assert.equal(timerMs.length, 1, "one deferred write");
+  assert.ok(timerMs[0] >= 5000, `the write is armed ${timerMs[0]} ms out`);
+  assert.equal(store.getItem("apex26.ghost.v1"), null, "nothing written on the lap-line task");
+  flushTimers();
+  assert.ok(store.getItem("apex26.ghost.v1"), "the timer writes the PB");
+});
+
+test("a layout revision segregates saved laps: a revision-1 ghost is not the revision-2 class's ghost", () => {
+  // #5316 CIRC2-05: Kyalami flipped direction with n and total unchanged, so
+  // only def.revision (the first `layout` entry, js/race/session-records.js)
+  // tells the two laps apart.
+  const { Ghost } = createHarness();
+  const cfg = (rev) => Ghost.contextKey({ circuit: "kyalami", layout: [rev, 1120, 4480.07], physics: 1 });
+  const old = cfg(1), now = cfg(2);
+  assert.notEqual(old, now);
+  assert.equal(Ghost.layoutRevision(old), 1);
+  assert.equal(Ghost.layoutRevision(now), 2);
+  assert.equal(Ghost.layoutRevision(null), 1, "a legacy row with no class was driven on revision 1");
+  assert.equal(Ghost.layoutRevision("not json"), 1);
+  Ghost.setTrack("kyalami", old);
+  Ghost.startLap();
+  for (let i = 0; i <= 40; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  assert.equal(Ghost.hasGhost(), true);
+  Ghost.setTrack("kyalami", now);
+  assert.equal(Ghost.hasGhost(), false, "the clockwise lap is not offered on the anticlockwise layout");
+  Ghost.setTrack("kyalami", old);
+  assert.equal(Ghost.hasGhost(), true, "and it is still stored, untouched");
 });
