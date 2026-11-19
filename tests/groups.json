@@ -667,6 +667,8 @@
     "tests/unit/livery-design.test.mjs",
     "tests/unit/livery-draft-mesh-cache.test.mjs",
     "tests/unit/livery-helmet-style.test.mjs",
+    "// A starved idle queue still lands the player's deferred 2048 livery (garage-pick-cost flake). < 1 s.",
+    "tests/unit/livery-hires-starved.test.mjs",
     "tests/unit/livery-stations.test.mjs",
     "// #3609: SAVE & FIT new custom_<ts> disposes the previous fitted hi-res atlas (stubbed CarDraw VM). < 1 s.",
     "tests/unit/livery-tex-dispose.test.mjs",
