@@ -29,7 +29,7 @@ const WallEndFace = (function () {
     let ds = c.s - c._prevS;
     const L = track.total;
     if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;
-    if (!(ds > 1e-6) || ds > 20) return false;           // only forward travel, never a teleport
+    if (!(Math.abs(ds) > 1e-6) || Math.abs(ds) > 20) return false;   // forward or reverse travel, never a teleport
     ContactGeometry.wallLimits(track, c._prevS, c.x, _prev, _post);
     const right = c.x > lim.r;
     if (!right && !(c.x < -lim.l)) return false;

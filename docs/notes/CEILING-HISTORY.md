@@ -1,6 +1,20 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
+
+`(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. The growth is the PR's own
+re-landed fix code (#5653 step 2) in six FULL (eager) files, measured on the sync merge with tip
+`dec94440`: `js/share/share-card-data.js` +302 and `js/share/share-card-layout.js` +258 (share
+links kept intact, the STREAK line stops short of the QR; both eager because a HARD_EDGES pair has
+`daily-challenge.js` read them at eval), `js/ui/hud-skin.js` +243 (a custom accent's ink reaches
+4.5:1), `js/camera/replay-buf.js` +215 (a NaN pose keeps the previous sample),
+`js/ui/results-story.js` +33 (a classified retiree keeps its podium tile) and
+`js/physics/wall-end-face.js` +18 (reverse travel held at the face). The real-replay, real-race,
+share-card-chips, transport and XR hunks are already lazy. Fragment:
+`tests/data/ratchets.d/claude--replay-follow-rank-5653.json`.
+
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
 `(tree) shellNodes` 2256 → **2322** (+66). Deliberate raise past the 40-line absorb; the
