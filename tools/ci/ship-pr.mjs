@@ -15,6 +15,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { MAX_AGE_MIN } from "../lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const USAGE = "usage: node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]\n  Runs ready-gate on the draft PR; on exit 0 prints the two calls that land it. Flips and labels nothing itself.";
@@ -22,8 +23,8 @@ const USAGE = "usage: node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]\n  
 /** The two calls after a passing ready-gate, as lines to print. Pure. */
 export function nextCalls(pr, repo = "brycejmurrin/f1-game") {
   return [
-    `1. GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${pr}  draft:false   (now, on the head ready-gate just judged; a later push: re-run ship-pr)`,
-    `2. gh api -X POST repos/${repo}/issues/${pr}/labels -f 'labels[]=land'   (after the flip: \`land\` on a draft does nothing)`,
+    `1. GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${pr}  draft:false   (now, on the head ready-gate just judged; receipt good for ${MAX_AGE_MIN} min; a later push: re-run ship-pr)`,
+    `2. GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${pr}  labels=<the live list from issue_read get_labels, plus "land">   (after the flip: \`land\` on a draft does nothing; one label per call, skill steward references/labels.md)`,
     `then refresh the Hand-off block and subscribe_pr_activity (re-subscribe after the flip); GitHub merges it, not you.`,
   ];
 }

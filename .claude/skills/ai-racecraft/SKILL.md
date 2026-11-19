@@ -28,7 +28,7 @@ energy recovery system (deploy and regen); X-mode = low-drag active aero.
 5. Run the unit gate for that edit (`references/checks.md`), then re-measure with the
    same seeds on a second circuit.
 6. Run `node tools/ci/pick-tests.mjs`: the PR run covers the browser groups it names; never run them locally.
-   One whole group on the pushed branch: `node tools/ci/remote-group.mjs <group>`.
+   A whole group (`remote-group.mjs`) is Bryce's opt-in.
 
 ## Do not
 

@@ -248,8 +248,15 @@ function runGateway({ server, command, args = [], root = process.cwd() }) {
   const childLines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   hostLines.on('line', line => { try { const msg = JSON.parse(line); void fromHost(msg); } catch { if (child.stdin.writable) child.stdin.write(`${line}\n`); } });
   childLines.on('line', line => { try { fromChild(JSON.parse(line)); } catch { process.stdout.write(`${line}\n`); } });
+  // Default: retain privately (tests pin that upstream stderr stays off the host pipe).
+  // APEX_MCP_STDERR_PASS=1 tees to process.stderr so preflight / a diagnosing host
+  // sees the real exit reason instead of only "stderr retained at …".
+  const passStderr = /^(1|true|yes)$/i.test(String(process.env.APEX_MCP_STDERR_PASS || '').trim());
   function retainStderr(chunk) {
     stderrBytes += chunk.length;
+    if (passStderr) {
+      try { process.stderr.write(chunk); } catch { /* host closed stderr */ }
+    }
     try {
       if (!stderrArtifact) {
         stderrArtifact = saveOutputArtifact('', { root, tool: `${server}-stderr`, kind: 'stderr' });
@@ -279,7 +286,12 @@ function runGateway({ server, command, args = [], root = process.cwd() }) {
       const diagnostic = stderrArtifact ? `stderr retained at ${stderrArtifact.path} (${stderrBytes} bytes${retentionError ? ', retention incomplete' : ''})` : 'no stderr diagnostic retained';
       process.stderr.write(`output-level-mcp: ${server} ${cleanupError ? 'cleanup failed' : error ? 'unable to start' : 'exited'} (${cleanupError ? `${cleanupError}; survivors=${(survivors ?? []).join(',')}` : error?.code ?? exitCode ?? signal}); ${diagnostic}\n`);
     }
-    process.exitCode = error || cleanupError ? 1 : stopping ? 0 : (exitCode ?? 1);
+    // Non-zero upstream exits must win over a later host EOF (`stopping`): otherwise a
+    // crashed server looks like a clean shutdown when the client closes stdin.
+    process.exitCode = error || cleanupError ? 1
+      : (typeof exitCode === 'number' && exitCode !== 0) ? exitCode
+      : stopping ? 0
+      : (exitCode ?? 1);
     process.removeListener('SIGTERM', stop); process.removeListener('SIGINT', stop);
     hostLines.close(); process.stdin.destroy();
   });

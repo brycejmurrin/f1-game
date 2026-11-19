@@ -17,9 +17,14 @@
 // Exit 0 every condition held · 124 timeout (nothing is killed) · 2 usage error (an unknown flag, or a foreground --timeout over the cap).
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { pidAlive } from "../lib/deploy-status.mjs";
+
+/** Repo root — `--merged` must not inherit a foreign `process.cwd()` (from /tmp it
+ *  falsely answered "not yet on deploy" because git had no repository). */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** The deploy branch a `--merged` wait reads (fetched each poll). */
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
@@ -103,9 +108,20 @@ export function parseArgs(argv) {
 }
 
 /** Is `sha` on the deploy tip? Fetches first so a stale clone never answers "no" forever. */
-export function mergedOnDeploy(sha, { cwd = process.cwd(), run = spawnSync } = {}) {
+export function mergedOnDeploy(sha, { cwd = ROOT, run = spawnSync } = {}) {
   run("git", ["fetch", "-q", "origin", DEPLOY_BRANCH], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return run("git", ["merge-base", "--is-ancestor", sha, `origin/${DEPLOY_BRANCH}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).status === 0;
+}
+
+/** Resolve relative `--file-nonempty` / `--log-matches` paths against the repo root
+ *  so a waiter started from another cwd still sees `artifacts/logs/…`. Absolute paths stay. */
+export function resolveCondPaths(conds, root = ROOT) {
+  return conds.map((c) => {
+    if ((c.kind === "file" || c.kind === "log") && c.path && !path.isAbsolute(c.path)) {
+      return { ...c, path: path.resolve(root, c.path) };
+    }
+    return c;
+  });
 }
 
 export const load1 = () => {
@@ -145,7 +161,7 @@ async function main() {
   if (a.help) { console.log(USAGE); return 0; }
   const cap = capForeground(a.timeoutMin, a.background || process.env.APEX_WAIT_BACKGROUND === "1");
   if (cap.error) { console.error(cap.error); return 2; }
-  const r = await waitFor(a.conds, a);
+  const r = await waitFor(resolveCondPaths(a.conds), a);
   console.log(r.text);
   return r.code;
 }

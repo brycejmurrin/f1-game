@@ -2,7 +2,9 @@
  * The DAILY pick ran the session stub's no-op prepareDaily; the bundle's onRaceSessionReady (the 9 s idle
  * prefetch) then moved teamIdx/driverIdx/difficulty mid-intro, entrySettings changed, live() went false
  * and START came back with no garage-out. raceIntroFromSheet now loads the bundle under the sheet first
- * and snapshots the request after it. Runs the real function from js/game.js in a vm harness. */
+ * and snapshots the request after it. Runs the real function from js/game.js in a vm harness.
+ * #5813 (Pages 44435424111): the gate read the GLOBAL SessionRecords._stub, which the bundle replaces before its
+ * hook swaps game.js's `records` instance; a tap in that gap started the intro over the stub instance. */
 import { test } from "node:test";
 import assert from "node:assert";
 import vm from "node:vm";
@@ -12,7 +14,7 @@ const game = gameSource();
 const wrapper = game.slice(game.indexOf("function raceIntroFromSheet("), game.indexOf("function raceIntro(go) {"));
 const awaitWarm = game.slice(game.indexOf("async function awaitIntroWarm("), game.indexOf("// THE STUDIO DRIVE-OUT:"));
 
-function harness({ dailyOn, stub, cls = "standard" }) {
+function harness({ dailyOn, stub, cls = "standard", globalStub = stub }) {
   const events = [];
   const btn = { textContent: "START TIME TRIAL", disabled: false }, back = { disabled: false }, sheet = { hidden: false };
   const ctx = {
@@ -24,7 +26,8 @@ function harness({ dailyOn, stub, cls = "standard" }) {
     GarageDepartureMotion: {}, GarageDepartureWheels: {},
     UiExperience: { isPracticePick: () => false }, isTimeTrial: () => true,
     entrySettings: () => ctx.settings, loadingScreen: { stop() {} }, cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
-    daily: { isActive: () => dailyOn, current: () => (dailyOn ? { class: cls } : null) }, SessionRecords: stub ? { _stub: true } : {},
+    daily: { isActive: () => dailyOn, current: () => (dailyOn ? { class: cls } : null) }, SessionRecords: globalStub ? { _stub: true } : {},
+    records: stub ? { _stub: true } : {},   // the instance onRaceSessionReady swaps (its prepareDaily is the one that ran)
     // The bundle's ready hook: a STANDARD daily's prepareDaily moves the car/driver/difficulty.
     ensureRaceSession: async () => { events.push(["session"]); ctx.settings = "after"; return true; },
     raceIntro: () => events.push(["intro", ctx.settings]),
@@ -50,4 +53,12 @@ test("no DAILY, the bundle already landed, or an OPEN-class daily: the intro sta
     h.ctx.raceIntroFromSheet(() => {}, h.sheet, h.btn);
     assert.deepStrictEqual(h.events, [["intro", "before"]], JSON.stringify({ dailyOn, stub, cls }));
   }
+});
+
+test("the real SessionRecords global evaluated but its hook not yet run (#5813): the intro still waits for the bundle", async () => {
+  const h = harness({ dailyOn: true, stub: true, globalStub: false });
+  h.ctx.raceIntroFromSheet(() => {}, h.sheet, h.btn);
+  assert.deepStrictEqual(h.events, [["session"]], "records is still the stub instance: its prepareDaily was a no-op");
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.deepStrictEqual(h.events, [["session"], ["intro", "after"]], "the intro runs on the post-prepareDaily request");
 });

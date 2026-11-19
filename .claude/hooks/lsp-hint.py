@@ -141,7 +141,7 @@ def main():
     call = "lsp_definition" if is_decl else "lsp_references"
     cli = "def" if is_decl else "refs"
     msg = (f"lsp-hint: `{sym}` is a JS symbol; for the next lookup apex-lsp answers this semantically "
-           f"(MCP {call} {{symbol: \"{sym}\"}}, lsp_callers for who calls it; shell: tools/mcp/lsp-mcp.sh {cli} {sym}) — "
+           f"(MCP {call} {{symbol: \"{sym}\"}}, lsp_callers for who calls it; shell: node tools/mcp/lsp-mcp.mjs {cli} {sym}) — "
            "rows tagged [def|export|alias|use] with the enclosing function, comments and strings excluded. "
            "grep stays right for text, comments, CSS and regexes.")
     event = data.get("hook_event_name") or "PostToolUse"

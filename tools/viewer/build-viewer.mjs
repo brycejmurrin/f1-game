@@ -75,7 +75,12 @@ export async function buildViewer(args) {
   return result;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+    && (process.argv.includes("--help") || process.argv.includes("-h"))) {
+  // The usage is the header comment: print it rather than keep a second copy.
+  const head = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n");
+  console.log(head.slice(4, head.findIndex((l, i) => i > 4 && l === "//")).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+} else if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = parseArgs(process.argv.slice(2));
     if (args.list) {

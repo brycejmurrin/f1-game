@@ -368,6 +368,20 @@ test("visor clear (audit4 R1): Droplets.clear() at race exit takes the light lay
   assert.equal(calls.inserted.hidden, true, "…and its canvas");
 });
 
+test("visor exit via Droplets (#4751 row 15): leaving the onboard cam in the dry still takes the shed layer down", () => {
+  // Droplets.tick calls VisorOptics.tick BEFORE its onboard/rain gate on purpose: the gate returns early off-board
+  // and in the dry, and the visor's own exit (hide, clear the shed/budget attributes) must still run on that frame.
+  const arm = load({ apex: { visorScene: () => DAY } });
+  arm.ctx.GLX = { isMobile: true };
+  arm.ctx.PerfGov = { lookPostShed: () => true };
+  Object.assign(arm.ctx.CockpitOpts, { visorRain: () => "normal", visorRunoff: () => "normal" });   // the droplet knobs Droplets reads
+  const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", arm.ctx, { filename: absSrc("js/fx/droplets.js") });
+  D.tick(1 / 60, true, 0, false, 30, false);
+  assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [true, "1"], "onboard, dry, under pressure: the visor sheds");
+  D.tick(1 / 60, false, 0, false, 30, false);
+  assert.deepEqual([arm.V.stats().shown, arm.V.stats().shed, arm.calls.attrs["data-visor-shed"], arm.calls.attrs["data-visor-budget"]], [false, false, undefined, undefined]);
+});
+
 test("visor size (audit4 R2): turning the visor ON mid-helmet sizes the new canvas before its first paint", () => {
   const { V, calls, listeners, live } = load({ apex: { visorScene: () => DAY }, visor: "off" });
   V.tick(1 / 60, true, 0, false);                     // visor OFF: _size records the viewport, no canvas yet

@@ -5,6 +5,8 @@
  *   node tools/mcp/browser-http-up.mjs [--idle-min 30] [--allow-query-token]
  *   node tools/mcp/browser-http-up.mjs --stop      # stop the recorded server + tunnel, forget the token
  *   node tools/mcp/browser-http-up.mjs --dry-run   # print what would run; starts nothing, downloads nothing
+ *   node tools/mcp/browser-http-up.mjs --status    # the recorded state and whether each end answers; starts nothing
+ *   node tools/mcp/browser-http-up.mjs --help      # this usage; any other flag is refused (exit 2), never a start
  *
  * Prints:
  *   phone-browser reuse https://…/mcp            (plus the Authorization header line)
@@ -41,14 +43,15 @@ const pinUrl = (pin) => `https://github.com/cloudflare/cloudflared/releases/down
 // regenerable download: scratch/, never /tmp (AGENTS.md); versioned so a bump never runs the old file
 const CLOUDFLARED = path.join(DIR, `cloudflared-${CLOUDFLARED_PIN.version}`);
 
-export const USAGE = "usage: node tools/mcp/browser-http-up.mjs [--idle-min 30] [--allow-query-token] [--dry-run] | --stop | --help";
-/** Strict argv: {help} | {error} (exit 2, nothing started) | {stop} | {idleMin, allowQueryToken, dryRun}. */
+export const USAGE = "usage: node tools/mcp/browser-http-up.mjs [--idle-min 30] [--allow-query-token] [--dry-run] | --stop | --status | --help";
+/** Strict argv: {help} | {error} (exit 2, nothing started) | {stop} | {status} | {idleMin, allowQueryToken, dryRun}. */
 export function parseUpArgs(argv) {
   const out = { stop: false, dryRun: false, allowQueryToken: false, idleMin: 30 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--help" || a === "-h") return { help: true };
+    if (a === "--help" || a === "-h") return argv.length === 1 ? { help: true } : { error: "--help takes no other flags" };
     if (a === "--stop") out.stop = true;
+    else if (a === "--status") out.status = true;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--allow-query-token") out.allowQueryToken = true;
     else if (a === "--idle-min") {
@@ -57,8 +60,14 @@ export function parseUpArgs(argv) {
       out.idleMin = n;
     } else return { error: `unknown argument ${JSON.stringify(a)}` };
   }
-  if (out.stop && (out.dryRun || out.allowQueryToken || argv.includes("--idle-min"))) return { error: "--stop takes no other flags" };
+  if ((out.stop || out.status) && argv.length !== 1) return { error: `${out.stop ? "--stop" : "--status"} takes no other flags` };
   return out;
+}
+
+/** The CLI mode for argv: only a run with no mode flag starts anything (#5674). */
+export function cliMode(argv) {
+  const o = parseUpArgs(argv);
+  return o.help ? "help" : o.error ? "bad" : o.stop ? "stop" : o.status ? "status" : o.dryRun ? "dry-run" : "up";
 }
 
 export const sha256Of = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -161,7 +170,14 @@ async function waitFor(label, probe) {
 const serverArgs = (opts) => ["tools/mcp/browser-http.mjs", "--port", String(PORT), "--idle-min", String(opts.idleMin),
   ...(opts.allowQueryToken ? ["--allow-query-token"] : [])];
 
-async function bringUp(opts) {
+const DEFAULT_IO = { readState, writeState, clearState: () => rmSync(STATE, { force: true }), ping, detach, ensureCloudflared: () => ensureCloudflared(), waitFor,
+  stop: (state) => stopRecorded(state), resetLog: () => { mkdirSync(DIR, { recursive: true }); writeFileSync(LOG, ""); }, readLog: () => readFileSync(LOG, "utf8") };
+
+/** Start what is dead. The pinned binary is checked before anything starts; state is written as each process starts,
+ *  and any later failure stops what started, so nothing is left that `--stop` cannot find (#5674). `io` is injectable
+ *  for the unit test. */
+export async function bringUp(opts, io = DEFAULT_IO) {
+  const { readState, writeState, clearState, ping, detach, ensureCloudflared, waitFor, stop, resetLog, readLog } = io;
   const prior = readState();
   const localOk = await ping(`http://127.0.0.1:${PORT}/healthz`);
   const publicOk = prior.host ? await ping(prior.host + "/healthz") : false;
@@ -172,8 +188,8 @@ async function bringUp(opts) {
   // A live server with no recorded PID was started by a run whose state is gone: refuse rather than guess.
   if (localOk && !Number.isInteger(prior.serverPid)) throw new Error("a server is live on :" + PORT + " with no recorded PID: stop it (its PID: ps), then re-run");
   if (localOk || Number.isInteger(prior.tunnelPid)) {
-    stopRecorded(prior);
-    rmSync(STATE, { force: true });
+    stop(prior);
+    clearState();
     await waitFor("old server exit", async () => !(await ping(`http://127.0.0.1:${PORT}/healthz`)));
   }
   const bin = await ensureCloudflared();   // before anything starts: a refused binary leaves nothing running
@@ -183,11 +199,11 @@ async function bringUp(opts) {
     state.serverPid = detach(process.execPath, serverArgs(opts), { ...process.env, APEX_MCP_TOKEN: token }, SERVER_LOG);
     await waitFor("browser mcp", () => ping(`http://127.0.0.1:${PORT}/healthz`));
     writeState(state);   // recorded at once: --stop can clean up whatever fails next
-    writeFileSync(LOG, "");
+    resetLog();
     state.tunnelPid = detach(bin, ["tunnel", "--url", `http://127.0.0.1:${PORT}`, "--no-autoupdate"], process.env, LOG);
     writeState(state);
     const host = await waitFor("tunnel", () => {
-      try { return tunnelUrlFromLog(readFileSync(LOG, "utf8")); }
+      try { return tunnelUrlFromLog(readLog()); }
       catch { return null; }
     });
     await waitFor("public mcp", () => ping(host + "/healthz"));
@@ -195,8 +211,8 @@ async function bringUp(opts) {
     writeState(state);
     return { kind: "new", host, token, allowQueryToken: opts.allowQueryToken };
   } catch (e) {
-    stopRecorded(state);
-    rmSync(STATE, { force: true });
+    stop(state);
+    clearState();
     throw e;
   }
 }
@@ -209,6 +225,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     for (const line of stopRecorded(readState())) console.log("phone-browser " + line);
     rmSync(STATE, { force: true });
     console.log("phone-browser stopped; the next run mints a new token and URL");
+    process.exit(0);
+  }
+  if (opts.status) {
+    const st = readState();
+    const localOk = await ping(`http://127.0.0.1:${PORT}/healthz`);
+    const publicOk = st.host ? await ping(st.host + "/healthz") : false;
+    console.log(JSON.stringify({ state: { ...st, token: st.token ? "(recorded)" : null }, localOk, publicOk }));
     process.exit(0);
   }
   if (opts.dryRun) {

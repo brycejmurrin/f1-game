@@ -3,6 +3,12 @@
     "js/game.js": {
       "codeLines": 2,
       "lines": 2
+    },
+    "js/ui/hud.js": {
+      "lines": -25
     }
+  },
+  "tree": {
+    "eagerBytes": 1225
   }
 }

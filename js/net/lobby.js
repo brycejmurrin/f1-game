@@ -9,6 +9,7 @@ const NetLobby = (function () {
     const $ = (id) => document.getElementById(id);
     const transports = new Map();
     let transport = null;                  // the pending one, mid-handshake
+    let raceHeld = false, tearingDown = false; // stop("local") after finishStart ≠ peer leave
     let nextGuestId = 0;
     let codeRoom = null;
     // The room code we closed while a guest's answer negotiates, and must
@@ -225,7 +226,7 @@ const NetLobby = (function () {
         return null;
       }
       const id = pendingId;
-      transport.onClose(() => {
+      transport.onClose((why) => {
         // Belt and braces: the transport that emitted close has already
         // released itself, but close it BEFORE the map delete so a future
         // close-emitter that does not self-release cannot leak past
@@ -244,8 +245,9 @@ const NetLobby = (function () {
         clashDrop(id);
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
-        Log.info("net", "peer leave " + id);
         if (hostEvictingIds.has(id)) hostEvictingIds.delete(id);
+        if (tearingDown) return;
+        Log.info("net", "peer leave " + id + (why ? " " + why : ""));
         session = [...sessions.values()][0] || null;
         // OCCUPANCY IS TRANSPORTS, NOT LOBBY SESSIONS. finishStart() hands the
         // sessions map to NetPlay and clears it, but leaves transports up for
@@ -264,6 +266,8 @@ const NetLobby = (function () {
           // roomState().peers and would wait forever for a lap the gone host
           // can no longer relay (2p never saw it — no relayed roster).
           _peers.clear(); _ready.clear(); selfReady = false; clashClear();
+          if (raceHeld && why === "local") { raceHeld = false; return; } // local quit (in/after race): onStop restores
+          raceHeld = false;
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else if (wasHostEvict && role === "host") {
@@ -358,9 +362,9 @@ const NetLobby = (function () {
     }
 
     function teardown() {
+      tearingDown = true; raceHeld = false;
       consumeHandledInvite(); stopPoll();
-      clearInterval(pumpTimer);
-      pumpTimer = null;
+      clearInterval(pumpTimer); pumpTimer = null;
       for (const timer of rosterTimers.values()) clearTimeout(timer);
       rosterTimers.clear();
       settingsAccepted = true; settingsNeedsReady = false; settingsRevision = 0; settingsFingerprint = null;
@@ -371,15 +375,11 @@ const NetLobby = (function () {
       codeReopen = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
-      sessions.clear();
-      session = null;
+      sessions.clear(); session = null;
       for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
       transports.clear(); _verify.clear(); _verified.clear();
       if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
-      transport = null;
-      pendingId = null;
-      nextGuestId = 0;
-      hostRemovedMe = false;
+      transport = null; pendingId = null; nextGuestId = 0; hostRemovedMe = false; tearingDown = false;
     }
 
     // "It didn't work" is not an answer a player can act on, and the two ways
@@ -564,7 +564,7 @@ const NetLobby = (function () {
         _verify.set(id, v); _verified.delete(id);   // unticked: READY waits for CODES MATCH (#5313)
         say("Connected. Check both screens show code " + v + ", then tap CODES MATCH.");
         if (selfReady) setReady(false); else renderRoom();
-      });
+      }).catch((e) => { Log.warn("net", "verify code failed:", e && e.message); });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       reopenRoom(transports.size < MAX_GUESTS);
       session = [...sessions.values()][0];
@@ -1434,13 +1434,13 @@ const NetLobby = (function () {
       session = null;                    // owned by NetPlay now
       sessions.clear();
       if (!started.ok) {
-        say(started.message || "Could not start the session.", true);
+        raceHeld = false; say(started.message || "Could not start the session.", true);
         // q-go already cleared qualiNetDone, so quitToMenu would not cancel.
         cancel();
         if (G.quitToMenu) G.quitToMenu();
         return;
       }
-      if (role === "host") G.netPlay.hostStart();
+      raceHeld = true; if (role === "host") G.netPlay.hostStart();
       close();
     }
 
@@ -2229,6 +2229,11 @@ const NetLobby = (function () {
         const e = els();
         if (transports.size > 0 && e.roomStep && e.roomStep.hidden) { backToRoom(); return; }
         cancel();
+        // A friend's link that arrived while this room was up was deferred, and the
+        // status line said CLOSE opens it: do that now, so it is neither lost nor
+        // left in the URL to prefill JOIN on the next launch (#5739 row 2).
+        const waiting = deferredInvite; deferredInvite = null;
+        if (waiting && NetHandshake.inviteFromUrl() === waiting) openFromUrl();
       });
       // BACK from a HOST / JOIN / code step with nobody connected: tear down
       // only this attempt (cancel() minus the close) and return to the choice.
@@ -2293,6 +2298,7 @@ const NetLobby = (function () {
     // down by a link — the fragment waits for the player instead.
     let hashWired = false;
     let urlInvite = null;          // the code last opened from the URL
+    let deferredInvite = null;     // a link that arrived while in a room: CLOSE opens it
     function openFromUrl() {
       const code = NetHandshake.inviteFromUrl();
       if (!code) return false;
@@ -2307,9 +2313,10 @@ const NetLobby = (function () {
       const hosting = role === "host" && (!!transport || !!codeRoom);
       if (racing || session || transports.size > 0 || hosting) {
         Log.info("net", "lobby invite link ignored: " + (racing ? "racing" : "in a room"));
+        if (!racing && e.screen && !e.screen.hidden) { deferredInvite = code; say("A friend's invite link arrived — CLOSE this room to join it."); }
         return false;
       }
-      urlInvite = code;
+      urlInvite = code; deferredInvite = null;
       // open() can refuse (title sheet already up); do not join() into a hidden lobby.
       if (!open()) return false;
       join();
