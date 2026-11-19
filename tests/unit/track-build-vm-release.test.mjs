@@ -223,7 +223,14 @@ const STRIP = {
   //   re-seat on the 19 official apexes (the hash-picked braking-board sets
   //   key on the apex node). +432 emitted / +432 survive; the strip itself
   //   is unchanged (19026). Emission 274359 → 274791, strip-after 255333 → 255765.
-  monaco: { before: 274791, after: 255765 },
+  // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): curved
+  //   bleacher/scaffold rows span to their chord midpoints and rails take their
+  //   own tier. Emission 274099 → 274135, strip-after 255181 → 255289.
+  // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+36 emitted) → 274395 / 255441.
+  // → curveTier drops a sub-10 cm sideways sagitta (2026-11-11, mexico coplanar): same
+  //   emission, 34 more enclosed faces stripped: strip-after 255441 → 255407.
+  // → merged (#5303 over #5511, 2026-11-11): the deltas add exactly (+36 emitted, +74 strip-after) → 274827 / 255839.
+  monaco: { before: 274827, after: 255839 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -280,7 +287,11 @@ const STRIP = {
   // → #5080 (PR #5254, 2026-11-10): the Rettifilo gravel is trimmed per cell instead
   //   of dropped whole; cells under the asphalt are left out. Emission 313768 → 313916,
   //   strip-after 284782 → 284930.
-  monza: { before: 313916, after: 284930 },
+  // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): the bowl
+  //   tiers meet on the outside of the Curva Grande / Parabolica bends, fascia
+  //   lip at seg. Emission 313768 → 313948, strip-after 284782 → 284931.
+  // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+180 emitted) → 314096 / 285079.
+  monza: { before: 314096, after: 285079 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

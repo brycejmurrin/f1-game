@@ -446,6 +446,10 @@ const SceneryStructures = (function () {
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
       ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
+        // Explicit mat 0: an unstamped op inherited whatever a circuit closure
+        // left in out._mat (zandvoort's stage: METAL/FABRIC) inline, while the
+        // instanced canonical mesh drew 0 (graph-parity matInherit).
+        rec.mat(0);
         if (st === "cabin") {                          // timber lean-to, open front
           rec.box([0, 1.0, 0], [2.0, 2.8, 2.6], [0.52, 0.40, 0.28]); // top 2.4
           // Seat on the wall (was 2.7 → 0.30 m air gap). Eaves 2.2×2.4 (was

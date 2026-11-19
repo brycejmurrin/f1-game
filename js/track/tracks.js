@@ -195,28 +195,6 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
-    // ── THE PIT LANE IS REAL TARMAC, NOT A STRIP CARVED OUT OF THE ROAD ──────
-    // Painted INSIDE the racing surface, the lane eats 3.2 m of the road's
-    // width, so a narrow circuit races on less road because a pit lane
-    // exists. Widen the road across the pit window instead, by exactly the
-    // lane's width, so the racing surface is untouched and the lane is new
-    // tarmac beyond the racing edge.
-    //
-    // WHY HERE: the curvature LUT is baked two lines up and the mesh is not
-    // built until build(), so this is the one seam where the window can be
-    // derived from the arc AND still reach the road, the kerbs and the banking.
-    //
-    // WHY SYMMETRIC: `hw` is ONE half-width per node and every consumer — mesh,
-    // kerbs, banking, sampling, projection — builds from +/-hw about the
-    // centreline. A one-sided widening needs a centreline-offset array threaded
-    // through all of them, which is a different change. Widening both sides is
-    // what this engine can express, and it is not a fudge: real pit straights
-    // ARE wide, and the extra room on the far side is the start/finish straight
-    // getting the width it should have had.
-    //
-    // The taper matters more than the width. A step in `hw` is a step in the
-    // road mesh, the kerb line and the racing-line LUT all at once, so the
-    // window opens and closes over PIT_TAPER metres.
     if (opts && opts.line === false) track.line = null; else TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;

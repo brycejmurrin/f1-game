@@ -143,13 +143,19 @@ const SceneryIdentity = (function () {
         ctx.noteSuppressed("ledFacadeBands", `ledFacadeBands SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
         return;
       }
+      // addFrustum anchors at its BASE: each band starts at c + i*bh along the
+      // basis up axis (it was handed the band MIDPOINT, so the stack rode half
+      // a band high and overshot Miami's 44 m core by ~1.4 m), and the taper is
+      // one line rAt(y) from r0 at the foot to 0.45 r0 at h, so a band's top
+      // radius is the next band's base radius scaled to the same line.
+      const up = basis ? basis[1] : [0, 1, 0];
+      const rAt = (y) => r0 * (1 - 0.55 * y / h);
+      const bandH = bh * 0.92;
       for (let i = 0; i < bands; i++) {
-        const t = i / Math.max(1, bands - 1);
-        const rB = r0 * (1 - t * 0.55);
-        const rT = r0 * (1 - (t + 1 / bands) * 0.55);
+        const y0 = i * bh;
         const col = cols[i % cols.length];
-        const mid = [c[0], c[1] + (i + 0.5) * bh, c[2]];
-        addFrustum(out, mid, rB, Math.max(0.4, rT), bh * 0.92, col, seg, basis);
+        const foot = [c[0] + up[0] * y0, c[1] + up[1] * y0, c[2] + up[2] * y0];
+        addFrustum(out, foot, rAt(y0), Math.max(0.4, rAt(y0 + bandH)), bandH, col, seg, basis);
       }
     };
 
