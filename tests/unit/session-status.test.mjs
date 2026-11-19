@@ -230,7 +230,7 @@ test("CLI --summary --json keeps the full JSON contract; default Markdown remain
 
 // Independent advisory tools: no network, browser, claims or reservations.
 const { explainPrWait, collectPrWait } = await import("../../tools/ci/pr-wait.mjs");
-const { comparePaths, collectOverlap } = await import("../../tools/ci/path-overlap.mjs");
+const { comparePaths, collectOverlap, MAX_PRS } = await import("../../tools/ci/path-overlap.mjs");
 
 test("pr-wait: pending concurrency, generic queue and execution remain distinct without fake position", () => {
   const snapshot = { complete: true, pr: { number: 7, state: "open", head: { sha: SHA } },
@@ -295,6 +295,18 @@ test("pr-wait: terminal CI failure names its actual failed job, not a guessed as
   assert.equal(out.reasons[0].detail, "Job failed; assertion requires its log");
 });
 
+// 62 open PRs once made every run incomplete under a 50-PR cap (#5712).
+test("path-overlap: a 62-PR board is inspected in full", () => {
+  assert.equal(MAX_PRS, 300);
+  const prs = Array.from({ length: 62 }, (_, i) => ({ number: i + 1, head: { sha: "s" + i } }));
+  const request = (u) => /^pulls\?/.test(u) ? { json: prs }
+    : /\/files/.test(u) ? { json: [] } : { json: { head: { sha: "s" + (Number(/pulls\/(\d+)/.exec(u)[1]) - 1) } } };
+  const out = collectOverlap({ owned: ["fixture-race/a.txt"] }, { request });
+  assert.equal(out.checkedPrs, 62);
+  assert.equal(out.complete, true);
+  assert.equal(out.state, "no-observed-overlap");
+});
+
 test("path-overlap: changing PR heads and invalid inventories remain incomplete", () => {
   const request = (p) => p.startsWith("pulls?") ? { json: [{ number: 7, head: { sha: SHA } }] }
     : p.includes("/files") ? { json: [] } : { json: { head: { sha: OTHER } } };
@@ -356,12 +368,13 @@ test("pr-wait: newer ignored display titles never supersede real running or fail
 
 test("path-overlap: bounded inventories preserve observed matches and disclose omissions", () => {
   const files = Array.from({ length: 301 }, (_, i) => `fixture-race/file-${i}.txt`);
-  const prs = Array.from({ length: 51 }, (_, i) => ({ number: i + 1, files }));
+  // Only the first PR overflows its file list, so the 64-row issue list keeps the assignments row.
+  const prs = Array.from({ length: MAX_PRS + 1 }, (_, i) => ({ number: i + 1, files: i ? files.slice(0, 1) : files }));
   const assignments = Array.from({ length: 33 }, (_, i) => ({ owner: `sibling-${i}`, owned: ["fixture-race/"] }));
   const out = comparePaths({ complete: true, owned: ["fixture-race/"], forbidden: [], prs, assignments });
   assert.equal(out.state, "overlap");
   assert.equal(out.complete, false);
-  assert.equal(out.checkedPrs, 50);
+  assert.equal(out.checkedPrs, MAX_PRS);
   assert.equal(out.checkedAssignments, 32);
   assert.equal(out.overlaps.length, 200);
   assert.equal(out.overlaps[0].other, files[0]);

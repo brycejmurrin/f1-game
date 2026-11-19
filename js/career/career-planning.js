@@ -36,8 +36,7 @@ const CareerPlanning = (function () {
     function chooseStake(committed) {
       if (!c() || ctx.blocked() || api().objectiveLocked() || api().seasonDone()) return false;
       if (committed && stakeShort()) return false;
-      c().briefStake = { year: c().year, round: c().season.round, committed: !!committed, escrow: 0 };
-      ctx.save(); return api().saveStatus().ok;
+      return ctx.commit(() => { c().briefStake = { year: c().year, round: c().season.round, committed: !!committed, escrow: 0 }; });
     }
     function escrow(r) {
       if (!stake(r) || ctx.blocked()) return 0;
@@ -145,9 +144,7 @@ const CareerPlanning = (function () {
     function chooseSponsor(i) {
       const sp = api().sponsor();
       if (!c() || ctx.blocked() || !sp || c().season.round !== sp.start || api().objectiveLocked() || (i !== 0 && i !== 1)) return false;
-      c().sponsorPicks = c().sponsorPicks || {};
-      c().sponsorPicks[key(sp.idx)] = i;
-      ctx.save(); return api().saveStatus().ok;
+      return ctx.commit(() => { c().sponsorPicks = c().sponsorPicks || {}; c().sponsorPicks[key(sp.idx)] = i; });
     }
     function lastSponsor() {
       if (!c() || !c().season.round) return null;

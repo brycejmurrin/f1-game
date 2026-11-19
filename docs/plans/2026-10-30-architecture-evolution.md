@@ -85,9 +85,9 @@ Scratch and artifacts are evidence, not deploy inputs.
 
 The phrase “no build step” describes direct local source execution. Deployment
 DOES stage, generate built content, minify copied JS, and stamp hashes/SRI:
-[stage](../../tools/desktop/stage.mjs:1),
-[allow-list](../../tools/desktop/stage-files.mjs:1),
-[generated/built inventory](../../tools/lib/generated-paths.mjs:1).
+[stage](../../tools/desktop/stage.mjs),
+[allow-list](../../tools/desktop/stage-files.mjs),
+[generated/built inventory](../../tools/lib/generated-paths.mjs).
 Any ESM or new content proposal must work in the staged tree and wrappers.
 
 ## Documentation drift, structural causes and hotspots

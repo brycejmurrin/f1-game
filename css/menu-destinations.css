@@ -267,14 +267,6 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   }
   body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) > span { min-width: 0; max-width: 100%; }
 }
-@media (min-height: 520px), (max-aspect-ratio: 1/1) {
-  body #overlay #menu-buttons #menu-secondary > .bigbtn {
-    overflow-wrap: normal;
-    word-break: normal;
-    text-wrap: balance;
-    line-height: 1.1;
-  }
-}
 /* 1440p and 21:9: a measure, not half the monitor. Local tokens — no
    responsive-foundation PR was open (searched 2026-10-29). */
 @media (min-width: 1680px) and (min-height: 700px) {
@@ -321,6 +313,9 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 #overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
 #overlay #menu-buttons .bigbtn::before { background: none; }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
+body #overlay #menu-buttons #menu-secondary > .bigbtn {
+  overflow-wrap: normal; word-break: normal; text-wrap: balance; line-height: 1.1;
+}
 }
 /* At comfortable heights the destinations retain their groups instead of
    dissolving into a field of equal tiles. DOM order is the reading order. */
