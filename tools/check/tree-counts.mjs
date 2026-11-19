@@ -16,6 +16,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { CSS_SOURCES } from "../lib/css-source.mjs";
+import { wallAt } from "./boot-wall.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -248,13 +249,16 @@ export function colorForks(all = sheets()) {
 }
 export const rawColorDistinct = () => colorForks().size;
 
-/** The css/-only tree counts measured at a git ref: what ratchets.mjs needs to
- *  tell a branch's OWN lowering (head minus merge-base) from a loose base (#4257). */
+/** The tree counts measured at a git ref (the css/ scans and the boot wall,
+ *  tools/check/boot-wall.mjs): what ratchets.mjs needs to tell a branch's OWN
+ *  lowering (head minus merge-base) from a loose base (#4257). */
 export const AT_REF = {
   rawColor: (ref) => colorLiterals(sheetsAt(ref)).length,
   rawColorDistinct: (ref) => colorForks(sheetsAt(ref)).size,
   rawSpacing: (ref) => rawSpacingReport(sheetsAt(ref)).length,
   subFloorFontSize: (ref) => subFloorFontSizeReport(sheetsAt(ref)).length,
+  eagerScripts: (ref) => wallAt(ref).scripts,
+  eagerBytes: (ref) => wallAt(ref).bytes,
 };
 
 /** Sheets that space themselves entirely in raw px and read neither --pad nor

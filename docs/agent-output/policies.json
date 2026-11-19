@@ -261,6 +261,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/check/boot-wall.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes) for the eager* tree ratchets; no CLI output"
+    },
     "tools/check/brake-cue-calibrate.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -665,6 +670,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Library: byOwner / isDecisionComment / ownerSet verdicts and the paginated event and comment readers; no CLI output"
+    },
+    "tools/ci/lib/tip-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: runTipGate / tipView verdicts (state, tip sha, failed test names, evidence) for merge-gate's base row; no CLI output"
     },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",

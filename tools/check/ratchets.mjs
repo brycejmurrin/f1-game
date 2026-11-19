@@ -98,6 +98,13 @@ export const TREE_METRICS = {
   // browser spec that could run in the VM adapter but still spends
   // SwiftShader minutes. All three are shrink-only.
   zeroRefModules: async () => (await import("./tree-counts.mjs")).zeroRefModules(),
+  // The boot wall (tools/check/boot-wall.mjs; tests/unit/boot-load-budget.test.mjs asserts it): every visit parses
+  // these before the title. They left that test's hand-written MAX_EAGER_* constants (2026-11-19,
+  // docs/notes/BUDGET-RATCHETS-2026-11-19.md): each PR re-measured them on its own old tip, so two fixers'
+  // numbers went stale against each other. Here a lowering is the branch's own fragment delta and a raise is
+  // Bryce's `ratchet-raise` (merge-gate raise row).
+  eagerScripts: async () => (await import("./boot-wall.mjs")).wallNow().scripts,
+  eagerBytes: async () => (await import("./boot-wall.mjs")).wallNow().bytes,
   implicitAsserts: async () => {
     const { audit } = await import("../ci/assert-audit.mjs");
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;

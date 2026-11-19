@@ -187,7 +187,7 @@ test("two PRs raising the same TREE metric as fragments merge clean in either or
   const r = repo();
   t.after(() => rmTemp(r.dir));
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(r.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(r.dir, rel), text); };
-  for (const rel of ["tools/check/tree-counts.mjs", "tools/lib/css-source.mjs"]) write(rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
+  for (const rel of ["tools/check/tree-counts.mjs", "tools/check/boot-wall.mjs", "tools/lib/generated-paths.mjs", "tools/lib/css-source.mjs"]) write(rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
   const cur = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8"));
   write("tests/data/ratchets.json", JSON.stringify({ ...cur, tree: { bareCatches: 0 } }));
   r.tool("--update", "--absolute");
