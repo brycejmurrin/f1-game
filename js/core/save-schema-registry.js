@@ -200,6 +200,7 @@ const SaveSchemaRegistry = (function () {
     photoBackground: entry("js/ui/photo-studio.js", "json", 1, "json"),
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
+    setupTrialRecover: entry("js/garage/setup-trials.js", "json", 1, "json"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
     xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),

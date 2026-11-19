@@ -507,3 +507,13 @@ while opening the recipient's own, different daily. Verified in Chromium with a 
 message naming the sender's circuit → the new message; a link dated today is unchanged. The underlying
 cause — the daily is keyed on the local date although the help says it is the same for every player — is a
 design decision and is not changed.
+
+### Fix 21 — a reload during a setup comparison no longer loses your setup (finding 7)
+
+`js/garage/setup-trials.js`: when a comparison writes a trial setup it also stores a small recovery record
+(the setup to restore and the trial setup it wrote; key registered in `js/core/save-schema-registry.js`).
+On the next load, garage visit or comparison, if the saved setup is still exactly the trial one, the
+original is restored; if the player has changed it since, it is left alone. Cancelling clears the record.
+Verified in Chromium with the comparison's launch stubbed: tuned {3,9,33,44,59}, baseline arm running,
+reload → before the fix the works baseline {8,6,22,62,56} stayed; after it the tuned setup is back and no
+record remains. Cancel still restores, and a setup edited by hand after the interruption is not overwritten.
