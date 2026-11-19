@@ -1085,6 +1085,9 @@
         "tests/unit/rival-contact-sfx.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
+      "detach": [
+        "tests/unit/rival-attach-init.test.mjs"
+      ],
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
@@ -6862,6 +6865,9 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "exportEnvelope": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
+      "exportFile": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "exportLibraryFile": [
@@ -15531,6 +15537,9 @@
       ]
     },
     "js/render/glx/soft.js": {
+      "_awaitFrame": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
       "awaitSoftPresent": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
