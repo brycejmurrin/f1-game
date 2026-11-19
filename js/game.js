@@ -3816,7 +3816,7 @@ function rescuePlayer(c) {
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);
   c.vLat = 0; c.yawRateCur = 0;
-  c.speed = Math.min(vTop(), Math.max(c.speed, 16 * Math.max(driveTune.PACE, 0.05)));
+  c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;
   c.boostOn = false; c.deploying = false;

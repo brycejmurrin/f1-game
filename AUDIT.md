@@ -331,6 +331,18 @@ Not folded into the ranking above; A1–A3 and A14 would sit in the top ten.
   record (disclosed in the credits); real team, driver and supplier names are used with a disclaimer that
   covers only the Formula 1 marks. THIRD-PARTY-NOTICES matches `vendor/` and `assets/`.
 
+- **A22. Spamming RECOVER CAR gave a much faster, fully valid race lap** — **ran**. `js/game.js:3812-3824`:
+  recover straightened the car on the racing line and kept its speed, with no cooldown, so full throttle
+  plus recover three times a second lapped Bahrain in 97.2 s against 135–138 s driven and a 120.6 s fastest
+  AI lap; the wrong-way auto-rescue likewise U-turned the car at 200 km/h. Would rank in the top five.
+  Fixed (fix 22).
+- **A23. A car stopped on the racing line gets about 60 s of green flag before it is removed** — **ran**.
+  `js/race/stopped-cars.js:21`, `js/game.js:3842`, `js/physics/ai-drive.js:610`: the caution resets the
+  stationary-retirement timer, which then only starts when the caution has ended.
+- **A24. A debris safety car always ends after about 6 s** — **ran**. `js/physics/debris-world.js:654,836`
+  despawns resting debris after 4 s and `js/race/race-control.js:347` only holds 6 s, so the field never
+  bunches.
+
 ## Fixes
 
 See "Fix log" at the end of this file; each fix is its own commit with how it was verified.
@@ -517,3 +529,11 @@ original is restored; if the player has changed it since, it is left alone. Canc
 Verified in Chromium with the comparison's launch stubbed: tuned {3,9,33,44,59}, baseline arm running,
 reload → before the fix the works baseline {8,6,22,62,56} stayed; after it the tuned setup is back and no
 record remains. Cancel still restores, and a setup edited by hand after the interruption is not overwritten.
+
+### Fix 22 — RECOVER CAR no longer keeps the car's speed (addendum A22)
+
+`js/game.js` `rescuePlayer`: the car is put back on the line at the recovery speed (16 m/s × pace) instead of
+keeping whatever speed it had. Verified in a simulated Bahrain race with full throttle and recover pressed
+three times a second for a lap: before, that lap took 97.19 s (valid, no penalty, player up to P1); after,
+the car is held at 16 m/s and did not complete the lap in the time the same test allows (P22). A single
+recover still gives a stopped car its 16 m/s push. The wrong-way auto-rescue uses the same function.
