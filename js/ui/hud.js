@@ -1141,7 +1141,7 @@ function updateHud(force, dtMs) {
   syncAlong();
   const sess = sessionOf(timeTrial);
   hText(els.pos, sess === "tt" ? "TT" : player.retired ? "DNF" : sess === "quali" ? "Q"
-    : sess === "practice" ? "PRAC" : (player.rank || "-") + "/" + cars.length);
+    : sess === "practice" ? "PRAC" : (player.rank || player.gridPos || "-") + "/" + cars.length);
   const rank = sess !== "race" || player.retired ? 0 : (player.rank || 0);
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
