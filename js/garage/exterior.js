@@ -206,9 +206,11 @@ const GarageExterior = (function () {
           let maxSliceMs = 0, uploadMs = 0;
           iterator = GarageExteriorGeometry.buildSteps(def, { teamId: s.teamId, night: s.night });
           let step;
+          // A show held on this build gets deps.sliceMs() of steps per yield (#5660); else one step.
           do {
             await wait(yieldTask()); if (!current()) return false;
-            const at = now(); step = iterator.next();
+            const at = now(), slice = deps.sliceMs ? deps.sliceMs() : 0;
+            do step = iterator.next(); while (!step.done && now() - at < slice);
             maxSliceMs = Math.max(maxSliceMs, now() - at);
           } while (!step.done);
           const data = step.value;

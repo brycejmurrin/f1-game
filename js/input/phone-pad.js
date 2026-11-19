@@ -24,7 +24,7 @@
 const PhonePad = (function () {
   const {
     PROTO, EVENTS, NAV_REPEAT, hudOf,
-    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent,
+    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, encodeSuspend, decodeEvent,
     teamHex, fmtLap, padUrl, codeFromUrl,
   } = PhonePadCodec;
   const { HELD, DASH, paintHud, pad } = PhonePadPage;
@@ -102,7 +102,7 @@ const PhonePad = (function () {
     // the phone page's peer id from its hello, which survives a re-dial.
     // whenId(ms) resolves with the id once the hello lands, or null after ms.
     let admitted = typeof opts.admit !== "function", gated = 0, rejectWhy = null;
-    let helloSeen = false, peerId = null, hapticsOn = false;
+    let helloSeen = false, peerId = null, hapticsOn = false, suspended = false;
     const idWaiters = [];
     const peer = { fp: remoteFingerprint(transport), get id() { return peerId; } };
     const whenId = (ms) => (helloSeen || closed ? Promise.resolve(peerId) : new Promise((res) => {
@@ -151,6 +151,7 @@ const PhonePad = (function () {
         // The FIRST hello names the peer; a later one cannot rename it mid-link.
         if (!helloSeen) { helloSeen = true; peerId = ev.id || null; for (const w of idWaiters.splice(0)) w(peerId); }
       }
+      if (ev.t === "sus") { suspended = true; return; }   // the page is going away: its close is not a goodbye
       if (ev.t === "ev" && !admitted) { gated++; return; }
       if (ev.t === "ev") {
         events++;
@@ -164,6 +165,7 @@ const PhonePad = (function () {
       if (closed) return;
       closed = true;
       if (rejectWhy) why = rejectWhy;
+      else if (suspended && why === "peer") why = "suspend";   // host() re-links on any reason but "peer"
       for (const w of idWaiters.splice(0)) w(peerId);
       if (ring) ring.stop();
       if (raf) { try { cancelAnimationFrame(raf); } catch (e) { /* no rAF here */ } raf = 0; }
@@ -278,6 +280,7 @@ const PhonePad = (function () {
 
   // ── desktop: the whole pairing flow, with signalling ─────────────────────
   // ui: { say(text, isError), qr(url, code) — null hides it, linked(), lost(),
+  //       asking() — the ALLOW / REJECT card is about to cover the screen,
   //       relinking() — a linked phone dropped and the room is open again for it,
   //       hud() — the dash sampler handed to link() }.
   // Returns the controller: cancel(), state().
@@ -303,7 +306,7 @@ const PhonePad = (function () {
     let token = { cancelled: false };
     let code = null;
     // RE-LINK (R3-PHONE-3): a linked phone whose WIRE died (a lock, a call, a dead
-    // signal — any close but the phone's own "peer" goodbye) gets the SAME code
+    // signal, the phone's page going away: "suspend" — any close but the phone's own "peer" goodbye) gets the SAME code
     // hosted again for the room's own lifetime (nostr HOST_TIMEOUT_MS), and the
     // phone dials it again by itself. A private relay's one mailbox is not reusable.
     let relink = false, roomTiming = null;
@@ -324,6 +327,9 @@ const PhonePad = (function () {
       phase = "confirming";
       say("A phone connected — tap ALLOW on this screen to let it steer, or REJECT.");
       let c = null;
+      // The card is full-screen and sits over the HUD pedals: the shell pauses a running solo race
+      // first (ui.asking), so the field cannot drive away while the player reads it.
+      if (ui.asking) { try { ui.asking(); } catch (e) { /* ui's problem */ } }
       try { c = deps.confirm("A phone joined with this game's room code. Let it steer this game?"); } catch (e) { c = null; }
       asking = c && typeof c.dismiss === "function" ? c : null;
       let ok = false;
@@ -596,6 +602,9 @@ const PhonePad = (function () {
         return n;
       },
       health,
+      // The page is going away (pagehide): say so on the reliable channel, so the
+      // close that follows reads as a wire loss on the game, which hosts the code again.
+      sendSuspend() { if (!closed && transport.status === "open") { try { transport.send(T.EVENT, encodeSuspend()); } catch (e) { /* closing */ } } },
       close() { try { transport.close(); } catch (e) { /* already closed */ } close("local"); },
       stats: () => ({ sent, haptics, huds, seq, queued: pending.length, expired, rejected, health: health(), open: !closed && transport.status === "open" }),
     };

@@ -403,10 +403,40 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
     await page.evaluate(() => window.__apex.race("bahrain", "day", "dry", { laps: 1, grid: "tier" }));
     await page.waitForFunction(() => !!window.__apex.info().track
       && ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: RACE_BUILD_MS });
+    // #5603: "at open" is every PAINTED frame from the first one that shows the sheet until the pins have held 30
+    // frames, read just after the frame (a message posted from rAF), never one sample between tasks while the sheet is
+    // still animating in. Each overlapping frame carries the geometry fitPins measured, so a red names its mechanism.
+    await page.evaluate(() => {
+      const T = document.getElementById("results-table"), frames = (window.__resOpenFrames = []);
+      const ch = new MessageChannel(); let n = 0, held = 0;
+      const over = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      ch.port1.onmessage = () => {
+        const sheet = document.querySelector("#results > .sheet");
+        const rows = [...T.querySelectorAll('[data-results-part="ranking"] > .res-row[role="listitem"]')];
+        const you = rows.find((r) => r.classList.contains("you"));
+        // A frame the player SEES: the sheet laid out and not transparent. `running` names a transition still replaying
+        // YOU's previous box: every spec runs under reduced motion (playwright.config.js), whose 0.01ms did that (#5603).
+        if (sheet && sheet.offsetParent && you && parseFloat(getComputedStyle(sheet).opacity) > 0) {
+          const yr = you.getBoundingClientRect(), tb = T.getBoundingClientRect();
+          const ov = yr.top < tb.bottom ? rows.filter((r) => r !== you).map((r) => +over(r.getBoundingClientRect(), yr).toFixed(1)).filter((v) => v > 1) : [];
+          frames.push({ frame: n, ov, pins: T.dataset.pins || null, youClear: T.style.getPropertyValue("--you-clear") || null, paneOwnH: T.clientHeight,
+            rowOwnH: +(rows[0].getBoundingClientRect().height / (rows[0].currentCSSZoom || 1)).toFixed(1), density: sheet.dataset.density || null,
+            shape: sheet.dataset.shape || null, opacity: getComputedStyle(sheet).opacity, scrollTop: T.scrollTop, youTop: +yr.top.toFixed(1), paneTop: +tb.top.toFixed(1), paneBottom: +tb.bottom.toFixed(1),
+            youMarginTop: getComputedStyle(you).marginTop, motion: document.documentElement.dataset.motion || null,
+            running: you.getAnimations().map((a) => a.transitionProperty || a.animationName).join(" "), above: [...T.children].map((k) => (k.getAttribute("data-results-part") || k.id || k.className || k.tagName)
+              .slice(0, 16) + "@" + Math.round(k.getBoundingClientRect().top) + "/" + Math.round(k.getBoundingClientRect().height)).join(" ") });
+          if (T.dataset.pins) held++;
+        }
+        if (held < 30 && ++n < 600) requestAnimationFrame(() => ch.port2.postMessage(0));
+        else frames.done = true;
+      };
+      requestAnimationFrame(() => ch.port2.postMessage(0));
+    });
     expect(await page.evaluate(() => window.__apex.finishRace())).toEqual({ state: "results" });
     await expect(page.locator("#results")).toBeVisible();
     await expect(page.locator("#res-next")).toBeEnabled();
-    await page.waitForFunction(() => !!document.getElementById("results-table").dataset.pins, null, { polling: 50, timeout: 8_000 });
+    await page.waitForFunction(() => window.__resOpenFrames.done === true, null, { polling: 50, timeout: 15_000 });
+    const openFrames = await page.evaluate(() => window.__resOpenFrames);
     const cell = await page.evaluate(() => {
       const z = (el) => el.currentCSSZoom || 1;
       const res = document.getElementById("results"), sheet = res.querySelector(":scope > .sheet"), table = document.getElementById("results-table");
@@ -414,9 +444,6 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
       const sticky = rows.filter((r) => getComputedStyle(r).position === "sticky").map((r) => r.className.replace("res-row", "").trim());
       const rowOwnH = rows[0] ? rows[0].getBoundingClientRect().height / z(rows[0]) : 0;
       const sr = sheet.getBoundingClientRect(), you = rows.find((r) => r.classList.contains("you"));
-      // #5580: at open the list is only entering the pane (55 painted px at 0.7 in D) and YOU, bottom-stuck, sat under P1.
-      const over = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-      const youOnRowAtOpen = you ? rows.filter((r) => r !== you).map((r) => +over(r.getBoundingClientRect(), you.getBoundingClientRect()).toFixed(1)).filter((v) => v > 1 && you.getBoundingClientRect().top < table.getBoundingClientRect().bottom) : [];
       // The story cards sit above the ranking list at open; the pins hold once the list is in the pane.
       const list = table.querySelector('[data-results-part="ranking"]');
       if (list) table.scrollTop = list.offsetTop;
@@ -425,7 +452,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
         sheet: { density: sheet.dataset.density, shape: sheet.dataset.shape, inScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 },
         pins: table.dataset.pins, sticky, rows: rows.length, paneOwnH: +table.clientHeight.toFixed(1), rowOwnH: +rowOwnH.toFixed(1), rowPaintedH: rows[0] ? +rows[0].getBoundingClientRect().height.toFixed(1) : 0,
         scrollingRows: rowOwnH ? +((table.clientHeight - sticky.length * rowOwnH) / rowOwnH).toFixed(2) : null,
-        youOnRowAtOpen, youInPane: yr ? yr.top >= tr.top - 0.5 && yr.bottom <= tr.bottom + 0.5 : null, tableScrolls: table.scrollHeight > table.clientHeight + 1 };
+        youInPane: yr ? yr.top >= tr.top - 0.5 && yr.bottom <= tr.bottom + 0.5 : null, tableScrolls: table.scrollHeight > table.clientHeight + 1 };
     });
     const tag = win.name + ": ";
     expect({ ui: cell.ui, text: cell.text }, tag + "the owner's knobs").toEqual({ ui: "0.7", text: "large" });
@@ -437,7 +464,11 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
     expect(cell.sticky, tag + "YOU is always pinned").toContain("you");
     if (cell.pins !== "1") expect(cell.sticky, tag + "P1 pins whenever more than YOU does").toContain("p1");
     expect(cell.scrollingRows, tag + "the classification keeps >= 2 scrolling rows under the pins").toBeGreaterThanOrEqual(2);
-    expect(cell.youOnRowAtOpen, tag + "at open your row lies on no other row (painted px of overlap)").toEqual([]);
+    // #5580: at open the list is only entering the pane (55 painted px at 0.7 in D) and YOU, bottom-stuck, sat under P1.
+    expect(openFrames.length, tag + "painted frames recorded from the sheet's open").toBeGreaterThanOrEqual(30);
+    const overlapping = openFrames.filter((f) => f.ov.length);
+    expect(overlapping.map((f) => f.ov), tag + "at open your row lies on no other row on any painted frame (painted px of overlap); first: "
+      + JSON.stringify(overlapping[0] || null) + "; settled: " + JSON.stringify(openFrames[openFrames.length - 1] || null)).toEqual([]);
     expect(cell.youInPane, tag + "your row is pinned inside the pane once the list is in view").toBe(true);
     expect(cell.tableScrolls, tag + "the classification is the one scroller").toBe(true);
   });

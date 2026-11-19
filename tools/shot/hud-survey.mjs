@@ -4,10 +4,12 @@
 // @doc Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery.
 // @skill survey-ui-matrix
 //
-//   node tools/shot/hud-survey.mjs --matrix quick                 # 13 cells, 3 boots, ~10 min here
+//   Cell and boot counts per matrix: `--plan --matrix <name>` prints them (no browser);
+//   they are not written here because they drift whenever a device or preset joins.
+//   node tools/shot/hud-survey.mjs --matrix quick                 # the smallest matrix, ~10 min here
 //   node tools/shot/hud-survey.mjs --matrix quick --only chase-default
-//   node tools/shot/hud-survey.mjs --matrix full                  # pairwise, 33 cells / 20 boots, ~45 min
-//   node tools/shot/hud-survey.mjs --matrix exhaustive --list     # ~440 cells / ~49 boots: CI shards it
+//   node tools/shot/hud-survey.mjs --matrix full                  # pairwise, ~45 min
+//   node tools/shot/hud-survey.mjs --matrix exhaustive --list     # every combination: CI shards it
 //   node tools/shot/hud-survey.mjs --matrix exhaustive --shard 2/8 --no-shots --out artifacts/hud-survey/s2
 //   node tools/shot/hud-survey.mjs --merge artifacts/hud-survey/s1 artifacts/hud-survey/s2 --out artifacts/hud-survey/all
 //   node tools/shot/hud-survey.mjs --matrix scratch/my-matrix.json --no-shots
@@ -120,8 +122,8 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
   const stamp = now.toISOString().replace(/[:.]/g, "-").replace(/Z$/, "");
   const out = path.resolve(ROOT, F.flag("--out", path.join("artifacts", "hud-survey", stamp)));
   if (!insideOutput(out)) throw new CliArgError(`--out must stay under artifacts/ or scratch/ (got ${out})`);
-  // --settings: a LOAD SETTINGS export (tests/data/settings-defaults-export.json is the owner's
-  // phone) imported once per boot through SettingsExport.applySettings, then a reload, the way
+  // --settings: a LOAD SETTINGS export (an owner device with no --settings reads tools/lib/bryce-phone.mjs
+  // OWNER_EXPORT, his phone today) imported once per boot through SettingsExport.applySettings, then a reload, the way
   // tools/ui/explorer.mjs seeds one. Every knob a cell names still wins; the rest is the file's.
   let settings = null;
   if (F.has("--settings")) {

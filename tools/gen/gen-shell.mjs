@@ -164,8 +164,9 @@ function cspBlock(html) {
 // pays one style recalc instead of one per sheet as each arrived. window "load"
 // is the backstop: it fires only after every sheet has settled, so a sheet that
 // failed before this script ran (no .sheet, and its error event already gone)
-// cannot leave the others on print. flip() runs its loop at most once.
-export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;` +
+// cannot leave the others on print. flip() runs its loop at most once. A route sheet
+// (MANIFEST.CSS_ROUTE, a data-route tag) is not this script's: LazyBundles flips it.
+export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]:not([data-route])'),n=L.length,d=0;` +
   `function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}` +
   `function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}` +
   `window.addEventListener("load",flip);` +
@@ -177,10 +178,10 @@ function preloadBlock() {
 }
 
 function cssBlock() {
-  const deferred = new Set(MANIFEST.CSS_DEFERRED || []);
+  const deferred = new Set(MANIFEST.CSS_DEFERRED || []), route = MANIFEST.CSS_ROUTE || {};
   return MANIFEST.CSS.map((f) =>
     `<link rel="stylesheet" href="${f}?v=${DEV_TOKEN}"` +
-    (deferred.has(f) ? ` media="print"` : "") + ">").join("\n") + "\n" + DEFER_CSS_SCRIPT + "\n";
+    (deferred.has(f) ? ` media="print"` : "") + (route[f] ? ` data-route="${route[f].join(" ")}"` : "") + ">").join("\n") + "\n" + DEFER_CSS_SCRIPT + "\n";
 }
 
 function scriptsBlock() {

@@ -52,25 +52,45 @@ async function expectPanes(page, from) {
   }
 }
 
-test("standalone@70: title SOUND and every Settings chevron from the title paint the 52 px floor", async ({ browser, baseURL }) => {
-  test.setTimeout(180000);
-  const { context, page } = await boot(browser, baseURL);
-  try {
+/** Wait until the title SOUND plate paints the house floor in the wide shape. */
+async function waitTitleSoundFloor(page) {
+  await page.waitForFunction((floor) => {
+    const el = document.getElementById("soundbtn");
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return document.body.dataset.shape === "wide" && Math.round(r.height * 10) / 10 === floor;
+  }, FLOOR, { polling: 50, timeout: 15000 });
+}
+
+// One boot serves both cases: title chevrons, then pause chevrons after a race.
+// Measured before (two boots): settings-stepper alone was a large share of the
+// 117 s headless batch; sharing the context drops the second cold boot.
+test.describe.configure({ mode: "serial" });
+test.describe("standalone@70 steppers (shared phone boot)", () => {
+  /** @type {import("@playwright/test").BrowserContext | undefined} */
+  let context;
+  /** @type {import("@playwright/test").Page | undefined} */
+  let page;
+
+  test.beforeAll(async ({ browser, baseURL }) => {
+    ({ context, page } = await boot(browser, baseURL));
+  });
+  test.afterAll(async () => { await context?.close().catch(() => {}); });
+
+  test("title SOUND and every Settings chevron from the title paint the 52 px floor", async () => {
+    test.setTimeout(180000);
     await resetToTitleState(page, { tag: "stepper-paint title", log: null });
-    await page.waitForTimeout(400);
+    await waitTitleSoundFloor(page);
     const sound = await page.evaluate(() => { const r = document.getElementById("soundbtn").getBoundingClientRect(); return { shape: document.body.dataset.shape, h: r.height }; });
     expect(sound.shape, "his landscape phone is the wide title shape").toBe("wide");
     expect(round(sound.h), "title SOUND paints the floor tall").toBe(FLOOR);
     await page.click("#mb-settings");
     await page.waitForSelector("#pmsettings:not([hidden])");
     await expectPanes(page, "title");
-  } finally { await context.close().catch(() => {}); }
-});
+  });
 
-test("standalone@70: every Settings chevron from the pause menu paints the 52 px floor", async ({ browser, baseURL }) => {
-  test.setTimeout(240000);
-  const { context, page } = await boot(browser, baseURL);
-  try {
+  test("every Settings chevron from the pause menu paints the 52 px floor", async () => {
+    test.setTimeout(240000);
     await resetToTitleState(page, { tag: "stepper-paint pause", log: null });
     await page.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: "tier" }); });
     await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 90000 });
@@ -81,5 +101,5 @@ test("standalone@70: every Settings chevron from the pause menu paints the 52 px
     await page.evaluate(() => document.getElementById("pm-settings").click());
     await page.waitForSelector("#pmsettings:not([hidden])");
     await expectPanes(page, "pause");
-  } finally { await context.close().catch(() => {}); }
+  });
 });

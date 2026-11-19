@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { selectedGateVerdict, shardEvidence, plannedSpecs, ranSpecsUnder } from "../../tools/ci/selected-gate-verdict.mjs";
+import { selectedGateVerdict, shardEvidence, plannedSpecs, ranSpecsUnder, recoverLostJunit, evidenceGap, tallyLine, parseTally, tallyUnder, TALLY_TITLE, SELECTED_JOB } from "../../tools/ci/selected-gate-verdict.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const base = {
@@ -363,4 +363,70 @@ test("#5403 CLI: SHARDS names a spec no junit ran -> exit 1; every planned spec 
   assert.equal(r.code, 1);
   assert.equal(r.err, "::error::selected specs success, but 1 planned spec(s) left no junit testcase in any shard: " + NEVER + " — they did not run (or their upload was lost); re-run, never read it as a pass\n");
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---- #5802: a green shard's lost junit vs a shard that ran nothing ---------------------------------------
+const SPEC_A = "tests/specs/boot-guard.spec.js", SPEC_B = "tests/specs/camera.spec.js";
+const tallyNote = (leg, tests, specs) => ({ title: TALLY_TITLE, message: JSON.stringify({ leg, tests, specs }) });
+const job = (conclusion, notes) => ({ name: `${SELECTED_JOB} (x, 1)`, conclusion, notes });
+const plan2 = { specs: [SPEC_A, SPEC_B] };
+
+test("#5802: tallyLine round-trips through parseTally; tallyUnder reads a shard's reporter folders", () => {
+  const line = tallyLine("oversize-time-trial-2of2-18", { tests: 3, specs: [SPEC_A] });
+  assert.equal(line, `::notice title=apex-selected-tally::{"leg":"oversize-time-trial-2of2-18","tests":3,"specs":["${SPEC_A}"]}`);
+  assert.deepEqual(parseTally(line.split("::")[2]), { leg: "oversize-time-trial-2of2-18", tests: 3, specs: [SPEC_A] });
+  assert.equal(tallyLine("a", { tests: 1, specs: ["100%"] }), `::notice title=apex-selected-tally::{"leg":"a","tests":1,"specs":["100%25"]}`, "% is escaped for the workflow command");
+  assert.equal(parseTally("not json"), null);
+  assert.equal(parseTally(JSON.stringify({ leg: "a", tests: -1, specs: [] })), null);
+  const dir = mkTmpDir("sel-tally-");
+  fs.mkdirSync(path.join(dir, "test-results-1"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "test-results-1", "junit.xml"), `<testsuites><testsuite><testcase classname="specs/boot-guard.spec.js" name="t"/><testcase classname="specs/boot-guard.spec.js" name="u"/></testsuite></testsuites>`);
+  assert.deepEqual(tallyUnder(dir), { tests: 2, specs: [SPEC_A] });
+  assert.deepEqual(tallyUnder(path.join(dir, "nope")), { tests: 0, specs: [] });
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("#5802: job green + junit lost is recovered from the shard's own tally and passes", () => {
+  // #5634 run 44301029662: the marker arrived, the junit did not.
+  const ev = { started: ["a-0", "b-1"], junit: ["a-0"], ran: [SPEC_A], planned: plan2 };
+  assert.equal(evidenceGap(ev), true);
+  assert.equal(selectedGateVerdict({ ...base, evidence: ev }).ok, false, "without the tally it is red, as before");
+  const jobs = [job("success", [tallyNote("a-0", 2, [SPEC_A])]), job("success", [tallyNote("b-1", 4, [SPEC_B])])];
+  const r = recoverLostJunit(ev, jobs, { planRows: 2 });
+  assert.deepEqual(r.recovered, ["b-1"]);
+  assert.deepEqual(r.zero, []);
+  assert.equal(evidenceGap(r.evidence), false);
+  const v = selectedGateVerdict({ ...base, evidence: r.evidence });
+  assert.equal(v.ok, true);
+  assert.equal(v.reason, "selected specs passed (the junit of b-1 was lost; each shard's job concluded success and its own tally annotation names its tests, #5802)");
+  // #5636 run 44301033515 attempt 2: the download 404'd (after its retry). Every planned shard green and tallied clears it.
+  const lost = { started: [], junit: [], ran: [], planned: plan2, downloadFailed: true };
+  const all = recoverLostJunit(lost, jobs, { planRows: 2 });
+  assert.equal(all.evidence.downloadFailed, false);
+  assert.equal(selectedGateVerdict({ ...base, evidence: all.evidence }).ok, true);
+  // ...but not when one planned shard is untallied, or the plan's row count is unknown
+  assert.equal(recoverLostJunit(lost, jobs.slice(0, 1), { planRows: 2 }).evidence.downloadFailed, true);
+  assert.equal(recoverLostJunit(lost, jobs, { planRows: null }).evidence.downloadFailed, true);
+  assert.equal(selectedGateVerdict({ ...base, evidence: recoverLostJunit(lost, jobs.slice(0, 1), { planRows: 2 }).evidence }).ok, false);
+});
+
+test("#5802/#5334: a shard that ran nothing stays red, whatever its job concluded", () => {
+  const ev = { started: ["a-0", "b-1"], junit: ["a-0"], ran: [SPEC_A], planned: { specs: [SPEC_A] } };
+  const red = (jobs, planRows = 2) => selectedGateVerdict({ ...base, evidence: recoverLostJunit(ev, jobs, { planRows }).evidence });
+  const a = job("success", [tallyNote("a-0", 2, [SPEC_A])]);
+  // its own tally says 0 tests: the spec selection that runs nothing and passes
+  const zero = recoverLostJunit(ev, [a, job("success", [tallyNote("b-1", 0, [])])], { planRows: 2 });
+  assert.deepEqual(zero.zero, ["b-1"]);
+  assert.equal(red([a, job("success", [tallyNote("b-1", 0, [])])]).reason, "selected specs success, but shard(s) b-1 reached the run step and left no junit with a testcase — they ran zero tests (or lost the upload); re-run the failed evidence, never read it as a pass");
+  assert.equal(red([a, job("success", [])]).ok, false, "no tally");
+  assert.equal(red([a, job("success", [tallyNote("b-1", 4, [SPEC_B]), tallyNote("b-1", 4, [SPEC_B])])]).ok, false, "two tallies: one is forged");
+  assert.equal(red([a, job("failure", [tallyNote("b-1", 4, [SPEC_B])])]).ok, false, "the job did not succeed");
+  assert.equal(red([a, job("success", null)]).ok, false, "annotation lookup failed");
+  assert.equal(red(null).ok, false, "jobs lookup failed");
+  assert.equal(red([a, { name: "Selected specs (verdict)", conclusion: "success", notes: [tallyNote("b-1", 4, [SPEC_B])] }]).ok, false, "only selected matrix jobs count");
+  // a recovered shard does not excuse a planned spec nobody ran
+  const ev2 = { ...ev, planned: { specs: [SPEC_A, SPEC_B, NEVER] } };
+  const v = selectedGateVerdict({ ...base, evidence: recoverLostJunit(ev2, [a, job("success", [tallyNote("b-1", 4, [SPEC_B])])], { planRows: 2 }).evidence });
+  assert.equal(v.ok, false);
+  assert.equal(v.reason, `selected specs success, but 1 planned spec(s) left no junit testcase in any shard: ${NEVER} — they did not run (or their upload was lost); re-run, never read it as a pass`);
 });
