@@ -14430,7 +14430,6 @@
     },
     "js/race/real-race-boot.js": {
       "create": [
-        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
@@ -19638,7 +19637,6 @@
       ],
       "*": [
         "tests/specs/phone-shipped-defaults.spec.js",
-        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },

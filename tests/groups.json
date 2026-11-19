@@ -1146,6 +1146,8 @@
     "tests/unit/three-inspector.test.mjs",
     "// Round 7: actual vendor binding/index updates and generated post/lamp shader contracts.",
     "tests/unit/three-shared-binding-update.test.mjs",
+    "// tip-gate: the deploy tip's own budget tests when no completed Pages run covers its sha (merge-gate base row). ~1 s.",
+    "tests/unit/tip-gate.test.mjs",
     "tests/unit/title-art.test.mjs",
     "// Round-2: VS FRIEND writes flow/selection only after the net bundle lands and announces a refused load.",
     "tests/unit/title-flow.test.mjs",

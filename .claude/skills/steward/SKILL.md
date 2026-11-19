@@ -135,8 +135,13 @@ shell is recorded as Bryce's own click; `bash-guard.sh` refuses it for every ses
 - **Log every act** in ONE PR comment (an issue comment when there is no PR): the run link, the act and why.
 
 How the hooks know (`github-mcp-guard.sh`): its OWN process environment holds `APEX_ROLE=orchestrator`, which Bryce
-sets on the orchestrator's cloud environment and no agent sets, and not `CLAUDE_CODE_CHILD_SESSION=1`, which the
-platform sets on every `create_session` child (measured 2026-11-18); the payload carries no `agent_id`. A seatbelt,
+sets on the orchestrator's cloud environment and no agent sets, and either not `CLAUDE_CODE_CHILD_SESSION=1`, which
+the platform sets on every `create_session` child (measured 2026-11-18), or, for a cloud orchestrator that runs as a
+child, `APEX_ORCH_ENV=env_…` beside it (the orchestrator environment's id, Bryce-set; #5819, his `decision: A` of
+2026-11-19; no platform variable carries the id, so the hook checks its shape only); the payload carries no
+`agent_id`; and no project, local or user settings file's `env` names either key (any session can write one, so the
+hook never trusts them from there). That environment never hosts workers: launch them with an explicit worker
+`environment_id`. A seatbelt,
 not a boundary: a routine-fired session in an environment with `APEX_ROLE` would pass too, so the worker routine runs
 in one without it. `settings.json` still asks on `actions_run_trigger`.
 
