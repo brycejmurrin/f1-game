@@ -307,3 +307,13 @@ frame gaps, sheds before → after: garage open 1 → 0, race setup open 1 → 0
 (guarded against re-entry, in case a subscriber writes in response). Verified in Chromium with localStorage
 filled to quota, before → after: `rawSet` still returns false and nothing reaches disk in both, but
 `#save-warning` hidden → shown. The title screen boots with no page errors.
+
+### Fix 5 — countdown position readout (finding 13)
+
+`js/ui/hud.js:1143`: falls back to the grid position while the rank is not yet computed. Verified in a
+simulated start from P11: `-/22` → `11/22` during the countdown.
+
+### Fix 6 — "LAP 0" on the results screen (finding 13)
+
+`js/ui/results-sheet.js:331`: clamps the incident lap to 1, as the debrief and HUD already do. Verified with a
+contact recorded after lights-out and before the line: `LAP 0 · Car contact` → `LAP 1 · Car contact`.
