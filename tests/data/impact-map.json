@@ -8154,6 +8154,11 @@
         "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
+    "js/garage/arrival-rows.js": {
+      "*": [
+        "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
     "js/garage/arrival.js": {
       "angleMap": [
         "tests/unit/garage-arrival.test.mjs",

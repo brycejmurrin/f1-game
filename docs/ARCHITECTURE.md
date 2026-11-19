@@ -576,6 +576,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 | `entrance-motion.js` | `GarageEntranceMotion` | LAZY_RACE | Blender-authored entrance motion. |
 | `garage-data.js` | `GarageData` | LAZY_RACE | GarageData: the garage's Blender-authored tables, loaded LAZY. |
+| `arrival-rows.js` | `GarageArrivalRows` | LAZY_RACE | the GARAGE ENTER & LEAVE tuner's extra rows (VISUAL STUDIO, #garrival), out of the eager shell (#5660: each PR pays its boot bytes). |
 | `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Cached garage-departure wheel layers; spin is path distance / WHEEL_RADIUS. |
 | `exterior-geometry.js` | `GarageExteriorGeometry` | LAZY_GARAGE_EXTERIOR | Detached circuit pit exterior: build once on selection, never on the render clock. |
 | `exterior.js` | `GarageExterior` | LAZY_GARAGE_EXTERIOR | Selected-world garage exterior. |

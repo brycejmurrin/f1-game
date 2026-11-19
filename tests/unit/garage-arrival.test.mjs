@@ -11,6 +11,7 @@ vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival.js') });
 // The Blender rigs' samples (LAZY_RACE): loaded as the game's idle prefetch / garage entry would.
 vm.runInContext(readFileSync(new URL('../../js/garage/garage-data.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/garage-data.js') });
+vm.runInContext(readFileSync(new URL('../../js/garage/arrival-rows.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival-rows.js') });   // the tuner's lazy rows (#5660)
 const Arrival = vm.runInContext('GarageArrival', context);
 vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/track/core/pit.js') });
 const TrackPit = vm.runInContext('TrackPit', context);
@@ -1531,7 +1532,7 @@ test('the tuner binds the camera, shot-length and after-race controls; CUSTOM re
 test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and FIELD OF VIEW', () => {
   const dom = makeDom(), doc = dom.document;
   const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, goldenhour: {}, night: {} } } });
-  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/garage/arrival-rows.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
   const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
@@ -1941,7 +1942,7 @@ test('STYLE quick-picks lay a whole look over the saved settings and leave crews
 test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
   const dom = makeDom(), doc = dom.document;
   const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {}, rain: {}, goldenhour: {}, night: {}, endurance: {} }, CUES: ['lightsup', 'spotsweep'] } });
-  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/garage/arrival-rows.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
   const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
@@ -2086,4 +2087,31 @@ test('EACH MOMENT: PIT OUT plays unless its own switch or the master is off, and
     assert.equal(out(() => done++), want, JSON.stringify(v));
     assert.deepEqual([started.length, done], want ? [1, 0] : [0, 1], 'plays, or hands straight back: ' + JSON.stringify(v));
   }
+});
+test('#5660: the tuner rows are lazy (arrival-rows.js): absent at bind, the open tap loads and builds them, then binds them', async () => {
+  const dom = makeDom(), doc = dom.document;
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {} } } });
+  // Own script origins: a compiled arrival.js shared with this file's other contexts kept its earlier global lookup.
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f + '#lazy-rows') });
+  let loads = 0;
+  ctx.LazyBundles = { live: () => ({ ensureGarageData: () => { loads++; vm.runInContext(readFileSync(new URL('../../js/garage/arrival-rows.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/garage/arrival-rows.js#late') }); return Promise.resolve(true); } }) };
+  const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
+  const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
+  const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; return add(add(r, 'div'), tag, id); };
+  row('ga-enabled', 'input').type = 'checkbox';
+  const angle = row('ga-angle', 'select');
+  for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
+  row('ga-fov', 'input');
+  const panel = doc.getElementById('garrival'); panel.hidden = true;
+  const $ = (id) => doc.getElementById(id);
+  let saved = null;
+  A.bindSettings($, { get: () => saved, set: (_, v) => { saved = v; } });
+  assert.deepEqual(angle.children.map((o) => o.value), ['cut', 'left', 'right'], 'nothing built at boot without the lazy file');
+  $('pm-garrival').onclick();
+  for (let i = 0; i < 10 && panel.hidden; i++) await new Promise((r) => setImmediate(r));   // the open runs after the load settles
+  assert.equal(loads, 1);
+  assert.deepEqual(angle.children.map((o) => o.value), [...A.ANGLES], 'built on the open tap');
+  assert.equal(panel.hidden, false, 'and the panel opens');
+  $('ga-pit-out').checked = false; $('ga-pit-out').onchange();
+  assert.equal(A.settings(saved).pitOut, false, 'a late-built row is bound');
 });
