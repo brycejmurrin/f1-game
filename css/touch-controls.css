@@ -115,8 +115,8 @@
    black cockpit that is most of what sits behind them, a 0.42 fill just reads
    as a darker flat colour, which is why they looked like the SOLID pair next to
    OT and AERO rather than the transparent one. */
-#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.85); }
-#btn-throttle:active { background: var(--gas-lit); opacity: 1; }
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); --idle: rgba(0, 170, 70, 0.85); background: var(--idle); }
+#btn-throttle[data-slid="on"], #btn-throttle:active { background: var(--gas-lit); opacity: 1; }
 /* .on is the LATCH (js/input/input.js paintLatch). Same fill as :active and its
    own rule rather than a grouped selector, because :active follows the THUMB and
    the latch outlives it — both have to read as pressed, and ui-journey-race.test
@@ -125,8 +125,13 @@
    BOOST, OT and AERO already use for "engaged". */
 #btn-throttle.on { background: var(--gas-lit); opacity: 1;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent); }
-#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.85); }
-#btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); --idle: rgba(180, 35, 35, 0.85); background: var(--idle); }
+#btn-brake[data-slid="on"], #btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
+/* SLIDE HAND-OFF (js/input/hold-buttons.js, #5575). :active stays with the control
+   the thumb LANDED on, so after a slide onto the sibling the wrong one lit.
+   data-slid="on" is the pressed look for the control that holds the thumb now
+   (it shares the :active rules); "off" puts the one it left back to idle. */
+#btn-throttle[data-slid="off"]:active, #btn-brake[data-slid="off"]:active { background: var(--idle); opacity: var(--btn-a); box-shadow: none; }
 
 /* BOOST IS THE BATTERY, so it is GREEN and its colour IS the charge. `--e` is
    written each frame by hud.js from player.energy (0..1) and mixed between a
@@ -207,9 +212,9 @@
    An outside ring costs no layout (box-shadow draws outside the border box and
    does not reflow the dock) and reads at a glance in peripheral vision, which
    is all a driver has to spare. */
-.touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+.touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
 @media (prefers-reduced-transparency: reduce) {
-  .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+  .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
 }
 
 /* WHERE THE FINGER LANDED, in TOUCH mode. Drag-to-steer is an invisible
@@ -310,8 +315,9 @@ body[data-dock-edit] .dock:active { cursor: grabbing; }
 /* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
    so the left thumb steers like a d-pad and the right thumb stays free for the
    action buttons (BRAKE/BOOST/OT). */
-.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: var(--steer); height: var(--steer); }
-.steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+.steerbtn { font-size: 22px; --idle: rgba(20, 20, 30, 0.55); background: var(--idle); width: var(--steer); height: var(--steer); }
+.steerbtn[data-slid="on"], .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+.steerbtn[data-slid="off"]:active { background: var(--idle); box-shadow: none; }
 #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
 #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(16px + var(--sab)); }
 

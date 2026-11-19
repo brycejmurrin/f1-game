@@ -39,6 +39,7 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { realpathSync } from "node:fs";
 
 import { chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
 import { parseFlags } from "../lib/cli-args.mjs";
@@ -64,32 +65,6 @@ const COMMANDS = {
   model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
 
-const argv = process.argv.slice(2);
-if (!argv.length || argv[0] === "-h" || argv[0] === "--help") {
-  console.log("usage: node tools/shot/agent.mjs <track> <command> [options]\n");
-  for (const [k, v] of Object.entries(COMMANDS)) console.log(`  ${k.padEnd(9)} ${v}`);
-  console.log("\nstaging:  --at <frac 0-1>  --speed <m/s>  --lateral <m>  "
-            + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night  --seed <uint32>  --vm (Node VM, no browser)");
-  process.exit(0);
-}
-
-parseFlags(argv, ["--at", "--brake", "--camera", "--cols", "--detail", "--edges", "--from", "--horizon", "--id", "--kind", "--kinds", "--lateral", "--lats", "--limit", "--near", "--north", "--offset", "--out", "--points", "--profile", "--radius", "--range", "--reach", "--rows", "--samples", "--seconds", "--seed", "--speed", "--ss", "--stations", "--steer", "--team", "--throttle", "--to", "--tod", "--visible", "--vm", "--weather", "--what"]);
-
-// `help` is the one command that needs no circuit, so allow it in either slot.
-// When argv[0] is `help` and argv[1] is ALSO a command name (world, track, …),
-// the old swap left cmd=world and booted Chromium for a colliding hook (#3327).
-let track = argv[0], cmd = argv[1] || "world";
-if (argv[0] === "help") {
-  cmd = "help";
-  track = "monza";
-} else if (COMMANDS[argv[0]] && !COMMANDS[argv[1] || ""]) {
-  cmd = argv[0];
-  track = "monza";
-}
-if (!COMMANDS[cmd]) {
-  console.error(`unknown command "${cmd}" — one of: ${Object.keys(COMMANDS).join(", ")}`);
-  process.exit(1);
-}
 
 // Flags that take a following value (the rest of the known list are booleans).
 const FLAG_VALUE = new Set(["at", "camera", "cols", "detail", "from", "horizon", "id", "kind", "kinds", "lateral", "lats", "limit", "near", "offset", "out", "points", "radius", "range", "reach", "rows", "samples", "seconds", "seed", "speed", "ss", "stations", "steer", "team", "to", "tod", "weather", "what"]);
@@ -112,176 +87,6 @@ function helpHookName(args) {
   return null;
 }
 
-/** One index row. Reads the generated index so a single hook does not boot Chromium. */
-function printOneHook(name) {
-  const fs = createRequire(ROOT + "/package.json")("node:fs");
-  const file = ROOT + "/docs/agent-index.json";
-  let idx;
-  try { idx = JSON.parse(fs.readFileSync(file, "utf8")); }
-  catch (e) {
-    console.error(`agent: docs/agent-index.json is not readable (${e.message}) — node tools/docs/gen-agent-index.mjs`);
-    return 2;
-  }
-  const hits = (idx.hooks || []).filter((h) => h.name === name);
-  if (!hits.length) {
-    console.error(`agent: no hook named "${name}" in docs/agent-index.json`);
-    return 1;
-  }
-  console.log(JSON.stringify(hits.length === 1 ? hits[0] : hits, null, 2));
-  return 0;
-}
-
-const hookQuery = cmd === "help" ? helpHookName(argv) : null;
-if (hookQuery) process.exit(printOneHook(hookQuery));
-
-const flag = (name, def) => {
-  const equal = argv.find((arg) => arg.startsWith("--" + name + "="));
-  if (equal != null) return equal.slice(name.length + 3);
-  const i = argv.indexOf("--" + name);
-  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : def;
-};
-const has = (name) => argv.includes("--" + name);
-const num = (name, def) => {
-  const v = flag(name, null);
-  return v == null ? def : Number(v);
-};
-
-const opts = {
-  cmd,
-  seed: num("seed", 1),
-  // staging position as a lap fraction. A value >1 is not a fraction — it is a
-  // stale `survey --at <count>` invocation, and passing it to jump() would wrap
-  // to 0 and stage at the start line while looking deliberate. Fall back to the
-  // default instead of silently teleporting somewhere the caller didn't ask for.
-  at: num("at", 0.1) > 1 ? 0.1 : num("at", 0.1),
-  speed: num("speed", 55),
-  lateral: num("lateral", 0),
-  weather: flag("weather", null),
-  tod: flag("tod", null),
-  detail: flag("detail", "drive"),
-  horizonS: num("horizon", 4),
-  points: num("points", 5),
-  what: flag("what", "corners"),
-  radius: num("radius", 150),
-  // accept --kind and --kinds; a silently-unbound filter returned the whole
-  // registry and looked like a working query
-  kinds: flag("kinds", null) || flag("kind", null),
-  limit: num("limit", 0),
-  seconds: num("seconds", 5),
-  steer: num("steer", 0),
-  throttle: has("throttle"),
-  brake: has("brake"),
-  samples: num("samples", 8),
-  modelDetail: flag("detail", "summary"),
-  offset: num("offset", 0),
-  cols: num("cols", 56),
-  rows: num("rows", 16),
-  ss: num("ss", 0),   // render({what:"car"}) supersampling override, 1-6 (0 = default)
-  range: num("range", 500),
-  team: flag("team", null),
-  // survey samples N stations across the WHOLE lap — a count, not a position.
-  // It used to read --at, which also means the staging frac 0-1, so
-  // `survey --at 32` both asked for 32 stations AND fed jump(32) — and 32 % 1
-  // is 0, silently staging at the start line. --stations is the flag; --at is
-  // still honoured when >1 so old invocations keep working, but it no longer
-  // doubles as staging (see the `at` guard below).
-  stations: num("stations", 0) || (num("at", 0) > 1 ? num("at", 0) : 0),
-  lats: num("lats", 0),
-  profileFlag: has("profile"),
-  reach: num("reach", 60),        // survey's lateral reach — distinct from frame's --range
-  north: has("north"),
-  edges: has("edges"),
-  visibleFlag: has("visible"),
-  cam: flag("camera", null),
-  out: flag("out", null),
-  id: flag("id", null),                 // describe: prop:12 | corner:T3 | car:4
-  nearM: has("near") ? num("near", 150) : null,   // query: radius around the car
-  fromS: has("from") ? num("from", 0) : null,     // query: arc window start (m)
-  toS: has("to") ? num("to", 0) : null,           // query: arc window end (m)
-};
-
-if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) { console.error("seed must be a uint32"); process.exit(2); }
-
-// Budgets sized off measurements, shared with apex-eval.mjs.
-const BOOT_MS = 45000, TRACK_MS = 45000;
-
-const RASTERS = new Set(["render", "frame", "plan", "car", "visible"]);
-// No top-level await here: tests/unit/capture-tools-regressions.test.mjs
-// compiles this file as a classic script in a VM.
-async function runVm() {
-  if (RASTERS.has(cmd)) {
-    console.error(`agent: "${cmd}" reads the last drawn frame — there is none in the Node VM; drop --vm for it`);
-    process.exit(2);
-  }
-  const { createGame } = createRequire(ROOT + "/package.json")("./tools/lib/game-vm.cjs");
-  console.error(`agent: vm route track=${track} cmd=${cmd}`);
-  let g = null;
-  try {
-    g = await createGame(cmd === "help" ? {} : { track, tod: opts.tod || undefined, wx: opts.weather || undefined });
-    if (cmd === "help") { console.log(JSON.stringify(g.apex.agentHelp(), null, 2)); }
-    else {
-      g.apex.go();
-      g.apex.jump(opts.at, opts.speed, opts.lateral);
-      await printResult(runCommand(g.apex, opts));
-    }
-  } catch (e) {
-    console.error("agent failed:", e.message);
-    process.exitCode = 1;
-  } finally { if (g) g.close(); }
-  process.exit(process.exitCode || 0);
-}
-
-if (has("vm")) runVm(); else (async () => {
-  const srv = await startStaticServer(ROOT);
-  try {
-    const browser = await launchChromium({
-      args: chromiumArgsForBackend("three"),
-    });
-    const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
-    await installProbeInit(page, { backend: "three" });
-    await page.goto(srv.url + "?seed=" + opts.seed);
-    // BOOT_MS, polling: 100 — both halves. An idle container defines __apex
-    // 10.3-12.6 s after goto (3 boots, 2026-10-02) and a fresh Chromium is
-    // slower, so 15 s failed this tool 2 of 2 through apex_agent; and rAF
-    // polling on a rendering page can starve the timeout itself
-    // (tools/check/wait-polling-lint.mjs).
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
-
-
-    if (opts.cmd === "help") {
-      console.log(JSON.stringify(await page.evaluate(() => window.__apex.agentHelp()), null, 2));
-      return;
-    }
-
-    await page.evaluate(([t, w, tod]) => window.__apex.race(t, tod || undefined, w || undefined),
-                        [track, opts.weather, opts.tod]);
-    // A TLX monza build measures 16.6 s on SwiftShader (apex-eval.mjs TRACK_MS).
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS, polling: 100 });
-
-    await sleep(1600);                       // mesh build
-
-    // Stage the car, then let frames actually draw. visible() reads the LAST
-    // RENDERED frame, so skipping this reports a camera still at its pre-jump
-    // position — plausible-looking and wrong.
-    await page.evaluate(([at, speed, lateral]) => {
-      window.__apex.go();
-      window.__apex.jump(at, speed, lateral);
-    }, [opts.at, opts.speed, opts.lateral]);
-    await page.evaluate(() => new Promise((res) => {
-      let i = 0;
-      const tick = () => (++i > 10 ? res(0) : requestAnimationFrame(tick));
-      requestAnimationFrame(tick);
-    }));
-
-    const result = await page.evaluate(([src, o]) => (new Function("return " + src)())(window.__apex, o), [runCommand.toString(), opts]);
-    await printResult(result);
-  } catch (e) {
-    console.error("agent failed:", e.message);
-    process.exitCode = 1;
-  } finally {
-    await shutdown();
-  }
-})();
 
 // THE COMMAND, as one plain function over the agent surface `a`: Playwright
 // serialises its source into the page, the VM route calls it directly.
@@ -346,30 +151,248 @@ function runCommand(a, o) {
       }
 }
 
-async function printResult(result) {
-    if ((opts.cmd === "frame" || opts.cmd === "plan" || opts.cmd === "render")
-        && result && result.grid && result.grid.lines && !opts.out) {
-      // Printing the raster inside a JSON string array defeats the purpose —
-      // the grid is meant to be looked at.
-      console.log(result.grid.lines.join("\n"));
-      console.log(JSON.stringify({ legend: result.legend, coveragePct: result.coveragePct,
-                                   horizonRow: result.grid.horizonRow,
-                                   camera: result.camera, lighting: result.lighting,
-                                   objects: result.objects }, null, 2));
-      return;
+// The real collaborators. main() takes overrides for any of them, so a unit test imports THIS module and
+// runs the real entry with stubs (tests/unit/capture-tools-agent.test.mjs) instead of a regex-stripped copy.
+export const DEFAULT_DEPS = Object.freeze({
+  process, console, createRequire, launchChromium, shutdown, sleep, startStaticServer,
+  chromiumArgsForBackend, installProbeInit, parseFlags,
+});
+
+/** The CLI. `argv` is process.argv.slice(2); `deps` overrides DEFAULT_DEPS. Resolves when the command is done. */
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const { process, console, createRequire, launchChromium, shutdown, sleep, startStaticServer,
+    chromiumArgsForBackend, installProbeInit, parseFlags } = { ...DEFAULT_DEPS, ...deps };
+
+  if (!argv.length || argv[0] === "-h" || argv[0] === "--help") {
+    console.log("usage: node tools/shot/agent.mjs <track> <command> [options]\n");
+    for (const [k, v] of Object.entries(COMMANDS)) console.log(`  ${k.padEnd(9)} ${v}`);
+    console.log("\nstaging:  --at <frac 0-1>  --speed <m/s>  --lateral <m>  "
+              + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night  --seed <uint32>  --vm (Node VM, no browser)");
+    process.exit(0);
+  }
+
+  parseFlags(argv, ["--at", "--brake", "--camera", "--cols", "--detail", "--edges", "--from", "--horizon", "--id", "--kind", "--kinds", "--lateral", "--lats", "--limit", "--near", "--north", "--offset", "--out", "--points", "--profile", "--radius", "--range", "--reach", "--rows", "--samples", "--seconds", "--seed", "--speed", "--ss", "--stations", "--steer", "--team", "--throttle", "--to", "--tod", "--visible", "--vm", "--weather", "--what"]);
+
+  // `help` is the one command that needs no circuit, so allow it in either slot.
+  // When argv[0] is `help` and argv[1] is ALSO a command name (world, track, …),
+  // the old swap left cmd=world and booted Chromium for a colliding hook (#3327).
+  let track = argv[0], cmd = argv[1] || "world";
+  if (argv[0] === "help") {
+    cmd = "help";
+    track = "monza";
+  } else if (COMMANDS[argv[0]] && !COMMANDS[argv[1] || ""]) {
+    cmd = argv[0];
+    track = "monza";
+  }
+  if (!COMMANDS[cmd]) {
+    console.error(`unknown command "${cmd}" — one of: ${Object.keys(COMMANDS).join(", ")}`);
+    process.exit(1);
+  }
+
+  /** One index row. Reads the generated index so a single hook does not boot Chromium. */
+  function printOneHook(name) {
+    const fs = createRequire(ROOT + "/package.json")("node:fs");
+    const file = ROOT + "/docs/agent-index.json";
+    let idx;
+    try { idx = JSON.parse(fs.readFileSync(file, "utf8")); }
+    catch (e) {
+      console.error(`agent: docs/agent-index.json is not readable (${e.message}) — node tools/docs/gen-agent-index.mjs`);
+      return 2;
     }
-    const json = JSON.stringify(result, null, 2);
-    if (opts.out) {
-      // A full world dump is megabytes on a street circuit — writing it beats
-      // paging it through a terminal, and the caller can then read what it needs.
-      const { writeFileSync, mkdirSync } = await import("node:fs");
-      const { dirname } = await import("node:path");
-      mkdirSync(dirname(opts.out), { recursive: true });
-      writeFileSync(opts.out, json);
-      console.log(JSON.stringify({ wrote: opts.out, bytes: json.length,
-                                   detail: opts.modelDetail }, null, 2));
-    } else {
-      console.log(json);
+    const hits = (idx.hooks || []).filter((h) => h.name === name);
+    if (!hits.length) {
+      console.error(`agent: no hook named "${name}" in docs/agent-index.json`);
+      return 1;
     }
-    if (result && result.ok === false) process.exitCode = 2;
+    console.log(JSON.stringify(hits.length === 1 ? hits[0] : hits, null, 2));
+    return 0;
+  }
+
+  const hookQuery = cmd === "help" ? helpHookName(argv) : null;
+  if (hookQuery) process.exit(printOneHook(hookQuery));
+
+  const flag = (name, def) => {
+    const equal = argv.find((arg) => arg.startsWith("--" + name + "="));
+    if (equal != null) return equal.slice(name.length + 3);
+    const i = argv.indexOf("--" + name);
+    return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : def;
+  };
+  const has = (name) => argv.includes("--" + name);
+  const num = (name, def) => {
+    const v = flag(name, null);
+    return v == null ? def : Number(v);
+  };
+
+  const opts = {
+    cmd,
+    seed: num("seed", 1),
+    // staging position as a lap fraction. A value >1 is not a fraction — it is a
+    // stale `survey --at <count>` invocation, and passing it to jump() would wrap
+    // to 0 and stage at the start line while looking deliberate. Fall back to the
+    // default instead of silently teleporting somewhere the caller didn't ask for.
+    at: num("at", 0.1) > 1 ? 0.1 : num("at", 0.1),
+    speed: num("speed", 55),
+    lateral: num("lateral", 0),
+    weather: flag("weather", null),
+    tod: flag("tod", null),
+    detail: flag("detail", "drive"),
+    horizonS: num("horizon", 4),
+    points: num("points", 5),
+    what: flag("what", "corners"),
+    radius: num("radius", 150),
+    // accept --kind and --kinds; a silently-unbound filter returned the whole
+    // registry and looked like a working query
+    kinds: flag("kinds", null) || flag("kind", null),
+    limit: num("limit", 0),
+    seconds: num("seconds", 5),
+    steer: num("steer", 0),
+    throttle: has("throttle"),
+    brake: has("brake"),
+    samples: num("samples", 8),
+    modelDetail: flag("detail", "summary"),
+    offset: num("offset", 0),
+    cols: num("cols", 56),
+    rows: num("rows", 16),
+    ss: num("ss", 0),   // render({what:"car"}) supersampling override, 1-6 (0 = default)
+    range: num("range", 500),
+    team: flag("team", null),
+    // survey samples N stations across the WHOLE lap — a count, not a position.
+    // It used to read --at, which also means the staging frac 0-1, so
+    // `survey --at 32` both asked for 32 stations AND fed jump(32) — and 32 % 1
+    // is 0, silently staging at the start line. --stations is the flag; --at is
+    // still honoured when >1 so old invocations keep working, but it no longer
+    // doubles as staging (see the `at` guard below).
+    stations: num("stations", 0) || (num("at", 0) > 1 ? num("at", 0) : 0),
+    lats: num("lats", 0),
+    profileFlag: has("profile"),
+    reach: num("reach", 60),        // survey's lateral reach — distinct from frame's --range
+    north: has("north"),
+    edges: has("edges"),
+    visibleFlag: has("visible"),
+    cam: flag("camera", null),
+    out: flag("out", null),
+    id: flag("id", null),                 // describe: prop:12 | corner:T3 | car:4
+    nearM: has("near") ? num("near", 150) : null,   // query: radius around the car
+    fromS: has("from") ? num("from", 0) : null,     // query: arc window start (m)
+    toS: has("to") ? num("to", 0) : null,           // query: arc window end (m)
+  };
+
+  if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) { console.error("seed must be a uint32"); process.exit(2); }
+
+  // Budgets sized off measurements, shared with apex-eval.mjs.
+  const BOOT_MS = 45000, TRACK_MS = 45000;
+
+  const RASTERS = new Set(["render", "frame", "plan", "car", "visible"]);
+  // main() returns runVm()'s promise or the browser route's, so a caller can await the whole command.
+  async function runVm() {
+    if (RASTERS.has(cmd)) {
+      console.error(`agent: "${cmd}" reads the last drawn frame — there is none in the Node VM; drop --vm for it`);
+      process.exit(2);
+    }
+    const { createGame } = createRequire(ROOT + "/package.json")("./tools/lib/game-vm.cjs");
+    console.error(`agent: vm route track=${track} cmd=${cmd}`);
+    let g = null;
+    try {
+      g = await createGame(cmd === "help" ? {} : { track, tod: opts.tod || undefined, wx: opts.weather || undefined });
+      if (cmd === "help") { console.log(JSON.stringify(g.apex.agentHelp(), null, 2)); }
+      else {
+        g.apex.go();
+        g.apex.jump(opts.at, opts.speed, opts.lateral);
+        await printResult(runCommand(g.apex, opts));
+      }
+    } catch (e) {
+      console.error("agent failed:", e.message);
+      process.exitCode = 1;
+    } finally { if (g) g.close(); }
+    process.exit(process.exitCode || 0);
+  }
+
+
+  async function printResult(result) {
+      if ((opts.cmd === "frame" || opts.cmd === "plan" || opts.cmd === "render")
+          && result && result.grid && result.grid.lines && !opts.out) {
+        // Printing the raster inside a JSON string array defeats the purpose —
+        // the grid is meant to be looked at.
+        console.log(result.grid.lines.join("\n"));
+        console.log(JSON.stringify({ legend: result.legend, coveragePct: result.coveragePct,
+                                     horizonRow: result.grid.horizonRow,
+                                     camera: result.camera, lighting: result.lighting,
+                                     objects: result.objects }, null, 2));
+        return;
+      }
+      const json = JSON.stringify(result, null, 2);
+      if (opts.out) {
+        // A full world dump is megabytes on a street circuit — writing it beats
+        // paging it through a terminal, and the caller can then read what it needs.
+        const { writeFileSync, mkdirSync } = await import("node:fs");
+        const { dirname } = await import("node:path");
+        mkdirSync(dirname(opts.out), { recursive: true });
+        writeFileSync(opts.out, json);
+        console.log(JSON.stringify({ wrote: opts.out, bytes: json.length,
+                                     detail: opts.modelDetail }, null, 2));
+      } else {
+        console.log(json);
+      }
+      if (result && result.ok === false) process.exitCode = 2;
+  }
+
+  if (has("vm")) return runVm();
+return (async () => {
+    const srv = await startStaticServer(ROOT);
+    try {
+      const browser = await launchChromium({
+        args: chromiumArgsForBackend("three"),
+      });
+      const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
+      await installProbeInit(page, { backend: "three" });
+      await page.goto(srv.url + "?seed=" + opts.seed);
+      // BOOT_MS, polling: 100 — both halves. An idle container defines __apex
+      // 10.3-12.6 s after goto (3 boots, 2026-10-02) and a fresh Chromium is
+      // slower, so 15 s failed this tool 2 of 2 through apex_agent; and rAF
+      // polling on a rendering page can starve the timeout itself
+      // (tools/check/wait-polling-lint.mjs).
+      await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
+
+
+      if (opts.cmd === "help") {
+        console.log(JSON.stringify(await page.evaluate(() => window.__apex.agentHelp()), null, 2));
+        return;
+      }
+
+      await page.evaluate(([t, w, tod]) => window.__apex.race(t, tod || undefined, w || undefined),
+                          [track, opts.weather, opts.tod]);
+      // A TLX monza build measures 16.6 s on SwiftShader (apex-eval.mjs TRACK_MS).
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS, polling: 100 });
+
+      await sleep(1600);                       // mesh build
+
+      // Stage the car, then let frames actually draw. visible() reads the LAST
+      // RENDERED frame, so skipping this reports a camera still at its pre-jump
+      // position — plausible-looking and wrong.
+      await page.evaluate(([at, speed, lateral]) => {
+        window.__apex.go();
+        window.__apex.jump(at, speed, lateral);
+      }, [opts.at, opts.speed, opts.lateral]);
+      await page.evaluate(() => new Promise((res) => {
+        let i = 0;
+        const tick = () => (++i > 10 ? res(0) : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      }));
+
+      const result = await page.evaluate(([src, o]) => (new Function("return " + src)())(window.__apex, o), [runCommand.toString(), opts]);
+      await printResult(result);
+    } catch (e) {
+      console.error("agent failed:", e.message);
+      process.exitCode = 1;
+    } finally {
+      await shutdown();
+    }
+  })();
 }
+
+// Run only as the entry point: importing this module (a unit test) runs nothing.
+const isEntry = (() => {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return false; }
+})();
+if (isEntry) main();

@@ -53,8 +53,9 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 7. **Prove no regression**: re-run the same scope, then
    `node tools/ui/layout-audit.mjs --diff=artifacts/layout-audit/audit.before.json` (exit 1 on a new finding;
    [verification.md](references/verification.md) §Regression).
-8. **Hand off**: publish selected captures with
-   `node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`; the PR body
+8. **Hand off**: package selected captures with
+   `node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug>` (publishing:
+   [verification.md](references/verification.md)); the PR body
    lists unmeasured cells as not run and records the `= diff` line. At most two read-only reviewers, over finished artifacts.
 
 ## References

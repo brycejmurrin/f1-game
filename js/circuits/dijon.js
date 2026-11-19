@@ -27,6 +27,10 @@
     night: false,
     theme: "green",
     lengthKm: 3.727,
+    // The 1982 Swiss GP and the 1979 French GP ran 80 laps of the 3.8 km
+    // layout (autosport.com "Grand Prix Gold: 1982 Swiss GP"); 3.727, the
+    // projected trace, derived 82.
+    gpLaps: 80,
     tyreSeverity: 0.95,  // Historic French permanent; slightly below neutral
     baseHW: 7,
     sceneryCoordinates: "racing",

@@ -227,9 +227,9 @@ test.describe("Season — sprint weekends", () => {
     await toTheGrid(page);
     await winAndFinish(page);
     await page.locator("#res-menu").click();
-    await page.waitForTimeout(300);
     // Scored, so STANDINGS is offered even though the round is still 0.
-    await expect(page.locator("#mb-standings")).toBeVisible();
+    // Wait on the door — a fixed 300 ms sleep raced a slow peel back to title.
+    await expect(page.locator("#mb-standings")).toBeVisible({ timeout: 15_000 });
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, undefined, { timeout: BOOT_MS, polling: 100 });
     const s = await saved(page);

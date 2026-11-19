@@ -69,7 +69,7 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 ```sh
 npm run test:garage-unit                   # node gate for a part/wing/livery edit (no browser)
 node tools/ci/pick-tests.mjs              # which groups prove it (car; modes for research locks / ownership UI)
-node tools/ci/remote-group.mjs car         # a whole group, on the PUSHED branch — never browser specs locally
+# the PR's own CI runs the browser shard (never locally); a whole `car` group is Bryce's opt-in
 node tools/car/audit-parts.mjs             # browser-gated (needs :3456) [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme

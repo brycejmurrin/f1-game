@@ -11,7 +11,7 @@ driver or race is **data-hub** (one home: this file).
 
 ## Workflow
 
-1. `node --test --test-name-pattern "replay fixture plan is offline and bounded" tests/unit/capture-tools-regressions.test.mjs`
+1. `node --test --test-name-pattern "replay fixture plan is offline and bounded" tests/unit/capture-tools-replay.test.mjs`
    (the bounded offline replay-fixture contract).
 
 **HIGHLIGHTS is not what the probe runs.** `replay-camera-probe.mjs` launches
