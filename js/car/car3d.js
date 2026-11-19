@@ -414,12 +414,10 @@ const Car3D = (function () {
           if(s>0) addQuad(out,a[j],b[j],b[j+1],a[j+1],c1); else addQuad(out,a[j+1],b[j+1],b[j],a[j],c1);
         }
         CarMaterials.smoothSkin(out,start);
-        // LINED shoulder (Bryce 2026-11-18, "I can see through the sides"): the wide onboard lens's 0.3 m near plane cuts this
-        // open crown shell at the frame's sides; inward carbon 2 mm inside the outer wall (ring 1-4, z 0.94..-0.12, where a forward
-        // ray leaves it) hides the road on every backend, culled (GLX/TLX) or not (WGX). tests/unit/cockpit-side-occlusion.test.mjs
-        const lin=(q)=>q.map((p)=>{ const d=[q[0][0]-p[0],q[4][1]-p[1]]; const L=Math.hypot(...d)||1; return [p[0]+d[0]/L*0.002,p[1]+d[1]/L*0.002,p[2]]; });
-        for(let i=1;i<3;i++) for(let j=1;j<4;j++) { const a=lin(rings[i]), b=lin(rings[i+1]);
-          if(s>0) addQuad(out,a[j+1],b[j+1],b[j],a[j],CARBON,SURFACES.carbon); else addQuad(out,a[j],b[j],b[j+1],a[j+1],CARBON,SURFACES.carbon); }
+        // carbon liner 2 mm in (see-through sides, Bryce 2026-11-18): tests/unit/cockpit-side-occlusion.test.mjs
+        const L=rings.map(q=>q.map(p=>{const x=q[0][0]-p[0],y=q[4][1]-p[1],d=Math.hypot(x,y)/.002||1;return [p[0]+x/d,p[1]+y/d,p[2]];}));
+        for(let i=1;i<3;i++) for(let j=1;j<4;j++){const a=L[i],b=L[i+1];
+          if(s>0) addQuad(out,a[j+1],b[j+1],b[j],a[j],CARBON,SURFACES.carbon); else addQuad(out,a[j],b[j],b[j+1],a[j+1],CARBON,SURFACES.carbon);}
         for(const i of [0,rings.length-1]) for(let j=1;j<6;j++) {
           const q=rings[i]; if((i===0)===(s>0)) addTri(out,q[0],q[j],q[j+1],c1); else addTri(out,q[0],q[j+1],q[j],c1);
         }
@@ -860,10 +858,7 @@ const Car3D = (function () {
     // SPONSOR BOARD. The titleA wordmark is podDecal(R.titleA, 0.32, 0.80), so
     // the board must cover yFrac 0.32..0.80 — centre 0.56, height 0.48 x pod
     // height (the fracH=true call below). A board shorter than its decal spills
-    // the glyph tops and tails onto the body paint, forcing one ink to serve a
-    // pale board and the paint at once — which is why 70% of liveries once fell
-    // back to a halo; the fractional sizing keeps the mark WHOLLY on the board
-    // at every station so liverytex can ink it for that one colour.
+    // the glyph onto the body paint; fractional sizing keeps it WHOLLY on the board.
     // Sized in POD FRACTIONS so each band tracks the taper and nothing overlaps:
     // the accent band holds the strip (yFrac 0.08..0.30), the board holds titleA
     // (0.32..0.80), and the accentC flash below sits at 0.88 with its lower edge
@@ -1579,12 +1574,7 @@ const Car3D = (function () {
     }
 
     part("driver");
-    // A DRIVER, not a floating head. The aperture was the right size and still
-    // did not read as a cockpit, because a cockpit reads as an OCCUPIED SPACE:
-    // a hole with one helmet hovering in it is a hole. Shoulders rising out of
-    // the seat, arms reaching forward and a wheel under the hands are what say
-    // "someone is sitting in there" — three shapes, 0 textures, and they do
-    // more for the look than every millimetre of rim geometry did.
+    // A DRIVER, not a floating head: shoulders, arms and a wheel make the cockpit read as occupied.
     // Sized off the opening rather than styled: the coaming abreast of the
     // driver sits at ~0.626 and the seat floor at 0.47, so the shoulders top
     // out at 0.585 — 4 cm proud of the floor's far side and 4 cm UNDER the
