@@ -25,11 +25,11 @@ function faultRig() {
   let request, pending;
   return { context, calls, clock, timers,
     session: { context, page: { url: () => 'http://localhost/' } },
-    start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false, resourceType = 'script' } = {}) {
+    start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false, resourceType = 'script', hang = false } = {}) {
       request = { url: () => origin + pathname + '?v=dev', resourceType: () => resourceType };
       pending = handler({ request: () => request,
-        fallback: async () => { calls.push('continue'); if (failRoute) throw Error('route failed'); },
-        abort: async () => { calls.push('reject'); context.emit('requestfailed', request); },
+        fallback: async () => { calls.push('continue'); if (hang) await new Promise(() => {}); if (failRoute) throw Error('route failed'); },
+        abort: async () => { calls.push('reject'); if (hang) await new Promise(() => {}); context.emit('requestfailed', request); },
       });
       return pending;
     },
@@ -291,4 +291,33 @@ test('stall diagnostics summarise a slow boot and a pending route call in one li
   assert.equal(parts.length, 3);
   assert.equal(parts[2].slice(0, 13), 'worker boot #');
   assert.ok(Number.isInteger(Number(parts[2].slice(13).split(' ')[0])), 'the worker boot count is a number');
+});
+
+// #5542: an interception call or a held route that never settles fails fast with its own name, not at the test timeout.
+test('fault schedule awaits that never settle reject within callMs, naming the call', async () => {
+  const never = () => new Promise(() => {});
+  const named = (what) => (error) => error.message === `Fault schedule ${what} did not settle within 30 ms`;
+  const r = faultRig();
+  r.context.route = never;
+  await assert.rejects(installFaultSchedule(r.context, 'http://localhost', { ...r.clock, callMs: 30 }), named('route'));
+  const u = faultRig(), su = await installFaultSchedule(u.context, 'http://localhost', { ...u.clock, callMs: 30 });
+  su.hold(faultHold()); u.expire();
+  u.context.unroute = never;
+  await assert.rejects(su.close(), named('unroute'));
+  // The spec's never-occurs case expects /not observed/: a stalled unroute behind it must fail that, by name.
+  const p = faultRig();
+  const replay = replayFaultScenario(p.session, faultScenario([faultHold(), faultWait(), faultRelease('continue')]),
+    { ...p.clock, callMs: 30, performAction: async () => {}, matchesOracle: async () => true });
+  await new Promise(resolve => setImmediate(resolve));
+  p.context.unroute = never; p.expire();
+  await assert.rejects(replay, error => error.message === 'Fault replay and cleanup failed (cleanup: Fault schedule unroute did not settle within 30 ms)'
+    && !/not observed/.test(error.message) && /not observed/.test(error.errors[0].message));
+  for (const outcome of ['continue', 'reject']) {
+    const f = faultRig(), s = await installFaultSchedule(f.context, 'http://localhost', { ...f.clock, callMs: 30 });
+    s.hold(faultHold()); void f.start({ hang: true }); await s.wait('circuit');
+    await assert.rejects(s.release('circuit', outcome), named(`route.${outcome === 'continue' ? 'fallback' : 'abort'} for circuit`));
+    await assert.rejects(s.close(), named('held-route drain'));
+    assert.equal(f.timers.size, 0);
+    assert.equal(f.context.listenerCount('requestfailed'), 0);
+  }
 });

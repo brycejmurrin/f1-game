@@ -53,22 +53,30 @@ export function validateFaultScenario(raw) {
 }
 
 /** Owns routing only; the caller retains ownership of its session/browser. */
-// `onSlowCall({ op, pendingMs, events, calls })` fires once when context.route or context.unroute is still pending
-// after `slowMs` (#5542: a stall there sat to the test timeout with nothing recorded). Evidence only: the call is
-// awaited exactly as before. The watchdog uses the real clock, never the injected one, so fake clocks are untouched.
-export async function installFaultSchedule(context, origin, { setTimer = setTimeout, clearTimer = clearTimeout, slowMs = 5000, onSlowCall = null } = {}) {
+// `callMs` bounds every await nothing else bounds (#5542): route/unroute and the held route's own fallback/abort.
+// One that never settles rejects with its name (`Fault schedule unroute did not settle within …`) instead of sitting
+// to the test timeout. Real clock, so injected fake clocks are untouched; the call is abandoned, not cancelled.
+// Before that, `onSlowCall({ op, pendingMs, events, calls })` fires once when context.route or context.unroute is
+// still pending after `slowMs` (evidence only: which call stalled, and when each fault event happened).
+export async function installFaultSchedule(context, origin, { setTimer = setTimeout, clearTimer = clearTimeout, callMs = 10000, slowMs = 5000, onSlowCall = null } = {}) {
   if (new URL(origin).origin !== origin) fail('Fault origin must be an HTTP(S) origin');
   if (!['http:', 'https:'].includes(new URL(origin).protocol)) fail('Fault origin must be HTTP(S)');
   const holds = new Map(), events = [], calls = [], t0 = Date.now();
   let closed = false;
   const event = (h, state) => events.push({ id: h.id, path: h.path, state, t: Date.now() - t0 });
+  const bounded = async (op, promise) => {
+    let deadline; // not unref'd: a pending await keeps the process alive to its named failure
+    const stalled = new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error(`Fault schedule ${op} did not settle within ${callMs} ms`)), callMs); });
+    try { return await Promise.race([promise, stalled]); } finally { clearTimeout(deadline); }
+  };
+  // A route call: timed into `calls`, reported once past slowMs (evidence), and bounded by callMs (named failure).
   const timed = async (op, call) => {
     const c = { op, start: Date.now() - t0, end: null }; calls.push(c);
     const watchdog = typeof onSlowCall === 'function' ? setTimeout(() => {
       try { onSlowCall({ op, pendingMs: Date.now() - t0 - c.start, events: structuredClone(events), calls: structuredClone(calls) }); } catch { /* evidence only */ }
     }, slowMs) : null;
     watchdog?.unref?.();
-    try { return await call(); } finally { clearTimeout(watchdog); c.end = Date.now() - t0; }
+    try { return await bounded(op, call()); } finally { clearTimeout(watchdog); c.end = Date.now() - t0; }
   };
   const get = id => { const h = holds.get(id); if (!h) throw new Error(`Unknown fault ${id}`); return h; };
   const finish = (h, outcome) => {
@@ -128,7 +136,7 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
       if (!h.waited || h.outcome) throw new Error(`Fault ${id} requires an observed, unreleased hold`);
       const transfer = watchTransfer(h);
       try {
-        finish(h, outcome); await h.completed;
+        finish(h, outcome); await bounded(`route.${outcome === 'continue' ? 'fallback' : 'abort'} for ${id}`, h.completed);
         if (h.error) throw new Error(`Fault ${id} route failed: ${h.error}`);
         const terminal = await transfer.promise; event(h, terminal);
         if (terminal !== (outcome === 'continue' ? 'finished' : 'failed')) throw new Error(`Fault ${id} unexpected transfer: ${terminal}`);
@@ -144,7 +152,7 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
       closed = true;
       for (const h of holds.values()) finish(h, 'cleanup');
       try { await timed('unroute', () => context.unroute('**/*', handler)); }
-      finally { await Promise.all([...holds.values()].filter(h => h.request).map(h => h.completed)); }
+      finally { await bounded('held-route drain', Promise.all([...holds.values()].filter(h => h.request).map(h => h.completed))); }
     },
   };
 }
@@ -167,7 +175,9 @@ export async function replayFaultScenario(session, raw, { performAction, matches
   } catch (error) { failure = error instanceof Error ? error : new Error(String(error)); }
   finally {
     try { await faults.close(); }
-    catch (error) { failure = failure ? new AggregateError([failure, error], 'Fault replay and cleanup failed') : error; }
+    // The cleanup's name goes in the message (a spec's toThrow reads only that), never the replay's: a stalled unroute
+    // must not pass a test that expects the replay failure (#5542).
+    catch (error) { failure = failure ? new AggregateError([failure, error], `Fault replay and cleanup failed (cleanup: ${error?.message || error})`) : error; }
   }
   const evidence = { scenario, events: structuredClone(faults.events), calls: structuredClone(faults.calls) };
   if (failure) { failure.faultEvidence = evidence; throw failure; }

@@ -105,7 +105,9 @@ heading): use `__apex.resetPlayer()` or `__apex.jump(frac, speed, x)`. Reach for
 
 ### SC never deploys
 
-**"SC never deploys" checklist** (steps 1-3 also run through `createGame()` in `tools/lib/game-vm.cjs`; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
+**"SC never deploys" checklist** (steps 1 and the stopped-car half of 3 also run through `createGame()` in `tools/lib/game-vm.cjs`; DebrisWorld never
+loads there (its dynamic `import()` has no VM loader), so step 2 reads `active:false` and `caution({hazards:true})`
+reads 0 in the VM: debris needs a browser; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
 0. `RaceControl.update` early exits: not racing (`G.state` other than race), Time Trial or quali → reset, no
    flag ever (a T1 pile-up in quali flies nothing); a WATCH replay owns the snapshot; a peer that does not
    `ownsRaceControl()` computes nothing; and the hazard query runs only every `QUERY_EVERY`.

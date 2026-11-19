@@ -4185,7 +4185,8 @@ twelve races first.
 Settle `n` rounds with nobody driving, through the **same** `Career.settleRound()`
 the driven path uses — so prize money, objectives, reputation and the standings are
 genuinely exercised, not approximated. Each entry is `{round, podium, pos, pts,
-prize, salary, bonus, wages, obj, dnf, sponsorPay, money, rep, save, unsaved}` —
+prize, matePos, matePrize, salary, bonus, wages, obj, dnf, sponsorPay, craft, money, rep, sponsorVerdict, stake,
+save, unsaved}` (`matePrize` and `stake` are terms of the money formula in `Career.settleRound`) —
 `dnf` is `null` for a finish and the failure reason for a retirement.
 
 Needs a track and a grid loaded, because the qualifying model reads both: stage one
