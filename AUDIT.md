@@ -361,3 +361,15 @@ arrives still fails (15.0 s → 16.5 s).
 is now divided by the scale, the same pattern `css/carsetup.css:11` uses. Verified in Chromium, rendered
 width before → after: iPhone 13 portrait 225 → 322 px of 390; landscape 496 → 708 px of 750; desktop
 1280×720 unchanged at 1020 px; no horizontal overflow at any size.
+
+### Fix 12 — key and controller binding tables on desktop (addendum A3)
+
+`js/ui/key-binds.js`: the tables rendered before `body.desktop` was set and never again, so on desktop they
+stayed hidden and settings search said "Keyboard bindings is unavailable on this device". They now
+re-render when the class changes. Verified at 1280×800: both sections hidden → shown.
+
+### Fix 13 — desktop helmet-camera HUD layout (finding 13)
+
+`js/ui/hud-layout.js`: the layout re-applies when the pointer kind changes, for the same root cause as fix
+12. Verified at 1280×800: `#hud-gearbox` gets its layout attribute (missing before), so it no longer sits
+under the energy gauge.
