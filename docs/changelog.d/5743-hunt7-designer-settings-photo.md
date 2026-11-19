@@ -1,0 +1,3 @@
+Fixed: Track designer: tapping the road to add a point no longer deletes the bridges, hills, banking and props on that stretch; a pinch that starts on the road keeps your selection; TEST HERE from another point no longer brings back an old range (#5743).
+Fixed: Settings files: the engine-sound tables are no longer listed as changed before the sound loads; a file with no device info, or with a wrong-shaped value, can no longer pin another device's graphics or store junk; a file over 1 MB says FILE TOO LARGE (#5743).
+Fixed: Photo Studio: a capture that never comes back gives up after 8 seconds instead of sticking on CAPTURING…; a failed open no longer leaves the free camera on; opening it twice keeps the race's pause restorable (#5743).
