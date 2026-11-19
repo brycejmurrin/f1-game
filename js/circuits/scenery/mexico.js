@@ -363,7 +363,7 @@
         palette: [[0.62, 0.60, 0.58], [0.68, 0.64, 0.60], [0.56, 0.54, 0.52], [0.60, 0.58, 0.56]],
         windowCol: [0.94, 0.84, 0.55], step: 40
       });
-      cityFront(0.32, 0.43, 1, 78, {   // past 0.43 the T4 hairpin loops under it
+      cityFront(0.32, 0.43, 1, 78, {   // back straight, right side; stops at 0.43, before the hairpin road loops under it
         minH: 12, maxH: 32, depth: 16, lit: true,
         palette: [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.68, 0.62, 0.58]],
         windowCol: [0.90, 0.82, 0.52], step: 42
@@ -679,7 +679,8 @@
         ]) floodMast(K(s), side, gap, { h: 46, cool: true, pool: false, arms: 3 });
       }
 
-      // Foro Sol scoreboard — masts from grade so the screen is not a floating slab
+      // Foro Sol scoreboard on the T12 approach (built 110 m before the T12 apex,
+      // inside the stadium bowl) — masts from grade so the screen is not a floating slab
       {
         const k = K(0.80), a = anchor(k, -1, 46);
         modelGroup("foro-scoreboard", {

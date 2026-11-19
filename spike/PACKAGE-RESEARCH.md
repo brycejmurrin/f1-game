@@ -3,8 +3,8 @@
 Companion to `ADOPTION-PLAN.md`. Consolidates four web-research sweeps
 (physics/vehicle-dynamics, three.js rendering ecosystem, performance/worker/WASM,
 game systems). Research-only at the time of writing. Since then: Trystero
-shipped (vendored 0.25.3, `js/net/nostr.js` — signalling only), the Rapier
-debris side-world is default-on (`js/game/debrisworld.js`, plain
+shipped (vendored 0.25.4, `js/net/nostr.js` — signalling only), the Rapier
+debris side-world is default-on (`js/physics/debris-world.js`, plain
 `rapier3d-compat` — the SIMD swap below is still open), and async ghosts exist
 (`js/car/ghost.js`). The rest is still the menu.
 
