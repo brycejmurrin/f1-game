@@ -11,10 +11,13 @@ import { openBrycePhone, brycePhone } from "../../tools/lib/bryce-phone.mjs";
 const BOOT = 60000;
 const PORTRAIT = { width: 393, height: 852 }, LANDSCAPE = { width: 852, height: 393 };
 
-/** In-page: every apex26.* key, the painted size tokens and the ICB shape. */
+/** In-page: every stored SETTING (the apex26.* keys SettingsExport.SPEC declares), the painted size tokens and
+ *  the ICB shape. Caches outside the SPEC (e.g. the asset pack's `apex26.packIndex`, written async after boot,
+ *  #5629) are not settings, so a rotation may race them. */
 function stateInPage() {
+  const spec = new Set(SettingsExport.SPEC.map((r) => "apex26." + r.k));
   const keys = {};
-  for (const k of Object.keys(localStorage).sort()) if (k.startsWith("apex26.")) keys[k] = localStorage.getItem(k);
+  for (const k of Object.keys(localStorage).sort()) if (spec.has(k)) keys[k] = localStorage.getItem(k);
   const cs = getComputedStyle(document.documentElement);
   return { keys, ui: cs.getPropertyValue("--ui-scale").trim(), btn: cs.getPropertyValue("--hud-btn-scale").trim(), shape: document.body.dataset.shape || null };
 }
