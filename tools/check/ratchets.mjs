@@ -842,6 +842,31 @@ export function sourceGrowth(ref, file, metric) {
   return b - a;
 }
 
+export const HISTORY_REL = "docs/notes/CEILING-HISTORY.md";
+
+/** The docs/notes/CEILING-HISTORY.md entry a raise past the absorb needs (#5845): `--base` refuses the raise
+ *  without one, so `--update --fragment` prints it and the `--base` refusal names its shape. PURE.
+ *  rows: [{file, metric, base, now}]; the placeholders stay in angle brackets for the author to fill. */
+export function historyEntry({ date = pacificDate(), pr = "<n>", branch = "<branch>", reason = "<why>", rows = [], fragment = null } = {}) {
+  const lines = [`## ${date} — PR #${pr} (${branch}): ${reason}`, ""];
+  for (const r of rows) {
+    const d = r.now - r.base;
+    lines.push(`\`${r.file} ${r.metric}\` ${r.base} → **${r.now}** (${d >= 0 ? "+" : ""}${d}). Deliberate raise past the absorb: <what grew and why>.`);
+  }
+  if (fragment) lines.push(`Fragment: \`${fragment.replace(/^tests\/data\//, "")}\`.`);
+  return lines.join("\n");
+}
+
+/** Today in the project's time zone (AGENTS.md: times are Pacific), YYYY-MM-DD. */
+export function pacificDate(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+/** The cure an exact (slack 0) ceiling's failure names (#5845): the tip moves it with zero slack, so a worker
+ *  that measured against its merge base negotiates bytes that are not its own. */
+export const EXACT_CURE = "exact ceiling (slack 0): measure against the TIP (sync-pr when behind), not the merge base; "
+  + "a count that fell: node tools/check/ratchets.mjs --update --lower-only --absolute";
+
 /** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
  *  deleted entry whose file still exists, blocks like a raise past the absorb
  *  (15-F10). Raises are warnings (GitHub `::warning::` annotations on CI, plain
@@ -883,7 +908,8 @@ export function compareToBase(ref, {
         if (!advisory && !reasoned) fatal++;
       }
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : reasoned ? " (reason recorded in docs/notes/CEILING-HISTORY.md)" : "")
+        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : reasoned ? ` (reason recorded in ${HISTORY_REL})`
+          : ` — add an entry to ${HISTORY_REL} in the same push, shaped: ${historyEntry({ rows: [r] }).split("\n").filter(Boolean).join(" ⏎ ")}`)
         : (r.delta > maxRaise && growth !== null
           ? ` — catch-up (source ${r.metric} grew ${growth} ≤ ${maxRaise}; ceiling tracks already-landed size)`
           : ""));
@@ -978,7 +1004,13 @@ async function main() {
     if (asFragment && (dryRun || lowerOnly)) { console.error("--fragment goes with --update only"); process.exitCode = 2; return; }
     if (asFragment && !reason) { console.error('--fragment raises a ceiling deliberately: pass --reason="<why>" and repeat it in the commit message'); process.exitCode = 2; return; }
     const { rows, fragment, scoped } = asFragment ? { rows: await updateFragment(load()), fragment: null } : await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
-    if (asFragment) console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
+    if (asFragment) {
+      console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
+      const raised = rows.filter((r) => r.value > r.ceiling).map((r) => ({ file: r.file, metric: r.metric, base: r.ceiling, now: r.value }));
+      const name = fragmentName(currentBranch());
+      if (raised.length) console.log(`ratchets --update --fragment: \`--base\` refuses a raise past the absorb without a ${HISTORY_REL} entry; append this one (fill the <…>) and commit it with the fragment, in the same push:\n\n`
+        + historyEntry({ branch: currentBranch() || "<branch>", reason, rows: raised, fragment: name ? `${FRAG_REL}/${name}` : null }) + "\n");
+    }
     const receipt = updateReceipt(rows, { lowerOnly });
     if (argv.includes("--json")) console.log(JSON.stringify({ ok: receipt.missing.length === 0, dryRun, lowerOnly, ...receipt }, null, 2));
     else {
@@ -1009,7 +1041,7 @@ async function main() {
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
-    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update --fragment --reason="<why>") and say why in the commit`);
+    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update --fragment --reason="<why>") and say why in the commit${x.slackMax === 0 ? ` — ${EXACT_CURE}` : ""}`);
     process.exitCode = r.ok ? 0 : 1;
     return;
   }
@@ -1028,7 +1060,7 @@ async function main() {
     console.log(process.env.GITHUB_ACTIONS === "true" ? `::warning file=tests/data/ratchets.json,title=ratchet inherited::${msg}` : msg);
   }
   for (const r of v.loose) {
-    const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update --lower-only`
+    const msg = `LOOSE  ${looseLine(r)} — ` + (r.slackMax === 0 ? EXACT_CURE : "lower it: node tools/check/ratchets.mjs --update --lower-only")
       + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
     console.log(v.looseAdvisory && process.env.GITHUB_ACTIONS === "true"
       ? `::warning file=tests/data/ratchets.json,title=ratchet loose::${msg}` : msg);
