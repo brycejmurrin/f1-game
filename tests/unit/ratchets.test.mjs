@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment } from "../../tools/check/ratchets.mjs";
+import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment, historyEntry, pacificDate, EXACT_CURE, HISTORY_REL } from "../../tools/check/ratchets.mjs";
 
 // ONE TREE WALK PER METRIC PER PROCESS (pass-3 T1 / audit4 E1, 2026-10-26). This
 // file called measure() three times in full, the TREE_METRICS loop once more, and
@@ -246,6 +246,10 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
     current: raised(41), print: (l) => big.push(l), sourceGrowthFn: () => 41, historyReasoned: false,
   }), 1, "real source growth past absorb still fails");
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
+  // #5845: the refusal names the history file and the exact entry shape, so the red explains its own cure.
+  const gRaise = big.find((l) => l.startsWith("RAISE  js/game.js lines:")), g = Number(/: (\d+) -> /.exec(gRaise)[1]);
+  assert.equal(gRaise.slice(gRaise.indexOf(" — add")), ` — add an entry to docs/notes/CEILING-HISTORY.md in the same push, shaped: ## ${pacificDate()} — PR #<n> (<branch>): <why>`
+    + ` ⏎ \`js/game.js lines\` ${g} → **${g + 41}** (+41). Deliberate raise past the absorb: <what grew and why>.`);
   // ADVISORY (a push run): the same real-growth raise is still named, and still
   // says it needs a reason, but the exit is 0 — a push has no PR body to carry
   // the reason, so failing there is a red that no push can clear. The PR run
@@ -496,4 +500,18 @@ test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts t
     compared++;
   }
   if (!compared) t.skip("every path AT_REF reads differs from HEAD in this checkout");
+});
+
+test("historyEntry: the CEILING-HISTORY.md entry --update --fragment prints and --base asks for (#5845)", () => {
+  assert.equal(HISTORY_REL, "docs/notes/CEILING-HISTORY.md");
+  assert.equal(historyEntry({ date: "2026-11-19", pr: 5851, branch: "claude/x", reason: "credits page",
+    rows: [{ file: "(tree)", metric: "shellNodes", base: 2256, now: 2322 }], fragment: ["tests/data/ratchets.d", "claude--x.json"].join("/") }),   // joined: a bare fixture path reads as a dead link
+  "## 2026-11-19 — PR #5851 (claude/x): credits page\n\n"
+    + "`(tree) shellNodes` 2256 → **2322** (+66). Deliberate raise past the absorb: <what grew and why>.\n"
+    + "Fragment: `" + ["ratchets.d", "claude--x.json"].join("/") + "`.");
+  assert.equal(historyEntry({ date: "2026-11-19" }), "## 2026-11-19 — PR #<n> (<branch>): <why>\n", "placeholders when nothing is known");
+  assert.equal(pacificDate(new Date("2026-11-20T06:30:00Z")), "2026-11-19", "Pacific, not UTC");
+  // the exact-ceiling cure (tonight's #5617/#5629/#5023): the tip, then a lower-only absolute snap
+  assert.equal(EXACT_CURE, "exact ceiling (slack 0): measure against the TIP (sync-pr when behind), not the merge base; "
+    + "a count that fell: node tools/check/ratchets.mjs --update --lower-only --absolute");
 });
