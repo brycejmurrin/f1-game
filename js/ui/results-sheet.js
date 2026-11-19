@@ -205,6 +205,21 @@ if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
     && typeof G.els.resultsTable.getBoundingClientRect === "function") {
   new ResizeObserver(fitPins).observe(G.els.resultsTable);
 }
+// #5603: LAY OUT BEFORE REVEAL. Whoever un-hides #results (ceremony, podium beat, game.js), classify the sheets and fit
+// the pins in the same task, after TopModal's own observer has opened the dialog (a queued microtask runs after every
+// observer callback, still before the paint), instead of waiting on ResizeObserver delivery. What still painted YOU on
+// P1 for a frame or two was MOTION: REDUCED replaying the pre-compact geometry; css/overlays.css makes that instant.
+if (typeof MutationObserver === "function" && typeof queueMicrotask === "function"
+    && G.els && G.els.results && G.els.resultsTable && typeof G.els.resultsTable.querySelectorAll === "function") {
+  new MutationObserver(() => {
+    if (G.els.results.hidden) return;
+    queueMicrotask(() => {
+      if (G.els.results.hidden) return;
+      if (typeof SheetShape !== "undefined" && SheetShape.reclassify) SheetShape.reclassify();
+      fitPins();
+    });
+  }).observe(G.els.results, { attributes: true, attributeFilter: ["hidden"] });
+}
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
 if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
   G.announce && G.announce((labels.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED")) + " — " + labels.join(" · "), 3, "race"));
@@ -653,9 +668,11 @@ function buildTTResults() {
     els.resultsTable.appendChild(note);
   }
   if ((guestGhost || Ghost.hasGhost()) && isFinite(best)) {
-    const ghostBest = replayGhost.bestTime();
+    const ghostBest = replayGhost.bestTime(), pm = guestGhost || typeof Ghost.meta !== "function" ? null : Ghost.meta();
+    // A record this session IS the ghost now: compare with the PB it replaced (#5672).
+    const prevBest = pm && typeof pm.prevBest === "number" && isFinite(pm.prevBest) && Math.abs(ghostBest - best) < 0.0006 ? pm.prevBest : null;
     if (isFinite(ghostBest)) {
-      const delta = best - ghostBest;
+      const delta = best - (prevBest != null ? prevBest : ghostBest);
       const gr = document.createElement("div");
       gr.className = "res-row";
       const gl = document.createElement("span"); gl.className = "res-name";
@@ -828,7 +845,8 @@ function buildTTResults() {
     clrBtn.className = "sel-chip";
     clrBtn.id = "res-ghost-clear";
     clrBtn.textContent = guestGhost ? tr("results.clearRivalGhost", null, "✕ CLEAR RIVAL GHOST") : tr("results.clearGhost", null, "✕ CLEAR GHOST");
-    clrBtn.onclick = () => {
+    // Arm-then-confirm (G.armConfirm): one tap deleted the PB ghost AND its medal (#5672).
+    clrBtn.onclick = () => G.armConfirm(clrBtn, tr("results.clearGhostConfirm", null, "TAP AGAIN TO CLEAR"), () => {
       if (guestGhost) GhostShare.clearGuest();
       else Ghost.clear(track.def.id);
       const remaining = G.records.board(track.def.id);
@@ -836,7 +854,7 @@ function buildTTResults() {
       // The rebuild destroys this button: keep focus on its slot (js/ui/modal.js).
       if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(els.results, buildTTResults);
       else buildTTResults();
-    };
+    });
     els.resultsTable.appendChild(clrBtn);
   }
 

@@ -32,7 +32,6 @@ import { api } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { commitTreeId } from "../lib/work-tree-id.mjs";
 import { writeReceipt } from "../lib/gate-receipt.mjs";
-import { preflipAdvisory, readProbeReceipt } from "./preflip-probe.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** Sidecar written by a full green tooling-fast suite (see tooling-fast.mjs). */
@@ -163,14 +162,16 @@ export function draftProblem(pull) {
 export function nextAction(state, pr, repo = "brycejmurrin/f1-game") {
   const n = Number(pr);
   if (!Number.isInteger(n) || n < 1) return null;
+  // The MCP recipe, never `gh` (PR #5809): a `gh` label write is refused by bash-guard.sh or recorded as Bryce's click.
+  const land = `next: GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${n}  labels=<the live list from issue_read get_labels, plus "land">   (one label per call, skill steward references/labels.md)`;
   if (state === "passed") {
     return [
       `next: GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${n}  draft:false`,
-      `next: gh api -X POST repos/${repo}/issues/${n}/labels -f 'labels[]=land'`,
+      land,
     ];
   }
   if (state === "not-draft") {
-    return [`next: gh api -X POST repos/${repo}/issues/${n}/labels -f 'labels[]=land'   (already ready: flip nothing; add land only)`];
+    return [`${land}   (already ready: flip nothing; add land only)`];
   }
   return null;
 }
@@ -382,7 +383,7 @@ export function planHash(body) {
 }
 
 /** The CLI, with every side effect injectable: request (GitHub), resolve (git/PR), judge (the tip), receipt, sleep, now, log. */
-export function main(argv, { request = api, resolve = resolveSha, judge = evaluate, receipt = (d) => writeReceipt(ROOT, "ready", d), sleep = (s) => spawnSync("sleep", [String(s)]), now = Date.now, log = console.log } = {}) {
+export function main(argv, { request = api, resolve = resolveSha, judge = evaluate, receipt = (d) => writeReceipt(ROOT, "ready", d), sleep = (s) => spawnSync("sleep", [String(s)]), now = Date.now, log = console.log, advisory = null } = {}) {
   exitIfHelp(argv, USAGE);
   const say = (...a) => log("[ready-gate]", ...a);
   if (argv.includes("--max-behind")) { say(MAX_BEHIND_GONE); return 1; }
@@ -433,8 +434,10 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);
     if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip ready and add `land` in one step (next: lines); if it ages out, re-run ready-gate");
-    // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs).
-    if (resolved.pr) say(preflipAdvisory(readProbeReceipt(resolved.pr), v.sha, resolved.pr));
+    // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs). The CLI
+    // passes it in: merge-gate imports this module, and preflip-probe (with pick-tests) stays out of the gate's
+    // import closure, so both are ROUTINE config paths (D-034).
+    if (resolved.pr && advisory) say(advisory(resolved.pr, v.sha));
     // next: before the `= ready-gate` verdict so the verdict stays the final line (ready-gate.test.mjs).
     if (resolved.pr && v.code === 0) for (const line of nextAction("passed", resolved.pr) || []) say(line);
     say(verdictLine(v));
@@ -442,4 +445,7 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   return v.code;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { preflipAdvisory, readProbeReceipt } = await import("./preflip-probe.mjs");
+  process.exitCode = main(process.argv.slice(2), { advisory: (pr, sha) => preflipAdvisory(readProbeReceipt(pr), sha, pr) });
+}

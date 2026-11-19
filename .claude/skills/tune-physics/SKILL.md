@@ -51,8 +51,9 @@ After any player-path change run `node --test tests/unit/curvature-channels.test
 **Touching steering or GRIP STEER:** `GripSteer.forPlayer` (called from `js/physics/player-forces.js`) must
 receive the SHAPED lock (`og.shaped` — the stick run through `STEER_EXPO` in `js/physics/player-forces.js`), as `grip-steer.js`'s `apply()`
 contract says, not the raw stick; an `expo` A/B is exactly what makes the two diverge. Pins:
-`node --test tests/unit/grip-steer.test.mjs`. `player-dyn.mjs` measures a bare seat (GRIP STEER off), so A/B it
-with `--seat shipped` plus a GRIP STEER on/off pair and say which seat each row came from.
+`node --test tests/unit/grip-steer.test.mjs`. `player-dyn.mjs` measures a bare seat; both seats boot GRIP STEER off, and the CLI
+has no gripSteer flag, so A/B the seat with `--seat shipped` and the GRIP STEER pair with a `measure()` script setting
+`storage.gripSteer`; say which seat each row came from.
 
 DRIVING HELP maps its notch to `ROAD_FOLLOW` (`helpFromSlider`, js/input/steer-tuning.js); raising its OFF default is a design reversal, not a tweak — flag it.
 
@@ -66,7 +67,7 @@ in `aero`. The PR's own CI runs the browser shard; a whole group (`remote-group.
 No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
 
 ```sh
-TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, trail-brake, midCorner_*
+TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, turnIn_coast/turnIn_brake, midCorner_coast/midCorner_brake
 # --seat pin (default) = the bare driving model; --seat shipped = the car a fresh browser boots. Say which seat an A/B measured.
 node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
 node tools/check/lockup-bench.mjs [--json]                       # braking: straight-line sweep, wheelLock, flat spots

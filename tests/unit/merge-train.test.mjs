@@ -7,8 +7,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
-  trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage,
+  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, newestRun, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
+  trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
 import { planVerdict } from "../../tools/ci/ready-gate.mjs";
@@ -69,7 +69,12 @@ test("carVerdict: every CAR_ROWS row must pass; base and the merge rows are the 
 test("trainHistory bisects: a red train of n caps the next at floor(n/2); a lone red car is left out", () => {
   const now = Date.parse("2026-11-18T12:00:00Z");
   const car = (pr) => ({ pr, head: sha(String(pr % 10)) });
-  assert.deepEqual(trainHistory([], { now }), { cap: TRAIN_MAX, exclude: new Set() });
+  assert.equal(TRAIN_MAX, 10, "Bryce 2026-11-18 ~19:50Z: bigger trains 5→10");
+  assert.deepEqual(trainHistory([], { now }), { cap: 10, exclude: new Set() });
+  const red = (n, closed = "2026-11-18T11:00:00Z") => ({ cars: Array.from({ length: n }, (_, i) => car(i + 1)), outcome: "red", closed });
+  assert.equal(trainHistory([red(10)], { now }).cap, 5, "a red train of 10 halves to 5");
+  assert.equal(trainHistory([red(5, "2026-11-18T11:30:00Z"), red(10)], { now }).cap, 2, "then a red 5 halves to 2");
+  assert.equal(trainHistory([red(2, "2026-11-18T11:45:00Z"), red(5, "2026-11-18T11:30:00Z"), red(10)], { now }).cap, 1, "then a red 2 halves to 1");
   assert.equal(trainHistory([{ cars: [1, 2, 3, 4, 5].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, 2);
   assert.equal(trainHistory([{ cars: [1, 2].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, 1);
   const h = trainHistory([
@@ -91,6 +96,67 @@ test("trainDisposition: stale when a car moved, red on CI or gate failure, else 
   assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "failure" }).outcome, "red");
   assert.deepEqual(trainDisposition({ manifest: m, cars: new Map([[5, p(sha("d"))], [7, p(sha("c"))]]), ciConclusion: "failure" }), { close: true, outcome: "stale", why: "car #5 moved, closed or lost land" });
   assert.deepEqual(trainDisposition({ manifest: m, cars: new Map([[5, p(sha("b"), { state: "closed", merged_at: "x" })], [7, p(sha("c"))]]), ciConclusion: "success", gate: "success" }), { close: false }, "a car that landed alone is not a move");
+  // PR #5809 (train #5814, run 44429435124): a cancelled CI run and no completed CI check-run closes the train
+  const run = (status, conclusion) => ({ status, conclusion });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "cancelled") }),
+    { close: true, outcome: "stale", why: "the CI run on the train head was cancelled before its CI check completed" });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "timed_out") }),
+    { close: true, outcome: "red", why: "the CI run on the train head ended timed_out before its CI check completed" });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("in_progress", "") }), { close: false });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: run("completed", "success") }), { close: false }, "a green run waits for its gate");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", ciRun: null }), { close: false }, "an unreadable run keeps waiting");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "failure", gate: "", ciRun: run("completed", "cancelled") }), { close: true, outcome: "red", why: "CI failure on the train head" }, "a completed CI check wins");
+  assert.deepEqual(newestRun({ workflow_runs: [{ id: 9, status: "completed", conclusion: "cancelled" }, { id: 12, status: "queued", conclusion: null }] }), { status: "queued", conclusion: "" });
+  assert.equal(newestRun({ workflow_runs: [] }), null);
+  assert.equal(newestRun(null), null);
+});
+
+test("redOnRedTip: a red train on a red tip closes stale (no bisect); a red on a green or unknown tip stays red", () => {
+  const red = { close: true, outcome: "red", why: "CI failure on the train head" };
+  const d = redOnRedTip(red, { state: "code-red", evidence: "the tip e9f93c47's own unit gate fails" });
+  assert.equal(d.outcome, "stale");
+  assert.equal(d.tipRed, true);
+  assert.equal(d.why, "CI failure on the train head, while the deploy tip was red (the tip e9f93c47's own unit gate fails): not the cars' red, no bisect");
+  for (const state of ["green", "platform", "none", "unverified"]) assert.deepEqual(redOnRedTip(red, { state }), red, `${state} keeps the bisect`);
+  assert.deepEqual(redOnRedTip(red, null), red);
+  const stale = { close: true, outcome: "stale", why: "car #5 moved, closed or lost land" };
+  assert.deepEqual(redOnRedTip(stale, { state: "code-red" }), stale);
+  assert.deepEqual(redOnRedTip({ close: false }, { state: "code-red" }), { close: false });
+  // trains #5822 (5) … #5827 (1), 2026-11-19: closed stale, they no longer halve the cap or exclude a lone car
+  const now = Date.parse("2026-11-19T07:00:00Z"), car = (n) => ({ pr: n, head: sha(String(n)) });
+  const closed = [{ cars: [car(1)], outcome: d.outcome, closed: "2026-11-19T06:23:00Z" }, { cars: [1, 2, 3, 4, 5].map(car), outcome: d.outcome, closed: "2026-11-19T04:24:00Z" }];
+  assert.deepEqual(trainHistory(closed, { now }), { cap: TRAIN_MAX, exclude: new Set() });
+});
+
+test("main --build: a red train whose base the tip gate finds red is closed stale with why; a green base bisects", async () => {
+  const base = sha("a");
+  const m = { base, cars: [{ pr: 5, head: sha("b"), ref: "claude/x" }] };
+  const train = { number: 90, head: { sha: sha("e"), ref: "train/x-5" }, body: renderManifest(m) };
+  const run = async (gateState) => {
+    const writes = [], gated = [];
+    let opens = 0;
+    const request = (p, o) => {
+      if (o?.method) { writes.push({ p, ...o }); return { json: {} }; }
+      if (p.startsWith("pulls?state=open")) return opens++ ? { error: "stop here" } : { json: [train] };
+      if (p === "pulls/5") return { json: { state: "open", head: { sha: sha("b") }, labels: [{ name: "land" }] } };
+      if (p.includes("check-runs?check_name=CI")) return { json: { check_runs: [{ app: { slug: "github-actions" }, status: "completed", conclusion: "failure" }] } };
+      if (p.includes("/statuses")) return { json: [] };
+      if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [{ id: 1, conclusion: "success", head_sha: sha("9") }] } };
+      return { error: `unexpected ${p}` };
+    };
+    const tipCheck = ({ sha: s }) => { gated.push(s); return { state: gateState, sha: s, jobs: gateState === "code-red" ? ["boot-load-budget"] : [], evidence: `the tip ${s.slice(0, 8)}'s own unit gate ${gateState === "code-red" ? "fails" : "passed"}` }; };
+    const code = await main(["--build"], { request, log: () => {}, tipCheck });
+    return { code, writes, gated };
+  };
+  const r = await run("code-red");
+  assert.deepEqual(r.gated, [base], "the tip gate runs on the train's base");
+  const close = r.writes.find((w) => w.p === "pulls/90");
+  assert.equal(trainResult(close.body.body).outcome, "stale");
+  assert.equal(close.body.state, "closed");
+  assert.equal(r.writes.find((w) => w.p.endsWith("/comments")).body.body.split("\n")[0],
+    `merge-train: closed (stale) — CI failure on the train head, while the deploy tip was red (the newest completed pages.yml run is on 99999999 (green), not the tip aaaaaaaa; the tip aaaaaaaa's own unit gate fails): not the cars' red, no bisect. The tip was red on the train's base, so these cars are not suspects: the next train is rebuilt at full size once the tip is fixed.`);
+  const g = await run("green");
+  assert.equal(trainResult(g.writes.find((w) => w.p === "pulls/90").body.body).outcome, "red", "a green base keeps the bisect");
 });
 
 // ---- git fixtures: a real repo, exact shas compared -------------------------------------------------------
@@ -128,6 +194,21 @@ test("foldCars merges clean cars in order, drops a conflicting one, and verifyTr
     // max caps the train; an already-merged car is dropped with why
     assert.deepEqual(foldCars({ base: r.base, cars, cwd: r.dir, max: 1 }).cars.map((c) => c.pr), [1]);
     assert.deepEqual(foldCars({ base: r.h1, cars: cars.slice(0, 1), cwd: r.dir }).dropped, [{ pr: 1, why: "already on the tip" }]);
+  } finally { r.rm(); }
+});
+
+test("foldCars takes up to TRAIN_MAX (10) clean cars by default and caps an 11th", () => {
+  const r = repo();
+  try {
+    const cars = Array.from({ length: 11 }, (_, i) => {
+      const n = i + 10;
+      r.g("switch", "-qc", `car${n}`, r.base); fs.writeFileSync(path.join(r.dir, `f${n}.txt`), `${n}\n`); r.g("add", "."); r.g("commit", "-qm", `car${n}`);
+      return { pr: n, head: r.g("rev-parse", "HEAD"), ref: `car${n}` };
+    });
+    r.g("switch", "-q", "main");
+    const f = foldCars({ base: r.base, cars, cwd: r.dir });
+    assert.deepEqual(f.cars.map((c) => c.pr), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    assert.equal(verifyTrain({ base: r.base, head: f.head, cars: f.cars, tip: r.base, cwd: r.dir }).ok, true);
   } finally { r.rm(); }
 });
 

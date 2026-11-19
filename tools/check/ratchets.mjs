@@ -98,6 +98,13 @@ export const TREE_METRICS = {
   // browser spec that could run in the VM adapter but still spends
   // SwiftShader minutes. All three are shrink-only.
   zeroRefModules: async () => (await import("./tree-counts.mjs")).zeroRefModules(),
+  // The boot wall (tools/check/boot-wall.mjs; tests/unit/boot-load-budget.test.mjs asserts it): every visit parses
+  // these before the title. They left that test's hand-written MAX_EAGER_* constants (2026-11-19,
+  // docs/notes/BUDGET-RATCHETS-2026-11-19.md): each PR re-measured them on its own old tip, so two fixers'
+  // numbers went stale against each other. Here a lowering is the branch's own fragment delta and a raise is
+  // Bryce's `ratchet-raise` (merge-gate raise row).
+  eagerScripts: async () => (await import("./boot-wall.mjs")).wallNow().scripts,
+  eagerBytes: async () => (await import("./boot-wall.mjs")).wallNow().bytes,
   implicitAsserts: async () => {
     const { audit } = await import("../ci/assert-audit.mjs");
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;
@@ -444,11 +451,19 @@ export function changedFiles() {
 }
 
 /** This branch's merge-base with the deploy branch (`APEX_RATCHETS_BASE` names
- *  the ref in tests), or null when none is reachable. */
-export function mergeBase() {
-  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+ *  the ref in tests), or null when none is reachable. During a merge (a sync, the
+ *  pre-commit hook on its merge commit) HEAD is still the branch's OLD head, so the
+ *  base is the one the merge commit will have: `git merge-base <ref> HEAD MERGE_HEAD`
+ *  (git's base against a hypothetical HEAD+MERGE_HEAD merge). Against the old base a
+ *  tip that grew since then ate the branch's own lowering (ownMin) and the slack rule
+ *  refused the sync commit. */
+export function mergeBase(root = ROOT) {
+  const git = (...a) => cp.execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  let merging = null;
+  try { merging = git("rev-parse", "-q", "--verify", "MERGE_HEAD"); } catch { /* no merge in progress */ }
+  const heads = merging ? ["HEAD", merging] : ["HEAD"];
   for (const ref of [process.env.APEX_RATCHETS_BASE, `origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH].filter(Boolean)) {
-    try { return git("merge-base", ref, "HEAD"); } catch { /* try the next ref */ }
+    try { return git("merge-base", ref, ...heads); } catch { /* try the next ref */ }
   }
   return null;
 }

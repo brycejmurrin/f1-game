@@ -309,7 +309,8 @@ test("MY TEAM completing a sponsor window through settleRound cannot pay twice",
   career.results = career.results.filter((row) => row.r !== sp.end);
   const rebuilt = Career.settleRound(order, player);
   assert.equal(rebuilt.sponsorPay, 0, "paidSponsors independently guards a rebuilt results row");
-  assert.equal(career.money, cash + rebuilt.prize + rebuilt.matePrize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS : 0) - rebuilt.wages);
+  assert.equal(rebuilt.stake, 0, "this fixture commits no brief stake (career-planning stake() is 0 until chooseStake)");
+  assert.equal(career.money, cash + rebuilt.prize + rebuilt.matePrize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS + rebuilt.stake * 2 : 0) - rebuilt.wages);
   assert.equal(JSON.stringify(career.paidSponsors), ledger);
 });
 

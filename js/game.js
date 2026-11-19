@@ -3492,7 +3492,7 @@ const onboard = Onboard.create(G),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
-const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
+const { buildResults, buildTTResults, buildStandings, buildChampion, quali: qualiSheet } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
@@ -3553,7 +3553,7 @@ customTeam = CustomTeam.create({
   getLivDraftOverride: () => customLiv.livDraftOverride,
   setLivDraftOverride: (v) => { customLiv.livDraftOverride = v; },
   getSoundOn: () => soundOn,
-  GameAudio,
+  GameAudio, announce,
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },
@@ -3574,7 +3574,7 @@ const careerUi = CareerUI.create(G);
 const seasonUi = SeasonUI.create(G);
 // QUALIFYING — the model (js/race/quali-model.js: the flying lap plus the simulated field,
 // holding the classification between session and grid) and its sheet (quali-sheet.js).
-const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
+const quali = Quali.create(G);
 qualiNet = QualiNet.create({
   $, fmtTime, isQuali,
   getPlayer: () => player,
@@ -4005,11 +4005,11 @@ function raceIntroFromSheet(go, sheet, btn) {
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
-  // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
-  // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
+  // A DAILY picked before LAZY_RACE_SESSION's hook ran the stub's no-op prepareDaily; the hook then moves
+  // teamIdx/driverIdx/difficulty (entrySettings): the intro went stale, no garage-out (#3591). `records`, not the
+  // global: the bundle reinjects SessionRecords before its hook swaps the instance (#5813).
   const sessionLate = typeof GarageDepartureMotion === "undefined" || typeof GarageDepartureWheels === "undefined"
-    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub);
+    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && !!(records && records._stub));
   try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();

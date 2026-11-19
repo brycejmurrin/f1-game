@@ -1,0 +1,1 @@
+Fixed: a car classified after retiring in the top three keeps its podium tile on the race story, and its head now reads "DNF · N points" instead of DNF with no points, matching the results sheet (#4931).

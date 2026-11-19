@@ -7,9 +7,10 @@
     "js/game.js": {
       "codeLines": -1,
       "lines": -1
-    },
-    "js/ui/hud.js": {
-      "lines": 2
     }
+  },
+  "tree": {
+    "eagerBytes": -5056,
+    "eagerScripts": -1
   }
 }

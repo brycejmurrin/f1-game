@@ -454,7 +454,7 @@ const FULL = [
   "js/race/quali-net.js",
   "js/race/race-settings.js",
   "js/career/custom-team.js",
-  "js/ui/quali-sheet.js",
+  // quali-sheet.js (QualiSheet, the #quali painter) is LAZY_RESULTS_SHEET; GameResults.create hands out its stub
   "js/ui/onboard.js",
   "js/physics/debris-draw.js",
   "js/physics/debris-world.js",
@@ -1123,6 +1123,7 @@ const LAZY_RACE = [
   "js/garage/entrance-motion.js",
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
+  "js/garage/arrival-rows.js",   // the GARAGE ENTER & LEAVE tuner's extra rows (#5660: off the boot wall)
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,
@@ -1367,6 +1368,7 @@ const LAZY_UI_PRESETS_EDGES = [];
 const LAZY_RESULTS_SHEET = [
   "js/share/share-card-chips.js",
   "js/ui/results-sheet.js",
+  "js/ui/quali-sheet.js", // QualiSheet: paints only after a session ran (C1 #5807 moved it off the boot wall)
 ];
 const LAZY_RESULTS_SHEET_EDGES = [];
 

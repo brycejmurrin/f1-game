@@ -31,7 +31,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
 5. **Cap.** The brief's `STOP AT` (`start+<N>k` is a budget above your first turn's context; the worker brief
-   `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
+   `tools/ci/worker-prompt.md`, its `Caps:` paragraph) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
    `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options, your pick and the exact line to paste
    (`decision: <option>`), posted when the question is first predictable, not after CI confirms it; then keep working
@@ -44,7 +44,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 ## Open
 
-1. Branch `cursor/<topic>-<hash>` from the deploy tip; commit in two calls (AGENTS.md rule 12); `git push -u origin
+1. Work on the branch you were assigned (`claude/*` in a cloud session), else branch `cursor/<topic>-<hash>` from the
+   deploy tip (AGENTS.md §Git branch); commit in two calls (AGENTS.md rule 12); `git push -u origin
    <branch>` alone.
 2. Open a DRAFT PR into `claude/f1-game-project-26h3ng` (GitHub MCP `create_pull_request`, `draft: true`) from
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
@@ -135,8 +136,13 @@ shell is recorded as Bryce's own click; `bash-guard.sh` refuses it for every ses
 - **Log every act** in ONE PR comment (an issue comment when there is no PR): the run link, the act and why.
 
 How the hooks know (`github-mcp-guard.sh`): its OWN process environment holds `APEX_ROLE=orchestrator`, which Bryce
-sets on the orchestrator's cloud environment and no agent sets, and not `CLAUDE_CODE_CHILD_SESSION=1`, which the
-platform sets on every `create_session` child (measured 2026-11-18); the payload carries no `agent_id`. A seatbelt,
+sets on the orchestrator's cloud environment and no agent sets, and either not `CLAUDE_CODE_CHILD_SESSION=1`, which
+the platform sets on every `create_session` child (measured 2026-11-18), or, for a cloud orchestrator that runs as a
+child, `APEX_ORCH_ENV=env_…` beside it (the orchestrator environment's id, Bryce-set; #5819, his `decision: A` of
+2026-11-19; no platform variable carries the id, so the hook checks its shape only); the payload carries no
+`agent_id`; and no project, local or user settings file's `env` names either key (any session can write one, so the
+hook never trusts them from there). That environment never hosts workers: launch them with an explicit worker
+`environment_id`. A seatbelt,
 not a boundary: a routine-fired session in an environment with `APEX_ROLE` would pass too, so the worker routine runs
 in one without it. `settings.json` still asks on `actions_run_trigger`.
 
