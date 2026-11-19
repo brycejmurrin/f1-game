@@ -332,14 +332,52 @@ def rule_commit(cmds):
 # own act, so every session is refused here alike and github-mcp-guard.sh tells the orchestrator from a worker.
 ORCH_CI = ("Only the orchestrator acts on runs, and only through the GitHub MCP `actions_run_trigger` (cancel_workflow_run, "
            "rerun_failed_jobs, run_workflow), each act logged in one comment (skill `steward` §CI); workers never.")
+# Owner request 2026-11-19: the MCP tool has no force-cancel, and a run stuck before the queue answers a plain cancel
+# with 409, so the ORCHESTRATOR alone (github-mcp-guard.sh's test, from the hook's own env) may send exactly one shape:
+# `gh api -X POST repos/brycejmurrin/f1-game/actions/runs/<id>/force-cancel`, no fields, no other argument.
+FORCE_CANCEL = re.compile(r"/?repos/brycejmurrin/f1-game/actions/runs/\d+/force-cancel")
 
 
-def rule_gh(cmds):
+def orchestrator(sub):
+    """The orchestrator test github-mcp-guard.sh applies: the hook process's own APEX_ROLE (never a settings `env`,
+    which any session can write, #5819), not a subagent, and as a child session a Bryce-set APEX_ORCH_ENV."""
+    if sub or os.environ.get("APEX_ROLE") != "orchestrator":
+        return False
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    for f in [os.path.join(root, ".claude", n) for n in ("settings.json", "settings.local.json")] + [os.path.expanduser("~/.claude/settings.json")]:
+        if not os.path.exists(f):
+            continue
+        try:
+            if any(k in (json.load(open(f)).get("env") or {}) for k in ("APEX_ROLE", "APEX_ORCH_ENV")):
+                return False
+        except Exception:
+            return False                     # unreadable: fail closed
+    return os.environ.get("CLAUDE_CODE_CHILD_SESSION") != "1" or \
+        re.fullmatch(r"env_[A-Za-z0-9]{6,}", os.environ.get("APEX_ORCH_ENV") or "") is not None
+
+
+def orch_force_cancel(c, sub):
+    """True only for the orchestrator's one force-cancel shape (see FORCE_CANCEL)."""
+    if c.prog != "gh" or c.assigns or not orchestrator(sub):
+        return False
+    w = gh_split(c.argv)
+    if w[:1] != ["api"]:
+        return False
+    rest = w[1:]
+    for m in (["-X", "POST"], ["--method", "POST"], ["-XPOST"], ["--method=POST"]):
+        if rest[:len(m)] == m and len(rest) == len(m) + 1:
+            return FORCE_CANCEL.fullmatch(rest[-1]) is not None
+        if rest[1:] == m and len(rest) == len(m) + 1:
+            return FORCE_CANCEL.fullmatch(rest[0]) is not None
+    return False
+
+
+def rule_gh(cmds, sub=False):
     for c in cmds:
         a = c.argv
         if c.prog == "gh":
             w = gh_split(a)
-            if has_help(w):
+            if has_help(w) or orch_force_cancel(c, sub):
                 continue
             if w[:2] == ["run", "cancel"]:
                 refuse("cancelling an Actions run from a shell: never. A queued run holds no slot, so a worker's cancel only loses "
@@ -536,8 +574,10 @@ def http_write(c):
         gh_refuse("%s %s to the GitHub API" % (c.prog, method), "run" if any("/actions/" in x for x in a[1:]) else "pr")
 
 
-def rule_gh_write(cmds):
+def rule_gh_write(cmds, sub=False):
     for c in cmds:
+        if orch_force_cancel(c, sub):
+            continue
         if any(x.startswith(OWNER_OPT_IN + "=") for x in c.assigns) or \
                 (c.prog in ("export", "declare", "typeset", "local", "readonly", "set") and any(x.startswith(OWNER_OPT_IN + "=") for x in c.argv[1:])):
             refuse("%s is the owner's opt-in for a tool that writes to GitHub as him (tools/ci/remote-group.mjs): only "
@@ -587,8 +627,8 @@ def main():
     if sub:
         rule_subagent(cmds)
     rule_commit(cmds)
-    rule_gh(cmds)
-    rule_gh_write(cmds)
+    rule_gh(cmds, sub)
+    rule_gh_write(cmds, sub)
     if sub:
         upd = marker(ti or {}, cmds)
         if upd is not None:

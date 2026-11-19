@@ -36,7 +36,9 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   line say so.
 - `bash-guard.sh` (Bash) refuses kills by name (`pkill`, `killall`, `pgrep`/`pidof` into `kill`) and a kill of a
   Chromium pid unless that kill carries `APEX_KILL_OK=1`; `git commit --no-verify` / `-n` and a hooks-path write or
-  override; `gh run cancel` / `gh pr merge` / `gh pr ready` with any global flags, and their REST / GraphQL forms;
+  override; `gh run cancel` / `gh pr merge` / `gh pr ready` with any global flags, and their REST / GraphQL forms (one
+  exception: the orchestrator's `gh api -X POST repos/brycejmurrin/f1-game/actions/runs/<id>/force-cancel`, which the
+  MCP tool lacks);
   every other GitHub write from a shell (a gh subcommand that is not a known read, `gh api` with a write method or
   fields and no explicit GET, a GraphQL mutation, a curl / wget write to api.github.com; an agent setting
   `APEX_GH_OWNER_WRITE`): agents write through the GitHub MCP tools, which GitHub marks as the app's (owner decision

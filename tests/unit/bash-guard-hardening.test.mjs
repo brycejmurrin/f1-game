@@ -233,6 +233,26 @@ test("4/5. a run act from a shell is refused for the orchestrator and a worker a
   for (const cmd of ["gh run view 123", "gh run list --limit 5", "gh api repos/a/b/actions/runs/1"]) assert.equal(run(cmd, {}, ORCH).status, 0, cmd);
 });
 
+test("4/5. the orchestrator alone may force-cancel, in exactly one gh api shape (owner request 2026-11-19)", () => {
+  const ORCH = { APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "" }, WORKER = { APEX_ROLE: "", CLAUDE_CODE_CHILD_SESSION: "1" };
+  const CHILD = { APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1", APEX_ORCH_ENV: "env_abc123XYZ" };
+  const ok = ["gh api -X POST repos/brycejmurrin/f1-game/actions/runs/43098589151/force-cancel",
+    "gh api --method POST /repos/brycejmurrin/f1-game/actions/runs/1/force-cancel", "gh api repos/brycejmurrin/f1-game/actions/runs/1/force-cancel -X POST"];
+  for (const cmd of ok) {
+    assert.equal(run(cmd, {}, ORCH).status, 0, `orchestrator: ${cmd}\n${run(cmd, {}, ORCH).stderr}`);
+    assert.equal(run(cmd, {}, CHILD).status, 0, `orchestrator child session: ${cmd}`);
+    assert.equal(run(cmd, {}, WORKER).status, 2, `worker: ${cmd}`);
+    assert.equal(run(cmd, SUB, ORCH).status, 2, `subagent of the orchestrator: ${cmd}`);
+    assert.equal(run(cmd, {}, { ...CHILD, APEX_ORCH_ENV: "" }).status, 2, `child without APEX_ORCH_ENV: ${cmd}`);
+  }
+  for (const cmd of ["gh api -X POST repos/a/b/actions/runs/1/force-cancel", "gh api -X POST repos/brycejmurrin/f1-game/actions/runs/1/cancel",
+    "gh api -X POST repos/brycejmurrin/f1-game/actions/runs/1/force-cancel -f x=1", "gh api repos/brycejmurrin/f1-game/actions/runs/1/force-cancel",
+    "gh api -X POST repos/brycejmurrin/f1-game/actions/runs/x/force-cancel", "gh api -X DELETE repos/brycejmurrin/f1-game/actions/runs/1/force-cancel",
+    "X=1 gh api -X POST repos/brycejmurrin/f1-game/actions/runs/1/force-cancel", "curl -X POST https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/1/force-cancel",
+    "gh run cancel 1", "gh api -X POST repos/brycejmurrin/f1-game/actions/runs/1/force-cancel; gh pr merge 1"])
+    assert.equal(run(cmd, {}, ORCH).status, 2, `orchestrator, other shape: ${cmd}`);
+});
+
 test("settings.json wires the guard on Bash with onFailure block, and the deny/ask rules back the hook", () => {
   const s = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const bash = s.hooks.PreToolUse.filter((g) => g.matcher === "Bash");
