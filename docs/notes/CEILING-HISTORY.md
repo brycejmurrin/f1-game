@@ -3745,3 +3745,16 @@ const MAX_EAGER_SCRIPTS = 313;
 // 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
 const MAX_EAGER_BYTES = 8_017_936;
 ```
+
+**Raise, 2026-11-19 — `eagerBytes` +3,894 (8,015,949 → 8,019,843; fragment `claude--ai-pace-calibration-5330.json`).**
+Cause: #5686 (#5330), so AI solo pace follows team tier and then driver skill. It adds `aeroDragMul`, `aiErs`,
+`paceTrim`, `laneClear` and `slowHazard` to the eager `js/physics/ai-drive.js`, plus their call sites in
+`js/game.js`.
+
+Trim first, then raise:
+- The merge with tip 734d0a2d measured +6,151 B.
+- Condensing the PR's own new comments (facts kept, no code change) freed 2,257 B.
+- Only the remainder, +3,894 B, is raised.
+
+Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed `decision: A` on #5686
+(comment 7013079936, 15:09:10Z). The raise lands under his `ratchet-raise`.

@@ -538,41 +538,28 @@ const AiDrive = (function () {
   // letting it rise with downforce took the solo-lap lateral-jerk figure in
   // ai-racecraft-vm from 5.9 to 8.1 m/s² (cap 7.5) — twitchier lane changes on
   // every straight for no corner speed at all.
-  // THE FACTORY WING IS A TRADE (#5330). Load bought AERO_LOAD_GRIP·(load-0.5) of
-  // lateral grip; at 0.16 and no cost, solo laps (tools/check/ai-solo.mjs) ran in
-  // aero-load order on every circuit — load 1 beat load 0 by 5.2 % at the Red Bull
-  // Ring, 5.7 % at Monza, 3.6 % at Monaco — and the factory spread (0.04-1.0) set
-  // the field order instead of the teams. Now the grip gain is a third of that and
-  // the wing costs top speed (aeroDragMul): the low-drag car wins Monza, the
-  // high-load car Monaco. The drag is the one X-mode sheds: PhysicsConsts gives the
-  // biggest wing +15.5 % top speed in X-mode and the smallest +5.5 % ("more drag to
-  // shed"), so the base top speed is (1 + gain at mid load) / (1 + gain at this
-  // load) — every wing reaches the SAME X-mode top speed, the big one is slower off
-  // it. Without it the big wing out-ran the small one at Monza by 1.8 %.
+  // THE FACTORY WING IS A TRADE (#5330). At 0.16 grip/load and no cost, solo laps
+  // (tools/check/ai-solo.mjs) ran in aero-load order (load 1 beat 0 by 5.2 % RBR,
+  // 5.7 % Monza, 3.6 % Monaco). Now a third of the gain, and the wing costs the top
+  // speed X-mode sheds (+15.5 % big wing, +5.5 % small): base vmax = (1+gain mid)/
+  // (1+gain here), so every wing hits the same X-mode top speed (else big beat small
+  // at Monza by 1.8 %). Low drag wins Monza, high load Monaco.
   const AERO_LOAD_GRIP = 0.05;
   const X_GAIN_LO = 0.055, X_GAIN_HI = 0.155;   // PhysicsConsts.X_VMAX_GAIN_LO/HI (unit VMs load this file alone; pinned equal)
   function aeroDragMul(load) {
     const l = clamp(load != null ? load : 0.5, 0, 1);
     return (1 + lerp(X_GAIN_LO, X_GAIN_HI, 0.5)) / (1 + lerp(X_GAIN_LO, X_GAIN_HI, l));
   }
-  // AI ERS AXES ARE BOUNDED (#5330). Deploy and regen are efficiencies with no cost
-  // (PaceMath.drainFor / regenFor), and the works kits do not trade them: Aston
-  // Martin, tier 4, fields 0.91 / 0.79, Haas 0.00 / 0.43. Deploy 0 -> 1 alone was
-  // worth 1.2-1.9 % of a solo lap. An AI car runs its factory map pulled to within
-  // AI_ERS_SPAN of the midpoint: the map still flavours how it deploys, it no
-  // longer orders the field. The player and MY TEAM's hire keep their saved build.
+  // AI ERS IS BOUNDED (#5330): deploy/regen cost nothing (PaceMath) and works kits
+  // don't trade them (Aston 0.91/0.79, Haas 0.00/0.43); deploy 0->1 was 1.2-1.9 % of
+  // a solo lap. AI maps pull to AI_ERS_SPAN round 0.5; player + hire keep their build.
   const AI_ERS_SPAN = 0.3;
   function aiErs(x) { return 0.5 + (clamp(x != null ? x : 0.5, 0, 1) - 0.5) * AI_ERS_SPAN; }
-  // SCRIPTED PACE TRIM (#5330). tierV x skill reached only top speed (corner targets
-  // use the shared envelope), so tier was ~0.4 of a lap's worth of itself and the
-  // team ladder barely showed at a twisty circuit. paceTrim scales an AI car's top
-  // speed AND corner target by PACE_GAIN x its scripted pace relative to the mid
-  // field, so solo pace follows team tier, then driver skill. PACE_REF sits 0.4 %
-  // under the field's median scripted pace (tier 2, skill 0.968 = 0.9339): the mean
-  // trim (~+1 %) is set so the field's NORMAL solo median lap holds against the
-  // calibration's base (tools/check/ai-solo.mjs: Red Bull Ring +0.02 %, Monaco +0.19 %).
-  // Fed the BASE tier ladder (TIER_V[tier] x skill), not tierV: career development
-  // and a legend duel's tierV lift keep exactly their old weight.
+  // SCRIPTED PACE TRIM (#5330): tierV x skill reached only top speed, so the ladder
+  // barely showed in corners. paceTrim scales AI vmax AND corner target by PACE_GAIN x
+  // scripted pace vs PACE_REF (0.4 % under the median 0.9339, so the NORMAL solo
+  // median holds: RBR +0.02 %, Monaco +0.19 %). Fed TIER_V[tier] x skill, not tierV:
+  // career development and the legend duel keep their old weight.
   const PACE_GAIN = 2.5, PACE_REF = 0.9302;
   function paceTrim(script) { return script > 0 ? 1 + PACE_GAIN * (script / PACE_REF - 1) : 1; }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
@@ -653,11 +640,8 @@ const AiDrive = (function () {
     let vLim = Math.sqrt(vLimSq);
     if (!Number.isFinite(vLim)) vLim = 1e6;
     const vLimRaw = vLim;
-    // No house-style `hold` term here any more (#5330): hold grows with a team's
-    // cornering and braking stats, so `vLim *= 1 - hold * 0.025` braked Mercedes
-    // and McLaren 0.7-0.9 % early into every corner and let Cadillac carry 1.25 %
-    // more — on a neutral setup the solo order ran backwards (rho -0.08). Hold
-    // still shapes the follow gap, the line and defence; it no longer costs pace.
+    // No `hold` vLim term (#5330): it braked Mercedes/McLaren 0.7-0.9 % early, gave
+    // Cadillac +1.25 % (solo order backwards, rho -0.08). Hold still shapes gap/line/defence.
     // Craft late-brake when attacking with room: allow a few % over the limit.
     // The 1 m/s "still closing" band is pace-5 m/s, so it rides vs like V.
     const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1 * vs);
@@ -669,8 +653,7 @@ const AiDrive = (function () {
     // marker. Signed, zero-mean across the grid — not a top-speed product term.
     // Kept small (±1.2 %): a 3 % always-on term moved field median >1 % despite
     // zero-mean (nonlinear with who sits at the median).
-    // ATTACKING ONLY (#5330): solo, it was a per-driver +-1.2 % corner-speed term
-    // outside skill, so it re-ordered team-mates on identical cars.
+    // ATTACKING ONLY (#5330): solo it re-ordered team-mates on identical cars.
     const opt = clamp(t.optimism != null ? t.optimism : 0, -1, 1);
     if (opt && attacking) vLim *= 1 + opt * 0.012;
     if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
@@ -739,14 +722,9 @@ const AiDrive = (function () {
     return damp(lane, target, 0.35, dt);
   }
 
-  // CLEAR ROAD TAKES THE LINE (#5330). The grid home lane (makeCars: up to 0.78 of
-  // the half-width, alternating by grid slot) exists so a PACK fans out; a car
-  // with nobody in its traffic scan kept it anyway, and a solo lap cost up to
-  // ~2 % by grid slot — the largest term left once setups were bounded (solo,
-  // neutral setups and traits: rho 0.79 with the lanes, 0.99 without). laneClear
-  // damps a 0..1 weight toward 1 on a clear road and back to 0 in traffic; game.js
-  // lifts the racing line's weight toward 1 by it (straights included), so a car
-  // alone drives the baked line and a car in traffic its lane, as before.
+  // CLEAR ROAD TAKES THE LINE (#5330): the grid home lane (up to 0.78 half-width) cost
+  // a lone car up to ~2 % (rho 0.79 with lanes, 0.99 without). laneClear damps 0..1
+  // toward 1 when clear, 0 in traffic; game.js lifts the line weight by it.
   const LANE_CLEAR_IN = 0.5, LANE_CLEAR_OUT = 2.5;   // 1/s: ~2 s to settle on the line, ~0.4 s back to the lane
   function laneClear(w, clear, dt) {
     const c = w > 0 ? w : 0;
@@ -1049,11 +1027,9 @@ const AiDrive = (function () {
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
-  // A CRAWLING CAR HOLDS THE CLEAR-ROAD LINE OFF (#5330). laneClear lifts a lone car onto the baked line, which can
-  // run straight through a car crawling, spun or reversing on it (a braked parked car backs up at 5 m/s, over the
-  // stoppedHazard floor) — and the blocker box sees it only once it is in the car's lane, too late at 42 m/s. Any
-  // running car under SLOW_V_FRAC of the top speed, within hazardReach ahead, keeps the car in its lane (as before
-  // #5330). A share of the top speed, so PACE-scaled.
+  // A CRAWLING CAR HOLDS THE CLEAR-ROAD LINE OFF (#5330): the line can run through a car crawling or reversing on
+  // it (5 m/s, over stoppedHazard's floor) that the blocker box sees too late at 42 m/s. Any running car under
+  // SLOW_V_FRAC of top speed (PACE-scaled) within hazardReach keeps the car in its lane.
   const SLOW_V_FRAC = 0.25;
   function slowHazard(o, vTop) {
     if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;

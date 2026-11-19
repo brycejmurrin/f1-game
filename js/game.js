@@ -1530,7 +1530,7 @@ function makeCars() {
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
         aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, isP ? SetupTune.aero(team.id) : undefined) : Parts.aeroLoad(factoryParts.setup, team),   // the BUILD is shared, the SHEET is not: rollBalance/mods above are already isP-only, and an AI reads aeroLoad continuously (AiDrive.lateralScale), so the mate was the only car the player's rake moved
-        ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : AiDrive.aiErs(Parts.ersProfile(factoryParts.setup, team).deploy),   // AI: bounded (#5330)
+        ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : AiDrive.aiErs(Parts.ersProfile(factoryParts.setup, team).deploy),
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : AiDrive.aiErs(Parts.ersProfile(factoryParts.setup, team).regen),
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
         // Baked once here rather than looked up per physics step. Career team
@@ -4630,7 +4630,7 @@ function update(dt) {
   // walk: a lapped car is a lap away in ranked[] and beside you on the road.
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars); pits.stepBegin();
-  parked.length = 0; _stopped.length = 0;   // _stopped: running cars at a crawl (AiDrive.slowHazard) — they hold every clear-road line off (#5330)
+  parked.length = 0; _stopped.length = 0;   // _stopped: crawling cars (AiDrive.slowHazard, #5330)
   for (let i = 0; i < cars.length; i++) { const o = cars[i]; if (o.retired && o.parkedOnRoad) parked.push(o); else if (AiDrive.slowHazard(o, vTop())) _stopped.push(o); }
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
@@ -4907,7 +4907,7 @@ function updateCar(c, dt, ranked) {
 
 
   // --- speed targets ---
-  let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : Math.min(BAND_CEIL, c.tierV * c.skill * dd.ai * AiDrive.paceTrim(TIER_V[c.tier] * c.skill) * AiDrive.aeroDragMul(c.aeroLoad)));   // #5330: scripted trim + the wing's drag, never past the player's own scale
+  let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : Math.min(BAND_CEIL, c.tierV * c.skill * dd.ai * AiDrive.paceTrim(TIER_V[c.tier] * c.skill) * AiDrive.aeroDragMul(c.aeroLoad)));   // #5330 trim + wing drag
   // WIND (js/race/wind.js) off the car's OWN heading (an AI's: tangent less its aiHead): head/tail wind moves top speed.
   vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), vStd(Math.abs(c.speed))).vmaxMul;
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
@@ -5718,7 +5718,7 @@ function updateCarLateral(c, dt, ranked, S) {
     _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
     _aiLane.queueT = c.queueT || 0;
-    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && !chaser && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330: a clear road takes the line (never in the launch / start calm: the grid keeps its lanes to Turn 1)
+    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && !chaser && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330 (not in launch/calm: lanes to T1)
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // THE LINE (TrackLine, baked at build): outside-inside-outside through every
     // corner, read a short way ahead so the lateral step's lag does not turn in
@@ -5741,7 +5741,7 @@ function updateCarLateral(c, dt, ranked, S) {
     const follow = AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold);
     const laneX = c.lane * (hw - 1.2);
     const ln = TrackLine.at(track, wrapS(c.s + lead), c.aiFam);
-    let targetX = clamp(lerp(laneX, ln.x, lerp(ln.w * follow, 1, c.laneClr || 0)), -(hw - 1.0), hw - 1.0);   // laneClr: a clear road drives the whole baked line, straights too (#5330)
+    let targetX = clamp(lerp(laneX, ln.x, lerp(ln.w * follow, 1, c.laneClr || 0)), -(hw - 1.0), hw - 1.0);
     // The target path's TANGENT (m/m) 4 m further on: the feed-forward heading
     // the controller below steers to, so the line is followed, not chased.
     // (`ln` is TrackLine.at's shared object — targetX is read before this call.)
