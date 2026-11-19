@@ -102,8 +102,9 @@ Back-stack (Escape/BACK goes to the wrong screen or closes TOO MUCH; does nothin
    closes, that inner dialog is not a `:modal` inside the layer.
 3. The chain: `TopModal` `cancel`/`onEscape` -> clicks the `data-esc-close` control
    (`#pm-settings-close`) -> `js/game.js` `if (settingsNav.back()) closeSettings()`.
-   `SettingsNav.back()` (`js/ui/settings-tabs.js`) pops a page to `home` and returns
-   `false`; only on `home` does it return `true`, and `closeSettings()` unhides
+   `SettingsNav.back()` (`js/ui/settings-tabs.js`) pops a page to its parent (`stack`) and returns
+   `false`; on `home`, or on a page opened by `showDirect` (`openSettingsPage`, the title menu), it returns `true`
+   on the first Escape, and `closeSettings()` unhides
    `#pausemenu` **only if `paused`** (title settings, `#mb-settings`, closes to the
    title). The pause key takes the same path via `Input.init` `onPause`
    (`js/ui/platform-session.js` `initInput`).
@@ -157,7 +158,7 @@ keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
 density). Measured fit is BROWSER-only (`tools/ui/layout-audit.mjs`;
 `menu-fit.mjs` is deprecated, kept only for `--safe=` notch insets;
 `ui-scale-axis.mjs`, `ui-scale.spec.js`); record the cell (viewport, scale,
-pointer — `ios-iphone-landscape-844` touch first) and the unrun tool in the PR.
+pointer — `ios-iphone-landscape-844` touch first; that is the generic iPhone cell, Bryce's own are `bryce-standalone` / `bryce-safari` in `layout-audit --list`) and the unrun tool in the PR.
 
 ## Common mistakes
 

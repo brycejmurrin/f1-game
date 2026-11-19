@@ -462,6 +462,38 @@ test("a custom circuit never goes to the worker", async () => {
   await tick();
 });
 
+// MODEL INSTANCING off (apex26.modelInst "0", build-props.js) is a page-only switch: the worker has no
+// localStorage, so it would build an instanced world for a page that asked for a stepped, uninstanced one.
+test("a page with MODEL INSTANCING off never goes to the worker", async () => {
+  const { page, posts } = pageWithWorker();
+  page.localStorage.getItem = (k) => (k === "apex26.buildWorker" ? "1" : k === "apex26.modelInst" ? "0" : null);
+  const def = page.Tracks.LIST.find((d) => d.id === "monza");
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf("monza"), def, { chunkRibbons: true }, recorder().gfx, MANIFEST.sceneryPath("monza"));
+  assert.equal(msg, null);
+  assert.deepEqual(posts, [], "refused before the worker is spawned");
+  await tick();
+});
+
+// LAB coldBuild (?lab=coldBuild, default OFF): the first build of a circuit may go to the worker too.
+// use(inSession) is the one question loadTrackStepped asks; with the lab off it is today's rule.
+test("coldBuild is OFF by default, use() keeps the in-session-only rule, and cold(on) flips it for the session", () => {
+  const { page } = pageWithWorker();
+  page.requestIdleCallback = () => 0;   // cold(true) warms the worker at idle: not under test here
+  const C = page.TrackBuildClient;
+  assert.equal(C.cold(), false);
+  assert.equal(C.use(false), false, "menu prep and cold race entry stay on the paced build");
+  assert.equal(C.use(true), true, "an in-session switch still posts");
+  assert.equal(C.cold(true), true);
+  assert.equal(C.use(false), true, "under the lab the first build posts too");
+  assert.equal(C.cold(false), false);
+  assert.equal(C.use(false), false);
+  const lab = pageWithWorker().page;
+  lab.URLSearchParams = URLSearchParams; lab.location.search = "?lab=postSubmit,coldBuild";
+  assert.equal(lab.TrackBuildClient.cold(), true, "?lab=coldBuild turns it on, beside other labs");
+  page.localStorage.getItem = () => "0";
+  assert.equal(C.cold(true), false, "BUILD IN BACKGROUND off wins: no worker, no lab");
+});
+
 function smallClient(extra = {}) {
   const ctx = vm.createContext({ URL, performance, setTimeout, clearTimeout,
     location: { href: "https://apex.test/index.html" },

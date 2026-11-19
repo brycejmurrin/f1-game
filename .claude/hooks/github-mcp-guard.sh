@@ -1,9 +1,7 @@
 #!/bin/bash
-# PreToolUse table for the GitHub MCP tools — ONE script behind three doors:
-# .claude/settings.json (matcher below), .cursor/hooks/mcp-guard.sh and
-# .codex/hooks/mcp-guard.sh (Cursor sends the bare tool name and tool_input as
-# a JSON string; Codex normalises its hosted spelling first). GUARDED must
-# stay identical to the two doors' matchers (tests/unit/cross-tool-guards.test.mjs).
+# PreToolUse table for the GitHub MCP tools — ONE script behind three doors: .claude/settings.json (matcher below),
+# .cursor/hooks/mcp-guard.sh and .codex/hooks/mcp-guard.sh (Cursor sends the bare tool name and tool_input as a JSON
+# string; Codex normalises its hosted spelling first). GUARDED must stay identical to the two doors' matchers.
 #
 #   DENY  merge_pull_request, enable_pr_auto_merge, disable_pr_auto_merge
 #         (no session merges or arms: land.yml lands — AGENTS.md §Coordination)
@@ -11,14 +9,13 @@
 #         (a file write on the admin token lands on any branch with no PR, no CI)
 #   DENY  update_pull_request_branch (sync through tools/ci/sync-pr.mjs)
 #   DENY  actions_run_trigger: any *cancel* / *rerun* method, run_workflow of
-#         pages.yml / ci.yml (the release train is never dual-dispatched)
+#         pages.yml / ci.yml; the ORCHESTRATOR (steward §CI; the hook's OWN env; as a child session it also needs APEX_ORCH_ENV=env_…, Bryce-set; never from a settings `env`, #5819) passes cancels, rerun_failed_jobs, ci.yml, deploy-branch pages.yml
 #   ASK   update_pull_request with state "closed"
-#   DENY  issue_write whose `labels` would drop `config-ok`, `hold`, `land` or
-#         `needs-decision` (the list REPLACES the labels; the live ones come
-#         from `gh api`; unknown → ask)
+#   DENY  issue_write whose `labels` (it REPLACES the list) differs from the live labels by anything but ONE name
+#         (live from `gh api`; unknown → ask), touches `config-ok`, or removes a `hold` Bryce set
 #   ALLOW the rest, draft→ready included: the Plan gate and CI check a flip.
-# Output is the documented PreToolUse JSON; an unreadable payload or a guarded
-# call with a non-object input is a deny (fail closed).
+# Output is the documented PreToolUse JSON; an unreadable payload or a guarded call with a non-object input is a
+# deny (fail closed).
 command -v python3 >/dev/null 2>&1 || { echo "BLOCKED: github-mcp-guard needs python3 (fail closed)." >&2; exit 2; }
 python3 /dev/fd/3 3<<'PY'
 import json, os, re, subprocess, sys
@@ -61,14 +58,18 @@ if op in ("push_files", "create_or_update_file", "create_branch", "delete_file")
 if op == "update_pull_request_branch":
     emit("deny", "update-branch merges the base on GitHub as the token's owner; sync through `node tools/ci/sync-pr.mjs <branch>` instead.")
 if op == "actions_run_trigger":
-    m = str(ti.get("method") or "").strip().lower()
+    m, wf, ref = str(ti.get("method") or "").strip().lower(), os.path.basename(str(ti.get("workflow_id") or "").strip().lower()), re.sub(r"^refs/heads/", "", str(ti.get("ref") or "").strip())
+    def planted(fs=[os.path.join(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd(), ".claude", n) for n in ("settings.json", "settings.local.json")] + [os.path.expanduser("~/.claude/settings.json")]):   # a settings `env` reaches this process and any session can write one (#5819)
+        try: return any(k in (json.load(open(f)).get("env") or {}) for f in fs if os.path.exists(f) for k in ("APEX_ROLE", "APEX_ORCH_ENV"))
+        except Exception: return True   # unreadable: fail closed
+    orch = os.environ.get("APEX_ROLE") == "orchestrator" and not d.get("agent_id") and not planted() and (os.environ.get("CLAUDE_CODE_CHILD_SESSION") != "1" or re.fullmatch(r"env_[A-Za-z0-9]{6,}", os.environ.get("APEX_ORCH_ENV") or "") is not None)
+    if orch and (m in ("cancel_workflow_run", "force_cancel_workflow_run", "rerun_failed_jobs") or (m == "run_workflow" and not wf.isdigit() and (wf in ("ci.yml", "ci.yaml") or ref == "claude/f1-game-project-26h3ng"))):
+        sys.exit(0)
     if "cancel" in m:
-        emit("deny", "NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Bryce cancels in the UI.")
-    if "rerun" in m:
-        emit("deny", "No re-run dispatch from a session: `node tools/ci/ci-rerun.mjs` re-runs a failed job at most once for a timeout or infra error (AGENTS.md §Coordination).")
-    wf = os.path.basename(str(ti.get("workflow_id") or "").strip().lower())
+        emit("deny", "WORKERS NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Only the orchestrator cancels (skill `steward` §CI).")
+    if "rerun" in m: emit("deny", "The orchestrator re-runs FAILED jobs only (rerun_failed_jobs), for a verdict on an infra failure (skill `steward` §CI); a worker never re-runs from a session (`node tools/ci/ci-rerun.mjs`: a run cancelled with zero failures, once).")
     if m == "run_workflow" and (wf in ("pages.yml", "pages.yaml", "ci.yml", "ci.yaml") or wf.isdigit()):
-        emit("deny", "pages.yml is the release train (a push to the deploy branch starts it) and ci.yml runs on the PR: neither is dispatched by a session (" + wf + ").")
+        emit("deny", "pages.yml is the release train and ci.yml runs on the PR: only the orchestrator dispatches them, by file name, pages.yml on the deploy branch only (" + wf + " @ " + ref + "; skill `steward` §CI).")
     sys.exit(0)
 if op == "update_pull_request":
     if str(ti.get("state") or "").strip().lower() == "closed":
@@ -79,24 +80,29 @@ if op == "issue_write":
     number = next((ti.get(k) for k in ("issue_number", "issueNumber", "number") if ti.get(k) is not None), None)
     if labels is None or number is None or str(ti.get("method") or "update").strip().lower() == "create":
         sys.exit(0)
-    names = [str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels])]
-    keep = ("config-ok", "hold", "land", "needs-decision")
-    if all(k in names for k in keep):
-        sys.exit(0)
-    cur = None
+    names = sorted({str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels]) if str(x).strip()})
     s = slug()
-    if s:
+    def live(path, jq):
         try:
-            r = subprocess.run(["gh", "api", "repos/%s/issues/%d" % (s, int(number)), "--jq", '[.labels[].name] | join("\\n")'],
-                               capture_output=True, text=True, timeout=6)
-            if r.returncode == 0: cur = [x.strip().lower() for x in r.stdout.splitlines() if x.strip()]
+            r = subprocess.run(["gh", "api", "--paginate", "repos/%s/issues/%d%s" % (s, int(number), path), "--jq", jq], capture_output=True, text=True, timeout=12)
+            return [x.strip().lower() for x in r.stdout.splitlines() if x.strip()] if r.returncode == 0 else None
         except Exception:
-            cur = None
+            return None
+    cur = live("", '[.labels[].name] | join("\\n")') if s else None
+    how = "Read the live labels (`issue_read` method get_labels) and send them plus or minus ONE name (skill `steward` `references/labels.md`); never `gh`."
     if cur is None:
-        emit("ask", "This `labels` list REPLACES the labels and omits one of " + ", ".join(k for k in keep if k not in names) + "; the current labels could not be read. Add or remove one label with `gh api` instead, or confirm by hand.")
-    gone = [k for k in keep if k in cur and k not in names]
-    if gone:
-        emit("deny", "issue_write labels REPLACES the list and would remove " + ", ".join("`%s`" % k for k in gone) + ". Add or remove one label with `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=<name>'` (or `-X DELETE .../labels/<name>`); a label Bryce set is his to remove (AGENTS.md §Coordination).")
+        emit("ask", "This `labels` list REPLACES the labels and the live ones could not be read, so the one-label rule cannot be checked. " + how)
+    add, gone = [x for x in names if x not in cur], [x for x in sorted(set(cur)) if x not in names]
+    if not add and not gone:
+        sys.exit(0)
+    if len(add) + len(gone) != 1:
+        emit("deny", "issue_write labels REPLACES the list, so it may differ from the live labels by exactly ONE name. Live: [" + ", ".join(sorted(set(cur))) + "]; this list would add [" + ", ".join(add) + "] and remove [" + ", ".join(gone) + "]. " + how)
+    if add + gone == ["config-ok"]:
+        emit("deny", "`config-ok` is Bryce's own click (merge-gate reads the label event's actor): an agent never adds or removes it. Ask with `needs-decision` and one comment.")
+    if gone == ["hold"]:    # an agent's hold: any removal; Bryce's: his own click. The LAST `labeled hold` event's app marker tells (every page, oldest first).
+        by = live("/events?per_page=100", '.[] | select(.event == "labeled" and .label.name == "hold") | (.performed_via_github_app.slug // "owner")')
+        if not by or by[-1] == "owner":
+            emit("deny", "`hold` is the only veto: Bryce set this one (or who set it could not be read), so only his own click lifts it (AGENTS.md §Coordination).")
 sys.exit(0)
 PY
 rc=$?

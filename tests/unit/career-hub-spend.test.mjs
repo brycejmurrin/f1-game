@@ -219,25 +219,26 @@ test("#5046 sanitizeCustom (the loader): uppercase before the cut, cut by code p
   assert.equal(loneSurrogate(u.name), false);
 });
 
-function customTeamDialog(stored) {
+function customTeamDialog(stored, extra = {}) {
   const dom = makeDom({ tagFor: (id) => (/^cz-(name|short|color|color2|driver|code|num)$/.test(id) ? "input" : "div") });
   const Teams = loadTeams();
   Teams.LIST.length = 0;
   let saved = stored;
   const store = { get: (k, d) => (k === "customTeam" ? saved : d), set: (k, v) => { if (k === "customTeam") saved = v; } };
   const $ = (id) => dom.byId(id);
-  const sb = sandbox(dom);
+  const sb = sandbox(dom, extra.sandbox || {});
+  const els = { customize: { hidden: false } };
   run(sb, "js/career/custom-team.js");
   const ct = sb.CustomTeam.create({
     $, store, Teams, DEFAULT_CUSTOM: Teams.DEFAULT_CUSTOM,
     hexToRgb: () => [1, 0, 0], rgbToHex: () => "#ff0000", hexToArr: () => [1, 0, 0], clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
     invalidateDecalTextures() {}, invalidateCustomMeshCaches() {}, spMeshBust() {},
     getLivDraftOverride: () => null, setLivDraftOverride() {}, getSoundOn: () => false, GameAudio: sb.GameAudio,
-    getEls: () => ({ customize: { hidden: false } }), getTeamIdx: () => 0, setTeamIdx() {}, getDriverIdx: () => 0,
-    setDriverIdx() {}, buildSelect() {}, buildSetup() {}, isCarsetupVisible: () => false,
+    getEls: () => els, getTeamIdx: () => 0, setTeamIdx() {}, getDriverIdx: () => 0,
+    setDriverIdx() {}, buildSelect() {}, buildSetup() {}, isCarsetupVisible: () => false, announce: extra.announce,
   });
   ct.init();
-  return { ct, $, saved: () => saved };
+  return { ct, $, els, saved: () => saved };
 }
 
 test("#5046 MY TEAM SAVE keeps an imported team's tier, engine and second driver", () => {
@@ -260,4 +261,59 @@ test("#5046 MY TEAM SAVE: ß widens before the cap, an emoji is never halved", (
   assert.equal(saved().short, "SSSS");
   assert.equal(saved().drivers[0].code, "SSS");
   assert.equal(saved().name, "a".repeat(21) + "🏎");
+});
+
+/* ── #5657: a refused career write keeps the screen and applies nothing ── */
+
+test("#5657 SIGN CONTRACT refused by storage: the sheet stays, the hub does not open, the player is told", () => {
+  const { ui, Career, $ } = loadCareerUi();
+  Career.acceptOffer = () => null;
+  Career.saveStatus = () => ({ ok: false, durable: false, reason: "QuotaExceededError" });
+  ui.openOffers();
+  $("co-body").querySelectorAll(".co-offer")[1].onclick();
+  const sign = $("co-body").querySelectorAll("button").find((b) => b.textContent === "SIGN CONTRACT");
+  const status = $("co-body").querySelectorAll("p").find((p) => p.getAttribute("role") === "status");
+  sign.onclick();
+  assert.equal($("career-offers").hidden, false, "the sheet stays open on the unsigned offer");
+  assert.equal(sign.disabled, false, "the offer did not change: SIGN stays available to retry");
+  assert.equal(status.textContent, "Not saved — the contract is unsigned. Try again.");
+});
+
+test("#5657 SIGN CONTRACT on a changed offer still says the offer changed", () => {
+  const { ui, Career, $ } = loadCareerUi();
+  Career.acceptOffer = () => null;
+  Career.saveStatus = () => ({ ok: true, durable: true, reason: null });
+  ui.openOffers();
+  $("co-body").querySelectorAll(".co-offer")[1].onclick();
+  const sign = $("co-body").querySelectorAll("button").find((b) => b.textContent === "SIGN CONTRACT");
+  const status = $("co-body").querySelectorAll("p").find((p) => p.getAttribute("role") === "status");
+  sign.onclick();
+  assert.equal(status.textContent, "The offer changed. Cancel and compare it again.");
+  assert.equal(sign.disabled, true);
+});
+
+function refusingCareer() {
+  return { inCareer: () => true, data: () => ({ flavour: "myteam" }), identityValue: (k, d) => d, setIdentityValue: () => false };
+}
+
+test("#5657 MY TEAM SAVE refused by the career: the dialog stays open and nothing is applied", () => {
+  const said = [];
+  const { ct, $, els, saved } = customTeamDialog(null, { sandbox: { Career: refusingCareer() }, announce: (m) => said.push(m) });
+  ct.openCustomize();
+  $("cz-save").onclick();
+  assert.equal(els.customize.hidden, false, "the dialog stays open");
+  assert.equal(saved(), null, "the global GP team is not written instead");
+  assert.deepEqual(said, ["TEAM NOT SAVED"]);
+});
+
+test("#5657 CLEAR LOGO refused by the career: the logo is not cleared on the car", () => {
+  const logos = [], said = [];
+  const { ct, $ } = customTeamDialog(null, {
+    sandbox: { Career: refusingCareer(), LiveryTex: { setTeamLogo: (...a) => logos.push(a) } },
+    announce: (m) => said.push(m) });
+  ct.openCustomize();
+  logos.length = 0;
+  $("cz-logo-clear").onclick();
+  assert.deepEqual(logos, [], "applyCustomLogo must not run for an edit the save refused");
+  assert.deepEqual(said, ["TEAM NOT SAVED"]);
 });

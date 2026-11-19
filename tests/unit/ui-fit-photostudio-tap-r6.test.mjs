@@ -34,3 +34,19 @@ test("r6 carve stays Photo Studio #ps-* (no foreign selectors)", () => {
   assert.doesNotMatch(m[0], /#lighting|#camtune|#ct-|#lt-|title|#hud/,
     "must not retarget tuner / title / HUD selectors");
 });
+
+test("portrait studio: preview-band pad, guide, overflow and --bg (393×852 hunt)", () => {
+  // cssRules/decl (no source-pin regex) — assertPinsAll is at its ceiling.
+  const phone = { context: /max-width:\s*640px/ };
+  assert.equal(decl(rules, "body.photo-studio-open", "background"), "var(--bg)",
+    "open studio fills the letterbox with --bg (not white)");
+  assert.equal(decl(rules, "#photo-studio", "--ps-preview-h", phone),
+    "calc(100svh - 42svh - var(--safe-b))", "preview band = viewport minus sheet minus safe-b");
+  assert.equal(decl(rules, "#photo-studio", "padding-top", phone), "var(--ps-preview-h)");
+  assert.equal(decl(rules, "#photo-studio", "padding-bottom", phone), "0");
+  assert.equal(decl(rules, "#ps-guide", "top", phone), "calc(var(--ps-preview-h) / 2)",
+    "guide centres on the preview band, not the full viewport");
+  assert.equal(decl(rules, "#ps-panel", "overflow", phone), "visible",
+    "Garage / Subject native selects must not clip to the sheet");
+  assert.equal(decl(rules, "#ps-body", "overscroll-behavior", phone), "contain");
+});

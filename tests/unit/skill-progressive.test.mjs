@@ -408,7 +408,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
     assert.match(fm.description, /Use (when|it when|proactively)/);
     assert.ok(text.split("\n").length <= 180, `${name} SKILL.md must stay a thin index`);
   }
-  // 2026-11-03: a whole group runs on the pushed branch (`remote-group.mjs <group>`), never `test-bg.mjs <group>` locally.
+  // A whole group is `remote-group.mjs <group>` on the pushed branch (Bryce's opt-in since #5524), never `test-bg.mjs <group>` locally.
   const input = fs.readFileSync(path.join(SKILLS, "input-controls/SKILL.md"), "utf8");
   assert.match(input, /remote-group\.mjs input/);
   assert.match(input, /tune-physics/);
@@ -442,6 +442,13 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   const explore = frontmatter(fs.readFileSync(path.join(AGENTS, "Explore.md"), "utf8"));
   assert.equal(explore.effort, "medium", "Explore: effort: medium");
   assert.equal(explore.omitClaudeMd, true, "Explore: the built-in starts without CLAUDE.md, so the override does too");
+  // Every read-only reporter starts without CLAUDE.md/AGENTS.md (~2.3k tokens a spawn; docs/notes/HARNESS-SETTINGS-2026-10-26.md):
+  // its card restates what it relies on. The two cards that edit code keep the rules.
+  for (const file of fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md")) {
+    const fm = frontmatter(fs.readFileSync(path.join(AGENTS, file), "utf8"));
+    const writer = file === "worker.md" || file === "track-surveyor.md";
+    assert.equal(fm.omitClaudeMd === true, !writer, `${file}: omitClaudeMd ${writer ? "must stay off a card that edits code" : "belongs on a read-only reporter"}`);
+  }
   const phys = fs.readFileSync(path.join(AGENTS, "physics-contract-auditor.md"), "utf8");
   assert.match(phys, /vstd-lint/);
   assert.match(phys, /AI-only/);

@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 45
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -30,7 +30,7 @@ the rest on a `not checked:` line. Optional: a tip SHA the claims were made at.
    line, or `git show HEAD:<file>`). Never trust the claim's quote, line number
    or paraphrase: the line may have moved, been fixed, or never said that.
 2. If the line moved, locate a named JS symbol through `code-nav` / apex-lsp
-   (Bash fallback: `bash tools/mcp/lsp-mcp.sh`); text fragments use search,
+   (Bash fallback: `node tools/mcp/lsp-mcp.mjs`); text fragments use search,
    `git log -L` or
    `git log -S '<fragment>' --oneline -5` for when it changed. A claim that was
    true at its SHA but is fixed now is STALE, with the fixing commit.
