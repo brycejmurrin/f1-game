@@ -1,4 +1,4 @@
-// @doc Advisory full-footprint support checks for substantial box masses; exact vertical contacts, review shot jobs.
+// @doc Library, no CLI: full-footprint support checks for box masses (exact vertical contacts, review shot jobs).
 // @skill scenery-dress
 "use strict";
 

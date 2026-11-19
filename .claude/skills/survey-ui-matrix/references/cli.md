@@ -73,7 +73,7 @@ truncation and tap targets on longer labels before translating real locales.
 | `fit-audit.mjs` | type/spacing floors (`--sizes=`, `--scale=`; no exit code) |
 | `menu-fit.mjs` | `--safe=` notch insets only (deprecated otherwise) |
 | `reach-score.mjs` | offline (no browser): two-thumb reach zone of each screen's primary, tap share per zone, dead space, from `--dom` dumps or an inspection (`--in DIR --svg`) |
-| `test:baseline` | CI group `baseline` (`menu-baseline.spec.js` PNGs, identity); on a pushed branch `node tools/ci/remote-group.mjs baseline` |
+| `test:baseline` | CI group `baseline` (`menu-baseline.spec.js` PNGs, identity); the nightly `baseline-trial` job runs it, no PR run does; a whole-group dispatch is Bryce's opt-in |
 | `flows.mjs` | interaction FLOWS, not layout: door/Escape, double-tap bleed, focus, Back, persistence, search, rotation, D-pad; `--diff=<old flows.json>` exits 1 on a pass → fail |
 
 ## menu-mock: the fastest look at the menus

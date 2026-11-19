@@ -54,8 +54,8 @@ node tools/ci/pick-tests.mjs                    # the groups this change needs
 ```
 
    No agent runs a browser spec locally (AGENTS.md rule 5). The chips (`season.spec.js`,
-   `season-format.spec.js`) are proven by the `modes` group on the PR; to run it on the pushed branch:
-   `node tools/ci/remote-group.mjs modes`, only when `pick-tests` names it.
+   `season-format.spec.js`) are proven by the `modes` group on the PR; a whole-group dispatch
+   (`remote-group.mjs modes`) is Bryce's opt-in.
 
 ## References
 

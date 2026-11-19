@@ -43,7 +43,7 @@ and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css   # the groups this edit needs
 node --test tests/unit/menu-a11y-audit.test.mjs   # STATIC Escape/door/layer pins, no browser; behaviour needs the specs
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the local floor
-node tools/ci/remote-group.mjs ui          # behaviour (menu-keyboard, ui-button-touch, ui-scale), on the PUSHED branch
+# behaviour specs (menu-keyboard, ui-button-touch, ui-scale): the PR's own CI; a whole `ui` group is Bryce's opt-in
 ```
 
 No browser spec runs locally (AGENTS.md rule 5): the PR run covers the picked groups. `tests/specs/ui-audit.spec.js`

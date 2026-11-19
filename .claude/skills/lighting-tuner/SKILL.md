@@ -52,7 +52,7 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
    node tools/ci/pick-tests.mjs                                            # names the CI groups
    ```
    `tests/specs/lighting-ab.spec.js` runs in the `gfx` group on CI, never locally (AGENTS.md rule
-   5); to run the whole group on the pushed branch: `node tools/ci/remote-group.mjs gfx`.
+   5); a whole `gfx` group (`remote-group.mjs`) is Bryce's opt-in.
 
 ## References
 

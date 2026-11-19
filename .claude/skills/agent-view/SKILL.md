@@ -48,7 +48,7 @@ use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or r
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
 - Tests (browser specs run on CI, never locally — AGENTS.md rule 5): `agent-view.spec.js`,
   `agent-drive-bench.spec.js` (group `hooks`), `agent-determinism.spec.js` (group `ui`); `pick-tests.mjs` names
-  the groups per diff, `node tools/ci/remote-group.mjs <group>` runs one on the pushed branch.
+  the groups per diff; the PR's own CI runs the browser shard, and a whole group (`remote-group.mjs`) is Bryce's opt-in.
 - Seeded replay field diff (VM): `node tools/check/episode-diff.mjs`
 
 ## Load on demand

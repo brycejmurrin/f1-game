@@ -1521,8 +1521,13 @@ function create(G) {
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
       const pastTeam = teamById(past.team);
-      if (typeof ShareCardChips !== "undefined") ShareCardChips.append(card, "co-year-card", () => ShareCardData.fromCareerYear(past,
+      // ShareCardChips rides LAZY_RESULTS_SHEET: if it is not in yet, load it and add the chip once it lands.
+      const yearChip = () => ShareCardChips.append(card, "co-year-card", () => ShareCardData.fromCareerYear(past,
         { teamName: pastTeam && pastTeam.name, teamColor: pastTeam && G.cssCol(pastTeam.color) }), "career-" + past.year);
+      if (typeof ShareCardChips !== "undefined") yearChip();
+      else if (typeof GameResults !== "undefined" && GameResults.ensureLoaded) {
+        GameResults.ensureLoaded().then(() => { if (typeof ShareCardChips !== "undefined" && card.isConnected) yearChip(); });
+      }
       body.appendChild(card);
     }
 

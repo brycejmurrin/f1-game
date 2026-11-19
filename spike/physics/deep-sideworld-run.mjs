@@ -9,9 +9,10 @@
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { createServer as netServer } from "node:net";
-import { statSync, createReadStream, existsSync } from "node:fs";
+import { statSync, createReadStream } from "node:fs";
 import { join, normalize, extname, sep } from "node:path";
 import os from "node:os";
+import { chromiumPath } from "../../tools/lib/chromium-path.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -45,7 +46,7 @@ console.log(`loadavg before run: [${os.loadavg().map((x) => x.toFixed(2)).join("
 let browser;
 try {
 browser = await chromium.launch({
-  executablePath: existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined,
+  executablePath: chromiumPath(),
   args: ["--use-angle=swiftshader", "--enable-precise-memory-info"],
 });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });

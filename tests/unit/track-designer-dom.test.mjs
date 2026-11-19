@@ -494,7 +494,7 @@ test("a stamp over a span that wraps the start line, and deleting point 0, keep 
   keep(plain(b.D.state().design), "delete point 0", 1e-6);
 });
 
-test("a full-lap width zone overlaps every span: SPAN WIDTH reads it, the base width clears it, a narrower span replaces it (W10 #2)", () => {
+test("a full-lap width zone overlaps every span: SPAN WIDTH reads it, and a span edit keeps it on the rest of the lap (W10 #2)", () => {
   const b = bootHooked();
   b.D.init(b.G, { custom: b.C, root: b.root });
   const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }] }));
@@ -503,15 +503,32 @@ test("a full-lap width zone overlaps every span: SPAN WIDTH reads it, the base w
   b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
   assert.equal(val.textContent, "5.0", "the road under the span is the full-lap zone's, not the 8.0 base");
-  assert.equal(b.D.setSpanWidth(8), true, "the base width clears the zone it overlaps");
-  assert.deepEqual(plain(b.D.state().design.hwZones), []);
+  const c = cumOf(b.D.state().design.pts), L = c[b.D.state().design.pts.length], f0 = c[5] / L, f1 = c[9] / L;
+  assert.equal(b.D.setSpanWidth(8), true, "the base width clears the span only");
+  assert.deepEqual(plain(b.D.state().design.hwZones), [{ s0: f1, s1: f0, hw: 5, ease: 0.025 }], "the rest of the lap keeps 5.0");
   b.D.undo();
-  assert.equal(b.D.state().design.hwZones.length, 1);
+  assert.deepEqual(plain(b.D.state().design.hwZones), [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }]);
   b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
-  assert.equal(b.D.setSpanWidth(6), true);
+  assert.equal(b.D.setSpanWidth(6), true, "a wider span than the full-lap zone");
   const z = plain(b.D.state().design.hwZones);
-  assert.equal(z.length, 1, "one zone: the span's, not the span's plus the full lap");
-  assert.equal(z[0].hw, 6); assert.notEqual(z[0].s1 - z[0].s0, 1);
+  assert.equal(z.length, 2);
+  assert.deepEqual(z[0], { s0: f1, s1: f0, hw: 5, ease: 0.025 });
+  assert.deepEqual([z[1].s0, z[1].s1, z[1].hw], [f0, f1, 6]);
+  b.D.close();
+});
+
+test("a span inside a longer width zone trims that zone to the road either side of the span", () => {
+  const b = bootHooked();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const pts = b.C.sanitize(design({ baseHW: 8 })).pts;
+  const c = cumOf(pts), L = c[pts.length], f = (i) => c[i] / L;
+  const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: f(2), s1: f(12), hw: 5, ease: 0.025 }] }));
+  b.D.open({ design: item, shared: true });
+  const z0 = plain(b.D.state().design.hwZones)[0];
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(8), true);
+  assert.deepEqual(plain(b.D.state().design.hwZones), [Object.assign({}, z0, { s1: f(5) }), Object.assign({}, z0, { s0: f(9) })],
+    "points 2-5 and 9-12 stay at 5.0; only the span goes back to base");
   b.D.close();
 });
 
@@ -1603,11 +1620,14 @@ test("SPAN WIDTH m: one hwZone on the span's control points, merged on repeat, c
   assert.equal(b.D.deletePoint(14), true);
   e = b.D.state().design;
   samePlace(pointAt(e.pts, e.hwZones[0].s0), P[5], 1e-6, "delete after: s0 still on the same point"); samePlace(pointAt(e.pts, e.hwZones[0].s1), P[9], 1e-6, "…and s1");
-  // Repeat on an overlapping span merges: one zone, the new width.
+  // An overlapping span takes its own road; the zone keeps the rest (P[7] … P[9] stays 5.0).
+  const zOld = plain(e.hwZones[0]);
   b.hooks.onPick(5, {}); b.hooks.onPick(8, { shiftKey: true });   // P[4] … P[7] after the insert
   assert.equal(b.D.setSpanWidth(6), true);
   e = b.D.state().design;
-  assert.equal(e.hwZones.length, 1, "an overlapping span replaces the zone"); assert.equal(e.hwZones[0].hw, 6);
+  const cE = cumOf(e.pts), fE = (i) => cE[i] / cE[e.pts.length];
+  assert.deepEqual(plain(e.hwZones), [Object.assign({}, zOld, { s0: fE(8) }), { s0: fE(5), s1: fE(8), hw: 6, ease: 0.025 }],
+    "the zone is trimmed to the road after the span; the span is one zone at the new width");
   // 24 is the registry's cap: a 25th refuses with the limit, a replacement still works.
   const N = e.pts.length, c = cumOf(e.pts), L = c[N];
   const many = [];
@@ -2030,6 +2050,15 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.deepEqual(plain(calls), [["raceIntro"], ["startRace"], ["quit"]], "never a frozen race");
   assert.equal(b.D.isOpen(), true);
   assert.match(msgText(b), /could not start/);
+  // Hunt #5743 D3: TEST HERE on another point while a range is selected drops the
+  // range — the way back must not restore "point 10 → old span end 6".
+  b.D.selectRange(2, 6);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [2, 6]);
+  calls.length = 0; b.G.state = "results";
+  assert.equal(await b.D.testHere(10), false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(b.D.isOpen(), true);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [10, -1], "the point driven from, no stale span");
   // A red design is refused before anything moves.
   calls.length = 0;
   b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));

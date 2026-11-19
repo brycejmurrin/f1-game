@@ -69,13 +69,15 @@ export function rememberPayload(live) {
  */
 export function diffRoleIndex(roleIndex, live, roles = ["placed", "kit_catalog", "nature_bake"]) {
   const roleSet = new Set(roles);
-  const indexIds = Object.keys((roleIndex && roleIndex.models) || {});
-  const liveIds = Object.keys((live && live.models) || {});
-  const indexOnly = indexIds.filter((id) => !Object.prototype.hasOwnProperty.call(live.models || {}, id));
-  const liveOnly = liveIds.filter((id) => !Object.prototype.hasOwnProperty.call(roleIndex.models || {}, id));
+  const idxModels = (roleIndex && roleIndex.models) || {};
+  const liveModels = (live && live.models) || {};
+  const indexIds = Object.keys(idxModels);
+  const liveIds = Object.keys(liveModels);
+  const indexOnly = indexIds.filter((id) => !Object.prototype.hasOwnProperty.call(liveModels, id));
+  const liveOnly = liveIds.filter((id) => !Object.prototype.hasOwnProperty.call(idxModels, id));
   const badRole = [];
   for (const id of indexIds) {
-    const role = roleIndex.models[id] && roleIndex.models[id].role;
+    const role = idxModels[id] && idxModels[id].role;
     if (!roleSet.has(role)) badRole.push(`${id}:${role}`);
   }
   return { indexOnly, liveOnly, badRole };

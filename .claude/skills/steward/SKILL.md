@@ -19,9 +19,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 (`issue_read` / `pull_request_read`); the Plan and the Hand-off block are the whole brief.
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
-   stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`gh api -X
-   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list
-   (`github-mcp-guard.sh` refuses one that drops `config-ok`, `hold`, `land` or `needs-decision`).
+   stand down. Labels ONLY through MCP `issue_write`: the live list plus or minus ONE name ([`references/labels.md`](references/labels.md);
+   `github-mcp-guard.sh` refuses any other list); never `gh`.
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
@@ -51,8 +50,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
    `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
    --pr`: it opens a READY PR without the template body.
-3. Labels with `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=lane:<host>'` — never the MCP `labels`
-   field. Every draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
+3. Add `lane:<host>` (the one-label recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
+   draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
 
 ## Push
 
@@ -87,6 +86,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `tests/data/flaky-quarantine.json`). A job that FAILED (infra, setup, timeout) is never re-run on a PR that must
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
+   The orchestrator's infra re-run (§CI) gives a verdict only; the PR still lands on a fresh commit.
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
    and only when `needs-sync` says so (`conflict | stale-red | retest-refused`; `tip-red` waits for the fix to land);
    never to "refresh" a cancelled run and never for clean-behind. `retest-refused` is the gate's `retest` row
@@ -101,8 +101,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    on a dirty PR starts no CI.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
-3. GitHub MCP `update_pull_request` with `draft: false`, then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f
-   'labels[]=land'`.
+3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
+   [`references/labels.md`](references/labels.md)).
 4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
@@ -117,9 +117,33 @@ silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR 
 check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
 (agent `deploy-research`; skill `check`), never a green PR.
 
+## CI — the orchestrator only
+
+The orchestrator is the session Bryce steers in his own chat that launches workers with `create_session` (skill
+`dispatcher` [`references/orchestrator-brief.md`](../dispatcher/references/orchestrator-brief.md)); every other session,
+a launched worker or a subagent, is a worker and never cancels, re-runs or dispatches. Owner request 2026-11-18: the
+orchestrator acts on Actions runs for Bryce, ONLY through the GitHub MCP `actions_run_trigger` (a `gh` write from a
+shell is recorded as Bryce's own click; `bash-guard.sh` refuses it for every session):
+- **Cancel** (`cancel_workflow_run`; `force_cancel_workflow_run` for a run that ignores it) a run on a superseded head,
+  a run stuck past its job's `timeout-minutes`, or a queue jam that keeps runners from the deploy tip. Never the
+  running Pages train on the deploy tip; a run on a live owner's head: message the owner first.
+- **Re-run failed jobs** (`rerun_failed_jobs`, never a whole run) only for an INFRA failure (runner lost, checkout,
+  set-up) to get a verdict. Never to turn a test failure green: a pass on the re-run is still a red named in the PR
+  (AGENTS.md rule 9), and merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)).
+- **Dispatch** (`run_workflow`): `ci.yml` (a group run) on any branch, `pages.yml` on the deploy branch only, by file
+  name, never a numeric id.
+- **Log every act** in ONE PR comment (an issue comment when there is no PR): the run link, the act and why.
+
+How the hooks know (`github-mcp-guard.sh`): its OWN process environment holds `APEX_ROLE=orchestrator`, which Bryce
+sets on the orchestrator's cloud environment and no agent sets, and not `CLAUDE_CODE_CHILD_SESSION=1`, which the
+platform sets on every `create_session` child (measured 2026-11-18); the payload carries no `agent_id`. A seatbelt,
+not a boundary: a routine-fired session in an environment with `APEX_ROLE` would pass too, so the worker routine runs
+in one without it. `settings.json` still asks on `actions_run_trigger`.
+
 ## Gotchas
 
-- Never merge, arm, rebase, force-push, cancel a run, `--no-verify`, or push to the deploy branch.
+- Never merge, arm, rebase, force-push, `--no-verify`, or push to the deploy branch; never cancel a run (§CI: the
+  orchestrator's acts).
 - Sweeping many PRs is the dispatch Action's job; `pr-board.mjs --json` (read-only; exit 3 = no token) tells you who
   owns a red. A session does not take over another lane's PR.
 - Reviewer subagents run `model: sonnet`; a subagent never starts a browser (AGENTS.md rule 10).
