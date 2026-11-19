@@ -205,8 +205,7 @@ if ($("pm-fullscreen")) {
     }
   }
   button.addEventListener("click", () => { polls = 0; refresh(retry); });
-  // The status costs the worker one cache lookup per precached file (~620), on the thread that also answers the
-  // title's lazy loads, for a note inside Settings. Ask when the note is on screen, not at every boot.
+  // The status costs one cache lookup per precached file: ask when the note is on screen, not at boot.
   if (typeof IntersectionObserver !== "function") {
     navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
     refresh();

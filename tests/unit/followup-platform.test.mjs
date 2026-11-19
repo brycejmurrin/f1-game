@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { absSrc } from '../helpers/abs-src.mjs';
 const read = p => fs.readFileSync(new URL('../../'+p, import.meta.url), 'utf8');
 const flush = async () => { for(let i=0;i<20;i++) await Promise.resolve(); };
 const ps = read('js/ui/platform-session.js');
@@ -65,7 +66,7 @@ function offlineNote({ observer = true } = {}) {
  const sb={Native:{isNative:()=>false},$:k=>k==='pm-install'?anchor:null,document:{createElement:el},MessageChannel:Channel,setTimeout,clearTimeout,
   navigator:{serviceWorker:{controller,addEventListener:(k,f)=>swEvents.set(k,f)}}};
  if(observer) sb.IntersectionObserver=class{constructor(cb){io=cb}observe(){}};
- vm.runInNewContext(section('offlineReadiness'),sb);
+ vm.runInNewContext(section('offlineReadiness'),sb,{filename:absSrc('js/ui/platform-session.js')});
  return {posts,note:made[0],button:made[1],see:on=>io([{isIntersecting:on}]),controllerchange:()=>swEvents.get('controllerchange')()};
 }
 test('offline note asks the worker only when it is on screen',async()=>{
@@ -74,7 +75,7 @@ test('offline note asks the worker only when it is on screen',async()=>{
  assert.equal(h.note.textContent,'Checking offline availability…');
  h.controllerchange();await flush();assert.deepEqual(h.posts,[],'a new controller while hidden only marks the note stale');
  h.see(true);await flush();assert.deepEqual(h.posts,['apex-offline-status']);
- assert.match(h.note.textContent,/^Core game and install downloads ready offline\./);
+ assert.equal(h.note.textContent,'Core game and install downloads ready offline. Optional content used later may still need a connection.');
  h.see(false);h.see(true);await flush();assert.equal(h.posts.length,1,'re-showing a fresh note asks nothing');
  h.see(false);h.controllerchange();await flush();assert.equal(h.posts.length,1);
  h.see(true);await flush();assert.equal(h.posts.length,2,'a controller change while hidden is picked up on the next show');

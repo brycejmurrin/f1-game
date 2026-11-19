@@ -29,9 +29,13 @@ Channels, `land` lanes, relayed grants and a shared phone, from a five-worker ru
 [`references/sibling-sessions.md`](references/sibling-sessions.md).
 
 ## Why was issue #n not picked up?
-1. `--plan` output: a `SKIP issue #n: <why>` line names the reason (open PR closing it, live claim, a cap reached,
-   paused, land-queue backpressure, `lane:cursor`); `IGNORED priority on #n` means an agent, not Bryce, set the label.
-   The Board comment's Skipped list shows the last cycle's reasons.
+0. Is the Action running at all? `gh api repos/brycejmurrin/f1-game/actions/workflows -q '.workflows[]|select(.path==".github/workflows/dispatch.yml").state'`:
+   `disabled_manually` means no cycle comes and the Board comment is as old as the last run; workers are launched by
+   hand (`references/orchestrator-brief.md`).
+1. `--plan` output: a `SKIP issue #n: <why>` line names a per-issue reason (open PR closing it, live claim,
+   `lane:cursor`); caps and `dispatch:pause` print `SKIP issue [Worker] #n <title>: …`, and land-queue backpressure is
+   ONE global `SKIP issue launches paused: …` line with no per-issue row. `IGNORED priority|ready|dispatch:pause on #n`
+   means an agent, not Bryce, set that label. The Board comment's Skipped list shows the last cycle's reasons.
 2. No line for #n at all: it failed the ready filter (task rule 1 in the `dispatch.mjs` header; `planDispatch`).
 3. Planned but no claim comment: read the Dispatch run's log (`gh run list --workflow dispatch.yml`, then
    `gh run view <id> --log`) for `= launch skipped …`, `= fire failed <status>` or `= fire skipped: …`.

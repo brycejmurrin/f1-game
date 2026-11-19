@@ -3,7 +3,8 @@
 Node VM only, no browser.
 
 0. Rule out assists/input and label both cars (phone and desktop `carWeight` defaults, `heavyDefault` in js/input/steer-tuning.js): SKILL.md §Which car?.
-1. Baseline: `node tools/check/player-dyn.mjs --json > scratch/pd-base.json` (desktop car). `TRACK`/`FRAC` only pick the
+1. Baseline: `node tools/check/player-dyn.mjs --json > scratch/pd-base.json` (the bare `pin` seat: McLaren, empty parts sheet; a
+   player's desktop boots `--seat shipped`, so baseline that too before reading a player's report). `TRACK`/`FRAC` only pick the
    straight the car is pinned to (position only), so they do not select a corner. Slow corner = `skidpad` rows whose
    STANDARD speed `vStd(v) = v / PACE` (read `g.apex.tuning().pace`) falls in the `lockTaper` blend (its thresholds: `updateCarBicycle`, js/game.js;
    the script's `30` mirrors the upper one). At shipped PACE only the `v` 20 rows land there

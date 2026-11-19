@@ -313,12 +313,8 @@ const TrackDef = (function () {
     return pts;
   }
 
-  // THE TEXT A CIRCUIT'S MODEL SET IS READ FROM. Assets.modelIds / modelsReady scan it for quoted pack-model ids, so
-  // an id spelled only inside an engine helper was never fetched: nature.js stamps "pine_lod0" under
-  // furniture.bakedPines, Spa's closure names no pine, and Spa silently built procedural pines. The page
-  // (lazy-bundles.js, build-client.js) and the build worker all ask here, so the two cannot disagree on the set.
-  // ENGINE_MODELS: def.furniture flag -> the model id an engine helper stamps for it. A new id spelled in js/track/
-  // goes here (tests/unit/baked-model-instancing.test.mjs fails until it does).
+  // The text Assets.modelIds/modelsReady scan for a circuit's pack-model ids: its scenery closure plus each id an
+  // engine helper stamps for a def.furniture flag (ENGINE_MODELS; baked-model-instancing.test.mjs pins the set).
   const ENGINE_MODELS = Object.freeze({ bakedPines: "pine_lod0" });
   function scenerySource(def, registry) {
     const fn = def && (def.scenery || (registry && registry[def.id]));
@@ -329,7 +325,7 @@ const TrackDef = (function () {
   }
 
   // dayPal / nightPal / realPoints / applyHwZones / materializeListPoints stay
-  // module-local (fromRaw only); elevation readers + fromRaw + scenerySource stay public.
+  // module-local (fromRaw only); elevation readers + fromRaw stay public.
   return { elevationAt, hasRealElevation, fromRaw, scenerySource, ENGINE_MODELS };
 })();
 Object.freeze(TrackDef);

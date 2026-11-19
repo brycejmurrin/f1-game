@@ -12,7 +12,7 @@ Code attaches them as `mcp__chrome-devtools__<tool>` (e.g.
 `mcp__chrome-devtools__evaluate_script`); the probe-mcp.py CLI and the apex
 docs call the same tools `chrome_<tool>`. `tools/mcp/probe-mcp.py` is a CLI (not
 MCP-attached since 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
-The deployed site, `version.json` and the public web are **deploy-research** (table below).
+Page-scoped calls take a `pageId` (chrome.md §pageId and frame hooks); the deployed site is **deploy-research**.
 
 **Pick one client:** use the attached `mcp__chrome-devtools__*` tools when the session lists them;
 otherwise use one persistent CLI daemon, then `call`. `chrome-start` requires
@@ -60,7 +60,7 @@ Heap/CPU while a **js-debugger** session is attached to that page → its `debug
 copies and GPU budgets): `tools/perf/vm-leak-census.mjs`, `tools/gfx/mem-census.mjs`
 (track-switch heap compare; CDP counters via the `tools/perf/runtime-memory.mjs` library),
 `tools/perf/mesh-census.mjs`, `tools/perf/garage-census.mjs` (flags: `--help` or file
-header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU. Record
+header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU; frame stutter: chrome.md §pageId and frame hooks. Record
 track and backend (`__apex.diag().env.backend`) with every number, cite MB
 deltas in the PR, and dispatch `gpu-census.yml` on `macos-latest` for a real
 GPU — SwiftShader here is not player evidence.

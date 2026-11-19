@@ -1,5 +1,15 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
+
+`(tree) eagerBytes` 8015286 → **8016541** (+1255). Deliberate raise of the exact boot-wall ceiling;
+it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's eager
+`js/track/core/def.js`, `js/ui/platform-session.js`, `js/core/lazy-bundles.js` and `js/track/build-client.js`
+(+1793 after the sync onto dec94440; shorter wording of the PR's own new comments took it to +1255).
+The code is `TrackDef.scenerySource` + `ENGINE_MODELS`, the one text the page and the build worker read a
+circuit's pack-model set from (Spa built procedural pines because `pine_lod0` was spelled only inside an
+engine helper), and the IntersectionObserver gate that stops the offline note costing about 620 worker
+cache lookups on every boot. Fragment: `tests/data/ratchets.d/claude--perf-assets-flow-1118.json`.
 
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
