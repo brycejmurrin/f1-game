@@ -451,11 +451,19 @@ export function changedFiles() {
 }
 
 /** This branch's merge-base with the deploy branch (`APEX_RATCHETS_BASE` names
- *  the ref in tests), or null when none is reachable. */
-export function mergeBase() {
-  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+ *  the ref in tests), or null when none is reachable. During a merge (a sync, the
+ *  pre-commit hook on its merge commit) HEAD is still the branch's OLD head, so the
+ *  base is the one the merge commit will have: `git merge-base <ref> HEAD MERGE_HEAD`
+ *  (git's base against a hypothetical HEAD+MERGE_HEAD merge). Against the old base a
+ *  tip that grew since then ate the branch's own lowering (ownMin) and the slack rule
+ *  refused the sync commit. */
+export function mergeBase(root = ROOT) {
+  const git = (...a) => cp.execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  let merging = null;
+  try { merging = git("rev-parse", "-q", "--verify", "MERGE_HEAD"); } catch { /* no merge in progress */ }
+  const heads = merging ? ["HEAD", merging] : ["HEAD"];
   for (const ref of [process.env.APEX_RATCHETS_BASE, `origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH].filter(Boolean)) {
-    try { return git("merge-base", ref, "HEAD"); } catch { /* try the next ref */ }
+    try { return git("merge-base", ref, ...heads); } catch { /* try the next ref */ }
   }
   return null;
 }

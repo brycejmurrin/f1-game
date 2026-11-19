@@ -37,7 +37,7 @@
 //             that cannot run WAITs as `unverified`, and the fixer routes are the same with the tip sha as the red.
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
-//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and every push after it must leave the
+//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455, D-034), and every push after it must leave the
 //             PR's own config diff as the label saw it (configPushState: a tip sync keeps it, #5432); any other diff
 //             passes. A package.json diff that is ONLY the generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
@@ -121,16 +121,17 @@ export const CONFIG_PATH = new RegExp("^(" + [
   "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
-/** The PROTECTED config paths (#5455, Bryce 2026-11-11 "Count it, except the gate and safety hooks"): only his own
- *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
- *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
- *  gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs when the gate imports it — a test pins
- *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
- *  host's hooks and settings. */
+/** The PROTECTED config paths (#5455; D-034 narrowed them on 2026-11-18): only Bryce's own `config-ok` tap covers a
+ *  diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every other CONFIG_PATH). Kept: the
+ *  gate (this module, which defines both lists; provenance; deploy-tip; ready-gate; the GitHub client and token, and
+ *  the rest of the gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs
+ *  when the gate imports it — a test pins the closure), the land workflow, and every host's hooks and settings.
+ *  D-034 ("Shrink the list") supersedes the 2026-11-11 ci.yml call ("Protect ci.yml"): ci.yml, pick-tests and
+ *  preflip-probe are ROUTINE now, still config paths, so they still need a `config-ok`, but an agent's counts. */
 export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
   "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/lib/deploy-tip\\.mjs$", "tools/ci/lib/tip-gate\\.mjs$", "tools/ci/ready-gate\\.mjs$",
-  "tools/ci/github-api\\.mjs$", "tools/ci/merge-train\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
-  "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
+  "tools/ci/github-api\\.mjs$", "tools/ci/merge-train\\.mjs$", "tools/ci/github-token\\.mjs$",
+  "\\.github/workflows/land\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
   "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));

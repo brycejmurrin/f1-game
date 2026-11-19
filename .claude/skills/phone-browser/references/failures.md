@@ -4,7 +4,7 @@
   (the :3001 server; its log is `scratch/browser-http/server.log`), "tunnel did not come up" (the tunnel log, `LOG`
   in `tools/mcp/browser-http-up.mjs`, under `scratch/browser-http/`), "public mcp did not come up" (a tunnel host
   was printed but its `/healthz` never answered), or "a server is live on :3001 with no recorded token" (state was
-  deleted under a running server: stop it by its listed PID, AGENTS.md rule 7). Read the matching log, retry once.
+  deleted under a running server: stop it by its listed PID, AGENTS.md rule 6). Read the matching log, retry once.
 - In a proxied Claude cloud container both network steps fail by design, not by chance: Node's `fetch` ignores
   `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1` (so the download throws "fetch failed"), and `cloudflared` needs
   direct egress to Cloudflare's edge (port 7844, QUIC/HTTP2), which the session proxy does not carry.
