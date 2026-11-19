@@ -1006,6 +1006,71 @@ export class Lsp {
     return [`0 semantic uses, but ${hits.length} text match${hits.length === 1 ? "" : "es"} of .${name} (a member on an object the checker cannot type, e.g. a factory's return; verify each): ${at}${hits.length > 6 ? ", …" : ""}`];
   }
 
+  factoryOf(file, line0, col0) {
+    const ast = this.astOf(file), refs = this.lexicalRefs(file), { starts } = this.textOf(file);
+    if (!ast) return [];
+    const fnTypes = ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"];
+    let target = null;
+    visit(ast, n => { if (!target && n.type === "Identifier" && n.loc.start.line - 1 === line0 && col0 >= n.loc.start.column && col0 <= n.loc.end.column) target = refs.get(n.range[0]) || null; });
+    if (!target) return [];
+    const unwrap = o => o?.type === "CallExpression" && objectName(o.callee) === "Object.freeze" ? o.arguments[0] : o;
+    const returned = fn => (fn.body?.type === "BlockStatement" ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [fn.body]).map(unwrap).filter(o => o?.type === "ObjectExpression");
+    const keyFor = (fn, variable) => {
+      for (const object of returned(fn)) for (const prop of object.properties) {
+        if (prop.type !== "Property" || prop.computed || prop.value.type !== "Identifier") continue;
+        if (refs.get(prop.value.range[0]) === variable) return String(prop.key.name ?? prop.key.value);
+      }
+      return null;
+    };
+    const out = [];
+    for (const statement of ast.body) {
+      if (statement.type !== "VariableDeclaration") continue;
+      for (const declarator of statement.declarations) {
+        const top = declarator.id.type === "Identifier" && iife(declarator.init);
+        if (!top) continue;
+        visit(top.body, fn => {
+          if (!fnTypes.includes(fn.type) || fn.type !== "FunctionDeclaration" || !fn.id) return;
+          const member = keyFor(fn, target);
+          if (!member) return;
+          const made = refs.get(fn.id.range[0]), via = made && keyFor(top, made);
+          if (via && !out.some(x => x.head === declarator.id.name && x.via === via && x.member === member)) out.push({ head: declarator.id.name, via, member });
+        });
+      }
+    }
+    void starts;
+    return out;
+  }
+  factoryUses(file, line0, col0) {
+    const found = this.factoryOf(file, line0, col0);
+    if (!found.length) return null;
+    const esc = x => x.replace(/[$]/g, "\\$"), files = [...this.mtimes.keys()].filter(x => !x.endsWith(".ts")).sort();
+    const all = { head: found[0].head, via: found.map(f => f.via).join("/"), member: found[0].member, instances: [], uses: [] }, seen = new Set();
+    for (const f of found) {
+      const made = new RegExp(`([A-Za-z_$][\\w$]*)\\s*=(?!=)[^;\\n]*?(?<![\\w$.])${esc(f.head)}\\.${esc(f.via)}\\(`, "g"), instances = new Set();
+      for (const x of files) {
+        const { text } = this.textOf(x);
+        if (!text.includes(`${f.head}.${f.via}(`)) continue;
+        for (const m of text.matchAll(made)) { const pos = this.posOf(x, m.index); if (!this.nonCode(x, pos.line0, pos.col0)) instances.add(m[1]); }
+      }
+      if (!instances.size) continue;
+      for (const i of instances) if (!all.instances.includes(i)) all.instances.push(i);
+      const use = new RegExp(`(?<![\\w$])(?:${[...instances].map(esc).join("|")})\\s*\\??\\.\\s*(${esc(f.member)})(?![\\w$])`, "g");
+      for (const x of files) {
+        const { text } = this.textOf(x);
+        if (!text.includes(f.member)) continue;
+        for (const m of text.matchAll(use)) {
+          const pos = this.posOf(x, m.index + m[0].length - f.member.length), key = `${x}:${pos.line0}:${pos.col0}`;
+          if (seen.has(key) || this.nonCode(x, pos.line0, pos.col0)) continue;
+          seen.add(key);
+          all.uses.push({ uri: this.uriOf(x), range: { start: { line: pos.line0, character: pos.col0 }, end: { line: pos.line0, character: pos.col0 + f.member.length } }, factory: true });
+        }
+      }
+    }
+    return all;
+  }
+  factoryNote(f) {
+    return `${f.uses.length} of them are text matches on instances of ${f.head}.${f.via}() (${f.instances.slice(0, 6).join(", ")}${f.instances.length > 6 ? ", …" : ""}).${f.member}; an instance passed on under another name is not followed`;
+  }
   outsideFiles() {
     if (this._outside) return this._outside;
     const out = [];
@@ -1256,7 +1321,7 @@ export async function callTool(lsp, name, a = {}) {
           const f = lsp.rel(loc.uri), s = loc.range.start;
           return lsp.tag(f, s.line, s.character) === "export" ? lsp.exportedMemberAt(f, s.line, s.character) : null;
         }).find(Boolean);
-        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra)).result || [])];
+        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra).catch(() => null))?.result || [])];
       }
       if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
@@ -1288,6 +1353,12 @@ export async function callTool(lsp, name, a = {}) {
           seen.add(key); return true;
         });
         locs.length = 0; locs.push(...uses);
+        const made = p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
+        if (made?.uses.length) {
+          const fresh = made.uses.filter(l => !seen.has(locationKey(l)));
+          for (const l of fresh) { seen.add(locationKey(l)); locs.push(l); }
+          if (fresh.length) notes.push(lsp.factoryNote({ ...made, uses: fresh }));
+        }
         if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
         if (p) notes.push(...lsp.outsideNote(a, p));
         const unfiltered = locs.length;
@@ -1320,6 +1391,12 @@ export async function callTool(lsp, name, a = {}) {
           const list = Array.isArray(result) ? result : result ? [result] : [], unfiltered = list.length;
           resolved = list.filter(l => inScope(lsp.rel(l.targetUri || l.uri), scope));
           notes.push(`scope path "${scope}": ${resolved.length} of ${unfiltered} resolved ${isDef ? "definitions" : "references"}`);
+        }
+        const made = !isDef && p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
+        if (made?.uses.length) {
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [], key = l => `${l.targetUri || l.uri}\u0000${(l.targetSelectionRange || l.range).start.line}:${(l.targetSelectionRange || l.range).start.character}`;
+          const have = new Set(list.map(key)), fresh = made.uses.filter(l => !have.has(key(l)) && (!scope || inScope(lsp.rel(l.uri), scope)));
+          if (fresh.length) { resolved = [...list, ...fresh]; notes.push(lsp.factoryNote({ ...made, uses: fresh })); }
         }
         const r = await lsp.locRows(resolved, { limit, offset, declFirst: isDef, where: !isDef, concise: a.format === "concise", render: !a.files });
         const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : !isDef && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
