@@ -55,6 +55,8 @@ const Particles = (function () {
   let _kWind = NaN, _kRainSpd = NaN, _kOp = NaN, _kShW = NaN, _kShL = NaN, _kDir = NaN;
   const RAIN_CELL_M = 2;
   let _statUpload = 0, _statExpand = 0, _statSkip = 0, _statAlphaExpand = 0, _statAddExpand = 0;
+  // #5387 primeRace: idle groups draw one empty particle so TLX wraps its buffer.
+  let _prime = false;
 
   function init(gfx) {
     Log.info("game", "Particles.init");
@@ -74,10 +76,21 @@ const Particles = (function () {
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
     // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
+    // A second init (tests, a future gfx-recreate path) must DROP any armed
+    // shower: rainFill writes wetCap quads into _vertA, and reallocating only
+    // MAX*FLOATS_PER under a live _rainN silently overflowed the TypedArray
+    // (OOB stores are no-ops — streaks vanished / corrupted). rainSeed re-arms.
+    _rainN = 0; _rainOn = false; _rainLastShown = 0; _rainFed = false;
+    _lastRainLive = false; _rainEyeOk = false; _rainAcc = 0;
+    _rox = _roy = _roz = null; _rspd = _rlen = _ralpha = null;
+    _rainCellX = _rainCellY = _rainCellZ = 0x7fffffff;
+    _kTone = -1; _kShown = -1; _kSpdQ = -1;
+    _kSpdS = _kLenS = _kWind = _kRainSpd = _kOp = _kShW = _kShL = _kDir = NaN;
     _vertA = new Float32Array(MAX * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
+    _prime = false;
   }
 
   // Drop the live pool and one-frame flares. Does NOT hide or unseed rain
@@ -88,6 +101,7 @@ const Particles = (function () {
     _sprK = 0; _sprThr = Infinity; _n = 0; _flN = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
     _rainFed = false; _lastRainLive = false; _rainAcc = 0;
+    _prime = false;   // startRace clear must not leave a pending idle prime
   }
   function count() { return _n; }
   function capacity() { return MAX; }
@@ -350,8 +364,6 @@ const Particles = (function () {
     }
   }
 
-  // #5387 primeRace: an idle group draws one empty particle (TLX wraps its buffer).
-  let _prime = false;
   function armPrime() { _prime = true; }
   function draw() {
     _draw();
@@ -680,6 +692,8 @@ const Particles = (function () {
       const halfW = 0.014 + dist * 0.0022;                      // ~1 px floor at distance (62° fov, 1080p: 1 px ≈ 0.0011 m per m)
       const a = _ralpha[i] * alphaMul * _clamp01((dist - 0.4) / 1.6);   // fade the drops right at the lens
       if (a <= 0.004) continue;
+      // TypedArray OOB stores are silent no-ops — refuse rather than corrupt.
+      if (p + FLOATS_PER > out.length) break;
       const cx = ex + tx, cy = ey + ty, cz = ez + tz;
       for (let v = 0; v < 12; v += 2) {
         const kx = _CORNERS[v], ky = _CORNERS[v + 1];

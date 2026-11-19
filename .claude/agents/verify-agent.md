@@ -2,6 +2,7 @@
 name: verify-agent
 description: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers "was this already red?". Use to verify a change without giving a subagent write access or a browser run of its own.
 model: haiku
+omitClaudeMd: true
 maxTurns: 16
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob

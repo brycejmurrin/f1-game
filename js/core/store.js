@@ -20,6 +20,11 @@ const GameStore = (function () {
   // again once storage has room (a name alone could only be reported, never healed).
   const _writeFails = new Map();
   const _rawOverrides = new Map();   // failed raw sets, or null tombstones, usable this session
+  // Keys whose raw getItem threw (private mode / blocked storage). Same contract as
+  // get()'s remembered miss: XROpts.xrInput and PerfGov read the raw lane every
+  // frame, and re-throwing + Log.info 60×/s flooded the diag buffer the JSON
+  // lane already stopped flooding.
+  const _rawReadFail = new Set();
 
   // A shipped default is shared data: handing out the object itself let a
   // caller that edits what get() returned (the garage sheet mutates its parts
@@ -222,11 +227,17 @@ const GameStore = (function () {
       // js/data/settings-defaults.js actually names. Everything else still
       // answers null exactly as before.
       const short = shortKey(k);
+      const key = fullKey(k);
       const def = () => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(short))
         ? SettingsDefaults.get(short) : null;
-      if (_rawOverrides.has(fullKey(k))) { const v = _rawOverrides.get(fullKey(k)); return v === null ? def() : v; }
-      try { const v = localStorage.getItem(fullKey(k)); return v === null ? def() : v; }
-      catch (e) { noteBroken(e, "read " + k); return def(); }
+      if (_rawOverrides.has(key)) { const v = _rawOverrides.get(key); return v === null ? def() : v; }
+      if (_rawReadFail.has(key)) return def();
+      try { const v = localStorage.getItem(key); return v === null ? def() : v; }
+      catch (e) {
+        noteBroken(e, "read " + k);
+        _rawReadFail.add(key);
+        return def();
+      }
     },
     rawSet(k, v) {
       if (!careerWriteStatus(k).ok) return false;
@@ -236,7 +247,7 @@ const GameStore = (function () {
       this.rawRev++;
       v = String(v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
-      try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
+      try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); _rawReadFail.delete(key); return true; }
       catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); return false; }
     },
     rawDel(k) {
@@ -245,7 +256,7 @@ const GameStore = (function () {
       this._cache.delete(key);
       this.rawRev++;
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
-      try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
+      try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); _rawReadFail.delete(key); return true; }
       catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); return false; }
     },
     subscribe(fn) {
@@ -285,13 +296,14 @@ const GameStore = (function () {
       if (e.key === null) {
         _writeFails.clear();
         mirrorForeign(null);
-        _rawOverrides.clear(); this.rawRev++;
+        _rawOverrides.clear(); _rawReadFail.clear(); this.rawRev++;
         this._cache.clear(); this._clearRev++; this.rev++; this.foreign++;
         this._notify({ key: null, foreign: true, clear: true });
         return true;
       }
       if (typeof e.key !== "string" || e.key.indexOf("apex26.") !== 0) return false;
       _rawOverrides.delete(e.key);
+      _rawReadFail.delete(e.key);
       _writeFails.delete(e.key);
       mirrorForeign(e.key);
       this.rawRev++;
