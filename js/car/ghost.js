@@ -299,7 +299,9 @@ const Ghost = (function () {
       };
       requestIdleCallback(idle);
     }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    // No requestIdleCallback (iOS Safari): the same capped wait, not the next task. A 0 ms timer ran the
+    // 5-30 ms write right behind the lap-line frame of a PB lap; flush() still writes at any earlier pause/quit/hide.
+    else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS);
     else write();   // bare VM harness: no scheduler, write now
   }
   // Leaving the page with a record still pending: write it now (synchronous

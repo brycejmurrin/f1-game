@@ -11,6 +11,15 @@ const Assets = (function () {
   // what makes a rebake land — from the first boot after the deploy.
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
+  // The manifest is asked for under the PAGE's build (`?b=<n>`, #5629): sw.js
+  // answers that key from the cache at once and revalidates behind it, so a
+  // stalled link no longer holds the pack for its 3 s network race. The key is
+  // the shell's own build, never the worker's, so an old worker cannot hand a
+  // new shell the old build's layer index. No build (VM, bare file) → bare URL.
+  function _manifestUrl() {
+    const b = typeof window !== "undefined" && window ? Number(window.__APEX_BUILD) : 0;
+    return Number.isSafeInteger(b) && b > 0 ? MANIFEST + "?b=" + b : MANIFEST;
+  }
   const MAT_LAYERS = 17;                 // MAT.FLAT(0) … MAT.ASPHALT(16)
 
   let _gfx = null;
@@ -91,7 +100,7 @@ const Assets = (function () {
 
   async function _fetchManifest(generation) {
     try {
-      const j = await _request(MANIFEST, "json");
+      const j = await _request(_manifestUrl(), "json");
       if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
