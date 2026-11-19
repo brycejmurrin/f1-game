@@ -70,6 +70,10 @@ const require = createRequire(import.meta.url);
 // T2-T14 ({ turn: N }) add +465 (props drape on the banked edges); the T1 tyre wall moved to the
 // outside of the hairpin, the T11 terrace and the T5 gravel moved onto their corners add +540.
 // Measured, not widened.
+// 2026-11-19 (#5699 row 18, PR #5747): fuji 564203 -> 567046 (+0.50 %). Measured on the merged tree:
+// deploy tip f25747de alone is 567000 (the tip's own drift since #5696, 24 under the old cap); this PR
+// adds +46 tris, the one instanced pine that now stands because a pine reserves its spot only once
+// it has landed (verify-track: fuji 27651 -> 27652 pines). Measured, not widened.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
