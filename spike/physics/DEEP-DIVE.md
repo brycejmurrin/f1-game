@@ -1,7 +1,7 @@
 # Rapier deep-dive — tuning, side-world cost, airborne handover
 
-> **Status:** R0–R2 subsequently shipped — `js/game/debrisworld.js` (the §2
-> side-world, default-on) and `js/game/incidentsim.js` (the §3 bounded
+> **Status:** R0–R2 subsequently shipped — `js/physics/debris-world.js` (the §2
+> side-world, default-on) and `js/physics/incident-sim.js` (the §3 bounded
 > takeover). This file remains the measurement record behind them.
 
 Follow-up to the baseline eval (`README.md` in this directory), de-risking the

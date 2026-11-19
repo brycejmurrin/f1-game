@@ -305,9 +305,11 @@ Other in-race roots are:
   editor, and resume/quit close it.
 - `#garrival` — the GARAGE ENTER & LEAVE tuner dock (`#pm-garrival` on VISUAL
   STUDIO; `js/garage/arrival.js`). Opens outside a race too; DONE or
-  Escape returns to Settings. Three sequences: PIT STOP (WORK ON CAR), RACE START
-  (the START RACE drive-out) and AFTER THE RACE (the next non-pit garage visit after a
-  race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS / FINISHED / RETIRED).
+  Escape returns to Settings. Four moments: RACE START (the START RACE drive-out),
+  PIT IN (WORK ON CAR), PIT OUT (the stop's release) and RACE END (the next non-pit
+  garage visit after a race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS /
+  FINISHED / RETIRED). Each has its own switch (`#ga-start`, `#ga-pit-in`,
+  `#ga-pit-out`, `#ga-after`) under PLAY ANIMATIONS (`#ga-enabled`, the master).
   GARAGE ANGLE picks a camera or a preset (DIRECTOR, or CUSTOM's `#ga-shots-row`
   per-shot pickers); CAMERA HEIGHT, CAMERA MOVE (still / push in / pull out /
   drift), HANDHELD and FINAL SHOT ZOOM shape the shots; SHUTTER SHOT, HOLD BEAT,
@@ -685,7 +687,8 @@ Process lifecycle reference: https://nodejs.org/api/child_process.html#event-clo
 The `Capture gallery` workflow runs the same native matrix and exporter on
 `macos-latest`, matching the repository's existing garage-before capture route.
 Commit `.github/capture-gallery-request.json` on your branch, then dispatch the
-workflow from it (`gh workflow run capture-gallery.yml --ref <branch>`); a push
+workflow from it (an agent: the GitHub MCP `actions_run_trigger`; `gh workflow run capture-gallery.yml --ref <branch>`
+is for Bryce's own shell); a push
 alone no longer starts a run. The runner captures the exact
 workflow SHA, limits the request to 24 images and the job to 15 minutes, and
 uploads PNGs, source/camera receipts and a portable gallery for seven days.

@@ -22,6 +22,7 @@
  *   node tools/mcp/lsp-mcp.mjs                      # stdio MCP (the .mcp.json entry)
  *   node tools/mcp/lsp-mcp.mjs def Liveries.forTeam # the same tools from a shell
  *   node tools/mcp/lsp-mcp.mjs refs Tracks.curvature | sym GameHud | hover X.y | diag js/game.js
+ *   node tools/mcp/lsp-mcp.mjs --install-cloud-cwd-shim  # Cursor Cloud: /agent host cwd → tools/mcp/*
  */
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
@@ -33,6 +34,75 @@ import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+// Cursor Cloud's exec-daemon cwd is `/agent` while the checkout lives at
+// `/agent/repos/<name>`. `.cursor/mcp.json` launches `bash tools/mcp/…` with a
+// relative path, so without a shim every stdio MCP exits 127 before initialize
+// (measured 2026-11-18: apex-lsp host discovery failed; shell from /agent
+// reproduced `No such file or directory`). The shim re-execs the real script
+// by absolute path; output-level-mcp.sh then `cd`s to the repo for children.
+export const CLOUD_CWD_SHIM_SCRIPTS = Object.freeze(["output-level-mcp.sh", "lsp-mcp.sh"]);
+
+/** @returns {{ host: string, reposDir: string, repo: string } | null} */
+export function cloudAgentLayout(repoRoot = ROOT) {
+  const repo = path.resolve(repoRoot);
+  const reposDir = path.dirname(repo);
+  const host = path.dirname(reposDir);
+  if (path.basename(reposDir) !== "repos") return null;
+  return { host, reposDir, repo };
+}
+
+/** Ensure `dir` exists and is writable (Cursor Cloud `/agent` is root-owned). */
+export function ensureWritableDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return { dir, escalated: false };
+  } catch (e) {
+    // `/agent` on Cursor Cloud is root-owned; passwordless sudo is available in the VM.
+    try {
+      execFileSync("sudo", ["-n", "mkdir", "-p", dir], { stdio: ["ignore", "pipe", "pipe"] });
+      execFileSync("sudo", ["-n", "chown", `${process.getuid()}:${process.getgid()}`, dir], { stdio: ["ignore", "pipe", "pipe"] });
+      const parent = path.dirname(dir);
+      try { fs.accessSync(parent, fs.constants.W_OK); }
+      catch {
+        try { execFileSync("sudo", ["-n", "chown", `${process.getuid()}:${process.getgid()}`, parent], { stdio: ["ignore", "pipe", "pipe"] }); }
+        catch { /* parent may stay root-owned; shimDir writable is enough */ }
+      }
+      fs.accessSync(dir, fs.constants.W_OK);
+      return { dir, escalated: true };
+    } catch (e2) {
+      throw Error(`cannot create writable ${dir}: ${e.message}; sudo: ${e2.message}`);
+    }
+  }
+}
+
+/** Install relative-path proxies under `<host>/tools/mcp/` for Cursor Cloud. */
+export function installCloudCwdShim({ repoRoot = ROOT, hostCwd, scripts = CLOUD_CWD_SHIM_SCRIPTS } = {}) {
+  const layout = cloudAgentLayout(repoRoot);
+  const host = hostCwd ? path.resolve(hostCwd) : layout?.host;
+  const repo = layout?.repo ?? path.resolve(repoRoot);
+  if (!host) throw Error("install-cloud-cwd-shim needs a Cursor Cloud /agent/repos/<repo> layout (or hostCwd)");
+  const shimDir = path.join(host, "tools/mcp");
+  const ensured = ensureWritableDir(shimDir);
+  const written = [];
+  for (const name of scripts) {
+    const target = path.join(repo, "tools/mcp", name);
+    if (!fs.existsSync(target)) throw Error(`missing ${path.relative(repo, target) || target}`);
+    const shim = path.join(shimDir, name);
+    // Absolute re-exec so the real script's ROOT=$(dirname $0)/../.. resolves inside the repo.
+    const body = [
+      "#!/usr/bin/env bash",
+      `# Cursor Cloud host-cwd shim for apex-lsp (and any MCP that hops through ${name}).`,
+      "set -euo pipefail",
+      `exec bash ${JSON.stringify(target)} "$@"`,
+      "",
+    ].join("\n");
+    fs.writeFileSync(shim, body, { mode: 0o755 });
+    written.push(shim);
+  }
+  return { host, repo, shimDir, written, escalated: ensured.escalated };
+}
 const SRC = "js";
 const ANCHOR = "js/core/log.js";   // tsgo searches open projects only: one open file loads jsconfig's
 const KIND = { 5: "class", 6: "method", 7: "property", 8: "field", 9: "constructor", 12: "function", 13: "variable", 14: "constant" };
@@ -1481,6 +1551,15 @@ async function cli([cmd, target, ...rest]) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   if (argv[0] === "--list-tools") process.stdout.write(JSON.stringify(TOOLS, null, 2) + "\n");
+  else if (argv[0] === "--install-cloud-cwd-shim") {
+    try {
+      const r = installCloudCwdShim();
+      process.stdout.write(`cloud-cwd-shim: ${r.written.length} script(s) under ${r.shimDir}\n`);
+    } catch (e) {
+      process.stderr.write(`cloud-cwd-shim: ${e.message}\n`);
+      process.exitCode = 1;
+    }
+  }
   else if (!argv.length || argv[0] === "serve") serve().catch(e => { process.stderr.write(e.message + "\n"); process.exitCode = 1; });
   else cli(argv).then(c => { process.exitCode = c; });
 }

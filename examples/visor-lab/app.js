@@ -1,30 +1,56 @@
 // @doc Controls and paired image loading for the captured visor gallery.
 "use strict";
 const $=id=>document.getElementById(id),title=s=>({ice:'Ice Blue',smoke:'Tinted',off:'Original'}[s]||s[0].toUpperCase()+s.slice(1));
-const state={scene:'bahrain-day-dry',mode:'smoke',color:'amber',intensity:'medium'};
+// Authoring checkout keeps only the eight `*--off.webp` originals (README). Default to
+// Original so the gallery paints without the exported full capture set.
+const state={scene:'bahrain-day-dry',mode:'off',color:'amber',intensity:'medium'};
 let data,lookup,generation=0;
 const variant=()=>state.mode==='smoke'?state.color+'-'+state.intensity:state.mode;
 function pressed(id,value){for(const b of $(id).querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.value===value));}
+function captureFor(scene,id){return lookup.get(scene+'|'+id);}
+function setPreview(img,c){
+ if(!img||!c)return;
+ img.onerror=()=>{if(c.file&&img.getAttribute('src')!==c.file){img.onerror=null;img.src=c.file;}};
+ img.src=c.thumb||c.file;
+}
+function applyVariantId(id){
+ if(id==='off'||id==='clear'){state.mode=id;return;}
+ const [color,intensity]=id.split('-');state.mode='smoke';state.color=color;state.intensity=intensity;
+}
+async function loadPair(a,b){
+ await Promise.all([a.file,b.file].map(src=>{const image=new Image();image.src=src;return image.decode();}));
+}
 async function render(){
  const request=++generation;
- const scene=data.scenes.find(s=>s.id===state.scene),a=lookup.get(state.scene+'|off'),b=lookup.get(state.scene+'|'+variant());
+ const scene=data.scenes.find(s=>s.id===state.scene),a=captureFor(state.scene,'off');
+ let want=variant(),b=captureFor(state.scene,want),fellBack=false;
  if(!a||!b){$('status').textContent='This comparison is not available.';return;}
  $('stage').setAttribute('aria-busy','true');$('stage').style.opacity='.5';$('status').textContent='Loading the matching comparison…';
- try{await Promise.all([a.file,b.file].map(src=>{const image=new Image();image.src=src;return image.decode();}));}
- catch(error){if(request!==generation)return;$('stage').setAttribute('aria-busy','false');$('stage').style.opacity='1';$('status').textContent='The selected images could not be loaded. Please select the view again.';return;}
+ try{await loadPair(a,b);}
+ catch(error){
+  if(want!=='off'){
+   const fallback=captureFor(state.scene,'off');
+   if(fallback){
+    try{await loadPair(a,fallback);if(request!==generation)return;want='off';applyVariantId('off');b=fallback;fellBack=true;}
+    catch(fallbackError){if(request!==generation)return;$('stage').setAttribute('aria-busy','false');$('stage').style.opacity='1';$('status').textContent='The selected images could not be loaded. Please select the view again.';return;}
+   }else{if(request!==generation)return;$('stage').setAttribute('aria-busy','false');$('stage').style.opacity='1';$('status').textContent='The selected images could not be loaded. Please select the view again.';return;}
+  }else{if(request!==generation)return;$('stage').setAttribute('aria-busy','false');$('stage').style.opacity='1';$('status').textContent='The selected images could not be loaded. Please select the view again.';return;}
+ }
  if(request!==generation)return;
  $('original').src=a.file;$('candidate').src=b.file;$('candidate').alt=scene.label+' with '+(state.mode==='smoke'?title(state.color)+' '+title(state.intensity)+' visor':title(state.mode)+' visor');
  $('stage').setAttribute('aria-busy','false');$('stage').style.opacity='1';
  const name=state.mode==='smoke'?title(state.color)+' / '+title(state.intensity):title(state.mode);
  $('lens-name').textContent=name;$('image-label').textContent=name.toUpperCase();$('scene').value=state.scene;$('scene-note').textContent=scene.note;
  $('scene-caption').textContent=title(scene.track)+' · '+title(scene.tod)+' · '+title(scene.weather)+' · 1920 × 1080';
- $('download').href=b.file;$('download').download=state.scene+'--'+variant()+'.webp';
+ $('download').href=b.file;$('download').download=state.scene+'--'+want+'.webp';
  $('color-field').disabled=state.mode!=='smoke';$('intensity-field').disabled=state.mode!=='smoke';
  $('intensity-note').textContent=title(state.intensity)+' · '+({light:12,medium:18,strong:24}[state.intensity])+'% lens tint';
  $('lens-description').textContent=state.mode==='off'?'The original helmet view, with its existing edge vignette.':state.mode==='clear'?'A curved shield and faint edge reflections, with an untinted centre.':({neutral:'A neutral shaded lens.',amber:'A warm amber lens.',ice:'A cool blue lens.',rose:'A soft rose lens.'}[state.color])+' HUD labels stay clear.';
  for(const k of ['mode','color','intensity'])pressed(k,state[k]);
- for(const card of $('scene-grid').children){const c=lookup.get(card.dataset.scene+'|'+variant());card.querySelector('img').src=c.thumb;card.setAttribute('aria-pressed',String(card.dataset.scene===state.scene));}
- $('status').textContent='Fixed camera. Fixed road view. The divider shows Original on the left and '+name+' on the right.';
+ for(const card of $('scene-grid').children){const c=captureFor(card.dataset.scene,want)||captureFor(card.dataset.scene,'off');setPreview(card.querySelector('img'),c);card.setAttribute('aria-pressed',String(card.dataset.scene===state.scene));}
+ $('status').textContent=fellBack
+  ?'Tinted captures are not in this authoring checkout. Showing Original; export into a Site gallery for the full set.'
+  :'Fixed camera. Fixed road view. The divider shows Original on the left and '+name+' on the right.';
 }
 for(const k of ['mode','color','intensity'])$(k).addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;state[k]=b.dataset.value;if(data)render();});
 $('scene').addEventListener('change',e=>{state.scene=e.target.value;render();});
