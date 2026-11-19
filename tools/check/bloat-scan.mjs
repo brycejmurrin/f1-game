@@ -4,7 +4,8 @@
 /* bloat-scan.mjs — size report for slim-bloat / bloat-auditor.
  *
  * Prints ratchet slack (from tests/data/ratchets.json `lines` ceilings),
- * SKILL.md / agent line counts, and oversized unratcheted files. Evidence
+ * SKILL.md / agent line counts, and (bare run: js/ tools/ css/; else the given
+ * paths) files of 800+ lines with no ratchet. Evidence
  * only — never edits, never launches a browser.
  *
  *   node tools/check/bloat-scan.mjs [--json] [path...]
@@ -54,6 +55,10 @@ function walkFiles(rel, out = []) {
   return out;
 }
 
+// The code roots a BARE run also sweeps for big files with no ratchet: tlx.js
+// (7,320 lines), presets.js and wgx.js were invisible to the report, which
+// only listed what already had a ceiling (#5712).
+const DEFAULT_ROOTS = ["js", "tools", "css"];
 const files = [];
 const seen = new Set();
 const add = (rel, kind, ceiling) => {
@@ -91,6 +96,13 @@ const missing = requested.filter((rel) => !fs.existsSync(path.resolve(ROOT, rel)
 const emptyScopes = [];
 const scanned = [];
 const LARGE = 800;
+if (!requested.length) {
+  for (const root of DEFAULT_ROOTS) for (const f of walkFiles(root)) {
+    if (seen.has(f) || !/\.(m?js|cjs|css)$/.test(f)) continue;
+    const n = linesOf(f);
+    if (n != null && n >= LARGE) add(f, "unratcheted");
+  }
+}
 for (const rel of extra) {
   const scopedFiles = walkFiles(rel);
   if (fs.existsSync(path.join(ROOT, rel)) && !scopedFiles.length) emptyScopes.push(rel);

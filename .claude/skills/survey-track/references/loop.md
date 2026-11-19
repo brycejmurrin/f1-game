@@ -11,13 +11,16 @@ reads the artifacts the PARENT steps produce.
 
 ## Layout check (no browser)
 
-Compare the BUILT centreline's `total`, apexes, widths, sectors and elevation against dated
-evidence. `path.len` is source metadata, not built length; the existing OSM comparison normalizes
+Compare the BUILT centreline's `total`, apexes, widths, sectors, elevation and banking against dated
+evidence (banking: sweep `groundY(frac, lat).bankDy` at a lateral offset, e.g. lat 5 — lat 0 always reads 0 — with
+`node tools/shot/apex-eval.mjs <id> '<expr>' --vm --raw`; the corner table's `bankingDeg` samples one point and can
+miss a zone's peak). `path.len` is source metadata, not built length; the existing OSM comparison normalizes
 scale, rotation and lap origin, so it cannot certify those quantities. Surveyed elevation
 conditionally overrides authored bumps via `TrackDef.fromRaw` (`js/track/core/def.js`); absent
 profiles do not prove flatness. `startFrac` and width zones use control-index fractions, built
 `s/total` arc fractions, and turns/sectors racing-space fractions. Respect `_sceneryShift` through
 wrapped helpers; never pre-shift `K(s)` (`.claude/rules/game-code.md`).
+Built length: `node tools/shot/apex-eval.mjs <id> "a.info().total" --vm`.
 
 ## The loop
 
@@ -50,8 +53,8 @@ probe, auto-flagged:
 lat 0, where the raycast falls through the ribbon (starts ~10 m out) to
 `floorY`, so a flat circuit flags a cliff at every frac (estoril: all false).
 A blank first capture is the pre-present frame. Real = a `--` sandwiched at
-lat 4-24 or a >1 m step in a lateral `node tools/shot/apex-eval.mjs <id> "a.groundY(frac,lat)"`
-sweep. Record artefact-vs-real per flag in the hand-back.
+lat 4-24 or a >1 m step in a lateral `node tools/shot/apex-eval.mjs <id> "a.groundY(frac,lat)" --vm --raw`
+sweep (`--raw`: without it arrays print as `Array(n)`). Record artefact-vs-real per flag in the hand-back.
 
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 `--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques
@@ -98,7 +101,7 @@ confirmed defect, intended slope or probe artifact rather than forcing zero flag
   (AGENTS.md rule 5). The `circuits` group proves a circuit edit on CI: the PR's selected shard picks
   the touched circuit's foundation cases when it has some (`node tools/ci/select-specs.mjs --files
   js/circuits/<id>.js` shows it; not every circuit has them: `ls tests/specs/foundation/` (circuit-foundation.spec.js,
-  run with APEX_CIRCUITS=<id>) and the ADAPTED `tests/specs/*-foundation.spec.js`, ids hyphenated). The whole group on the pushed branch: `node tools/ci/remote-group.mjs circuits`
+  run with APEX_CIRCUITS=<id>) and the ADAPTED `tests/specs/*-foundation.spec.js`, ids hyphenated). The PR's own CI runs them; a whole `circuits` group is Bryce's opt-in
   (`docs/VERIFICATION.md` §By change).
 - No pixel-golden suite: `tests/manual/tracks-visual.spec.js` is retired. Compare before/after captures.
 - `node tools/gen/gen-shell.mjs --check` (shell/cache: `?v=dev`, no bump; check-changes bump reference, linked from SKILL.md) after any `js/*`/`css/*` edit.

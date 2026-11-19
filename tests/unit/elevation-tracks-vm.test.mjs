@@ -196,22 +196,31 @@ test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", () => {
   lt(Math.max(...others), 6, "no other corner is banked like a bowl");
 });
 
+// La Monumental is madring.com Curve 12: the long right straight after the
+// Curve 10/11 chicane, built 2246-2666 m on this trace (#5316 CIRC2-02). Until
+// 2026-11-18 the 13.5 degree bank sat on the ordinary left at 0.75.
+const MONUMENTAL_FRAC = 0.456;
 test("Madrid converts La Monumental's 24 percent bank to degrees", () => {
   const Tracks = g.sandbox.Tracks;
   const def = Tracks.LIST.find((entry) => entry.id === "madrid");
   const track = Tracks.buildCenterline(def);
-  const bank = Tracks.banking(track, 0.75 * track.total, 0);
-  const rollDeg = Math.abs((bank?.roll || 0) * 180 / Math.PI);
-  gt(rollDeg, 13);
-  lt(rollDeg, 14);
+  const rollDeg = (frac) => Math.abs((Tracks.banking(track, frac * track.total, 0)?.roll || 0) * 180 / Math.PI);
+  gt(rollDeg(MONUMENTAL_FRAC), 13);
+  lt(rollDeg(MONUMENTAL_FRAC), 14);
+  // The zone is a cosine window (js/track/core/mesh.js paint), so the bank
+  // peaks mid-arc; the arc's quarter points (±83 m) still carry over 8 degrees,
+  // and the left at 0.75 that wore the bank until 2026-11-18 is flat.
+  gt(rollDeg(0.4405), 8, "Curve 12, first quarter");
+  gt(rollDeg(0.4755), 8, "Curve 12, last quarter");
+  lt(rollDeg(0.75), 1, "the left at 0.75");
 });
 
 test("bank roll matches the road surface slope", () => {
   const Tracks = g.sandbox.Tracks;
   const def = Tracks.LIST.find((entry) => entry.id === "madrid");
   const track = Tracks.buildCenterline(def);
-  const s = 0.75 * track.total;
-  const w = track.hw[Math.round(0.75 * track.n) % track.n];
+  const s = MONUMENTAL_FRAC * track.total;
+  const w = track.hw[Math.round(MONUMENTAL_FRAC * track.n) % track.n];
   const leftY = Tracks.banking(track, s, -w)?.dy || 0;
   const rightY = Tracks.banking(track, s, w)?.dy || 0;
   const roll = Tracks.banking(track, s, 0)?.roll || 0;
@@ -224,12 +233,12 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
   const A = g.apex;
   const def = Tracks.LIST.find((entry) => entry.id === "madrid");
   const track = Tracks.buildCenterline(def);
-  const trackRoll = Tracks.banking(track, 0.75 * track.total, 0)?.roll || 0;
-  A.jump(0.75, 30, 0);
+  const trackRoll = Tracks.banking(track, MONUMENTAL_FRAC * track.total, 0)?.roll || 0;
+  A.jump(MONUMENTAL_FRAC, 30, 0);
   A.camera("chase");
   A.snapCam();
   const bankedRoll = A.camState().roll;
-  A.orbit(0.75, 45, 18, 45);
+  A.orbit(MONUMENTAL_FRAC, 45, 18, 45);
   const debugRoll = A.camState().roll;
   A.camera("chase");
   A.jump(0.60, 30, 0);

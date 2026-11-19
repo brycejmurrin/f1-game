@@ -43,12 +43,14 @@ and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css   # the groups this edit needs
 node --test tests/unit/menu-a11y-audit.test.mjs   # STATIC Escape/door/layer pins, no browser; behaviour needs the specs
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the local floor
-node tools/ci/remote-group.mjs ui          # behaviour (menu-keyboard, ui-button-touch, ui-scale), on the PUSHED branch
+# behaviour specs (menu-keyboard, ui-button-touch, ui-scale): the PR's own CI; a whole `ui` group is Bryce's opt-in
 ```
 
 No browser spec runs locally (AGENTS.md rule 5): the PR run covers the picked groups. `tests/specs/ui-audit.spec.js`
 (group `gallery`) asserts nothing — it is a capture harness; read its PNGs from the CI artifacts.
-FLOWS (door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
+Focus return after a close is `js/ui/modal.js` (`lastFocus` / `opener` WeakMaps, `onLayerShow` takes the opener from
+`document.activeElement`, `onLayerHide` restores it; iOS does not focus a tapped button, Chromium does). FLOWS
+(door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
 844×390 touch: `node tools/ui/flows.mjs [--checks=…] [--diff=<old flows.json>]` (parent-only browser; `--list`/`--help` none).
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 `docs/notes/ARCHITECTURE-REVIEW.md`. First tap silent on iPhone (audio unlock on a user gesture) → **audio-debug**.
@@ -100,7 +102,7 @@ The oracle requires the remembered node to be disconnected and a unique new
 matching node to hold sampled focus. A different expected selector permits an
 intentional focus transfer. Same-node reinsertion never proves replacement.
 Target changes, mismatches and sampling gaps restart the stability window; the poll
-interval, gap limit and timeline cap live in `sampleFocus` (`tools/ui/explorer/browser.mjs`). Missing
+interval lives in `checkFocus`, the gap limit and timeline cap in `sampleFocus` (`tools/ui/explorer/browser.mjs`). Missing
 witnesses, unobserved replacement, measured wrong focus and incomplete sampling
 are distinct outcomes. A sampling gap is unmeasured time, not proof of a UI defect.
 

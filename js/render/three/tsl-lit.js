@@ -1652,8 +1652,10 @@
 
         // procedural ground texture + patches + cracks (js/render/glx/shaders/glsl-lit.js)
         const patchM = float(0.5).toVar();
-        // fwidth(cr) in the detail If: a uniform gate (keep it one — a per-fragment
-        // gate is a WGSL derivative_uniformity error); detail-0 draws skip the vnoise.
+        // fwidth(cr) in the detail If: a uniform gate (keep it one — under a
+        // per-fragment gate the derivative is undefined across inactive lanes, and a
+        // hard WGSL derivative_uniformity error on Firefox; r187 switches that
+        // diagnostic off everywhere else); detail-0 draws skip the vnoise.
         If(matU.detail.greaterThan(0.0), () => {
           const cr = abs(vnoise(wp.xz.mul(0.9).add(3.3)).mul(2.0).sub(1.0)).toVar();
           const crAA = max(float(0.075), fwidth(cr).add(0.015)).toVar();

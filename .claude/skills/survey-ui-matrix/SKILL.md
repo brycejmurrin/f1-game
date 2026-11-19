@@ -12,15 +12,15 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 
 ## Gotchas
 
-- **Parent-only.** In a subagent `bash-guard.sh` §2 refuses by name every `tools/ui/*audit*.mjs`
-  (layout-audit, fit-audit, audit-diff) and every `tools/shot/*.mjs` but frame-report/cam-corners/cam-motion
-  (hud-mock, hud-survey, publish-evidence), even `--help`/`--list`/`--diff`. `menu-mock.mjs` and
-  `explorer.mjs` are not matched but launch Chromium: parent-only by AGENTS.md rule 10. Subagents analyse
-  finished artifacts only.
-- **Bryce's cell is not the default.** `--viewport`'s default (`--help`) is not Bryce's 844x390 profile,
-  `ios-iphone-landscape-844` (AGENTS.md §Critical conventions). Name it explicitly, and run it first. For
-  HUD/touch reviews seed his real export `tests/data/settings-defaults-export.json` (`hud-survey.mjs
-  --settings`, `explorer.mjs --settings`); layout-audit and menu-mock boot fresh shipped settings.
+- **Parent-only runs.** No hook names these CLIs; a subagent may run `--help`/`--list`/`--plan` and analyse
+  finished artifacts, and any run that launches Chromium (layout-audit, fit-audit, hud-mock, hud-survey,
+  menu-mock, explorer) throws from `launchChromium` under `APEX_SUBAGENT` (`tools/lib/harness.mjs`; AGENTS.md rule 10).
+- **Bryce's cells are not the default.** `--viewport`'s default (`--help`) is not his phone. `ios-iphone-landscape-844`
+  is the generic 844x390 iPhone cell (AGENTS.md §Critical conventions); his own are `bryce-standalone` (852x393,
+  Home Screen app) and `bryce-safari` (`layout-audit --list`), which boot on his live export (`OWNER_PROFILES.live`
+  in `tools/lib/bryce-phone.mjs`). Name them explicitly and run them first. `tests/data/settings-defaults-export.json`
+  is his legacy 2026-10-05 export (`hud-survey.mjs --settings`, `explorer.mjs --settings`); every other cell and
+  menu-mock boot fresh shipped settings.
 - **Sizes are catalog names, scale is a percent.** `--scale=125`, not `1.25` (range: `tools/ui/ui-scale-axis.mjs`);
   viewports are `VIEWPORTS` names in `tools/ui/menu-screens.mjs` only. A free-form size needs a new `VIEWPORTS`
   row. `menu-fit.mjs` is DEPRECATED except `--safe=` notch insets.
@@ -36,7 +36,7 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 
 1. **Plan the matrix** (no browser, parent-only): `node tools/ui/layout-audit.mjs --list`, and cross-check
    the screen roots in `index.html` against `SCREENS` ([setup.md](references/setup.md) §Enumerate).
-2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 first): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
+2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 on the PRE-edit tree: `git stash` or a worktree at the base sha): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
 3. **Bryce's cell first**, pictures AND DOM, as ONE background task (AGENTS.md rule 4), after
    `mkdir -p artifacts/logs`:
    `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*' --shots --dom > artifacts/logs/layout-audit-844.log 2>&1`.
@@ -53,8 +53,9 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 7. **Prove no regression**: re-run the same scope, then
    `node tools/ui/layout-audit.mjs --diff=artifacts/layout-audit/audit.before.json` (exit 1 on a new finding;
    [verification.md](references/verification.md) §Regression).
-8. **Hand off**: publish selected captures with
-   `node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`; the PR body
+8. **Hand off**: package selected captures with
+   `node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug>` (publishing:
+   [verification.md](references/verification.md)); the PR body
    lists unmeasured cells as not run and records the `= diff` line. At most two read-only reviewers, over finished artifacts.
 
 ## References

@@ -42,7 +42,7 @@ that is what makes low pace more forgiving.
 (`axEstTarget` is `ACCEL * PACE * …`), so an acceleration compared against a
 hard-coded number is pace-sensitive in precisely the way a speed is. It is
 written as the divisor (`a / max(PACE, 0.05)`) rather than `vStd`'s
-`VMAX / vTop()` round trip, so at pace 5 it is the identity to the bit. This
+`VMAX / vTop()` round trip, so at PACE 1 (notch 14) it is the identity to the bit. This
 shape is easy to miss because the lint only sees `.speed`: A16's launch-smoke
 defect was reached sideways, by flagging the speed window on the same line.
 

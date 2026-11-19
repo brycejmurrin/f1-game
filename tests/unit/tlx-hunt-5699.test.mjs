@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import * as espree from "espree";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -85,8 +86,23 @@ test("row 1: a native mapped create that throws latches the shim on for the devi
   assert.deepEqual(dev.calls.at(-1), { size: 4, usage: 0x40 }, "unmapped creates are untouched");
 });
 
+// The create site, read as a parsed call (not source text): every installMappedShim(...) call in tlx.js passes the
+// device and `_softAdapter || _headless` as `eager`, so a real GPU (both false) keeps the native path above.
+function shimCalls(src) {
+  const out = [];
+  const walk = (n) => {
+    if (!n || typeof n.type !== "string") return;
+    if (n.type === "CallExpression" && n.callee.type === "Identifier" && n.callee.name === "installMappedShim") {
+      const [dev, eager] = n.arguments;
+      out.push([dev && dev.name, eager && eager.type === "LogicalExpression" ? [eager.left.name, eager.operator, eager.right.name] : null]);
+    }
+    for (const k in n) { const v = n[k]; if (k !== "parent" && v && typeof v === "object") (Array.isArray(v) ? v : [v]).forEach(walk); }
+  };
+  walk(espree.parse(src, { ecmaVersion: "latest", sourceType: "script" }));
+  return out;
+}
 test("row 1: the create site gates the eager shim on a software adapter or a headless run", () => {
-  assert.match(TLX, /installMappedShim\(\s*_dev\s*,\s*_softAdapter\s*\|\|\s*_headless\s*\)/);
+  assert.deepEqual(shimCalls(TLX), [["_dev", ["_softAdapter", "||", "_headless"]]]);
 });
 
 test("row 3: no 2d context for an undone layer returns 0, not the partial count", () => {

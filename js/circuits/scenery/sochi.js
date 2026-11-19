@@ -78,7 +78,8 @@
           }
         }, { required: true });
       }
-      // The Olympic flame tower and its reflecting pool, inside the Turn 2 loop.
+      // The Olympic flame tower and its reflecting pool, at the centre of the
+      // Medals Plaza loop (an infield landmark ~96 m off the road, not a corner kit).
       // ~50 m Firebird stele on Medals Plaza (2014 cauldron).
       // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
       {
@@ -393,9 +394,9 @@
           out._mat = 0;
         });
       };
-      arcStand(0.225, 0.285, 1, 18, { rows: 9 });          // Turn 5 / Adler Arena side
-      arcStand(0.520, 0.575, -1, 18, { rows: 8 });         // Turn 13
-      arcStand(0.795, 0.845, 1, 16, { rows: 7, span: 8.5 });  // Turn 17
+      arcStand(0.225, 0.285, 1, 18, { rows: 9 });          // Adler Arena side, on the T4 approach (ends ~195 m before the T4 apex)
+      arcStand(0.520, 0.575, -1, 18, { rows: 8 });         // T8/T9 (window starts on the T8 apex)
+      arcStand(0.795, 0.845, 1, 16, { rows: 7, span: 8.5 });  // T12/T13/T14 (spans T12-T15)
 
       groundPatch(K(0.045), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "sochi-t1-gravel", samples: 6 });
