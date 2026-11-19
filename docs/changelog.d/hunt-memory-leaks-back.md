@@ -1,0 +1,1 @@
+Fixed: ending dock REPOSITION cancels a pending fit frame; a results-sheet host swap disconnects the prior spoken-card observer; a pagehide clears the VS FRIEND hidden-tab net pump; soft-resetting friend quali drops peer times with the rest of the gate.

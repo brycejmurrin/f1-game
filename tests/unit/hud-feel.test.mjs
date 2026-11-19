@@ -1632,9 +1632,12 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
       assert.equal(sizeRow(r.key, 61, r.lim, null, 0, false).value, 61, "a desktop keeps 40 %");
       const tok = src("css/tokens.css");
       // The tokens' own arithmetic at the phone minimum: max(rung, floor / scale) * scale painted px, per declaration.
-      const z = r.phoneMin / 100, painted = (name) => [...tok.matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\(([\\d.]+)px / var\\(--ui-scale`, "g"))]
+      // The --fs-* rungs share --fs-floor (#5586); it resolves to its own calc(12px / var(--ui-scale…)).
+      const fsFloor = /--fs-floor: (calc\(([\d.]+)px \/ var\(--ui-scale)/.exec(tok);
+      assert.ok(fsFloor, "--fs-floor is a painted-px floor over --ui-scale");
+      const z = r.phoneMin / 100, painted = (name) => [...tok.replaceAll("var(--fs-floor)", fsFloor[1]).matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\(([\\d.]+)px / var\\(--ui-scale`, "g"))]
         .map((m) => Math.round(Math.max(+m[1], +m[2] / z) * z * 100) / 100);
-      assert.deepEqual(painted("--fs-micro"), [12, 12], "menu text (default and LARGE) paints 12 px at the phone minimum, never under");
+      assert.deepEqual(painted("--fs-micro"), [12, 12, 12], "menu text (default, LARGE and LARGER) paints 12 px at the phone minimum, never under");
       // 44.2, not 44 (#5358): 44 / scale snaps to a layout box that painted 43.98 at 70 %.
       assert.equal(painted("--tap").pop(), 44.2, "a touch row (the later, body:not(.desktop) rule) paints the 44 px floor at the phone minimum, with the snap margin");
     }

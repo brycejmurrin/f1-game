@@ -54,6 +54,11 @@ export const KNOWN = {
   // for the pedals, `#status.bad` colours a refusal.
   "bad": "controller.html <style> (#status.bad) — the phone page, not css/",
   "linked": "controller.html <style> (body.linked) — the phone page, not css/",
+  "placed": "controller.html <style> (.placed, a control moved by MOVE & SIZE) — the phone page, not css/",
+  "picked": "controller.html <style> (body.arranging .picked) — the phone page, not css/",
+  "clash": "controller.html <style> (body.arranging .clash, two overlapping controls) — the phone page, not css/",
+  "arranging": "controller.html <style> (body.arranging, MOVE & SIZE on) — the phone page, not css/",
+  "lay-row": "controller.html <style> (.lay-row, the WHEEL LAYOUT sheet's per-key rows) — the phone page, not css/",
   // …and the wheel's LCD states PhonePad.paintHud() toggles on #screen, every
   // one styled in that same <style> (#screen.redline / .boost / .ot-on /
   // .ot-ready / .x-open / .caution / .idle); `redline` also has a css/ rule.

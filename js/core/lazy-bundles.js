@@ -135,7 +135,6 @@ function ensureCircuit(idx) {
   let p = _circuitLoads.get(def.id);
   if (!p) {
     p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
-      _circuitLoads.delete(def.id);
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
         return false;
@@ -153,7 +152,7 @@ function ensureCircuit(idx) {
         return false;
       }
       return Tracks.hydrate(raw);
-    });
+    }).finally(() => _circuitLoads.delete(def.id));
     _circuitLoads.set(def.id, p);
   }
   // Reject when hydrate/load fails so ensureScenery / startRace never build a
@@ -946,7 +945,7 @@ function ensureLightPresets() {
     if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }
     deps.applyLightTuneIfReady();
     return true;
-  });
+  }).catch(() => false);
   return lightLoad;
 }
 // THE GARAGE'S BLENDER TABLES (GarageData): asked for at idle, on garage entry,
@@ -1070,10 +1069,40 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
+// ROUTE SHEETS (#5394 row 2). A <link data-route="id id…" media="print"> (MANIFEST.CSS_ROUTE) is skipped by the
+// shell's boot flipper, so its rules stay out of the cascade through the title intro. It turns on the first time one
+// of its elements is shown: a MutationObserver record on hidden/open is a microtask, so a loaded sheet applies before
+// the frame that paints the screen, the same guarantee the boot flip gives. A root built later (#ceremony-podium) is
+// caught by the subtree watch. The backstop flips whatever is left once, idle after ROUTE_BACKSTOP_MS, so a missed
+// coupling can never leave a screen unstyled for long; then the observer goes.
+const ROUTE_BACKSTOP_MS = 15000;
+const routeLinks = () => {
+  try { return Array.from(document.querySelectorAll('link[rel="stylesheet"][data-route][media="print"]')); } catch (_) { return []; }
+};
+function ensureRouteCss(id) {
+  let n = 0;
+  for (const l of routeLinks()) if (id == null || l.dataset.route.split(" ").includes(id)) { l.media = "all"; n++; }
+  return n;
+}
+function watchRouteCss() {
+  if (typeof document === "undefined" || !document.documentElement || typeof MutationObserver !== "function") return null;
+  const links = routeLinks();
+  if (!links.length) return null;
+  const ids = new Set(links.flatMap((l) => l.dataset.route.split(" ")));
+  const shown = (el) => !!el && ids.has(el.id) && (!el.hidden || el.open === true);
+  const flip = (id) => { ids.delete(id); ensureRouteCss(id); if (!routeLinks().length) mo.disconnect(); };
+  const mo = new MutationObserver((recs) => { for (const r of recs) if (shown(r.target)) flip(r.target.id); });
+  mo.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ["hidden", "open"] });
+  // A deep link opened one already. One selector over the roots, not a lookup per id (shell-ids counts those).
+  for (const el of Array.from(document.querySelectorAll([...ids].map((id) => "#" + id).join(",")))) if (shown(el)) flip(el.id);
+  setTimeout(() => scheduleIdle(() => { ensureRouteCss(); mo.disconnect(); }, 4000), ROUTE_BACKSTOP_MS);
+  return mo;
+}
+watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

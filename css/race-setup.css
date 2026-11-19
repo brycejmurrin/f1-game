@@ -263,6 +263,11 @@
   --_sheet-z: var(--ui-scale);
   zoom: var(--ui-scale);
 }
+/* A SHORT TOUCH SCREEN KEEPS IT COMPACT AT EVERY UI SIZE (#5632), the career hub's #5580 gate (css/overlays.css): at the
+   shipped 70 % 393 / 0.7 hands it 539 own px (534 at 844x390), over its 480, so it went NORMAL on the owner's phone. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #race-settings > .sheet { --compact-at: 99999px; }
+}
 /* A TALL task (an upright phone) reads as one page: wrapped context and
    stacked actions must not reserve most of its viewport outside the settings
    scroller. So does a sheet too SHORT for fixed chrome (data-page="on", above).

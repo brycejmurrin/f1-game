@@ -18,13 +18,41 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const loader = readFileSync(new URL("../../js/core/script-loader.js", import.meta.url), "utf8");
 const boot = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
 
-function rig({ lazyV = null, integrity = null, blocked = false } = {}) {
+// Production TRANSIENT_RETRY_MS = [400, 1200]. A wall-clock `>= 350` / `>= 1500`
+// assert is load-sensitive; drive those sleeps as microtasks and pin the ms list.
+// Slow/deadline timers stay pending until settle()'s clearTimeout (same as prod).
+function retryTimers() {
+  const backoff = [];
+  const pending = new Map();
+  let id = 0;
+  return {
+    backoff,
+    setTimeout(fn, ms = 0) {
+      const t = ++id;
+      if (ms === 400 || ms === 1200) {
+        backoff.push(ms);
+        queueMicrotask(fn);
+      } else {
+        pending.set(t, fn);
+      }
+      return t;
+    },
+    clearTimeout(t) { pending.delete(t); },
+  };
+}
+
+function rig({ lazyV = null, integrity = null, blocked = false, timers = null } = {}) {
   const head = [];
+  const clock = timers || { setTimeout, clearTimeout };
   const json = (id, map) => map && { tagName: "SCRIPT", type: "application/json", textContent: JSON.stringify(map), id };
   const byId = { "apex-lazy-v": json("apex-lazy-v", lazyV), "apex-lazy-integrity": json("apex-lazy-integrity", integrity) };
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED_EDGES: [] },
-    window: { __APEX_BUILD: "b7", setTimeout, clearTimeout },
+    window: {
+      __APEX_BUILD: "b7",
+      setTimeout: (...a) => clock.setTimeout(...a),
+      clearTimeout: (...a) => clock.clearTimeout(...a),
+    },
     Log: { warn() {} },
     UpdateCheck: { prepareLazyLoad: async () => true, blocksLazyLoad: () => blocked },
     document: {
@@ -90,18 +118,24 @@ test("files with no waiting predecessor get no hint (they are injected at once)"
 test("deployed shell: the hint carries the content-hash URL and the inject's SRI; a file inject() refuses is not fetched", async () => {
   const sri = "sha256-" + "A".repeat(43) + "=";
   const r = rig({ lazyV: { "b.js": "0123456789ab", "c.js": "ba9876543210" }, integrity: { "a.js": sri, "b.js": sri } });
-  r.ctx.ScriptLoader.create().load(["a.js", "b.js", "c.js"], [["a.js", "b.js"], ["a.js", "c.js"]]);
+  // Await and settle the inject: an abandoned load left the default 25 s
+  // deadline timer alive and held the suite open (~50 s wall with no asserts).
+  const p = r.ctx.ScriptLoader.create().load(["a.js", "b.js", "c.js"], [["a.js", "b.js"], ["a.js", "c.js"]]);
   await r.flush();
   assert.deepEqual(r.links().map((l) => [l.href, l.integrity]), [["b.js?v=0123456789ab", sri]],
     "c.js has no SRI in a deployed map: inject() refuses it, so the hint does too");
   assert.equal(r.scripts()[0].integrity, sri);
+  r.scripts()[0].onload(); await r.flush();
+  r.scripts()[1].onload();
+  assert.equal(await p, false, "c.js has no integrity key: the strict-shaped refuse fails the load");
 });
 
 test("a newer build controlling the tab: nothing is preloaded", async () => {
   const r = rig({ blocked: true });
-  r.ctx.ScriptLoader.create().load(["a.js", "b.js"], [["a.js", "b.js"]]);
+  const p = r.ctx.ScriptLoader.create().load(["a.js", "b.js"], [["a.js", "b.js"]]);
   await r.flush();
   assert.equal(r.links().length, 0);
+  assert.equal(await p, false, "blocksLazyLoad refuses every inject");
 });
 
 function bootRig({ local = {}, session = {}, gpu = false, throws = false } = {}) {
@@ -236,7 +270,8 @@ test("eval-time hunch guesses skip the TLX roster; sure guesses preload at defau
 test("a transient script onerror retries with cache-bust, then succeeds without a fourth inject", async () => {
   const urls = [];
   let loads = 0;
-  const r = rig();
+  const timers = retryTimers();
+  const r = rig({ timers });
   const docHead = r.ctx.document.head;
   const orig = docHead.appendChild.bind(docHead);
   docHead.appendChild = (el) => {
@@ -249,17 +284,17 @@ test("a transient script onerror retries with cache-bust, then succeeds without 
       else el.onload();
     });
   };
-  const t0 = Date.now();
   const p = r.ctx.ScriptLoader.create().load(["a.js"], []);
   await r.flush();
   assert.equal(await p, true);
-  assert.ok(Date.now() - t0 >= 350, "waits before the second inject");
+  assert.deepEqual(timers.backoff, [400], "one TRANSIENT_RETRY_MS sleep before the cache-bust inject");
   assert.equal(loads, 2);
   assert.ok(urls[1].includes("retry=1"), "the retry uses a fresh URL key");
 });
 
 test("three transient failures on one file settle the load as failed", async () => {
-  const r = rig();
+  const timers = retryTimers();
+  const r = rig({ timers });
   const docHead = r.ctx.document.head;
   const orig = docHead.appendChild.bind(docHead);
   let loads = 0;
@@ -268,10 +303,9 @@ test("three transient failures on one file settle the load as failed", async () 
     if (el.tag !== "script") return;
     queueMicrotask(() => { loads++; el.onerror(); });
   };
-  const t0 = Date.now();
   const p = r.ctx.ScriptLoader.create().load(["a.js"], [], { strict: true });
   await r.flush();
   assert.equal(await p, false);
   assert.equal(loads, 3);
-  assert.ok(Date.now() - t0 >= 1500, "both backoff delays ran");
+  assert.deepEqual(timers.backoff, [400, 1200], "both TRANSIENT_RETRY_MS backoffs ran");
 });

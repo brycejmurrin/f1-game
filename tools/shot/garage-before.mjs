@@ -183,8 +183,12 @@ export function writeManifest(dir, { sha, timestamp } = {}) {
 /** Bounded retries for GitHub REST hiccups (5xx / 429 / network). Injectable under test. */
 export const GITHUB_API_MAX_ATTEMPTS = 4;
 const GITHUB_API_BASE_DELAY_MS = 1000;
-/** Exact-name pack lookups walk this many ancestors — never page the repo-wide artifact list. */
-export const ANCESTOR_PACK_LIMIT = 20;
+/** Exact-name pack lookups walk this many FIRST-PARENT ancestors — never page the repo-wide artifact list.
+ *  All parents at 20 could not reach a pack: the 2026-11-17 one sat 41 commits back, behind merged branch
+ *  commits that never carry a pack (#5712). The deploy branch's first parents are its merges, one per landed PR. */
+export const ANCESTOR_PACK_LIMIT = 40;
+/** The `git rev-list` argv for that walk. */
+export const revListArgs = (sha, limit) => ["rev-list", "--first-parent", `-n${limit}`, String(sha)];
 
 let _githubFetch = proxyFetch;   // #2188: Node fetch ignores HTTPS_PROXY
 let _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
@@ -192,7 +196,7 @@ let _githubRandom = Math.random;
 let _revList = defaultRevList;
 
 function defaultRevList(sha, limit) {
-  const g = spawnSync("git", ["rev-list", `-n${limit}`, String(sha)], {
+  const g = spawnSync("git", revListArgs(sha, limit), {
     cwd: ROOT, encoding: "utf8",
   });
   if (g.status !== 0) {
@@ -297,7 +301,7 @@ export async function githubApi(method, pathQs, { token, raw = false } = {}) {
 }
 
 /**
- * Ancestor SHAs for exact-name pack lookups: `git rev-list -n N`, then the
+ * Ancestor SHAs for exact-name pack lookups: `git rev-list --first-parent -n N`, then the
  * commits API if the local clone is too shallow (Actions default depth 1).
  */
 export async function listAncestorShas(sha, { token, limit = ANCESTOR_PACK_LIMIT } = {}) {

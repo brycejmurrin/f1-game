@@ -4,6 +4,7 @@
 //   node tools/check/episode-diff.mjs                    # monza, seed 42, 3 episodes
 //   node tools/check/episode-diff.mjs --track spa --seed 7
 //   node tools/check/episode-diff.mjs --json             # {ok, digestsMatch, fields:[...]}
+//   exit 0 only when the digests match AND no field leaks; ok is the same verdict
 //
 // WHY THIS EXISTS. "Same seed + same inputs => same result" has been broken four
 // times, always by the same shape: a per-car field that reads like a per-tick
@@ -34,21 +35,41 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
-// Every primitive on a car. Objects become a stable tag rather than being
-// walked: the leaks of this class have all been numbers and booleans, and a
-// deep walk would drown the diff in team/track back-references.
+// Every primitive on a car, plus one level into each object the car owns alone.
+// A shared object (the team, the track, anything two cars point at) stays a
+// stable "<object>" tag: walking it would drown the diff in back-references.
+// An object only this car holds is its own state, so its primitives are listed
+// as "field.key" — a scratch object that keeps a value across reset() is the
+// same leak as a top-level number. Arrays are tagged with their length.
 export function snapshot(cars) {
+  const holders = new Map();
+  for (const c of cars) for (const k of Object.keys(c)) {
+    const v = c[k];
+    if (v !== null && typeof v === "object") holders.set(v, (holders.get(v) || 0) + 1);
+  }
+  const tag = (v) => {
+    const t = typeof v;
+    if (v === null || t === "number" || t === "boolean" || t === "string") return v;
+    if (t === "undefined") return "<undefined>";
+    if (Array.isArray(v)) return "<array:" + v.length + ">";
+    return "<" + t + ">";
+  };
   return cars.map((c) => {
     const o = {};
     for (const k of Object.keys(c)) {
-      const v = c[k], t = typeof v;
-      if (v === null || t === "number" || t === "boolean" || t === "string") o[k] = v;
-      else if (t === "undefined") o[k] = "<undefined>";
-      else if (t === "object") o[k] = "<object>";
-      else o[k] = "<" + t + ">";
+      const v = c[k];
+      o[k] = tag(v);
+      if (v !== null && typeof v === "object" && !Array.isArray(v) && holders.get(v) === 1)
+        for (const j of Object.keys(v)) o[k + "." + j] = tag(v[j]);
     }
     return o;
   });
+}
+
+// A leak fails the run even when the digests match: the field is still carried
+// across reset(), and the next controller change may be the one that moves it.
+export function verdict(digestsMatch, rows) {
+  return { ok: digestsMatch && rows.length === 0, exit: digestsMatch && rows.length === 0 ? 0 : 1 };
 }
 
 /**
@@ -155,7 +176,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const { digestsMatch, rows, episodesChecked, carsChecked } = await episodeLeaks({ track, seed, episodes, seconds });
 
   if (asJson) {
-    console.log(JSON.stringify({ ok: digestsMatch, track, seed, episodes, episodesChecked, carsChecked, digestsMatch,
+    console.log(JSON.stringify({ ok: verdict(digestsMatch, rows).ok, track, seed, episodes, episodesChecked, carsChecked, digestsMatch,
                                  fieldCount: rows.length, fields: rows }, null, 2));
   } else {
     console.log(`episode-diff: ${track}, seed ${seed}, ${episodes} episodes of ${seconds}s`);
@@ -164,7 +185,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       console.log("  no per-car field differs between the cold and warm episode");
     } else {
       console.log(`  ${rows.length} field(s) not restored by a re-grid`
-                  + (digestsMatch ? " (harmless in THIS scenario — still leaks)" : ""));
+                  + (digestsMatch ? " (harmless in THIS scenario — still a leak, exit 1)" : ""));
       for (const r of rows) {
         const ex = r.example;
         console.log(`    ${r.field.padEnd(20)} ${String(r.cars).padStart(2)} car(s)`
@@ -175,7 +196,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       console.log("  reset() (and gridUp() for the paths a real player takes).");
     }
   }
-  process.exit(digestsMatch ? 0 : 1);
+  process.exit(verdict(digestsMatch, rows).exit);
   } catch (e) {
     if (has("json")) console.log(JSON.stringify({ ok: false, error: e.message }));
     else console.error(`episode-diff: ${e.message}`);
