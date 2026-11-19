@@ -427,3 +427,11 @@ with no disconnect event, return it idle → throttle before the fix `true`, lev
 `APX…`) is now percent-decoded before parsing. Verified in Chromium: `APXC1.l.bahrain%7E-%7E91234` refused
 as corrupt → accepted as a 1:31.234 lap challenge; the unencoded form and the `#share=` form still work, and
 a malformed escape is still refused.
+
+### Fix 16 — circuit detail opened while the circuit is still loading (addendum A13)
+
+`js/ui/select-screen.js` `openTrackDetail`: the panel read corners, zones and elevation once and never
+again, so opened early it showed "0 turns", no corner list and a blank map until closed and reopened. It now
+repaints when the circuit file arrives, if it is still open on the same circuit. Verified in Chromium with
+Spa's circuit file delayed 9 s: 14 s after opening, "0 turns", 0 corners, blank map → "19 turns", 19 corners,
+map drawn.

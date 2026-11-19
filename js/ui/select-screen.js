@@ -1111,6 +1111,12 @@ function openTrackDetail() {
   if (!t) return;
   const modal = document.getElementById("track-detail");
   if (!modal) return;
+  if (!previewPathReady(t) && G.ensureCircuit) {
+    const idx = G.trackIdx;
+    G.ensureCircuit(idx).then(() => {
+      if (G.trackIdx === idx && !modal.hidden && previewPathReady(Tracks.LIST[idx])) openTrackDetail();
+    }).catch((e) => Log.warn("track", "circuit detail could not load circuit " + idx + ": " + ((e && e.message) || e)));
+  }
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
   const mapCanvas = document.getElementById("track-detail-canvas");
