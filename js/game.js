@@ -9324,7 +9324,10 @@ function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPendin
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; G.endRace(); return true; }   // G.endRace: RealRace's wrap
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
-els.workBtn.onclick = openPitWork;
+// END TIME TRIAL (#5789): the box WORK ON CAR slot; the drive-in, then the TT sheet.
+function endTimeTrialFromBox() { if (!isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return; paused = true; GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
+  openGarage("pit"); setupCam.startPitIn(() => { leaveGarage(); G.endRace(); setTimeout(() => { if ($("carsetup").hidden && !setupPreviewOn) garagePre.release(); }, 0); }); }
+els.workBtn.onclick = () => (isTimeTrial() ? endTimeTrialFromBox() : openPitWork());
 
 // ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class

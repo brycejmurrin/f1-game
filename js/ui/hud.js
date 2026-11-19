@@ -1980,7 +1980,7 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active()));
+    if (els.workBtn) { hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active())); hText(els.workBtn, G.timeTrial ? "END TIME TRIAL" : "WORK ON CAR"); }   // #5789
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.

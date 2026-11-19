@@ -1789,6 +1789,7 @@
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
@@ -1890,6 +1891,7 @@
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
@@ -1991,6 +1993,7 @@
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs"
