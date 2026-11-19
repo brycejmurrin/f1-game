@@ -228,8 +228,10 @@ const PhonePadPage = (function () {
       document.addEventListener("pointerup", releasePointer, true);
       document.addEventListener("pointercancel", releasePointer, true);
       if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); window.addEventListener("blur", releaseAll); }
-      document.addEventListener("touchend", allUp, true);
-      document.addEventListener("touchcancel", allUp, true);
+      // Passive: these only READ touches.length and never preventDefault, so the
+      // compositor need not wait on them for every lift (same net as input.js).
+      document.addEventListener("touchend", allUp, { capture: true, passive: true });
+      document.addEventListener("touchcancel", allUp, { capture: true, passive: true });
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
     }
     // PedalTravel: 12 px of slop, then 90 px to the 0.12 floor. Moving down
@@ -305,20 +307,40 @@ const PhonePadPage = (function () {
     function edge(el, k, repeat) {
       if (!el) return;
       const r = repeater(k), stop = r.stop;
+      const held = new Set();
       const fire = () => { buzz(); if (session) session.event(k); };
       el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); fire(); } });
       el.addEventListener("pointerdown", (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
+        // Track every contact: a second finger's up/leave used to clear `on` and
+        // stop the repeater while the first thumb was still down (multi-touch).
+        const first = !held.size;
+        held.add(e.pointerId);
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* document release fanout still stops the repeat */ }
         el.classList.add("on");
+        if (!first) return;
         fire();
         if (repeat) r.start();
       });
-      const up = () => { el.classList.remove("on"); stop(); };
-      releases.push(up);   // a lost lift must not repeat a menu step forever (the nets above)
+      const up = (e) => {
+        if (e && typeof e === "object" && "pointerId" in e) {
+          if (!held.delete(e.pointerId)) return;
+          if (held.size) return;
+        } else {
+          held.clear();
+        }
+        el.classList.remove("on");
+        stop();
+      };
+      // Lost lift / blur / last-finger-up: same nets as hold() and the menu stick.
+      releases.push(() => up());
+      pointerReleases.push(up);
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
-      el.addEventListener("pointerleave", up);
+      // No pointerleave: with capture it fires when the thumb slides a few px
+      // and killed a held D-pad repeat; document/window pointerup catches the lift.
+      el.addEventListener("lostpointercapture", (e) => { if (!el.isConnected || !el.getClientRects().length) up(e); });
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     // An action may have more than one button (OT on the grip AND on the face).
@@ -431,6 +453,12 @@ const PhonePadPage = (function () {
     // inside the game's 120 s re-host window, then give up (#2198).
     const REDIAL_BACKOFF_MS = [5000, 15000, 30000];
     let redialTries = 0, redialTimer = null, redialing = false;
+    // CONNECT DEADLINE: an answer published to an offer nobody is behind any more
+    // (a relay replaying a consumed room, nostr OFFER_CREATED_SLACK_S) never opens;
+    // past this the attempt ends, says so and frees CONNECT (#5739 row 5).
+    const CONNECT_DEADLINE_MS = 15000;
+    let connectDeadline = null, liveCode = null;
+    function clearConnectDeadline() { if (connectDeadline) { clearTimeout(connectDeadline); connectDeadline = null; } }
     function stopRedial() { redial = null; redialTries = 0; if (redialTimer) { clearTimeout(redialTimer); redialTimer = null; } }
     function redialNow() {
       if (!redial || connecting || session || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
@@ -442,6 +470,7 @@ const PhonePadPage = (function () {
     function cancel() {
       stopScan();
       stopRedial();
+      clearConnectDeadline();
       const old = attempt; attempt = null;
       if (old) old.cancelled = true;
       connecting = false;
@@ -455,7 +484,20 @@ const PhonePadPage = (function () {
       if (dom.body) dom.body.classList.remove("linked");
       if (dom.connect) dom.connect.disabled = false;
     }
-    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", cancel);
+    // PAGEHIDE IS NOT AN UNPAIR (#5739 row 4): a linked page that goes away (navigate,
+    // switch-away, Safari unloading it) tells the game it is suspending, so the game
+    // hosts the same code again; a bfcache return (pageshow) or the page in front
+    // again re-dials it. A pairing still in progress is simply cancelled.
+    function pageHide() {
+      const code = session ? liveCode : null;
+      if (session && session.sendSuspend) session.sendSuspend();
+      cancel();
+      if (code && !deps.privateRelay()) { redial = code; say("Link paused — reconnecting when this page is back…", true); }
+    }
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("pagehide", pageHide);
+      window.addEventListener("pageshow", () => redialNow());
+    }
     async function connect(codeIn) {
       const isRedial = redialing; redialing = false;
       if (connecting || session) return { ok: false, error: "busy" };
@@ -484,7 +526,16 @@ const PhonePadPage = (function () {
         if (attempt !== owner) return { ok: false, error: "cancelled" };
         let transport = owner.transport = deps.rtc({ role: "guest", name: "pad" });
         if (!transport) { say("WebRTC is unavailable in this browser.", true); return { ok: false, error: "no_transport" }; }
-        let answered = null;
+        let answered = null, opened = false;
+        const armDeadline = () => {
+          clearConnectDeadline();
+          connectDeadline = setTimeout(() => {
+            connectDeadline = null;
+            if (attempt !== owner || opened) return;
+            cancel();
+            say("The game is not offering that code any more — choose MAKE NEW CODE in its phone-controller settings, then CONNECT.", true);
+          }, CONNECT_DEADLINE_MS);
+        };
         // `listen` is the swap's own token: with `reanswer` the rendezvous keeps
         // listening after it resolves, and a link that is up (or a cancel) stops it.
         const listen = { stopped: false, get cancelled() { return owner.cancelled || this.stopped; } };
@@ -523,12 +574,14 @@ const PhonePadPage = (function () {
               const old = transport;
               transport = owner.transport = fresh; answered = res;
               rebind(old);
+              armDeadline();   // the newer offer gets its own window
               return res.code;
             }
             say("Found it — connecting…");
             const res = await deps.acceptInvite(transport, invite, { pad: PhonePadCodec.PROTO });
             if (attempt !== owner) return null;
             answered = res;
+            if (res.ok) armDeadline();
             return res.ok ? res.code : null;
           },
         });
@@ -563,6 +616,7 @@ const PhonePadPage = (function () {
           onOpen: () => {
             if (gen !== bindGen) return;
             listen.stopped = true;   // the link is up: no later offer is answered
+            opened = true; clearConnectDeadline();
             say((sensorOn || sensor ? "Connected — tilt to steer." : "Connected — pedals and buttons only.") + " If the game asks, tap ALLOW on its screen.");
             if (dom.body) dom.body.classList.add("linked");
             if (opts.onOpen) opts.onOpen();
@@ -574,7 +628,7 @@ const PhonePadPage = (function () {
           },
           onClose: (why) => {
             if (attempt !== owner || gen !== bindGen) return;   // a cancel, or a session rebind() replaced
-            bound = null; listen.stopped = true;
+            bound = null; listen.stopped = true; clearConnectDeadline();
             steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) dom.health.textContent = "INPUT DISCONNECTED"; if (dom.steer) dom.steer.hidden = true;
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
@@ -599,11 +653,12 @@ const PhonePadPage = (function () {
         }
         if (attempt !== owner || !bind()) return { ok: false, error: "cancelled" };
         redialTries = 0;   // a link is up: a later drop gets the full backoff again
+        liveCode = code;
         return { ok: true };
       } finally {
         if (attempt === owner) {
           connecting = false;
-          if (!session) { attempt = null; owner.cancelled = true; dropWake(); }
+          if (!session) { attempt = null; owner.cancelled = true; dropWake(); clearConnectDeadline(); }
           if (dom.connect && !session) dom.connect.disabled = false;
         }
       }
@@ -659,6 +714,18 @@ const PhonePadPage = (function () {
     if (typeof document !== "undefined" && document.addEventListener) {
       document.addEventListener("visibilitychange", () => { if (document.hidden) stopScan(); });
     }
+    // A NEW #pad= LINK INTO AN OPEN TAB (#5739 row 6): a hash-only navigation keeps
+    // this page, so re-read the pairing; a dial still on the OLD code is stopped.
+    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("hashchange", () => {
+      const next = PhonePadCodec.pairingFromUrl(typeof location !== "undefined" ? location.href : "");
+      if (!next || (pairing && next.code === pairing.code && next.relay === pairing.relay)) return;
+      const linked = !!session;   // a live link stays up; the new code is what the next CONNECT dials
+      if (!linked) cancel();
+      pairing = next;
+      if (dom.codeIn) dom.codeIn.value = next.code;
+      paintCodeInput();
+      say(linked ? "A new pairing link arrived — the current link stays; CONNECT uses the new code after it ends." : "Tap CONNECT to pair with the game.");
+    });
     const fromUrl = pairing && pairing.code;
     if (fromUrl && dom.codeIn) dom.codeIn.value = fromUrl;
     say(fromUrl ? "Tap CONNECT to pair with the game." : Scan && Scan.supported() ? "Scan the game's QR code, or type its room code and CONNECT." : "Type the room code the game shows, then CONNECT.");

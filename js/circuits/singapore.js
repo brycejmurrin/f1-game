@@ -33,7 +33,7 @@
       palette: { shell: [0.16, 0.30, 0.40], roof: [0.80, 0.88, 0.94] },
     },
     lengthKm: 4.9,
-    gpLaps: 62,   // real race distance (4.940 km); lengthKm's 1 dp derives 63
+    gpLaps: 62,   // real race distance (FIA 2026 centreline 4.927 km; 4.940 was the 2023 figure); lengthKm's 1 dp derives 63
     tyreSeverity: 1.15,  // Marina Bay: thermal stress is the main deg cause despite smooth asphalt (Pirelli)
     baseHW: 6,
     street: true,

@@ -69,8 +69,8 @@ APEX_VM_PAGE=1 node --test tests/specs/pit-lane.spec.js   # NO browser: pit-lane
 
 The list above can drift: `node tools/ci/pick-tests.mjs` / `select-specs.mjs` are authoritative.
 Browser specs (`quali`, time-trial, real-race) are never run locally (AGENTS.md rule 5): the PR's CI
-runs the picked groups; a whole group on the pushed branch is `node tools/ci/remote-group.mjs <group>`
-(group names: `pick-tests.mjs` output, `--bg` prints the commands).
+runs the picked groups; a whole group (`remote-group.mjs`) is Bryce's opt-in
+(group names: `pick-tests.mjs` output).
 
 ## Pitfalls
 

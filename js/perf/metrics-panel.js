@@ -259,14 +259,23 @@ function snapshot() {
       out.logConsole = lv.console || "";
       out.logBuffer = lv.buffer || "";
       if (wantLog) {
-        const rec = Log.records();
-        out.logN = rec.length;
+        // One ring walk (Log.records is a single pass). Filter in place for the
+        // page tail instead of a second records() that re-walked all 500 slots.
+        const all = Log.records();
+        out.logN = all.length;
         const ns = logNs();
-        const filt = { level: logLvl(), limit: 12 };
-        if (ns && ns !== "*") filt.ns = ns;
-        const shown = Log.records(filt);
-        out.logShown = shown.length;
-        out.logs = shown.map((r) => r.level[0] + " " + r.ns + " " + r.msg);
+        const min = (Log.LEVELS && Log.LEVELS[logLvl()]) || 2;
+        const levels = Log.LEVELS || { warn: 2, info: 3, debug: 4, error: 1 };
+        const matched = [];
+        for (let i = 0; i < all.length; i++) {
+          const r = all[i];
+          if (ns && ns !== "*" && r.ns !== ns) continue;
+          if (!((levels[r.level] || 0) <= min)) continue;
+          matched.push(r);
+        }
+        const tail = matched.length > 12 ? matched.slice(-12) : matched;
+        out.logShown = tail.length;
+        out.logs = tail.map((r) => r.level[0] + " " + r.ns + " " + r.msg);
       }
       if (wantGov && out.track) {
         const tr = Log.records({ ns: "track", level: "info" });

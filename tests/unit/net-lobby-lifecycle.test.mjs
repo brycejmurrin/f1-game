@@ -277,6 +277,37 @@ test("a link tapped while the host has an offer out is deferred, and close() kee
   } finally { h.lobby.cancel(); }
 });
 
+test("#5739 row 2: a link that arrives while hosting says so on screen, and CLOSE opens it instead of leaving it in the URL", async () => {
+  let hash = null;
+  let consumed = 0;
+  const handshake = {
+    inviteFromUrl: () => hash,
+    consumeInviteUrl: () => { if (!hash) return false; consumed++; hash = null; return true; },
+  };
+  const h = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }), href: "https://x.test/play" });
+  try {
+    h.lobby.wire();
+    assert.equal(h.lobby.open(), true);
+    assert.equal((await h.lobby.host()).ok, true);
+    assert.deepEqual(h.transports, ["host"]);
+    hash = "friend";
+    h.emitWindow("hashchange");
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["host"], "the pending offer is not torn down by the link");
+    assert.equal(h.status.textContent, "A friend's invite link arrived — CLOSE this room to join it.");
+    h.click("vs-close");
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["host", "guest"], "CLOSE ends the room and opens the deferred invite on JOIN");
+    assert.equal(h.elements.get("vsfriend").hidden, false);
+    assert.equal(h.elements.get("vs-invite-in")?.value ?? "friend", "friend");
+    assert.equal(consumed, 0, "still in the URL while the JOIN it opened is on screen");
+    h.click("vs-close");
+    assert.equal(consumed, 1, "the second CLOSE (handled now) consumes the fragment: no stale prefill on reload");
+    assert.equal(hash, null);
+    assert.equal(h.elements.get("vsfriend").hidden, true);
+  } finally { h.lobby.cancel(); }
+});
+
 test("a newer join operation prevents a late host continuation", async () => {
   const ice = deferred();
   const h = harness({ prefetchIce: () => ice.promise, scanFactory: () => ({ stop() {}, start() {} }) });

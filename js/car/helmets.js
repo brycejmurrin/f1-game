@@ -786,6 +786,7 @@ const Helmets = (function () {
   const MEMO_MAX = 24, MEMO_BYTES = 8 * 1024 * 1024, _memo = new Map();
   let _memoBytes = 0;
   const ARRS = ["pos", "nrm", "col", "mat"];
+  const _cornersFull = new Map(), _cornersField = new Map();   // t -> (az -> corner), see paintLid
   function build(out, cx, cy, cz, design, S) {
     let key = null;
     try { key = JSON.stringify([cx, cy, cz, design, S || null]); } catch (_) { key = null; }
@@ -829,7 +830,19 @@ const Helmets = (function () {
     // du/da stay tied to the BASE grid so a split quad's normals match its
     // neighbours' exactly and no subdivision seam can show in the light.
     const du = 0.5 / rings, da = Math.PI / slices;
+    // The shell is one shape for every design: a corner depends on (t, az) and the grid (du, da) only, and the
+    // lattice is small (base grid plus MAX_SPLIT midpoints), so 22 lids share one table per detail level instead
+    // of solving the superellipse five times per corner each (pointAt: 52 ms of a grid warm, 2026-11-18).
+    // Entries are read-only: emit() copies p and n out.
+    const table = simplePaint ? _cornersField : _cornersFull;
     const corner = (t, az) => {
+      let row = table.get(t);
+      if (!row) { if (table.size > 512) table.clear(); row = new Map(); table.set(t, row); }
+      let v = row.get(az);
+      if (!v) { if (row.size > 512) row.clear(); v = cornerAt(t, az); row.set(az, v); }
+      return v;
+    };
+    const cornerAt = (t, az) => {
       const a = (az * Math.PI) / 180;
       const p = pointAt(t, a);
       const pu = pointAt(Math.min(1, t + du), a), pd = pointAt(Math.max(0, t - du), a);

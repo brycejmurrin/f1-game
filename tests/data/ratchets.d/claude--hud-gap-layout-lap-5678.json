@@ -5,10 +5,11 @@
       "lines": 7
     },
     "js/game.js": {
-      "codeLines": -2
+      "codeLines": -1,
+      "lines": -1
     },
     "js/ui/hud.js": {
-      "lines": 3
+      "lines": 2
     }
   }
 }

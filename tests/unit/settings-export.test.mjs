@@ -393,7 +393,7 @@ test("a completed import locks new file choices until it reloads", async () => {
 
 test("the import UI stays open and reports a refused storage reset", async () => {
   const b = bootImportUI({ store: { rawDel: () => false } });
-  b.choose(Promise.resolve(JSON.stringify({ format: "apex26-settings-v1", settings: { display: { gfxBackend: null } } })));
+  b.choose(Promise.resolve(JSON.stringify({ format: "apex26-settings-v1", device: { desktop: false }, settings: { display: { gfxBackend: null } } })));   // the import UI page reads as a phone (no body.desktop)
   await Promise.resolve();
   assert.match(b.button.textContent, /NOT SAVED/);
   b.flushReloads();
@@ -770,7 +770,7 @@ test("restoring default motion restores OS preference following", () => {
 
 test("a refused raw reset is a storage failure that leaves nothing applied", () => {
   const target = boot({ disk: { "apex26.gfxBackend": "glx" }, store: { rawDel: () => false } });
-  const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
+  const result = target.loadSettings({ format: "apex26-settings-v1", device: { desktop: true }, settings: {
     display: { gfxBackend: null }, audio: { volMusic: 0.4 },
   } });
   assert.equal(result.failed, 1, "the UI must stay open instead of reloading");
@@ -801,7 +801,7 @@ test("#5005: on the real store one refused write undoes the import in memory and
 test("throwing storage is reported as failed for settings and garage imports", () => {
   const fail = () => { throw new Error("storage unavailable"); };
   const target = boot({ store: { set: fail, rawSet: fail, rawDel: fail } });
-  const settings = target.loadSettings({ format: "apex26-settings-v1", settings: {
+  const settings = target.loadSettings({ format: "apex26-settings-v1", device: { desktop: true }, settings: {
     audio: { volMusic: 0.4 }, camera: { cockpitHalo: "0" }, display: { gfxBackend: null },
   } });
   assert.deepEqual(settings, { ok: true, applied: 0, skipped: 0, failed: 3, rejectedTtlb: 0, reason: null });
@@ -1507,10 +1507,10 @@ test("SEC2-2: LOAD SETTINGS / CAREER FILE refuse an oversized file before readin
   const big = (size) => ({ size, text: () => { read++; return Promise.resolve("{}"); } });
   pickerFile(b, b.button, big(2 * 1024 * 1024));
   assert.equal(read, 0, "settings: 2 MB is never read");
-  assert.match(b.button.textContent, /NOT A JSON FILE/);
+  assert.match(b.button.textContent, /FILE TOO LARGE/, "the size cap says so, not NOT A JSON FILE (#5743 S5)");
   pickerFile(b, careerBtn, big(5 * 1024 * 1024 + 1));
   assert.equal(read, 0, "career: past CareerBackup.MAX_BYTES is never read");
-  assert.match(careerBtn.textContent, /NOT A JSON FILE/);
+  assert.match(careerBtn.textContent, /FILE TOO LARGE/);
   pickerFile(b, b.button, big(1000));
   await new Promise(setImmediate);
   assert.equal(read, 1, "a normal-sized file still reads");
@@ -1881,4 +1881,55 @@ test("WHEEL LOCK & ABS (wheelState, wheelAssist) survive settings backup and res
   const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { driving: { wheelAssist: "turbo" } } });
   assert.equal(bad.skipped, 1);
   assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
+});
+
+// ── hunt #5743 S1–S4 ─────────────────────────────────────────────────────────
+
+test("#5743 S1: before the audio engine loads (stub {} tables) a stored sndTune/sndLayers is never CHANGED", () => {
+  const TUNE = { gain: 1, bass: 0.5, air: 0.2 }, LAYERS = { wind: true, turbo: true };
+  const disk = { "apex26.sndTune": JSON.stringify(TUNE), "apex26.sndLayers": JSON.stringify(LAYERS) };
+  const stub = boot({ disk, globals: { GameAudio: { tuneDefaults: () => ({}), layerDefaults: () => ({}) } } });
+  const ch = stub.collect("changes");
+  assert.deepEqual(ch.changed.filter((k) => k.startsWith("audio.snd")), [], "neither table is CHANGED");
+  assert.equal(ch.settings.audio && ch.settings.audio.sndTune, undefined, "CHANGES does not ship the whole table");
+  assert.equal(ch.defaults.audio && ch.defaults.audio.sndTune, undefined, "no {} default reported");
+  const all = stub.collect("all");
+  assert.deepEqual(all.settings.audio.sndTune, TUNE, "ALL still carries the stored table");
+  assert.deepEqual(all.changed.filter((k) => k.startsWith("audio.snd")), []);
+  // Loaded engine: the same stored table equals TUNE_DEF — unchanged; one moved knob is CHANGED with just that field.
+  const real = boot({ disk: { "apex26.sndTune": JSON.stringify(Object.assign({}, TUNE, { bass: 0.9 })) } });
+  const r = real.collect("changes");
+  assert.deepEqual(r.changed.filter((k) => k.startsWith("audio.snd")), ["audio.sndTune"]);
+  assert.deepEqual(r.settings.audio.sndTune, { bass: 0.9 });
+  // Importing a table while only the stub is there still needs an object.
+  const t = boot({ globals: { GameAudio: { tuneDefaults: () => ({}), layerDefaults: () => ({}) } } });
+  const imp = t.loadSettings({ format: "apex26-settings-v1", settings: { audio: { sndTune: { bass: 0.7 }, sndLayers: "loud" } } });
+  assert.equal(imp.applied, 1); assert.equal(imp.skipped, 1);
+  assert.equal(t.disk.get("apex26.sndTune"), JSON.stringify({ bass: 0.7 }));
+  assert.equal(t.disk.has("apex26.sndLayers"), false);
+});
+
+test("#5743 S2/S3: an object or array on a raw null-default flag, or an array for an object default, is skipped", () => {
+  const b = boot();
+  const r = b.loadSettings({ format: "apex26-settings-v1", device: { desktop: true }, settings: {
+    display: { gfxBackend: {}, tlxForceGL: ["a"], tlxEnvProbe: "1" }, camera: { camTune: [] },
+  } });
+  assert.equal(r.applied, 1);
+  assert.equal(r.skipped, 3);
+  assert.equal(b.disk.has("apex26.gfxBackend"), false, "never \"[object Object]\"");
+  assert.equal(b.disk.has("apex26.tlxForceGL"), false);
+  assert.equal(b.disk.has("apex26.camTune"), false, "never \"[]\"");
+  assert.equal(b.disk.get("apex26.tlxEnvProbe"), "1", "a string flag still applies");
+});
+
+test("#5743 S4: a file with no device block never pins renderer, resolution or quality", () => {
+  const file = (device) => Object.assign({ format: "apex26-settings-v1", settings: { display: { gfxBackend: "glx" }, audio: { volMusic: 0.4 } } }, device);
+  for (const mobile of [false, true]) {
+    const none = boot({ mobile }).loadSettings(file({}));
+    assert.deepEqual([none.applied, none.skipped], [1, 1], "no block: the device row is skipped, the rest applies");
+    const broken = boot({ mobile }).loadSettings(file({ device: { desktop: "yes" } }));
+    assert.deepEqual([broken.applied, broken.skipped], [1, 1]);
+    const same = boot({ mobile }).loadSettings(file({ device: { desktop: !mobile } }));
+    assert.deepEqual([same.applied, same.skipped], [2, 0], "same kind of device: everything applies");
+  }
 });
