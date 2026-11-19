@@ -30,13 +30,30 @@
       // the terrace rakes backwards.
       const IN = (side) => -side;
 
+      // FRAME (2026-11-18, #5316 CIRC2-05). The lap runs ANTICLOCKWISE now, as
+      // the real circuit does (def `reverse: false`; SRO/IGTC 2023 Kyalami 9 Hour
+      // briefing notes p. 8). Every literal below was re-keyed from the old
+      // clockwise authoring frame so the dressing stays where it stood: frac
+      // f -> 1 - f, range [a, b] -> [1 - b, 1 - a]; the (k|s, side) helpers keep
+      // their side (the reverse flag's side flip and the direction flip cancel),
+      // the raw-side groundPatch / circuitKit negate it. The one deliberate move
+      // is the pit straight: the engine's pit complex (`pit.side: -1`) is now
+      // on the INFIELD, driver's left, as the SRO pit-lane drawing (p. 9) has
+      // it, so the paddock group crossed to -1 and the main grandstand to +1,
+      // both placed in metres from the new line with RACE(m).
+      // Lap order (SRO): T1 The Kink, T2 Crowthorne, T3-4 Jukskei Sweep,
+      // T5 Barbeque, T6 Sunset, T7 Clubhouse, T8-9 The Esses, T10 Leeukop,
+      // T11, T12 Mineshaft, T13-14 The Crocodiles, T15 Cheetah, T16 Ingwe.
+      const SHIFT = api.def._sceneryShift || 0;
+      const RACE = (m) => (((m / (n * api.ds) - SHIFT) % 1) + 1) % 1;   // racing metres from the line -> authored frac
+
       // 1. HIGHVELD VELD — flat-topped acacia thorn trees scattered over open
       //    golden grass, plus the ranks of imported blue-gum along the
       //    boundary. Sparse and low: the veld reads as open, never wooded.
       //    api.acacia (nature.js) builds the flat-topped thorn as ONE connected
       //    trunk -> fork -> layered-slab stack; it replaced a hand-rolled
       //    single-box umbrella here (same sites, same hash, same sizes).
-      const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.48);
+      const openArea = (s) => (s >= 0.90 || s <= 0.08) || (s >= 0.52 && s <= 0.64);
       every(30, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -55,7 +72,7 @@
         if (h < 0.48) return;
         const s = k / n;
         // Clear of spectator banks and the main-GS bowl (clip-audit).
-        if ((s >= 0.22 && s <= 0.30) || (s >= 0.42 && s <= 0.52) || (s >= 0.93 || s <= 0.02)) return;
+        if ((s >= 0.70 && s <= 0.78) || (s >= 0.48 && s <= 0.58) || s >= 0.93) return;
         // Low wide mound of dry scrub (bush() is a green cone that read as a marker on straw ground).
         const side = h < 0.72 ? -1 : 1, a = anchor(k, side, 7 + h * 6);
         if (onTrack(a.c[0], a.c[2], 3)) return;
@@ -77,23 +94,24 @@
         tree(k, side, dist, h, GUM, { crown: "lobed" });
       });
       for (const [id, s, side, d, w, l] of [
-        ["kyalami-earth-crowthorne", 0.115, -1, 26, 22, 90],
-        ["kyalami-earth-esses", 0.330, 1, 30, 18, 70],
-        ["kyalami-earth-leeukop", 0.590, -1, 34, 20, 76],
-        ["kyalami-earth-barbecue", 0.250, 1, 28, 16, 62],  // worn walkway on the descent
-        ["kyalami-earth-climb", 0.470, 1, 44, 20, 80],     // laterite approach below the climb terrace
+        ["kyalami-earth-ingwe", 0.885, 1, 26, 22, 90],
+        ["kyalami-earth-mineshaft", 0.670, -1, 30, 18, 70],
+        ["kyalami-earth-clubhouse", 0.410, 1, 34, 20, 76],
+        ["kyalami-earth-crocodiles", 0.750, -1, 28, 16, 62],  // worn walkway on the descent
+        ["kyalami-earth-climb", 0.530, -1, 44, 20, 80],     // laterite approach below the climb terrace
       ]) groundPatch(K(s), side, d, [w, 0.16, l], EARTH, { id, samples: 6 });
 
-      // The paddock is on +1 with the engine's pit complex (def `pit.side`:
-      // the outside of the clockwise lap, left of the main straight). The
-      // complex builds the garages 14-27 m out and keeps 30 m of the row's
-      // arc; anything whose footprint enters that is superseded (models.js).
-      // So the brick block and race control stand BEHIND the garages (the
-      // Suzuka idiom), 46 m out, and the block's bays open onto the paddock
-      // (inw = IN(-1): away from the track) rather than at the garage backs.
+      // The paddock is on -1 with the engine's pit complex (def `pit.side`:
+      // the INFIELD, driver's left on the main straight, SRO briefing p. 9).
+      // The complex builds the garages 14-27 m out along about -46..+86 m of
+      // the line and keeps 30 m of the row's arc; anything whose footprint
+      // enters that is superseded (models.js). So the brick block and race
+      // control stand BEHIND the garages (the Suzuka idiom), 46 m out, and the
+      // block's bays open onto the paddock (inw = IN(+1): away from the track)
+      // rather than at the garage backs.
       {
-        const a = anchor(K(0.982), 1, 46), b = [a.r, a.u, a.t];
-        const bays = 12, pitch = 7.4, len = bays * pitch, inw = IN(-1);
+        const a = anchor(K(RACE(20)), -1, 46), b = [a.r, a.u, a.t];
+        const bays = 12, pitch = 7.4, len = bays * pitch, inw = IN(1);
         modelGroup("kyalami-pit-block", {
           center: vadd(a.c, a.u, 7), size: [20, 15, len + 6], basis: b,
         }, (stage) => {
@@ -124,7 +142,7 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.999), 1, 46), b = [a.r, a.u, a.t], inw = IN(1);
+        const a = anchor(K(RACE(-40)), -1, 46), b = [a.r, a.u, a.t], inw = IN(-1);
         modelGroup("kyalami-race-control", {
           center: vadd(a.c, a.u, 15), size: [20, 34, 18], basis: b,
         }, (stage) => {
@@ -147,26 +165,28 @@
           stage._mat = 0;
         }, { required: true });
       }
-      gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
-      gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
-      for (let i = 0; i < 4; i++) {
-        building(K(0.925 + i * 0.013), 1, 38, 25, 9, 19,
+      gantry(RACE(0), 8.5, [0.15, 0.15, 0.18]);     // the start/finish line
+      gantry(0.032, 8.0, [0.15, 0.15, 0.18]);       // second gantry, 345 m on (where it always stood)
+      for (const m of [-228, -170, -112, 115]) {
+        building(K(RACE(m)), -1, 38, 25, 9, 19,
           { kind: "chevron", wall: [0.84, 0.80, 0.72], window: [0.32, 0.34, 0.38], floor: 4.5 });
       }
       // Paddock hospitality — sparse, far out. Closer pads buried into the
       // pit-straight grade (ground-audit).
-      for (const [s, gap, w] of [[0.935, 78, 10], [0.948, 82, 9], [0.012, 80, 10]]) {
-        const h = hash(K(s) * 71);
-        motorhome(K(s), 1, gap, w, 4, 6, { wall: [0.68 + h * 0.22, 0.68, 0.68] });
+      for (const [m, gap, w] of [[-60, 78, 10], [-5, 82, 9], [60, 80, 10]]) {
+        const h = hash(K(RACE(m)) * 71);
+        motorhome(K(RACE(m)), -1, gap, w, 4, 6, { wall: [0.68 + h * 0.22, 0.68, 0.68] });
       }
-      broadcastCompound(K(0.916), 1, 70, { vans: 3, dishes: 2, mastH: 9 });
-      sponsorHoarding(0.950, 0.050, -1, 7, { h: 2.4, step: 12,
+      broadcastCompound(K(RACE(235)), -1, 70, { vans: 3, dishes: 2, mastH: 9 });
+      // Spectator side of the pit straight (outside, +1), opposite the pits.
+      sponsorHoarding(RACE(-220), RACE(220), 1, 7, { h: 2.4, step: 12,
         palette: [[0.94, 0.72, 0.14], [0.16, 0.44, 0.26], [0.86, 0.22, 0.16], [0.20, 0.20, 0.22]] });
 
       const CROWD = [[0.86, 0.84, 0.80], [0.20, 0.24, 0.34], [0.72, 0.24, 0.20],
                      [0.24, 0.44, 0.30], [0.90, 0.72, 0.24], [0.42, 0.36, 0.32]];
       // A truss post stands on the ground under it, not the road frame: on the
-      // Crowthorne and Leeukop falls the front posts hung 0.5-0.6 m in the air (#5088).
+      // Ingwe and Clubhouse falls (labelled Crowthorne and Leeukop then) the front
+      // posts hung 0.5-0.6 m in the air (#5088).
       const post = (stage, foot, rad, h, b) => {
         const gy = terrainYAt(foot[0], foot[2]);
         const drop = Number.isFinite(gy) ? Math.min(6, Math.max(0, foot[1] - gy + 0.2)) : 0;
@@ -217,21 +237,23 @@
       // Gap 36 (was 13): dual_lite day S/F orbit (az 45 / el 20 / dist 42) puts
       // the eye ~28 m lateral — inside the old terrace roof / crowd mass, so
       // frac-0 orbit+trackside looked into/under the slatted bowl (#3316).
-      ironTerrace("kyalami-terrace-main", K(0.005), -1, 36, 15, { rows: 7 });
-      ironTerrace("kyalami-terrace-crowthorne", K(0.078), -1, 20, 10, { rows: 6 });
-      ironTerrace("kyalami-terrace-leeukop", K(0.565), -1, 22, 8, { rows: 5 });
+      ironTerrace("kyalami-terrace-main", K(RACE(115)), 1, 36, 15, { rows: 7 });
+      // Ingwe exit, outside: the infield here is the pit entry road now.
+      ironTerrace("kyalami-terrace-ingwe", K(0.922), 1, 20, 10, { rows: 6 });
+      ironTerrace("kyalami-terrace-esses", K(0.435), -1, 22, 8, { rows: 5 });
       // Main grandstand opposite the pits on the S/F straight — face-brick /
       // sandstone bowl under a corrugated lean-to (Highveld vernacular; not a
       // Tilke cantilever). Sources: circuit visual brief; SAHO / official site
       // place the main spectator bank on the pit-straight (exact bay count and
       // seat total not surveyed — length kept modest ~80 m).
       // Emit body lives in a local fn so BATCH-01's 2200-char required window fits.
-      // Side -1 (authored). Gap 36 (was 16): past the dual_lite S/F orbit eye
+      // Side +1 (the outside, opposite the infield pits), centred 20 m past
+      // the line. Gap 36 (was 16): past the dual_lite S/F orbit eye
       // (~28 m lateral) so start cells see the Highveld pit straight, not the
       // lean-to underside (#3316). Sponsor hoarding stays at 7 m.
       {
-        const side = -1, dist = 36;
-        const a = anchor(K(0.950), side, dist);
+        const side = 1, dist = 36, kGS = K(RACE(20));
+        const a = anchor(kGS, side, dist);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t], inw = IN(side);
           const bays = 12, pitch = 6.6, len = bays * pitch, rows = 6;
@@ -248,7 +270,7 @@
                 [1.2, 0.4, len - 1.5], [0.66, 0.62, 0.54], b);
               stage._mat = MAT.FABRIC;
               for (let j = 0; j * 1.2 < len - 2; j++) {
-                const h2 = hash(K(0.950) * 31 + t * 97 + j * 13);
+                const h2 = hash(kGS * 31 + t * 97 + j * 13);
                 if (h2 < 0.48) continue;
                 seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1 + j * 1.2), a.u, y + 1.55),
                   [0.5, 0.85, 0.42], CROWD[Math.floor(h2 * 97) % CROWD.length], b);
@@ -281,54 +303,57 @@
 
       // Corner run-off kits, anchored on def.turns (racing frame) rather than
       // frac literals: the old literals sat 78-130 m off their apexes and on the
-      // INSIDE (corner-frames 2026-11-10). This lap runs clockwise on a
-      // `reverse: true` source, so the two emitter families take opposite side
-      // conventions here: groundPatch is NOT side-flipped by the api wrapper
-      // (engine side: -1 = left), the (s0, s1, side) / (k, side) helpers ARE
-      // (authored +1 = engine -1 = left). A right-hander's outside is the left.
-      const TURN = (i) => (((api.def.turns[i - 1] - (api.def._sceneryShift || 0)) % 1) + 1) % 1;
+      // INSIDE (corner-frames 2026-11-10). The two emitter families take the
+      // same side convention on this forward lap: engine and authored -1 = the
+      // driver's left. A left-hander's outside is the right (+1).
+      const TURN = (i) => (((api.def.turns[i - 1] - SHIFT) % 1) + 1) % 1;
 
-      // T1 Crowthorne (right): gravel + red tyre wall on the outside (left).
-      // No spectatorHill on the Crowthorne drop — ironTerrace covers seating;
-      // a bank here clipped bushes and hung unsupported over the grade.
-      groundPatch(K(TURN(1)), -1, 6, [28, 0.18, 54], EARTH,
-        { id: "kyalami-crowthorne-gravel", samples: 8 });
-      tyreWall(TURN(1) - 0.008, TURN(1) + 0.008, 1, 35, [0.86, 0.20, 0.18]);
-      marshalPost(K(TURN(1) + 0.006), -1, 10);
+      // T16 Ingwe (left hairpin onto the straight): gravel + red tyre wall on
+      // the outside (right). No spectatorHill on the drop — ironTerrace covers
+      // seating; a bank here clipped bushes and hung unsupported over the grade.
+      groundPatch(K(TURN(16)), 1, 6, [28, 0.18, 54], EARTH,
+        { id: "kyalami-ingwe-gravel", samples: 8 });
+      tyreWall(TURN(16) - 0.008, TURN(16) + 0.008, 1, 35, [0.86, 0.20, 0.18]);
+      marshalPost(K(TURN(16) - 0.006), -1, 10);
 
-      // T3 Barbecue (left): gravel + blue tyre wall on the outside (right).
-      groundPatch(K(TURN(3)), 1, 5, [12, 0.18, 34], EARTH,
-        { id: "kyalami-barbecue-gravel", samples: 6 });
-      tyreWall(TURN(3) - 0.007, TURN(3) + 0.007, -1, 18, [0.20, 0.40, 0.85]);
-      marshalPost(K(TURN(3) + 0.004), 1, 9);
+      // T13 The Crocodiles (right hairpin): gravel + blue tyre wall on the outside (left).
+      groundPatch(K(TURN(13)), -1, 5, [12, 0.18, 34], EARTH,
+        { id: "kyalami-crocodiles-gravel", samples: 6 });
+      tyreWall(TURN(13) - 0.007, TURN(13) + 0.007, -1, 18, [0.20, 0.40, 0.85]);
+      marshalPost(K(TURN(13) - 0.004), 1, 9);
 
-      // Spectator bank on the downhill run after the second left (not a run-off kit).
-      spectatorHill(0.235, 0.285, 1, 30, { rows: 2, rise: 0.95, depth: 1.6, density: 0.28, step: 11 });
+      // Spectator bank on the run down to T13 the Crocodiles (not a run-off kit).
+      spectatorHill(0.715, 0.765, 1, 30, { rows: 2, rise: 0.95, depth: 1.6, density: 0.28, step: 11 });
 
-      // T9 Leeukop (right, after the T6-T8 Esses): gravel on the outside (left).
-      groundPatch(K(TURN(9)), -1, 5, [26, 0.18, 34], EARTH,
-        { id: "kyalami-leeukop-gravel", samples: 6 });
-      marshalPost(K(TURN(9) - 0.004), -1, 9);
+      // T7 Clubhouse (left): gravel on the outside (right).
+      groundPatch(K(TURN(7)), 1, 5, [26, 0.18, 34], EARTH,
+        { id: "kyalami-clubhouse-gravel", samples: 6 });
+      marshalPost(K(TURN(7) + 0.004), -1, 9);
 
-      // T13 final corner (right): gravel + yellow tyre wall on the outside (left).
-      groundPatch(K(TURN(13)), -1, 5, [28, 0.18, 36], EARTH,
-        { id: "kyalami-final-gravel", samples: 6 });
-      tyreWall(TURN(13) - 0.007, TURN(13) + 0.007, 1, 34, [0.85, 0.78, 0.20]);
-      marshalPost(K(TURN(13) + 0.004), -1, 9);
+      // T2 Crowthorne (left, the first heavy stop): gravel + yellow tyre wall on the outside (right).
+      groundPatch(K(TURN(2)), 1, 5, [28, 0.18, 36], EARTH,
+        { id: "kyalami-crowthorne-gravel", samples: 6 });
+      tyreWall(TURN(2) - 0.007, TURN(2) + 0.007, 1, 34, [0.85, 0.78, 0.20]);
+      marshalPost(K(TURN(2) - 0.004), -1, 9);
 
-      // Final-corner approach terrace (outside of the braking zone, ~56 m early).
-      ironTerrace("kyalami-terrace-final", K(0.885), 1, 18, 9, { rows: 5 });
+      // Crowthorne exit terrace (outside, ~56 m past the apex).
+      ironTerrace("kyalami-terrace-crowthorne", K(0.115), 1, 18, 9, { rows: 5 });
 
-      spectatorHill(0.43, 0.51, 1, 32, { rows: 2, rise: 0.95, depth: 1.6, density: 0.30, step: 11 });
-      ironTerrace("kyalami-terrace-climb", K(0.470), 1, 30, 10, { rows: 6 });
+      spectatorHill(0.49, 0.57, 1, 32, { rows: 2, rise: 0.95, depth: 1.6, density: 0.30, step: 11 });
+      // 0.522, not the mirrored 0.530: on the forward lap the rake faces the road and
+      // its low rows met the slope there (ground-audit buried 6 -> 8).
+      ironTerrace("kyalami-terrace-climb", K(0.522), 1, 30, 10, { rows: 6 });
 
-      for (const [s0, s1] of [[0.11, 0.23], [0.28, 0.40], [0.46, 0.55], [0.60, 0.86]]) {
+      for (const [s0, s1] of [[0.77, 0.89], [0.60, 0.72], [0.45, 0.54], [0.14, 0.40]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
       }
-      guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
-      fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
-      for (const s of [0.15, 0.32, 0.44, 0.62, 0.74, 0.90]) {
+      // Pit straight: rail on the pit side (infield), catch fence on the spectator side.
+      // The rail stops at the pit-exit line (+110 m): past it the exit road blends
+      // back across its 4 m and a rail there stood 0.5 m proud of the ground (scenery-seats).
+      guardrail(RACE(-270), RACE(110), -1, 4.0, [0.85, 0.85, 0.88]);
+      fence(RACE(-224), RACE(270), 1, 9, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.85, 0.68, 0.56, 0.38, 0.26, 0.10]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
@@ -362,7 +387,7 @@
         out._mat = 0;
       }
       {
-        const k = K(0.55);
+        const k = K(0.45);
         for (let i = 0; i < 9; i++) {
           building(k, 1, 520 + i * 24, 16, 14 + (i % 4) * 5, 16,
             { kind: "podium", wall: [0.62 + i * 0.012, 0.64 + i * 0.012, 0.70], window: [0.54, 0.56, 0.62] });
@@ -370,7 +395,7 @@
       }
 
       {
-        const a = anchor(K(0.34), -1, 210);
+        const a = anchor(K(0.66), -1, 210);
         const b = [a.r, a.u, a.t];
         modelGroup("kyalami-headgear", {
           center: vadd(a.c, a.u, 20), size: [26, 48, 68], basis: b,
@@ -407,7 +432,7 @@
       {
         // Windpump — dam shares the tower's terrain sample via a short trough
         // so it cannot hang off a different grade sample 10 m out.
-        const a = anchor(K(0.70), 1, 96), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.30), 1, 96), b = [a.r, a.u, a.t];
         modelGroup("kyalami-windpump", {
           center: vadd(a.c, a.u, 9), size: [28, 22, 20], basis: b,
         }, (stage) => {
@@ -444,8 +469,9 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.965), 1, 66);
-        const b = [a.r, a.u, a.t], inw = IN(1);
+        // Infield paddock with the pits, past the garage row's exit end.
+        const a = anchor(K(RACE(165)), -1, 66);
+        const b = [a.r, a.u, a.t], inw = IN(-1);
         modelGroup("kyalami-clubhouse", {
           center: vadd(a.c, a.u, 7), size: [34, 16, 48], basis: b,
         }, (stage) => {
@@ -471,14 +497,14 @@
         }, { required: true });
       }
       // Camera masts — seat the pole so the head stays BFS-grounded.
-      for (const [s, side, gap] of [[0.030, -1, 26], [0.078, -1, 40], [0.565, -1, 28], [0.885, 1, 26]]) {
+      for (const [s, side, gap] of [[0.970, -1, 26], [0.922, -1, 40], [0.435, -1, 28], [0.115, 1, 26]]) {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
         seat.cyl(out, a.c, 0.20, 17, [0.22, 0.22, 0.25], 6, b);
         addBox(out, vadd(a.c, a.u, 17.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], b);
       }
       // Blue-gum / thorn treeline further out than spectator banks.
-      for (const [s0, s1] of [[0.12, 0.34], [0.5, 0.9]]) {
+      for (const [s0, s1] of [[0.66, 0.88], [0.1, 0.5]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 40, { density: 0.22, hMin: 6, hMax: 10, pineFrac: 0, col: GUM, col2: THORN });
       }
@@ -487,7 +513,7 @@
       // Everything below is APPENDED so the hash phases, spectatorHill slots
       // and tree relocations of the dressing above stay byte-identical.
       // Side +1 is the lap's OUTSIDE on this build (measured: a +1 anchor
-      // 60-220 m out never meets tarmac except across the 0.20-0.25 loop);
+      // 60-220 m out never meets tarmac except across the 0.75-0.80 loop);
       // its terrain skirt falls from grade to the -15 m floor by ~120 m.
 
       // 2a. Outer veld thorn: Acacia karroo / Vachellia clumps on the open
@@ -495,7 +521,7 @@
       const VELD_T = [0.30, 0.38, 0.21];
       every(36, (k) => {
         const s = k / n;
-        if (openArea(s) || (s >= 0.19 && s <= 0.26)) return;
+        if (openArea(s) || (s >= 0.74 && s <= 0.81)) return;
         const h = hash(k * 53 + 11);
         if (h < 0.38) return;
         const dist = 66 + h * 24;
@@ -509,7 +535,7 @@
       //     as dark blue-grey squares on the horizon, taller than everything
       //     but the mine headgear. Outside skirt, 95-125 m out.
       const GUM_B = [0.27, 0.36, 0.33];
-      for (const [s, rows, cols] of [[0.300, 3, 5], [0.505, 3, 4], [0.665, 4, 4], [0.790, 3, 5]]) {
+      for (const [s, rows, cols] of [[0.700, 3, 5], [0.495, 3, 4], [0.335, 4, 4], [0.210, 3, 5]]) {
         const k0 = K(s);
         for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
           const h = hash(k0 * 13 + r * 7 + c * 3);
@@ -520,38 +546,38 @@
 
       // 2c. Spectator grass banks on the corner outsides (turn index ->
       //     racing frac from def.turns; side = away from the turn direction,
-      //     measured with anchor tangents). Names follow the 2016 layout
-      //     order T1 Crowthorne, T2 Jukskei Sweep, T3 Barbecue, T4 Sunset,
-      //     T5 Clubhouse — from the published circuit map, not re-verified
-      //     against a survey this pass.
+      //     measured with anchor tangents). Names are the SRO turn names
+      //     (IGTC 2023 Kyalami 9 Hour briefing notes p. 8) on the built
+      //     curvature peaks.
       const BANK = { rows: 3, rise: 0.95, depth: 1.6, density: 0.26, step: 12 };
-      // Ends at 0.101, before the apex: run to 0.114 its treads folded over
-      // each other round the tight corner (clip-audit 1.23 m severe at 0.113).
-      spectatorHill(0.088, 0.101, -1, 24, BANK);                       // T1 Crowthorne (0.1055)
-      spectatorHill(0.152, 0.178, 1, 20, { ...BANK, rows: 2 });        // T2 Jukskei Sweep (0.165)
-      spectatorHill(0.380, 0.400, -1, 22, BANK);                       // T4 Sunset (0.391)
-      spectatorHill(0.405, 0.425, -1, 22, { ...BANK, density: 0.22 }); // T5 Clubhouse (0.4115)
+      // Starts at 0.899, past the apex: run back to 0.886 its treads folded over
+      // each other round the tight corner (clip-audit 1.23 m severe there).
+      spectatorHill(0.899, 0.912, -1, 24, BANK);                       // T16 Ingwe, inside of the exit
+      spectatorHill(0.822, 0.848, 1, 20, { ...BANK, rows: 2 });        // T15 Cheetah
+      spectatorHill(0.600, 0.620, -1, 22, BANK);                       // T11
+      spectatorHill(0.575, 0.595, -1, 22, { ...BANK, density: 0.22 }); // T10 Leeukop
 
       // 2d. Modern paddock (2015-16 Porsche SA rebuild): glazed hospitality
       //     units in the paddock BEHIND the engine-built garages and the brick
-      //     block (side +1, the block 40-52 m out). Non-required kit.
+      //     block (side -1, the block 40-56 m out). Non-required kit; circuitKit
+      //     takes the engine side and the shifted frac.
       if (circuitKit) {
-        circuitKit.hospitality({ id: "kit:kyalami:hospitality-a", frac: 0.012, side: 1, gap: 58,
+        circuitKit.hospitality({ id: "kit:kyalami:hospitality-a", frac: RACE(20), side: -1, gap: 58,
           size: [16, 9, 44], modules: 5 });
-        circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: 0.976, side: 1, gap: 58,
+        circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: RACE(-40), side: -1, gap: 58,
           size: [16, 9, 40], modules: 4 });
       }
       // Pit straight + main grandstand: furniture.lamp is "none"; registered floods
       // carry the night-race wash (bahrain / catalunya pattern).
       if (typeof floodMast === "function") {
         for (const [s, side, gap] of [
-          [0.010, 1, 36], [0.030, 1, 40], [0.985, -1, 30], [0.968, -1, 34],
-          [0.390, -1, 32], [0.410, -1, 36], [0.250, 1, 34],
+          [RACE(-120), -1, 36], [RACE(140), -1, 40], [RACE(-35), 1, 30], [RACE(75), 1, 34],
+          [0.610, -1, 32], [0.590, -1, 36], [0.750, 1, 34],
         ]) floodMast(K(s), side, gap, { h: 38, cool: true, pool: false, arms: 2 });
       }
       // Kyalami International Convention Centre: a long, low exhibition hall
-      // on the estate beside the paddock, on the flat floor beyond the skirt.
-      building(K(0.045), 1, 150, 64, 15, 120,
+      // on the estate outside the main straight, on the flat floor beyond the skirt.
+      building(K(0.955), 1, 150, 64, 15, 120,
         { kind: "hall", wall: [0.82, 0.80, 0.76], window: [0.30, 0.36, 0.42], floor: 5 });
 
       // 2e. Midrand suburbia: Kyalami's walled residential estates — single-
@@ -579,7 +605,7 @@
         addPyramid(out, vadd(foot, a.u, 3.32), [w * 1.12, 2.0, d * 1.12], roof, b);
         out._mat = 0;
       };
-      for (const [s0, s1] of [[0.29, 0.35], [0.69, 0.86]]) {
+      for (const [s0, s1] of [[0.65, 0.71], [0.14, 0.31]]) {
         every(30, (k) => {
           const s = k / n;
           if (s < s0 || s > s1) return;
@@ -593,7 +619,7 @@
       }
       // Midrand office park on the N1 side: low glazed blocks, not towers.
       for (let i = 0; i < 5; i++) {
-        building(K(0.735 + i * 0.012), 1, 250 + (i % 2) * 26, 30, 12 + (i % 3) * 4, 26,
+        building(K(0.265 - i * 0.012), 1, 250 + (i % 2) * 26, 30, 12 + (i % 3) * 4, 26,
           { kind: i % 2 ? "clad" : "slab", wall: [0.74, 0.74, 0.72], window: [0.34, 0.42, 0.48], floor: 4 });
       }
 
@@ -611,7 +637,7 @@
       // 2g. Winter firebreaks: burnt black strips mown and burned along the
       //     property boundary every May-August — the Highveld's dry-season mark.
       for (const [id, s, d, l] of [
-        ["kyalami-firebreak-south", 0.32, 84, 150], ["kyalami-firebreak-west", 0.76, 82, 170],
-        ["kyalami-firebreak-north", 0.87, 70, 90],
-      ]) groundPatch(K(s), 1, d, [9, 0.12, l], [0.15, 0.13, 0.11], { id, samples: 8 });
+        ["kyalami-firebreak-south", 0.68, 84, 150], ["kyalami-firebreak-west", 0.24, 82, 170],
+        ["kyalami-firebreak-north", 0.13, 70, 90],
+      ]) groundPatch(K(s), -1, d, [9, 0.12, l], [0.15, 0.13, 0.11], { id, samples: 8 });
     };

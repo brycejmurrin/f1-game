@@ -328,3 +328,57 @@ test("MCP concurrency: retrying admission release never replaces uncertain peer 
     assert.equal(takeJobAdmission(dir, owner, birth), null);
   } finally { fs.renameSync = rename; fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("MCP concurrency: the first cancel marker is published whole; a concurrent reader never parses a partial file (#5695)", { timeout: 20000 }, async () => {
+  const { publishJobFileOnce } = await import("../../tools/mcp/job-admission.mjs");
+  const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "mcp-cancel-marker-"));
+  const marker = path.join(root, "job.cancelled"), write = fs.writeFileSync;
+  // A marker big enough that a non-atomic write lands in several chunks.
+  const body = { state: "cancelled", ended: 1, exit: null, cleanup: { pids: Array.from({ length: 4000 }, (_, i) => i + 1), complete: false } };
+  let reader;
+  try {
+    // Deterministic half: while the bytes are being written the marker name does not exist yet.
+    let checked = false;
+    fs.writeFileSync = (file, ...rest) => {
+      if (String(file).startsWith(`${marker}.`)) { checked = true; assert.equal(fs.existsSync(marker), false, "marker name is visible before its bytes"); }
+      return write(file, ...rest);
+    };
+    assert.equal(publishJobFileOnce(marker, body), true);
+    fs.writeFileSync = write;
+    assert.ok(checked, "the marker is written through a sibling temp file");
+    assert.deepEqual(JSON.parse(fs.readFileSync(marker, "utf8")), body);
+    // A second canceller neither throws nor replaces the first marker, and leaves no temp file.
+    assert.equal(publishJobFileOnce(marker, { ...body, ended: 2 }), false);
+    assert.equal(JSON.parse(fs.readFileSync(marker, "utf8")).ended, 1, "first canceller wins");
+    assert.deepEqual(fs.readdirSync(root), ["job.cancelled"]);
+    fs.rmSync(marker);
+    // Loaded-reader half: another OS process polls the marker the way readCancellation does.
+    const done = path.join(root, "done");
+    reader = spawn(process.execPath, ["-e", `
+      const fs=require('node:fs'); let seen=0, torn=0;
+      while (!fs.existsSync(${JSON.stringify(done)})) {
+        let text; try { text = fs.readFileSync(${JSON.stringify(marker)}, 'utf8'); } catch { continue; }
+        seen++; try { JSON.parse(text); } catch { torn++; }
+      }
+      process.stdout.write(JSON.stringify({ seen, torn }));
+    `], { stdio: ["ignore", "pipe", "inherit"] });
+    let out = "";
+    reader.stdout.on("data", (d) => { out += d; });
+    const exited = new Promise((resolve) => reader.on("exit", resolve));
+    const deadline = Date.now() + 3000;
+    for (let i = 0; i < 400 && Date.now() < deadline; i++) {
+      assert.equal(publishJobFileOnce(marker, { ...body, ended: i }), true);
+      await new Promise((r) => setImmediate(r));
+      fs.rmSync(marker);
+    }
+    write(done, "");
+    await exited;
+    const { seen, torn } = JSON.parse(out);
+    assert.equal(torn, 0, `reader parsed ${torn} partial markers of ${seen} reads`);
+  } finally { fs.writeFileSync = write; if (reader?.exitCode === null) reader.kill(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("MCP concurrency: apex-extras writes no job marker or manifest in place (#5695)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-extras.mjs"), "utf8");
+  assert.doesNotMatch(src, /writeFileSync\(\s*(jobCancelPath|jobManifestPath|mf\b)/, "use publishJobFileOnce / publishJobManifest (tmp in the same dir, then link or rename)");
+});

@@ -114,3 +114,41 @@ test("TT: END TIME TRIAL from the box ends the session in the TT results", async
   assert.equal(g.sandbox.document.getElementById("results").hidden, false, "the TT results sheet is up");
   assert.equal(G.timeTrial, true, "still a Time Trial's sheet");
 });
+
+// ── Part 1 (#5789, on #5720): the TT drive-out's exterior is keyed on the TT SESSION ──
+// The exterior outside the garage door is keyed on circuit + weather + hour. Every TT entry used to key it on the
+// previous session's chips ("it sometimes works"). #5720 keys the drive-out on G at its moment and re-keys on every
+// RACE SETTINGS move; these pin the three TT entries on its own boot, the previous session left at rain / night.
+// GaragePrebuild.prewarmExterior() is the drive-out's own pick (garage-prebuild.test.mjs "a race-settings prewarm
+// keys the exterior exactly as the RACE! drive-out will").
+test("TT entries key the drive-out exterior on the TT session: picker → SESSION SETUP, garage → RACE SETUP, title DAILY", async () => {
+  const h = await createGame({ track: ID });
+  try {
+    const G = h.G, pre = h.sandbox.GaragePrebuild.instance();
+    const tick = async (n = 50) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+    const key = () => { const e = pre.state().exterior; return [e.trackId, e.weather, e.tod].join("/"); };
+    const stale = () => { G.raceWeather = "rain"; G.raceTimeOfDay = "night"; pre.prewarmExterior(); };
+    const ttPick = () => { G.flow = "gp"; G.timeTrial = true; G.session = "race"; };
+
+    // Picker → SESSION SETUP: the picker pre-keys on the leftover chips; RACE SETTINGS resets the TT draft and re-keys.
+    ttPick(); stale(); await tick();
+    assert.equal(key(), ID + "/rain/night", "the picker's pre-key is the previous session's (the old bug's start)");
+    G.openRaceSettings("select"); await tick();
+    assert.deepEqual([G.raceWeather, G.raceTimeOfDay], ["dry", "default"], "the TT draft");
+    assert.equal(key(), ID + "/dry/default", "SESSION SETUP re-keys the exterior on the TT draft");
+
+    // Picker → YOUR CAR → garage → RACE SETUP: the bay keys on the leftover chips; RACE SETUP re-keys.
+    stale(); G.openGarage("select"); await tick();
+    G.openRaceSettings("select"); await tick();
+    assert.equal(key(), ID + "/" + G.raceWeather + "/" + G.raceTimeOfDay, "RACE SETUP after the garage keys on the TT session");
+
+    // Title DAILY: open() skips race settings; at startRace (the drive-out's moment) the pick is the day's.
+    stale(); await tick();
+    const day = G.daily.plan();
+    let atStart = null;
+    const start = G.startRace;
+    G.startRace = (...args) => { pre.prewarmExterior(); atStart = key(); G.startRace = start; return start(...args); };
+    G.daily.open();
+    assert.equal(atStart, day.trackId + "/" + day.weather + "/" + day.tod, "the DAILY drive-out picks the day's circuit, weather and hour");
+  } finally { h.close(); }
+});

@@ -161,7 +161,7 @@ function startDriveOut() {
   driveOutEngine(false);   // repeated launch releases its previous audio graph
   if (typeof clearSetupGestures === "function") clearSetupGestures();
   driveOut = null;
-  if (!cfg.enabled) return 0;
+  if (!GarageArrival.plays(cfg, "raceStart")) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
   // card uses): a harness launch on software GL spent the ~10.6 s drive-out (up to 3x
   // on a stalled clock) plus awaitSoftPresent on top of a 30-90 s build and blew
@@ -480,7 +480,8 @@ function noteResult(order, meta) {
   const t = typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST[G.trackIdx] : null, night = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night));
   pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now(),
     driver: String(pl.name || pl.code || ""), fastest: fast === pl, wet: /rain|wet|storm/.test(String(G.raceWeather || "")), night,
-    grid: Number.isFinite(pl.gridPos) ? pl.gridPos : null, sprint: !!(meta && meta.sprint) };
+    grid: Number.isFinite(pl.gridPos) ? pl.gridPos : null, sprint: !!(meta && meta.sprint),
+    scene: { track: t, weather: G.raceWeather || "dry", tod: G.raceTimeOfDay || "default" } };
   return pendingHome;
 }
 function startHome(from) {
@@ -488,9 +489,10 @@ function startHome(from) {
   if (!p || from === "pit" || from === "vsfriend") return false;
   pendingHome = null;
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
-  if (!cfg.enabled || !cfg.afterRace || performance.now() - p.at > 30 * 60e3) return false;
+  if (!GarageArrival.plays(cfg, "afterRace") || performance.now() - p.at > 30 * 60e3) return false;
   if (typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation()) return false;
   endHome();
+  homeScene = p.scene || null;
   arrival.start({ home: p });
   return true;
 }
@@ -502,17 +504,16 @@ const auto = () => typeof LoadingScreen !== "undefined" && LoadingScreen.isAutom
 function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
 function startPitOut(done) {
   handoff = { done };
-  if (!GarageArrival.settings(G.store.get("garageArrival", null)).enabled || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); arrival.start({ out: true, rate: 1.6 });
+  if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitOut") || reducedMotion() || auto()) { fireHandoff(); return false; }
+  endHome(); homeScene = null; arrival.start({ out: true, rate: 1.6 });
   return true;
 }
 function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
-// END TIME TRIAL (#5789): the pit drive-in, then done() once, on its end, SKIP / Esc or DONE (skipPitOut). Tuner off,
-// reduced motion and automation hand back at once, as startPitOut does.
+// END TIME TRIAL (#5789): the drive-in, then done() once (end, SKIP, DONE); gated as startPitOut, on PIT IN.
 function startPitIn(done) {
   handoff = { done };
-  if (!GarageArrival.settings(G.store.get("garageArrival", null)).enabled || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); arrival.start({ skip: "SKIP TO RESULTS" });
+  if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitIn") || reducedMotion() || auto()) { fireHandoff(); return false; }
+  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO RESULTS" });
   return true;
 }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
@@ -854,17 +855,22 @@ function getSetupPreviewMesh() {
 let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
-function exteriorPick(ctx) {
-  const t = ctx.track, team = Teams.LIST[G.teamIdx], tod = home.active && home.mode === "night" ? "night" : G.raceTimeOfDay || "default", weather = G.raceWeather || "dry";
+// OUTSIDE (#5660): a drive-out / pit drive-in shows the session's circuit (trackIdx), not the garage's next race;
+// the way home, the one it ended in. `session`: a race-settings prewarm, keyed as RACE! will key it.
+let homeScene = null;
+function exteriorPick(ctx, session) {
+  const arriving = !driveOut && !!(arrival.state && arrival.state.active), seq = !!driveOut || arriving, pin = arriving && homeScene;
+  const t = pin ? pin.track : (session || seq) && Tracks.LIST[G.trackIdx] || ctx.track, team = Teams.LIST[G.teamIdx];
+  const tod = pin ? pin.tod : home.active && home.mode === "night" ? "night" : G.raceTimeOfDay || "default", weather = pin ? pin.weather : G.raceWeather || "dry";
   const night = tod === "night" || (tod === "default" && !!(t && t.night));
   const p = exteriorSelection;
   if (!p || p.trackId !== (t && t.id) || p.teamId !== (team && team.id) || p.weather !== weather || p.tod !== tod || p.night !== night)
     exteriorSelection = { trackId: t && t.id, teamId: team && team.id, def: t, weather, tod, night };
   return exteriorSelection;
 }
-function prepareExterior(ctx, pose) {
+function prepareExterior(ctx, pose, session) {
   if (!deps.prepareExterior || ctx.studio) return false;
-  const selection = exteriorPick(ctx), sequence = !!(pose && pose.active);
+  const selection = exteriorPick(ctx, session), sequence = !!(pose && pose.active);
   if (sequence && !exteriorSequence) { exteriorHeld = selection; exteriorVisible = !!(exterior && exterior.ready(selection)); }
   if (!sequence) { exteriorHeld = null; exteriorVisible = true; }
   exteriorSequence = sequence;
@@ -873,7 +879,7 @@ function prepareExterior(ctx, pose) {
     const generation = ++exteriorEpoch; exteriorBootKey = pick.trackId;
     exteriorBoot = deps.prepareExterior(pick.trackId).then((def) => {
       if (generation !== exteriorEpoch || !def || typeof GarageExterior === "undefined") return;
-      exterior = GarageExterior.create({ gfx, load: (choice) => deps.prepareExterior(choice.trackId),
+      exterior = GarageExterior.create({ gfx, load: (choice) => deps.prepareExterior(choice.trackId), sliceMs: exteriorSliceMs,
         onChange: (state) => { exteriorLight = null; exteriorAnchor = state.anchor || null; if (state.status === "failed") Log.warn("game", "garage exterior unavailable: " + state.error); } });
       exteriorRequested = exteriorHeld || exteriorSelection; exterior.request(exteriorRequested);
     }).catch((e) => { Log.warn("game", "garage exterior preparation failed: " + e.message); })
@@ -884,6 +890,28 @@ function prepareExterior(ctx, pose) {
   if (sequence && pose.door < .02 && exterior && exterior.ready()) exteriorVisible = true;
   return !!(exterior && exterior.ready() && exteriorVisible);
 }
+// READY TO SHOW (#5660): the drive-out's cover (game.js studioShown) and an arrival's clock wait on this: built for
+// this pick, or never buildable. A load past EXTERIOR_WAIT_MS releases the show on the room's backdrop, logged.
+const EXTERIOR_WAIT_MS = 12000;
+let exteriorWait = { pick: null, at: 0 }, exteriorWaitSeen = -Infinity;
+// Only a held show hurries the build: a sliced prewarm starved the setup garage (garage-pick-cost).
+function exteriorSliceMs() { return performance.now() - exteriorWaitSeen < 250 ? 6 : 0; }
+function exteriorSettled() {
+  const ctx = deps.prepareExterior ? garageCtx() : null;
+  if (!ctx || ctx.studio) return true;
+  const pick = exteriorHeld || exteriorPick(ctx), st = exterior ? exterior.state() : null;
+  const dead = st ? st.trackId === pick.trackId && (st.status === "unsupported" || st.status === "failed")
+    : !exteriorBoot && exteriorBootKey === pick.trackId;
+  if (dead || (exterior && exterior.ready(pick))) { exteriorWait.pick = null; return true; }
+  const now = performance.now();
+  if (exteriorWait.pick !== pick) exteriorWait = { pick, at: now };
+  if (now - exteriorWait.at < EXTERIOR_WAIT_MS) { exteriorWaitSeen = now; return false; }
+  if (exteriorWait.at > 0) { exteriorWait.at = -Infinity; Log.warn("game", "garage exterior not ready: the sequence plays without it", st); }
+  return true;
+}
+// THE RACE! DRIVE-OUT UNDER ITS COVER (game.js render → studioShown lifts the cover on a frame that reports drawn):
+// a held frame reports not drawn until the circuit outside is ready, so the car's first visible frame has it.
+function driveOutCovered(hold) { return !!(hold && driveOut) && !exteriorSettled(); }
 function exteriorLighting() {
   if (exteriorLight) return exteriorLight;
   const light = exterior.lighting(), yaw = exteriorAnchor ? exteriorAnchor.yaw : 0;
@@ -1078,7 +1106,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (home.active && $("photo-studio") && !$("photo-studio").hidden) endGarageRes();
   else pinGarageRes();
   gfx.resize();
-  const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  // An arrival waits on its first pose for the circuit outside (#5660); `typeof`: the tick harness runs this dispatch alone.
+  const arrivalHeld = () => typeof exteriorSettled === "function" && !!(arrival.state && arrival.state.active) && !exteriorSettled();
+  const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt, arrivalHeld());
   if (handoff && !driveOut && !preview && !home.active && !(arriving && arriving.active)) fireHandoff();   // the show ended or was skipped
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
@@ -1531,9 +1561,9 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, startPitIn, skipPitOut, noteResult, startHome,
+  startArrival(...args) { endHome(); homeScene = null; return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, startPitIn, skipPitOut, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
-  renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
+  renderSetupPreview: (dt, hold) => renderSetupPreview(dt, hold) && !driveOutCovered(hold), resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
   // on: boolean, or a lens {fov, centre} (a matched-lens dev shot, which is free too).
@@ -1548,15 +1578,15 @@ return {
   get effDist() { return _spEffDist; },
   get effFit() { return _spEffFit; },
   get effPanel() { return _spEffPanel; },
-  prewarmExterior() { if (typeof prepareExterior === "function") prepareExterior(garageCtx(true), null); },
+  prewarmExterior() { if (typeof prepareExterior === "function" && !driveOut && !(arrival.state && arrival.state.active)) prepareExterior(garageCtx(true), null, true); },   // never re-picks a playing sequence
   exteriorState: () => exterior ? Object.assign(exterior.state(), { visible: exteriorDrawn }) : { status: exteriorBoot ? "loading" : "idle", visible: false },
   // GaragePrebuild (js/garage/prebuild.js): the setup garage's car and room,
   // built ahead of the GARAGE tap — keyed exactly as the first garage frame keys them.
   previewKey, prebuildKey: () => previewKey() + "|" + GarageScene.ctxKey(garageCtx(true)),
   prebuild(part) {
     if (part === "car") return !!getSetupPreviewMesh();
-    const team = Teams.LIST[G.teamIdx], ctx = garageCtx(true);
-    prepareExterior(ctx, null);
+    const team = Teams.LIST[G.teamIdx], ctx = garageCtx(true), rs = $("race-settings");
+    prepareExterior(ctx, null, !!(rs && !rs.hidden));   // race settings: keyed as its RACE! drive-out (#5660)
     return GarageScene.prepare(team, _spLiv(), getTeamParts, G.driverIdx, ctx);
   },
   roomReady() { return GarageScene.prepared(Teams.LIST[G.teamIdx], _spLiv(), getTeamParts, G.driverIdx, garageCtx(true)); },
