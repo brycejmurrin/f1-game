@@ -3049,14 +3049,19 @@
       "getErsLight": [
         "tests/unit/tlx-prune-pin.test.mjs"
       ],
+      "getExhaustFlame": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
       "getGearDigit": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getMirrorFallback": [
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "getMirrorGlass": [
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getOtLamp": [
@@ -3181,6 +3186,7 @@
         "tests/unit/wheel-phase-math.test.mjs"
       ],
       "createGarage": [
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
@@ -3196,6 +3202,7 @@
       ],
       "prepare": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
@@ -5669,6 +5676,7 @@
       "mulTo": [
         "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs",
@@ -5751,7 +5759,6 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
-        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-frame-garbage.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -6201,6 +6208,9 @@
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "value": [
+        "tests/unit/garage-departure-wheels.test.mjs"
       ]
     },
     "js/data/garage-entrance-motion.js": {
