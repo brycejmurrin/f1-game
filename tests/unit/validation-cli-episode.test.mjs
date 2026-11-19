@@ -4,7 +4,7 @@
 // Run: node --test tests/unit/validation-cli-episode.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
+import { episodeLeaks, snapshot, verdict } from "../../tools/check/episode-diff.mjs";
 import { cli } from "../helpers/validation-cli.mjs";
 
 const mockGame = (overrides = {}) => {
@@ -52,4 +52,29 @@ test("episode rejects an empty or changing car field and a failed reset", async 
   changed.apex.reset = () => { if (++resets === 2) changed.G.cars.push({ code: "BBB" }); return { ok: true }; };
   await assert.rejects(episodeLeaks({ game: changed }), /Car count/);
   await assert.rejects(episodeLeaks({ game: mockGame({ reset: () => false }) }), /reset failed/);
+});
+
+// #5329 S29(d): an object only one car holds is walked one level; a shared one stays a tag.
+test("snapshot walks one level into an object the car owns alone, never a shared one", () => {
+  const team = { name: "T", points: 3 };
+  const cars = [{ code: "AAA", team, ctl: { acc: 0.5, lane: null, sub: {} }, trail: [1, 2], gap: undefined },
+                { code: "BBB", team, ctl: { acc: 0 }, trail: [], gap: 1 }];
+  assert.deepEqual(snapshot(cars), [
+    { code: "AAA", team: "<object>", ctl: "<object>", "ctl.acc": 0.5, "ctl.lane": null, "ctl.sub": "<object>",
+      trail: "<array:2>", gap: "<undefined>" },
+    { code: "BBB", team: "<object>", ctl: "<object>", "ctl.acc": 0, trail: "<array:0>", gap: 1 },
+  ]);
+});
+
+test("a leak inside a car-owned object is reported, and a found leak fails the verdict", async () => {
+  const g = mockGame(); g.G.cars[0].ctl = { acc: undefined };
+  let resets = 0;
+  g.apex.reset = () => { if (++resets === 2) g.G.cars[0].ctl.acc = 0.25; return { ok: true }; };
+  const { digestsMatch, rows } = await episodeLeaks({ game: g, episodes: 2 });
+  assert.equal(digestsMatch, true);
+  assert.deepEqual(rows, [{ field: "ctl.acc", cars: 1,
+    example: { car: 0, code: "AAA", field: "ctl.acc", cold: "<undefined>", warm: 0.25 } }]);
+  assert.deepEqual(verdict(true, rows), { ok: false, exit: 1 });
+  assert.deepEqual(verdict(true, []), { ok: true, exit: 0 });
+  assert.deepEqual(verdict(false, []), { ok: false, exit: 1 });
 });
