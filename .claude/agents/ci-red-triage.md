@@ -2,6 +2,7 @@
 name: ci-red-triage
 description: Read-only triage of a red GitHub Actions run (ci.yml, pages.yml, gpu-census.yml). Use when a CI or Pages run is red and the question is WHICH test, WHICH assertion, WHICH lane, and whether the base was already red — before anyone re-runs or "fixes" anything. Returns a one-line SHA · run · RED status line. Never re-runs tests locally.
 model: sonnet
+omitClaudeMd: true
 maxTurns: 20
 background: true
 disallowedTools: Write, Edit, NotebookEdit
@@ -19,7 +20,7 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 
 ## The job
 
-0. No run, id or SHA given? Resolve the current deploy tip and latest Pages
+0. No run, id or SHA given? Resolve the current deploy tip (`claude/f1-game-project-26h3ng`) and latest Pages
    run, then current open PR heads and each head's latest CI runs. Select a
    current failure and say which. Do not filter history to `status=failure`
    first: that can revive an old red after a newer successful run. If current
