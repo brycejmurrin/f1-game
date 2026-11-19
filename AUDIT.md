@@ -280,3 +280,11 @@ worker registrations 0 → 1 (installs in 6 s, 634 files cached, and the title s
 all 17 menu buttons); `window.__APEX_BUILD` undefined → 1695; an uncaught error now shows the error overlay;
 `controller.html` violations 3 → 0 and `window.__apexPad` exists. Any future edit to an inline script needs
 the same recomputation — moving them to files would remove the trap.
+
+### Fix 2 — penalty reasons (finding 12)
+
+`js/game.js`: safety-car-overtake and blue-flag penalties now record a reason through a small
+`notePenaltyWhy` helper (same accumulate-without-duplicates behaviour the track-limits code already had).
+Verified in simulated races, before → after: storm race with safety car, `pen=40, penaltyWhy=null` →
+`pen=40, "overtaking under caution"`; lapped-player race, `pen=20, null` → `pen=20, "ignoring blue flags"`.
+The tool's diagnostics report 0 new errors in `js/game.js`.
