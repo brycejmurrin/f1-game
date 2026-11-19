@@ -76,6 +76,7 @@
     "tests/unit/apex-tools-mcp-occupancy.test.mjs",
     "tests/unit/apex-tools-mcp-surface.test.mjs",
     "tests/unit/apex-tools-mcp.test.mjs",
+    "tests/unit/appearance-shapes.test.mjs",
     "// #3307: Appearance SettingRow ‹ › steppers floor at --tap-paint under",
     "// sheet zoom (ios-iphone-landscape@75 soft taps were 39 vs 52).",
     "tests/unit/appearance-steppers-tap.test.mjs",
@@ -2573,6 +2574,7 @@
     "test:ui": {
       "files": [
         "tests/specs/agent-determinism.spec.js",
+        "tests/specs/appearance-orientation.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/bryce-phone-paint.spec.js",

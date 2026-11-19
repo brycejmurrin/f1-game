@@ -1300,6 +1300,9 @@ const TLX = (function () {
         if (c === DPR_CAP) return false;
         DPR_CAP = c; resizeNow(); return true;
       }
+      // ?lab=postSubmit (URL only, one boot, no storage key: D-027): the post chain submits its passes' command buffers
+      // in one call (tlx-post.js SUBMIT HOLD, vendor PATCHES.md §21). OFF until a phone A/B; __tlx.postSubmit(on) flips it for the session.
+      let _postSubmitOn = labOn("postSubmit");
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -1486,6 +1489,7 @@ const TLX = (function () {
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
+              postSubmitHold: function () { return _postSubmitOn; },
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -3793,6 +3797,7 @@ const TLX = (function () {
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
+        _warmStages.sky = Math.round(performance.now() - _tStage); _tStage = performance.now();   // its own row: it was counted inside "mirror"
         _warmStages.mirror = null;
         if (wantMirrorWarm()) {
           await warmMirrorStage(usePost, useTag);
@@ -3883,7 +3888,7 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+              sky: _warmStages.sky, mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
             _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
             try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
@@ -6921,6 +6926,7 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
+          postSubmit(on) { if (on !== undefined) _postSubmitOn = !!on; return _postSubmitOn; },   // the ?lab=postSubmit arm, live, this session only
           roadSplit(on) {   // persists: a reload keeps the A/B arm (apex26.tlxRoadSplit)
             if (on !== undefined) {
               _roadSplitOn = !!on;
