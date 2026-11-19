@@ -80,9 +80,13 @@ const OvertakeMode = (function () {
   function lines(c, track, gapAhead, open) {
     if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
     if (track && crossed(c._otS, c.s, detectS(track), track.total)) {
-      c.otEarned = !!open && gapAhead < (consts().OT_GAP || 1);
+      // Number.isFinite: `null < 1` is true in JS (null → 0), so a missing gap
+      // would earn Overtake with nobody ahead. game.js passes Infinity; keep the
+      // pure rule honest for every caller.
+      const gapOk = Number.isFinite(gapAhead) && gapAhead < (consts().OT_GAP || 1);
+      c.otEarned = !!open && gapOk;
       if (c.otEarned) note(c, "earned gap=" + (+gapAhead).toFixed(2) + "s");
-      else if (!open && gapAhead < (consts().OT_GAP || 1)) note(c, "denied detection-closed");
+      else if (!open && gapOk) note(c, "denied detection-closed");
     }
     c._otS = c.s;
     // The Activation Line. Highest lap seen, so a car shoved back over the line

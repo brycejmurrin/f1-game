@@ -159,6 +159,27 @@ function inRace() {
   } catch (_) { return false; }
 }
 
+// Pack tier follows the preset off track only; while driving it waits for a pause or race end (#5561).
+let packObs = null;
+function driving() {
+  if (!inRace()) return false;
+  try { const pm = document.getElementById("pausemenu"); return !(pm && !pm.hidden); } catch (_) { return true; }
+}
+function syncPack() {
+  if (typeof Assets === "undefined" || !Assets.followQuality) return false;
+  if (!driving()) {
+    if (packObs) { packObs.disconnect(); packObs = null; }
+    return Assets.followQuality();
+  }
+  if (!packObs && typeof MutationObserver === "function") {
+    packObs = new MutationObserver(() => { syncPack(); });
+    const pm = document.getElementById("pausemenu");
+    if (pm) packObs.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
+    packObs.observe(document.body, { attributes: true, attributeFilter: ["data-race"] });
+  }
+  return false;
+}
+
 function reloadSoon() {
   try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in a harness */ }
   setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, RELOAD_DELAY_MS);
@@ -182,6 +203,7 @@ function set(id, opts = {}) {
   // MSAA is decided once when the render targets are made (GLX setup, WGX
   // script eval): ULTRA 4×, anything else 2×/1×. Crossing that boundary on a
   // DESKTOP therefore needs the same reload the mobile boot tier takes
+  try { syncPack(); } catch (_) { /* optional pack */ }
   const needsReload = syncBootTier() || (!isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
   paintGfx(needsReload ? " — RELOADING…" : "");
   if (needsReload && !opts.noReload) {
@@ -254,7 +276,7 @@ if (typeof document !== "undefined") {
 // PRESETS / label stay module-local (UI + current() use them).
 // cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
-  init, set, cycle, current: () => current().id, defaultId,
+  init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
 };
 })();

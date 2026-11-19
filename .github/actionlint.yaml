@@ -9,6 +9,10 @@ paths:
       # message only; remove when the pin moves past a release that knows `queue`.
       - 'unexpected key "queue" for "concurrency" section'
       - 'SC2086:info'   # see the SC2086 note below
+  .github/workflows/browser-group.yml:
+    ignore:
+      # The same `queue: max` false positive: the GROUP LANES (#5848). Remove with ci.yml's.
+      - 'unexpected key "queue" for "concurrency" section'
   # SC2086 at *info* level, in the three files that pass a flag list through an unquoted
   # variable on purpose ($ARGS, $RATCHET_MODE, $MINE, $PATHS, $LS, ${FORCE:+…}): each is a
   # reviewed word-split of a space-separated option string. Warning- and error-level

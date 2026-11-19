@@ -120,8 +120,8 @@ async function measure(browser, baseURL, entries) {
       // The 5-row, 264 px title against 7 rows, 362 px (CI runs 43764591144, 43963990479) was not this wait: under
       // MOTION REDUCED a label lagged its door's font-size by a frame (#5578, css/responsive.css); `lag` holds that.
       if (s.id === "title") { await page.waitForFunction(() => document.fonts.status === "loaded", null, { polling: 100, timeout: BOOT }); await page.evaluate(settleInPage, 12); }
-      // #4798: every other sheet is only final once its fit is quiet too (sheet-shape reclassifies density on the
-      // ResizeObserver frame after the screen shows; a busy first tap can put the sample before it).
+      // Every other sheet is only final once its fit is quiet too (Pages 44573978727: sheet-shape settles density after the
+      // screen shows, and the paint gate alone sampled #dlg-racesettings mid-fit, in either direction).
       else await page.evaluate(quietInPage, { ids: s.ids, frames: 6 });
       out[s.id] = await page.evaluate(rectsInPage, s.ids);
       if (s.id === "title") out.lag = await page.evaluate(labelLagInPage);

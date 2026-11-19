@@ -405,6 +405,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
+| **gfx/sharpness-ab.mjs** | Headless A/B of the phone-sharpness arms on TLX WebGPU: captures, 400% crop sheets, edge metrics. | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
@@ -724,6 +725,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
+| **ci/pool-share.mjs** | Read-only runner-pool census: who held the 40 Linux slots while land.yml jobs queued (#5848). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/preflip-probe.mjs** | Pre-flip probe: merge the deploy tip into a PR head in a temp worktree, run ratchets + fixture audit + diff units. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
