@@ -11982,6 +11982,10 @@
       "adaptLane": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "aeroGrip": [
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/mechanics-coherence.test.mjs"
+      ],
       "aiRescueDelay": [
         "tests/unit/ai-drive.test.mjs"
       ],

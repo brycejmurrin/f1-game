@@ -70,6 +70,7 @@ window.PhysicsConsts = {
   // ones sharp. Lateral grip is 1 + DOWNFORCE·(v/VMAX)², so high-speed
   // cornering firms up the way it should.
   DOWNFORCE: 0.65,     // extra grip fraction at VMAX (0 = no wings)
+  AI_WING_GRIP: 0.055,  // AI only: the wing's share of corner grip (docs/PHYSICS.md, #5791)
 
   X_VMAX_GAIN_LO: 0.055,  // top-speed gain at full X-mode, smallest wing
   X_VMAX_GAIN_HI: 0.155,  // ...and the biggest (more drag to shed)

@@ -202,8 +202,8 @@ teammate carries the player's saved build instead. A car that still
 has no resolved setup falls back to 0.5 via `aeroLoadOf`. `AiDrive.houseStyle`
 reads `team.stats` (career `tdev` via `Career.teamStats` baked as `c.houseStats`),
 then seat 0 attacks / seat 1 holds; `ordersMul` stops #2 diving #1 and lets #1
-through. AI corner `vLim` now scales with that same `aeroLoad` (±8 % at the
-catalog ends); harvest/overcharge maps shift `wantBoost`; hold cars mix less
+through. AI corner `vLim` scales with that same `aeroLoad` (±`AI_WING_GRIP`/2,
+±2.75 % at the catalog ends; it was ±8 % before #5791); harvest/overcharge maps shift `wantBoost`; hold cars mix less
 racing line and may keep Z-mode. Player `mods.braking` now reaches `axEstTarget`
 so garage brakes spend the friction ellipse. Measured end to end:
 
@@ -224,6 +224,12 @@ accel down; ±5 % clamp), and are exactly 1.0 at the works sheet.
 The big-wing car has the LOWEST base top speed and the biggest gain from opening,
 so X-mode partly buys back the straight-line speed the wing costs — which is the
 real trade, and the reason the two ends are worth choosing between.
+That is the PLAYER's trade: the base top-speed cost is the aero part's
+`mods.speed`, and AI cars carry no part mods. So an AI car's X-mode reads the
+NEUTRAL wing (`xLoadOf` in `js/race/pace-math.js`: `human === false` → 0.5), and
+its wing buys only the `AI_WING_GRIP` corner share, sized so the same car alone at
+Monza is about 1 s a lap quicker at wing 1 than at wing 0 (it was 5.9 s, the
+whole field 4-6 s wide from wing alone; #5791, Bryce's `decision: b`).
 `physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
 and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
