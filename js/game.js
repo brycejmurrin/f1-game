@@ -3112,6 +3112,7 @@ const G = {
   },
   get tyres() { return tyres; },
   get pits() { return pits; },
+  get feel() { return feel; },
   pitCrewDrawn: () => _pitCrewDrawn(),
   retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
