@@ -1,5 +1,14 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-19 — PR #5788 (claude/render-caster-position-only-1118): car shadow casters position-only
+
+`(tree) eagerBytes` 8015286 → **8015510** (+224). Deliberate raise of the exact boot-wall ceiling;
+it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's eager
+`js/car/car-draw.js` (+193) and `js/car/car3d.js` (+31). The code is the `_casterOnly` flag on the
+two depth-only builds (the team caster and the first-person caster), which lets TLX allocate
+position + index alone (about 8 to 10 MB of `carSh` geometry saved per race). It measured +331
+after the sync onto dec94440; shorter wording of the PR's own new comments took it to +224.
+Fragment: `tests/data/ratchets.d/claude--render-caster-position-only-1118.json`.
 
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
