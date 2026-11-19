@@ -62,7 +62,8 @@ function collect(mode, G) {
     const stored = row.normalize && raw !== null ? row.normalize(raw) ?? null : raw;
     const def = defaultOf(row, G);
     const has = stored !== null;
-    let diff = has && !row.info && (row.changed ? row.changed(stored) : !same(stored, def));
+    // An undefined default is not known yet (engineTable): nothing to diff against, so never CHANGED.
+    let diff = has && !row.info && def !== undefined && (row.changed ? row.changed(stored) : !same(stored, def));
     // perDevice: an UNSET key whose default depends on this device (a phone's
     // LOW resolution, its touch steering weight) exports as null, so loading
     // the file elsewhere keeps THAT device's default instead of pinning ours.
@@ -72,7 +73,7 @@ function collect(mode, G) {
       if (!Object.keys(d).length) diff = false;
       if (!all) value = d;   // CHANGES carries the moved fields; ALL the whole effective value (B·H11 hunt)
     }
-    if (!diff && !all) continue;
+    if ((!diff && !all) || value === undefined) continue;
     (settings[row.group] ||= {})[row.k] = value;
     if (diff) {
       const name = `${row.group}.${row.k}`;
@@ -83,8 +84,7 @@ function collect(mode, G) {
   }
   let build = null;
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
-  let desktop = null;
-  try { desktop = document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
+  const desktop = thisDesktop(G);   // the same reading applySettings compares against
   const out = {
     format: FORMAT, mode: all ? "all" : "changes", exportedAt: new Date().toISOString(), build,
     device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
@@ -217,9 +217,13 @@ function collectGarage() {
 // input, and the failure that matters is not a malformed number but a key the
 // allowlist never named being written into the namespace. Nothing outside SPEC
 // (settings) or isGarageKey (garage) is written, whatever the file says.
-function typeOk(v, def) {
+function typeOk(v, def, row) {
+  if (row && row.table) return isObj(v);               // an engine table, known or not yet (engineTable)
+  // A raw row is a bare string flag: an object or array stored "[object Object]" (#5743 S2).
+  if (row && row.lane === "raw" && v !== null && typeof v === "object") return false;
   if (def === null || def === undefined) return true;   // "unset" default: any shape
-  if (typeof def === "object") return v !== null && typeof v === "object";
+  // A plain-object default takes a plain object, an array default an array (#5743 S3).
+  if (typeof def === "object") return v !== null && typeof v === "object" && Array.isArray(v) === Array.isArray(def);
   return typeof v === typeof def;
 }
 // Which kind of device this page runs on, read the way collect() writes file.device.desktop.
@@ -248,7 +252,10 @@ function applySettings(file, G) {
   // A FILE FROM THE OTHER KIND OF DEVICE (#5005): a desktop's renderer, quality and resolution pinned on the
   // phone boot desktop graphics. Every perDevice row stays this device's own; the receipt counts them skipped.
   const here = thisDesktop(G), there = isPlain(file.device) ? file.device.desktop : null;
-  const crossDevice = typeof here === "boolean" && typeof there === "boolean" && here !== there;
+  // A file that does not say which kind of device saved it (no or a broken `device` block: hand-built, older)
+  // is treated as the other kind on a page that knows its own: pinning its resolution and renderer here is
+  // the #5005 failure (#5743 S4).
+  const crossDevice = typeof here === "boolean" && (typeof there !== "boolean" || here !== there);
   const writes = [];
   let skipped = 0;
   for (const row of SPEC) {
@@ -264,7 +271,7 @@ function applySettings(file, G) {
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
-    if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
+    if ((!row.freeShape && !typeOk(v, def, row)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     writes.push([row, v]);
   }
   // ALL OR NOTHING (#5005). A write storage refuses (a nearly full phone) used to leave the keys before and
@@ -557,8 +564,8 @@ function create(G) {
         try { obj = JSON.parse(text); } catch (_) { obj = null; }
         onJson(obj);
       };
-      const fail = () => { if (version === pickVersion) onJson(null); };
-      if (maxBytes && f.size > maxBytes) { fail(); return; }   // refused before it is read, let alone parsed
+      const fail = (why) => { if (version === pickVersion) onJson(null, why === "big" ? "big" : "read"); };
+      if (maxBytes && f.size > maxBytes) { fail("big"); return; }   // refused before it is read, let alone parsed
       if (typeof f.text === "function") f.text().then(done, fail);
       else { const r = new FileReader(); r.onload = () => done(String(r.result || "")); r.onerror = fail; r.readAsText(f); }
     };
@@ -627,8 +634,9 @@ function create(G) {
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
       };
-      pick((obj) => {
-        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
+      pick((obj, why) => {
+        // Over the size cap is its own reason: "NOT A JSON FILE" for a 2 MB .json misled (#5743 S5).
+        if (!obj) { flash(b, label, why === "big" ? "FILE TOO LARGE" : "NOT A JSON FILE", 2200); return; }
         let r;
         // A throw here would surface as an unhandled rejection over the game (#2191).
         const threw = (e) => { Log.warn("ui", "file load threw", e && e.message); return null; };

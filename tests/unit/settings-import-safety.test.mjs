@@ -176,4 +176,9 @@ test("Bryce's real phone export loads on a phone with nothing skipped, failed or
   assert.equal(rows, Object.values(file.settings).reduce((n, grp) => n + Object.keys(grp).length, 0));
   assert.equal(back.display.uiScale, 70);
   assert.equal(back.display.hudBtnScale, 143.25);
+  // #5743: the CHANGED list comes back too (exportedAt, device, where and build are per-export context; keys
+  // added after the file was made are not in it).
+  const inFile = (name) => { const [g, k] = name.split("."); return !!(file.settings[g] && Object.prototype.hasOwnProperty.call(file.settings[g], k)); };
+  const again = b.collect("all");
+  assert.deepEqual(again.changed.filter(inFile).sort(), file.changed.filter(inFile).sort());
 });

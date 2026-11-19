@@ -96,8 +96,10 @@ const SPEC = [
   { k: "commentary", lane: "json", group: "audio", def: "tv", src: "js/race/race-radio.js", oneOf: ["off", "tv", "on"] },
   { k: "musicSource", lane: "json", group: "audio", def: "all", src: "js/audio/panel.js" },
   { k: "sndProfile", lane: "json", group: "audio", def: "team", src: "js/audio/panel.js" },
-  { k: "sndTune", lane: "json", group: "audio", def: () => (typeof GameAudio !== "undefined" && GameAudio.tuneDefaults) ? GameAudio.tuneDefaults() : {}, src: "js/audio/engine.js TUNE_DEF" },
-  { k: "sndLayers", lane: "json", group: "audio", def: () => (typeof GameAudio !== "undefined" && GameAudio.layerDefaults) ? GameAudio.layerDefaults() : {}, src: "js/audio/engine.js LAYER_DEF" },
+  // The engine's tables arrive with the lazy audio bundle: the stub answers {}, and a {} default made every
+  // stored table CHANGED (#5743 S1). undefined = "not known yet": collect lists no diff for it.
+  { k: "sndTune", lane: "json", group: "audio", def: () => engineTable("tuneDefaults"), table: true, src: "js/audio/engine.js TUNE_DEF" },
+  { k: "sndLayers", lane: "json", group: "audio", def: () => engineTable("layerDefaults"), table: true, src: "js/audio/engine.js LAYER_DEF" },
   // DISPLAY (js/ui/scale.js, js/perf/quality-preset.js, js/perf/renderer-picker.js)
   // UNSET is the default here, and it is not the same number on every device:
   // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
@@ -351,6 +353,11 @@ if (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.ingestSettin
 }
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+/** GameAudio's default table, or undefined while only the stub's empty answer is there. */
+function engineTable(fn) {
+  const t = typeof GameAudio !== "undefined" && typeof GameAudio[fn] === "function" ? GameAudio[fn]() : null;
+  return isObj(t) && Object.keys(t).length ? t : undefined;
+}
 
 // THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
 // a player BUILT (parts bought, liveries painted, setups dialled in, a team
