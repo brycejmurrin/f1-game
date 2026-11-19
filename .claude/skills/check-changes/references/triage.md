@@ -29,8 +29,8 @@ A red with only ~120 s timeouts goes to step 1.
 `Test timeout … while setting up "context"` is the classic load signature —
 the browser couldn't even boot a context. Cross-check the sibling shards on the
 same `head_sha` and the spec's usual duration (`tests/data/spec-timings.json`).
-→ Re-run the group on the pushed branch: `node tools/ci/remote-group.mjs <group>`
-(a green run of the same sha is reused; `--force` re-dispatches). PASS there =
+→ A re-run is the next push's PR run, or a whole group with `remote-group.mjs <group>`, which
+dispatches only with Bryce's opt-in (a green run of the same sha is reused without one). A passing re-run =
 contention, but a pass that needed the retry is still a red (rule 9). FAIL again
 = real; bisect. A local solo re-run (`test-solo.mjs`) is for a Bryce-attended
 session on his explicit grant only.
@@ -86,7 +86,7 @@ base result is UNKNOWN, not green. A pass that needed the retry is still a red
   `bash-guard.sh`). Browser+browser pairing on this box is the measured source of the
   entire 120 s class; on CI each shard owns its runner.
 - `verify-change.mjs` plans ONE group per batch and reports browser batches as not-run;
-  name them in the PR or run them with `remote-group.mjs`.
+  name them in the PR (a whole group, `remote-group.mjs`, is Bryce's opt-in).
 - Verdicts come from a log's closing line: `remote-group.mjs` ends `= group <verdict>`,
   `ci-watch.mjs` ends `= ci <verdict>`, a `tooling-fast` log ends
   `= tooling-fast passed|failed (<n> files, <m> failed)`. Match with `grep -E '^= '` — never the process table.

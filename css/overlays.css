@@ -975,6 +975,13 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
 }
 #install-chip[hidden] { display: none; }
 #update-chip[hidden] { display: none; }
+/* THE TITLE MAKES ROOM FOR IT. The chip is fixed bottom-right at z 9000 and the
+   title grid fills the window, so on a landscape phone it sat ON the last menu
+   row: SAVES & DATA fully and HOW TO PLAY half at 844x390 (SETTINGS too under the
+   longer "RELOAD TO CONTINUE" text), for as long as the update was pending, and
+   a tap meant for one of them reloaded the game. While it shows, #overlay ends
+   one chip row (+ a gap of air) higher; the grid reflows inside what is left. */
+body:has(> #update-chip:not([hidden])) #overlay { padding-bottom: calc(var(--sab) + var(--tap) + var(--gap) * 2); }
 /* NOT UNDER A MODAL DIALOG. showModal() puts dialog.screen (RESULTS after
    every race, SETTINGS, STANDINGS, DATA HUB…) in the top layer, which no
    z-index outranks, and makes everything outside it inert — the chip sat under
@@ -1683,6 +1690,10 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
    edges: its containing block is the list, so it cannot leave it to cover the
    story podium above, and it shows at open without results-sheet.js scrolling
    the sheet away from the winner. An open stint fold drops it back into flow. */
+/* #5603 GEOMETRY IS INSTANT UNDER MOTION: REDUCED. Its 0.01ms on the initial `transition-property: all`
+   (css/responsive.css) replays the previous box for a frame: when the sheet turned compact at open, YOU kept its old
+   margin-top and painted on P1 (852x393: YOU at y 313 on the list top, 44 px over P1). Paint keeps its 0.01ms. */
+:root[data-motion="reduce"] #results :is(*, *::before, *::after) { transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow; }
 #results-table .res-row.you { position: relative; }
 #results-table [data-results-part="ranking"] > .res-row.you { position: sticky; top: 0; bottom: 0; }
 #results-table .res-row.you:has([data-stint-details][open]) { position: relative; }

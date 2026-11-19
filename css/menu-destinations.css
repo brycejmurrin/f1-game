@@ -267,14 +267,6 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   }
   body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) > span { min-width: 0; max-width: 100%; }
 }
-@media (min-height: 520px), (max-aspect-ratio: 1/1) {
-  body #overlay #menu-buttons #menu-secondary > .bigbtn {
-    overflow-wrap: normal;
-    word-break: normal;
-    text-wrap: balance;
-    line-height: 1.1;
-  }
-}
 /* 1440p and 21:9: a measure, not half the monitor. Local tokens — no
    responsive-foundation PR was open (searched 2026-10-29). */
 @media (min-width: 1680px) and (min-height: 700px) {
@@ -321,6 +313,9 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 #overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
 #overlay #menu-buttons .bigbtn::before { background: none; }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
+body #overlay #menu-buttons #menu-secondary > .bigbtn {
+  overflow-wrap: normal; word-break: normal; text-wrap: balance; line-height: 1.1;
+}
 }
 /* At comfortable heights the destinations retain their groups instead of
    dissolving into a field of equal tiles. DOM order is the reading order. */
@@ -407,7 +402,9 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
 body[data-shape="wide"]:not([hidden]) #overlay #title { font-size: min(calc(6 * var(--vwz)), 21cqi); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-meta { align-items: flex-start; margin-top: var(--gap); gap: calc(var(--gap) / 2); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
-body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #soundbtn { font-size: calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)); margin: 0; min-height: 0; padding: calc(var(--gap) * .7) var(--gap); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #soundbtn { font-size: calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)); margin: 0; padding: calc(var(--gap) * .7) var(--gap);
+  /* #5622: was 0 (29 px); the brand zooms by TITLE SIZE x fit only. */
+  min-height: calc(var(--tap-paint-at, 24px) / (var(--tl-title-size, 1) * var(--tf, 1))); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer { font-size: calc(var(--fs-micro) * .52 * var(--ui-compact-brand-text, 1)); margin: 0; white-space: normal; text-wrap: balance; max-width: 100%; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons {
   --home-g: calc(var(--gap) * .45);

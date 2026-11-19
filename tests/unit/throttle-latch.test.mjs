@@ -440,3 +440,147 @@ test("a silent gyro falls back after 1.5s only while its permission attempt stil
     assert.equal(messages.includes("no motion sensor — switched to buttons"), change === "none");
   }
 });
+
+// ---- SLIDE HAND-OFF between sibling hold controls (#5575 findings 2 and 3) ----
+// A captured pointer stayed with the control it landed on: a thumb slid from GAS
+// up onto BRAKE never braked and left 12 % throttle, and one slid from the left
+// arrow onto the right kept steering left. Driven through the real listeners, on
+// the dock geometry of the 844x390 phone at BUTTON SIZE 143: BRAKE directly
+// above GAS, the arrows side by side 8 px apart.
+const BOX = {
+  "btn-brake":       { left: 700, top: 180, width: 90, height: 90 },
+  "btn-throttle":    { left: 700, top: 278, width: 90, height: 90 },
+  "btn-steer-left":  { left: 20,  top: 265, width: 103, height: 103 },
+  "btn-steer-right": { left: 131, top: 265, width: 103, height: 103 },
+};
+function bootDock() {
+  const h = boot();
+  const b = {};
+  for (const id of Object.keys(BOX)) {
+    b[id] = h.sb.document.getElementById(id);
+    b[id].getBoundingClientRect = () => BOX[id];
+    b[id].captured = new Set();
+    b[id].setPointerCapture = (p) => b[id].captured.add(p);
+    b[id].releasePointerCapture = (p) => b[id].captured.delete(p);
+  }
+  const mid = (id) => ({ clientX: BOX[id].left + BOX[id].width / 2, clientY: BOX[id].top + BOX[id].height / 2 });
+  const win = (t, ev) => (h.listeners[t] || []).forEach((f) => f({ pointerId: 1, touches: [], ...ev }));
+  // A real lift reaches the window capture net as well as the capturing element.
+  const lift = (id, pointerId = 1) => { win("pointerup", { pointerId }); b[id].fire("pointerup", { pointerId }); };
+  const btn = () => h.Input.debugState().btn;
+  return { ...h, gas: b["btn-throttle"], brake: b["btn-brake"], left: b["btn-steer-left"], right: b["btn-steer-right"], mid, win, lift, btn };
+}
+
+test("sliding one thumb from GAS up onto BRAKE brakes and drops the throttle; sliding back restores it (#5575)", () => {
+  const { gas, brake, mid, lift, btn } = bootDock();
+  gas.fire("pointerdown", mid("btn-throttle"));
+  assert.deepEqual([btn().throttle, btn().throttleVal, btn().brake], [true, 1, false]);
+  // Still on GAS, 40 px up: the documented single-pedal ease, untouched.
+  gas.fire("pointermove", { clientX: 745, clientY: 283 });
+  assert.equal(btn().throttle, true);
+  assert.equal(btn().brake, false);
+  assert.ok(btn().throttleVal < 1 && btn().throttleVal > 0.12, "stamp-then-ease still eases inside the pedal");
+  // In the 8 px gap between the pedals nothing changes hands.
+  gas.fire("pointermove", { clientX: 745, clientY: 274 });
+  assert.deepEqual([btn().throttle, btn().brake], [true, false]);
+  // Onto BRAKE (capture still delivers the move to GAS).
+  gas.fire("pointermove", mid("btn-brake"));
+  assert.deepEqual([btn().throttle, btn().throttleVal], [false, 0], "GAS is released, not left at the 0.12 floor");
+  assert.deepEqual([btn().brake, btn().brakeVal], [true, 1], "BRAKE is pressed at full travel");
+  assert.equal(brake.captured.has(1), true, "the pointer is now captured by BRAKE");
+  assert.equal(gas.captured.has(1), false);
+  assert.deepEqual([brake.attrs["data-slid"], gas.attrs["data-slid"]], ["on", "off"], "the pressed look follows the thumb");
+  // Further up the same slide must not read as easing the brake off.
+  brake.fire("pointermove", { clientX: 745, clientY: 185 });
+  assert.equal(btn().brakeVal, 1);
+  // …and it hands back the same way.
+  brake.fire("pointermove", mid("btn-throttle"));
+  assert.deepEqual([btn().throttle, btn().throttleVal, btn().brake, btn().brakeVal], [true, 1, false, 0]);
+  // A browser that keeps a touch's moves on the control it LANDED on, whatever
+  // setPointerCapture said: GAS -> BRAKE -> GAS has to work when every move of
+  // the contact arrives on GAS.
+  gas.fire("pointermove", mid("btn-brake"));
+  assert.deepEqual([btn().throttle, btn().brake], [false, true]);
+  gas.fire("pointermove", mid("btn-throttle"));
+  assert.deepEqual([btn().throttle, btn().throttleVal, btn().brake, btn().brakeVal], [true, 1, false, 0]);
+  lift("btn-throttle");
+  assert.deepEqual([btn().throttle, btn().brake, btn().throttleVal, btn().brakeVal], [false, false, 0, 0]);
+  for (const el of [gas, brake]) assert.equal("data-slid" in el.attrs, false);
+});
+
+test("sliding one thumb from the left arrow onto the right steers right (#5575)", () => {
+  const { Input, left, right, mid, lift, btn, clock } = bootDock();
+  Input.setSteerMode("buttons");
+  left.fire("pointerdown", mid("btn-steer-left"));
+  for (let i = 0; i < 40; i++) { clock.t += 16; Input.steer(); }
+  assert.ok(Input.steer() < 0, "holding the left arrow steers left");
+  left.fire("pointermove", mid("btn-steer-right"));
+  assert.deepEqual([btn().left, btn().leftVal, btn().right, btn().rightVal], [false, 0, true, 1]);
+  for (let i = 0; i < 80; i++) { clock.t += 16; Input.steer(); }
+  assert.ok(Input.steer() > 0, "the wheel follows the arrow under the thumb");
+  right.fire("pointermove", mid("btn-steer-left"));
+  assert.deepEqual([btn().left, btn().right], [true, false]);
+  lift("btn-steer-left");
+  assert.deepEqual([btn().left, btn().right], [false, false]);
+});
+
+test("a hand-off moves only the finger that slid: a second finger keeps its control (#5575)", () => {
+  const { gas, brake, left, mid, lift, btn } = bootDock();
+  // Left thumb steers, right thumb slides GAS -> BRAKE: the arrow is untouched.
+  left.fire("pointerdown", { pointerId: 2, ...mid("btn-steer-left") });
+  gas.fire("pointerdown", { pointerId: 1, ...mid("btn-throttle") });
+  gas.fire("pointermove", { pointerId: 1, ...mid("btn-brake") });
+  assert.deepEqual([btn().left, btn().throttle, btn().brake], [true, false, true]);
+  lift("btn-brake", 1);
+  assert.deepEqual([btn().left, btn().brake], [true, false]);
+  lift("btn-steer-left", 2);
+  // Two fingers on GAS, one slides to BRAKE: GAS stays held by the other.
+  gas.fire("pointerdown", { pointerId: 1, ...mid("btn-throttle") });
+  gas.fire("pointerdown", { pointerId: 3, ...mid("btn-throttle") });
+  gas.fire("pointermove", { pointerId: 3, ...mid("btn-brake") });
+  assert.deepEqual([btn().throttle, btn().throttleVal, btn().brake], [true, 1, true]);
+  lift("btn-brake", 3);
+  assert.deepEqual([btn().throttle, btn().brake], [true, false]);
+  lift("btn-throttle", 1);
+  assert.equal(btn().throttle, false);
+});
+
+test("a hidden sibling takes no hand-off: BRAKE cannot slide onto the GAS that AUTO throttle hid (#5575)", () => {
+  const { gas, brake, mid, btn } = bootDock();
+  gas.hidden = true;
+  brake.fire("pointerdown", mid("btn-brake"));
+  brake.fire("pointermove", mid("btn-throttle"));
+  assert.deepEqual([btn().brake, btn().throttle], [true, false]);
+});
+
+test("pointercancel, a hidden page and a rotation release a handed-off hold (#5575)", () => {
+  const cases = {
+    pointercancel: (h) => { h.win("pointercancel"); h.brake.fire("pointercancel"); },
+    visibilitychange: (h) => { h.sb.document.hidden = true; h.win("visibilitychange"); },
+    blur: (h) => h.blur(),
+    orientationchange: (h) => h.win("orientationchange"),
+  };
+  for (const [name, act] of Object.entries(cases)) {
+    const h = bootDock();
+    h.gas.fire("pointerdown", h.mid("btn-throttle"));
+    h.gas.fire("pointermove", h.mid("btn-brake"));
+    assert.equal(h.btn().brake, true, name);
+    act(h);
+    assert.deepEqual([h.btn().throttle, h.btn().brake, h.btn().throttleVal, h.btn().brakeVal], [false, false, 0, 0], name);
+    assert.deepEqual([...h.Input.debugState().holdPointers].filter(Boolean), [], name + ": no ghost pointer is left in any hold set");
+    assert.deepEqual(["data-slid" in h.brake.attrs, "data-slid" in h.gas.attrs], [false, false], name);
+    // The next press starts clean.
+    h.gas.fire("pointerdown", h.mid("btn-throttle"));
+    assert.deepEqual([h.btn().throttle, h.btn().brake], [true, false], name);
+  }
+});
+
+test("THROTTLE = LATCH: sliding off a latched GAS keeps the latch, and BRAKE still works (#5575)", () => {
+  const { Input, gas, mid, lift, btn } = bootDock();
+  Input.setThrottleLatch(true);
+  gas.fire("pointerdown", mid("btn-throttle"));
+  gas.fire("pointermove", mid("btn-brake"));
+  assert.deepEqual([btn().throttle, btn().brake], [true, true], "the latch outlives the thumb, as it does on a lift");
+  lift("btn-brake");
+  assert.deepEqual([btn().throttle, btn().brake], [true, false]);
+});

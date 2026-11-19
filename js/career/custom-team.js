@@ -22,7 +22,7 @@ const CustomTeam = (function () {
       invalidateDecalTextures, invalidateCustomMeshCaches, spMeshBust,
       getLivDraftOverride, setLivDraftOverride, getSoundOn, GameAudio,
       getEls, getTeamIdx, setTeamIdx, getDriverIdx, setDriverIdx, buildSelect, buildSetup,
-      isCarsetupVisible,
+      isCarsetupVisible, announce,
     } = hooks;
 
     let logoGeneration = 0;
@@ -44,7 +44,14 @@ const CustomTeam = (function () {
     function identityGet(key, fallback) { return typeof Career !== "undefined" && Career.identityValue ? Career.identityValue(key, fallback) : fallback; }
     function identitySet(key, value) {
       if (typeof Career !== "undefined" && Career.inCareer() && Career.data().flavour === "myteam" && Career.setIdentityValue) return Career.setIdentityValue(key, value);
-      return store.set(key, value);
+      store.set(key, value);
+      return true;
+    }
+    function keptIdentity(key, value) {   // a career refusal keeps the dialog (#5657)
+      let kept = false;
+      try { kept = identitySet(key, value) !== false; } catch (_) {}
+      if (!kept && announce) announce("TEAM NOT SAVED", 3, "info");
+      return kept;
     }
     function loadCustomTeam() {
       return Teams.sanitizeCustom(identityGet("customTeam", store.get("customTeam", DEFAULT_CUSTOM)));
@@ -335,7 +342,7 @@ const CustomTeam = (function () {
           }, ...(Array.isArray(prev.drivers) ? prev.drivers.slice(1) : [])],
         };
         ct.livery = czLivFromDialog();
-        identitySet("customTeam", ct);
+        if (!keptIdentity("customTeam", ct)) return;
         syncCustomTeam();
         // Inside a career the CONTRACT picks the car: saving the design must
         // not swap a driver career's seat for MY TEAM (the contracted car
@@ -363,7 +370,7 @@ const CustomTeam = (function () {
         const current = () => generation === logoGeneration;
         readLogoFile(f, (dataUrl) => {
           if (!current() || !dataUrl) return;
-          try { identitySet(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
+          if (!keptIdentity(CUSTOM_LOGO_KEY, dataUrl)) return;
           applyCustomLogo(dataUrl);
           refreshCustomLogoUi(dataUrl);
           invalidateDecalTextures("custom");
@@ -374,7 +381,7 @@ const CustomTeam = (function () {
       });
       $("cz-logo-clear").onclick = () => {
         ++logoGeneration;
-        try { identitySet(CUSTOM_LOGO_KEY, null); } catch (_) {}
+        if (!keptIdentity(CUSTOM_LOGO_KEY, null)) return;
         applyCustomLogo(null);
         refreshCustomLogoUi(null);
         invalidateDecalTextures("custom");

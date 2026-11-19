@@ -13,6 +13,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
 import { ON_DEMAND_PATHS } from "../../tools/lib/generated-paths.mjs";
+import {
+  collectSkillReferenceFailures,
+  assertNotOwnedSetPresent,
+} from "./skills-references-exist.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SKILLS = path.join(ROOT, ".claude/skills");
@@ -190,4 +194,16 @@ test("every agent, skill, npm script, tool path and doc anchor the agent surface
     }
   }
   assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+// Skills-audit path/npm gate (logic in skills-references-exist.mjs). A dedicated
+// skills-references-exist.test.mjs needs a tests/groups.json row; that path is
+// FORBIDDEN / multi-owned on this tip, so the suite rides skill-descriptions.
+test("owned skill markdown paths and npm scripts resolve", () => {
+  const bad = collectSkillReferenceFailures(SCRIPTS);
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("skills-audit NOT OWNED allowlist paths still exist on tip", () => {
+  assert.deepEqual(assertNotOwnedSetPresent(), [], "NOT OWNED skill paths missing on tip");
 });

@@ -53,10 +53,10 @@ node tools/track/audit-circuit.cjs <id>     # node-VM, seconds: verify + every p
 node tools/track/float-audit.cjs <id> --why # on a FAIL: the emitting source line (ground-audit / clip-audit take --why too)
 ```
 
-Grounded = `audit-circuit.cjs <id>` all OK (its header names each check's baseline); a denser circuit raises the
+Grounded = `audit-circuit.cjs <id>` all OK (the comment block at the top of `tools/track/audit-circuit.cjs` names each check's baseline); a denser circuit raises the
 props-tris baseline (`tests/unit/props-tri-ratchet.test.mjs`) in a commit that says why. Then `npm run gen:check`
 ([shell/cache](../check-changes/references/bump.md)). The rest is the PR's CI: `node tools/ci/pick-tests.mjs`
-names the groups (`circuits`, plus `sweeps` for an engine edit); `node tools/ci/remote-group.mjs <group>` on the pushed branch.
+names the groups (`circuits`, plus `sweeps` for an engine edit); a whole group (`remote-group.mjs`) is Bryce's opt-in.
 
 **Built on demand:** `tools/shot/scenery-locations.json` is gitignored (`ON_DEMAND_PATHS` in
 `tools/lib/generated-paths.mjs`): its reader rebuilds a stale copy (`node tools/gen/ensure-built.mjs --with
