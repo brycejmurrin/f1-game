@@ -4,7 +4,7 @@
 // Full description: Watches every workflow run for a SHA (default HEAD) and prints one `[ci-watch]` line per job as it finishes — a red names its failing step and first annotations — then a terminal `= ci <verdict>` line; `--pages` follows the deploy train until a Pages run containing the SHA ends. Built for a Monitor (each line an event) or a background task.
 // @skill steward
 //
-// AGENTS.md rule 12 / §Watching CI and Pages: a push is not done when it lands,
+// AGENTS.md rules 12–13 + skill steward: a push is not done when it lands,
 // it is done when its jobs are green — and a red found at the end of the turn
 // (or never: a `cancelled` run hid a FAILED one for five days) costs a cycle.
 // Waiting on a PR event alone is not enough either: webhooks arrive late or not
@@ -78,7 +78,7 @@ import { loadQuarantine, QUARANTINE } from "../../tests/helpers/flaky-policy.mjs
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export { REPO, DEPLOY };
-const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
+const PAGES_WORKFLOW = 295002043;   // pages.yml (skill steward / AGENTS.md rule 13)
 const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
 export const DEFAULT_INTERVAL_S = 60;       // seconds between polls; --interval overrides (min 10)
 const WAIT_TIMEOUT_MIN = 720;        // --wait: one background task outlives the 30-min Monitor expiry
@@ -303,7 +303,7 @@ export const USAGE = `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pag
   then one \`= ci <verdict>\` line (passed | failed | cancelled | superseded | none). --pages adds the Pages train.
   --failures-only: only red/cancelled jobs and the final line. --wait: long poll (12 h default timeout). --jobs: list waiting legs and exit.
   --state <file|none>: reported-job keys across re-arms. --once polls one time and exits. --since: runs created earlier never count (default: the open PR's last
-  ready flip / reopen; none = no floor). Details: the header of this file and AGENTS.md §Watching CI and Pages.
+  ready flip / reopen; none = no floor). Details: the header of this file and skill steward (AGENTS.md rules 8, 12–13).
   An unknown flag prints this usage and exits 2.`;
 export const KNOWN_FLAGS = ["--sha", "--pages", "--once", "--failures-only", "--wait", "--jobs", "--state", "--timeout", "--interval", "--since"];
 // Only as the entry point: a module that imports this one keeps its own argv.

@@ -90,10 +90,21 @@ const QualiNet = (function () {
     // The ONLY place the wait clock runs: it starts the first time the gate holds
     // and the deadlines are measured from there.
     function waiting() {
-      if (!rawWaiting()) { gateSince = null; return false; }
+      // Every peer posted (or the room emptied): drop the wake-up timer too.
+      // Clearing only gateSince left a scheduled refreshQualiGate() to fire once
+      // after the field was already ready.
+      if (!rawWaiting()) {
+        if (gateTimer != null) { clearTimer(gateTimer); gateTimer = null; }
+        gateSince = null;
+        return false;
+      }
       if (gateTimedOut) return false;
       if (gateSince == null) gateSince = clock();
-      if (clock() - gateSince >= GATE_TIMEOUT_MS) { gateTimedOut = true; return false; }
+      if (clock() - gateSince >= GATE_TIMEOUT_MS) {
+        gateTimedOut = true;
+        if (gateTimer != null) { clearTimer(gateTimer); gateTimer = null; }
+        return false;
+      }
       // The host's START ANYWAY: the gate stops holding the host (q-go then
       // proceeds exactly as for a complete field); guests wait out the cap.
       return !canForce();
@@ -210,6 +221,7 @@ const QualiNet = (function () {
     function resetSoft() {
       qualiNetDone = null;
       qualiLive.clear();
+      qualiPeers.clear();
       qualiHadRivals = false;
       gateReset();
     }

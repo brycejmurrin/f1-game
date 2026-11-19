@@ -23,7 +23,7 @@ const USAGE = "usage: node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]\n  
 export function nextCalls(pr, repo = "brycejmurrin/f1-game") {
   return [
     `1. GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${pr}  draft:false   (receipt good for ${MAX_AGE_MIN} min; older: re-run ready-gate)`,
-    `2. gh api -X POST repos/${repo}/issues/${pr}/labels -f 'labels[]=land'   (after the flip: \`land\` on a draft does nothing)`,
+    `2. GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${pr}  labels=<the live list from issue_read get_labels, plus "land">   (after the flip: \`land\` on a draft does nothing; one label per call, skill steward references/labels.md)`,
     `then refresh the Hand-off block and subscribe_pr_activity (re-subscribe after the flip); GitHub merges it, not you.`,
   ];
 }

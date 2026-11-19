@@ -443,7 +443,6 @@ const FULL = [
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
   "js/share/share-card.js",
-  "js/share/share-card-chips.js", // ShareCardChips: the SHARE CARD chip on results, standings, champion and THE YEAR
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -522,6 +521,21 @@ const CSS_DEFERRED = [
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
   "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];
+// ROUTE SHEETS (#5394 row 2): a CSS_DEFERRED sheet whose rules style only the screens named here. gen-shell writes the
+// ids into the tag's data-route; the boot flipper skips such a tag, so it stays on print (out of the cascade) through
+// the title intro, and LazyBundles flips it the first time one of these elements is shown (hidden removed or open set),
+// or at the idle backstop. The ids come from a selector-to-element census of each sheet, plus every #id its selectors
+// name mapped to its screen (PR #5714 body). Not here, on
+// purpose: hud, touch-controls and overlays style title chips, pause settings, toasts and html vars; watch-transport's
+// replay bar is a body-level node with body-class rules.
+const CSS_ROUTE = {
+  "css/career.css": ["career", "career-offers", "career-guide", "career-history", "quali", "results", "standings"],   // compact .res-row rules for every results/standings sheet
+  "css/career-experience.css": ["career", "results", "ceremony-podium"],
+  "css/garage-experience.css": ["carsetup", "customize"],
+  "css/photo-studio.css": ["photo-studio"],
+  "css/editor.css": ["trackdesigner"],
+  "css/data.css": ["datahub", "track-detail", "trackdesigner", "results", "spotifypanel"],
+};
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
 const SHELL_NOTES = {
@@ -1111,6 +1125,7 @@ const LAZY_RACE = [
   "js/garage/entrance-motion.js",
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
+  "js/garage/arrival-rows.js",   // the GARAGE ENTER & LEAVE tuner's extra rows (#5660: off the boot wall)
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,
@@ -1346,10 +1361,13 @@ const LAZY_UI_PRESETS = [
 ];
 const LAZY_UI_PRESETS_EDGES = [];
 
-// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~54 KB). endRace and the
+// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~62 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
-// ensureResultsSheet so buildResults stays synchronous at the flag.
+// ensureResultsSheet so buildResults stays synchronous at the flag. The SHARE
+// CARD chip (ShareCardChips) rides here: results-sheet and career-ui's THE YEAR
+// card are its only callers, both behind a typeof check (deploy red, boot wall).
 const LAZY_RESULTS_SHEET = [
+  "js/share/share-card-chips.js",
   "js/ui/results-sheet.js",
 ];
 const LAZY_RESULTS_SHEET_EDGES = [];
@@ -1832,7 +1850,7 @@ const SW_LOCALES = ["locales/manifest.json"];
 module.exports = {
   MOVED,
   SW_LOCALES,
-  CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
+  CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, CSS_ROUTE, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, LAZY_REAL_RACE, LAZY_REAL_RACE_EDGES, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,

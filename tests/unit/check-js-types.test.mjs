@@ -21,5 +21,7 @@ test("checkJs stays opt-in and the starters carry the marker", () => {
   const cfg = JSON.parse(readFileSync("tsconfig.checkjs.json", "utf8"));
   assert.equal(cfg.compilerOptions.checkJs, false);
   assert.equal(cfg.compilerOptions.noEmit, true);
+  assert.equal(cfg.compilerOptions.noImplicitAny, false);
+  assert.equal(cfg.compilerOptions.strictNullChecks, true);
   for (const f of STARTERS) assert.match(readFileSync(f, "utf8"), /^\/\/ @ts-check$/m, f);
 });

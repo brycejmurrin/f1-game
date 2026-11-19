@@ -296,6 +296,8 @@ $("pm-phonepad").onclick = () => {
         btn.textContent = "UNPAIR PHONE"; G.announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
         if (VISOR_CAM >= 0 && G.camMode !== VISOR_CAM) { phonePadCam = G.camMode; G.setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
       },
+      // ALLOW / REJECT covers the pedals: pause a running solo race under it (a net race never pauses).
+      asking: () => { if ((G.state === "race" || G.state === "count") && !G.paused && !G.netPlay.active()) setPaused(true, "phone-confirm"); },
       // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
       relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
       recovery: (r) => {
@@ -354,7 +356,11 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && G.netPlay.active()) _netHiddenPump = setInterval(() => G.netPlay.tick(performance.now()), 500);
 });
 let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep(); });
+window.addEventListener("pagehide", () => {
+  // A bfcache hide can leave the VS FRIEND hidden-tab pump armed; clear it with the rest.
+  clearInterval(_netHiddenPump); _netHiddenPump = 0;
+  PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep();
+});
 // LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
 // the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
 // or an overlay taking focus, left the car coasting off-line while the field
