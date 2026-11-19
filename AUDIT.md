@@ -420,3 +420,10 @@ under the energy gauge.
 `js/input/input.js`: the no-controller branch of `pollGamepad` now clears the throttle and look-back toggle
 latches. Verified in a live session with a stubbed gamepad, toggle mode: tap RT (throttle on), remove the pad
 with no disconnect event, return it idle → throttle before the fix `true`, level 1; after it `false`, 0.
+
+### Fix 15 — percent-encoded lap-challenge links (addendum A12)
+
+`js/ui/share-code.js` `codeFrom`: a code that arrives already extracted from the URL (so it starts with
+`APX…`) is now percent-decoded before parsing. Verified in Chromium: `APXC1.l.bahrain%7E-%7E91234` refused
+as corrupt → accepted as a 1:31.234 lap challenge; the unencoded form and the `#share=` form still work, and
+a malformed escape is still refused.

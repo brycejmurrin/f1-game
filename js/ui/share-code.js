@@ -162,7 +162,10 @@ const ShareCode = (function () {
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLDC]1\./.test(input)) return input.replace(/\s+/g, "");
+    if (/^APX[SLDC]1\./.test(input)) {
+      if (input.indexOf("%") >= 0) { try { input = decodeURIComponent(input); } catch (_) {  } }
+      return input.replace(/\s+/g, "");
+    }
     const match = input.match(/(?:^|[#&])share=([^&]+)/);
     if (!match) return null;
     try { input = decodeURIComponent(match[1]); }
