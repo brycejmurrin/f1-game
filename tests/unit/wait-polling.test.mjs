@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lintSource, lintAll, count } from "../../tools/check/wait-polling-lint.mjs";
+import { lintSource, lintAll } from "../../tools/check/wait-polling-lint.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -31,6 +31,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // tests/data/ratchets.json (slack 39, the rule this file used); its history
 // is docs/notes/CEILING-HISTORY.md. What stays here is the LINT's behaviour:
 // what counts as a site, what does not, and that it still finds real ones.
+//
+// One lintAll() walks tests/+tools/ through espree (~3 s here). The suite used
+// to call it five times plus count()'s sixth walk (~20 s local / ~52 s in
+// tooling-fast-timings). Share one scan; assertions stay identical.
+
+const SCAN = lintAll();
+const SITE_COUNT = (() => {
+  const bad = SCAN.filter((r) => r.parseError);
+  if (bad.length) {
+    throw new Error(`wait-polling-lint: ${bad.length} file(s) cannot be parsed, so their waits are uncounted: ${
+      bad.map((r) => `${r.file} (${r.parseError})`).join("; ")}`);
+  }
+  return SCAN.reduce((a, r) => a + r.sites.length, 0);
+})();
 
 test("an async predicate is flagged — Playwright treats a Promise as success (#2825)", () => {
   for (const src of [
@@ -47,7 +61,7 @@ test("an async predicate is flagged — Playwright treats a Promise as success (
 });
 
 test("no scanned file keeps an async waitForFunction predicate", () => {
-  const bad = lintAll().flatMap((r) => (r.sites || [])
+  const bad = SCAN.flatMap((r) => (r.sites || [])
     .filter((s) => s.kind === "async-predicate")
     .map((s) => `${r.file}:${s.line}`));
   assert.deepEqual(bad, [], "async predicates never wait — make them synchronous (#2825)");
@@ -100,7 +114,7 @@ test("under tests/specs an option-less wait IS flagged (rAF-starved on a renderi
 });
 
 test("no spec under tests/specs carries an option-less waitForFunction", () => {
-  const bad = lintAll().filter((r) => r.file.startsWith("tests/specs/"))
+  const bad = SCAN.filter((r) => r.file.startsWith("tests/specs/"))
     .flatMap((r) => r.sites.filter((x) => x.kind === "no-options").map((x) => `${r.file}:${x.line}`));
   assert.deepEqual(bad, [], "add `null, { polling: 100 }` — the four foundation/time-trial sites were the proof");
 });
@@ -117,12 +131,11 @@ test("waitForSelector and locator.waitFor are NOT exposed to this", () => {
 test("tests/manual is exempt, and timeout-probe MUST stay exempt", () => {
   // That file exists to measure what the DEFAULT does. Linting it into
   // compliance would delete the evidence for this lint.
-  const rows = lintAll();
-  assert.deepEqual(rows.filter((r) => r.file.startsWith("tests/manual/")), []);
+  assert.deepEqual(SCAN.filter((r) => r.file.startsWith("tests/manual/")), []);
 });
 
 test("every scanned file parses", () => {
-  const bad = lintAll().filter((r) => r.parseError);
+  const bad = SCAN.filter((r) => r.parseError);
   assert.deepEqual(bad.map((b) => `${b.file}: ${b.parseError}`), []);
 });
 
@@ -132,13 +145,13 @@ test("the tool finds real sites — anti-vacuity", () => {
   // remaining tools/ population (tests/ went to zero in the 2026-08-27
   // sweep); detection itself is proven by the synthetic lintSource cases
   // above, and the walk by the file count here.
-  assert.ok(count() > 20, `expected 20+ sites (tools/ backlog), got ${count()}`);
+  assert.ok(SITE_COUNT > 20, `expected 20+ sites (tools/ backlog), got ${SITE_COUNT}`);
 });
 
 test("check-physics.mjs does not declare a timeout without polling", () => {
   // Six waitForFunction calls on a rendering page. Two already declared a
   // timeout (the SwiftShader trap); the rest must not grow a fake bound.
-  const row = lintAll().find((r) => r.file.replace(/\\/g, "/").endsWith("tools/check/check-physics.mjs"));
+  const row = SCAN.find((r) => r.file.replace(/\\/g, "/").endsWith("tools/check/check-physics.mjs"));
   assert.deepEqual(row?.sites ?? [], [],
     `check-physics.mjs still has waitForFunction timeout without polling: ${JSON.stringify(row?.sites)}`);
 });

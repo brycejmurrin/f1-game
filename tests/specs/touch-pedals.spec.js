@@ -120,13 +120,16 @@ test("auto-throttle and the GAS button can never disagree, across mode switches"
     // Through the REAL pause menu, the way a player switches: the pause button
     // opens it, STEER cycles the mode, resume closes it. Driving setSteerMode()
     // directly would skip the very refresh this test exists to check.
+    const prevMode = pair.mode;
     await page.evaluate(() => {
       document.getElementById("pausebtn")?.click();
       // STEERING INPUT is a setting row: › steps to the next mode.
       document.getElementById("pm-steer-next")?.click();
       document.getElementById("pm-resume")?.click();
     });
-    await page.waitForTimeout(150);
+    // Wait for the mode flip — a fixed 150 ms sleep raced a slow pause close.
+    await page.waitForFunction((m) => window.__apex.inputState().steerMode !== m,
+      prevMode, { polling: 50, timeout: 10_000 });
   }
   // Anti-vacuity: the loop must actually have visited more than one mode, or it
   // proved the invariant for a single state and called it a sweep.
