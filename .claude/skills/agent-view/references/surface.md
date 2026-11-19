@@ -119,7 +119,10 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
 Action space: `{steer, throttle, brake}`. `steer` ∈ [−1,1], **+1 = full right
 lock**; note `+k` is a **LEFT**-hand turn, so full right lock is toward `-k`.
 `throttle`/`brake` are **booleans** (any truthy = full, so
-`throttle:0.5` is full throttle, not half). `act(input, dt, n)` applies it for `n`
+`throttle:0.5` is full throttle, not half). Partial pedal travel is a separate
+field: `throttleLevel` / `brakeLevel` ∈ [0,1] (default 1 when absent), read
+beside the boolean (`{throttle:true, throttleLevel:0.5}`; Monza VM, 5 s from
+rest: 23.08 m/s full, 12.87 at 0.5, 0 at 0). `act(input, dt, n)` applies it for `n`
 ticks; `rollout({policy})` calls your policy repeatedly.
 
 ```

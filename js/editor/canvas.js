@@ -61,6 +61,7 @@ const DesignerCanvas = (function () {
     let issues = [];
     let sel = -1, span = -1, hover = -1, tool = "select";
     let scale = 0.1, cx = 0, cz = 0, fitted = false;
+    let preIns = null;               // sel/span before an insert-drag, for a pinch that abandons it (#5743 D4)
     let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null, rangeAnchor = -1;
     // Group drag: when a SPAN is selected, moving any member translates the whole
     // group by the same delta (origins snapshotted at beginDrag).
@@ -254,6 +255,9 @@ const DesignerCanvas = (function () {
         if (mode === "drag" || mode === "held" || mode === "press") {
           work = null; stale = false; dragI = -1; press = null;
           dragGroup = null; dragOrigins = null; drag0 = null;
+          // An insert the pinch threw away: its spliced index (N on the closing
+          // segment) is no point at all — hand the prior selection back.
+          if (inserted) { inserted = false; moved = false; if (preIns) { sel = preIns.sel; span = preIns.span; } preIns = null; tellSelect(); }
         }
         if (mode === "draw") { path = null; }
         const [a, b] = [...pointers.values()];
@@ -297,6 +301,7 @@ const DesignerCanvas = (function () {
         if (hooks.onLimit) hooks.onLimit("points");
       } else if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly) {
         taps[taps.length - 1] = { kind: "insert", i: k + 1 };
+        preIns = { sel, span };
         beginDrag(k + 1, true);
         placeGroup(toWX(p.x), toWZ(p.y));
         sel = dragI; span = -1; tellSelect();

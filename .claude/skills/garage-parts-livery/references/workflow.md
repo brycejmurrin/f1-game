@@ -91,7 +91,7 @@ resolution.
    **Look-only vs new stats — decide first.** A new wing LOOK (no physics change) is a `STYLES` row in
    `js/car/parts.js` — a 6-tuple `[category, equivalent, id, label, desc, visualOverrides]` that copies
    cost and all stats from its `equivalent` and is open to every team (`style_aero_spoon`,
-   `style_aero_twinplane` are the pattern); preview with the `build-viewer.mjs --sheet=parts:aero:<team>
+   `style_aero_twinplane` are the pattern); preview with the `node tools/viewer/build-viewer.mjs --sheet=parts:aero:<team>
    --match=^style_` line above `STYLES`. Only NEW stats mean a full `CATALOG` row, which is a balance
    change `parts-ladder` judges.
    **A new visual field** (say a new `fw*` key) needs THREE edits: an entry in
@@ -111,8 +111,8 @@ resolution.
    Browser specs: `tests/specs/parts-catalog.spec.js` (the category tabs),
    `parts-physics.spec.js` (mesh-hash collision) — CI runs them, never a local run (AGENTS.md rule 5).
 8. **Test and ship.** `node tools/ci/pick-tests.mjs` names the groups (`car`; `modes` when you changed
-   research locks or garage ownership UI — there is no `test:career`); the PR runs them, and one whole
-   group runs on the pushed branch with `node tools/ci/remote-group.mjs car`. Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
+   research locks or garage ownership UI — there is no `test:career`); the PR runs them; a whole
+   group (`remote-group.mjs car`) is Bryce's opt-in. Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
    before commit.
 
 ## Common mistakes

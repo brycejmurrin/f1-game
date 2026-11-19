@@ -10,7 +10,7 @@ wgx-defects.md (linked from SKILL.md).
 - 3. Unit gates and live poke (the live pokes are BROWSER-ONLY)
 
 WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
-`wgsl-post.js`.
+`wgsl-post.js`, `wgx-post.js`, `wgx-shadow.js`, `wgx-chunked.js`, `wgx-roadlut.js`, `wgx-debug-labels.js`.
 DEFERRED: no `<script>` tag; `js/render/renderer-boot.js` injects it when
 `apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
 WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,

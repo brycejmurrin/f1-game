@@ -7,8 +7,8 @@
   deleted under a running server: stop it by its listed PID, AGENTS.md rule 6). Read the matching log, retry once.
 - In a proxied Claude cloud container both network steps fail by design, not by chance: Node's `fetch` ignores
   `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1` (so the download throws "fetch failed"), and `cloudflared` needs
-  direct egress to Cloudflare's edge (port 7844, QUIC/HTTP2), which the session proxy does not carry
-  (`/root/.ccr/README.md`). Do not retry there: say plainly the tunnel cannot start from this container, and
+  direct egress to Cloudflare's edge (port 7844, QUIC/HTTP2), which the session proxy does not carry.
+  Do not retry there: say plainly the tunnel cannot start from this container, and
   offer the live URL (SKILL.md §First, which route).
 - A run that failed after starting the server leaves it detached: `node tools/mcp/browser-http-up.mjs --stop` stops
   whatever the state file recorded; an unrecorded one is stopped by its listed PID.

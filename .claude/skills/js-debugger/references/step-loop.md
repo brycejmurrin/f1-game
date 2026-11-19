@@ -8,7 +8,7 @@
 2. Find the function through `code-nav` (`lsp_definition {symbol, body:true}`;
    fallback `node tools/mcp/lsp-mcp.mjs def Ghost.snapshot --body`), then narrow
    `debugger_scripts` by the returned file name, then use `debugger_source` with
-   that row's `scriptId` (or its exact `url`) to find the statement. Preserve the returned URL including its query suffix.
+   that row's `scriptId` (or its exact `url`) to find the statement. For a breakpoint, drop the query suffix.
    Source lines/columns are one-based; frame indices are zero-based. A URL without a query
    (or a bare `js/agent/apex.js`) matches every `?v=`, so a `?v=dev` or deferred script resolves.
 3. Set `debugger_breakpoint` at that URL/line, optionally with a condition

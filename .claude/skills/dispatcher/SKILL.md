@@ -25,6 +25,8 @@ session loads skill `steward` §Lane.
 A session that launches workers itself (`create_session`) while the Action is off writes its briefs from
 [`references/orchestrator-brief.md`](references/orchestrator-brief.md): what to check before a wave, the brief
 template, and what to send while workers run.
+Channels, `land` lanes, relayed grants and a shared phone, from a five-worker run:
+[`references/sibling-sessions.md`](references/sibling-sessions.md).
 
 ## Why was issue #n not picked up?
 0. Is the Action running at all? `gh api repos/brycejmurrin/f1-game/actions/workflows -q '.workflows[]|select(.path==".github/workflows/dispatch.yml").state'`:

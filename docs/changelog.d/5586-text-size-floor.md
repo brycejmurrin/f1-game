@@ -1,0 +1,1 @@
+Fixed: TEXT SIZE LARGER (and LARGE) no longer paints smaller menu text than NORMAL at a low UI SIZE: below 67 % every text size is held at 12 painted px or more, so a bigger TEXT SIZE is never smaller (#5586).

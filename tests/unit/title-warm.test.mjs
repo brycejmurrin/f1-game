@@ -74,6 +74,24 @@ test("a phone that already warmed this build skips it; a new build warms again; 
   assert.equal(desk.calls.schedule, 1, "desktop / hardware: every session");
 });
 
+test("the 1 Hz poll stops once this build is done (or already done on a phone) (perf hunt)", () => {
+  // Unit rig has no setInterval: drive poll() and check the latch + stop() path.
+  const phoneDone = rig({ phone: true, stored: "1700", build: "1700" });
+  phoneDone.tick(100);
+  phoneDone.tick(5000);
+  assert.equal(phoneDone.W.state().last.why.includes("done-this-build"), true);
+  assert.equal(phoneDone.W.state().doneBuild, "1700");
+  assert.equal(phoneDone.calls.schedule, 0);
+  const finish = rig({ phone: false, stored: null, build: "1700" });
+  finish.idle();
+  finish.setReady(true);
+  finish.tick(1000);
+  finish.tick(5000);
+  assert.equal(finish.disk.get("titleWarm"), "1700");
+  assert.equal(finish.W.state().doneBuild, "1700");
+  assert.equal(finish.calls.schedule, 1);
+});
+
 test("never under Save-Data, a 3D Home, no warm(), a hidden tab, or off the title", () => {
   for (const [name, opts, why] of [["save-data", { saveData: true }, "save-data"], ["3D Home", { home: true }, "home-3d"],
     ["GLX/WGX (no warm())", { warmable: false }, "no-warm"]]) {

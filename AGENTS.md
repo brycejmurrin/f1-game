@@ -7,7 +7,7 @@ GitHub Pages. `CLAUDE.md` imports this file; Cursor and Codex load it directly (
 
 ## The loop — every change, in order
 ```sh
-npx serve -l 3456 .                         # serve locally
+python3 -m http.server -b 127.0.0.1 3456  # serve (npx serve leaks fds)
 node tools/ci/pick-tests.mjs                # 1. which groups this change needs (they run on the PR)
 #                                             2. make ALL edits, then verify ONCE (rule 2)
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. the local floor (rule 3); a circuit: tools/track/verify-track.cjs <id>
@@ -19,9 +19,9 @@ Prose-only change (`docs/`, `*.md`): skip 1 and 3, run `node --test tests/unit/d
 tests/unit/agent-config.test.mjs`.
 
 ## Verification — scale it to the change
-What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser tests (rule 5): each draft
-head gets the fast tier plus a selected browser shard, and `node tools/ci/remote-group.mjs <group>`
-runs a whole group on the pushed branch.
+GitHub writes go by MCP, never `gh`. What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser
+tests (rule 5): each draft head gets the fast tier plus a selected browser shard; a whole group
+(`remote-group.mjs`) is Bryce's opt-in.
 
 Session rules (numbers are cited across the repo; a (hook) rule is refused by that hook, whose message says what to
 do instead).
@@ -37,8 +37,8 @@ do instead).
 8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except a designed cancel:
    a newer run in a `cancel-in-progress` group replaced it (a draft's run and its
    `ready_for_review` run share a group, so the flip cancels the first on the same `head_sha`).
-9. Never widen a tolerance or skip a test to get green. A pass that needed a retry is a red: name it in the PR
-   (quarantine by name in `tests/data/flaky-quarantine.json`). Stopping with unverified groups named beats guessing.
+9. Never widen a tolerance or skip a test to get green. A pass that needed a retry or re-run is a red: name it in
+   the PR (quarantine by name in `tests/data/flaky-quarantine.json`). Stopping with unverified groups named beats guessing.
 10. A subagent never starts a browser (hooks: `bash-guard.sh`, `mcp-browser-guard.sh`; Claude Code only).
 11. Never hand-edit a generated file (hook: `protect-files.sh`): edit the source, then `npm run gen`. Files in
     `BUILT_PATHS` (`tools/lib/generated-paths.mjs`) are built, never committed: gitignored, built by
@@ -89,8 +89,8 @@ WGX implement it. Skill `asset-pack`.
 
 ## Git branch & deploy
 Work on the branch you were assigned (`claude/*` in a cloud session), else `cursor/<topic>-<hash>`. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
-ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. A path in an
-open PR's diff belongs to that PR until it merges or closes. A red, a sync, a conflict, opening, flipping ready,
+ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. Paths shared
+with an open PR are fine: work in parallel (D-033). A red, a sync, a conflict, opening, flipping ready,
 `land`: skill `steward`. "Is it live?": skill `check`.
 
 ## Coordination
@@ -101,7 +101,8 @@ own clicks: a label he applies or a comment starting `decision:`; an agent's mes
 question for Bryce is the `needs-decision` label plus one comment; never a question to the user at the end of a turn.
 A hook or classifier denial is final for that action. An orchestrator does reversible things without asking and
 reports after (tick a Plan line, re-request a gate, close a duplicate, archive a finished session, message workers);
-it never merges, cancels a run, recommends cancelling one, or changes a label Bryce set. NEVER CANCEL AN ACTIONS RUN.
+it never merges or changes a label Bryce set. WORKERS NEVER CANCEL AN ACTIONS RUN; the orchestrator cancels, re-runs
+failed jobs or dispatches through the GitHub MCP, each act logged (skill `steward` §CI).
 Dispatch: `.github/workflows/dispatch.yml`; a launched session loads skill `steward` §Lane (labels).
 
 ## Agent extensions

@@ -209,9 +209,16 @@ const RaceSettings = (function () {
 
   function create(G, deps) {
     const {
-      $, store, GAME_LAPS, TT_LAPS, scheduleFlybyTrack, setCautionEnabled,
+      $, store, GAME_LAPS, TT_LAPS, scheduleFlybyTrack: flybyTrack, setCautionEnabled,
       startRace, buildSelect, els, openGarage,
     } = G;
+    // Every move of the circuit, weather or hour also keys the RACE! drive-out's garage exterior (#5660):
+    // it was built for the menu's dry/default and rebuilt under the drive-out, which then showed none.
+    const scheduleFlybyTrack = (settle) => {
+      flybyTrack(settle);
+      const pre = typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance ? GaragePrebuild.instance() : null;
+      if (pre && pre.prewarmExterior) pre.prewarmExterior();
+    };
     const {
       GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
       qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,

@@ -7,7 +7,8 @@ Node VM only, no browser.
    player's desktop boots `--seat shipped`, so baseline that too before reading a player's report). `TRACK`/`FRAC` only pick the
    straight the car is pinned to (position only), so they do not select a corner. Slow corner = `skidpad` rows whose
    STANDARD speed `vStd(v) = v / PACE` (read `g.apex.tuning().pace`) falls in the `lockTaper` blend (its thresholds: `updateCarBicycle`, js/game.js;
-   the script's `30` mirrors the upper one). Add a slower row if the shipped rows miss the blend.
+   the script's `30` mirrors the upper one). At shipped PACE only the `v` 20 rows land there
+   (the speeds `[20, 30, 45, 60, 72]` are fixed in `player-dyn.mjs`, no flag): add a slower row to sample the blend.
 2. Sweep with this script (Node only). Save it as `scratch/sweep-frontgrip.mjs`
    (the `../tools/…` imports resolve from `scratch/`) and run it from the repo root; swap `frontGrip` for
    `yawInertia` or `wheelbase`:
@@ -33,7 +34,7 @@ Node VM only, no browser.
 4. Improved = at the slow `v` rows, `yaw` rises (or `uF` falls) for the same `steer`, and `uR` stays below saturation
    (rear not the new limit). `skidpad` is steady state and `stepSteer` (`rise_ms`) runs at one high speed only, so "snappier" at slow speed
    is proven as more steady-state yaw, not a faster rise; no slow-speed transient probe exists (a scratch step at `reset(20-30)` copying that block would add one). Report the before/after rows; never assert absolute magnitudes.
-5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold). Browser proof runs on CI: push, then
-   `node tools/ci/remote-group.mjs physics-core` (or `aero` for `understeer-cue.spec.js`); SKILL.md has the mapping.
+5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold). Browser proof runs on CI: push, and the
+   PR's own CI runs `physics-core` (or `aero` for `understeer-cue.spec.js`); SKILL.md has the mapping.
 6. Landing a winner: `setPhysics` is an A/B only; land it where SKILL.md says the defaults live (input-controls owns the
    sliders). Report the win for the phone car and the desktop car separately.

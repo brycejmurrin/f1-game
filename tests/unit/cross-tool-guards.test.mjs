@@ -118,6 +118,9 @@ test("the shell adapter blocks what bash-guard blocks, from Cursor's and Codex's
   assert.equal(JSON.parse(cursor.stdout).agent_message.slice(0, why.length), why, "Cursor reads WHY");
   assert.equal(guard({ tool_name: "Bash", tool_input: { command: "git commit --no-verify -m x" } }).status, 2, "Codex shape: --no-verify");
   assert.equal(guard({ command: "gh pr merge 1", cwd: ROOT }).status, 2, "gh pr merge");
+  assert.equal(guard({ command: "gh api -X POST repos/a/b/issues/1/labels -f 'labels[]=x'", cwd: ROOT }).status, 2, "Cursor shape: a gh label write");
+  assert.equal(guard({ tool_name: "Bash", tool_input: { command: "gh pr comment 1 -b x" } }).status, 2, "Codex shape: a gh comment");
+  assert.equal(guard({ command: "gh pr view 1 --json headRefOid", cwd: ROOT }).status, 0, "a gh read passes");
   assert.equal(guard({ command: "ls -la", cwd: ROOT }).status, 0, "an ordinary command passes");
   assert.equal(guard("not json").status, 2, "an unreadable payload is a deny");
 });
@@ -172,7 +175,7 @@ test("Codex's MCP door guards legacy and hosted GitHub operations: an ask become
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, draft: false }), null, prefix + "the ready flip passes");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, state: "closed" }), "deny", prefix + "close ask becomes a deny");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, body: "x" }), null, prefix + "body edit passes");
-    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "land", "needs-decision", "x"] }), null, prefix + "labels that keep every guarded label pass (no lookup)");
+    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, title: "x" }), null, prefix + "an issue edit with no labels field passes (no lookup)");
     for (const input of [undefined, null, [], false, 1, "not JSON", "[]"])
       assert.equal(mcp(prefix + "update_pull_request", input), "deny", prefix + "malformed input " + JSON.stringify(input));
     assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "a JSON-object string body edit passes");

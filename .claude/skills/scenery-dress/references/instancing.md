@@ -28,7 +28,7 @@ Not for first-time dressing (`SKILL.md`), spline/elevation (**agent-view**) or G
 BASE=<ref> node tools/track/graph-parity.cjs <id> # or --all; a clean tree with no BASE exits 2
 BASE=<ref> node tools/track/graph-parity.cjs --all
 npm run test:tooling-fast
-node tools/ci/remote-group.mjs gfx               # instanced-draw.spec.js (browser) runs in CI group gfx, pushed branch
+# instanced-draw.spec.js (browser) runs in CI group gfx on the PR; a whole group is Bryce's opt-in
 node tools/track/verify-track.cjs <id>
 ```
 
@@ -75,8 +75,8 @@ judging a `graph-parity` mismatch.
    discrete keys) before expecting instancing savings.
 
 5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, <1 s) **then GL wiring** (browser):
-   `instanced-draw.spec.js` runs in CI group `gfx` (`node tools/ci/remote-group.mjs gfx`, pushed
-   branch); request it when the TLX/GLX instanced-draw path itself changed.
+   `instanced-draw.spec.js` runs in CI group `gfx` on the PR (a whole-group
+   dispatch is Bryce's opt-in); name it in the PR when the TLX/GLX instanced-draw path itself changed.
 
 6. **Ship** — `npm run gen:check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) if you edited `js/`. Visual spot-check:
    **playwright-probe** on a dense track (Spa, Vegas).
