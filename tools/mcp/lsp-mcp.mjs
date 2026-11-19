@@ -824,6 +824,7 @@ export class Lsp {
       if (answered(result)) return { ...c, p, result, note: p.note };
     }
     if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length > 1 && first?.p.note && !(this.windowDecl(c.parts.slice(0, -1).join(".")) || this.repeatedIifeDecl(c.parts.slice(0, -1).join(".")))) return { ...c, ...first, note: first.p.note };
     if (c.parts.length > 1) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
     if (c.parts.length === 1 && method === "textDocument/definition") {
       const p = c.top[0];
