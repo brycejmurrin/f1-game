@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import { parse } from "espree";
 import { analyze } from "eslint-scope";
+import { buildIndex, checkFile } from "./member-check.mjs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -715,6 +716,22 @@ export class Lsp {
     return `${f}\n${pageRows.join("\n")}${out.length > offset + limit ? `\n… ${out.length - offset - limit} more rows (offset: ${offset + limit})` : ""}`;
   }
 
+  memberIndex() {
+    const stamp = [...this.mtimes].map(([f, m]) => `${f}:${m}`).join("|");
+    if (this._memberIndex && this._memberIndexStamp === stamp) return this._memberIndex;
+    const asts = new Map();
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) { const ast = this.astOf(f); if (ast) asts.set(f, ast); }
+    this._memberIndexStamp = stamp;
+    return this._memberIndex = buildIndex(asts);
+  }
+  memberDiagnostics(text) {
+    let ast;
+    try { ast = parse(text, { ecmaVersion: "latest", sourceType: "script", loc: true, range: true }); } catch { return []; }
+    const lines = text.split("\n");
+    return checkFile(ast, text, this.memberIndex()).filter(m => !m.guarded && m.member !== "_stub").map(m => ({ line0: m.line0, col0: m.col0, code: m.called ? "APX1" : "APX2",
+      msg: m.called ? `${m.owner}.${m.member}() is called, but no declaration of it defines '${m.member}' (TypeError at run time)` : `${m.owner}.${m.member} is read, but no declaration of it defines '${m.member}' (always undefined)`,
+      src: (lines[m.line0] || "").trim() }));
+  }
   async diagnose(file, all = false) {
     await this.prepare();
     const f = this.inRoot(file);
@@ -734,15 +751,16 @@ export class Lsp {
         if ((d.code === 2304 || d.code === 2552) && name && this.windowDecl(name)) return false;
         if (d.code === 2451 && name && new RegExp(`declare\\s+(const|let|var|function)\\s+${name}\\b`).test(ambient)) return false;
         return true;
-      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: d.code, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: `TS${d.code}`, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }))
+        .concat(this.memberDiagnostics(text));
     };
     try {
       const now = await check(fs.readFileSync(path.join(this.root, f), "utf8"));
       let head = null;
       try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch {  }
-      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  TS${d.code} ${d.msg}`;
+      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  ${d.code} ${d.msg}`;
       if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
-      let dependenciesChanged = true;
+      let dependenciesChanged = true, changedOthers = [];
       try {
         const gitPaths = args => execFileSync("git", args, { cwd: this.root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\0");
         const changed = [...gitPaths(["diff", "--name-only", "--no-renames", "-z", "HEAD", "--"]), ...gitPaths(["ls-files", "--others", "--exclude-standard", "-z"])];
@@ -751,16 +769,20 @@ export class Lsp {
           const rel = path.relative(this.root, file);
           return rel.startsWith("..") || path.isAbsolute(rel) || rel.split(path.sep).includes("node_modules");
         });
-        dependenciesChanged = externalConfig || changed.some(other => other !== f && (
+        changedOthers = changed.filter(other => other && other !== f && /\.(?:[cm]?js|ts)$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/")));
+        const configChanged = externalConfig || changed.some(other => configs.has(path.resolve(this.root, other)));
+        if (!configChanged && changedOthers.length) dependenciesChanged = "sources";
+        else dependenciesChanged = externalConfig || changed.some(other => other !== f && (
           (/\.(?:[cm]?js|ts)$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/"))) ||
           configs.has(path.resolve(this.root, other))
         ));
       } catch {  }
-      if (dependenciesChanged) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, JavaScript or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      if (dependenciesChanged === true) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
       const before = await check(head), key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
       for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
       const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
-      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax)\n${fresh.map(fmt).join("\n")}`.trim();
+      if (dependenciesChanged === "sources") return `${fresh.length} new from this file's own edits in ${f} (${now.length - fresh.length} also present with this file at HEAD; ${changedOthers.length} other changed file${changedOthers.length === 1 ? "" : "s"} (${changedOthers.slice(0, 4).join(", ")}${changedOthers.length > 4 ? ", …" : ""}) may have caused some of those: all: true lists them; per-file @ts-check)\n${fresh.map(fmt).join("\n")}`.trim();
+      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax + missing module/instance members)\n${fresh.map(fmt).join("\n")}`.trim();
     } catch (error) { failed = true; throw error; }
     finally {
       if (this.proc === diagnosticProc && this.generation === generation) {
