@@ -1017,6 +1017,8 @@
     "tests/unit/script-loader-throw.test.mjs",
     "tests/unit/scroll-strips.test.mjs",
     "tests/unit/select-budget.test.mjs",
+    "// #5656: the picker outline is centred in the band the caption and numbers leave free (Menus.previewMapBand). ~0.1 s.",
+    "tests/unit/select-preview-band.test.mjs",
     "// D·DP5: cold race-select preview defers TrackMaps.corners/draw off the open's sync turn.",
     "tests/unit/select-preview-defer.test.mjs",
     "// Round-2: re-tapping the active team tile keeps the seat (Legends keeps its build); unstarring the active circuit under FAVOURITES keeps the selection.",
