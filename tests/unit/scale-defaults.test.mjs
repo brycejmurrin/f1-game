@@ -427,3 +427,24 @@ test("#5256 D: nothing is kept when the gear row is not held, HUD SIZE is unset,
   assert.equal("hudBotKeep" in menu.stored, false, "no caps outside a race: nothing measured, nothing kept");
 });
 
+
+// ui-scale.spec cell D (CI runs on #5682 heads 30012f87 and 1eee6031): right after the first HUD SIZE move a fit read
+// mid-reflow published the tower's cap at ~1.17, so the row's range read [70, 117], and the next read [70, 119]. A range
+// the player has moved on never widens under the thumb; it only narrows until the window, BUTTON SIZE or the race changes.
+test("#5256 D: a HUD SIZE range never widens after a move, until its layout key changes", () => {
+  const { el, rootStyle } = bootScale({ hudScale: 119, hudBtnScale: 245 }, { caps: "1.184 1.122 1.25 2.611 2.544 0.82" });
+  const range = () => [+el("pm-hudscale").min, +el("pm-hudscale").max];
+  assert.deepEqual(range(), [70, 119], "untouched: the settled tower cap");
+  rootStyle.set("--hud-cap", "1.17 1.122 1.25 2.611 2.544 0.82");   // the mid-reflow read
+  el("pm-hudscale").oninput({ target: { value: "70" } });
+  assert.deepEqual(range(), [70, 117], "the move shows what the fit published");
+  rootStyle.set("--hud-cap", "1.184 1.122 1.25 2.611 2.544 0.82");  // the settled read
+  el("pm-hudscale").oninput({ target: { value: "81.75" } });
+  assert.deepEqual(range(), [70, 117], "a later reflow does not widen the range the slider showed");
+  rootStyle.set("--hud-cap", "1.15 1.122 1.25 2.611 2.544 0.82");
+  el("pm-hudscale").oninput({ target: { value: "90" } });
+  assert.deepEqual(range(), [70, 115], "it still narrows: the slider never offers a size that cannot paint");
+  rootStyle.set("--hud-cap", "1.184 1.122 1.25 2.611 2.544 0.82");
+  el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.deepEqual(range(), [70, 119], "a BUTTON SIZE move is a new layout: the range is read afresh");
+});

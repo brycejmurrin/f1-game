@@ -131,7 +131,15 @@ const UiScale = (() => {
     const sheetCap = () => { const sh = uiSheet(); return (sh?.getClientRects?.().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
     const fitCaps = () => (document.body?.classList?.contains("in-race") ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
     const cssWas = {};   // prop -> last value written here
-    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi());
+    // A moved HUD SIZE range only narrows until the window, BUTTON SIZE or race changes (#5256 D: a mid-reflow read).
+    let held = null;
+    const hudKey = () => [window.innerWidth, window.innerHeight, scalePct("hudBtnScale"), !!fitCaps()] + "";
+    const sz = (key, hi) => sizeRow(key, scalePct(key), { min: minFor(key), max: hi, step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi());
+    const rowFor = (key) => {
+      const r = sz(key, maxFor(key));
+      if (key !== "hudScale" || !held || held.key !== hudKey()) return key === "hudScale" ? (held = null, r) : r;
+      return r.max > held.max ? sz(key, held.max) : (held.max = r.max, r);
+    };
     // Moving one slider pins the OTHER's wish to what it paints: freed room never grows it.
     const isSet = (key) => typeof store.get(key, null) === "number";
     const pinPainted = (key) => { const r = rowFor(key); if (isSet(key) && r.value < scalePct(key)) store.set(key, r.value); };
@@ -160,15 +168,8 @@ const UiScale = (() => {
       const input = $(inputId);
       if (input) { input.min = String(r.min); input.max = String(r.max); input.value = String(r.value); }
       const out = $(`${inputId}-v`); if (out && out.textContent !== r.label) out.textContent = r.label;
-      // IS THIS VALUE MINE OR INHERITED? `stored` has always known — null means
-      // "following" — and nothing on screen said so, which is the whole bug class
-      // behind BUTTON SIZE: unset it tracks HUD SIZE, and a player who had never
-      // touched it could not tell that from a coincidence. Unity's editor, VS
-      // Code's settings and Google Workspace's org units all converge on the same
-      // two signifiers, so use theirs rather than invent one: an override bar and
-      // a bolder label while the value is set, and an in-context revert ON THAT
-      // CONTROL rather than a global Reset button (which NN/G argues against —
-      // it sits next to the thing you meant to press and discards work).
+      // MINE OR INHERITED? A set value shows an override bar, a bolder label and an in-context revert on THAT control
+      // (no global Reset beside it: it discards work), as Unity, VS Code and Google Workspace settings do.
       const row = input && input.closest && input.closest(".tune-row, .pm-group");
       if (row) row.classList.toggle("tune-over", typeof stored === "number");
       const rev = $(`${inputId}-r`); if (rev) rev.hidden = typeof stored !== "number";
@@ -193,11 +194,7 @@ const UiScale = (() => {
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
     // fitHud publishes --hud-cap on its own schedule: both race rows follow <html>'s inline style.
     function refreshFit() { applyHudScale(); applyBtnScale(); }
-    // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
-    // helper snaps to SCALE_MIN..SCALE_MAX (40..200), which is meaningless for a
-    // 0-100 % control and would both forbid a faint dock and allow a 200 % one.
-    // Reusing a helper whose bounds are wrong for the new use is how a control
-    // ends up unable to reach one end of its own range.
+    // BUTTON OPACITY has its OWN clamp, not applyScale's 40..200 (wrong bounds for a 0-100 % control).
     const OPACITY_MIN = 20, OPACITY_MAX = 100;   // floor: a dock you cannot see is a dock you cannot aim at
     const opacityPct = (key) => {
       const v = store.get(key, null);
@@ -247,6 +244,7 @@ const UiScale = (() => {
     const hudEl = $("pm-hudscale");
     if (hudEl) hudEl.oninput = (e) => {
       pinPainted("hudBtnScale");
+      if (!held || held.key !== hudKey()) held = { key: hudKey(), max: Infinity };
       store.set("hudBotKeep", null);
       store.set("hudScale", fromSlider("hudScale", e.target.value));
       refreshFit();

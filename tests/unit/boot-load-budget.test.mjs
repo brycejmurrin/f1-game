@@ -56,7 +56,8 @@ const MAX_EAGER_SCRIPTS = 309;
 // 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
 // 8,013,045: #5682 (+11,705 eager HUD bytes) pays with hud-inputs.js → LAZY_RACE_SESSION (16,533 B): tip b8d0a4ac
 // 310 scripts / 8,017,909 raw → 309 / 8,013,045 (−4,864). Cap = measurement; the freed bytes are not handed out.
-const MAX_EAGER_BYTES = 8_013_045;
+// 8,012,855: #5682's HUD SIZE range hold in scale.js paid with condensed comments there (−190).
+const MAX_EAGER_BYTES = 8_012_855;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
