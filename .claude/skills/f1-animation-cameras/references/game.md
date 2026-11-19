@@ -14,10 +14,11 @@ entrance is Blender-authored: `poseIn` delegates to `GarageEntranceMotion.pose` 
 never hand-edit: `docs/notes/GARAGE-ENTRANCE-BLENDER.md`) whenever `available()`, latched per
 config. Only when the data is missing or corrupt does it fall back to the procedural back-in,
 `ease()` over `IN_BACK` along the drive-out's own arc (`pathAt`). Timing for both comes from
-`timeline()`; read the `DURATION` definition.
-Playback is `create().step(dt)`, which clamps `dt`, scales by `config.speed`, and calls
-`finish()` — a jump to `pose(DURATION)` — once `active` drops. So a visible snap means
-the last stepped pose was not yet the parked one: sample `pose(t)` in Node across the
+`timeline()`; read `duration(config, dir)` (`DURATION` is only the default timeline's).
+Playback is `create().step(dt)`, which clamps `dt` (crediting a wall-clock frame gap up to `MAX_GAP_S`),
+scales by `config.speed * rate(config, dir, time)`, and calls `finish()` — a jump to `pose(duration(config, dir))` — once `active` drops. So a visible snap means
+the last stepped pose was not yet the parked one: sample `pose(t)` in Node (load `js/garage/arrival.js` into a `vm` context as
+`tests/unit/garage-arrival.test.mjs` does; `apex_eval {vm:true}` has no `GarageArrival`) across the
 last second and assert the final-pose delta against the parked pose (tolerance: the
 test below).
 Authored-path contracts (phase joins, parked finish, fallback, camera) live in

@@ -20,6 +20,11 @@ const BitmapDecode = (function () {
     _pending.delete(seq);
     if (p.timer != null) clearTimeout(p.timer);
     if (err) p.reject(err); else p.resolve(value);
+    // Pack decode is one-shot (assets.js never calls drop). Empty queue → retire.
+    if (!_pending.size && _w) {
+      try { _w.terminate(); } catch (_) { /* already gone */ }
+      _w = null;
+    }
   }
 
   function url(f) {

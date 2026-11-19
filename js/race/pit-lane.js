@@ -194,7 +194,12 @@ var PitLane = (function () {
       for (const o of G.cars || []) {
         if (o !== c && !o.retired && !o.finished && o.prog < c.prog && (!behind || o.prog > behind.prog)) behind = o;
       }
-      const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || G.vTop() * roadFrac) : null;
+      // Seconds at OUR pace (the engineer undercut's measure). behind.speed in a
+      // slow corner — or a crawl of a few m/s — turned a half-second gap into a
+      // "free" stop: marginS > 0, planInfo "CHEAPER STOP", while the car behind
+      // would accelerate and catch the pit loss.
+      const pace = Math.max(1, c.speed || G.vTop() * roadFrac);
+      const gapS = behind ? (c.prog - behind.prog) / pace : null;
       return { lossS: loss, gapS, marginS: gapS == null ? null : gapS - loss, caution: flag >= 2, estimated: true };
     }
     function choices(c) {

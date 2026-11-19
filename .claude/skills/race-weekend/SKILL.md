@@ -17,7 +17,7 @@ The rules modules that turn a lap into a weekend. Each is one
 | `js/race/quali-net.js` | `QualiNet` | VS FRIEND quali gate (rival times on NetPlay `EV.QUALI`) |
 | `js/race/start-lights.js` | `StartLights` | five gantry lamps as one-frame flares (`lampsFor`) |
 | `js/race/flying-start.js` | `FlyingStart` | quali/TT run-up: dropped in before the line, `HANDOVER_S` of AI driving, never timed |
-| `js/race/weather-arc.js` | `WeatherArc` | live weather changes and the optional arc along `LADDER` dry → wet → rain |
+| `js/race/weather-arc.js` | `WeatherArc` | live weather changes and the optional arc along `LADDER` dry → wet → rain → storm |
 | `js/race/sporting-regs.js` | `SportingRegs` | FIA 2026 SR: two dry compounds (`applyCompoundRule`: DSQ, or `SUSPENDED_PEN_S` added to `c.penalty` when the race ended suspended), no passing under SC/VSC (`createPassWatch`, `passPenaltyS`), championship-order grid |
 | `js/ui/hud-strategy.js` / `hud-tyres.js` | `HudStrategy` / `HudTyres` | opt-in STRATEGY panel (TYRES / PIT LOSS / NEXT / UNDERCUT, race + wear only); cold/ok/hot tyre band |
 | `js/ui/quali-sheet.js` / `results-sheet.js` / `results-story.js` | `QualiSheet` / `GameResultsSheet` (lazy; `GameResults` in `results-boot.js` is the stub game.js calls) / `ResultsStory` | DOM only — paint what the models classified, to the thousandth (`Dom.fmtLap`) |
@@ -69,8 +69,8 @@ APEX_VM_PAGE=1 node --test tests/specs/pit-lane.spec.js   # NO browser: pit-lane
 
 The list above can drift: `node tools/ci/pick-tests.mjs` / `select-specs.mjs` are authoritative.
 Browser specs (`quali`, time-trial, real-race) are never run locally (AGENTS.md rule 5): the PR's CI
-runs the picked groups; a whole group on the pushed branch is `node tools/ci/remote-group.mjs <group>`
-(group names: `pick-tests.mjs` output, `--bg` prints the commands).
+runs the picked groups; a whole group (`remote-group.mjs`) is Bryce's opt-in
+(group names: `pick-tests.mjs` output).
 
 ## Pitfalls
 

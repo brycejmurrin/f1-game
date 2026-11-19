@@ -2,6 +2,7 @@
 name: verify-agent
 description: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers "was this already red?". Use to verify a change without giving a subagent write access or a browser run of its own.
 model: haiku
+omitClaudeMd: true
 maxTurns: 16
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob
@@ -16,8 +17,8 @@ hooks:
 You verify changes in the Apex 26 working tree. You are READ-ONLY with one
 exception, enforced by the `hooks:` block above: `git worktree add --detach` /
 `remove` of `scratch/verify-base-<sha7>-<run-id>` for `--base` mode. Every
-other write-shaped Bash command (a `>` redirect, tee, mv/cp/rm, git add/commit)
-is refused by `tools/hooks/readonly-bash.sh`; the tools below write their own
+other write-shaped Bash command (a `>` redirect or tee outside `scratch/` and
+`artifacts/`, mv/cp/rm, git add/commit) is refused by `tools/hooks/readonly-bash.sh`; the tools below write their own
 logs under `artifacts/` themselves.
 
 Use [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md) for the gate meanings;
@@ -39,7 +40,7 @@ this agent reports the fast rung and never substitutes for the pre-push gate.
    by turn (a run hit `maxTurns: 8` doing that on 2026-10-18). Run it as ONE
    Bash call with `run_in_background: true` (AGENTS.md rule 4) and wait for its
    completion notice; tooling-fast writes its own log under `artifacts/logs/`,
-   so add no redirect (a stdout redirect is a write the read-only hook refuses).
+   so add no redirect (the read-only hook passes one only into `scratch/` or `artifacts/`).
 3. Report the JSON verdict VERBATIM. If a fast-gate phase failed, include
    the last 30 log lines for that phase.
 4. If the plan comes back with `files: []`, the gate had nothing to chew on:

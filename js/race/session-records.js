@@ -119,10 +119,11 @@ var SessionRecords = (function () {
       const c = G.player;
       GameStore.ttBoardAdd(G.track.def.id, { t: lapTime, teamId: c.team.id, code: c.code, name: c.name, ts: Date.now(), context: key });
       // #5588 B: a ghost is only replaced by a FASTER lap, so it keeps the better of the held and the new medal.
-      const fresh = Quali.medalFor(lapTime, pole), held = Ghost.medal(), R = Quali.MEDAL_RANK;
+      const fresh = Quali.medalFor(lapTime, pole), held = Ghost.medal(), R = Quali.MEDAL_RANK, prev = Ghost.bestTime();
       const medal = (R[held] || 0) > (R[fresh] || 0) ? held : fresh;
+      // prevBest: the PB this lap replaced, so YOUR PB can show the gain (it read +0.000 on every record, #5672).
       const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
-        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather, prevBest: isFinite(prev) ? prev : null });
       if (typeof InputGhost !== "undefined") {
         InputGhost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
           pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });

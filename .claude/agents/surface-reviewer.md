@@ -1,7 +1,8 @@
 ---
 name: surface-reviewer
-description: Use proactively after editing a skill, agent card, hook, rule file, settings.json or an AGENTS.md section. Takes a SET of agent-surface units, extracts every claim one unit makes about another ("hook X refuses Y", "tool Z takes --f", "see §N", "the one home is", "agent may write P") and tests each against the unit it names (reads it, runs --help, pipes a sample payload into the hook, WebFetch for a host-doc claim); flags one-home collisions and pointer cycles. Writes a ≤ 60-line report to scratch/, returns VERDICT + CLAIM rows. "retest <old report>" = before/after. Read-only on the repo.
+description: Use proactively after editing a skill, agent card, hook, rule, settings.json or AGENTS.md section. Tests each claim one unit makes about another (refuses X, takes --f, see §N, one home) against it; flags collisions and cycles. Report to scratch/; "retest" = before/after. Read-only, no browser.
 model: sonnet
+omitClaudeMd: true
 maxTurns: 40
 background: true
 tools: Bash, Read, Grep, Glob, Write, WebFetch
@@ -47,17 +48,19 @@ MODE (below).
    - a path or anchor: `test -e`, `grep -n '^## '` for the section;
    - a CLI flag: `node <tool> --help` (or `--plan`/`--dry-run` only where the
      header says it is side-effect-free; never a tool that boots Chromium);
-   - a hook rule: pipe a sample payload into the hook and read the exit code —
-     `printf '%s' '{"tool_name":"Bash","tool_input":{"command":"pkill -f chrome"}}' | bash .claude/hooks/bash-guard.sh; echo $?`
-     (exit 2 = refused, 0 = passed; a JSON `permissionDecision` on stdout for
-     ask/deny). One payload per Bash call, no `&&` chains;
+   - a hook rule: your own read-only hook refuses running a hook script (`bash`,
+     `python3 .claude/hooks/…`), so you cannot pipe a payload in. Read the rule in
+     the hook's source, find the payload that pins it in its test
+     (`grep -n '<the refused command>' tests/unit/*hook*.test.mjs tests/unit/*guard*.test.mjs`)
+     and run that file (`node --test tests/unit/<file>`). A rule no test pins is
+     `unread`: return the exact payload so the parent can pipe it;
    - a settings rule: read `.claude/settings.json` and match the pattern by eye
      against the documented syntax;
    - a host-doc claim ("Claude Code ignores field X", "hooks run inside
      subagents"): WebFetch the cited page (code.claude.com/docs/en/…) and quote
      the sentence;
    - an agent's tool or write scope: its `tools:` / `disallowedTools:` /
-     `hooks:` frontmatter, then the hook probe above with `agent_id` set.
+     `hooks:` frontmatter, then the hook's pinned test as above (`tests/unit/agent-scope-hooks.test.mjs`).
    Verdicts: `holds` (B does it), `false` (B does not), `stale` (B did, a
    commit changed it — name the sha from `git log -S`), `unread` (a probe you
    could not run; say why).

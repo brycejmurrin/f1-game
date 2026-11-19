@@ -115,10 +115,26 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   // 3. An agent's label on a routine-only diff passes, and says so.
   assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
     { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
-  // ci.yml decides what green means: protected (Bryce, 2026-11-11 "Protect ci.yml").
-  assert.equal(configVerdict([".github/workflows/ci.yml", "js/a.js"], L, [agent(T1)]).ok, false, "an agent's label on ci.yml is refused");
-  assert.match(configVerdict([".github/workflows/ci.yml"], L, [agent(T1)]).evidence, /protected path\(s\) \.github\/workflows\/ci\.yml/);
-  assert.equal(configVerdict([".github/workflows/ci.yml"], L, [ev("config-ok", T1)]).ok, true, "his own tap on ci.yml passes");
+  // D-034 (Bryce 2026-11-18 ~10:33Z "Shrink the list"): ci.yml, pick-tests and preflip-probe are ROUTINE, superseding
+  // the 2026-11-11 "Protect ci.yml" call; still config paths, so they still need a config-ok, but an agent's counts.
+  for (const p of [".github/workflows/ci.yml", "tools/ci/pick-tests.mjs", "tools/ci/preflip-probe.mjs"]) {
+    assert.equal(isConfigPath(p), true, `${p} is still a config path`);
+    assert.equal(isProtectedConfigPath(p), false, `${p} is routine (D-034)`);
+    assert.deepEqual(configVerdict([p], L, [agent(T1)]),
+      { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers ${p}` });
+    assert.equal(configVerdict([p], [], []).ok, false, `${p} with no config-ok at all still fails`);
+  }
+  // The kept set, exactly: the gate's own modules, land.yml, every host's hooks and settings.
+  for (const p of ["tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", "tools/ci/lib/deploy-tip.mjs", "tools/ci/ready-gate.mjs",
+    "tools/ci/github-api.mjs", "tools/ci/github-token.mjs", "tools/gen/gen-test-groups.mjs", "tools/lib/changed-files.mjs",
+    "tools/lib/cli-args.mjs", "tools/lib/gate-receipt.mjs", "tools/lib/work-tree-id.mjs", ".github/workflows/land.yml",
+    ".claude/hooks/bash-guard.sh", ".claude/settings.json", ".claude/settings.local.json", "tools/hooks/readonly-bash.sh",
+    ".githooks/pre-commit", ".cursor/hooks.json", ".codex/hooks.json"]) {
+    assert.equal(isProtectedConfigPath(p), true, `${p} stays protected (D-034)`);
+    assert.match(configVerdict([p], L, [agent(T1)]).evidence, new RegExp(`^needs config-ok from brycejmurrin himself: .* protected path\\(s\\) ${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+  }
+  for (const p of ["tools/ci/dispatch.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
+    assert.equal(isProtectedConfigPath(p), false, `${p} is routine`);
   for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
     assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
   // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
@@ -413,7 +429,7 @@ function fakes() {
     if (p === "pulls/7") return { json: pull };
     if (p.startsWith("actions/workflows/pages.yml/runs?branch=deploy-x&status=completed")) return { json: { workflow_runs: pages.runs } };
     if (p.startsWith(`actions/runs/${pages.runs[0]?.id}/jobs?filter=latest`)) return { json: { jobs: pages.jobs } };
-    if (p === `compare/${pages.runs[0]?.head_sha}...${HEAD}`) { compared.push(p); return compare.error ? { error: compare.error } : { json: { status: compare.status } }; }
+    if (p === `compare/${pages.runs[0]?.head_sha}...${HEAD}` || p === `compare/${TIP}...${HEAD}`) { compared.push(p); return compare.error ? { error: compare.error } : { json: { status: compare.status } }; }
     if (p.startsWith("issues/7/events")) return { json: events };
     if (p.startsWith("pulls/7/files")) return { json: files };
     if (p === "branches/deploy-x") return { json: { commit: { sha: TIP } } };
@@ -423,7 +439,10 @@ function fakes() {
     return { error: `unexpected ${p}` };
   };
   const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" }, retest: a.ciAt === null ? null : { ok: true, evidence: "no tip merge since the CI run" } }; };
-  return { pull, checks, runs, prRuns, events, files, calls, pages, compare, compared, deps: { request, root: "/nowhere", localMerge } };
+  // The tip's own unit gate (tools/ci/lib/tip-gate.mjs): asked only when no completed pages.yml run covers TIP.
+  const tipGate = { state: "green", evidence: "the tip's own unit gate passed" }, tipCalls = [];
+  const tipCheck = (a) => { tipCalls.push(a); return { ...tipGate }; };
+  return { pull, checks, runs, prRuns, events, files, calls, pages, compare, compared, tipGate, tipCalls, deps: { request, root: "/nowhere", localMerge, tipCheck } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -801,8 +820,19 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
   assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
-  assert.deepEqual(jobsWhere(usesSecret), ["post"], "LAND_TOKEN lives in post alone (the sync job left with AUTO-SYNC, 2026-11-03)");
-  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "train"], "LAND_TOKEN lives in post and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
+  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train"], "only the read-only legs and the train check out or run code");
+  // The merge train holds LAND_TOKEN, so it runs only the DEPLOY branch's gate closure (protected paths): no PR
+  // checkout, no install, one node script. Car heads are fetched as git objects and folded with merge-tree.
+  const train = LAND.jobs.train;
+  assert.deepEqual(train.permissions, { contents: "read", issues: "read" }, "the train writes only through LAND_TOKEN");
+  const checkout = train.steps.find((st) => /actions\/checkout@/.test(st.uses || ""));
+  assert.equal(checkout.with?.ref, "${{ env.DEPLOY_BRANCH }}");
+  assert.equal(checkout.with?.["persist-credentials"], false);
+  const script = train.steps.map((st) => st.run || "").join("\n");
+  assert.deepEqual(script.split(/\s+/).filter((w) => w === "npm" || w === "npx"), [], "no install: the gate closure needs node builtins only");
+  assert.deepEqual(script.match(/\bnode\s+\S+/g), ["node tools/ci/merge-train.mjs"]);
+  assert.ok(isProtectedConfigPath("tools/ci/merge-train.mjs"), "the code the token meets is a protected path");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
   assert.deepEqual(LAND.jobs["land-gate"].permissions, readOnly);
   assert.deepEqual(LAND.jobs["trusted-rows"].permissions, readOnly);
@@ -1731,6 +1761,61 @@ test("evaluate: the base row reads the PR's base branch; a code-red tip waits (e
   assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "run 42880431465 (platform) holds nothing");
   const noPages = (p) => (/^actions\/workflows\/pages\.yml/.exec(p) ? { error: "HTTP 502" } : f.deps.request(p));
   assert.deepEqual(evaluate({ pr: 7, ...f.deps, request: noPages }), { error: "pages.yml runs on deploy-x: HTTP 502" }, "unreadable tip: an error (will retry), never a pass");
+});
+
+// ---- the tip Pages has not reached (2026-11-19: #5714 + #5634 red the tip; 8 PRs merged onto it) ------------------
+
+test("base row: a PENDING pages.yml run on a red tip holds merges — the tip's own unit gate decides, the fixer still lands", () => {
+  const f = fakes();
+  const OLD = "0".repeat(40), BEHIND = "the newest completed pages.yml run is on 00000000 (green), not the tip tttttttt";
+  // The tip's run is queued in a backlog (status=completed lists only older runs): the newest completed run is green on OLD.
+  f.pages.runs[0] = { id: 700, head_sha: OLD, status: "completed", conclusion: "success", created_at: "2026-11-18T23:00:00Z" };
+  f.tipGate.state = "code-red"; f.tipGate.sha = TIP; f.tipGate.jobs = ["the eager shell stays inside its script budget (count and raw bytes)"];
+  f.tipGate.evidence = "the tip tttttttt's own unit gate fails: \"the eager shell stays inside its script budget (count and raw bytes)\"";
+  const v = evaluate({ pr: 7, ...f.deps });
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["base"], "the old green run no longer speaks for the tip");
+  assert.deepEqual([v.waiting, v.rows.base.pending], [true, true], "WAIT, not FAIL: the next event re-gates");
+  const held = (r) => r.rows.base.evidence.split(": merges wait")[0];
+  assert.equal(held(v), `${BEHIND}; ${f.tipGate.evidence}`);
+  assert.deepEqual(f.tipCalls.map((a) => [a.sha, a.base, a.root]), [[TIP, "deploy-x", "/nowhere"]], "the gate runs on the base branch's own head");
+  const logs = [];
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 3, "land.yml's trusted-rows leg holds too (it owns the base row)");
+  assert.equal(logs.at(-1), `= merge-gate waiting — open=ok hold=ok plan=ok ci=ok base=WAIT config=ok raise=ok pr=#7 sha=${HEAD} tip=${TIP}`, "trusted reports the tip the gate judged");
+  // The fixer: `deploy:red` and a head that contains the TIP sha (not the old Pages run's), CI green on top of it.
+  f.pull.labels = [{ name: "deploy:red" }]; f.events.push(ev("deploy:red", "2026-11-19T00:40:00Z", { app: APP }));
+  assert.equal(evaluate({ pr: 7, ...f.deps }).rows.base.ok, false, "an agent's label on a head cut before the red tip: held");
+  f.compare.status = "ahead";
+  const fixer = evaluate({ pr: 7, ...f.deps });
+  assert.equal(fixer.ok, true, fixer.rows.base.evidence);
+  assert.equal(f.compared.at(-1), `compare/${TIP}...${HEAD}`, "the proof compares against the tip sha the gate judged");
+  // Bryce's own click after the tip commit also lifts it (runAt = the tip commit's date).
+  f.compare.status = "diverged"; f.events.length = 0; f.events.push(ev("deploy:red", "2026-11-19T00:40:00Z"));
+  const at = (p) => (p === "branches/deploy-x" ? { json: { commit: { sha: TIP, commit: { committer: { date: "2026-11-19T00:07:00Z" } } } } } : f.deps.request(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: at }).rows.base.ok, true, "his click at 00:40 is newer than the 00:07 tip");
+  const later = (p) => (p === "branches/deploy-x" ? { json: { commit: { sha: TIP, commit: { committer: { date: "2026-11-19T01:00:00Z" } } } } } : f.deps.request(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: later }).rows.base.ok, false, "a click older than the red tip does not wave it through");
+  f.pull.labels = []; f.events.length = 0;
+  // A green tip gate: the normal flow does not wait for Pages.
+  f.tipGate.state = "green"; f.tipGate.evidence = "the tip tttttttt's own unit gate passed (2 file(s), 3.6 s)";
+  const green = evaluate({ pr: 7, ...f.deps });
+  assert.equal(green.ok, true, green.rows.base.evidence);
+  assert.equal(green.rows.base.evidence, `${BEHIND}; the tip tttttttt's own unit gate passed (2 file(s), 3.6 s)`);
+  // A gate that cannot run fails closed as a WAIT (unverified), never a pass.
+  const calls = f.tipCalls.length;
+  const broken = evaluate({ pr: 7, ...f.deps, tipCheck: () => ({ error: "tip gate: worktree add tttttttt failed: disk full" }) });
+  assert.deepEqual([broken.ok, broken.waiting, broken.rows.base.pending], [false, true, true]);
+  assert.equal(held(broken), `${BEHIND}; tip gate: worktree add tttttttt failed: disk full: held until it runs or Pages reaches the tip`);
+  // Pages has judged the tip itself: the gate is not asked; a Pages red on an older commit holds without it.
+  f.pages.runs[0] = { id: 800, head_sha: TIP, status: "completed", conclusion: "success" };
+  assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true);
+  f.pages.runs[0] = { ...RUN_42880431465, id: 9 }; f.pages.jobs = SPEC_RED;
+  assert.equal(evaluate({ pr: 7, ...f.deps }).rows.base.ok, false, "a Pages code red on an older commit still holds");
+  assert.equal(f.tipCalls.length, calls, "neither case runs the tip gate");
+  // No completed pages.yml run at all: the tip gate decides.
+  f.pages.runs.length = 0; f.tipGate.state = "code-red";
+  const none = evaluate({ pr: 7, ...f.deps });
+  assert.equal(none.rows.base.ok, false);
+  assert.equal(held(none), `no completed pages.yml run on the base branch yet (tip tttttttt); ${f.tipGate.evidence}`);
 });
 
 // ---- #5407 option (b), Bryce 2026-11-11 ~09:02Z "Quick re-test at merge (Recommended)" ---------------------------

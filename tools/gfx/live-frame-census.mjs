@@ -19,7 +19,7 @@
 // docs/notes/LIVE-FRAME-H10-2026-10-20.md.
 //
 //   node tools/gfx/live-frame-census.mjs [--tracks monaco,spa] [--backends tlx-gl,tlx-gpu] [--cam helmet]
-//        [--warm 8] [--win 40] [--trace 6] [--prof 12] [--ls "apex26.k=v ..."] [--json live-frame.json]
+//        [--warm 8] [--win 40] [--trace 6] [--prof 12] [--prof-out f.cpuprofile] [--ls "apex26.k=v ..."] [--json live-frame.json]
 //        [--dsf 1.5] [--cpu-throttle 1] [--lab dpr3] [--sweep 3,2,1.5] [--step 6] [--row-cap 480] [--alloc 0] [--poke 'weather("rain")']
 //
 // Phone-cost options (phone perf hunt 2026-11-10, docs/notes/PHONE-PERF-MEASURE-2026-11-10.md):
@@ -60,6 +60,7 @@ export function parseArgs(argv) {
     else if (a === "--prof") { o.prof = num(v, 0, 30); i++; }
     else if (a === "--ls") { o.ls = String(v || "").split(/\s+/).filter(Boolean).map((kv) => { const k = kv.indexOf("="); return k > 0 ? [kv.slice(0, k), kv.slice(k + 1)] : null; }).filter(Boolean); i++; }
     else if (a === "--json") { o.json = String(v); i++; }
+    else if (a === "--prof-out") { o.profOut = String(v); i++; }
     else if (a === "--dsf") { o.dsf = num(v, 1, 3); i++; }
     else if (a === "--cpu-throttle") { o.cpuThrottle = num(v, 1, 20); i++; }
     else if (a === "--sweep") { o.sweep = caps(v); i++; }
@@ -84,7 +85,7 @@ export function parseArgs(argv) {
   return o;
 }
 
-let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, DSF = 1.5, THROTTLE = 1, SWEEP = [], STEP = 6, LAB = "", POKE = "", ALLOC = 0, report, save;
+let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, DSF = 1.5, THROTTLE = 1, SWEEP = [], STEP = 6, LAB = "", POKE = "", ALLOC = 0, PROF_OUT = "", report, save;
 export const SWEEP_SCALES = [1, 0.75, 0.5];
 /** The sweep's steps in run order: caps descending (capDpr only lowers), each at scale 1 / 0.75 / 0.5. */
 export function sweepSteps(capList) { const out = []; for (const cap of capList) for (const scale of SWEEP_SCALES) out.push({ cap, scale }); return out; }
@@ -314,6 +315,7 @@ async function runRow(browser, server, backend, track) {
   await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 250 }); await cdp.send("Profiler.start");
   await page.waitForTimeout(PROF * 1000);
   const { profile } = await cdp.send("Profiler.stop");
+  if (PROF_OUT) writeFileSync(PROF_OUT, JSON.stringify(profile));   // raw .cpuprofile for tools/perf/cpuprofile-summary.mjs (callers; the row keeps self time only)
   const g1 = await page.evaluate(() => window.__lf.ts.length);
   const cpuProf = Object.assign(analyseProfile(profile), { frames: g1 - g0 });
   let alloc = null;
@@ -390,7 +392,7 @@ async function runRow(browser, server, backend, track) {
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls; DSF = o.dsf; THROTTLE = o.cpuThrottle; SWEEP = o.sweep; STEP = o.step; LAB = o.lab; POKE = o.poke; ALLOC = o.alloc;
+  TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls; DSF = o.dsf; THROTTLE = o.cpuThrottle; SWEEP = o.sweep; STEP = o.step; LAB = o.lab; POKE = o.poke; ALLOC = o.alloc; PROF_OUT = o.profOut || "";
   report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, prof: PROF, cam: CAM, extra: EXTRA, dsf: DSF, cpuThrottle: THROTTLE, sweep: SWEEP, step: STEP, lab: LAB, rows: [] };
   save = () => writeFileSync(o.json, JSON.stringify(report, null, 2));
   const BACK = o.backends;

@@ -1606,6 +1606,11 @@ jobs:
           # A dispatched group runs its browser copies of the VM-twinned specs
           # too (locally run-playwright skips them; this is where they still run).
           APEX_WITH_TWINNED: 1
+          # THE PERF SPECS FAIL HERE (#5334): perf-frametime and perf-race-entry are soft
+          # without these, so a lane that runs them could never go red on them. Every
+          # step that can run either spec sets both (tests/unit/perf-strict-lanes.test.mjs).
+          APEX_PERF_FRAMETIME_STRICT: 1
+          APEX_PERF_RACE_ENTRY_STRICT: 1
           # Mesa llvmpipe + Xvfb, installed by the step above (it is skipped
           # with `gl: swiftshader`, and so is this step).
           APEX_GL: llvmpipe
@@ -1624,6 +1629,11 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group || 'tiny' }}
+          # THE PERF SPECS FAIL HERE (#5334): perf-frametime and perf-race-entry are soft
+          # without these, so a lane that runs them could never go red on them. Every
+          # step that can run either spec sets both (tests/unit/perf-strict-lanes.test.mjs).
+          APEX_PERF_FRAMETIME_STRICT: 1
+          APEX_PERF_RACE_ENTRY_STRICT: 1
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4   # zizmor: ignore[template-injection] matrix.shard is a workflow-literal integer (ci-coverage.test.mjs pins this exact form)
       # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
       # Every per-test duration this job measures is written to junit.xml by
@@ -2665,17 +2675,23 @@ jobs:
     # LANES (2026-10-15): on a PULL REQUEST every leg joins one of LANES
     # (tools/ci/select-specs.mjs) fleet-wide concurrency groups with
     # `queue: max`, so at most that many selected legs run at once across every
-    # ready PR and the rest wait FIFO without holding a runner or being
+    # ready PR and the rest wait without holding a runner or being
     # cancelled (the workflow-level per-PR cancel still replaces a superseded
-    # run's queued legs). A run's own legs cycle through the lanes from a start
+    # run's queued legs). The docs order a queue by when each job started
+    # waiting and add "ordering is not guaranteed": plan on no order (#5536). A run's own legs cycle through the lanes from a start
     # rotated by run number (laneBase), so they never queue behind each other
-    # and runs spread over every lane. The train, the nightly and a dispatch get
+    # and runs spread over every lane. The train (its `train/*` PR head: select-specs
+    # trainHead gives every leg lane -1, PR #5809), the nightly and a dispatch get
     # a group of their own per leg (`run_id` + job index): a gate never waits
-    # behind PR legs. `queue: max` cannot be combined with cancel-in-progress
+    # behind PR legs. So does every leg of a SMALL PR plan (#5536, 2026-11-18):
+    # select-specs gives a plan of at most SMALL_RUN_LEGS (2) legs lane -1, so a
+    # one-leg fix pays the runner queue, not the wide runs filling every lane
+    # (measured: 1-2-leg runs, 0.7 % of leg-minutes, waited p90 62.6 min).
+    # `queue: max` cannot be combined with cancel-in-progress
     # in one block, and none is set here.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
     concurrency:
-      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '' && matrix.lane >= 0) && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
       queue: max
     timeout-minutes: ${{ matrix.timeout }}
     # playwright.config.js's 45-min CI globalTimeout must never undercut the plan's own per-shard cap (nightly shards run 60).
@@ -2754,6 +2770,11 @@ jobs:
           SHARD: ${{ matrix.shard }}
           SPECS: ${{ matrix.specs }}
           RETRIES: ${{ matrix.retries || 0 }}
+          # THE PERF SPECS FAIL HERE (#5334): perf-frametime and perf-race-entry are soft
+          # without these, so a lane that runs them could never go red on them. Every
+          # step that can run either spec sets both (tests/unit/perf-strict-lanes.test.mjs).
+          APEX_PERF_FRAMETIME_STRICT: 1
+          APEX_PERF_RACE_ENTRY_STRICT: 1
         run: |
           # matrix.shard is set when shards() split a loop-expanded spec across
           # Playwright --shard=i/n jobs (tracks-walls ~63 tests). Empty for the
@@ -2771,6 +2792,15 @@ jobs:
           set -f
           # shellcheck disable=SC2086
           npm test -- $SPECS --retries="$RETRIES" --timeout=180000 --max-failures=3 $SHARD_FLAG
+      # THE SHARD'S OWN TALLY (#5802): one `apex-selected-tally` annotation (testcases and tested specs, read from
+      # this job's junit). The verdict reads it only when this job concluded success and its junit artifact was lost;
+      # a tally of 0 tests is a shard that ran nothing (#5334) and stays red. Telemetry: it never fails the job.
+      - name: Shard tally (the verdict's fallback for a lost junit)
+        if: always()
+        continue-on-error: true
+        env:
+          LEG: ${{ matrix.name }}-${{ strategy.job-index }}
+        run: node tools/ci/selected-gate-verdict.mjs --tally "$LEG" --junit-in artifacts
       # The failing-spec carry-forward is written ONCE, by selected-verdict,
       # from every shard's junit (below). Each shard used to save it under one
       # shared key: run 37198214523's three `selected` jobs raced for
@@ -2869,7 +2899,7 @@ jobs:
     permissions:
       contents: read
       actions: read    # a dropped spec's browser-group runs on this head (#5480)
-      checks: read     # their shards' apex-group records (annotations)
+      checks: read     # their shards' apex-group records (annotations); this run's shard tallies (#5802)
     needs: [select, selected, guards]
     # `!cancelled()`, not `always()` (2026-09-30): a skipped `selected` is
     # still judged (that is the point of this job), but a CANCELLED run — the
@@ -2914,11 +2944,28 @@ jobs:
         with:
           pattern: spec-timings-junit-selected-*
           path: junit-in
+      # ONE RETRY of a failed download (#5802: run 44301033515 attempt 2, a 404 on one shard's junit).
+      - name: Every shard's junit (retry)
+        id: dl_junit_retry
+        if: ${{ needs.selected.result != 'skipped' && steps.dl_junit.outcome == 'failure' }}
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: spec-timings-junit-selected-*
+          path: junit-in
       # Which shards reached their run step (15-F2): a shard in this list with no
       # junit testcases in junit-in died mid-test, and the verdict reds on it.
       - name: Every shard's run-step marker
         id: dl_started
         if: ${{ needs.selected.result != 'skipped' }}
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: selected-started-*
+          path: started-in
+      - name: Every shard's run-step marker (retry)
+        id: dl_started_retry
+        if: ${{ needs.selected.result != 'skipped' && steps.dl_started.outcome == 'failure' }}
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -2987,7 +3034,10 @@ jobs:
           GROUP_ACCEPT: ${{ steps.group_runs.outputs.accept }}
           GROUP_RUNS: ${{ steps.group_runs.outputs.runs }}
           GROUP_WHY: ${{ steps.group_runs.outputs.why }}
-          DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}
+          DOWNLOAD_FAILED: ${{ (steps.dl_junit.outcome == 'failure' && steps.dl_junit_retry.outcome != 'success') || (steps.dl_started.outcome == 'failure' && steps.dl_started_retry.outcome != 'success') }}
+          # The shard tallies (#5802), read only on a green matrix whose junit evidence has a gap.
+          GH_TOKEN: ${{ github.token }}
+          SHARD_TALLIES: "1"
         run: |
           set -u
           JUNIT_ROOT=carry
