@@ -661,7 +661,8 @@
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
         "tests/unit/followup-platform.test.mjs",
-        "tests/unit/notices.test.mjs"
+        "tests/unit/notices.test.mjs",
+        "tests/unit/shipped-notices.test.mjs"
       ],
       "twinned": false
     },
@@ -1538,6 +1539,7 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/damage.test.mjs",
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/duel-row.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/help-rules-facts.test.mjs",
@@ -1580,6 +1582,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/session-records-assists.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
@@ -4096,9 +4099,14 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
-      "path": "js/race/driving-coach.js",
+      "path": "js/race/driving-coach-boot.js",
       "global": "DrivingCoach",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/driving-coach.js",
+      "global": "DrivingCoachBody",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/duel.js",
@@ -4462,6 +4470,11 @@
     },
     {
       "path": "js/render/three/tlx-chunked.js",
+      "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-mem.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
     },
@@ -4968,7 +4981,7 @@
     {
       "path": "js/ui/quali-sheet.js",
       "global": "QualiSheet",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/ui/race-message-history.js",
