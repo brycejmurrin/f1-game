@@ -343,3 +343,13 @@ copy of your own circuit is not fixed — it needs a prompt, which is a design d
 visible rows 20 → 22 and the player's highlighted row hidden → shown; `?rows=10` still shows 10. The other
 two broadcast defects (false "OVERTAKE" on a retirement, FASTEST LAP card never shown) are not fixed; they
 only appear in real-race replays, which could not be exercised here.
+
+### Fix 10 — voice packs no longer fail on slow connections (addendum A1)
+
+`js/audio/voice-pack.js`: the fixed 15 s limit covered the manifest, the whole binary and the integrity check,
+so a pack could only load if several megabytes arrived within 15 s, and after failing it was downloaded
+again every 30 s. The limit is now a stall timer: it restarts whenever data arrives (the binary is read as a
+stream) and allows a 1.5 s grace after a quiet period so callbacks queued behind a busy main thread can run.
+The SHA-256 check is unchanged. Verified in Chromium with caches off: fast network, loads in 0.1 s before
+and after; 2 Mbps, the 4.0 MB announcer pack failed at exactly 15.0 s → loads in 16.7 s; a binary that never
+arrives still fails (15.0 s → 16.5 s).

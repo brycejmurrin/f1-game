@@ -20,6 +20,8 @@ var VoicePack = (() => {
   const CACHE_S = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 24 : 90;
   const SLACK_S = 0.2;
   const RETRY_MS = 30000;
+  const STALL_MS = 15000;
+  const STALL_GRACE_MS = 1500;
   const WATCHDOG_MS = 4000;
 
   function norm(text) {
@@ -127,13 +129,37 @@ var VoicePack = (() => {
       if (raceLoad && isAnnouncerPack(id)) { deferred.add(id); return v.state; }
       v.state = "loading";
       const controller = typeof AbortController === "function" ? new AbortController() : null;
-      let timer;
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => { reject(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) {  } } }, 15000);
-      });
+      let timer, stalled, lastProgress = Date.now();
+      const timeout = new Promise((_, reject) => { stalled = reject; });
+      const giveUp = () => { stalled(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) {  } } };
+      let graceFor = -1;
+      const arm = (ms) => { timer = setTimeout(check, ms); };
+      const check = () => {
+        const quiet = Date.now() - lastProgress;
+        if (quiet < STALL_MS) { arm(STALL_MS - quiet); return; }
+        if (graceFor === lastProgress) { giveUp(); return; }
+        graceFor = lastProgress; arm(STALL_GRACE_MS);
+      };
+      const progress = () => { lastProgress = Date.now(); };
+      arm(STALL_MS);
+      const whole = async (r) => {
+        const reader = r.body && typeof r.body.getReader === "function" ? r.body.getReader() : null;
+        if (!reader) return r.arrayBuffer();
+        const parts = []; let size = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          progress();
+          if (done) break;
+          parts.push(value); size += value.byteLength;
+        }
+        const out = new Uint8Array(size); let at = 0;
+        for (const part of parts) { out.set(part, at); at += part.byteLength; }
+        return out.buffer;
+      };
       const get = (f, t) => {
         try { return Promise.resolve(fetch(base + f, controller ? { signal: controller.signal } : undefined))
-          .then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); }); }
+          .then((r) => { progress(); if (!r.ok) throw new Error(f + " " + r.status); return t === "arrayBuffer" ? whole(r) : r[t](); })
+          .then((v) => { progress(); return v; }); }
         catch (e) { return Promise.reject(e); }
       };
       const verify = async (bin, meta) => {
