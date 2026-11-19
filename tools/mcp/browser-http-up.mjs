@@ -4,6 +4,8 @@
 /**
  *   node tools/mcp/browser-http-up.mjs
  *   node tools/mcp/browser-http-up.mjs --stop   # stop the recorded server + tunnel, forget the token
+ *   node tools/mcp/browser-http-up.mjs --status # the recorded state and whether each end answers; starts nothing
+ *   node tools/mcp/browser-http-up.mjs --help   # this usage; any other flag is refused (exit 2), never a start
  *
  * Prints one line:
  *   phone-browser reuse https://…/mcp?token=…
@@ -107,7 +109,24 @@ async function waitFor(label, probe) {
   throw new Error(label + " did not come up");
 }
 
-async function bringUp() {
+export const USAGE = `usage: node tools/mcp/browser-http-up.mjs [--stop | --status | --help]
+  (no flag)  reuse the live public address, or start the server and/or tunnel; prints "phone-browser reuse|new <url>"
+  --stop     stop the recorded server + tunnel and forget the token (the next run mints a new URL)
+  --status   print the recorded state and whether the local and public ends answer; starts nothing`;
+
+/** The CLI mode for argv: only a bare run starts anything (#5674). */
+export function cliMode(argv) {
+  if (argv.length === 0) return "up";
+  if (argv.length === 1 && ["--stop", "--status", "--help", "-h"].includes(argv[0])) return argv[0] === "-h" ? "help" : argv[0].slice(2);
+  return "bad";
+}
+
+const DEFAULT_IO = { readState, writeState, ping, detach, ensureCloudflared, waitFor, readLog: () => readFileSync(LOG, "utf8") };
+
+/** Start what is dead. State is written as each process starts, before the next step can throw, so a failed tunnel
+ *  never leaves a server `--stop` cannot find (#5674). `io` is injectable for the unit test. */
+export async function bringUp(io = DEFAULT_IO) {
+  const { readState, writeState, ping, detach, ensureCloudflared, waitFor } = io;
   const prior = readState();
   const localOk = await ping(`http://127.0.0.1:${PORT}/healthz`);
   const publicOk = prior.url ? await ping(new URL(prior.url).origin + "/healthz") : false;
@@ -125,15 +144,17 @@ async function bringUp() {
       ...process.env,
       APEX_MCP_TOKEN: token,
     }, SERVER_LOG);
+    writeState({ token, port: PORT, serverPid });
     await waitFor("browser mcp", () => ping(`http://127.0.0.1:${PORT}/healthz`));
   }
   if (Number.isInteger(prior.tunnelPid)) stopRecorded({ tunnelPid: prior.tunnelPid });   // the dead tunnel's process, if any
-  mkdirSync(DIR, { recursive: true });
-  writeFileSync(LOG, "");
+  writeState({ token, port: PORT, serverPid });   // the server is known before the tunnel step can throw
+  if (io === DEFAULT_IO) { mkdirSync(DIR, { recursive: true }); writeFileSync(LOG, ""); }
   const bin = await ensureCloudflared();
   const tunnelPid = detach(bin, ["tunnel", "--url", `http://127.0.0.1:${PORT}`, "--no-autoupdate"], process.env, LOG);
+  writeState({ token, port: PORT, serverPid, tunnelPid });
   const host = await waitFor("tunnel", () => {
-    try { return tunnelUrlFromLog(readFileSync(LOG, "utf8")); }
+    try { return tunnelUrlFromLog(io.readLog()); }
     catch { return null; }
   });
   const url = connectorUrl(host, token);
@@ -143,7 +164,17 @@ async function bringUp() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.includes("--stop")) {
+  const mode = cliMode(process.argv.slice(2));
+  if (mode === "help") { console.log(USAGE); process.exit(0); }
+  if (mode === "bad") { console.error(`browser-http-up: unknown arguments ${process.argv.slice(2).join(" ")}\n${USAGE}`); process.exit(2); }
+  if (mode === "status") {
+    const st = readState();
+    const localOk = await ping(`http://127.0.0.1:${PORT}/healthz`);
+    const publicOk = st.host ? await ping(st.host + "/healthz") : false;
+    console.log(JSON.stringify({ state: { ...st, token: st.token ? "(recorded)" : null, url: st.url ? "(recorded)" : null }, localOk, publicOk }));
+    process.exit(0);
+  }
+  if (mode === "stop") {
     for (const line of stopRecorded(readState())) console.log("phone-browser " + line);
     rmSync(STATE, { force: true });
     console.log("phone-browser stopped; the next run mints a new token and URL");

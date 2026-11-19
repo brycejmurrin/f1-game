@@ -30,13 +30,20 @@ const DataRealRace = (function () {
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
+    let bodyFetch = false; // raceSession/scriptFor in flight (the ~11 OpenF1 bodies before paint)
     let requestGen = 0, replayUi = null, traceError = "", partialTraces = null, traceWork = Promise.resolve();
     let driveAction = null;
     let queuedGo = null;   // a WATCH tapped while the same race's positions load: runs when they land (latest wins, #5063)
-    // A download in flight leaves ~20 queued /location requests in the transport's
-    // FIFO that every other tab would wait behind; drop them (showTab cancels this
-    // tab BEFORE it starts the next tab's load).
-    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; queuedGo = null; replayUi = null; driveAction = null; traceError = ""; releaseIncomplete(); }
+    // A download OR the script-body fetch leaves queued OpenF1 requests in the
+    // transport's FIFO that every other tab would wait behind (15 s timeouts and
+    // 10–60 s 429 backoffs); drop them (showTab cancels this tab BEFORE it starts
+    // the next tab's load). Idle cancel must not abort another tab's work.
+    function cancel() {
+      if (loading || bodyFetch) F1API.cancelAll();
+      bodyFetch = false;
+      ++bodyGen; ++requestGen; loading = null; queuedGo = null; replayUi = null; driveAction = null; traceError = "";
+      releaseIncomplete();
+    }
     function releaseIncomplete() { partialTraces = null; if (traces && !traces.complete) traces = null; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
@@ -92,6 +99,8 @@ const DataRealRace = (function () {
       const slot = el("div");
       slot.appendChild(spinner());
       body.appendChild(slot);
+      bodyFetch = true;
+      const doneFetch = () => { if (myGen === bodyGen) bodyFetch = false; };
       raceSession(meta).then((race) => {
         if (myGen !== bodyGen) return;
         if (!race) { clear(slot); slot.appendChild(emptyMsg(NO_RACE_MSG)); return; }
@@ -112,7 +121,7 @@ const DataRealRace = (function () {
         const retry = el("button", "dh-retry", "RETRY"); retry.type = "button";
         retry.addEventListener("click", () => renderBody(meta, body));
         slot.append(failure, retry);
-      });
+      }).then(doneFetch, doneFetch);
     }
 
     function simLaps(script) { return Math.max(1, Math.round(script.laps * distance)); }

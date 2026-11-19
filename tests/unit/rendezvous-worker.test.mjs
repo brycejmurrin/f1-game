@@ -166,6 +166,33 @@ test("Worker rate-limits room creation before allocating more Durable Objects", 
   assert.equal(ids, 20, "limited requests must not resolve or create a Durable Object");
 });
 
+test("Worker rate-limits junk and legacy paths before they burn request quota", async () => {
+  let ids = 0;
+  const env = { ROOM: { idFromName() { ids++; }, get() { throw new Error("unreachable"); } } };
+  const headers = { "cf-connecting-ip": "198.51.100.42" };
+  let last;
+  for (let i = 0; i < 181; i++) {
+    last = await worker.fetch(new Request(`https://relay.test/v3/r/not-a-room/${i}`, {
+      method: "GET", headers,
+    }), env);
+  }
+  assert.equal(last.status, 429, "junk paths share the read budget");
+  assert.equal(last.headers.get("retry-after"), "60");
+  assert.equal(ids, 0, "junk paths must never name a Durable Object");
+
+  const legacyHeaders = { "cf-connecting-ip": "198.51.100.43" };
+  let legacy;
+  for (let i = 0; i < 21; i++) {
+    legacy = await worker.fetch(new Request(`https://relay.test/r/LEGACY${i}/offer`, {
+      method: "POST",
+      headers: { ...legacyHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ payload: sealed("legacy") }),
+    }), env);
+  }
+  assert.equal(legacy.status, 429, "legacy /r/ writes share the write budget");
+  assert.equal(ids, 0);
+});
+
 test("Worker rate-bucket storage is hard-capped under fresh address churn", async () => {
   const stub = { fetch: async () => new Response('{"ok":true}', { status: 200 }) };
   const env = { ROOM: { idFromName(code) { return code; }, get() { return stub; } } };
@@ -299,4 +326,27 @@ test("Room refuses an unknown slot without touching storage", async () => {
   assert.equal((await res.json()).error, "bad_slot");
   assert.equal(h.calls.get, 0);
   assert.equal(h.calls.put, 0);
+});
+
+test("Worker rejects malformed owner capabilities and marks responses no-store", async () => {
+  const h = roomHarness();
+  for (const owner of ["short", "has spaces!!", "x".repeat(200), 12, true, {}]) {
+    const res = await h.room.fetch(new Request(url, {
+      method: "POST",
+      body: JSON.stringify({ payload: sealed("owner-check"), owner }),
+    }));
+    assert.equal(res.status, 400, JSON.stringify(owner));
+    assert.equal((await res.json()).error, "bad_owner");
+  }
+  assert.equal(h.calls.put, 0);
+
+  const ok = await h.room.fetch(new Request(url, {
+    method: "POST",
+    body: JSON.stringify({ payload: sealed("owner-ok"), owner: "owner_capability_123456" }),
+  }));
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("cache-control"), "no-store");
+  const read = await h.room.fetch(new Request(url));
+  assert.equal(read.status, 200);
+  assert.equal(read.headers.get("cache-control"), "no-store");
 });

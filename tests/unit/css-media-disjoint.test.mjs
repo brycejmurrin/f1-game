@@ -121,3 +121,22 @@ test("both large-screen menu blocks in responsive.css guard every selector on de
     }
   }
 });
+
+test("css-screens free sheets: cockpit density, career motion tokens, tdc font-size", () => {
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+  const ck = strip(fs.readFileSync(path.join(ROOT, "css", "cockpit-preview.css"), "utf8"));
+  const ce = fs.readFileSync(path.join(ROOT, "css", "career-experience.css"), "utf8");
+  const td = strip(fs.readFileSync(path.join(ROOT, "css", "track-detail.css"), "utf8"));
+  assert.ok(
+    mediaBlocks(ck).length === 0
+      && /\.sheet\[data-density="compact"\]:not\(\[data-shape="tall"\]\)\s+#ckpreview-frame\s*\{[^}]*height:\s*150px/.test(ck)
+      && /:is\(body,\s*\.sheet\)\[data-shape="tall"\]\s+#ckpreview-frame\s*\{[^}]*height:\s*245px/.test(ck)
+      && !/max-height:\s*500px|max-width:\s*600px/.test(ck)
+      && /animation:\s*career-reveal 240ms var\(--ease-out\)/.test(ce)
+      && /calc\(\(3 - var\(--podium-place\)\) \* \(var\(--dur-1\) \* 4 \/ 3\)\)/.test(ce)
+      && /translateY\(calc\(var\(--gap\) \* 1\.5\)\)/.test(ce)
+      && /\.tdc-fast\s*\{[^}]*\}/.test(td) && !/\.tdc-fast\s*\{[^}]*font-size/.test(td)
+      && /\.tdc-corner\s*\{[^}]*font-size:\s*var\(--fs-micro\)/.test(td),
+    "cockpit frame heights key on sheet density/shape (not viewport media); career reveal reads --ease-out / --dur-1 stagger / --gap rise; .tdc-* drops restated font-size"
+  );
+});

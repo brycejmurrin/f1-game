@@ -28,6 +28,8 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 import { stale as genShellStale, inlineScripts } from "../../tools/gen/gen-shell.mjs";
 import { checkRepo as checkModuleBoundaries, checkSource as checkBoundarySource, checkFunctionSource,
@@ -291,9 +293,10 @@ async function runFlipper(links) {
   const frames = [];
   const raf = (fn) => frames.push(fn);
   const win = { on: {}, requestAnimationFrame: raf, addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); } };
-  const ctx = { document: { querySelectorAll: () => links }, requestAnimationFrame: raf, window: win };
+  const asked = [];
+  const ctx = { document: { querySelectorAll: (sel) => { asked.push(sel); return links; } }, requestAnimationFrame: raf, window: win };
   vm.runInNewContext(body, ctx, { filename: "gen-shell.mjs:DEFER_CSS_SCRIPT" });
-  return { frames, win };
+  return { frames, win, asked };
 }
 function stubLink(loaded) {
   let writes = 0, media = "print";
@@ -328,6 +331,77 @@ test("#5394: a sheet that failed before the flipper ran cannot hold the rest on 
   assert.equal(win.on.load.length, 1, "window load is the backstop");
   win.on.load[0]();
   assert.deepEqual(links.map((l) => l.media), ["all", "all"], "window load (every sheet settled) flips them all");
+});
+
+// #5394 row 2: route sheets (MANIFEST.CSS_ROUTE) stay on print until one of their screens is shown.
+test("#5394: route sheets carry data-route in the shell and the boot flipper never selects them", async () => {
+  const { CSS_ROUTE, CSS_DEFERRED } = MANIFEST;
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const tags = [...html.matchAll(/<link rel="stylesheet" href="([^"?]+)\?v=dev"([^>]*)>/g)];
+  const route = Object.fromEntries(tags.filter((m) => / data-route="/.test(m[2]))
+    .map((m) => [m[1], m[2].match(/ data-route="([^"]*)"/)[1].split(" ")]));
+  assert.deepEqual(route, CSS_ROUTE, "every route tag, and only those, names the manifest's roots");
+  assert.deepEqual(Object.keys(CSS_ROUTE).filter((f) => !CSS_DEFERRED.includes(f)), [], "every route sheet is a deferred (print) sheet");
+  // Each root is a static shell element, or one a named module builds (podium-beat.js makes #ceremony-podium).
+  const BUILT = ["ceremony-podium"];
+  const missing = [...new Set(Object.values(CSS_ROUTE).flat())].filter((id) => !BUILT.includes(id) && !html.includes(`id="${id}"`));
+  assert.deepEqual(missing, [], "a route root the shell does not hold");
+  const { asked } = await runFlipper([]);
+  assert.deepEqual(asked, ['link[rel="stylesheet"][media="print"]:not([data-route])'], "the flipper leaves route tags alone");
+});
+
+function routeWorld(linkSpec, els) {
+  const links = linkSpec.map(([href, ids]) => ({ href, media: "print", dataset: { route: ids } }));
+  let observer = null, disconnected = 0;
+  const timers = [], idles = [];
+  const ctx = vm.createContext({
+    console, Promise, queueMicrotask, URLSearchParams,
+    ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_EDGES: [], LAZY_RACE: [], SCENERY_DIR: "js/circuits/scenery" },
+    localStorage: { getItem() { return null; } }, navigator: { userAgent: "apex-game-vm" },
+    location: { search: "", hostname: "example.com" }, Log: { warn() {}, info() {}, error() {} },
+    setTimeout: (fn, ms) => { timers.push([fn, ms]); return timers.length; }, clearTimeout() {},
+    requestIdleCallback: (fn) => { idles.push(fn); },
+    MutationObserver: class { constructor(cb) { this.cb = cb; observer = this; } observe(t, o) { this.opts = o; } disconnect() { disconnected++; } },
+    document: { documentElement: {},
+      querySelectorAll: (sel) => (sel === 'link[rel="stylesheet"][data-route][media="print"]' ? links.filter((l) => l.media === "print")
+        : sel.split(",").map((s) => els[s.slice(1)]).filter(Boolean)) },
+  });
+  ctx.window = ctx;
+  vm.runInContext(readFileSync(join(ROOT, "js/core/lazy-bundles.js"), "utf8") + "\nthis.LazyBundles = LazyBundles;", ctx,
+    { filename: absSrc("js/core/lazy-bundles.js") });
+  const lb = ctx.LazyBundles.create({ els: {}, loadBackendScripts: async () => true, getContext: () => ({}) });
+  const show = (el, attr) => { if (attr === "open") el.open = true; else el.hidden = false; observer.cb([{ target: el }]); };
+  return { lb, links, timers, idles, show, observer: () => observer, disconnected: () => disconnected,
+    medias: () => links.map((l) => l.media).join() };
+}
+
+test("#5394: a route sheet flips on the first reveal of one of its roots, before that frame paints", () => {
+  const els = { career: { id: "career", hidden: true }, quali: { id: "quali", hidden: true, open: false },
+    results: { id: "results", hidden: true, open: false }, hud: { id: "hud", hidden: true } };
+  const w = routeWorld([["css/career.css", "career quali"], ["css/data.css", "datahub results"], ["css/career-experience.css", "career results"]], els);
+  assert.equal(JSON.stringify(w.observer().opts), JSON.stringify({ subtree: true, attributes: true, attributeFilter: ["hidden", "open"] }));
+  assert.equal(w.medias(), "print,print,print", "nothing shown yet: every route sheet stays on print");
+  w.show(els.hud);
+  assert.equal(w.medias(), "print,print,print", "a screen that is no route root flips nothing");
+  w.show(els.quali, "open");
+  assert.equal(w.medias(), "all,print,print", "the quali dialog's open flips career.css only");
+  w.show(els.results);
+  assert.equal(w.medias(), "all,all,all", "results flips both sheets that style it");
+  assert.equal(w.disconnected(), 1, "no route sheet left: the observer goes");
+  assert.equal(w.lb.ensureRouteCss("career"), 0, "an already-flipped sheet is not written again");
+});
+
+test("#5394: a root already shown at install flips at once; the idle backstop flips the rest", () => {
+  const els = { trackdesigner: { id: "trackdesigner", hidden: false } };
+  const w = routeWorld([["css/editor.css", "trackdesigner"], ["css/photo-studio.css", "photo-studio"]], els);
+  assert.equal(w.medias(), "all,print", "a deep-linked screen gets its sheet at install");
+  const back = w.timers.find(([, ms]) => ms === 15000);
+  assert.ok(back, "the backstop waits 15 s, so the title intro never pays it");
+  back[0]();
+  assert.equal(w.medias(), "all,print", "then it waits for idle");
+  w.idles.at(-1)();
+  assert.equal(w.medias(), "all,all", "idle after the backstop flips every route sheet left");
+  assert.equal(w.disconnected(), 1);
 });
 
 test("every gen-shell block is byte-identical to a fresh generation", () => {

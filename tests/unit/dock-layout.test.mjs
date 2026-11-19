@@ -416,3 +416,22 @@ test("a REPOSITION drag reads the pad once (pointerdown), not per pointermove, a
   docL.pointerup(ev({}));
   assert.equal(fits, f0 + 2, "pointerup settles the fit");
 });
+
+test("setEditing(false) cancels a pending drag fit frame (hunt memory-leaks back)", () => {
+  const { ctx, api, docL, els } = bootCreate();
+  let fits = 0, rafCb = null, cancelled = [];
+  ctx.GameHud = { invalidateFit() { fits++; } };
+  ctx.requestAnimationFrame = (cb) => { rafCb = cb; return 7; };
+  ctx.cancelAnimationFrame = (id) => { cancelled.push(id); rafCb = null; };
+  const target = { closest() { return null; } };
+  els["dock-right"].contains = (t) => t === target;
+  els["dock-left"].contains = () => false;
+  const ev = (o) => Object.assign({ target, pointerId: 1, preventDefault() {} }, o);
+  api.setEditing(true);
+  docL.pointerdown(ev({ clientX: 300, clientY: 700 }));
+  docL.pointermove(ev({ clientX: 260, clientY: 700 }));
+  assert.equal(typeof rafCb, "function", "a fit frame is queued mid-drag");
+  api.setEditing(false);
+  assert.deepEqual(cancelled, [7], "DONE/Escape cancels the pending fit");
+  assert.equal(rafCb, null, "the cancelled frame is dropped, not flushed");
+});

@@ -14,7 +14,7 @@ is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix /
 
 ## First, which route
 
-- They want to PLAY: give them the live URL (README.md, first line) to open in the phone's own browser. Done.
+- They want to PLAY: give them the live URL (README.md, line 3) to open in the phone's own browser. Done.
 - They want Claude to MEASURE OR DRIVE THE LIVE GAME ON THEIR OWN PHONE: the GitHub-issue bridge
   — skill `phone-bridge`, not this skill.
 - They want to SEE this working tree driven for them: this skill, and it needs a Grok custom connector.
@@ -40,7 +40,7 @@ node tools/mcp/browser-http-up.mjs
 A line that starts `phone-browser reuse` means the address they already pasted still works. Say nothing about a new address.
 
 A line that starts `phone-browser new` means the public host changed. Give them that one URL and tell them to open
-their Grok connector settings (Settings → Connectors), edit the custom connector, and paste it. That is the only step
+their Grok connectors page (grok.com/connectors), edit the custom connector, and paste it. That is the only step
 they do.
 
 The script throws, takes long, or a URL needs checking (`browser_status`, `orientation`): `references/failures.md`.
@@ -65,5 +65,5 @@ next browser tool breaks one browser at a time (AGENTS.md rule 5).
 - Add this server to `.mcp.json`. Keep the checkout's configured catalog; phone-browser stays a separate bridge.
 - Run it beside another browser (Playwright, chrome-devtools, playwright-official `browser_*`, `apex_*` browser
   tools) — one browser at a time — or from a subagent (AGENTS.md rules 5 and 10). No hook catches this server's
-  Chromium: `bash-guard.sh` and `mcp-browser-guard.sh` do not match `browser-http-up.mjs`, so the rule is yours to keep.
+  Chromium: no hook names `browser-http-up.mjs`; in a subagent its `launchChromium` throws under `APEX_SUBAGENT`.
 - Hand them a localhost address. The phone cannot open it.
