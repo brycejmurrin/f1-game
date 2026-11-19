@@ -2181,6 +2181,12 @@
       ]
     },
     {
+      "path": "tools/gfx/sharpness-ab.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gfx/ssr-probe.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",

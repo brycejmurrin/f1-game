@@ -1401,6 +1401,11 @@
       "presentation": "shared-levels",
       "preserve": "Skip reasons, angular units, thresholds and full JSON rows."
     },
+    "tools/gfx/sharpness-ab.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Evidence class (software pixels), each arm's buffer size and the per-crop metrics; never read a sheet as what a phone shows."
+    },
     "tools/gfx/ssr-probe.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

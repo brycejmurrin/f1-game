@@ -1085,6 +1085,9 @@
         "tests/unit/rival-contact-sfx.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
+      "detach": [
+        "tests/unit/rival-attach-init.test.mjs"
+      ],
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
@@ -6864,6 +6867,9 @@
       "exportEnvelope": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
+      "exportFile": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
       "exportLibraryFile": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -7370,6 +7376,7 @@
         "tests/unit/car-fx.test.mjs"
       ],
       "rainActive": [
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -11184,6 +11191,9 @@
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
+      ],
+      "rowsFrom": [
+        "tests/unit/overlay-feed.test.mjs"
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
@@ -15373,6 +15383,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/comment-citations.test.mjs",
@@ -15435,7 +15446,8 @@
     "js/render/glx/shaders/glsl-chunks.js": {
       "*": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/puddles.test.mjs"
+        "tests/unit/puddles.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-fx.js": {
@@ -15460,6 +15472,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs",
         "tests/unit/vertex-pack.test.mjs",
@@ -15475,6 +15488,7 @@
         "tests/unit/notices.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-shadow-size-source.test.mjs"
@@ -15527,6 +15541,9 @@
       ]
     },
     "js/render/glx/soft.js": {
+      "_awaitFrame": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
       "awaitSoftPresent": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -16127,6 +16144,11 @@
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
+      ]
+    },
+    "js/render/three/tlx-mem.js": {
+      "memCensus": [
+        "tests/unit/tlx-mem.test.mjs"
       ]
     },
     "js/render/three/tlx-post.js": {
@@ -16959,6 +16981,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs"
       ]
@@ -16972,6 +16995,7 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
@@ -16979,7 +17003,8 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
-        "tests/unit/tlx-webgpu-perf.test.mjs"
+        "tests/unit/tlx-webgpu-perf.test.mjs",
+        "tests/unit/tsl-post-fxaa-lab.test.mjs"
       ]
     },
     "js/render/three/tsl-sky.js": {
@@ -17055,6 +17080,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/wgsl-bindings.test.mjs"
       ]
@@ -17072,7 +17098,8 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/notices.test.mjs",
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/shading-leaf-parity.test.mjs"
       ]
     },
     "js/render/webgpu/wgx-chunked.js": {
@@ -17431,6 +17458,7 @@
         "tests/unit/share-card.test.mjs"
       ],
       "close": [
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "preview": [
@@ -17441,8 +17469,7 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/unit/css-has-scope.test.mjs",
-        "tests/unit/results-sheet-lazy.test.mjs"
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -19548,16 +19575,20 @@
     },
     "js/ui/quali-sheet.js": {
       "build": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "close": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "create": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "open": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/ui/race-message-history.js": {
@@ -19580,7 +19611,7 @@
       ]
     },
     "js/ui/results-boot.js": {
-      "*": [
+      "create": [
         "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
@@ -19605,6 +19636,7 @@
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",

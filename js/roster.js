@@ -39,6 +39,7 @@
       "js/render/three/tlx-shadow.js",
       "js/render/three/tlx-chunked.js",
       "js/render/three/tlx-post.js",
+      "js/render/three/tlx-mem.js",
       "js/render/three/tlx.js"
     ]
   },
@@ -831,7 +832,8 @@
     LAZY_UI_PRESETS_EDGES: [],
     LAZY_RESULTS_SHEET: [
     "js/share/share-card-chips.js",
-    "js/ui/results-sheet.js"
+    "js/ui/results-sheet.js",
+    "js/ui/quali-sheet.js"
   ],
     LAZY_RESULTS_SHEET_EDGES: [],
     LAZY_TRACK_BUILD: [

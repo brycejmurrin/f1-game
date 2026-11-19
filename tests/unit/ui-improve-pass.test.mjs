@@ -2660,3 +2660,26 @@ test("AriaState sync writes aria-pressed / aria-current only when the value chan
   sb.AriaState.sync();
   assert.deepEqual(writes, ["aria-pressed"], "only the button whose state changed is written");
 });
+
+// #5672: Bryce's phone (UI SIZE 70, garage BUTTON 80 %) painted CLOSE GARAGE 35 px and the touch --chip-h 33.6 px
+// (SEASON SETUP ▲ / ▼ / ✕ 34×34); #5755's re-record of his export saw #cs-done at 35.4 at UI SIZE 50 and 70 too.
+// The tokens' own arithmetic, evaluated at both: every touch arm paints 44.2 px.
+test("touch --chip-h and every BUTTON-look arm paint 44.2 px at UI SIZE 50 and 70 (#5672)", () => {
+  const num = (expr, vars) => Function(`"use strict"; return (${String(expr)
+    .replace(/var\((--[\w-]+)(?:,\s*[\d.]+)?\)/g, (_, n) => { assert.ok(n in vars, `${n} in ${expr}`); return String(vars[n]); })
+    .replace(/(\d)px/g, "$1").replace(/calc\(/g, "(").replace(/\bmax\(/g, "Math.max(").replace(/\bmin\(/g, "Math.min(")});`)();
+  const tok = css("css/tokens.css"), ov = css("css/overlays.css");
+  const looks = { datahub: "#datahub", select: "#select", race: "#race-settings", career: "#career", garage: "#carsetup",
+    popups: "dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings)" };
+  for (const s of [0.5, 0.7]) {
+    const r2 = (v) => Math.round(v * s * 100) / 100;
+    const tap0 = num(decl(tok, "body:not(.desktop)", "--tap"), { "--ui-scale": s });
+    const chip0 = num(decl(tok, "body:not(.desktop)", "--chip-h"), { "--ui-scale": s });
+    assert.deepEqual([r2(tap0), r2(chip0)], [44.2, 44.2], `the touch tokens at UI SIZE ${s * 100}`);
+    const painted = (look) => Object.entries(looks).map(([k, sel]) => ["--tap", "--chip-h"].map((p) =>
+      r2(num(decl(ov, `:root[data-look-${k}-btn] ${sel}`, p, { context: /pointer: coarse/ }),
+        { "--ui-scale": s, "--tap-0": tap0, "--chip-h-0": chip0, [`--look-${k}-btn`]: look }))));
+    assert.deepEqual(painted(0.8), Object.keys(looks).map(() => [44.2, 44.2]), `BUTTON 80 % holds the floor at UI SIZE ${s * 100}`);
+    assert.deepEqual(painted(1.5), Object.keys(looks).map(() => [r2(tap0 * 1.5), r2(chip0 * 1.5)]), `a bigger look still scales at UI SIZE ${s * 100}`);
+  }
+});
