@@ -2,20 +2,13 @@
 "use strict";
 
 const Assets = (function () {
-  // Pack URLs carry no ?v= cache-bust (index.html's version guard only rewrites
-  // the shell's own script/link tags), so these fetches use DEFAULT caching
-  // rather than force-cache: force-cache would serve a stale pack out of the
-  // HTTP cache indefinitely, and a rebaked pack would never reach anyone who
-  // had already loaded the old one. sw.js serves assets/pack/ NETWORK-FIRST
-  // (cache only as the offline / slow fallback), so normal revalidation is
-  // what makes a rebake land — from the first boot after the deploy.
+  // Pack URLs carry no ?v= (the version guard rewrites only the shell tags), so
+  // fetches use DEFAULT caching: force-cache would keep a stale pack forever.
+  // sw.js serves the pack network-first, so a rebake lands on the next boot. The
+  // manifest is asked under the PAGE build (`?b=<n>`, #5629), which sw.js answers
+  // stale-first (why: sw.js isBuildKeyedManifest). No build: bare URL.
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
-  // The manifest is asked for under the PAGE's build (`?b=<n>`, #5629): sw.js
-  // answers that key from the cache at once and revalidates behind it, so a
-  // stalled link no longer holds the pack for its 3 s network race. The key is
-  // the shell's own build, never the worker's, so an old worker cannot hand a
-  // new shell the old build's layer index. No build (VM, bare file) → bare URL.
   function _manifestUrl() {
     const b = typeof window !== "undefined" && window ? Number(window.__APEX_BUILD) : 0;
     return Number.isSafeInteger(b) && b > 0 ? MANIFEST + "?b=" + b : MANIFEST;
@@ -424,14 +417,10 @@ const Assets = (function () {
   // readPixelsAsync does), then ONE fenceSync + gl.flush() marks the GPU work;
   // clientWaitSync is polled off a timer and, once the fence has signalled,
   // getBufferSubData copies each buffer into `data` — a copy that no longer
-  // waits on the GPU. One buffer PER LAYER is not style: Chromium keeps a
-  // single-use "shadow copy" per READ-usage buffer that the fence fills and
-  // the first getBufferSubData consumes (gles2_implementation.cc MapBufferRange
-  // + readback_buffer_shadow_tracker.cc); a second read of the same buffer
-  // falls back to a blocking round trip with "performance warning: READ-usage
-  // buffer was read back without waiting on a fence" — measured in-container:
-  // 12 warnings and a 3× slower copy with one shared buffer at slot offsets,
-  // none with one per layer (perf hunt 4, lane WGX). The uploads happen
+  // waits on the GPU. One buffer PER LAYER because Chromium's per-buffer READ
+  // shadow copy is single-use (readback_buffer_shadow_tracker.cc): a shared
+  // buffer read again blocks ("READ-usage buffer was read back without waiting
+  // on a fence"; measured: 12 warnings, 3× slower copy). The uploads happen
   // synchronously INSIDE this call, so a caller may close its ImageBitmaps the
   // moment it returns (assets.js does).
   //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback

@@ -412,8 +412,7 @@ const InputGhost = (function () {
       };
       requestIdleCallback(idle);
     }
-    // No requestIdleCallback (iOS Safari): wait as Ghost does, and 2 s past its write so one PB lap is two
-    // short writes in two frames, not one long one behind the lap line. flush() covers pause/quit/hide.
+    // No rIC (iOS Safari): as Ghost, 2 s after its write, so a PB lap is two short writes (#5629).
     else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS + 2000);
     else write();
   }

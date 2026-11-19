@@ -299,8 +299,7 @@ const Ghost = (function () {
       };
       requestIdleCallback(idle);
     }
-    // No requestIdleCallback (iOS Safari): the same capped wait, not the next task. A 0 ms timer ran the
-    // 5-30 ms write right behind the lap-line frame of a PB lap; flush() still writes at any earlier pause/quit/hide.
+    // No rIC (iOS Safari): the same capped wait, not a 0 ms timer behind the PB lap-line frame (#5629).
     else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS);
     else write();   // bare VM harness: no scheduler, write now
   }
