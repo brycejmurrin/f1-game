@@ -93,12 +93,12 @@ export function syncRefusal(v, { forceCleanBehind = false, ontoRedTip = false } 
 }
 
 /** Loud warning when --force-clean-behind overrides a needs-sync `no`. Pure. Agents must sync only for
- *  conflict|stale-red|retest-refused (or a CONFLICTING PR); clean-behind is not a reason. */
+ *  conflict|stale-red|retest-refused|gate-refused (or a CONFLICTING PR); clean-behind is not a reason. */
 export function forceCleanBehindWarning(v) {
   if (!v?.ok || v.verdict !== "no") return null;
   return [
     "WARNING: --force-clean-behind overrides needs-sync `no` — clean-behind is NOT a reason to sync.",
-    "WARNING: Sync only when needs-sync.mjs says conflict|stale-red|retest-refused (or the PR is CONFLICTING).",
+    "WARNING: Sync only when needs-sync.mjs says conflict|stale-red|retest-refused|gate-refused (or the PR is CONFLICTING).",
     "WARNING: Drop --force-clean-behind unless you have an explicit owner grant to sync anyway.",
   ];
 }
@@ -196,7 +196,7 @@ export const USAGE = [
     "            (changed on both sides, regenerated or hand-resolved); the branch's whole diff when HEAD is not a sync merge;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it;",
-    "            when overriding `no`, prints a loud WARNING — sync only for conflict|stale-red|retest-refused)",
+    "            when overriding `no`, prints a loud WARNING — sync only for conflict|stale-red|retest-refused|gate-refused)",
     "  --onto-red-tip  sync although needs-sync.mjs says `tip-red` (the deploy tip is red on code): the fixer's own branch only (exit 5 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
     "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 9, max 590 s) for loadavg < 2.8, 0 refuses at once",
