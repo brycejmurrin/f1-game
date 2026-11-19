@@ -131,8 +131,20 @@ test("mobile-ui: Settings sheet-w is 1020; wide compact-at is 620", () => {
 });
 
 test("mobile-ui: the Settings fold plate keeps its border on :hover/:active (no hover layout loop)", () => {
-  const css = fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8");
+  const rules = cssRules(fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8"));
+  const HOVER_MQ = "@media (hover: hover) and (pointer: fine)";
+  const PLATE = "1px solid var(--plate-line)";
+  const at = (sel, mq) => rules.findIndex((r) => r.selector === sel && r.context.filter((c) => c.startsWith("@media")).join(" ") === mq);
   // In order: the plain-fold hover (border: none), the plate covering :active, then a gated :hover plate that
   // follows the plain-fold hover (same specificity) so it wins.
-  assert.match(css, /#rs-body details > summary:hover \{[^}]*border: none[\s\S]*#pmsettings-inner \.pm-group details > summary,\s*#pmsettings-inner \.pm-group details > summary:active\s*\{[^}]*border:\s*1px solid var\(--plate-line\)[\s\S]*@media \(hover: hover\) and \(pointer: fine\) \{\s*#pmsettings-inner \.pm-group details > summary:hover\s*\{[^}]*border:\s*1px solid var\(--plate-line\)/, "gated :hover keeps the plate, after the plain-fold hover");
+  const plainHover = at(":is(#pmsettings-inner .pm-group) details > summary:hover, #rs-body details > summary:hover", HOVER_MQ);
+  const plate = at("#pmsettings-inner .pm-group details > summary, #pmsettings-inner .pm-group details > summary:active", "");
+  const plateHover = at("#pmsettings-inner .pm-group details > summary:hover", HOVER_MQ);
+  assert.notEqual(plainHover, -1, "the plain-fold hover rule exists");
+  assert.equal(rules[plainHover].decls.get("border"), "none");
+  assert.notEqual(plate, -1, "the plate rule covers summary and :active");
+  assert.equal(rules[plate].decls.get("border"), PLATE);
+  assert.notEqual(plateHover, -1, "a gated :hover plate exists");
+  assert.equal(rules[plateHover].decls.get("border"), PLATE);
+  assert.equal(plainHover < plate && plate < plateHover, true, "gated :hover keeps the plate, after the plain-fold hover");
 });
