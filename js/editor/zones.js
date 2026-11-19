@@ -62,7 +62,8 @@ const TrackZones = (function () {
   }
   /** After an insert / delete / stamp: a zone BEFORE the edited span keeps its
    *  arc distance from the start, one AFTER it its distance to the finish, one
-   *  inside it is dropped (a range is clipped to the span's edge). Anchors are
+   *  inside it is dropped (a range is clipped to the span's edge) — except a
+   *  single insert, which splits its segment and keeps every zone on it. Anchors are
    *  the control points both loops share — the unchanged head walked forward,
    *  the unchanged tail walked back (a stamp may thin the tail with RDP, so its
    *  survivors are a subsequence) — and a zone between two anchors keeps its
@@ -105,10 +106,24 @@ const TrackZones = (function () {
     const cO = cumArc(oldPts), cP = cumArc(newPts), LO = cO[N], LP = cP[M];
     if (!(LO > 0 && LP > 0)) return d;
     const A = head.concat(tail).map(([o, n]) => [cO[o], cP[n]]), gap = head.length - 1, eps = 1e-9 * LO;
+    // A single INSERT (M = N+1, the old loop intact around one new point) splits
+    // segment a→b at the new point p: a zone on it keeps its place, mapped by its
+    // projection onto a→b (before p's foot → a→p, after it → p→b), never dropped.
+    const h = head[gap], t0 = tail[0];
+    const ins = M === N + 1 && t0[0] === h[0] + 1 && t0[1] === h[1] + 2;
+    let tp = 0.5;
+    if (ins) {
+      const a = oldPts[h[0]], b = oldPts[t0[0] % N], p = newPts[h[1] + 1], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz;
+      if (l2 > 0) tp = Math.min(1 - 1e-6, Math.max(1e-6, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2));
+    }
     const at = (f, role) => {
       const x = wrap01(f) * LO;
       let k = 0;
       while (k < A.length - 2 && x > A[k + 1][0]) k++;
+      if (ins && k === gap) {
+        const seg = A[k + 1][0] - A[k][0], t = seg > 0 ? Math.min(1, Math.max(0, (x - A[k][0]) / seg)) : 0, sp = cP[h[1] + 1];
+        return (t <= tp ? A[k][1] + (t / tp) * (sp - A[k][1]) : sp + ((t - tp) / (1 - tp)) * (A[k + 1][1] - sp)) / LP;
+      }
       if (k === gap && x > A[k][0] + eps && x < A[k + 1][0] - eps) return role === "s0" ? A[k + 1][1] / LP : role === "s1" ? A[k][1] / LP : null;
       const span = A[k + 1][0] - A[k][0];
       return (A[k][1] + (span > 0 ? (x - A[k][0]) / span : 0) * (A[k + 1][1] - A[k][1])) / LP;

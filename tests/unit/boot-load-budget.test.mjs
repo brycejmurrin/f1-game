@@ -33,7 +33,8 @@ const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 // 317: #4978 row 2 moved the perf rig (bench-run, bench-capture, phone-recorder, gpu-test-run, soak-run) to LAZY_PERF (319 → 314).
 // 314: #4978 row 6 moved watch-transport, real-replay, real-race-pace and the real-race body to LAZY_REAL_RACE
 // behind a FULL stub (js/race/real-race-boot.js) (314 → 311).
-const MAX_EAGER_SCRIPTS = 314;
+// 313: deploy red (#5714 + #5634 overlap) moved share-card-chips.js into LAZY_RESULTS_SHEET (tip 311 → 310 tags).
+const MAX_EAGER_SCRIPTS = 313;
 // 8.25 MB: raised from 8.20 MB by Bryce's grant (2026-10-30 ~16:51Z, quoted via the dispatcher: "Raise budget +50 KB").
 // Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
 // 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
@@ -46,7 +47,13 @@ const MAX_EAGER_SCRIPTS = 314;
 // 8,030,960 raw (−22,785), so the room stays the owner's 8,150,000 decision and the freed bytes are not handed out.
 // 8,018,484: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE behind the FULL stub js/race/real-race-boot.js
 // (#5515): tip 2de6f5eb 8,076,221 → 7,967,490 raw (−108,731), so the room stays what the owner's decision left.
-const MAX_EAGER_BYTES = 8_018_484;
+// 8,014,025: deploy red — #5714 (ROUTE SHEETS watcher in eager lazy-bundles.js) + #5634 (eager ui/race growth) ate
+// the room; tip 9b75df12 8,022,147 raw (over by 3,663). share-card-chips.js → LAZY_RESULTS_SHEET: 8,022,147 →
+// 8,014,025 (−8,122). Zero room: growth spent the owner's room, and freed bytes are not handed out.
+// 8,017,936: tip 08886fdb boots 8,017,936 raw against 8,014,025 (+3,911). #5815 merged before re-measure; growth
+// from #5582 and other merges onto the red tip (8a9d0796: 8,026,058 raw before the move). Still under Bryce's
+// 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
+const MAX_EAGER_BYTES = 8_017_936;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");

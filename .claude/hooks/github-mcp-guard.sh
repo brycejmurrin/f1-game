@@ -11,7 +11,7 @@
 #         (a file write on the admin token lands on any branch with no PR, no CI)
 #   DENY  update_pull_request_branch (sync through tools/ci/sync-pr.mjs)
 #   DENY  actions_run_trigger: any *cancel* / *rerun* method, run_workflow of
-#         pages.yml / ci.yml (the release train is never dual-dispatched)
+#         pages.yml / ci.yml; the ORCHESTRATOR (steward §CI) passes cancels, rerun_failed_jobs, ci.yml, deploy-branch pages.yml
 #   ASK   update_pull_request with state "closed"
 #   DENY  issue_write whose `labels` (it REPLACES the list) differs from the
 #         live labels by anything but ONE name (live from `gh api`; unknown →
@@ -61,14 +61,15 @@ if op in ("push_files", "create_or_update_file", "create_branch", "delete_file")
 if op == "update_pull_request_branch":
     emit("deny", "update-branch merges the base on GitHub as the token's owner; sync through `node tools/ci/sync-pr.mjs <branch>` instead.")
 if op == "actions_run_trigger":
-    m = str(ti.get("method") or "").strip().lower()
+    m, wf, ref = str(ti.get("method") or "").strip().lower(), os.path.basename(str(ti.get("workflow_id") or "").strip().lower()), re.sub(r"^refs/heads/", "", str(ti.get("ref") or "").strip())
+    orch = os.environ.get("APEX_ROLE") == "orchestrator" and os.environ.get("CLAUDE_CODE_CHILD_SESSION") != "1" and not d.get("agent_id")   # the hook's OWN env, never the command's (steward §CI)
+    if orch and (m in ("cancel_workflow_run", "force_cancel_workflow_run", "rerun_failed_jobs") or (m == "run_workflow" and not wf.isdigit() and (wf in ("ci.yml", "ci.yaml") or ref == "claude/f1-game-project-26h3ng"))):
+        sys.exit(0)
     if "cancel" in m:
-        emit("deny", "NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Bryce cancels in the UI.")
-    if "rerun" in m:
-        emit("deny", "No re-run dispatch from a session: `node tools/ci/ci-rerun.mjs` re-runs a failed job at most once for a timeout or infra error (AGENTS.md §Coordination).")
-    wf = os.path.basename(str(ti.get("workflow_id") or "").strip().lower())
+        emit("deny", "WORKERS NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Only the orchestrator cancels (skill `steward` §CI).")
+    if "rerun" in m: emit("deny", "The orchestrator re-runs FAILED jobs only (rerun_failed_jobs), for a verdict on an infra failure (skill `steward` §CI); a worker never re-runs from a session (`node tools/ci/ci-rerun.mjs`: a run cancelled with zero failures, once).")
     if m == "run_workflow" and (wf in ("pages.yml", "pages.yaml", "ci.yml", "ci.yaml") or wf.isdigit()):
-        emit("deny", "pages.yml is the release train (a push to the deploy branch starts it) and ci.yml runs on the PR: neither is dispatched by a session (" + wf + ").")
+        emit("deny", "pages.yml is the release train and ci.yml runs on the PR: only the orchestrator dispatches them, by file name, pages.yml on the deploy branch only (" + wf + " @ " + ref + "; skill `steward` §CI).")
     sys.exit(0)
 if op == "update_pull_request":
     if str(ti.get("state") or "").strip().lower() == "closed":

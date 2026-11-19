@@ -14,11 +14,38 @@ import { readFileSync } from "node:fs";
 
 const loader = readFileSync(new URL("../../js/core/script-loader.js", import.meta.url), "utf8");
 
+// Controllable clock: hang detection and "slow cleared on success" without
+// wall sleeps. Real setTimeout left the suite waiting on a 120 ms probe after a
+// successful load; advancing past slowMs proves settle() cleared the timer.
 function load(files, opts, prepare) {
   const warns = [];
+  const pending = new Map();
+  let tid = 0, now = 0;
+  const clock = {
+    setTimeout(fn, ms = 0) {
+      const id = ++tid;
+      pending.set(id, { fn, due: now + Number(ms) });
+      return id;
+    },
+    clearTimeout(id) { pending.delete(id); },
+    async advance(ms) {
+      const target = now + ms;
+      while (pending.size) {
+        const next = [...pending.entries()].map(([id, t]) => ({ id, ...t }))
+          .filter((t) => t.due <= target).sort((a, b) => a.due - b.due || a.id - b.id)[0];
+        if (!next) break;
+        pending.delete(next.id);
+        now = next.due;
+        next.fn();
+        await Promise.resolve();
+      }
+      now = target;
+    },
+    pendingCount: () => pending.size,
+  };
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED_EDGES: [] },
-    window: { __APEX_BUILD: "t", setTimeout, clearTimeout },
+    window: { __APEX_BUILD: "t", setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout },
     Log: { warn: (_ns, m) => warns.push(m) },
     UpdateCheck: { prepareLazyLoad: prepare, blocksLazyLoad: () => false },
     document: {
@@ -28,8 +55,15 @@ function load(files, opts, prepare) {
   });
   vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;", ctx);
   const done = ctx.ScriptLoader.create().load(files, [], opts);
-  const hang = new Promise((r) => setTimeout(() => r("HUNG"), 500));
-  return Promise.race([done, hang]).then((v) => ({ v, warns }));
+  // Real short timer only for hang detection (cleared when load settles). Do not
+  // use clock.advance here: an empty pending queue resolves immediately and
+  // falsely reports HUNG before the inject's microtasks run.
+  let hangTimer;
+  const hang = new Promise((r) => { hangTimer = setTimeout(() => r("HUNG"), 80); });
+  return Promise.race([done, hang]).then((v) => {
+    clearTimeout(hangTimer);
+    return { v, warns, clock };
+  });
 }
 
 for (const strict of [false, true]) {
@@ -131,8 +165,9 @@ test("a hung lazy file fails at the deadline after signalling slow", async () =>
 
 test("a file that loads in time never fires slow or the deadline", async () => {
   const slow = [];
-  const { v } = await load(["a.js"], { slowMs: 30, deadlineMs: 60, onSlow: (s) => slow.push(s) }, async () => true);
+  const { v, clock } = await load(["a.js"], { slowMs: 30, deadlineMs: 60, onSlow: (s) => slow.push(s) }, async () => true);
   assert.equal(v, true);
-  await new Promise((r) => setTimeout(r, 120));
-  assert.deepEqual(slow, []);
+  assert.equal(clock.pendingCount(), 0, "settle() cleared slow/deadline timers on success");
+  await clock.advance(120);
+  assert.deepEqual(slow, [], "cleared timers must not fire after a successful load");
 });

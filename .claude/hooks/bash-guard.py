@@ -15,7 +15,7 @@ A quoted string or a heredoc fed to anything but a shell is data: mentioning a r
      A subagent also never writes the .claude/allow-* hatches or a guard file.
   3. the commit gate stays reachable: no `git commit --no-verify` / `-n`, no core.hooksPath write or `-c` override.
   4. no `gh run cancel`, `gh pr merge`, `gh pr ready` (global flags such as `-R` included) or their REST / GraphQL
-     forms through `gh api`.
+     forms through `gh api`, for every session: the orchestrator's run acts go through the GitHub MCP tool.
   5. no GitHub write from a shell (owner decision 2026-11-11): a write on the gh token is recorded as Bryce's own act,
      with no app marker, so agents write through the GitHub MCP tools. Refused: every gh subcommand that is not a
      known read (an alias or extension too), `gh api` with a non-GET method or with fields / --input and no explicit
@@ -327,6 +327,13 @@ def rule_commit(cmds):
 
 
 # --- 4. no cancel, merge or ready flip from a shell -----------------------------------------------------------
+# Owner request 2026-11-18: the ORCHESTRATOR (skill steward §CI) cancels, re-runs failed jobs and dispatches, but
+# through the GitHub MCP tool, which carries the app marker; from a shell the gh token would record it as Bryce's
+# own act, so every session is refused here alike and github-mcp-guard.sh tells the orchestrator from a worker.
+ORCH_CI = ("Only the orchestrator acts on runs, and only through the GitHub MCP `actions_run_trigger` (cancel_workflow_run, "
+           "rerun_failed_jobs, run_workflow), each act logged in one comment (skill `steward` §CI); workers never.")
+
+
 def rule_gh(cmds):
     for c in cmds:
         a = c.argv
@@ -335,8 +342,8 @@ def rule_gh(cmds):
             if has_help(w):
                 continue
             if w[:2] == ["run", "cancel"]:
-                refuse("cancelling an Actions run: a queued run holds no slot, so a cancel only loses its place and buys a "
-                       "retrigger push (AGENTS.md §Coordination). Your superseded run is replaced by your next push; Bryce cancels in the UI.")
+                refuse("cancelling an Actions run from a shell: never. A queued run holds no slot, so a worker's cancel only loses "
+                       "its place (AGENTS.md §Coordination); your next push replaces your superseded run. " + ORCH_CI)
             if w[:2] == ["pr", "merge"]:
                 refuse("no session merges or arms (AGENTS.md §Coordination): add the 'land' label and land.yml's gate arms auto-merge.")
             if w[:2] == ["pr", "ready"] and "--undo" not in w:
@@ -354,7 +361,7 @@ def rule_gh(cmds):
                     elif x.startswith("-X") and len(x) > 2:
                         method = x[2:].upper()
                 if any(re.search(r"actions/runs/[^/]+/(force-)?cancel\b", p) for p in paths):
-                    refuse("cancelling an Actions run through the API (…/actions/runs/<id>/cancel): never (AGENTS.md §Coordination). Bryce cancels in the UI.")
+                    refuse("cancelling an Actions run through the API (…/actions/runs/<id>/cancel) from a shell: never. " + ORCH_CI)
                 if method == "PUT" and any(re.search(r"pulls/\d+/merge\b", p) for p in paths):
                     refuse("no session merges (AGENTS.md §Coordination): the REST merge is the same act as gh pr merge; add the 'land' label.")
                 if "graphql" in paths[:1]:
@@ -363,9 +370,9 @@ def rule_gh(cmds):
                     if re.search(r"\bmarkPullRequestReadyForReview\b", text):
                         refuse("a draft goes ready through 'node tools/ci/ship-pr.mjs' and the GitHub MCP flip, not the GraphQL mutation.")
                     if re.search(r"\bcancelWorkflowRun\b", text):
-                        refuse("cancelling an Actions run through GraphQL: never (AGENTS.md §Coordination).")
+                        refuse("cancelling an Actions run through GraphQL: never. " + ORCH_CI)
         if c.prog in ("curl", "wget", "http", "xh") and any(re.search(r"api\.github\.com/repos/[^\s]*/actions/runs/[^/\s]+/(force-)?cancel\b", x) for x in a):
-            refuse("cancelling an Actions run through the API (…/actions/runs/<id>/cancel): never (AGENTS.md §Coordination). Bryce cancels in the UI.")
+            refuse("cancelling an Actions run through the API (…/actions/runs/<id>/cancel) from a shell: never. " + ORCH_CI)
 
 
 # --- 5. no GitHub write from a shell with the owner's token ---------------------------------------------------
@@ -393,7 +400,7 @@ MCP_FOR = {
     "comment": "a comment: add_issue_comment (issue or PR), add_reply_to_pull_request_comment, update_issue_comment",
     "pr": "a PR: create_pull_request / update_pull_request (draft, body, title); a review: pull_request_review_write",
     "issue": "an issue: issue_write (create / update / close; labels: the live list plus or minus one name) or add_issue_comment",
-    "run": "starting, re-running or dispatching a workflow is the owner's call: say so on the PR (needs-decision), never from a shell",
+    "run": "a worker never cancels, re-runs or dispatches: say so on the PR (needs-decision). " + ORCH_CI.rstrip("."),
 }
 GH_HOW = ("Write to GitHub through the GitHub MCP tools, which mark the write as the app's; a gh write is recorded as "
           "Bryce's own click (AGENTS.md §Coordination). Reads stay open: gh api GETs (also -X GET with -f), gh pr "
@@ -526,7 +533,7 @@ def http_write(c):
     else:
         return
     if method not in ("GET", "HEAD"):
-        gh_refuse("%s %s to the GitHub API" % (c.prog, method), "pr")
+        gh_refuse("%s %s to the GitHub API" % (c.prog, method), "run" if any("/actions/" in x for x in a[1:]) else "pr")
 
 
 def rule_gh_write(cmds):

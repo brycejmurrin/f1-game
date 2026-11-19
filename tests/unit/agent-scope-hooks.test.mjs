@@ -239,9 +239,51 @@ test("mcp-browser-guard.sh: a subagent never drives a browser; the main session 
   } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
 });
 
+test("github-mcp-guard.sh: the orchestrator's CI acts (owner request 2026-11-18) pass; a worker, a child session or a subagent is denied", () => {
+  const decide = (tool_input, env, extra = {}) => {
+    const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input, ...extra }, env);
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "allow";
+  };
+  const ORCH = { APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "" };
+  const who = {
+    orchestrator: [ORCH, {}],
+    child: [{ APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1" }, {}],
+    worker: [{ APEX_ROLE: "", CLAUDE_CODE_CHILD_SESSION: "1" }, {}],
+    plain: [{ APEX_ROLE: "", CLAUDE_CODE_CHILD_SESSION: "" }, {}],
+    wrongValue: [{ APEX_ROLE: "Orchestrator", CLAUDE_CODE_CHILD_SESSION: "" }, {}],
+    subagent: [ORCH, { agent_id: "a1" }],
+  };
+  const DEPLOY = "claude/f1-game-project-26h3ng";
+  // [input, the orchestrator's decision]; every other column is "deny" unless the row says "all"
+  const table = [
+    [{ method: "cancel_workflow_run", run_id: 1 }, "allow"],
+    [{ method: "force_cancel_workflow_run", run_id: 1 }, "allow"],
+    [{ method: "rerun_failed_jobs", run_id: 1 }, "allow"],
+    [{ method: "rerun_workflow_run", run_id: 1 }, "deny"],
+    [{ method: "run_workflow", workflow_id: "ci.yml", ref: "feature" }, "allow"],
+    [{ method: "run_workflow", workflow_id: ".github/workflows/ci.yml", ref: "feature" }, "allow"],
+    [{ method: "run_workflow", workflow_id: "pages.yml", ref: DEPLOY }, "allow"],
+    [{ method: "run_workflow", workflow_id: "pages.yml", ref: "refs/heads/" + DEPLOY }, "allow"],
+    [{ method: "run_workflow", workflow_id: "pages.yml", ref: "feature" }, "deny"],
+    [{ method: "run_workflow", workflow_id: "123", ref: DEPLOY }, "deny"],
+    [{ method: "run_workflow", workflow_id: "browser-group.yml", ref: "feature" }, "all"],
+  ];
+  const got = [], want = [];
+  for (const [input, orch] of table)
+    for (const [k, [env, extra]] of Object.entries(who)) {
+      got.push(`${k} ${JSON.stringify(input)} → ${decide(input, env, extra)}`);
+      want.push(`${k} ${JSON.stringify(input)} → ${orch === "all" ? "allow" : k === "orchestrator" ? orch : "deny"}`);
+    }
+  assert.deepEqual(got, want);
+  // the deny names the one route, so the worker is not left guessing
+  const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input: { method: "cancel_workflow_run", run_id: 1 } }, who.worker[0]);
+  assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, "WORKERS NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Only the orchestrator cancels (skill `steward` §CI).");
+});
+
 test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close, labels change by ONE name, allow the rest", () => {
   const gh = (tool_name, tool_input, env = {}) => {
-    const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, env);
+    const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, { APEX_ROLE: "", ...env });
     if (r.status === 2) return "exit2";
     assert.equal(r.status, 0, r.stderr);
     return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "allow";

@@ -216,6 +216,23 @@ test("fail closed on a payload or a command it cannot read; an empty command pas
     assert.ok(!src.includes(gone), `bash-guard still names ${gone}`);
 });
 
+test("4/5. a run act from a shell is refused for the orchestrator and a worker alike, and names the MCP route (owner request 2026-11-18)", () => {
+  const ORCH = { APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "" }, WORKER = { APEX_ROLE: "", CLAUDE_CODE_CHILD_SESSION: "1" };
+  const shapes = ["gh run cancel 123", "gh api -X POST repos/a/b/actions/runs/1/cancel", "curl -X POST https://api.github.com/repos/a/b/actions/runs/1/cancel",
+    "gh run rerun 123 --failed", "gh api -X POST repos/a/b/actions/runs/1/rerun-failed-jobs", "gh workflow run ci.yml --ref x",
+    "gh api -X POST repos/a/b/actions/workflows/ci.yml/dispatches -f ref=x", "curl -X POST -d '{}' https://api.github.com/repos/a/b/actions/workflows/ci.yml/dispatches",
+    "APEX_ROLE=orchestrator gh run cancel 1"];
+  const got = [], want = [];
+  for (const [who, env] of [["orchestrator", ORCH], ["worker", WORKER]])
+    for (const cmd of shapes) {
+      const r = run(cmd, {}, env);
+      got.push(`${who} ${cmd} → ${r.status} ${/Only the orchestrator acts on runs, and only through the GitHub MCP `actions_run_trigger`/.test(r.stderr)}`);
+      want.push(`${who} ${cmd} → 2 true`);
+    }
+  assert.deepEqual(got, want);
+  for (const cmd of ["gh run view 123", "gh run list --limit 5", "gh api repos/a/b/actions/runs/1"]) assert.equal(run(cmd, {}, ORCH).status, 0, cmd);
+});
+
 test("settings.json wires the guard on Bash with onFailure block, and the deny/ask rules back the hook", () => {
   const s = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const bash = s.hooks.PreToolUse.filter((g) => g.matcher === "Bash");
