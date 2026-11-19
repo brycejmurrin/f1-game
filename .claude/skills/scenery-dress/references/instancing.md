@@ -25,7 +25,7 @@ Not for first-time dressing (`SKILL.md`), spline/elevation (**agent-view**) or G
 
 ```sh
 ./tools/mcp/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
-node tools/track/graph-parity.cjs <id>            # or --all
+BASE=<ref> node tools/track/graph-parity.cjs <id> # or --all; a clean tree with no BASE exits 2
 BASE=<ref> node tools/track/graph-parity.cjs --all
 npm run test:tooling-fast
 # instanced-draw.spec.js (browser) runs in CI group gfx on the PR; a whole group is Bryce's opt-in

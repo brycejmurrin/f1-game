@@ -17,9 +17,10 @@ before/after counts (`bloat-scan.mjs --json`).
    that should move, move — do not copy.
 3. New file is hyphenated IIFE: `"use strict"; var Name = { create(G) { … } };`
    Module never reaches into `game.js`. `Module.create(G)` at the existing
-   roster site.
+   roster site. A lazy backend group is different: a `js/render/three/` carve is a sibling `tlx-*.js` / `tsl-*.js`
+   factory in `DEFERRED.three` with `DEFERRED_EDGES` pairs in `tools/manifest.cjs`, and gets no `index.html` tag.
 4. Lockstep the same commit: file + its `tools/manifest.cjs` row (+ `HARD_EDGES` if eval-time
-   destructure), then `npm run gen` (writes the `index.html` `<script>` tag — generated, never
+   destructure), then `npm run gen` (writes the `index.html` `<script>` tag for a FULL-roster file — generated, never
    hand-edited) + lower
    the ceilings: `node tools/check/ratchets.mjs --update --lower-only` (a delta in tests/data/ratchets.d on a topic branch).
 5. `lsp_references` every removed symbol (grep for text and comments). Then
@@ -60,7 +61,8 @@ row. Grep the symbol; check `hooks-documented`, `global-registry`,
 
 **Dead CSS** (a selector or `--token` nothing uses): grep every `css/*.css`, `index.html`, `js/**` (class
 names built in JS: grep the stem too) and `controller.html`; the proof is a green
-`tests/unit/css-tokens.test.mjs` after the cut plus one screenshot of the touched screen by the parent
+`tests/unit/css-tokens.test.mjs` (tokens) and `tests/unit/component-inventory.test.mjs` (the dead-class list in
+`docs/COMPONENTS.md`; `node tools/check/class-usage.mjs` lists class use) after the cut plus one screenshot of the touched screen by the parent
 (844×390 touch first). Restructuring what is left is **css-play**.
 
 **Duplicate:** keep one seam. Shared scalars already live on `M4`

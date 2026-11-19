@@ -26,7 +26,7 @@ node tools/shot/apex-eval.mjs vegas "a.lightState()"
 ```
 
 **No browser (Node VM, verified 2026-09-30):** the same loop runs in `tools/lib/game-vm.cjs`
-(~70 s of wall time per 120 s of sim; write the script under `scratch/`).
+(seconds of wall time per minute of sim in the VM — measured 6 s per 120 s on 2026-11-18; write the script under `scratch/`).
 Use `createGame({track:"suzuka",search:"?seed=1"})`, then
 `const a=g.apex; a.headless(true); let o=a.reset(0.97,30,0);`
 then `a.world({detail:"brief"})` → `a.act(input,1/60,6)` → `a.terminal()`. `createGame` already calls `race()`.

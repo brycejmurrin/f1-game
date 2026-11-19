@@ -11,8 +11,10 @@ reads the artifacts the PARENT steps produce.
 
 ## Layout check (no browser)
 
-Compare the BUILT centreline's `total`, apexes, widths, sectors and elevation against dated
-evidence. `path.len` is source metadata, not built length; the existing OSM comparison normalizes
+Compare the BUILT centreline's `total`, apexes, widths, sectors, elevation and banking against dated
+evidence (banking: sweep `groundY(frac, lat).bankDy` at a lateral offset, e.g. lat 5 — lat 0 always reads 0 — with
+`node tools/shot/apex-eval.mjs <id> '<expr>' --vm --raw`; the corner table's `bankingDeg` samples one point and can
+miss a zone's peak). `path.len` is source metadata, not built length; the existing OSM comparison normalizes
 scale, rotation and lap origin, so it cannot certify those quantities. Surveyed elevation
 conditionally overrides authored bumps via `TrackDef.fromRaw` (`js/track/core/def.js`); absent
 profiles do not prove flatness. `startFrac` and width zones use control-index fractions, built
