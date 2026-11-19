@@ -414,3 +414,9 @@ re-render when the class changes. Verified at 1280×800: both sections hidden �
 `js/ui/hud-layout.js`: the layout re-applies when the pointer kind changes, for the same root cause as fix
 12. Verified at 1280×800: `#hud-gearbox` gets its layout attribute (missing before), so it no longer sits
 under the energy gauge.
+
+### Fix 14 — toggle throttle after a silent controller drop (addendum A7)
+
+`js/input/input.js`: the no-controller branch of `pollGamepad` now clears the throttle and look-back toggle
+latches. Verified in a live session with a stubbed gamepad, toggle mode: tap RT (throttle on), remove the pad
+with no disconnect event, return it idle → throttle before the fix `true`, level 1; after it `false`, 0.

@@ -1091,6 +1091,7 @@ const Input = (function () {
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       padIsWheel = false;
       if (padPrevKey !== null) padSnapshotLost = true;
+      padThrottleToggle = padLookBackToggle = false;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
