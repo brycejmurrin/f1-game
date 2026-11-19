@@ -848,9 +848,8 @@ function getSetupPreviewMesh() {
 let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
-// WHICH WORLD IS OUTSIDE (#5660): a drive-out or a pit drive-in shows the SESSION's circuit (trackIdx), not the
-// garage's "next race" (a career's round moves at the flag); the way home, the circuit, weather and hour it ended in.
-// `session`: a race-settings prewarm, keyed as the RACE! drive-out will key it.
+// OUTSIDE (#5660): a drive-out / pit drive-in shows the session's circuit (trackIdx), not the garage's next race;
+// the way home, the one it ended in. `session`: a race-settings prewarm, keyed as RACE! will key it.
 let homeScene = null;
 function exteriorPick(ctx, session) {
   const arriving = !driveOut && !!(arrival.state && arrival.state.active), seq = !!driveOut || arriving, pin = arriving && homeScene;
@@ -873,7 +872,7 @@ function prepareExterior(ctx, pose, session) {
     const generation = ++exteriorEpoch; exteriorBootKey = pick.trackId;
     exteriorBoot = deps.prepareExterior(pick.trackId).then((def) => {
       if (generation !== exteriorEpoch || !def || typeof GarageExterior === "undefined") return;
-      exterior = GarageExterior.create({ gfx, load: (choice) => deps.prepareExterior(choice.trackId),
+      exterior = GarageExterior.create({ gfx, load: (choice) => deps.prepareExterior(choice.trackId), sliceMs: exteriorSliceMs,
         onChange: (state) => { exteriorLight = null; exteriorAnchor = state.anchor || null; if (state.status === "failed") Log.warn("game", "garage exterior unavailable: " + state.error); } });
       exteriorRequested = exteriorHeld || exteriorSelection; exterior.request(exteriorRequested);
     }).catch((e) => { Log.warn("game", "garage exterior preparation failed: " + e.message); })
@@ -884,11 +883,12 @@ function prepareExterior(ctx, pose, session) {
   if (sequence && pose.door < .02 && exterior && exterior.ready()) exteriorVisible = true;
   return !!(exterior && exterior.ready() && exteriorVisible);
 }
-// READY TO SHOW (#5660): the drive-out's cover (game.js studioShown) and an arrival's clock wait on this, never a fixed
-// delay: the exterior is built for this sequence's pick, or it never will be (unsupported bay, failed load). A load
-// still running after EXTERIOR_WAIT_MS releases the show on the room's own backdrop, logged — the old behaviour.
+// READY TO SHOW (#5660): the drive-out's cover (game.js studioShown) and an arrival's clock wait on this: built for
+// this pick, or never buildable. A load past EXTERIOR_WAIT_MS releases the show on the room's backdrop, logged.
 const EXTERIOR_WAIT_MS = 12000;
-let exteriorWait = { pick: null, at: 0 };
+let exteriorWait = { pick: null, at: 0 }, exteriorWaitSeen = -Infinity;
+// Only a held show hurries the build: a sliced prewarm starved the setup garage (garage-pick-cost).
+function exteriorSliceMs() { return performance.now() - exteriorWaitSeen < 250 ? 6 : 0; }
 function exteriorSettled() {
   const ctx = deps.prepareExterior ? garageCtx() : null;
   if (!ctx || ctx.studio) return true;
@@ -898,7 +898,7 @@ function exteriorSettled() {
   if (dead || (exterior && exterior.ready(pick))) { exteriorWait.pick = null; return true; }
   const now = performance.now();
   if (exteriorWait.pick !== pick) exteriorWait = { pick, at: now };
-  if (now - exteriorWait.at < EXTERIOR_WAIT_MS) return false;
+  if (now - exteriorWait.at < EXTERIOR_WAIT_MS) { exteriorWaitSeen = now; return false; }
   if (exteriorWait.at > 0) { exteriorWait.at = -Infinity; Log.warn("game", "garage exterior not ready: the sequence plays without it", st); }
   return true;
 }

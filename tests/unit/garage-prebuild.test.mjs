@@ -1222,13 +1222,21 @@ test("an exterior that cannot be built never holds the show; a stuck load releas
   assert.equal(stuck.warns.length, 1);
 });
 
-test("the exterior build shares a slice between steps instead of one step per yield", async () => {
+test("a show held on the exterior shares a slice between steps; an unheld prewarm yields every step", async () => {
   const h = exteriorSection({ steps: 30 });
   h.run("driveOut = { t: 0 }; prepareExterior(ctx, { active: true, door: 0 })");
+  assert.equal(h.run("exteriorSettled()"), false, "the cover holds on this build");
   await flushTasks(80);
   assert.equal(h.state().status, "ready");
   // 31 next() calls at 1 ms each in 6 ms slices = 6 build yields, then one per uploaded mesh (3).
   assert.equal(h.yields.length, 6 + 3);
+  // A race-settings / select-screen prewarm under the live setup garage: nothing waits, so one step per yield
+  // (sliced, it starved the garage's frames and livery picks rebuilt no car: garage-pick-cost on #5720).
+  const w = exteriorSection({ steps: 30 });
+  w.run("prepareExterior(ctx, null, true)");
+  await flushTasks(120);
+  assert.equal(w.state().status, "ready");
+  assert.equal(w.yields.length, 31 + 3);
 });
 
 test("an arrival held for its exterior waits on its first pose, then plays from it", () => {
