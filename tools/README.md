@@ -405,6 +405,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
+| **gfx/sharpness-ab.mjs** | Headless A/B of the phone-sharpness arms on TLX WebGPU: captures, 400% crop sheets, edge metrics. | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |

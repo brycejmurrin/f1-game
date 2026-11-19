@@ -253,10 +253,10 @@ const FULL = [
   "js/car/ghost.js",
   "js/car/ghost-share.js",
   "js/car/input-ghost.js",
-  // session-records / duel → LAZY_RACE_SESSION; driving-coach stays FULL
-  // (UiExperience.create captures the coach instance for practice-goal rows).
+  // session-records / duel → LAZY_RACE_SESSION. The coach body too (#4748): this FULL façade keeps
+  // DrivingCoach.create(G) (UiExperience captures the instance) and the Settings rows it wires.
   "js/race/race-insights.js",
-  "js/race/driving-coach.js",
+  "js/race/driving-coach-boot.js",
   "js/physics/consts.js",
   "js/lighting/knobs.js",
   "js/lighting/track-lights.js",
@@ -1014,6 +1014,7 @@ const DEFERRED = {
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
+    "js/render/three/tlx-mem.js",
     "js/render/three/tlx.js",
   ],
 };
@@ -1160,6 +1161,7 @@ const LAZY_RACE_SESSION = [
   "js/race/ceremony.js", // RaceCeremony: post-flag cooldown → parc fermé → podium → results (#4067); session-stub.js holds the title-time stub
   "js/race/stopped-cars.js", // StoppedCars: cars stopped on the road, RaceControl's second hazard source (W34)
   "js/race/retired-card.js", // RetiredCard: a retired solo player's RETIRED card + SKIP TO RESULTS (W34); RaceControl typeof-guards it
+  "js/race/driving-coach.js", // DrivingCoachBody: the coach (#4748); the FULL façade js/race/driving-coach-boot.js creates it once it lands
   "js/ui/hud-inputs.js",     // HudInputs: opt-in INPUTS trace + pause REVIEW INPUTS (mounts itself); GameHud typeof-guards it (#5682)
 ];
 const LAZY_RACE_SESSION_EDGES = [
@@ -1376,8 +1378,8 @@ const LAZY_RESULTS_SHEET_EDGES = [];
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
 // the eval order. TRACK_VM keeps the same files for verify-track / the build
 // worker (unaffected). No boot stub: nothing outside js/track/ reads these at
-// eval (hunt-2 T5). Race-only scripts (driving-coach, race-insights,
-// real-replay, flyby-seq) stay FULL.
+// eval (hunt-2 T5). Race-only scripts (race-insights, flyby-seq) stay FULL;
+// real-replay and the coach body went lazy in their own groups (#4978, #4748).
 const LAZY_TRACK_BUILD = [
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",

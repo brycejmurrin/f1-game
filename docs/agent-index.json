@@ -1538,6 +1538,7 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/damage.test.mjs",
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/duel-row.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/help-rules-facts.test.mjs",
@@ -4097,9 +4098,14 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
-      "path": "js/race/driving-coach.js",
+      "path": "js/race/driving-coach-boot.js",
       "global": "DrivingCoach",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/driving-coach.js",
+      "global": "DrivingCoachBody",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/duel.js",
@@ -4463,6 +4469,11 @@
     },
     {
       "path": "js/render/three/tlx-chunked.js",
+      "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-mem.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
     },
