@@ -294,7 +294,7 @@ const HudRelative = (function () {
       for (let pass = 0; pass < 3; pass++) {
         const rr = root.getBoundingClientRect();
         if (!(rr.width && rr.height)) break;
-        let cap = Infinity, slide = 0, hit = false;
+        let cap = Infinity, slide = 0, hit = false, inSteer = false;
         for (let i = 0; i < CLEAR_IDS.length; i++) {
           const el = doc.getElementById(CLEAR_IDS[i]);
           if (!el || el.hidden) continue;
@@ -313,6 +313,7 @@ const HudRelative = (function () {
             && (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7);
           const centreSlide = CENTRE_SLIDE_IDS.indexOf(id) >= 0;
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          if (!doCap && id.indexOf("btn-steer") === 0) inSteer = true;
           if (leftish) slide = Math.max(slide, (box.right + 8) / z);
           else if (centreSlide && !doCap) {
             // Slide past OT/aero only while the card stays left of the right dock
@@ -332,6 +333,9 @@ const HudRelative = (function () {
           }
         }
         if (!hit) break;
+        // A home that STARTS inside the steer arrows (a taller top band, #5256 D) goes to the allocator, which lifts it
+        // above the pad: the slide parked it mid-screen in INPUTS' column (hud-layout.spec, HUD / BUTTON 150 %).
+        if (inSteer && typeof HudLayout !== "undefined" && HudLayout.clearReadouts) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";
         // Apply any positive doCap (phoneL 150%: OT/aero room is ~6–15px — the
         // old >28 gate left the full card painted on OT after the leftish slide).
