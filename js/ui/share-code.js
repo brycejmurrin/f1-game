@@ -223,6 +223,7 @@ const ShareCode = (function () {
       if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
+      if (result.kind === "daily" && result.expired) return "That daily challenge has ended — here is today's.";
       if (result.kind === "daily") return "Daily challenge — " + (result.trackName || result.track).toUpperCase() + ".";
       if (result.kind === "lap") return "Lap challenge — " + trackLabel(result.track) + (result.time ? " · BEAT " + clock(result.time) : "") + ".";
     }
@@ -300,7 +301,7 @@ const ShareCode = (function () {
     }
     if (decoded.kind === "daily") {
       if (typeof h.openDaily === "function") h.openDaily(decoded);
-      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track };
+      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track, expired: !!(h.today && decoded.day !== h.today) };
     }
     return CORRUPT;
   }

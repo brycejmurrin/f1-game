@@ -498,3 +498,12 @@ distance ÷ the player's current speed in the gap readout (`js/ui/hud.js`), the 
 4-lap Bahrain race, comparing the displayed gap ahead with a true time gap recorded every physics step
 (249 samples): 90th-percentile error 0.26 s → 0.06 s, worst 0.49 s → 0.13 s. The remainder is the readout's
 existing smoothing.
+
+### Fix 20 — a daily link from another day no longer names the wrong circuit (addendum A4)
+
+`js/ui/share-code.js`: when the link's day is not the recipient's day, the result is marked expired and the
+message reads "That daily challenge has ended — here is today's." It used to say "Daily challenge — MONACO"
+while opening the recipient's own, different daily. Verified in Chromium with a link dated yesterday: old
+message naming the sender's circuit → the new message; a link dated today is unchanged. The underlying
+cause — the daily is keyed on the local date although the help says it is the same for every player — is a
+design decision and is not changed.
