@@ -272,7 +272,8 @@
     "js/race/cooldown-lap.js",
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
-    "js/race/retired-card.js"
+    "js/race/retired-card.js",
+    "js/ui/hud-inputs.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

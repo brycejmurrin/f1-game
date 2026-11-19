@@ -432,6 +432,7 @@ async function precacheAssetLists() {
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
     "js/race/retired-card.js",
+    "js/ui/hud-inputs.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -974,7 +975,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|watch-transport)\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|watch-transport|hud-inputs)\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.

@@ -274,5 +274,7 @@ const HudInputs = (function () {
       Array.isArray(change.keys) && change.keys.includes("hudElements")) && !isOn()) reset();
   });
 
+  // LAZY_RACE_SESSION (#5682 pays the eager budget): game.js's eval-time mountReview runs before this file loads.
+  mountReview();
   return Object.freeze({ N, STEP_S, WINDOW_S, createTrace, levelY, steerY, frame, trace, snapshot, reset, mountReview });
 })();

@@ -3501,7 +3501,6 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
-if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's

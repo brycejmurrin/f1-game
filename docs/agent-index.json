@@ -4834,7 +4834,7 @@
     {
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/ui/hud-layout.js",
