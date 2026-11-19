@@ -2,7 +2,7 @@
 
 Kind: design · Re-measure-by: 2026-12-18
 
-Decision: Bryce, orchestrator chat 2026-11-18 ~10:15Z (relayed in its brief with the time), asked "How do we still have so many open PRs can we somehow merge them" and then picked "Merge train (Recommended)". He tapped `config-ok` on #5731 in person at 11:18:45Z. Its docs/DECISIONS.md row follows in a separate PR, because the D-number queue is held by #5691 and #5736.
+Decision: Bryce, orchestrator chat 2026-11-18 ~10:15Z (relayed in its brief with the time), asked "How do we still have so many open PRs can we somehow merge them" and then picked "Merge train (Recommended)". He tapped `config-ok` on #5731 in person at 11:18:45Z. Its docs/DECISIONS.md row is D-035 (#5742).
 
 Summary: 91 open PRs and 23 at `land` (10:12Z) drained at 4–6 merges an hour: each merge moves the tip and every other `land` PR re-gates or retests. A merge train lands up to 10 green `land` PRs with one CI run and one `gate`. Native merge queue: not available here. Custom train: `tools/ci/merge-train.mjs` and land.yml's `train` job. It needs no ruleset or settings change. Re-measure: merges per hour and train red rate after a week of trains.
 

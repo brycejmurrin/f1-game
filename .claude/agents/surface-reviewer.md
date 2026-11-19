@@ -1,7 +1,8 @@
 ---
 name: surface-reviewer
-description: Use proactively after editing a skill, agent card, hook, rule file, settings.json or an AGENTS.md section. Takes a SET of agent-surface units, extracts every claim one unit makes about another ("hook X refuses Y", "tool Z takes --f", "see §N", "the one home is", "agent may write P") and tests each against the unit it names (reads it, runs --help, runs the hook's pinned test, WebFetch for a host-doc claim); flags one-home collisions and pointer cycles. Writes a ≤ 60-line report to scratch/, returns VERDICT + CLAIM rows. "retest <old report>" = before/after. Read-only on the repo.
+description: Use proactively after editing a skill, agent card, hook, rule, settings.json or AGENTS.md section. Tests each claim one unit makes about another (refuses X, takes --f, see §N, one home) against it; flags collisions and cycles. Report to scratch/; "retest" = before/after. Read-only, no browser.
 model: sonnet
+omitClaudeMd: true
 maxTurns: 40
 background: true
 tools: Bash, Read, Grep, Glob, Write, WebFetch
