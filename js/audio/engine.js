@@ -3203,6 +3203,7 @@ var GameAudio = (function () {
     stopMusic,
     musicPlaybackGeneration: soundtrack.musicPlaybackGeneration,
     stopMusicIfGeneration: soundtrack.stopMusicIfGeneration,
+    musicStalled: soundtrack.musicStalled,
     setMusicEnabled,
     skipTrack,
     prevTrack,

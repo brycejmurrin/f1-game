@@ -105,7 +105,7 @@ revRange, curve, pitch })` (ranges: `__apex.audio().range`) covers a wide spread
    `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. The limiter
    fade in top gear is in the Layers table. Read
    `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:
-   equal = pinned by design. The Node VM has no AudioContext, so `rate()` is 0 there. To
+   equal = pinned by design. `GameAudio` is not loaded in the Node VM (`apex_eval {vm:true}`, `apex-eval --vm`): these reads are browser-only. To
    widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
 
 ## Gear-shift cue silent
@@ -120,7 +120,7 @@ for it. The remaining gate is the SHIFT trim (`#as-t-shift`; `0` =
 silent gearbox; the rev-cut duck is separate and survives it).
 
 Read it: `GameAudio.shiftState()` → `{ fired, peak }` (not in `__apex.audio()`;
-call it via `apex_eval`/DevTools). `fired` not rising on an upshift = the
+call it via `apex_eval` without `vm:true`, or DevTools). `fired` not rising on an upshift = the
 trigger never reached `shift()` (check `soundOn`, `c.local`, gear mode);
 `fired` rising with `peak: 0` = SHIFT trim at 0; both fine = bus/mute, see
 above. No browser needed for the unit check:

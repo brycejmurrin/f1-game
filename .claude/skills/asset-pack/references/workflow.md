@@ -70,8 +70,8 @@ vertex-displaced; FLAT is the no-material id.
    Sources live in `assets/atlases/`. `--map BRICK=1,0` patches one tile;
    `ATLAS_PRESETS.generated` in `tools/gen/assets.mjs` is the committed mapping.
 
-5. **Add a real CC0 layer** — manifest shape in
-   `docs/research/ASSET-API-RESEARCH.md`; run `verify`; confirm MAT id and
+5. **Add a real CC0 layer** — copy an existing layer entry in
+   `assets/pack/manifest.json` (field list: `docs/research/ASSET-API-RESEARCH.md`); run `verify`; confirm MAT id and
    `scale` (world metres per tile — there is no `worldTile` field; the
    manifest and `tools/gen/assets.mjs` `SCALES` table both call it `scale`).
 
@@ -81,8 +81,7 @@ vertex-displaced; FLAT is the no-material id.
    node tools/ci/pick-tests.mjs                # the browser group(s) this change needs
    ```
    The pack's own spec `tests/specs/assets-api.spec.js` is a browser spec: never run it locally
-   (AGENTS.md rule 5). It runs on the PR; to run its group on the pushed branch:
-   `node tools/ci/remote-group.mjs <group>`.
+   (AGENTS.md rule 5). The PR's own CI runs it; a whole group (`remote-group.mjs`) is Bryce's opt-in.
    Visual: **lighting-tuner** or **renderer-debug** on a track
    with varied surfaces.
 

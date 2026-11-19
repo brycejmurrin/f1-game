@@ -113,6 +113,8 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
+    // S1 matches the FIA 2026 Monaco GP circuit map (~0.315); S2 does NOT: the
+    // FIA line is after Tabac (~0.740), this one before it (#5316 CIRC3-05).
     sectors: [0.32, 0.68],
     // turns = the OFFICIAL F1 numbering (FIA 2026 Monaco GP circuit map; F1
     // live-timing corner markers, api.multiviewer.app circuits/22/2026,

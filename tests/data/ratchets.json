@@ -64,6 +64,14 @@
       "ceiling": 73,
       "slack": 5
     },
+    "eagerBytes": {
+      "ceiling": 8017877,
+      "slack": 0
+    },
+    "eagerScripts": {
+      "ceiling": 310,
+      "slack": 0
+    },
     "implicitAsserts": {
       "ceiling": 39,
       "slack": 0

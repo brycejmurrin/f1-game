@@ -1,0 +1,1 @@
+Fixed: Results sheet: with Reduce Motion on, the sheet painted its first frame or two on the previous layout, with your row drawn over the winner's at the top of the list; its layout is now instant (#5603).

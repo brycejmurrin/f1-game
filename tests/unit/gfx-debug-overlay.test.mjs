@@ -20,6 +20,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -105,6 +106,49 @@ test("gfx-debug asks the backend whether it soft-presents before saying native (
   assert.doesNotMatch(glxSoft, /onto #game/);
   const unreadable = overlayText({ softPresent: true, gameSoft: false, game2d: false });
   assert.match(unreadable, /frame\(soft\) unreadable/, "never steal or invent: a non-2D #game reads as unreadable");
+});
+
+test("gfx-debug soft luma downscales into SAMPLE_MAX² — never getImageData of the full soft canvas (perf hunt)", () => {
+  assert.equal(/SAMPLE_MAX\s*=\s*64/.test(SRC) && /sampleSoftLuma/.test(SRC) && /drawImage\(soft/.test(SRC), true);
+  const calls = [];
+  const soft = {
+    id: "game-soft", width: 200, height: 100,
+    getContext: () => ({
+      getImageData: (x, y, w, h) => { calls.push({ w, h, via: "soft" }); return { data: new Uint8ClampedArray(w * h * 4) }; },
+    }),
+  };
+  const sampleGets = [];
+  const sampleCanvas = {
+    width: 0, height: 0,
+    getContext: () => ({
+      drawImage: () => { calls.push({ drawImage: 1 }); },
+      getImageData: (x, y, w, h) => {
+        sampleGets.push({ w, h });
+        const data = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < data.length; i += 4) data[i] = data[i + 1] = data[i + 2] = 40, data[i + 3] = 255;
+        return { data };
+      },
+    }),
+  };
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: {
+      getElementById: (id) => (id === "game-soft" ? soft : id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null),
+      querySelector: () => null,
+      createElement: () => sampleCanvas,
+    },
+    location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+    GLX: { gpuErrors: () => 0, softPresent: () => true },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: absSrc("js/perf/gfx-debug-overlay.js") });
+  const text = vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-sample" });
+  assert.equal(calls.some((c) => c.drawImage), true);
+  assert.equal(sampleGets.length, 1);
+  assert.equal(sampleGets[0].w <= 64 && sampleGets[0].h <= 64, true);
+  assert.equal(calls.some((c) => c.via === "soft" && c.w === 200 && c.h === 100), false);
+  assert.equal(/frame\(soft\) mean=40\.0 max=40/.test(text), true);
 });
 
 test("gfx-debug prints the memory line a crash report can paste (#1648)", () => {
