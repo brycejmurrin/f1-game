@@ -65,7 +65,7 @@
       "slack": 5
     },
     "eagerBytes": {
-      "ceiling": 8017936,
+      "ceiling": 8017877,
       "slack": 0
     },
     "eagerScripts": {

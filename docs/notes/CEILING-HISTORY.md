@@ -3696,6 +3696,8 @@ default-shaped body stays under the pre-train triangle caps: rounded 14,872 and 
 Moved verbatim from the test's `MAX_EAGER_SCRIPTS` / `MAX_EAGER_BYTES` comments on 2026-11-19, when the two ceilings
 became `tests/data/ratchets.json` `tree` entries (docs/notes/BUDGET-RATCHETS-2026-11-19.md). Seeded on tip 1cb36d81
 at its measurement: 310 scripts (the test's cap was 313; the freed slots are not headroom) and 8,017,936 B, slack 0.
+Lowered to 8,017,877 B before landing: #5798 (−27 B) and #5820 (−32 B) merged after that measurement and freed bytes
+with no fragment yet; tip 38b20bcd measures 8,017,877.
 
 ```js
 // 325: tip PedalTravel + GarageCrewDraw + AiStrategy (323) + OverlayBridge + OverlayPublisher (#4056).
