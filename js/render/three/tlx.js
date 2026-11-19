@@ -2202,13 +2202,13 @@ const TLX = (function () {
         if (_chunkPrimeNow && slot === 0 && _chunkMerge && chunkedSys.mergeVisible) _primeMergeSlot(rec, order);
         const mat = rec.mat;
         // The mirror (slot 1) under a draw-distance cap culls a record's CELLS, not its merged blocks (tlx-chunked.js
-        // fineCells). Fewer than two cells, or a record the merge never takes, falls through to the blocks;
+        // fineCells), down to a single cell. A record the merge never takes falls through to the blocks;
         // apex26.tlxChunkMerge=0 (a draw per chunk) turns it off with the merge.
         if (slot === 1 && cd > 0 && _chunkMerge && chunkedSys.fineCells
             && !(mat && (mat.transparent || mat.depthWrite === false)) && !(rec.al < 1)) {
           const fine = chunkedSys.fineCells(rec.chunked);
           const fn = fine ? chunkedSys.cull(fine, vp, eye, cd, fog) : 0;
-          const fg = fn > 1 ? chunkedSys.mergeVisible(fine, fn, slot) : null;
+          const fg = fn > 0 ? chunkedSys.mergeVisible(fine, fn, slot) : null;
           if (fg) { acquireMesh(fg, rec.m, rec.mat, rec).renderOrder = order; return fn; }
           if (fine && fn === 0) return 0;
         }
