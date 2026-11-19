@@ -4229,6 +4229,9 @@
       "blocked": [
         "tests/unit/career-cross-tab.test.mjs"
       ],
+      "bonusPtFor": [
+        "tests/unit/save-migrate.test.mjs"
+      ],
       "budget": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -5737,6 +5740,7 @@
         "tests/unit/cockpit-side-occlusion.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
@@ -10079,11 +10083,16 @@
       ],
       "create": [
         "tests/specs/steer-migration.spec.js",
+        "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/steer-presets.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "helpBand": [
+        "tests/unit/steer-presets.test.mjs"
+      ],
       "helpFromSlider": [
-        "tests/specs/steer-migration.spec.js"
+        "tests/specs/steer-migration.spec.js",
+        "tests/unit/steer-presets.test.mjs"
       ],
       "lockFromSlider": [
         "tests/unit/low-speed-lock.test.mjs",
@@ -10100,6 +10109,9 @@
       ],
       "migrateValues": [
         "tests/unit/settings-import-safety.test.mjs"
+      ],
+      "paceFromSlider": [
+        "tests/unit/collide-severity-pace.test.mjs"
       ],
       "touchSpeedFromSlider": [
         "tests/unit/touch-drag-speed.test.mjs"
@@ -12424,6 +12436,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
@@ -12546,6 +12559,7 @@
       ],
       "create": [
         "tests/specs/physics-hotpath.spec.js",
+        "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
@@ -12583,6 +12597,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "resolveCollisions": [
+        "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
@@ -12684,6 +12699,7 @@
       ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
