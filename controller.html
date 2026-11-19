@@ -54,10 +54,11 @@
   buttons are the in-race controls a pad has.
 
   A separate ROOT page like bench.html, deliberately: the phone needs the
-  signalling and transport half of js/net plus two input modules — nine files,
-  no renderer, no game — and boots in under a second on any phone that has a
-  camera app. js/input/phone-pad.js owns the behaviour; this page owns the DOM
-  and hands every element in (the shell-id contract stays index.html's).
+  signalling and transport half of js/net plus the pad/input modules —
+  MANIFEST.CONTROLLER (16 script tags; tools/manifest.cjs), no renderer, no
+  game — and boots in under a second on any phone that has a camera app.
+  js/input/phone-pad.js owns the behaviour; this page owns the DOM and hands
+  every element in (the shell-id contract stays index.html's).
   `controller.html?demo` paints a sample dash without a link, for a look.
 
   Why this is not Bluetooth: a web page cannot advertise as a Bluetooth
