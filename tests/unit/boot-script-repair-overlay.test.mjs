@@ -285,5 +285,10 @@ test('stall diagnostics summarise a slow boot and a pending route call in one li
   routeStallReporter(info, null)({ op: 'unroute', pendingMs: 5000, events: [{ state: 'armed', t: 0 }, { state: 'timeout', t: 1001 }], calls: [] });
   assert.equal(info.annotations.length, 1);
   assert.equal(info.annotations[0].type, STALL_ANNOTATION);
-  assert.match(info.annotations[0].description, /^stall-diag context\.unroute still pending after 5\.0s \| events armed@0\.0s timeout@1\.0s \| worker boot #\d+/);
+  // Structural, field by field (no page, so no census field): head | events | worker boot #<n>[ after "…"].
+  const parts = info.annotations[0].description.split(' | ');
+  assert.deepEqual(parts.slice(0, 2), ['stall-diag context.unroute still pending after 5.0s', 'events armed@0.0s timeout@1.0s']);
+  assert.equal(parts.length, 3);
+  assert.equal(parts[2].slice(0, 13), 'worker boot #');
+  assert.ok(Number.isInteger(Number(parts[2].slice(13).split(' ')[0])), 'the worker boot count is a number');
 });
