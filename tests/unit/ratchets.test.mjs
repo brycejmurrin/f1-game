@@ -247,7 +247,8 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   }), 1, "real source growth past absorb still fails");
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
   // #5845: the refusal names the history file and the exact entry shape, so the red explains its own cure.
-  const gRaise = big.find((l) => l.startsWith("RAISE  js/game.js lines:")), g = Number(/: (\d+) -> /.exec(gRaise)[1]);
+  // On Actions the line carries a `::error …::` prefix: find it anywhere.
+  const gRaise = big.find((l) => l.includes("RAISE  js/game.js lines:")), g = Number(/: (\d+) -> /.exec(gRaise)[1]);
   assert.equal(gRaise.slice(gRaise.indexOf(" — add")), ` — add an entry to docs/notes/CEILING-HISTORY.md in the same push, shaped: ## ${pacificDate()} — PR #<n> (<branch>): <why>`
     + ` ⏎ \`js/game.js lines\` ${g} → **${g + 41}** (+41). Deliberate raise past the absorb: <what grew and why>.`);
   // ADVISORY (a push run): the same real-growth raise is still named, and still
