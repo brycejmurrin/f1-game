@@ -236,8 +236,11 @@ test.describe("Qualifying — lap times", () => {
     const rows = await page.evaluate(() => [...document.querySelectorAll("#q-table .res-row")]
       .map((r, i) => ({ pos: i + 1, code: r.querySelector(".res-name").innerText.trim().split(/\s+/)[0] })));
     const at = (c) => rows.find((r) => r.code === c).pos;
-    // Tier 4 back-markers cannot out-qualify the tier-0 car in a dry session.
-    expect(at("RUS")).toBeLessThan(at("STR"));
+    // Tier 4 back-markers cannot out-qualify the tier-0 car in a dry session. Not
+    // Aston Martin's: its wing (1.0, Mercedes 0.69) is the AI's fastest corner speed
+    // on track (#5791, #5854's solo table), and the sheet reads the wing (#5786), so
+    // STR out-qualifies RUS at Monaco and the Hungaroring exactly as it out-drives him.
+    expect(at("RUS")).toBeLessThan(at("BOT"));
     expect(at("LEC")).toBeLessThan(at("BOR"));
     // …and within a team, the higher-rated driver comes out ahead more often
     // than not, which is what the ratings are for.
