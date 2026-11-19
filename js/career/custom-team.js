@@ -47,14 +47,11 @@ const CustomTeam = (function () {
       store.set(key, value);
       return true;
     }
-    // A MY TEAM career refused the edit and kept the old one (#5657): keep the dialog, say so.
-    function keptIdentity(key, value) {
+    function keptIdentity(key, value) {   // a career refusal keeps the dialog (#5657)
       let kept = false;
       try { kept = identitySet(key, value) !== false; } catch (_) {}
-      if (kept) return true;
-      if (announce) announce("TEAM NOT SAVED", 3, "info");
-      if (getSoundOn() && GameAudio.uiReject) GameAudio.uiReject();
-      return false;
+      if (!kept && announce) announce("TEAM NOT SAVED", 3, "info");
+      return kept;
     }
     function loadCustomTeam() {
       return Teams.sanitizeCustom(identityGet("customTeam", store.get("customTeam", DEFAULT_CUSTOM)));

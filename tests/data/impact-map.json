@@ -4371,6 +4371,9 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs"
       ],
+      "keep": [
+        "tests/unit/select-specs.test.mjs"
+      ],
       "load": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",

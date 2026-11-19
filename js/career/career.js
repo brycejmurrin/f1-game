@@ -129,9 +129,7 @@ function adoptTeamIdentity() {
     career.myTeamIdentity = career.myTeamIdentity ? CareerTeamIdentity.sanitize(career.myTeamIdentity) : CareerTeamIdentity.capture(store);
   }
 }
-// CLEARED IS NOT NEVER SET (#5657). A key the career holds answers what it holds; only an
-// absent key falls back. A held null is "no logo" (CLEAR LOGO, or none at capture()), so it
-// must not fall back to the GP logo; the other keys have no empty value, so null falls back.
+// A held null logo is "no logo", never the GP one (#5657).
 function identityValue(key, fallback) {
   const id = inCareer() && career.flavour === "myteam" && career.myTeamIdentity;
   if (!id || !Object.hasOwn(id, key)) return fallback;
@@ -301,14 +299,10 @@ function save(options) {
 }
 function saveStatus() { return Object.assign({}, lastSave); }
 const saveKept = () => lastSave.ok !== false && lastSave.durable !== false;
-// A PLAYER DECISION IS KEPT DURABLY OR NOT AT ALL (#5657). save() answers the
-// career on every path, so a caller cannot tell a refused write from a kept
-// one. Snapshot, apply, write with requireDurable (a quota refusal then leaves
-// the session cache, the retry list and the mirror untouched), and on refusal
-// restore the career IN PLACE (game.js aliases career.season) and answer false.
-function commit(apply) {
-  const before = JSON.parse(JSON.stringify(career));
-  apply();
+// A decision is kept durably or restored in place (season alias kept) (#5657).
+const snap = () => JSON.parse(JSON.stringify(career));
+function commit(apply) { const before = snap(); apply(); return keep(before); }
+function keep(before) {
   save({ requireDurable: true });
   if (saveKept()) return true;
   const seasonRef = career.season;
@@ -447,9 +441,7 @@ function start(opts) {
   }
   // Save ordinary departing careers; protected originals must remain untouched.
   if (career && !calendarProtection && (flavour !== slotFlavour || target !== slotIdx)) save();
-  // What a refused first write puts back (#5657): the career being left and its slot.
-  const left = { career, flavour: slotFlavour, idx: slotIdx, protection: calendarProtection,
-                 revision: careerRevision, conflict: careerConflict };
+  const left = { career, flavour: slotFlavour, idx: slotIdx, protection: calendarProtection, revision: careerRevision, conflict: careerConflict };
   calendarProtection = null;
   slotFlavour = flavour;
   slotIdx = target;
@@ -460,16 +452,9 @@ function start(opts) {
   // then LEGENDS, so falling back to the tail would hand an unknown id Legends'
   // factory setup.
   const team = teamOf(teamId) || teamOf("custom") || Teams.LIST[0];
-  // CLEAR THE RULESET BEFORE RESOLVING THE FACTORY. getFactorySetup() runs the
-  // whole legality chain, and at this point `career` is still the career being
-  // LEFT — so starting a new one while another sits in a restricted era would
-  // resolve the new team's works build against the old save's bans, and write
-  // the DEFAULTS fallback into `owned`/`fitted` for every banned category. A new
-  // career is always season 0, which is the unrestricted opening era, so
-  // clearing is not merely safe here: it is the correct ruleset.
-  //
-  // The menu path clears it first (useSlot() on an empty slot), but
-  // __apex.career() calls start() directly.
+  // CLEAR THE RULESET BEFORE RESOLVING THE FACTORY: `career` is still the one being
+  // LEFT, whose era bans would write DEFAULT parts into owned/fitted. Season 0 is
+  // unrestricted; __apex.career() reaches here without useSlot() clearing it.
   if (typeof Parts !== "undefined" && Parts.setLegality) Parts.setLegality(null, "");
   const factory = Parts.getFactorySetup(team);
 
@@ -521,10 +506,7 @@ function start(opts) {
   applyRegs();
   career.deal = newDeal(team, 1);
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
-  // STORAGE FULL plays on session-only: the "Saving unavailable" banner, RETRY SAVE and
-  // the recovery EXPORT are up (persistence-dom.spec pins it). A REFUSED write (another
-  // tab, the writer lock) never opens a hub on a career a reload loses (#5657): put the
-  // career being left and the slot pointer back, and answer null.
+  // Quota plays on session-only (persistence-dom.spec); a refusal puts the old career back (#5657).
   save();
   if (lastSave.ok !== false) return career;
   const refused = lastSave;
@@ -734,25 +716,19 @@ function goalNow(goal) { return goal && goalHasResult() ? goalKind(goal.type).no
 function goalOnTrack(goal) { return goal && goalHasResult() ? goalKind(goal.type).onTrack(goal.value) : null; }
 function setAmbition(i) {
   if (!career || blocked()) return ambition();
-  // A refused write keeps the old rung and the old targets (#5657).
-  commit(() => {
-    career.amb = ambIdx(clamp(i | 0, 0, AMBITION.length - 1));
-    // RE-STAMP THE OFFERS ON THE TABLE. The sheet prints o.goal.value, and offers
-    // are drawn at rollover — before this pick exists. Leaving them alone would
-    // put one number on the button and sign the contract at another.
-    for (const o of career.offers || []) {
-      const t = teamOf(o.teamId);
-      // THE KIND IS PART OF THE OFFER, only the TARGET moves with the rung.
-      // Re-drawing it here changed a seat's promise out from under the player:
-      // rollover() draws the offers BEFORE `career.year++`, so a re-stamp that
-      // re-derived the kind read a different year than the draw did and turned a
-      // beatMate seat into a champPos one between looking and signing.
-      if (t && o.goal) {
-        const type = goalTypeOk(o.goal.type);
-        o.goal = { type, value: goalKind(type).value(t, career.amb) };
-      }
+  const before = snap();
+  career.amb = ambIdx(clamp(i | 0, 0, AMBITION.length - 1));
+  // RE-STAMP THE OFFERS: they are drawn at rollover, before this pick exists.
+  for (const o of career.offers || []) {
+    const t = teamOf(o.teamId);
+    // Only the TARGET moves with the rung; the kind is part of the offer (drawn
+    // before `career.year++`, so re-deriving it changed the seat's promise).
+    if (t && o.goal) {
+      const type = goalTypeOk(o.goal.type);
+      o.goal = { type, value: goalKind(type).value(t, career.amb) };
     }
-  });
+  }
+  keep(before);
   return career.amb;
 }
 
@@ -992,8 +968,7 @@ function freeMoney(on) {
   if (on !== undefined) store.set("career.freeMoney", !!on);
   return !!store.get("career.freeMoney", false);
 }
-// Hand yourself credits. Returns the new balance, or null with no career loaded
-// or when the write was not kept.
+// Hand yourself credits. Returns the new balance, or null with no career loaded.
 function grant(n) {
   if (!career || blocked()) return null;
   const add = Math.max(0, Math.round(Number(n) || GRANT));
@@ -1011,13 +986,11 @@ function research(opt) {
   if (career.owned.indexOf(key) >= 0) return false;
   const cost = charge(researchCost(opt));
   if (cost > career.money) return false;
-  // A refused or non-durable write must not leave a purchase the save does not hold (#5575).
+  // A refused or non-durable write keeps no purchase (#5575).
   return commit(() => { career.money -= cost; career.owned.push(key); });
 }
-// Raise the fitted-cost cap one rung of BUDGET_MULT (the RAISE THE CAP card).
-// Deliberately a different sink from the factory: the factory cuts what FUTURE
-// parts cost and never runs out; this raises what you may BOLT ON AT ONCE and
-// stops at three rungs, so spending on one genuinely gives up the other.
+// RAISE THE CAP: one rung of BUDGET_MULT on what you may BOLT ON AT ONCE (three
+// rungs); a different sink from the factory, which cuts what FUTURE parts cost.
 function upgradeBudget() {
   const cost = charge(budgetUpgradeCost());
   if (!career || blocked() || budgetUpgradeCost() == null || cost > career.money) return false;
@@ -1659,40 +1632,29 @@ function acceptOffer(i, reviewed) {
   const o = career.offers ? career.offers[i | 0] : null;
   const team = o && teamOf(o.teamId);
   if (!team) return null;
-  // A refused write leaves the old contract in force and the offers on the table (#5657).
-  const signed = commit(() => {
-    if (team.id !== career.team) {
-      const oldId = seasonDriverId(career.team, career.seat);
-      // BEFORE career.team moves: seatDriver() answers "the player" for (career.team,
-      // career.seat), so after the move the old seat INDEX at the new team read as the
-      // player's placeholder rating and the wrong AI driver was displaced.
-      const seat = preview.seat;
-      career.team = team.id;
-      career.seat = seat;
-      // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
-      // keyed by seat, and a move must not leave the player's growth in the old
-      // seat for the AI who takes it — nor hand the player the displaced driver's.
-      // Unlike swapSeats() the seats do NOT trade: the displaced driver leaves
-      // the grid and the old seat falls to whoever career.seats / the roster
-      // names, so that AI starts clean rather than inheriting the displaced
-      // driver's growth (which it never earned).
-      const newId = seasonDriverId(career.team, career.seat);
-      if (career.dev && oldId !== newId) {
-        const mine = career.dev[oldId];
-        if (mine) career.dev[newId] = mine; else delete career.dev[newId];
-        delete career.dev[oldId];
-      }
-      // THE WORKS BUILD IS READ OUTSIDE THE ERA, as start() does: rollover() has
-      // already installed the new season's bans, so a banned works part resolved
-      // to the DEFAULT and that fallback was written into owned/fitted — the team's
-      // own engine or floor lost for good (3x catalog to research it back).
-      career.owned = preview.owned.slice();
-      career.fitted = Object.assign({}, preview.fitted);
+  const before = snap();
+  if (team.id !== career.team) {
+    const oldId = seasonDriverId(career.team, career.seat);
+    // Read BEFORE career.team moves: seatDriver() answers "the player" for (team, seat).
+    const seat = preview.seat;
+    career.team = team.id;
+    career.seat = seat;
+    // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md); unlike swapSeats() the seats
+    // do not trade, so the AI taking the old seat starts clean.
+    const newId = seasonDriverId(career.team, career.seat);
+    if (career.dev && oldId !== newId) {
+      const mine = career.dev[oldId];
+      if (mine) career.dev[newId] = mine; else delete career.dev[newId];
+      delete career.dev[oldId];
     }
-    career.deal = JSON.parse(JSON.stringify(preview.deal));
-    career.offers = [];
-  });
-  if (!signed) return null;
+    // THE WORKS BUILD IS READ OUTSIDE THE ERA (as start()): rollover() already
+    // installed the new bans, which would write DEFAULT parts into owned/fitted.
+    career.owned = preview.owned.slice();
+    career.fitted = Object.assign({}, preview.fitted);
+  }
+  career.deal = JSON.parse(JSON.stringify(preview.deal));
+  career.offers = [];
+  if (!keep(before)) return null;
   Log.info("game", `Career.acceptOffer team=${team.id} years=${o.years}`);
   return career.deal;
 }

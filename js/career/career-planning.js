@@ -36,7 +36,6 @@ const CareerPlanning = (function () {
     function chooseStake(committed) {
       if (!c() || ctx.blocked() || api().objectiveLocked() || api().seasonDone()) return false;
       if (committed && stakeShort()) return false;
-      // saveStatus().ok stayed true for a session-only quota write; commit() answers kept (#5657).
       return ctx.commit(() => { c().briefStake = { year: c().year, round: c().season.round, committed: !!committed, escrow: 0 }; });
     }
     function escrow(r) {
