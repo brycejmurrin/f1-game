@@ -132,6 +132,24 @@ test("Jeddah starts on the pit straight after T27 and numbers its turns as the F
   assert.equal(def.pit.side, -1, "the pit lane is on the left of the straight (OSM way 1121870473)");
 });
 
+test("Brands Hatch starts on the Brabham straight, so Paddock Hill is Turn 1 and Clearways the last", () => {
+  // #5316 (Bryce's `decision: Brands Hatch A`, 2026-11-18): startFrac 0.1226 put
+  // the line on the Stirlings -> Clearways link, so Clearways was "Turn 1" 104 m
+  // after the line. The driver61 Start/Finish GPS point projects 0.9 m from
+  // control node 29 (143.1, 401.7), on the Brabham straight 216 m before
+  // Paddock Hill (docs/tracks/START-LINES.md). Positions are def.path metres.
+  const { def, track, corner } = circuit("brands_hatch");
+  const L = track.total;
+  assert.ok(Math.hypot(track.px[0] - 143.1, track.pz[0] - 401.7) < 3, `line at ${track.px[0].toFixed(1)}, ${track.pz[0].toFixed(1)}`);
+  const t1 = corner(1), t1m = t1.fraction * L;
+  assert.ok(t1.curvature < -0.01 && t1m > 240 && t1m < 290, `Turn 1 is the right at Paddock Hill (${t1m.toFixed(0)} m, k ${t1.curvature.toFixed(4)})`);
+  assert.ok(Math.hypot(t1.x + 105, t1.z - 454) < 30, `Turn 1 at ${t1.x.toFixed(0)}, ${t1.z.toFixed(0)}`);
+  const last = corner(def.turns.length), back = (1 - last.fraction) * L;
+  assert.ok(last.curvature < -0.01 && Math.hypot(last.x - 391, last.z - 78) < 30, `the last turn is Clearways (${last.x.toFixed(0)}, ${last.z.toFixed(0)})`);
+  assert.ok(back > 400 && back < 550, `Clearways is ${back.toFixed(0)} m before the line`);
+  assert.ok(!def.pit || def.pit.side !== -1, "the pit wall stays on the driver's right (driver61)");
+});
+
 test("Kyalami runs anticlockwise with the SRO turns, line and infield pits", () => {
   // SRO/IGTC 2023 Kyalami 9 Hour briefing notes p. 8-9 (#5316 CIRC2-05): 16
   // turns, T1 The Kink a flat right a few hundred metres after S/F, T2
