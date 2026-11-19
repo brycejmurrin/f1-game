@@ -1,6 +1,19 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5738 (claude/appearance-shapes-4529): PORTRAIT & LANDSCAPE, garage PANEL HEIGHT
+
+`(tree) eagerBytes` 8,015,949 → **8,018,824** (+2,875 B). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR (needs-decision comment
+7013692231). The growth is #4529's own feature code in four FULL (eager) files, measured on the sync
+merge with tip `734d0a2d`: `js/ui/appearance-studio.js` +1,687 (the orientation watcher, which must
+run at boot to see a settled rotation; on SHARED, the default, it returns at once),
+`js/ui/settings-export.js` +569 (the `appearanceShapes` save/backup row), `js/ui/screen-looks.js`
++340 (PANEL WIDTH 60–150 and the new PANEL HEIGHT knob) and `js/ui/settings-tabs.js` +279
+(`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
+row stay lazy in `js/ui/layout-presets.js`. Fragment:
+`tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
 `(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the
