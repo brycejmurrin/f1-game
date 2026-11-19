@@ -115,6 +115,9 @@ const GLTF = (function () {
     throw new Error("GLTF: no base64 decoder available (need atob or Buffer)");
   }
 
+  // Extensions toMesh reads (it may appear in extensionsRequired).
+  const SUPPORTED_EXT = ["KHR_mesh_quantization"];
+
   function parseGLB(arrayBuffer) {
     if (!arrayBuffer || !(arrayBuffer instanceof ArrayBuffer)) {
       throw new Error("GLTF.parseGLB: expected an ArrayBuffer");
@@ -149,6 +152,10 @@ const GLTF = (function () {
     }
 
     if (!json) throw new Error("GLTF: GLB has no JSON chunk");
+    // glTF 2.0 §3.12: a loader that does not support a required extension must
+    // fail the load (a meshopt-compressed import would otherwise read packed bytes as raw).
+    const unsupported = (json.extensionsRequired || []).filter((e) => !SUPPORTED_EXT.includes(e));
+    if (unsupported.length) throw new Error("GLTF: required extension not supported: " + unsupported.join(", "));
     if (json.asset && json.asset.version && !String(json.asset.version).startsWith("2")) {
       throw new Error("GLTF: asset version " + json.asset.version + " unsupported (need 2.x)");
     }
@@ -160,7 +167,9 @@ const GLTF = (function () {
     const buf = json.buffers && json.buffers[index];   // no buffers[] at all → same named error, not a bare TypeError
     if (!buf) throw new Error("GLTF: missing buffer " + index);
     if (buf.uri === undefined) {
-      // embedded BIN chunk
+      // embedded BIN chunk. glTF 2.0 §4.4.3.3: only buffers[0] may refer to it;
+      // a later uri-less buffer is an extension's (e.g. meshopt's fallback), not BIN.
+      if (index !== 0) throw new Error("GLTF: buffer " + index + " has no uri and only buffer 0 may use the BIN chunk");
       if (!bin) throw new Error("GLTF: buffer " + index + " references BIN chunk but none present");
       return bin;
     }

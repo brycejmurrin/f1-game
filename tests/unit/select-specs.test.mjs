@@ -41,6 +41,9 @@ const budgetFor = (sec) => (sec + SELECTED_GATE.perTestTimeoutSec - MEASURED.sec
 // pin them there so raising MAX_SPILL_SHARDS (7, PR #3812) keeps them saturated.
 const FIXTURE_SPILL = 4;
 const EMPTY = { specs: {} };
+// N oversize probe specs, each a whole shard's worth of seconds, so shards() gives exactly N legs.
+const probePlan = (n) => ({ oversize: Array.from({ length: n }, (_, i) =>
+  ({ file: `tests/specs/lane-probe-${i}.spec.js`, tests: 2, sec: TARGET_SHARD_SEC })) });
 const at = (files, secPerTest) => ({ specs: Object.fromEntries(files.map((f) => [f,
   { s: [1, 2, 3].map((i) => [`2026-09-2${i}T00:00:00Z`, "llvmpipe", secPerTest * declaredTests(f), declaredTests(f)]) }])) });
 
@@ -1942,16 +1945,41 @@ test("the CI select step leaves the tree it diffs untouched (a chmod there made 
 
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
   const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(LANES, 24);
   assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
   assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
-  const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
-    "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
-  const base = LANES - 1;
-  const lanes = shards(fit(specs, 1, { db: EMPTY }), EMPTY, new Set(), base).map((j) => j.lane);
-  assert.ok(lanes.length >= 2, `two legs to wrap: ${lanes}`);
-  assert.ok(lanes.includes(base) && lanes.includes(0), `starts at the rotated lane and wraps: ${lanes}`);
-  assert.equal(new Set(lanes).size, lanes.length, "a run's own legs never share a lane");
-  assert.ok(lanes.every((l) => Number.isInteger(l) && l >= 0 && l < LANES), "every lane is in range");
+  // One leg per probe spec: each costs a whole shard, so none pack together.
+  const lanes = shards(probePlan(4), EMPTY, new Set(), LANES - 1).map((j) => [j.name, j.lane]);
+  assert.deepEqual(lanes, [["oversize-lane-probe-0", 23], ["oversize-lane-probe-1", 0],
+    ["oversize-lane-probe-2", 1], ["oversize-lane-probe-3", 2]], "starts at the rotated lane and wraps");
+});
+
+// #5536: a plan of at most SMALL_RUN_LEGS legs gets NO_LANE, which ci.yml's `selected` job maps to the
+// per-run group (`matrix.lane >= 0` is false), so a one-leg fix never waits behind wide runs in a lane.
+test("lanes: a plan of 1 or 2 legs gets NO_LANE; 3 legs keep lanes; nothing else in a row changes", async () => {
+  const { LANES, NO_LANE, SMALL_RUN_LEGS } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(SMALL_RUN_LEGS, 2);
+  assert.equal(NO_LANE, -1);
+  const lanesOf = (n, base) => shards(probePlan(n), EMPTY, new Set(), base).map((j) => j.lane);
+  assert.deepEqual(lanesOf(1, 5), [-1]);
+  assert.deepEqual(lanesOf(2, 5), [-1, -1]);
+  assert.deepEqual(lanesOf(2, LANES - 1), [-1, -1]);
+  assert.deepEqual(lanesOf(3, 5), [5, 6, 7]);
+  assert.deepEqual(shards({}, EMPTY, new Set(), 5), [], "an empty plan has no legs");
+  // The two-leg rows equal the first two rows of the three-leg plan in every field but `lane`.
+  const withoutLane = (rows) => rows.map(({ lane, ...rest }) => rest);
+  assert.deepEqual(withoutLane(shards(probePlan(2), EMPTY, new Set(), 5)), withoutLane(shards(probePlan(3), EMPTY, new Set(), 5)).slice(0, 2));
+});
+
+// PR #5809: a merge train's legs never queue in the shared PR lanes: every leg of a `train/*` head gets NO_LANE.
+test("lanes: a train/* head gets NO_LANE on every leg; any other head keeps its lanes", async () => {
+  const { trainHead } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "train/20261118-2215" }), true);
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "claude/ci-trains-junit-5802" }), false);
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "x/train/1" }), false);
+  assert.equal(trainHead({}), false, "push, schedule and dispatch runs have no head ref");
+  assert.deepEqual(shards(probePlan(3), EMPTY, new Set(), 5, true).map((j) => j.lane), [-1, -1, -1]);
+  assert.deepEqual(shards(probePlan(3), EMPTY, new Set(), 5, false).map((j) => j.lane), [5, 6, 7]);
 });
 
 test("spec-less js dirs route to a module-specific spec, and a dir with no coverage at all is named (ci-7d C7)", async () => {

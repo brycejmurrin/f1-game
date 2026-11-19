@@ -39,7 +39,7 @@ paired stays here. Escape/focus paths → **ui-menu-a11y**.
 ```sh
 node --test tests/unit/key-binds.test.mjs tests/unit/ui-improve-pass.test.mjs   # node pins
 node tools/ci/pick-tests.mjs                 # the groups this change needs (docs/VERIFICATION.md §By change)
-node tools/ci/remote-group.mjs input         # the whole group on the PUSHED branch, when the PR run is not enough
+# the PR's own CI runs the browser shard; a whole group (remote-group.mjs input) is Bryce's opt-in
 ```
 
 ## References
