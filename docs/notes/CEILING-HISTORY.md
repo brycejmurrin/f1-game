@@ -32,6 +32,13 @@ through `LiveRegion`; a removed round drops its sprint mark), `js/career/season-
 replaced mid-scrub ends the scrub; `at/apply(NaN)` refused). The data-hub and real-race hunks are
 already lazy (LAZY_DATA, LAZY_REAL_RACE) and cost nothing. Fragment:
 `tests/data/ratchets.d/claude--hunt4-fixes-5694.json`.
+## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
+
+`(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
+explained them were the bytes over the tip, so they were cut and the fragment records the
+lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
+inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
+
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
 `(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the
