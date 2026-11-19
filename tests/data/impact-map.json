@@ -16187,6 +16187,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/store-registry.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
