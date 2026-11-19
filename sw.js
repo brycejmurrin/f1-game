@@ -904,12 +904,12 @@ self.addEventListener("fetch", (event) => {
       try {
         const res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
-        if (res == null && failFast) return Response.error();
+        if (res == null && failFast && !isShellBust) return Response.error();
       } catch (_) {
-        if (failFast) return Response.error();
+        if (failFast && !isShellBust) return Response.error();
       }
       if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
-      if (isShellBust) return bustShell || Response.error();
+      if (isShellBust) return bustShell || (await matchPreferCurrent("index.html")) || Response.error();
       const ownURL = new URL(url.href);
       ownURL.search = "";
       ownURL.hash = "";
