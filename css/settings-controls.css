@@ -312,9 +312,15 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
 /* A touch phone held upright keeps the door LIST (ui-redesign "balanced
    control rows"): #5640's uncapped --sheet-w lifts its sheet past 24rem
    (~33rem own px at UI 70), where the grid left a half-width orphan
-   mid-list. Tablets (>= 40rem) and desktop keep the grid. */
-@container sheet (min-width: 24rem) and (max-width: 39.99rem) {
-  body:not(.desktop) #pmsettings-inner[data-shape="tall"] #pm-settings-index { display: flex; }
+   mid-list. Tablets (>= 40rem) and desktop keep the grid. Keyed on the
+   viewport's orientation, not the sheet's data-shape: SheetShape writes that
+   a frame after the open (ResizeObserver + rAF), so a sheet opened right
+   after a rotation still read "wide" and painted the grid (ready run
+   44479875495, ui-redesign:989). */
+@media (orientation: portrait) {
+  @container sheet (min-width: 24rem) and (max-width: 39.99rem) {
+    body:not(.desktop) #pmsettings-inner #pm-settings-index { display: flex; }
+  }
 }
 /* A wide sheet (laptop and up) reads nine doors as three columns, not a
    long two-up list with a half-width orphan. */
