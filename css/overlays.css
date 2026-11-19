@@ -1278,11 +1278,19 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
 :root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
 :root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
-/* Under a finger the scaled height keeps 44 PAINTED px: a phone ships BUTTON HEIGHT 90 at UI SIZE 70 %, which painted START RACE 39.8 px (#5358). */
-@media (pointer: coarse) { :root[data-look-race-btn] #race-settings { --tap: max(calc(var(--tap-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); } }
 :root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
 :root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
 :root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+/* Under a finger every scaled button AND chip keeps 44 PAINTED px: BUTTON HEIGHT 90 at UI SIZE 70 painted START RACE
+   39.8 px (#5358); garage BUTTON 80 painted CLOSE GARAGE 35 and the livery pills 26 (#5672). */
+@media (pointer: coarse) {
+  :root[data-look-datahub-btn] #datahub { --tap: max(calc(var(--tap-0) * var(--look-datahub-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-datahub-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-select-btn] #select { --tap: max(calc(var(--tap-0) * var(--look-select-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-select-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-race-btn] #race-settings { --tap: max(calc(var(--tap-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-career-btn] #career { --tap: max(calc(var(--tap-0) * var(--look-career-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-career-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-garage-btn] #carsetup { --tap: max(calc(var(--tap-0) * var(--look-garage-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-garage-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: max(calc(var(--tap-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); }
+}
 
 /* CORNERS — the radius tokens every card and button reads. */
 :root[data-look-pause-corners="sharp"] #pausemenu,

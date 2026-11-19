@@ -1094,6 +1094,9 @@
         "tests/unit/rival-contact-sfx.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
+      "detach": [
+        "tests/unit/rival-attach-init.test.mjs"
+      ],
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
@@ -6875,6 +6878,9 @@
       "exportEnvelope": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
+      "exportFile": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
       "exportLibraryFile": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -7381,6 +7387,7 @@
         "tests/unit/car-fx.test.mjs"
       ],
       "rainActive": [
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -11202,6 +11209,9 @@
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
       ],
+      "rowsFrom": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
       ],
@@ -14708,6 +14718,9 @@
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
+      ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
@@ -15407,6 +15420,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/comment-citations.test.mjs",
@@ -15561,6 +15575,9 @@
       ]
     },
     "js/render/glx/soft.js": {
+      "_awaitFrame": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
       "awaitSoftPresent": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -17466,6 +17483,7 @@
         "tests/unit/share-card.test.mjs"
       ],
       "close": [
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "preview": [
@@ -17476,8 +17494,7 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/unit/css-has-scope.test.mjs",
-        "tests/unit/results-sheet-lazy.test.mjs"
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -17688,7 +17705,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -17929,6 +17947,7 @@
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
@@ -17979,6 +17998,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -17989,11 +18009,13 @@
         "tests/unit/scenery-kits.test.mjs"
       ],
       "overheadSpan": [
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
       "scratch": [
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "sealGeometry": [
@@ -18005,6 +18027,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
@@ -18904,6 +18927,9 @@
       ]
     },
     "js/ui/hud-skin.js": {
+      "skinAccent": [
+        "tests/unit/hud-skin-ink.test.mjs"
+      ],
       "*": [
         "tests/unit/hud-feel.test.mjs"
       ]
@@ -19581,16 +19607,20 @@
     },
     "js/ui/quali-sheet.js": {
       "build": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "close": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "create": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "open": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/ui/race-message-history.js": {
@@ -19613,7 +19643,7 @@
       ]
     },
     "js/ui/results-boot.js": {
-      "*": [
+      "create": [
         "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
@@ -19638,6 +19668,7 @@
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
@@ -19660,7 +19691,8 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "summary": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/results-story.test.mjs"
       ],
       "*": [
         "tests/unit/podium-beat.test.mjs",
@@ -20677,6 +20709,9 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "recenter": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "seed": [
         "tests/unit/xr-phase0.test.mjs"
       ],
       "sessionInit": [

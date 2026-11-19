@@ -432,8 +432,22 @@ body[data-shape="wide"] [data-nextgp="session-time"] { white-space: nowrap; font
 body[data-width="narrow"] [data-nextgp="tile"] { grid-template-columns: 1fr; }
 body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: auto; }
 /* schedule: ADD TO CALENDAR bar (iCalendar file) — touch-sized, wraps on a 390px-tall phone */
-[data-ics="bar"] { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-top: calc(var(--gap) * 0.75); }
-[data-ics="weekend"], [data-ics="season"] { min-height: var(--tap-paint); font-size: var(--fs-2); font-weight: 800; letter-spacing: var(--ls-3); }
+[data-ics="bar"] {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: calc(var(--gap) / 2); margin-top: calc(var(--gap) * 0.75);
+  width: 100%; min-width: 0; max-width: 100%;
+  box-sizing: border-box;
+  /* A leftover flex free-space lane next to ADD WHOLE SEASON painted as a
+     solid black slab on the card (393×852, 2026-11-17). */
+  overflow-x: hidden;
+}
+[data-ics="weekend"], [data-ics="season"] {
+  flex: 1 1 calc(50% - var(--gap) / 2);
+  min-width: min(100%, 9rem);
+  min-height: var(--tap-paint);
+  font-size: var(--fs-2); font-weight: 800; letter-spacing: var(--ls-3);
+}
+[data-ics="alarm"] { flex: 1 1 100%; min-width: 0; max-width: 100%; }
 [data-ics="note"] { flex-basis: 100%; color: var(--dim); font-size: var(--fs-micro); }
 
 /* schedule rows */
@@ -1459,6 +1473,34 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
 @media (min-width: 1600px) {
   body[data-width="wide"][data-density="normal"] #datahub .dh-card {
     width: min(1080px, 100%);
+  }
+}
+
+/* mobile-ui hunt — deferred overlays layer (beats career/howto/touch). */
+#howtoplay-inner #htp-contents {
+  padding-inline-end: calc(var(--pad) + var(--chip-h));
+  scroll-padding-inline-end: calc(var(--pad) + var(--chip-h));
+  mask-image: linear-gradient(90deg, black 0, black calc(100% - 1.1rem), transparent);
+}
+#howtoplay-inner[data-density="compact"] #htp-contents > :first-child,
+#howtoplay-inner[data-shape="tall"] #htp-contents > :first-child { margin-inline-start: 0; }
+@container sheet (min-width: 420px) {
+  #quali .sheet:not([data-shape="tall"]) #q-table {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap);
+  }
+  #quali .sheet:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
+}
+#quali .sheet:not([data-shape="tall"]) .res-row {
+  padding-block: calc(var(--gap) * 0.2);
+  min-height: max(var(--chip-h), calc(36px / var(--ui-scale)));
+}
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
+  body[data-shape="wide"] #ios-install:not([hidden]) {
+    right: auto; left: var(--safe-l); bottom: var(--safe-b); margin: 0;
+    width: min(18rem, calc(42% - var(--safe-l) - var(--gap))); max-width: none;
+    padding: calc(var(--gap) * 0.45) calc(var(--gap) * 0.6);
+    font-size: calc(var(--fs-micro) * 0.85); line-height: 1.25;
+    max-height: 4.5rem; overflow: hidden;
   }
 }
 

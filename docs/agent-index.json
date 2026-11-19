@@ -1681,6 +1681,7 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/elevation-smoothness.test.mjs",
+        "tests/unit/footprint-rejected-baseline.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/kerb-berm-surface.test.mjs",
         "tests/unit/kerb-stripes.test.mjs",
@@ -1696,6 +1697,7 @@
         "tests/unit/scenery-seats.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
+        "tests/unit/stand-curve-gap-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
         "tests/unit/track-themes-build.test.mjs",
@@ -4992,7 +4994,7 @@
     {
       "path": "js/ui/quali-sheet.js",
       "global": "QualiSheet",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/ui/race-message-history.js",
