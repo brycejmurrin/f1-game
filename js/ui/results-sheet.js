@@ -205,6 +205,21 @@ if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
     && typeof G.els.resultsTable.getBoundingClientRect === "function") {
   new ResizeObserver(fitPins).observe(G.els.resultsTable);
 }
+// #5603: LAY OUT BEFORE REVEAL. Whoever un-hides #results (ceremony, podium beat, game.js), classify the sheets and fit
+// the pins in the same task, after TopModal's own observer has opened the dialog (a queued microtask runs after every
+// observer callback, still before the paint), instead of waiting on ResizeObserver delivery. What still painted YOU on
+// P1 for a frame or two was MOTION: REDUCED replaying the pre-compact geometry; css/overlays.css makes that instant.
+if (typeof MutationObserver === "function" && typeof queueMicrotask === "function"
+    && G.els && G.els.results && G.els.resultsTable && typeof G.els.resultsTable.querySelectorAll === "function") {
+  new MutationObserver(() => {
+    if (G.els.results.hidden) return;
+    queueMicrotask(() => {
+      if (G.els.results.hidden) return;
+      if (typeof SheetShape !== "undefined" && SheetShape.reclassify) SheetShape.reclassify();
+      fitPins();
+    });
+  }).observe(G.els.results, { attributes: true, attributeFilter: ["hidden"] });
+}
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
 if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
   G.announce && G.announce((labels.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED")) + " — " + labels.join(" · "), 3, "race"));
