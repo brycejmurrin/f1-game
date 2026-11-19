@@ -71,7 +71,7 @@ test("fromDaily keeps share links intact (no trademark rewrite) and accepts HTTP
   assert.equal(data.fromDaily(plan, entry, "gold", 1, { link: "javascript:alert(1)" }).link, null);
   assert.equal(data.fromDaily(plan, entry, "gold", 1, { link: "ftp://example.test/x" }).link, null);
   // Titles still rewrite the mark; only the link path is exempt.
-  assert.doesNotMatch(data.fromDaily({ ...plan, trackName: "FORMULA 1" }, entry, "gold", 1, {}).trackName, /FORMULA\s*1/i);
+  assert.equal(data.fromDaily({ ...plan, trackName: "FORMULA 1" }, entry, "gold", 1, {}).trackName, "GRAND PRIX");
 });
 
 const car = (code, extra) => Object.assign({ code, name: code + " Driver", driverId: code.toLowerCase(),
