@@ -69,6 +69,10 @@
       fract, floor, dot, mix, smoothstep, clamp, pow, exp,
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
+    // DESCENDING smoothstep (edge0 > edge1 reads 1 below `hi`, 0 above `lo`) written as the ascending builtin
+    // flipped: GLSL ES 3.00 leaves smoothstep undefined for edge0 >= edge1 (#5699 row 8). Same value wherever
+    // the descending form was defined. tests/unit/tlx-hunt3.test.mjs refuses a literal descending call.
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
     // The 0..1 image uv of the scene pass: screenUV, or (fixed targets, #2655)
     // the fragment over the LOGICAL scene size (tsl-viewport.js).
     const imageUV = (ctx && ctx.vp && ctx.sceneView) ? ctx.vp.uv(ctx.sceneView) : screenUV;
@@ -163,9 +167,9 @@
       bankThresh: uniform(0.0), bankK: uniform(0.0),
       topK: uniform(0.0), topTint: v3(), topWarm: uniform(0.0), cloudBot: v3(),
       silverK: uniform(0.0), silverCol: v3(), washCol: v3(),
-      mieDamp: uniform(0.0), mieK: uniform(0.0),
+      mieK: uniform(0.0),
       sunHLen: uniform(0.0), sunHn: v2(), hGlowCol: v3(),
-      coronaDamp: uniform(0.0), golden: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
+      coronaDamp: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
       aurCol: v3(), squash: uniform(0.0), discOut: uniform(0.0), discIn: uniform(0.0),
       discCore: v3(), starThresh: uniform(0.0), dthOff: uniform(0.0),
       // E1 cache lookup: on/off and the per-channel cp offset since the bake.
@@ -231,7 +235,6 @@
       const sunBright = Math.max(sc.x, Math.max(sc.y, sc.z));
       const eff = lerp(sunBright, Math.min(sunBright, 0.55), overcast);
       const golden = 1 - sstep(0.0, 0.45, sunE);   // goldenC == golden (the same expression)
-      D.golden.value = golden;
       D.topK.value = eff * 0.62 + 0.38;
       const tk = lerp(1.45, 2.6, golden);
       set3(D.topTint, sc.x * tk, sc.y * tk, sc.z * tk);
@@ -249,7 +252,6 @@
       // Mie + the horizon glow in the sun's compass direction.
       // sunDir is the moon key at night: solar lobes must not follow it.
       const mieDamp = (1 - overcast * 0.85) * (1 - night);
-      D.mieDamp.value = mieDamp;
       D.mieK.value = 0.22 * mieDamp * U.mieScatter.value;
       const hLen = Math.hypot(sd.x, sd.z);
       D.sunHLen.value = hLen;
@@ -741,7 +743,7 @@
         // Disc, vertically squashed near the horizon (atmospheric refraction).
         const dd = dir.sub(U.sunDir.mul(sd)).toVar();
         const perp = length(vec2(length(dd.xz), dd.y.mul(D.squash))).toVar();
-        const disc = smoothstep(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
+        const disc = smoothstepDown(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
         // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
         const discCore = D.discCore;
         c.addAssign(discCore.mul(disc));
@@ -764,7 +766,7 @@
           const twinkle = U.starTwinkle.mul(0.20).mul(sin(U.time.mul(1.4).add(phase))).add(0.80);
           const giant = step(0.9995, h);                       // rare brighter star
           const srad = mix(float(0.0016), float(0.0028), giant).mul(U.starSize);
-          const star = smoothstep(srad, srad.mul(0.35), d)
+          const star = smoothstepDown(srad, srad.mul(0.35), d)
             .mul(min(0.88, bright.mul(twinkle).mul(giant.mul(0.6).add(1.0))));
           // Cloud occlusion: stars sit BEHIND the deck (cityCov hoisted above).
           c.addAssign(vec3(star).mul(U.starBright).mul(cityCov.oneMinus()));
@@ -777,7 +779,7 @@
         const moonDir = normalize(U.sunDir);
         const md = dot(dir, moonDir).toVar();
         const moonPerp = length(dir.sub(moonDir.mul(max(md, 0.0)))).toVar();
-        const moonDisc = smoothstep(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
+        const moonDisc = smoothstepDown(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
           .mul(U.moon);
         const moonHalo = exp(moonPerp.mul(moonPerp)
           .mul(float(140.0).div(max(U.moonHalo, 0.001))).negate())

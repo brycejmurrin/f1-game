@@ -1413,7 +1413,6 @@ const TrackBuildProps = (function () {
           // over the verge. Where the chord's midpoint gives up more than
           // 0.1 m of the gap, emit two single-node panels that follow the
           // curve instead — the cost lands only on the handful of apex spans.
-          const oM = side * (hw[km] + barrierOffset);
           const qx = (px[k] + track.rx[k] * side * (hw[k] + barrierOffset)
                     + px[kn] + track.rx[kn] * side * (hw[kn] + barrierOffset)) / 2;
           const qz = (pz[k] + track.rz[k] * side * (hw[k] + barrierOffset)

@@ -1911,3 +1911,19 @@ test("HUD plan and actual Strategy share one caution field scan and preserve vis
   assert.deepEqual(reads.plan, legacyPlan);
   assert.equal(view(), expected, "visible rows and ARIA stay equal");
 });
+
+// #5699 row 20: window()'s bay budget floored the entry road at ROAD_MIN (30 m) while build() floors it at
+// ENTRY_ROAD_MIN (60 m), so the "no circuit can lose a bay by construction" pullback could over-state the room by
+// ~15 m. Both now share the floor; on the shipped calendar the window moved nowhere (52 of 52 identical, measured
+// 2026-11-18). The guarantee itself, on every circuit: only a def's own `bays: false` takes the bays away, plus
+// mont_tremblant, whose window is shorter than a twelve-bay row (pinned as bay-less above).
+test("every circuit without pit.bays === false keeps its garage bays (#5699 row 20)", () => {
+  const SHORT_WINDOW = new Set(["mont_tremblant"]);
+  const lost = [];
+  for (const d of BUILT.Tracks.LIST) {
+    const p = BUILT.build(d.id).pit;
+    const wantBays = !(d.pit && d.pit.bays === false) && !p.painted && !SHORT_WINDOW.has(d.id);
+    if (wantBays !== p.hasBays) lost.push(`${d.id}: hasBays ${p.hasBays}`);
+  }
+  assert.deepEqual(lost, []);
+});
