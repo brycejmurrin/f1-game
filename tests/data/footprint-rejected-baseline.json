@@ -1,7 +1,6 @@
 {
-  "_why": "Shrink-only: non-pit \"footprint rejected\" modelGroups per circuit (tools/track/footprint-rejected.cjs). A new id fails; a landed id must be removed (--all --update). Measured 2026-11-10. 2026-11-11: interlagos's four rows removed — the tip's Interlagos fix lands arq-senna, favela-17, crowd-905 and crowd-921. 2026-11-18: jeddah's pit-building row removed — it lands on the deploy tip ab21df75 too (measured there before the sync).",
+  "_why": "Shrink-only: non-pit \"footprint rejected\" modelGroups per circuit (tools/track/footprint-rejected.cjs). A new id fails; a landed id must be removed (--all --update). Measured 2026-11-10. 2026-11-11: interlagos's four rows removed — the tip's Interlagos fix lands arq-senna, favela-17, crowd-905 and crowd-921. 2026-11-18: jeddah's pit-building row removed — it lands on the deploy tip ab21df75 too (measured there before the sync). 2026-11-19: madrid's monumental-r-3 row removed — the tip's La Monumental rework (ecebd83) lands it.",
   "madrid": [
-    "madrid-monumental-r-3",
     "madrid-skyline-midrise-7"
   ],
   "qatar": [
