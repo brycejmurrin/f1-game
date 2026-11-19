@@ -43,6 +43,10 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
 
 ## While workers run
 
+- Each cycle, and on every child-session event, run the quota watchdog `tools/ci/child-health.mjs` (#5844; usage in
+  its header): save `list_sessions {children:true}` and each failed child's `list_events kinds:["result"]` page, then
+  act on every PARK / RELAUNCH row it prints (`needs-owner`, a `CONTINUE PR <n>` brief on another model or after the
+  reset). Six PRs sat ownerless 7.8–9.1 h on 2026-11-18 because nothing read the children between waves.
 - Messages reach a busy worker when its turn ends (median 0.3 min, p90 7.5, max 78). Send a hold or stop with
   priority "now", name its exceptions in the same message, and expect a push to cross it [12].
 - Never push to, flip or label a live owner's PR, nor edit its body beyond ticking a Plan line: message the owner

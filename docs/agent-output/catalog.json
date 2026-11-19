@@ -789,6 +789,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/child-health.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/ci-coverage.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
