@@ -11521,6 +11521,7 @@
       ],
       "read": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "resolvePos": [
@@ -11893,7 +11894,8 @@
       ],
       "*": [
         "tests/specs/tlx-probes.spec.js",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/perf/soak-run.js": {
@@ -19799,7 +19801,8 @@
       ],
       "*": [
         "tests/specs/phone-shipped-defaults.spec.js",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/scroll-fade.js": {

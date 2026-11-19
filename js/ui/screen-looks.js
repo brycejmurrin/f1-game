@@ -601,7 +601,8 @@ const ScreenLooks = (function () {
      already showing); a host with no router (a unit harness, a tool page) has
      no enter to wait for, so it builds once the document is parsed. */
   function arm() {
-    registerSearch();
+    // #4798: Settings search only.
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(registerSearch); else registerSearch();
     const panel = byId("pm-panel-appearance");
     if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) {
       SettingsNav.onEnter((id) => { if (id === "appearance") build(); });
