@@ -557,6 +557,35 @@
       };
       _warmCompiles = _warmCompiles.then(job).catch(() => { /* the live draw builds it then */ });
     }
+    // SUBMIT HOLD (vendor PATCHES.md §21; docs/notes/RENDER-FRAME-COST-2026-11-18.md). three submits once per render
+    // context, so this chain is one queue.submit per pass (ten at the phone tier) and WebKit does not coalesce
+    // command buffers. While ctx.postSubmitHold() is on (WebGPU only, default off: ?lab=postSubmit or
+    // __tlx.postSubmit(true)), present() parks the chain's finished command buffers on device.apexSubmitHold and
+    // submits them in ONE call, in order, before any target is shed. A held buffer reads its uniforms at submit,
+    // so a material drawn twice in one chain (the unfixed blur / bloom materials, the second godray blur pair)
+    // would see its LAST values in both passes: runPass submits what is held before a repeat. The same holds for
+    // three's screenSize, ONE shared render-group buffer rewritten at every render() with that target's size (it
+    // is what screenUV divides by): passes of different sizes cannot share a submit, so runPass also submits when
+    // the target size changes. The phone chain then goes out as 6 submits (AO trio + bright, down, down, up, up,
+    // composite + FXAA), not 10.
+    const _hold = [], _holdSeen = new Set();
+    let _holdDev = null, _holdSize = -1;
+    function holdBegin() {
+      _last.held = 0; _last.submits = 0;
+      if (_holdDev || !webgpu || compileJobs || _scissorWarm || !(ctx.postSubmitHold && ctx.postSubmitHold())) return;
+      const dev = renderer.backend && renderer.backend.device;
+      if (!dev || !dev.queue) return;
+      _holdDev = dev; _hold.length = 0; _holdSeen.clear(); _holdSize = -1;
+      dev.apexSubmitHold = _hold;
+    }
+    function holdFlush(again) {
+      const dev = _holdDev;
+      if (!dev) return;
+      dev.apexSubmitHold = null;
+      _holdSeen.clear();
+      try { if (_hold.length) { _last.held += _hold.length; _last.submits++; dev.queue.submit(_hold); } }
+      finally { _hold.length = 0; if (again) dev.apexSubmitHold = _hold; else _holdDev = null; }
+    }
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
       if (_scissorWarm) {
@@ -574,6 +603,13 @@
         renderer.autoClear = false;   // a clear (WebGPU loadOp) ignores the scissor
         try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); target.scissorTest = st0; }
         return;
+      }
+      if (_holdDev) {
+        // The canvas pass is keyed on its DRAWING BUFFER (what three writes to screenSize), not the present size:
+        // at a render scale under 1 with no upscale the two differ.
+        const cv = target ? null : renderer.domElement, size = target ? target.width * 65536 + target.height : (cv ? cv.width * 65536 + cv.height : -2);
+        if (_holdSeen.has(mat) || (size !== _holdSize && _hold.length)) holdFlush(true);
+        _holdSeen.add(mat); _holdSize = size;
       }
       setQuadMat(mat);
       renderer.setRenderTarget(target);
@@ -663,7 +699,7 @@
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     // Last-presented-frame block states (__tlx.postState()).
-    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false };
+    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false, held: 0, submits: 0 };
     let _lastPresentRT = null;
 
     // w x h: the render (logical) size; pw x ph: the present size (phys mode).
@@ -761,6 +797,7 @@
       // throw mid-chain latches autoClear=false for every later classic-path
       // frame, which skips three's clear and smears the canvas until reload.
       try {
+      holdBegin();
       if (phys) VP.sync();   // the readers' logical/physical ratio for the targets as bound NOW
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
@@ -1122,12 +1159,14 @@
       _last.shafts = !!haveGR;
       _last.ssr = !!(haveRefl && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
       _last.fxaa = !viz;
+      holdFlush(false);   // before a shed below destroys a target a held command buffer still names
       // After the composite has rebound the 1x1 fallbacks. Releasing on the
       // same frame the block drew would dispose a target runPass just wrote.
       aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
       grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
       bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
       } finally {
+        try { holdFlush(false); } catch (_) { /* a throw mid-chain: tlx.js's catch owns the fallback */ }
         if (!dest) {
           try { renderer.setRenderTarget(null); } catch (_) { /* device dying: tlx.js's catch owns the fallback */ }
         }
@@ -1384,6 +1423,7 @@
         tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
+        submitHold: { on: !!(ctx.postSubmitHold && ctx.postSubmitHold()), held: _last.held, submits: _last.submits },   // the last present: command buffers held, submit calls
         targets: [W, H],
         // Post working size (PHONE_POST_SCALE of scene on phones). Aux passes half of this.
         postTargets: [pW, pH],
