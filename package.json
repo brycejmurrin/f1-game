@@ -5,6 +5,6 @@
   "devDependencies": {
     "eslint-scope": "9.1.2",
     "espree": "11.2.0",
-    "typescript": "7.0.2"
+    "typescript": "7.1.0-dev.20261119.1"
   }
 }
