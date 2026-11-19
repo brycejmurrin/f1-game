@@ -16,7 +16,7 @@
 
 ```
 # 1. serve the working tree yourself (Playwright's own server uses a random port)
-python3 -m http.server 3456        # background it
+python3 -m http.server -b 127.0.0.1 3456   # background it (AGENTS.md §The loop)
 ```
 ```
 mcp__chrome-devtools__navigate_page   http://127.0.0.1:3456/

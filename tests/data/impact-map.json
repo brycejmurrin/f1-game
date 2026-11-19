@@ -15701,7 +15701,8 @@
         "tests/unit/lamp-chunks.test.mjs"
       ],
       "cellSize": [
-        "tests/unit/lamp-chunks.test.mjs"
+        "tests/unit/lamp-chunks.test.mjs",
+        "tests/unit/tlx-half-webgpu-guard.test.mjs"
       ],
       "gxOf": [
         "tests/unit/lamp-chunks.test.mjs"
@@ -16036,14 +16037,17 @@
       "build": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-half-webgpu-guard.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "chunkPrepareConfig": [
         "tests/unit/build-worker.test.mjs",
-        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-half-webgpu-guard.test.mjs"
       ],
       "chunked": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-half-webgpu-guard.test.mjs",
         "tests/unit/tlx-r187-contracts.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
@@ -16074,6 +16078,7 @@
       ],
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-half-webgpu-guard.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "prepareChunks": [
