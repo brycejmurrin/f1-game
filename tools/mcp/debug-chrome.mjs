@@ -173,7 +173,13 @@ export async function main(args = process.argv.slice(2)) {
     // The checkout's gitignored generated files (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): built before Chrome loads the title.
     const { ensureBuilt } = await import("../gen/ensure-built.mjs"); ensureBuilt();
     if (!serverUp) procs.push({ role: "server", ...launch("python3",["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
-    const chrome = chromiumPath();
+    // Prefer a real Chromium binary over PATH shell wrappers (Cloud's
+    // /usr/local/bin/google-chrome forces a shared profile + fixed debugging
+    // port). Match tools/mcp/playwright-mcp.sh / chrome-devtools-mcp.sh.
+    const chrome = process.env.CHROMIUM_PATH || process.env.CHROME || process.env.PW_CHROMIUM
+      || ["/opt/google/chrome/chrome", "/usr/bin/google-chrome-stable"].find(existsSync)
+      || chromiumPath();
+    if (!chrome) throw Error("no Chromium found; set CHROMIUM_PATH or run: npx playwright install chromium");
     procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url: headlessGame ? "about:blank" : url, webgpu, device }), `--remote-debugging-port=${port}`, "chrome.log") });
     writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
     for (let i = 0; i < 60; i++) {

@@ -58,7 +58,9 @@ floating tree and not reach the line that places it.
    `BASE=<parent-supplied-baseline-ref> node tools/track/graph-parity.cjs <id>`
    (explicit base). A clean tree refuses implicit
    HEAD; without a meaningful baseline report parity unverified, never force
-   HEAD-vs-itself into a pass. `node tools/shot/frame-report.mjs --track <id>`.
+   HEAD-vs-itself into a pass. `node tools/shot/frame-report.mjs --track <id>` (in a
+   fresh worktree run `node tools/gen/ensure-built.mjs` first: it needs the built
+   `js/track/circuit-meta.js`).
 
    Run one plain command per Bash call so an allowlist can approve it:
    iterate with separate calls, or put the loop inside `node -e "…"`.

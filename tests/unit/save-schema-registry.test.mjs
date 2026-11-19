@@ -13,7 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import * as espree from "espree";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
-import { ROOT, jsFiles, walk, storageReceiver } from "../helpers/store-key-scan.mjs";
+import { ROOT, jsFiles, walk, storageReceiver, lsWrappers } from "../helpers/store-key-scan.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const WRITE_OPS = new Set(["set", "write", "rawSet", "setItem", "remove", "removeItem"]);   // removes count: a stale or unregistered key is dropped or migrated by name
@@ -80,6 +80,7 @@ const LS_DYNAMIC_EXEMPT = new Map([
 const LITERAL_EXEMPT = new Map([
   ["js/car/ghost.js", new Set(["apex_ghost_v1"])],   // legacy key, only ever read and removed after migration to the registered ghost store
   ["js/perf/phone-recorder.js", new Set(["phoneRec"])],   // transient soak-run scratch blob, kept out of export/backup on purpose
+  ["js/input/phone-pad-page.js", new Set(["padLayout"])],   // controller.html's own WHEEL LAYOUT, written by the phone page's localStorage (never GameStore, the registry's only runtime reader), no export/backup; kept off the eager boot budget (#5803)
 ]);
 
 function loadRegistry() {
@@ -112,26 +113,7 @@ function scanStoreCalls(file, ops) {
   // M1-17 write half: a file-local wrapper `function lsSet(k, v) { localStorage.setItem(k, v) }`
   // is a storage call too. Map wrapper name -> the localStorage op it relays its FIRST param to;
   // the relay site inside the wrapper body is the wrapper itself, not a dynamic write.
-  const wrappers = new Map();   // name -> { op, param, range }
-  const fnOf = (n) => {
-    if (n.type === "FunctionDeclaration" && n.id) return { name: n.id.name, fn: n };
-    if (n.type === "VariableDeclarator" && n.id && n.id.type === "Identifier" && n.init
-      && (n.init.type === "FunctionExpression" || n.init.type === "ArrowFunctionExpression")) return { name: n.id.name, fn: n.init };
-    return null;
-  };
-  walk(ast, (n) => {
-    const f = fnOf(n);
-    if (!f || !f.fn.params.length || f.fn.params[0].type !== "Identifier") return;
-    const param = f.fn.params[0].name;
-    walk(f.fn.body, (c) => {
-      if (c.type !== "CallExpression" || !c.callee || c.callee.type !== "MemberExpression" || c.callee.computed) return;
-      if (storageReceiver(c.callee.object) !== "ls") return;
-      const a0 = c.arguments && c.arguments[0];
-      if (a0 && a0.type === "Identifier" && a0.name === param && !wrappers.has(f.name)) {
-        wrappers.set(f.name, { op: c.callee.property.name, param, range: f.fn.range });
-      }
-    });
-  });
+  const wrappers = lsWrappers(ast);   // name -> { op, param, range } (tests/helpers/store-key-scan.mjs)
   const insideWrapperRelay = (kNode) => {
     for (const w of wrappers.values()) {
       if (kNode.name === w.param && kNode.range[0] >= w.range[0] && kNode.range[1] <= w.range[1]) return true;

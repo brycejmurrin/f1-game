@@ -3690,3 +3690,44 @@ fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) 
 none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
+
+## Boot wall — `eagerScripts` / `eagerBytes` (from `tests/unit/boot-load-budget.test.mjs`)
+
+Moved verbatim from the test's `MAX_EAGER_SCRIPTS` / `MAX_EAGER_BYTES` comments on 2026-11-19, when the two ceilings
+became `tests/data/ratchets.json` `tree` entries (docs/notes/BUDGET-RATCHETS-2026-11-19.md). Seeded on tip 1cb36d81
+at its measurement: 310 scripts (the test's cap was 313; the freed slots are not headroom) and 8,017,936 B, slack 0.
+Lowered to 8,017,877 B before landing: #5798 (−27 B) and #5820 (−32 B) merged after that measurement and freed bytes
+with no fragment yet; tip 38b20bcd measures 8,017,877.
+
+```js
+// 325: tip PedalTravel + GarageCrewDraw + AiStrategy (323) + OverlayBridge + OverlayPublisher (#4056).
+// 326: + EnergyPlan (#1580, PR #3981): game.js reads it every frame and the Settings ERS rows at boot, so it
+// cannot be lazy without a redesign (Bryce, 2026-10-29: "Raise to 326").
+// 323: #4978 rows 1+4 moved overlay/render.js (OVERLAY_PAGE), three-inspector (LAZY_AGENT) and
+// gfx-debug-overlay (LAZY_DEV) off the wall (326 → 323); the freed slots are not headroom for new eager files.
+// 322: #4748 moved career-backup into LAZY_CAREER_UI (tip 320 → 319 tags).
+// 317: #4978 row 2 moved the perf rig (bench-run, bench-capture, phone-recorder, gpu-test-run, soak-run) to LAZY_PERF (319 → 314).
+// 314: #4978 row 6 moved watch-transport, real-replay, real-race-pace and the real-race body to LAZY_REAL_RACE
+// behind a FULL stub (js/race/real-race-boot.js) (314 → 311).
+// 313: deploy red (#5714 + #5634 overlap) moved share-card-chips.js into LAZY_RESULTS_SHEET (tip 311 → 310 tags).
+const MAX_EAGER_SCRIPTS = 313;
+// 8.25 MB: raised from 8.20 MB by Bryce's grant (2026-10-30 ~16:51Z, quoted via the dispatcher: "Raise budget +50 KB").
+// Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
+// 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
+// 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
+// 8.15 MB: the cap came down from 8,220,000 with #5468 (#4748 career-backup → LAZY_CAREER_UI, #4978 row 2 perf rig →
+// LAZY_PERF). 8,150,000 is the owner's decision of 2026-11-11 (issue #5523, brycejmurrin "decision: 8150000",
+// 16:37:17Z), a deliberate exception to the "freed bytes are not headroom" default. Measured after #5468:
+// 314 scripts, 8,048,913 raw bytes (tip 240426c6) → 101,087 B of room.
+// 8,127,215: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (#5489): tip 7974edf7 8,053,745 →
+// 8,030,960 raw (−22,785), so the room stays the owner's 8,150,000 decision and the freed bytes are not handed out.
+// 8,018,484: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE behind the FULL stub js/race/real-race-boot.js
+// (#5515): tip 2de6f5eb 8,076,221 → 7,967,490 raw (−108,731), so the room stays what the owner's decision left.
+// 8,014,025: deploy red — #5714 (ROUTE SHEETS watcher in eager lazy-bundles.js) + #5634 (eager ui/race growth) ate
+// the room; tip 9b75df12 8,022,147 raw (over by 3,663). share-card-chips.js → LAZY_RESULTS_SHEET: 8,022,147 →
+// 8,014,025 (−8,122). Zero room: growth spent the owner's room, and freed bytes are not handed out.
+// 8,017,936: tip 08886fdb boots 8,017,936 raw against 8,014,025 (+3,911). #5815 merged before re-measure; growth
+// from #5582 and other merges onto the red tip (8a9d0796: 8,026,058 raw before the move). Still under Bryce's
+// 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
+const MAX_EAGER_BYTES = 8_017_936;
+```
