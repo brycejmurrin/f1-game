@@ -299,7 +299,8 @@ const Ghost = (function () {
       };
       requestIdleCallback(idle);
     }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    // No rIC (iOS Safari): the same capped wait, not a 0 ms timer behind the PB lap-line frame (#5629).
+    else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS);
     else write();   // bare VM harness: no scheduler, write now
   }
   // Leaving the page with a record still pending: write it now (synchronous

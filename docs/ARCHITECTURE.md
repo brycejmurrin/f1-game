@@ -352,7 +352,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
 | `session-phys.js` | `SessionPhys` | tag | SESSION PHYS (SessionPhys): the physics keys a comparable session records, shared by SessionRecords and setup trials. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
-| `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
+| `driving-coach-boot.js` | `DrivingCoach` | tag | DRIVING COACH boot façade (FULL, #4748). game.js still makes `DrivingCoach.create(G)` at eval, calls update / retry / practiceActive every frame of a race,… |
 | `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
@@ -398,6 +398,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 | `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
 | `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
+| `driving-coach.js` | `DrivingCoachBody` | LAZY_RACE_SESSION | Read-only driving feedback and explicitly unscored solo practice: the BODY (DrivingCoachBody, LAZY_RACE_SESSION, #4748). |
 | `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race-pace.js` | `RealRacePace` | LAZY_REAL_RACE | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
 | `real-race.js` | `RealRaceBody` | LAZY_REAL_RACE | REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands)… |

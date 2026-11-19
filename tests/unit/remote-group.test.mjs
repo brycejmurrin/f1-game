@@ -10,8 +10,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
+import YAML from "yaml";
 import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE,
-  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN } from "../../tools/ci/remote-group.mjs";
+  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN, GROUP_LANES, withLanes } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -274,4 +275,19 @@ test("the dispatch is an owner write: it says so and refuses unless the owner's 
     assert.deepEqual([g.ok, g.lines.length, g.lines[0], g.lines[1].slice(0, 8)], [false, 2, what, "refused:"], JSON.stringify(env));
   }
   assert.deepEqual(ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" }), { ok: true, lines: [what] }, "the opt-in still prints what the dispatch is");
+});
+
+test("group lanes (#5848): a dispatch gives every shard a lane 1..GROUP_LANES and the shard job queues on it", () => {
+  const m = [1, 2, 3, 4].map((shard) => ({ shard, total: 4 }));
+  assert.deepEqual(withLanes(m, 0).map((x) => x.lane), [1, 2, 3, 4]);
+  assert.deepEqual(withLanes(m, 6).map((x) => x.lane), [7, 8, 1, 2], "consecutive lanes from the base, wrapping");
+  assert.deepEqual(withLanes(m, -1).map((x) => x.lane), [8, 1, 2, 3]);
+  assert.ok(withLanes(Array.from({ length: 8 }, (_, i) => ({ shard: i + 1, total: 8 })), 3).every((x) => x.lane >= 1 && x.lane <= GROUP_LANES));
+  assert.equal(new Set(withLanes(Array.from({ length: GROUP_LANES }, (_, i) => ({ shard: i + 1 })), 5).map((x) => x.lane)).size, GROUP_LANES,
+    "one run's shards never share a lane");
+  assert.deepEqual(withLanes(m, 0)[0], { shard: 1, total: 4, lane: 1 }, "the shard fields are kept");
+  // The workflow: a fleet-wide queue per lane, a lane-less (hand) plan falling back to its shard number.
+  assert.deepEqual(YAML.parse(YML).jobs.group.concurrency,
+    { group: "browser-group-lane-${{ matrix.lane || matrix.shard }}", queue: "max" });
+  assert.ok(Math.max(...SHARD_CHOICES) <= GROUP_LANES, "a lane-less plan of the largest shard choice stays inside the lanes");
 });
