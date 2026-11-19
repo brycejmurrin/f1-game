@@ -247,11 +247,8 @@ First load of the title screen: **792 requests, 13.6 MB** uncompressed, about 35
 ## Not covered
 
 Real frame rates and GPU behaviour (software rasterizer only); real touch, tilt, gamepad and VR hardware;
-multiplayer with a live peer; audio output. Sub-audits still running when this was written (audio, HTML/CSS
-across viewports, settings and input, the secondary pages and offline behaviour, numerical fuzzing, weather
-and lighting, career flows in the UI, practice and daily modes, data hub and sharing, player-facing text,
-contact and incident staging, long-session soak, debug surfaces, vendored code, first-run experience, and an
-adversarial re-check of the findings above) are added below as they report.
+multiplayer with a live peer; audible audio and system text-to-speech; Firefox and Safari; the raw WebGPU
+renderer (no adapter on this machine). All 25 sub-audits reported; their later findings are in the addendum.
 
 ## Addendum — findings from the later sub-audits
 
@@ -342,6 +339,42 @@ Not folded into the ranking above; A1–A3 and A14 would sit in the top ten.
 - **A24. A debris safety car always ends after about 6 s** — **ran**. `js/physics/debris-world.js:654,836`
   despawns resting debris after 4 s and `js/race/race-control.js:347` only holds 6 s, so the field never
   bunches.
+
+- **A25. The circuit search filters the list but did not change the selected circuit** — **ran**.
+  `js/ui/select-screen.js:441-444`: typing "monza" and pressing RACE SETUP started Bahrain. Fixed (fix 23).
+- **A26. BACK TO MENU on the error screen did nothing for anyone not using VR** — **ran**.
+  `LoopHealth.recover()` needs `XrBoot.chainWindowRaf()`, whose tick function was only stored once the lazy
+  VR bundle had loaded (`js/xr/xr-boot.js:168,211`). Fixed (fix 24).
+- **A27. Helmet-camera visor reflections never render for normal players** — **ran**.
+  `js/fx/visor-optics.js:214-234` reads the scene from `G` (not a global) and falls back to the test API
+  `window.__apex`, which only exists on localhost or with `?apex`, `?debug`, `?report` or the metrics
+  overlay. With it removed in a real race the visor layer painted 0 times; with it, it paints.
+- **A28. A slow first load can permanently switch a player from the three.js renderer to WebGL2** —
+  **ran**. `js/render/renderer-boot.js`: the 15 s boot step covers a 1.16 MB vendor import; a timeout leaves
+  the boot canary set, the next normal load is forced to WebGL2 without trying three, and after two such
+  loads the preference is overwritten ("retired").
+- **A29. A setup or livery link overwrites saved data with no prompt and its single undo slot can be lost**
+  — **executed**. `js/ui/title-flow.js:95-131`, `js/ui/share-code.js:321-345`: applying the same link twice,
+  or two links in a row, then UNDO, does not bring back the player's own setup.
+- **A30. First-run experience** — **ran**. SOUND ON is shown before any audio exists and the first click
+  mutes the game (`js/audio/stub.js:97-118`); browser Back after the chequered flag leaves the game and
+  loses the result (`js/ui/platform-session.js:302`, `js/ui/deep-link.js:31-37`); a refresh mid-race drops
+  the race with no warning or resume; on a 1.6 Mbps connection the menu is drawn at 5 s but its buttons stay
+  inert until 35 s, with only a wordless stripe as progress; race-setup values are clipped at 390 px wide
+  ("DEFAUI"); the ERS readout is clipped in phone landscape.
+- **A31. Results announcements pile up** — **ran**. `js/ui/results-sheet.js:120` leaves one observer per
+  race quit during the ceremony; the next results screen reads out those earlier winners to screen readers.
+- **A32. Vendored code** — **executed / read**. Everything in `vendor/` is byte-identical to its npm release
+  (three.js rebuilds identically from the pristine build plus the ten recorded patches) except
+  `vendor/trystero-0.25.4/core/action-wire.js`, which carries a local change not noted anywhere, and the
+  three.js Inspector addon, which cannot load because `Storage.js` was not vendored (developer-only).
+  `?metrics=1` (or the backquote/F9 toggle) loads the full test API on a production origin.
+
+**Adversarial re-check.** A separate sub-audit was told to refute the first thirteen findings, working
+against the branch as fixed. It confirmed the allowlist, penalty-reason, watchdog, save-warning and
+track-link fixes hold; confirmed the performance-governor finding with its own traces (30–43 fps accepted
+with automatic resolution on; the phone tier latch survives into the next race); judged the false start,
+the 75 s forced classification and the per-strike track-limits penalty to be intended; and found A26.
 
 ## Fixes
 
@@ -544,3 +577,25 @@ recover still gives a stopped car its 16 m/s push. The wrong-way auto-rescue use
 match is selected, as the filter chips already do. Verified in Chromium: typing "monza" left BAHRAIN selected
 and RACE SETUP opened "BAHRAIN · … · 3 LAPS" → MONZA is selected, previewed and opened; typing keeps focus in
 the search box; a query with no match leaves the selection alone and shows the empty message.
+
+### Fix 24 — BACK TO MENU on the error screen works (addendum A26)
+
+`js/xr/xr-boot.js` `bind`: the frame function is stored when the game binds it, not only once the VR bundle
+has loaded, so `LoopHealth.recover()` can restart the loop. Verified in Chromium by forcing the loop to stop
+(eight faulting frames) and pressing BACK TO MENU: frames in the next 3 s 0 → 165, loop stopped → running,
+overlay left up → dismissed.
+
+## What is not fixed, and why
+
+- **Needs a design decision:** changing team mid-season (finding 4); damage with tyre wear OFF (5); the
+  daily challenge keyed on the local date (14); RESET GARAGE deleting career setups (A8); My Team livery
+  codes (7); a prompt before a share link overwrites a setup (A29) or renames a circuit (10); the false
+  start for a held throttle (12); refresh and browser Back losing a race (A30).
+- **Needs tuning on real hardware or across circuits, which this machine cannot do:** the performance
+  governor (11); AI avoidance of a stopped car (6); the AI shove cap (A15); safety-car and stopped-car
+  timing (A23, A24); renderer retirement on a slow first load (A28).
+- **Larger than a safe single change:** visor reflections for normal players (A27); practice bests keyed per
+  circuit (A5); wind in time-trial record keys (A16, changes which existing records match); career import
+  validation (A17); voice language options (A18); load weight and unreferenced assets (17, 18).
+- **Small and safe but left for lack of time:** the results-announcement observer (A31), the text and unit
+  inconsistencies (A19), the 22-versus-20 remaining broadcast defects (15), and the iOS banner (A9).

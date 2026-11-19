@@ -210,6 +210,7 @@ const XrBoot = (function () {
 
   function bind(api) {
     _bindApi = api;
+    if (api && typeof api.windowTick === "function") _windowRaf = api.windowTick;
     if (typeof XrSession === "undefined") return;
     bindInner(api);
   }
