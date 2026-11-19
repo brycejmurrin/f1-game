@@ -482,8 +482,10 @@ test("#4257: own tree lowerings add under a merge, so siblings stay at ceiling =
 
 test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts the working tree", async (t) => {
   const cp = await import("node:child_process");
-  const dirty = cp.execFileSync("git", ["status", "--porcelain", "--", "css/"], { encoding: "utf8" }).trim();
-  if (dirty) { t.skip("css/ differs from HEAD in this checkout"); return; }
+  // HEAD vs the working tree is a parity check only on a clean checkout: css/ feeds the raw* metrics,
+  // index.html + js/ the eager* ones (a staged eager-JS edit at pre-commit differs from HEAD by design).
+  const dirty = cp.execFileSync("git", ["status", "--porcelain", "--", "css/", "js/", "index.html"], { encoding: "utf8" }).trim();
+  if (dirty) { t.skip("css/, js/ or index.html differs from HEAD in this checkout"); return; }
   const { AT_REF } = await import("../../tools/check/tree-counts.mjs");
   for (const [metric, fn] of Object.entries(AT_REF)) assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric);
 });

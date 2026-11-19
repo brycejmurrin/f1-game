@@ -5459,6 +5459,7 @@
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/data-hub-slow.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/gfx-debug-overlay.test.mjs",
@@ -5484,6 +5485,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureDataHub": [
+        "tests/unit/data-hub-slow.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -5910,6 +5912,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/data-hub-slow.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/flyby-panel.test.mjs",

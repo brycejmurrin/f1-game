@@ -8759,7 +8759,7 @@ $("standings-close").onclick = () => { $("standings").hidden = true; };
 // A refused or offline bundle says so: the tap sound already played, a silent door reads as broken.
 const openDataHub = (tab) => {
   const visit = titleVisit;
-  return ensureDataHub().then((ok) => {
+  return ensureDataHub({ onSlow: () => { if (state === "menu" && visit === titleVisit) announce("STILL LOADING…", 4, "info"); } }).then((ok) => {
     if (state !== "menu" || visit !== titleVisit) return;
     if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
   });
