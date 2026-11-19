@@ -182,3 +182,25 @@ test("same-statement reinjections contribute each distinct member definition onc
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("hover at a use follows the shorthand export to the documented declaration", { timeout: 60000 }, async () => {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "lsp-hover-docs-"));
+  fs.mkdirSync(path.join(root, "src"));
+  fs.writeFileSync(path.join(root, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
+  fs.writeFileSync(path.join(root, "src/m.js"), `var M = (function () {
+  /** Doc here. */
+  function g(x) { return x; }
+  return { g };
+})();
+M.g(1);
+`);
+  const lsp = new Lsp({ root, src: "src", anchor: "src/m.js", cmd: TSC, idleMs: 0 });
+  try {
+    const hover = await callTool(lsp, "lsp_hover", { symbol: "M.g" });
+    assert.equal(hover.isError, false, hover.content[0].text);
+    assert.deepEqual(hover.content[0].text.split("\n"), ["```typescript", "function g(x: any): any", "```", "Doc here.", "at src/m.js:6:3  [use] M.g(1);", "(docs from src/m.js:3)"]);
+  } finally {
+    lsp.stop();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
