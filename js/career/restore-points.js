@@ -1,0 +1,186 @@
+const CareerRestorePoints = (function () {
+  "use strict";
+  const LIMIT = 3, PROGRESS_BYTES = 128 * 1024, IDENTITY_BYTES = 800000, OPEN_MS = 4000;
+  const SNAPSHOT_BYTES = PROGRESS_BYTES + IDENTITY_BYTES;
+  const SLOT_RE = /^(driver|myteam)\.[0-2]$/;
+  function create(opts) {
+    opts = opts || {};
+    const store = opts.store || (typeof GameStore !== "undefined" && GameStore.store);
+    const safe = (read) => { try { return read(); } catch (_) { return null; } };
+    const getDisk = () => safe(() => opts.localStorage || (typeof localStorage !== "undefined" && localStorage));
+    const now = opts.now || (() => Date.now());
+    const previews = new WeakMap();
+    let opening = null, handle = null, sequence = 0;
+    const LOST = { lost: true };
+    const lost = (e) => !!e && (e.name === "InvalidStateError" || e.name === "UnknownError");
+    const ended = (tx, ev) => lost(tx.error) || lost(ev && ev.target && ev.target.error);
+    function invalidate(db) {
+      if (handle !== db) return;
+      handle = null; opening = null;
+      try { db.close(); } catch (_) {  }
+    }
+    async function withDb(run, unavailable, failed) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const db = await open(); if (!db) return unavailable;
+        const out = await new Promise((resolve) => { try { run(db, resolve); } catch (_) { resolve(LOST); } });
+        if (out !== LOST) return out;
+        invalidate(db);
+      }
+      return failed;
+    }
+    const captureHealth = new Map(), captureOwners = new Map();
+    function health() {
+      return [...captureHealth].map(([key, value]) => Object.assign({ flavour: key.split(".")[0], slot: +key.split(".")[1] }, value));
+    }
+    function slotKey(flavour, i) { const key = flavour + "." + i; return SLOT_RE.test(key) ? key : null; }
+    function refused(reason) { return { ok: false, durable: false, reason }; }
+    function open() {
+      if (opening) return opening;
+      const idb = safe(() => opts.indexedDB || (typeof indexedDB !== "undefined" && indexedDB));
+      if (!idb) return Promise.resolve(null);
+      opening = new Promise((resolve) => {
+        let settled = false, timer = null;
+        const finish = (db) => {
+          if (settled) { if (db) { try { db.close(); } catch (_) {  } } return; }
+          settled = true; if (timer !== null) clearTimeout(timer);
+          if (db) { handle = db; db.onclose = db.onversionchange = () => invalidate(db); }
+          resolve(db);
+        };
+        try {
+          const r = idb.open("apex26-restore-points", 1);
+          r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("slots")) r.result.createObjectStore("slots", { keyPath: "k" }); };
+          r.onsuccess = () => finish(r.result);
+          r.onerror = r.onblocked = () => finish(null);
+          timer = setTimeout(() => finish(null), OPEN_MS);
+        } catch (_) { finish(null); }
+      }).then((db) => { if (!db) opening = null; return db; });
+      return opening;
+    }
+    function withinBudget(data, raw, flavour) {
+      const bytes = raw.length * 2;
+      if (bytes <= PROGRESS_BYTES) return true;
+      if (bytes > SNAPSHOT_BYTES || flavour !== "myteam" || typeof CareerTeamIdentity === "undefined") return false;
+      const logo = data.myTeamIdentity && data.myTeamIdentity.customLogo;
+      return typeof logo === "string" && logo.length * 2 <= IDENTITY_BYTES &&
+        CareerTeamIdentity.value("customLogo", logo) === logo && bytes - logo.length * 2 <= PROGRESS_BYTES;
+    }
+    function clean(data, flavour) {
+      if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+      try {
+        const raw = JSON.stringify(data);
+        if (!withinBudget(data, raw, flavour)) return null;
+        const copy = JSON.parse(raw);
+        if (!Number.isSafeInteger(copy.v) || copy.v < 0 ||
+            (typeof SaveMigrate !== "undefined" && copy.v > SaveMigrate.CAREER_V) ||
+            (copy.flavour && copy.flavour !== flavour)) return null;
+        const migrated = typeof SaveMigrate !== "undefined" ? SaveMigrate.migrateCareer(copy) : null;
+        if (!migrated || migrated.flavour !== flavour) return null;
+        const json = JSON.stringify(migrated);
+        return withinBudget(migrated, json, flavour) ? json : null;
+      } catch (_) { return null; }
+    }
+    function summary(json) {
+      const d = JSON.parse(json), season = d.season || {};
+      return { year: d.year, round: Number.isInteger(season.round) ? season.round : 0,
+        team: typeof d.team === "string" ? d.team.slice(0, 64) : "", money: Number(d.money) || 0 };
+    }
+    async function capture(flavour, i, data, options) {
+      if (store && store.careerWriteStatus && !store.careerWriteStatus().ok) return store.careerWriteStatus();
+      const key = slotKey(flavour, i), json = key && clean(data, flavour);
+      if (!key) return refused("invalid-or-too-large");
+      const reason = options && options.reason;
+      if (!["round", "before-import", "before-restore"].includes(reason)) return refused("explicit-boundary-required");
+      const owner = (captureOwners.get(key) || 0) + 1; captureOwners.set(key, owner);
+      captureHealth.set(key, { state: "saving", at: now(), boundary: reason, reason: null });
+      const finish = (result) => {
+        if (captureOwners.get(key) === owner) captureHealth.set(key, {
+          state: result.ok && result.durable ? "saved" : "unavailable", at: now(), boundary: reason, reason: result.reason || null,
+        });
+        return result;
+      };
+      if (!json) return finish(refused("invalid-or-too-large"));
+      return finish(await withDb((db, resolve) => {
+        let result = null;
+        const tx = db.transaction("slots", "readwrite"), os = tx.objectStore("slots"), req = os.get(key);
+        req.onsuccess = () => {
+          const items = validItems(req.result && req.result.items, flavour);
+          if (items[0] && items[0].json === json) { result = { ok: true, durable: true, id: items[0].id, duplicate: true }; return; }
+          const at = now(), id = at.toString(36) + "-" + (++sequence).toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+          items.unshift({ id, at, reason, json });
+          os.put({ k: key, items: items.slice(0, LIMIT) }); result = { ok: true, durable: true, id };
+        };
+        tx.oncomplete = () => resolve(result || refused("history-write-failed"));
+        tx.onerror = tx.onabort = (ev) => resolve(ended(tx, ev) ? LOST : refused("history-write-failed"));
+      }, refused("history-unavailable"), refused("history-write-failed")));
+    }
+    function validItems(items, flavour) {
+      if (!Array.isArray(items)) return [];
+      return items.slice(0, LIMIT).filter((x) => x && typeof x.id === "string" && x.id.length <= 96 &&
+        Number.isFinite(x.at) && typeof x.json === "string" && x.json.length * 2 <= SNAPSHOT_BYTES &&
+        clean(parse(x.json), flavour) !== null);
+    }
+    function parse(json) { try { return JSON.parse(json); } catch (_) { return null; } }
+    async function read(flavour, i) {
+      const key = slotKey(flavour, i); if (!key) return { ok: false, reason: "invalid-slot", items: [] };
+      const failed = { ok: false, reason: "history-read-failed", items: [] };
+      return withDb((db, resolve) => {
+        const tx = db.transaction("slots", "readonly"), r = tx.objectStore("slots").get(key);
+        r.onsuccess = () => resolve({ ok: true, items: validItems(r.result && r.result.items, flavour) });
+        r.onerror = (ev) => resolve(ended(tx, ev) ? LOST : failed);
+      }, { ok: false, reason: "history-unavailable", items: [] }, failed);
+    }
+    async function list(flavour, i) {
+      const r = await read(flavour, i);
+      return { ok: r.ok, reason: r.reason || null, items: r.items.map((x) => ({ id: x.id, at: x.at, reason: x.reason, bytes: x.json.length * 2, summary: summary(x.json) })) };
+    }
+    function engaged() {
+      return opts.inCareer ? opts.inCareer() : typeof Career !== "undefined" && Career.inCareer && Career.inCareer();
+    }
+    async function preview(flavour, i, id) {
+      const disk = getDisk();
+      if (!store || !disk || engaged()) return refused(engaged() ? "leave-career-first" : "storage-unavailable");
+      const r = await read(flavour, i), row = r.items.find((x) => x.id === id);
+      if (!r.ok || !row) return refused(r.reason || "point-missing");
+      const key = "career." + slotKey(flavour, i);
+      try {
+        const raw = disk.getItem("apex26." + key), current = store.get(key, null);
+        const token = Object.freeze({ ok: true, flavour, slot: i, id,
+          current: current ? summary(JSON.stringify(current)) : null, point: summary(row.json), at: row.at, reason: row.reason });
+        previews.set(token, { key, revision: store.keyRevision(key), raw, session: JSON.stringify(current), json: row.json });
+        return token;
+      } catch (_) { return refused("storage-unavailable"); }
+    }
+    async function restore(token) {
+      const p = token && previews.get(token);
+      if (!p) return refused("preview-required");
+      previews.delete(token);
+      if (engaged()) return refused("leave-career-first");
+      if (store.careerWriteStatus && !store.careerWriteStatus().ok) return store.careerWriteStatus();
+      try {
+        const disk = getDisk();
+        if (!disk) return refused("storage-unavailable");
+        const unchanged = () => store.keyRevision(p.key) === p.revision && disk.getItem("apex26." + p.key) === p.raw &&
+          JSON.stringify(store.get(p.key, null)) === p.session;
+        if (!unchanged()) return refused("slot-changed");
+        const current = parse(p.session);
+        if (current) {
+          const saved = await capture(token.flavour, token.slot, current, { reason: "before-restore" });
+          if (!saved.ok) return saved;
+        }
+        if (engaged()) return refused("leave-career-first");
+        if (!unchanged()) return refused("slot-changed");
+        const value = parse(p.json), checked = clean(value, token.flavour);
+        if (!checked) return refused("invalid-point");
+        const result = store.write(p.key, JSON.parse(checked));
+        if (result.ok && opts.onRestored) opts.onRestored(token.flavour, token.slot);
+        return Object.assign({}, result, { reloadRequired: result.ok === true });
+      } catch (_) { return refused("restore-failed"); }
+    }
+    return { capture, list, preview, restore, health, limits: { perSlot: LIMIT, snapshotBytes: SNAPSHOT_BYTES, progressBytes: PROGRESS_BYTES, identityBytes: IDENTITY_BYTES, totalBytes: LIMIT * SNAPSHOT_BYTES * 6 } };
+  }
+  let instance;
+  const current = () => instance || (instance = create());
+  return { create, capture: (...args) => current().capture(...args), list: (...args) => current().list(...args),
+    preview: (...args) => current().preview(...args), restore: (...args) => current().restore(...args), health: () => current().health() };
+})();
+Object.freeze(CareerRestorePoints);

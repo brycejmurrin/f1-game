@@ -1,0 +1,166 @@
+"use strict";
+
+const WGXPost = (function () {
+
+  function init(core) {
+    let postFailureLogged = false;
+    function _buildPost() {
+      if (!core.Post) return;
+      const buffers = {};
+      const makeBuffer = (name, size) => { buffers[name] = core.device.createBuffer({ size, usage: core.UCD }); };
+      try {
+        core.pointSampler = core.device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+        core.pBloomDown = core.fsPipe(core.Post.BLOOM_DOWN, core.POST_HDR_FORMAT, null);
+        core.pBloomUp   = core.fsPipe(core.Post.BLOOM_UP,   core.POST_HDR_FORMAT, core.ADD_BLEND);
+        {
+          const ssaoG0 = core.device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          ] });
+          const ssaoMod = core.device.createShaderModule({ code: core.Post.SSAO });
+          core.pSSAO = core.device.createRenderPipeline({
+            layout: core.device.createPipelineLayout({ bindGroupLayouts: [ssaoG0] }),
+            vertex: { module: ssaoMod, entryPoint: "vs_main" },
+            fragment: { module: ssaoMod, entryPoint: "fs_main", targets: [{ format: core.SSAO_FORMAT }] },
+            primitive: { topology: "triangle-list" },
+          });
+        }
+        if (!core.WGX_LITE) {
+          const ssrG0 = core.device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+            { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+            { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          ] });
+          const ssrMod = core.device.createShaderModule({ code: core.Post.SSR });
+          core.pSSR = core.device.createRenderPipeline({
+            layout: core.device.createPipelineLayout({ bindGroupLayouts: [ssrG0] }),
+            vertex: { module: ssrMod, entryPoint: "vs_main" },
+            fragment: { module: ssrMod, entryPoint: "fs_main", targets: [{ format: core.SCENE_FORMAT }] },
+            primitive: { topology: "triangle-list" },
+          });
+        }
+        {
+          const grG0 = core.device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
+            { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 5, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+            { binding: 6, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
+          ] });
+          const grMod = core.device.createShaderModule({ code: core.Post.GODRAY });
+          core.pGodray = core.device.createRenderPipeline({
+            layout: core.device.createPipelineLayout({ bindGroupLayouts: [grG0] }),
+            vertex: { module: grMod, entryPoint: "vs_main" },
+            fragment: { module: grMod, entryPoint: "fs_main", targets: [{ format: core.POST_HDR_FORMAT }] },
+            primitive: { topology: "triangle-list" },
+          });
+        }
+        const BLUR_STRIDE = 256;
+        const BLUR_SLOTS = 16;
+        let blurBGL = null;
+        if (core.Post.BLUR) {
+          blurBGL = core.device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT,
+              buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: core.Post.BLUR_UNIFORM_BYTES } },
+          ] });
+          const blurPL = core.device.createPipelineLayout({ bindGroupLayouts: [blurBGL] });
+          const blurMod = core.device.createShaderModule({ code: core.Post.BLUR });
+          const blurPipe = (fmt) => core.device.createRenderPipeline({
+            layout: blurPL,
+            vertex: { module: blurMod, entryPoint: "vs_main" },
+            fragment: { module: blurMod, entryPoint: "fs_main", targets: [{ format: fmt }] },
+            primitive: { topology: "triangle-list" },
+          });
+          core.pBlur = blurPipe(core.SSAO_FORMAT);
+          core.pBlurHDR = blurPipe(core.POST_HDR_FORMAT);
+          core._blurBGL = blurBGL;
+          core._blurStride = BLUR_STRIDE;
+          core._blurSlots = BLUR_SLOTS;
+        }
+        core.pComposite = core.fsPipe(core.Post.COMPOSITE, core.LDR_FORMAT,    null);
+        core.pFXAA      = core.fsPipe(core.Post.FXAA,       core.presentFormat, null);
+        core.pFXAALdr   = (core.presentFormat !== core.LDR_FORMAT)
+          ? core.fsPipe(core.Post.FXAA, core.LDR_FORMAT, null) : core.pFXAA;
+        makeBuffer("ssaoUBO", core.Post.SSAO_UNIFORM_BYTES);
+        makeBuffer("blurUBO", BLUR_STRIDE * BLUR_SLOTS);
+        makeBuffer("godrayUBO", core.Post.GODRAY_UNIFORM_BYTES);
+        makeBuffer("compositeUBO", core.Post.COMPOSITE_UNIFORM_BYTES);
+        makeBuffer("fxaaUBO", core.Post.FXAA_UNIFORM_BYTES);
+        if (!core.WGX_LITE) makeBuffer("ssrUBO", core.Post.SSR_UNIFORM_BYTES);
+        Object.assign(core, buffers);
+      } catch (e) {
+        for (const buffer of Object.values(buffers)) { try { buffer.destroy(); } catch (_) {  } }
+        core.pComposite = null;
+        if (!postFailureLogged) {
+          postFailureLogged = true;
+          Log.warn("gfx", "WGX post construction failed: " + ((e && e.message) || e));
+        }
+      }
+    }
+    function _retireSpatial(buffer) {
+      if (!buffer) return;
+      try { buffer.destroy(); } catch (_) {  }
+      if (core.sgsrUBO === buffer) { core.sgsrUBO = null; core.pSGSR = null; core._sgsrGather = false; }
+    }
+
+    function _ensureSpatial() {
+      if (core._sgsrTried || core.WGX_MINIMAL || !core.Post) return !!(core.pSGSR && core.sgsrUBO);
+      core._sgsrTried = true;
+      try {
+        let forceTap = false;
+        try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) {  }
+        core.pSGSR = null; core._sgsrGather = false;
+        const variants = [];
+        if (!forceTap && core.Post.SGSR_GATHER) variants.push({ code: core.Post.SGSR_GATHER, gather: true });
+        if (core.Post.SGSR) variants.push({ code: core.Post.SGSR, gather: false });
+        if (!variants.length) return false;
+        core.sgsrUBO = core.device.createBuffer({ size: core.Post.SGSR_UNIFORM_BYTES, usage: core.UCD });
+        _trySgsr(variants, 0);
+      } catch (_) { _retireSpatial(core.sgsrUBO); core.pSGSR = null; core._sgsrGather = false; }
+      return !!(core.pSGSR && core.sgsrUBO);
+    }
+
+    function _trySgsr(variants, i, buffer = core.sgsrUBO) {
+      if (i >= variants.length) { _retireSpatial(buffer); Log.warn("gfx", "WGX SGSR: no variant compiled — spatial upscale stays off"); return; }
+      const v = variants[i], dev = core.device;
+      const commit = (pipe) => {
+        core.pSGSR = pipe; core._sgsrGather = v.gather;
+        if (core.onSpatialReady) core.onSpatialReady();
+      };
+      const scoped = typeof dev.pushErrorScope === "function" && typeof dev.popErrorScope === "function";
+      if (!scoped) {
+        let pipe = null;
+        try { pipe = core.fsPipe(v.code, core.presentFormat, null); } catch (_) { pipe = null; }
+        if (pipe) { core.pSGSR = pipe; core._sgsrGather = v.gather; } else _trySgsr(variants, i + 1, buffer);
+        return;
+      }
+      dev.pushErrorScope("validation");
+      let pipe = null;
+      try { pipe = core.fsPipe(v.code, core.presentFormat, null); } catch (_) { pipe = null; }
+      dev.popErrorScope().then((err) => {
+        if (core.device !== dev || core.sgsrUBO !== buffer) { _retireSpatial(buffer); return; }
+        if (pipe && !err) { commit(pipe); return; }
+        Log.warn("gfx", "WGX SGSR " + (v.gather ? "gather" : "4-tap") + " variant failed: " + ((err && err.message) || "threw"));
+        _trySgsr(variants, i + 1, buffer);
+      }, () => {
+        if (core.device !== dev || core.sgsrUBO !== buffer) { _retireSpatial(buffer); return; }
+        _trySgsr(variants, i + 1, buffer);
+      });
+    }
+
+    return {
+      buildPost: _buildPost,
+      ensureSpatial: _ensureSpatial,
+    };
+  }
+
+  return { init };
+})();
+Object.freeze(WGXPost);

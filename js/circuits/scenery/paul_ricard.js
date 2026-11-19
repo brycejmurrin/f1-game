@@ -1,0 +1,524 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
+  function (api) {
+      const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack,
+        pine, tree, bush, ridge, building, spectatorHill,
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
+        fence, guardrail, modelGroup, prop,
+        cameraTower, sponsorHoarding, signBoard, terrainYAt, recordBarrier,
+        addBox, addCyl, addCone, addFrustum, addPrism } = api;
+
+      const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
+      const SCRUB = [0.36, 0.40, 0.22], SCRUB_D = [0.30, 0.34, 0.19];
+      const BLUE = [0.22, 0.34, 0.66], RED = [0.58, 0.24, 0.22];
+      const BLUE_D = [0.18, 0.28, 0.57], LINE = [0.90, 0.90, 0.88];
+      const RED_D = [0.49, 0.20, 0.19];
+      const ALU = [0.76, 0.78, 0.80], WHITE = [0.94, 0.94, 0.92];
+      const groundPatch = (k, side, ...rest) => api.groundPatch(k, -side, ...rest);
+
+      const { drape, drapeRun } = api;
+
+      for (const [id, s, side, w, l] of [
+        ["pr-runoff-verrerie", 0.070, -1, 82, 150],
+        ["pr-runoff-mistral", 0.490, -1, 70, 60],
+        ["pr-runoff-signes", 0.713, 1, 92, 170],
+        ["pr-runoff-beausset", 0.745, 1, 66, 120],
+        ["pr-runoff-village", 0.905, -1, 64, 120],
+      ]) {
+        drapeRun(s, side, 4, [w * 0.30, 0.18, l], BLUE, 0.03, l * 1.14);
+        drapeRun(s, side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE_D, 0.03, l * 1.14);
+        drapeRun(s, side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], RED, 0.03);
+      }
+
+      for (const side of [-1, 1]) {
+        let i = 0;
+        along(0.0, 1.0, 15, (k, spacing) => {
+          const seg = spacing * 1.05;
+          const ph = { phase: i };
+          drape(k, side, 2.5, [9, 0.16, seg], BLUE, ph);
+          drape(k, side, 11.5, [30, 0.14, seg], BLUE_D, ph);
+          drape(k, side, 41.5, [26, 0.12, seg], RED, ph);
+          drape(k, side, 67.5, [22, 0.10, seg], RED_D, ph);
+          if (i % 3 === 0) drape(k, side, 12, [28, 0.10, 0.9], LINE, { res: 0.09, line: true });
+          if (i % 3 === 1) drape(k, side, 48, [20, 0.10, 0.9], LINE, { res: 0.09, line: true });
+          i++;
+        });
+      }
+
+      const openRunoff = (s) =>
+        (s >= 0.92 || s <= 0.10) || (s >= 0.20 && s <= 0.50) || (s >= 0.68 && s <= 0.83);
+      every(30, (k) => {
+        const s = k / n;
+        if (openRunoff(s)) return;
+        const h = hash(k * 31);
+        if (h < 0.62) return;
+        pine(k, h < 0.5 ? -1 : 1, 44 + h * 22, 8 + h * 5, h < 0.75 ? PINE : PINE_D);
+      });
+      every(26, (k) => {
+        const h = hash(k * 97 + 23);
+        if (h < 0.66) return;
+        bush(k, h < 0.82 ? -1 : 1, 42 + h * 16, h < 0.75 ? SCRUB : SCRUB_D);
+      });
+      every(50, (k) => {
+        const s = k / n;
+        if (openRunoff(s)) return;
+        const h = hash(k * 67 + 17);
+        if (h < 0.72) return;
+        tree(k, h < 0.5 ? -1 : 1, 64 + h * 30, 7 + h * 4, [0.26, 0.36, 0.20]);
+      });
+
+      for (const [i, s] of [0.950, 0.970, 0.990, 0.010].entries()) {
+        const a = anchor(K(s), -1, 20);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`paul-ricard-pit-bay-${i + 1}`, {
+          center: vadd(a.c, a.u, 6), size: [22, 12, 38], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 3.4), [15, 6.8, 36], WHITE, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 3.2), [0.4, 3.6, 34],
+            [0.16, 0.19, 0.26], b);
+          stage._mat = MAT.METAL;
+          for (let d = 0; d < 4; d++) {
+            const off = (d - 1.5) * 8.6;
+            addBox(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, -7.3), a.u, 3.3),
+              [0.5, 6.4, 1.0], [0.82, 0.83, 0.86], b);
+          }
+          addBox(stage, vadd(a.c, a.u, 7.2), [21, 0.55, 37], [0.90, 0.91, 0.92], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -10.2), a.u, 6.85),
+            [0.55, 0.7, 37], [0.20, 0.34, 0.62], b);
+          for (let c = 0; c < 5; c++) {
+            const off = (c - 2) * 7.2;
+            addCyl(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, -9.4), a.u, 3.4),
+              0.18, 6.8, [0.86, 0.87, 0.88], 6, b);
+          }
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
+        const a = anchor(K(0.992), -1, 26);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-race-control", {
+          center: vadd(a.c, a.u, 10), size: [16, 22, 20], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 7), [8, 14, 9], [0.90, 0.90, 0.88], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -3), a.u, 15.6), [13, 4.2, 17],
+            [0.18, 0.24, 0.34], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -3), a.u, 18.2), [14, 0.5, 18],
+            [0.90, 0.91, 0.92], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -3), a.u, 13.2), [13.4, 0.5, 17.4],
+            [0.20, 0.34, 0.62], b);
+          addCyl(stage, vadd(a.c, a.u, 18.4), 0.14, 9, [0.86, 0.86, 0.88], 5, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      gantry(0.004, 9, [0.15, 0.15, 0.18]);
+      gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
+      {
+        const a = anchor(K(0.005), 1, 14);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const ALU2 = [0.70, 0.72, 0.76], GLASS_S = [0.28, 0.40, 0.48];
+          recordBarrier(0.0, 0.02, 1, 14);
+          modelGroup("paul-ricard-main-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [18, 22, 148], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            for (let t = 0; t < 4; t++) {
+              const outLat = -(2.0 + t * 1.6);
+              const h = 1.4 + t * 2.1;
+              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, h * 0.5 + t * 0.04),
+                [2.85, h, 136 - t * 5], t & 1 ? WHITE : ALU, b);
+            }
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 11.6),
+              [12, 0.55, 142], ALU2, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 0.4), a.u, 10.9),
+              [0.4, 0.9, 138], [0.20, 0.34, 0.62], b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -9.2), a.u, 9.4),
+              [0.35, 2.8, 110], GLASS_S, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      for (let i = 0; i < 4; i++) {
+        building(K(0.944 + i * 0.013), -1, 40, 30, 9, 15,
+          { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
+      }
+      every(46, (k) => {
+        const s = k / n, h = hash(k * 71 + 31);
+        if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
+        motorhome(k, -1, 66 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+      });
+      broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
+      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
+
+      const bleacher = (s0, s1, side, gap, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 6, rise = opts.rise || 0.75, depth = opts.depth || 1.0;
+        const step = opts.step || 9;
+        along(s0, s1, step, (k, spacing) => {
+          const a = anchor(k, side, gap);
+          const b = [a.r, a.u, a.t];
+          const nb = Math.max(1, Math.round(step / ds));
+          const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
+          const chord = (lat) => {
+            const p = vadd(a.c, a.r, lat);
+            let c = spacing;
+            for (const q of kn) {
+              const pq = vadd(q.c, q.r, lat);
+              c = Math.min(c, Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]));
+            }
+            return c;
+          };
+          const swing = (() => {
+            let t = 0;
+            for (const q of kn) {
+              const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2], dl = Math.hypot(dx, dy, dz) || 1;
+              const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
+              t = Math.max(t, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
+            }
+            return t;
+          })();
+          const rowSeg = (back) => {
+            const half = depth / 2;
+            const c = Math.min(spacing, chord(back - half), chord(back + half), chord(back));
+            const l = (c - depth * 0.5 * swing) * 0.94;
+            return l < 1.0 ? 0 : l;
+          };
+          const seg = rowSeg(side * (rows - 1) * depth / 2);
+          if (seg <= 0) return;
+          out._mat = MAT.METAL;
+          addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.55),
+            a.u, rows * rise * 0.55), [rows * depth * 1.2, 0.10, 0.10],
+            [0.62, 0.64, 0.68], b);
+          const seated = [];
+          for (let r = 0; r < rows; r++) {
+            const back = r * depth, up = 0.5 + r * rise;
+            const rs = rowSeg(side * back) || seg;
+            if (rs <= 0) continue;
+            const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
+              [depth, rise + 0.14, rs], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
+            seated[r] = tier !== false;
+            const h = hash(k * 13 + r * 7);
+            if (h < 0.70 || tier === false) continue;
+            out._mat = MAT.FABRIC;
+            addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
+              a.t, (h - 0.5) * rs * 0.8), a.u, up + 0.55),
+              [0.5, 0.9, 0.55], h < 0.8 ? [0.80, 0.34, 0.28] : [0.30, 0.40, 0.66], b);
+            out._mat = MAT.METAL;
+          }
+          for (const f of [0.25, 0.85]) {
+            const back = f * rows * depth, row = Math.min(rows - 1, Math.round(back / depth));
+            if (!seated[row]) continue;
+            const head = vadd(vadd(a.c, a.r, side * back), a.u, 0.5 + row * rise);
+            let foot = head, len = 0;
+            for (let it = 0; it < 2; it++) {
+              const g = terrainYAt(foot[0], foot[2]);
+              len = (head[1] - (g != null ? g : a.c[1] + 0.3) + 0.2) / Math.max(0.5, a.u[1]);
+              foot = vadd(head, a.u, -len);
+            }
+            if (len >= 0.3) addCyl(out, foot, 0.09, len, [0.62, 0.64, 0.68], 5, b);
+          }
+          out._mat = 0;
+        });
+      };
+      bleacher(0.055, 0.095, 1, 66, { rows: 8 });
+      bleacher(0.690, 0.730, 1, 72, { rows: 8 });
+      bleacher(0.890, 0.930, -1, 58, { rows: 7 });
+      bleacher(0.700, 0.740, -1, 54, { rows: 6, step: 7 });
+      bleacher(0.115, 0.150, -1, 52, { rows: 6, step: 8 });
+      bleacher(0.480, 0.515, -1, 56, { rows: 6, step: 8 });
+      {
+        const a = anchor(K(0.745), 1, 68);
+        const b = [a.r, a.u, a.t];
+        const GRASS = [0.34, 0.40, 0.21], DIRT = [0.52, 0.46, 0.34];
+        modelGroup("paul-ricard-beausset-hill", {
+          center: vadd(a.c, a.u, 4.5), size: [32, 12, 80], basis: b,
+        }, (stage) => {
+          addFrustum(stage, a.c, 28, 16, 4.2, DIRT, 7, b);
+          for (let row = 0; row < 3; row++) {
+            const y = 1.0 + row * 1.4;
+            const outR = -(6 + row * 2.6);
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, outR),
+              [13 - row * 1.4, 0.4, 64 - row * 8], GRASS, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.u, 4.15), a.r, -11.2),
+            [0.2, 0.85, 40], [0.62, 0.64, 0.68], b);
+        }, { required: true });
+      }
+      spectatorHill(0.68, 0.76, 1, 78, { rows: 2, rise: 1.0, depth: 1.8, density: 0.28, step: 11 });
+      for (const s of [0.070, 0.713, 0.905]) marshalPost(K(s), -1, 12);
+      for (const s of [0.496, 0.745]) marshalPost(K(s), 1, 12);
+
+      for (const [s0, s1] of [[0.11, 0.19], [0.45, 0.59], [0.79, 0.87]]) {
+        guardrail(s0, s1, -1, 12, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 12, [0.80, 0.81, 0.83]);
+      }
+      guardrail(0.94, 0.06, 1, 5.0, [0.85, 0.85, 0.88]);
+      fence(0.95, 0.05, 1, 10, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.15, 0.26, 0.34, 0.50, 0.64, 0.82]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 14);
+      }
+
+      const { cx, cz, radius: rad } = lapBounds();
+      for (const [extra, count, len, w, hMin, hVar, col] of [
+        [140, 40, 150, 110, 7, 4, [0.43, 0.43, 0.33]],
+        [250, 32, 210, 170, 14, 8, [0.56, 0.55, 0.47]],
+        [400, 24, 280, 260, 26, 14, [0.70, 0.69, 0.62]],
+      ]) {
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832, h = hash(i * 7 + extra);
+          const r = rad + extra + h * 36;
+          const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
+          if (onTrack(tx, tz, 34)) continue;
+          ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
+        }
+      }
+
+      const AP = 0.43;
+      groundPatch(K(AP), 1, 104, [86, 0.16, 240], [0.60, 0.60, 0.59],
+        { id: "paul-ricard-airfield-apron", samples: 10 });
+      groundPatch(K(0.42), 1, 196, [22, 0.16, 700], [0.44, 0.45, 0.46],
+        { id: "paul-ricard-runway", samples: 10 });
+      groundPatch(K(0.42), 1, 166, [30, 0.16, 580], [0.52, 0.52, 0.51],
+        { id: "paul-ricard-taxiway", samples: 10 });
+      for (let i = 0; i < 10; i++) {
+        const a = anchor(K(0.368 + i * 0.011), 1, 196);
+        addBox(out, vadd(a.c, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
+      }
+      for (let i = 0; i < 10; i++) {
+        const a = anchor(K(0.375 + i * 0.010), 1, 166);
+        addBox(out, vadd(a.c, a.u, 0.22), [1.0, 0.10, 8], [0.86, 0.74, 0.18], [a.r, a.u, a.t]);
+      }
+      {
+        const a = anchor(K(AP), 1, 150);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-aerodrome", {
+          center: vadd(a.c, a.u, 8), size: [46, 20, 150], basis: b,
+        }, (stage) => {
+          for (let i = 0; i < 3; i++) {
+            const p = vadd(a.c, a.t, (i - 1) * 42);
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(p, a.u, 4), [26, 8, 32], [0.80, 0.80, 0.78], b);
+            stage._mat = MAT.METAL;
+            addCyl(stage, vadd(vadd(p, a.u, 8), a.t, -16.2), 13, 32.4,
+              [0.68, 0.70, 0.73], 16, [a.r, a.t, a.u]);
+            addBox(stage, vadd(vadd(p, a.r, -13.1), a.u, 3.4), [0.3, 6.4, 28],
+              [0.40, 0.43, 0.48], b);
+          }
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
+        const a = anchor(K(0.458), 1, 128);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-airfield-tower", {
+          center: vadd(a.c, a.u, 12), size: [12, 30, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 8), [7, 16, 7], WHITE, b);
+          stage._mat = MAT.GLASS;
+          addFrustum(stage, vadd(a.c, a.u, 16), 4.2, 5.4, 4, [0.22, 0.30, 0.40], 8, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 20.4), [12, 0.5, 12], [0.86, 0.87, 0.90], b);
+          addCyl(stage, vadd(a.c, a.u, 20), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
+          const w = vadd(vadd(a.c, a.t, 16), a.r, -6);
+          const wy = terrainYAt(w[0], w[2]);
+          if (wy != null) w[1] = wy;
+          addCyl(stage, w, 0.14, 9, [0.86, 0.86, 0.88], 6, b);
+          addFrustum(stage, vadd(w, a.u, 8.4), 0.95, 0.35, 2.8,
+            [0.92, 0.44, 0.14], 6, [a.r, a.t, a.u]);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      for (let i = 0; i < 3; i++) {
+        const a = anchor(K(AP - 0.015 + i * 0.015), 1, 118);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`paul-ricard-lightplane-${i + 1}`, {
+          center: vadd(a.c, a.u, 1.2), size: [12, 4, 9], basis: b,
+        }, (stage) => {
+          const body = vadd(a.c, a.u, 0.95);
+          stage._mat = MAT.METAL;
+          addBox(stage, body, [1.1, 1.1, 7], WHITE, b);
+          addBox(stage, body, [10, 0.3, 1.5], WHITE, b);
+          addBox(stage, vadd(vadd(body, a.t, -3.0), a.u, 0.9), [0.25, 1.8, 1.3],
+            i % 2 ? [0.20, 0.34, 0.62] : [0.72, 0.24, 0.22], b);
+          addBox(stage, vadd(body, a.t, -3.0), [3.2, 0.22, 1.0], WHITE, b);
+          addCone(stage, vadd(body, a.t, 3.6), 0.5, 1.2, [0.30, 0.32, 0.36], 6,
+            [a.r, a.t, a.u]);
+          for (const [toff, roff] of [[2.2, 0.55], [2.2, -0.55], [-2.8, 0]]) {
+            addCyl(stage, vadd(vadd(a.c, a.t, toff), a.r, roff),
+              0.07, 0.85, [0.22, 0.22, 0.24], 5, b);
+          }
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(body, a.u, 0.55), [0.9, 0.5, 1.8], [0.28, 0.38, 0.46], b);
+          stage._mat = 0;
+        });
+      }
+
+      const windTurbine = (id, s, side, dist, h) => {
+        const a = anchor(K(s), side, dist);
+        const b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 46)) return;
+        const HUB = [0.90, 0.90, 0.92], BLADE = [0.95, 0.95, 0.95];
+        modelGroup(id, {
+          center: vadd(a.c, a.u, h * 0.6), size: [h * 1.3, h * 1.7, h * 1.3], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          addFrustum(stage, a.c, 2.4, 1.15, h, WHITE, 9, b);
+          const top = vadd(a.c, a.u, h);
+          addBox(stage, top, [2.6, 2.4, 6.2], HUB, b);
+          const hub = vadd(top, a.t, -3.6);
+          addCyl(stage, hub, 0.78, 1.3, HUB, 8, [a.r, a.t, a.u]);
+          const bl = h * 0.46, phase = hash(dist * 3 + s * 90) * 1.2;
+          for (let i = 0; i < 3; i++) {
+            const ang = i * 2.0944 + phase, cA = Math.cos(ang), sA = Math.sin(ang);
+            const dir = [], perp = [];
+            for (let ax = 0; ax < 3; ax++) {
+              dir[ax] = a.r[ax] * cA + a.u[ax] * sA;
+              perp[ax] = -a.r[ax] * sA + a.u[ax] * cA;
+            }
+            addBox(stage, vadd(hub, dir, bl * 0.5 + 1.0), [0.4, bl, 0.9], BLADE,
+              [a.t, dir, perp]);
+          }
+          stage._mat = 0;
+        });
+      };
+      for (const [id, s, side, dist, h] of [
+        ["pr-turbine-1", 0.150, -1, 170, 52],
+        ["pr-turbine-2", 0.225, -1, 198, 46],
+        ["pr-turbine-3", 0.315,  1, 190, 50],
+        ["pr-turbine-4", 0.640, -1, 178, 54],
+        ["pr-turbine-5", 0.760, -1, 160, 48],
+        ["pr-turbine-6", 0.845,  1, 172, 50],
+        ["pr-turbine-7", 0.055,  1, 184, 46],
+        ["pr-turbine-8", 0.430, -1, 176, 48],
+        ["pr-turbine-9", 0.905, -1, 158, 50],
+      ]) windTurbine(id, s, side, dist, h);
+
+      groundPatch(K(0.955), -1, 44, [76, 0.16, 200], [0.56, 0.56, 0.55],
+        { id: "paul-ricard-paddock-apron", samples: 10 });
+      for (let i = 0; i < 14; i++) {
+        const a = anchor(K(0.925 + i * 0.008), -1, 82);
+        const p = [a.c[0], a.c[1], a.c[2]];
+        const py = terrainYAt(p[0], p[2]);
+        if (py != null) p[1] = py;
+        addBox(out, vadd(p, a.u, 0.22), [64, 0.09, 0.5], LINE, [a.r, a.u, a.t]);
+      }
+      {
+        const a = anchor(K(0.940), -1, 22);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-pit-entry-2019", {
+          center: vadd(a.c, a.u, 1.8), size: [7, 4.5, 22], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.8), a.u, 0.95),
+            [0.3, 1.7, 16], [0.78, 0.80, 0.82], b);
+          addBox(stage, vadd(vadd(a.c, a.r, 2.4), a.u, 0.3),
+            [0.35, 0.45, 15], [0.90, 0.90, 0.88], b);
+          addCyl(stage, vadd(vadd(a.c, a.t, -6), a.u, 2.0),
+            0.11, 3.8, [0.70, 0.72, 0.74], 5, b);
+          addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 4.2),
+            [0.14, 0.9, 1.1], [0.88, 0.18, 0.16], b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      groundPatch(K(0.885), 1, 92, [40, 0.16, 40], [0.50, 0.50, 0.50],
+        { id: "paul-ricard-helipad", samples: 6 });
+      {
+        const a = anchor(K(0.885), 1, 112);
+        addFrustum(out, vadd(a.c, a.u, 0.24), 9, 9, 0.10, LINE, 14, [a.r, a.u, a.t]);
+        addFrustum(out, vadd(a.c, a.u, 0.28), 7.6, 7.6, 0.10, [0.50, 0.50, 0.50], 14,
+          [a.r, a.u, a.t]);
+      }
+      for (const s of [0.965, 0.985, 0.015]) {
+        prop(K(s), -1, 5, [1.6, 1.4, 60], [0.92, 0.92, 0.90]);
+      }
+      for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);
+      signBoard(K(0.052), -1, 8, "corner", 1);
+      signBoard(K(0.705), -1, 9, "corner", 10);
+      sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10, style: "panel" });
+      sponsorHoarding(0.455, 0.520, 1, 3.6, { h: 1.25, step: 11 });
+      cameraTower(K(0.030), -1, 26, { h: 17 });
+      cameraTower(K(0.713), 1, 84, { h: 20 });
+      cameraTower(K(0.910), -1, 70, { h: 17 });
+
+      {
+        const VINE = [0.26, 0.36, 0.20], VINE_D = [0.21, 0.30, 0.17];
+        const LAV = [0.44, 0.38, 0.62], LAV_D = [0.36, 0.31, 0.54];
+        const SOIL = [0.72, 0.66, 0.52];
+        for (const [id, s, side, gap, rows, kind] of [
+          ["vine-north",  0.150,  1,  96, 18, 0],
+          ["vine-east",   0.310,  1, 104, 16, 0],
+          ["lav-south",   0.660, -1,  92, 16, 1],
+          ["vine-west",   0.820,  1,  84, 14, 0],
+          ["lav-north",   0.075,  1, 104, 12, 1],
+          ["vine-far-n",  0.200, -1, 176, 14, 0],
+          ["vine-far-s",  0.700, -1, 168, 12, 0],
+          ["lav-east",    0.380,  1, 168, 12, 1],
+          ["vine-mistral", 0.480, -1, 118, 14, 0],
+          ["lav-west",    0.880,  1, 148, 10, 1],
+          ["vine-verrerie", 0.110, -1, 130, 18, 0],
+          ["lav-north-e",   0.170,  1, 124, 10, 1],
+          ["lav-t2",        0.260,  1, 130, 12, 1],
+          ["vine-signes",   0.590, -1, 128, 18, 0],
+          ["vine-beausset", 0.735,  1, 112, 14, 0],
+          ["lav-far-w",     0.860, -1, 152, 12, 1],
+          ["vine-far-e",    0.340, -1, 150, 16, 0],
+          ["vine-t2-out",   0.200,  1, 152, 12, 0],
+          ["lav-signes-o",  0.610,  1, 150, 12, 1],
+          ["vine-beau2",    0.780, -1, 122, 14, 0],
+        ]) {
+          drapeRun(s, side, gap - rows * 2.25, [rows * 4.5, 0.15, 120], SOIL, 0.06);
+          for (let r = 0; r < rows; r++) {
+            const a = anchor(K(s), side, gap + (r - rows / 2) * 4.2);
+            const b = [a.r, a.u, a.t];
+            if (onTrack(a.c[0], a.c[2], 4)) continue;
+            const alt = (r & 1);
+            if (kind === 0) {
+              addBox(out, vadd(a.c, a.u, 1.05), [0.85, 1.5, 112],
+                alt ? VINE : VINE_D, b);
+              for (const t of [-54, -18, 18, 54]) {
+                const pbase = vadd(a.c, a.t, t);
+                const py_ = terrainYAt(pbase[0], pbase[2]);
+                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
+                addCyl(out, vadd(pbase, a.u, 0.1), 0.07, 2.0,
+                  [0.52, 0.44, 0.32], 4, b);
+              }
+            } else {
+              for (const t of [-22, 22]) {
+                const pbase = vadd(a.c, a.t, t);
+                const py_ = terrainYAt(pbase[0], pbase[2]);
+                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
+                else pbase[1] = a.c[1];
+                addBox(out, vadd(pbase, a.u, 0.75), [1.9, 1.25, 40],
+                  alt ? LAV : LAV_D, b);
+              }
+            }
+          }
+        }
+        const a = anchor(K(0.235), -1, 120);
+        const b = [a.r, a.u, a.t];
+        const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
+        modelGroup("paul-ricard-cabanon", {
+          center: vadd(a.c, a.u, 3), size: [10, 8, 14], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 2.1), [6, 4.2, 8], DRY, b);
+          addPrism(stage, vadd(a.c, a.u, 4.2), [6.6, 1.8, 8.6], [0.58, 0.40, 0.30], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 1.5), [0.25, 2.2, 1.1],
+            [0.34, 0.28, 0.22], b);
+        }, { required: true });
+        modelGroup("paul-ricard-drywall", {
+          center: vadd(vadd(a.c, a.t, 17.3), a.u, 0.75), size: [0.8, 2, 22], basis: b,
+        }, (stage) => {
+          for (let i = 0; i < 7; i++)
+            addBox(stage, vadd(vadd(a.c, a.t, 8 + i * 3.1), a.u, 0.6 + (i & 1) * 0.1),
+              [0.7, 1.2 + (i % 3) * 0.15, 3.0], (i & 1) ? DRY_D : DRY, b);
+        }, { required: true });
+      }
+    };

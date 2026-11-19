@@ -1,0 +1,352 @@
+@layer components {
+
+.grain { position: relative; isolation: isolate; }
+.grain::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background-image: var(--grain);
+  background-size: 160px 160px;
+  opacity: var(--grain-opacity, 0.05);
+  mix-blend-mode: overlay;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .grain::before { display: none; }
+}
+
+input[type="range"] {
+  height: var(--slider);
+  min-height: var(--slider);
+  accent-color: var(--red);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+input[type="range"]:disabled { cursor: default; }
+
+.screen {
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  padding-bottom: max(var(--safe-b), var(--kb));
+  overscroll-behavior: contain;
+}
+
+dialog.screen {
+  margin: 0;
+  border: 0;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  padding-bottom: max(var(--safe-b), var(--kb));
+  max-width: none; max-height: none;
+  width: 100%; height: 100%;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+}
+dialog.screen:not([open]) { display: none; }
+dialog.screen[open] { display: grid; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .screen.dim { animation: scrim-in var(--dur-1) var(--ease-out); }
+  .screen.dim > .sheet { animation: sheet-in var(--dur-3) var(--ease-out); }
+}
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+
+h1, h2, h3, .sheet-head h2, .adv-sec, .pm-group-h, .tune-label { text-wrap: balance; }
+p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
+:root[data-menu-help="off"] :is(#pmsettings, #rs-body) .adv-help:not([role="status"]):not([aria-live]):not([data-help="keep"]) { display: none; }
+
+.sheet {
+  display: grid;
+  min-width: 0; min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  zoom: var(--sheet-scale, var(--ui-scale));
+  --vwz:  calc(1vw  / var(--sheet-scale, var(--ui-scale)));
+  --vhz:  calc(1vh  / var(--sheet-scale, var(--ui-scale)));
+  --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
+  --slider: calc(32px / var(--sheet-scale, var(--ui-scale)));
+  --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--sheet-scale, var(--ui-scale))));
+  width: min(100%, var(--sheet-w, 520px));
+  max-height: 100%;
+  background: var(--panel);
+  border: 1px solid color-mix(in oklab, var(--red) 28%, var(--card-line));
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge), var(--lift-2);
+  overflow: hidden;
+  container: sheet / inline-size;
+}
+.sheet > :where(.sheet-head, .sheet-body, .sheet-foot) { min-width: 0; }
+.sheet-head {
+  padding: calc(var(--pad) * 0.55) var(--pad) calc(var(--pad) * 0.4);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gap); flex-wrap: wrap;
+  background: var(--grad-head);
+  border-bottom: 0;
+  position: relative;
+  box-shadow: inset 3px 0 0 var(--red);
+}
+.sheet-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--grad-rule);
+  pointer-events: none;
+}
+.sheet-head h2 {
+  color: var(--text); margin: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(var(--fs-2), calc(3.6 * var(--vhz)), 24px);
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+}
+.sheet-body {
+  min-width: 0;
+  min-height: 0;
+  padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5);
+}
+.sheet-foot {
+  display: flex; align-items: center; gap: var(--gap);
+  flex-wrap: wrap;
+  padding: calc(var(--pad) * 0.35) var(--pad);
+  border-top: 0;
+  position: relative;
+  background: linear-gradient(180deg in oklab, color-mix(in oklab, var(--red) 8%, rgba(0, 0, 0, 0.30)), rgba(8, 8, 13, 0.80) 60%);
+}
+.sheet-foot > :where(button, a) {
+  max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+}
+.sheet-foot::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: var(--grad-rule);
+  pointer-events: none;
+}
+.sheet[data-density="compact"] .sheet-head {
+  padding-top: calc(var(--pad) * 0.28); padding-bottom: calc(var(--pad) * 0.2);
+  gap: calc(var(--gap) * 0.6);
+}
+.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px); }
+.sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
+.sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
+.sheet-foot .bigbtn {
+  width: auto; min-width: min(100%, 110px); margin: 0; flex: 1 1 0;
+  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px); 
+  padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
+}
+.sheet-foot .bigbtn:only-child {
+  flex: 0 1 auto;
+  width: auto;
+  margin-inline: auto;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) {
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+  }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-head { grid-column: 1; grid-row: 1; }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-body { grid-column: 1 / -1; grid-row: 2; }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-foot {
+    grid-column: 2; grid-row: 1; align-self: stretch;
+    padding: calc(var(--pad) * 0.3) var(--pad) calc(var(--pad) * 0.3) 0;
+    background: none; box-shadow: none;
+  }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-foot::before { content: none; }
+}
+.pane {
+  min-width: 0; min-height: 0;
+  scroll-padding-block: var(--gap);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+.sf-t, .sf-b, .sf-l, .sf-r {
+  --sfade-t: 0px; --sfade-b: 0px; --sfade-l: 0px; --sfade-r: 0px;
+  mask-image:
+    linear-gradient(to bottom,
+      transparent 0, #000 var(--sfade-t),
+      #000 calc(100% - var(--sfade-b)), transparent 100%),
+    linear-gradient(to right,
+      transparent 0, #000 var(--sfade-l),
+      #000 calc(100% - var(--sfade-r)), transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    linear-gradient(to bottom,
+      transparent 0, #000 var(--sfade-t),
+      #000 calc(100% - var(--sfade-b)), transparent 100%),
+    linear-gradient(to right,
+      transparent 0, #000 var(--sfade-l),
+      #000 calc(100% - var(--sfade-r)), transparent 100%);
+  -webkit-mask-composite: source-in;
+}
+.sf-t { --sfade-t: 36px; }
+.sf-b { --sfade-b: 36px; }
+.sf-l { --sfade-l: 36px; }
+.sf-r { --sfade-r: 36px; }
+
+.sf-scroll::before {
+  content: "";
+  position: sticky;
+  top: var(--sf-y, 0px);
+  z-index: 3;
+  display: block;
+  grid-column: 1 / -1;
+  width: 6px;
+  height: var(--sf-h, 24px);
+  flex: 0 0 auto;
+  margin-left: auto; margin-right: 2px;
+  margin-bottom: calc(-1 * var(--sf-h, 24px));
+  border-radius: var(--r-xs);
+  background: var(--accent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.sheet-body.sf-scroll::before { margin-right: calc(6px - var(--pad)); }
+.sf-scroll:not(.sheet-body)::before { margin-right: calc(var(--gap) / 6 - var(--sf-pr)); }
+#overlay.sf-scroll::before,
+#menu-buttons.sf-scroll::before { display: none; }
+
+.sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
+.track-row, .team-tile, .season-upcoming-row,
+.cs-tab, .cs-opt, .lt-tab,
+.dh-tab, .dh-pill, .dh-dchip, .dh-sortbtn, .dh-row {
+  transition:
+    background-color 0.14s ease, background 0.14s ease,
+    border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sel-chip:active, .opt-btn:active, .preset-btn:active,
+  .cz-liv-none:active, .cs-opt:active, .lt-tab:active,
+  .dh-tab:active, .dh-pill:active, .dh-dchip:active {
+    transform: translateY(1px);
+  }
+  .opt-btn, .preset-btn, .cz-liv-none,
+  .cs-opt, .lt-tab, .dh-pill, .dh-dchip {
+    transition:
+      background-color 0.14s ease, background 0.14s ease,
+      border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease,
+      transform 0.08s ease;
+  }
+}
+:is(.bigbtn.alt, button[role="tab"], .sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
+    .cs-opt, .dh-pill, .dh-dchip):active:not(:disabled) {
+  background: color-mix(in oklab, var(--red) 24%, var(--plate-opaque));
+  box-shadow: var(--press-lit);
+  transition-duration: 0s;
+}
+
+.balanced-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+.balanced-row > :not([hidden]) {
+  flex: 1 1 var(--balance-basis, 8rem);
+  min-width: min(100%, var(--balance-min, var(--balance-basis, 8rem)));
+}
+
+.bigbtn {
+  display: block;
+  width: min(calc(78 * var(--vwz)), 340px);
+  margin: 10px auto;
+  min-height: var(--tap);
+  padding: 14px 18px 14px 22px;
+  font-size: var(--fs-6);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  color: var(--text);
+  background: var(--grad-primary);
+  border: none;
+  border-radius: var(--r-md);
+  transform: skewX(-6deg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 6px 22px color-mix(in oklab, var(--red) 46%, transparent);
+  transition: background 0.14s, box-shadow 0.14s, transform 0.1s;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.bigbtn::after {
+  content: "";
+  position: absolute; inset: 0; z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg in oklab,
+    transparent calc(var(--sheen) - 14%),
+    rgba(255, 255, 255, 0.30) var(--sheen),
+    transparent calc(var(--sheen) + 14%));
+}
+@media (prefers-reduced-motion: no-preference) {
+  @media (hover: hover) and (pointer: fine) {
+    .bigbtn:is(:hover, :focus-visible)::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
+}
+@keyframes sheen {
+  from { --sheen: -30%; }
+  to   { --sheen: 130%; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .bigbtn:is(:hover, :focus-visible) {
+    background: var(--grad-primary-hot);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+      0 3px 6px rgba(0, 0, 0, 0.45),
+      0 10px 32px color-mix(in oklab, var(--red) 62%, transparent);
+  }
+}
+.bigbtn:active {
+  background: var(--grad-primary-hot);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 2px 12px color-mix(in oklab, var(--red) 42%, transparent);
+  transform: skewX(-6deg) scale(0.97);
+}
+.bigbtn.alt {
+  background: var(--plate-opaque); color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+  font-weight: 600;
+  letter-spacing: var(--ls-1);
+  box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bigbtn.alt:is(:hover, :focus-visible) {
+    background: var(--plate-hover);
+    color: var(--text);
+    border-color: var(--plate-line);
+    box-shadow: none;
+  }
+}
+.bigbtn.alt:active {
+  background: var(--plate-press);
+  box-shadow: none;
+}
+
+.bigbtn, .sel-edit,
+.sheet-body > button, .pm-group button, .pm-doors button,
+#advanced-inner :is(.opt-btn, .preset-btn),
+.cs-tab, .cs-opt, #campicker button, .cs-unlimited-btn, .adv-more-btn {
+  min-height: var(--tap);
+  min-width: var(--tap-min);
+}
+.sel-chip, .sel-edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--chip-h); min-width: var(--chip-h);
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .sheet { background: var(--surf-1); }
+}
+@media (pointer: coarse) {
+  :is(input[type="range"], select):not(:is(#lighting, #camtune, #flyby, #freecam, #garrival) *) {
+    height: var(--tap-paint); min-height: var(--tap-paint);
+  }
+  summary:not(:is(#lighting, #camtune, #flyby, #freecam, #garrival) *) {
+    min-height: var(--tap-paint); align-content: center; box-sizing: border-box;
+  }
+}
+} 

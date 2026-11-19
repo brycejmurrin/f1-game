@@ -1,0 +1,356 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["catalunya"] =
+  function (api) {
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill, bleacher,
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        floodMast, sailCanopy, sponsorHoarding, seat, stonePine, cameraTower, circuitKit,
+        drape, addBox, addCyl, addCone } = api;
+
+      const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
+      const SCRUB = [0.33, 0.38, 0.20], SCRUB_D = [0.27, 0.32, 0.17];
+      const GRAVEL = [0.70, 0.62, 0.46];
+      const WHITE = [0.93, 0.92, 0.88], BONE = [0.86, 0.84, 0.78];
+      const OCHRE = [0.76, 0.69, 0.55], SHADE = [0.66, 0.63, 0.58];
+
+      function sunTerrace(s0, s1, side, gap, rows, step) {
+        const SEATS = [[0.86, 0.85, 0.83], [0.72, 0.30, 0.24], [0.90, 0.78, 0.30]];
+        let i = 0;
+        const chord = (k, d) => {
+          const p = anchor(k, side, d).c, q = anchor((k + 1) % n, side, d).c;
+          return Math.hypot(q[0] - p[0], q[2] - p[2]);
+        };
+        along(s0, s1, step || 9, (k, spacing) => {
+          const c0 = chord(k, 0);
+          for (let t = 0; t < rows; t++) {
+            const a = anchor(k, side, gap + t * 3.6);
+            const b = [a.r, a.u, a.t];
+            const h = 1.8 + t * 2.2;
+            const seg = spacing * 0.88 * Math.min(1, chord(k, gap + t * 3.6) / c0);
+            addBox(out, vadd(a.c, a.u, h * 0.5), [3.5, h, seg], t & 1 ? BONE : WHITE, b);
+            addBox(out, vadd(a.c, a.u, h + 0.65), [2.7, 1.3, seg], SEATS[(i + t) % 3], b);
+          }
+          i++;
+        });
+      }
+
+      const openInfield = (s) => (s >= 0.92 || s <= 0.12) || (s >= 0.558 && s <= 0.658);
+      every(30, (k) => {
+        const s = k / n;
+        if (openInfield(s)) return;
+        if ((s >= 0.66 && s <= 0.90) || (s >= 0.35 && s <= 0.41)) return;
+        const h = hash(k * 31);
+        if (h < 0.42) return;
+        pine(k, h < 0.5 ? -1 : 1, 14 + h * 12, 11 + h * 7, h < 0.6 ? PINE : PINE_D);
+      });
+      every(22, (k) => {
+        const s = k / n;
+        if (openInfield(s)) return;
+        if ((s >= 0.66 && s <= 0.92) || (s >= 0.35 && s <= 0.41)) return;
+        const h = hash(k * 97 + 23);
+        if (h < 0.40) return;
+        bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
+        if (h > 0.80) bush(k, h > 0.90 ? -1 : 1, 13 + h * 8, SCRUB_D);
+      });
+      every(64, (k) => {
+        const s = k / n;
+        if (openInfield(s)) return;
+        if (s > 0.96 || s < 0.16) return;
+        const h = hash(k * 67 + 17);
+        if (h < 0.60) return;
+        tree(k, h < 0.5 ? -1 : 1, 48 + h * 26, 9 + h * 6, [0.24, 0.36, 0.19]);
+      });
+
+      {
+        const COLUMN = [0.88, 0.87, 0.84], GLASS = [0.30, 0.42, 0.50];
+        for (let i = 0; i < 6; i++) {
+          const s = 0.944 + i * 0.011;
+          const a = anchor(K(s), 1, 20);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`catalunya-pit-bay-${i + 1}`, {
+            center: vadd(a.c, a.u, 8), size: [24, 16, 30], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [16, 0.8, 28], BONE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, 4.4), [11, 7.2, 28], WHITE, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -3.6), a.u, 3.0), [0.5, 4.6, 27], GLASS, b);
+            stage._mat = MAT.CONCRETE;
+            for (let d = 0; d < 5; d++)
+              addCyl(stage, vadd(vadd(a.c, a.r, -6.6), a.t, (d - 2) * 6.4),
+                0.24, 10.5, COLUMN, 8, b);
+            for (let l = 0; l < 4; l++)
+              addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 4.4 + l * 1.9),
+                [3.6, 0.28, 29], l & 1 ? BONE : WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -2.0), a.u, 11.3), [19, 0.55, 30], WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -11.2), a.u, 11.1), [0.7, 0.9, 30], SHADE, b);
+            stage._mat = MAT.METAL;
+            for (let v = 0; v < 3; v++)
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, 1.5), a.t, (v - 1) * 8), a.u, 12.3),
+                [3.2, 1.2, 2.4], [0.62, 0.64, 0.68], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+        const a = anchor(K(0.985), 1, 13);
+        const b = [a.r, a.u, a.t];
+        modelGroup("catalunya-race-control", {
+          center: vadd(a.c, a.u, 18), size: [10, 44, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 13), [5.0, 26, 7.5], WHITE, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 24.5), [5.4, 4.6, 9.0],
+            [0.16, 0.24, 0.30], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -2.4), a.u, 24.5), [5.0, 3.6, 8.0],
+            [0.92, 0.86, 0.60], b);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 27.3), [7.0, 0.6, 10.5], WHITE, b);
+          stage._mat = MAT.METAL;
+          for (let d = 0; d < 4; d++)
+            addBox(stage, vadd(vadd(a.c, a.r, -2.4), a.u, 20.0 + d * 0.7),
+              [5.6, 0.35, 8.4], d & 1 ? [0.86, 0.16, 0.14] : [0.92, 0.78, 0.14], b);
+          addCyl(stage, vadd(a.c, a.u, 27.6), 0.14, 12, [0.42, 0.43, 0.46], 4, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
+      gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
+      grandstandEx(0.005, -1, 11, 170, null, null,
+        { livery: "concrete", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true,
+          roofCol: [0.72, 0.74, 0.78] });
+      {
+        const a = anchor(K(0.005), -1, 14);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const METAL = [0.70, 0.72, 0.76], GLASS_S = [0.28, 0.40, 0.48];
+          modelGroup("catalunya-main-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [18, 22, 160], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 9.2), a.u, 14.5), [0.4, 3.2, 120], GLASS_S, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, 5.5), a.u, 17.2), [14, 0.55, 155], METAL, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -0.5), a.u, 16.6), [0.45, 0.9, 152], SHADE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -5.0), a.u, 8.0),
+              [0.35, 1.1, 148], [0.90, 0.88, 0.84], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      grandstandEx(0.048, -1, 12, 72, null, null,
+        { livery: "alu", roof: "none", endWalls: true, tiers: 1 });
+      {
+        const winLit = [0.97, 0.88, 0.54];
+        const a = anchor(K(0.005), -1, 24);
+        addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 150], winLit, [a.r, a.u, a.t]);
+      }
+      {
+        const a = anchor(K(0.042), 1, 22);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          const STEEL = [0.42, 0.44, 0.48], LED = [0.08, 0.10, 0.12];
+          const LED_G = [0.18, 0.72, 0.32];
+          modelGroup("catalunya-pit-end-scoreboard", {
+            center: vadd(a.c, a.u, 14), size: [8, 32, 10], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            seat.box(stage, a.c, [3.6, 0.6, 3.6], BONE, b);
+            addBox(stage, vadd(a.c, a.u, 12.2), [1.4, 24.4, 1.4], STEEL, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 18), [0.35, 10, 7.5], LED, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1.35), a.u, 20.5), [0.12, 1.2, 6.8], LED_G, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1.35), a.u, 17.0), [0.12, 4.5, 6.8],
+              [0.92, 0.92, 0.88], b);
+            addBox(stage, vadd(a.c, a.u, 24.6), [2.4, 2.2, 3.2], LED, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      {
+        const RAIL = [0.48, 0.48, 0.50], BALLAST = [0.55, 0.52, 0.46];
+        along(0.975, 0.070, 12, (k, spacing) => {
+          const a = anchor(k, -1, 42);
+          if (onTrack(a.c[0], a.c[2], 6)) return;
+          const b = [a.r, a.u, a.t];
+          const seg = spacing * 0.98;
+          addBox(out, vadd(a.c, a.u, 0.22), [4.2, 0.4, seg], BALLAST, b);
+          addBox(out, vadd(vadd(a.c, a.r, -0.75), a.u, 0.48), [0.12, 0.12, seg], RAIL, b);
+          addBox(out, vadd(vadd(a.c, a.r, 0.75), a.u, 0.48), [0.12, 0.12, seg], RAIL, b);
+        });
+      }
+      for (let i = 0; i < 4; i++) {
+        building(K(0.920 + i * 0.014), 1, 40, 26, 11, 16,
+          { kind: "fin", wall: [0.90, 0.89, 0.85], window: [0.34, 0.38, 0.44], floor: 4.5 });
+      }
+      every(46, (k) => {
+        const s = k / n, h = hash(k * 71 + 31);
+        if (!(s > 0.90 || s < 0.05) || h < 0.52 || Math.abs(s - 0.912) < 0.008) return;
+        if (h < 0.62) return;
+        motorhome(k, 1, 70 + h * 12, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
+      });
+      broadcastCompound(K(0.912), 1, 76, { vans: 3, dishes: 2, mastH: 9 });
+      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.20, 0.16]);
+
+      grandstandEx(0.145, 1, 20, 96, null, null,
+        { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
+      sunTerrace(0.360, 0.400, -1, 28, 4, 11);
+      sunTerrace(0.630, 0.655, 1, 22, 4, 12);
+      sunTerrace(0.880, 0.900, 1, 24, 3, 12);
+      sunTerrace(0.920, 0.945, 1, 22, 3, 12);
+      for (const [s, side, gap] of [[0.932, 1, 36], [0.845, -1, 42]]) {
+        const a = anchor(K(s), side, gap);
+        sailCanopy(a.c, [a.r, a.u, a.t],
+          { rad: 15, rx: 9, rz: 17, h: 15, col: [0.94, 0.92, 0.86], ribs: 6, thick: 0.4 });
+      }
+      spectatorHill(0.438, 0.498, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
+
+
+      grandstandEx(0.700, -1, 14, 40, null, null,
+        { livery: "concrete", tiers: 1, roof: "flat", endWalls: true,
+          roofCol: [0.72, 0.74, 0.78] });
+      bleacher(0.778, 0.788, -1, 12, {
+        rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
+        frameCol: [0.55, 0.56, 0.58], plankCol: [0.78, 0.30, 0.24], density: 0.35, step: 8,
+      });
+      bleacher(0.790, 0.802, -1, 13, {
+        rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
+        frameCol: [0.52, 0.53, 0.55], plankCol: BONE, density: 0.35, step: 8,
+      });
+      bleacher(0.804, 0.812, -1, 22, {
+        rows: 5, rise: 0.55, setback: 0.85, frame: "steel",
+        frameCol: [0.55, 0.56, 0.58], plankCol: [0.90, 0.78, 0.30], density: 0.30, step: 9,
+      });
+      grandstandEx(0.860, -1, 14, 40, null, null,
+        { livery: "concrete", tiers: 1, roof: "cantilever", endWalls: true, pylons: true,
+          roofCol: [0.70, 0.72, 0.76] });
+
+      groundPatch(K(0.145), -1, 6, [40, 0.18, 54], GRAVEL,
+        { id: "catalunya-t1-gravel", samples: 8 });
+      tyreWall(0.130, 0.165, -1, 5, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.150), 1, 10);
+
+      groundPatch(K(0.450), -1, 5, [24, 0.18, 32], GRAVEL,
+        { id: "catalunya-chicane-gravel", samples: 6 });
+      tyreWall(0.436, 0.466, -1, 4, [0.20, 0.40, 0.85]);
+      marshalPost(K(0.453), 1, 9);
+
+      groundPatch(K(0.685), 1, 5, [28, 0.18, 36], GRAVEL,
+        { id: "catalunya-lacaixa-gravel", samples: 6 });
+      tyreWall(0.668, 0.700, 1, 4, [0.85, 0.78, 0.20]);
+      marshalPost(K(0.678), -1, 9);
+
+      groundPatch(K(0.930), -1, 5, [26, 0.18, 34], GRAVEL,
+        { id: "catalunya-final-gravel", samples: 6 });
+      marshalPost(K(0.925), 1, 9);
+
+      for (const [s0, s1] of [[0.17, 0.43], [0.47, 0.66], [0.72, 0.89]]) {
+        guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
+      }
+      guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
+      fence(0.95, 0.08, -1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.13, 0.17, -1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.67, 0.71, -1, 9, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.16, 0.22, 0.40, 0.46, 0.56, 0.78, 0.86]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
+      }
+
+      const { cx, cz, radius: rad } = lapBounds();
+      for (const [extra, count, len, w, hMin, hVar, col] of [
+        [130, 30, 150, 46, 14, 9, [0.42, 0.42, 0.26]],
+        [230, 26, 195, 60, 24, 14, [0.36, 0.37, 0.25]],
+        [360, 22, 240, 74, 40, 24, [0.34, 0.36, 0.32]],
+      ]) {
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832, h = hash(i * 7 + extra);
+          const r = rad + extra + h * 34;
+          const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
+          if (onTrack(tx, tz, 32)) continue;
+          ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
+        }
+      }
+
+      for (const [s, side, gap] of [
+        [0.030, -1, 32], [0.155, 1, 34], [0.383, -1, 30],
+        [0.643, 1, 34], [0.700, -1, 48], [0.860, -1, 46], [0.935, 1, 48],
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
+
+      for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
+        const a = anchor(K(s), 1, gap);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`catalunya-paddock-club-${i + 1}`, {
+          center: vadd(a.c, a.u, 7), size: [18, 14, 46], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 4.2), [12, 8.4, 42], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 8.8), [14.5, 0.5, 44], BONE, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -6.1), a.u, 5.6), [0.35, 2.4, 40],
+            [0.34, 0.46, 0.56], b);
+          stage._mat = MAT.METAL;
+          for (let d = 0; d < 6; d++)
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -1.5), a.t, (d - 2.5) * 7), a.u, 11.4),
+              [11, 0.18, 0.5], SHADE, b);
+          for (const t of [-1, 1])
+            addCyl(stage, vadd(vadd(a.c, a.r, -6.8), a.t, t * 17), 0.18, 11.3, BONE, 6, b);
+          stage._mat = 0;
+        });
+      }
+
+      hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
+      hedge(0.022, 0.078, 1, 16, 2.6, [0.19, 0.37, 0.19]);
+      hedge(0.660, 0.695, -1, 28, 2.6, [0.19, 0.37, 0.19]);
+      {
+        const CYP = [0.13, 0.28, 0.15], CYP_D = [0.10, 0.22, 0.13];
+        for (const [s0, side, gap, count] of [
+          [0.955, -1, 36, 3], [0.910, -1, 38, 2],
+        ]) {
+          for (let i = 0; i < count; i++) {
+            const a = anchor(K(s0 + i * 0.008), side, gap + (i & 1) * 3.5);
+            if (onTrack(a.c[0], a.c[2], 5)) continue;
+            const b = [a.r, a.u, a.t];
+            const h = 9 + hash(i * 13 + s0 * 100) * 3;
+            addCyl(out, a.c, 0.16, h * 0.16, [0.34, 0.26, 0.18], 5, b);
+            addCone(out, vadd(a.c, a.u, h * 0.10), 0.85, h * 0.55, i & 1 ? CYP : CYP_D, 6, b);
+            addCone(out, vadd(a.c, a.u, h * 0.46), 0.60, h * 0.40, CYP, 6, b);
+          }
+        }
+      }
+
+      for (const [s0, s1, side, gap0] of [
+        [0.145, 0.185, -1, 62], [0.340, 0.380, -1, 58],
+        [0.590, 0.640, 1, 62], [0.625, 0.680, -1, 58],
+      ]) {
+        for (let t = 0; t < 3; t++) {
+          const col = t & 1 ? OCHRE : [0.71, 0.66, 0.52];
+          along(s0, s1, 14, (k) => {
+            drape(k, side, gap0 + t * 14, [9, 0.14, 12], col, { res: 0.08 });
+          });
+        }
+      }
+      const BOARDS = [[0.86, 0.16, 0.14], [0.94, 0.93, 0.88], [0.12, 0.32, 0.66], [0.96, 0.78, 0.10]];
+      sponsorHoarding(0.955, 0.100, -1, 6.5, { h: 1.25, step: 10, palette: BOARDS });
+      sponsorHoarding(0.318, 0.342, 1, 9, { h: 1.1, step: 10, palette: BOARDS });
+      sponsorHoarding(0.585, 0.606, -1, 9, { h: 1.1, step: 10, palette: BOARDS });
+
+      every(26, (k) => {
+        const s = k / n;
+        if (!((s > 0.20 && s < 0.35) || (s > 0.42 && s < 0.556))) return;
+        const h = hash(k * 43 + 11);
+        if (h < 0.45) return;
+        stonePine(k, h < 0.72 ? 1 : -1, 52 + h * 22, 10 + h * 5,
+          h < 0.6 ? [0.20, 0.33, 0.17] : [0.16, 0.29, 0.15], { spread: 1.1 });
+      });
+      for (const [s, side, gap] of [[0.240, -1, 26], [0.352, 1, 24], [0.612, -1, 26], [0.735, 1, 36]]) {
+        cameraTower(K(s), side, gap, { h: 14, col: [0.60, 0.62, 0.66] });
+      }
+      if (circuitKit) {
+        circuitKit.marshalShelter({
+          id: "kit:catalunya:t5-marshal", frac: 0.300, side: 1, gap: 10, size: [3, 3, 3],
+        });
+        circuitKit.recoveryBay({
+          id: "kit:catalunya:campsa-recovery", frac: 0.598, side: -1, gap: 30, size: [12, 5, 16],
+        });
+      }
+    };

@@ -1,0 +1,538 @@
+@layer components {
+#menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
+#menu-hero, #menu-primary, #menu-explore, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
+#menu-hero { display: grid; gap: calc(var(--gap) * 0.55); }
+#menu-retention {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: calc(var(--gap) * 0.7);
+}
+#menu-retention .bigbtn {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: calc(var(--gap) / 6);
+  min-width: 0;
+  min-height: var(--tap);
+  padding-block: calc(var(--gap) * 0.65);
+}
+#menu-retention .mb-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+@media (max-width: 1366px) {
+  #menu-retention .bigbtn {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.15em;
+  }
+  #menu-retention .bigbtn .btn-ico { margin: 0; flex: none; }
+  #menu-retention .bigbtn > span { max-width: 100%; min-width: 0; }
+  #menu-retention .mb-sub {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+}
+#menu-primary, #menu-explore, #menu-secondary {
+  gap: calc(var(--gap) * 0.7);
+  align-items: stretch;
+}
+#menu-primary, #menu-explore {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+#menu-secondary {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+#menu-hero .bigbtn { padding-block: 13px; }
+#mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.mb-sub {
+  font-size: var(--fs-micro); font-weight: 600; letter-spacing: var(--ls-4);
+  font-style: normal; color: color-mix(in oklab, var(--text) 72%, transparent);
+  text-transform: none;
+}
+#mb-career-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#menu-buttons .bigbtn > span { min-width: 0; max-width: 100%; }
+#overlay #mb-career .mb-sub { color: var(--text); }
+#menu-retention .bigbtn > span,
+#menu-primary .bigbtn > span,
+#menu-explore .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }
+#menu-retention .bigbtn > span { align-items: flex-start; }
+#menu-explore, #menu-secondary {
+  display: flex;
+  flex-wrap: wrap;
+}
+#menu-buttons .bigbtn { margin: 0; width: 100%; border-width: 1px; border-style: solid; }
+#menu-buttons :is(#menu-hero, #menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { border-color: transparent; }
+#menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
+#menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
+#menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
+@media (max-width: 899px) {
+  #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
+  #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn {
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  }
+}
+@media (max-width: 899px) and (min-height: 370px) {
+  #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: 0; }
+  #menu-buttons #menu-primary.balanced-row > .bigbtn {
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  }
+}
+.minibtn {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-1);
+  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 5 / 6);
+  box-shadow: none;
+}
+#menu-secondary .minibtn { color: var(--text); }
+#menu-secondary .bigbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  min-height: max(36px, var(--tap-min), var(--tap-paint));
+  padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.95) calc(var(--gap) * 0.65) calc(var(--gap) * 1.15);
+}
+#menu-secondary .bigbtn .btn-ico { margin-right: 0; }
+#overlay .bigbtn.alt {
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+  color: var(--text);
+}
+.minibtn .btn-ico { margin-right: 0.35em; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
+  background:
+    linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box,
+    color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
+  border-color: var(--plate-line);
+  color: var(--text);
+  box-shadow: none;
+  transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--red) 30%, transparent),
+    color-mix(in oklab, var(--text) 9%, transparent) 55%);
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:hover::before { opacity: 1; }
+}
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active { box-shadow: var(--press-lit); }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+#mb-career { transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out); }
+#mb-career::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background: var(--grad-primary-hot);
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  #mb-career:hover { background: var(--grad-primary); }
+  #mb-career:hover::before { opacity: 1; }
+}
+#mb-career:active { background: var(--grad-primary); }
+#mb-career:active::before { opacity: 1; }
+#menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
+#menu-brand { align-items: center; }
+#menu-meta { margin-top: 16px; gap: 6px; }
+#audiostate { color: var(--dim); font-size: var(--fs-micro); }
+#audiostate:empty { display: none; }
+#soundbtn {
+  width: auto; margin: 2px 0 0; min-height: var(--tap);
+  font-weight: 700; letter-spacing: var(--ls-2);
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+  --note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E");
+}
+#soundbtn::before {
+  content: ""; display: inline-block; width: 1em; height: 1em;
+  margin-right: .4em; vertical-align: -.15em; background: currentColor;
+  -webkit-mask: var(--note) center / contain no-repeat; mask: var(--note) center / contain no-repeat;
+}
+#disclaimer {
+  color: color-mix(in oklab, var(--text) 75%, var(--dim)); font-size: var(--fs-micro); margin: 0;
+  width: fit-content; max-width: 100%;
+  padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.8);
+  border-radius: var(--r-sm);
+  background: var(--plate-opaque);
+  border: 1px solid transparent;
+}
+.build-tag { color: var(--dim); font-size: var(--fs-micro); margin: 4px 0 0; text-align: center; }
+
+body { --compact-at: 600px; --wide-at: 620px; }
+
+html[data-home-live] #overlay #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
+html[data-home-live] #overlay[data-intro] #menu-buttons .bigbtn { animation: none; }
+html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
+  background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start;
+  justify-content: flex-start; align-items: center; padding: var(--gap); font-style: normal; min-height: var(--tap);
+}
+html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn > span { align-items: flex-start; }
+html[data-home-live] #overlay #menu-secondary .bigbtn { transform: none; font-style: normal; }
+html[data-home-live] #overlay #menu-brand {
+  align-self: end; position: relative; z-index: 1; isolation: isolate; overflow: hidden;
+  padding: var(--gap); border-radius: var(--r-md); background: var(--scrim-heavy);
+}
+html[data-home-live] :where(body[data-shape="wide"]) #overlay {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+  align-content: stretch; align-items: start; gap: var(--gap);
+}
+html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-brand {
+  grid-column: 1; grid-row: 1; align-self: start; text-align: start; align-items: flex-start;
+}
+html[data-home-live] :where(body[data-shape="wide"]) #overlay #title {
+  font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4));
+}
+html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons {
+  grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
+  touch-action: pan-y; min-height: 0;
+}
+@media (max-height: 660px) {
+  html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons { gap: calc(var(--gap) * 0.5); }
+  html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
+  html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
+}
+html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
+html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-primary, #menu-explore) {
+  --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap));
+}
+html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay :is(#menu-primary, #menu-explore) .bigbtn {
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.45em;
+}
+html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { flex: none; margin: 0; }
+html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
+  align-self: stretch; align-content: start; min-height: 0; max-height: 100%;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
+  touch-action: pan-y; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
+}
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch; align-items: stretch;
+  row-gap: calc(var(--gap) * 0.15); column-gap: var(--gap);
+  overflow-x: hidden;
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
+  grid-column: 1; grid-row: 1; z-index: 1; align-self: start;
+  overflow: hidden; min-height: min-content;
+  padding-block: calc(var(--gap) * 0.5); gap: calc(var(--gap) * 0.35);
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #title {
+  font-size: clamp(var(--fs-5), calc(4.2 * var(--vwz)), calc(var(--fs-6) * 2.8));
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+  display: grid; grid-column: 1 / -1; grid-row: 1;
+  grid-template-columns: subgrid;
+  grid-template-rows: max-content max-content max-content max-content;
+  align-content: start; align-items: start; justify-items: stretch;
+  width: auto; height: 100%; max-height: 100%; min-height: 0; align-self: stretch;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
+  touch-action: pan-y; z-index: 2; background: transparent;
+  padding-block: calc(var(--gap) * 0.5);
+  padding-inline: var(--gap);
+  pointer-events: none;
+}
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
+  pointer-events: auto;
+}
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
+  width: 100%; align-self: start; justify-self: stretch;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
+  grid-column: 2; grid-row: 5; align-self: start; display: flex; flex-wrap: nowrap; align-items: stretch;
+  gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
+  --balance-basis: 0%; --balance-min: 0%;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { justify-content: flex-start; white-space: normal; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
+  flex: 1 1 0; min-width: 0; width: auto;
+}
+@media (max-width:480px){:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary{flex-wrap:wrap}}
+:where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
+  min-height: var(--tap); padding-block: calc(var(--gap) / 2);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
+  min-height: max(var(--tap-min), var(--tap-paint));
+  padding-block: calc(var(--gap) * 0.3);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
+  padding-block: calc(var(--gap) * 0.4);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
+  min-height: var(--tap-paint); height: auto; max-height: none;
+}
+html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand #audiostate { display: none; }
+html[data-home-live] :where(body[data-shape="tall"]) #overlay {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
+html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
+  grid-row: 2;
+  align-self: stretch;
+  height: auto;
+  max-height: none;
+}
+:where(body[data-density="compact"]) #overlay { gap: var(--gap); }
+:where(body[data-density="compact"]) #menu-buttons {
+  max-height: min(100%, calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b) - 2 * var(--gut)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  align-content: center;
+  align-content: safe center;
+  padding-inline: var(--gap);
+}
+:where(body[data-shape="tall"]) #overlay {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  gap: var(--gap);
+}
+:where(body[data-shape="tall"]) #menu-brand { grid-row: 1; }
+:where(body[data-shape="tall"]) #menu-buttons {
+  grid-row: 2;
+  align-self: stretch;
+  min-height: 0;
+  max-height: none; 
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  align-content: center;
+  align-content: safe center;
+  padding-inline: var(--gap);
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+}
+:where(body[data-shape="tall"]) #menu-buttons::-webkit-scrollbar { display: none; }
+html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])):has(> #install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
+@media (max-width: 899px) {
+  :where(body[data-shape="wide"]) #overlay #menu-buttons {
+    padding-bottom: calc(var(--tap) + var(--gap));
+    scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  }
+}
+:where(body[data-shape="tall"]) #title { font-size: clamp(30px, calc(8 * var(--vwz)), 72px); }
+:where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.28) 0 0; }
+:where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.42); gap: calc(var(--gap) / 4); }
+:where(body[data-shape="tall"]) #overlay {
+  padding-block-start: max(var(--safe-t), calc(var(--sat) + var(--gap) * 0.5));
+}
+@media (max-width: 699px) {
+  :where(body[data-shape="tall"]) #overlay {
+    grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
+    row-gap: calc(var(--gap) * 1.2);
+  }
+  :where(body[data-shape="tall"]) #title { font-size: clamp(40px, calc(12 * var(--vwz)), 72px); }
+  :where(body[data-shape="tall"]) #title::after { margin-top: calc(var(--gap) * 0.45); }
+  :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.7); gap: calc(var(--gap) * 0.4); }
+  :where(body[data-shape="tall"]) #disclaimer { text-align: center; font-size: var(--fs-micro); }
+  :where(body[data-shape="tall"]) #soundbtn { font-size: var(--fs-micro); min-height: max(calc(var(--tap) * 0.8), var(--tap-paint)); }
+  :where(body[data-shape="tall"]) #disclaimer { padding-block: calc(var(--gap) * 0.25); }
+  :where(body[data-shape="tall"]) #menu-hero,
+  :where(body[data-shape="tall"]) #menu-primary,
+  :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-explore { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-buttons {
+    height: auto;
+    align-self: start;
+    align-content: start;
+    gap: calc(var(--gap) * 0.6);
+  }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore, #menu-secondary) { gap: calc(var(--gap) * 0.5); }
+  :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.55); font-size: var(--fs-4); }
+  :where(body[data-shape="tall"]) #menu-retention .bigbtn { min-height: max(calc(var(--tap) * 0.85), var(--tap-paint)); padding-block: calc(var(--gap) * 0.3); }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.45em;
+    padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.8);
+    font-size: clamp(0.75rem, calc(3.2 * var(--vwz)), var(--fs-3));
+    min-height: max(calc(var(--tap) * 0.9), var(--tap-paint));
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
+  :where(body[data-shape="tall"]) :is(#menu-explore, #menu-secondary) {
+    --balance-basis: calc(50% - 0.5em);
+    --balance-min: calc(50% - 0.5em);
+  }
+  :where(body[data-shape="tall"]) #menu-secondary .bigbtn {
+    padding-block: calc(var(--gap) * 0.3);
+    min-height: max(calc(var(--tap) * 0.85), var(--tap-paint));
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
+    font-size: clamp(0.7rem, calc(2.8 * var(--vwz)), var(--fs-micro));
+  }
+
+  :where(body[data-shape="tall"]) #title-car {
+    display: block;
+    position: relative;
+    grid-row: 3;
+    align-self: center;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    opacity: 0.9;
+  }
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
+}
+@media (max-width: 699px) and (max-height: 740px) {
+  :where(body[data-shape="tall"]) #overlay { row-gap: calc(var(--gap) * 0.8); }
+  :where(body[data-shape="tall"]) #title { font-size: clamp(36px, calc(10.5 * var(--vwz)), 72px); }
+  :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.5); }
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(304px, -318px) scale(1.1); }
+}
+@media (max-width: 699px) and (prefers-reduced-transparency: reduce) {
+  :where(body[data-shape="tall"]) #title-car { display: none; }
+}
+@media (min-width: 700px) {
+  :where(body[data-shape="tall"]) #overlay { grid-template-rows: auto minmax(0, auto) minmax(0, 1fr); }
+  :where(body[data-shape="tall"]) #menu-buttons { height: auto; align-self: start; align-content: start; }
+  :where(body[data-shape="tall"]) #title-car {
+    display: block;
+    position: relative;
+    grid-row: 3;
+    align-self: center;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    opacity: 0.9;
+  }
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
+}
+@media (min-width: 700px) and (prefers-reduced-transparency: reduce) {
+  :where(body[data-shape="tall"]) #title-car { display: none; }
+}
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
+  grid-template-columns: minmax(0, 1fr) min(46%, 400px);
+  justify-content: safe center;
+  align-content: safe center; justify-items: stretch;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-brand,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  grid-column: 2; grid-row: 1;
+  align-self: stretch;
+  justify-items: stretch;
+  gap: calc(var(--gap) * 0.35);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-brand { container-type: inline-size; }
+:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: min(clamp(32px, calc(11 * var(--vwz)), 84px), 21cqi); }
+:where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(69px, 145px) scale(0.902); }
+@media (max-width: 860px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(68px, 178px) scale(0.78); }
+}
+:where(body[data-shape="wide"][data-density="compact"]) #title-car { opacity: 0.9; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-explore { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore, #menu-secondary) {
+  gap: calc(var(--gap) * 0.45);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
+  padding: 6px 8px 6px 12px;
+  min-height: max(32px, var(--tap-min));
+}
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.4em;
+  font-size: clamp(0.7rem, calc(2.6 * var(--vwz)), calc(var(--fs-4) * var(--ui-compact-text, 1)));
+  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .bigbtn {
+  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
+  font-size: clamp(0.6rem, calc(2.0 * var(--vwz)), var(--fs-micro));
+}
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-explore, #menu-secondary) {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; flex: none; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
+  padding: 3px 6px 3px 10px; 
+  min-height: max(26px, var(--tap-min));
+}
+:where(body[data-density="compact"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn {
+  flex-direction: row; align-items: center; gap: 0;
+  padding-block: calc(var(--gap) * 0.25);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; min-width: 0; line-height: 1.15; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
+  flex-direction: row; align-items: center; gap: 0;
+  padding-inline: calc(var(--gap) / 8);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn .btn-ico {
+  margin: 0; flex: none; width: 0.6em; height: 0.6em;
+}
+html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-retention .bigbtn .btn-ico {
+  margin: 0; flex: none;
+}
+
+@media (max-width: 899px), (max-height: 699px) {
+  :where(body[data-density="compact"]) #menu-brand {
+    zoom: calc(var(--ui-compact-brand-scale) * var(--tf, 1));
+    --vwz: calc(1vw / var(--ui-compact-brand-scale));
+    --vhz: calc(1vh / var(--ui-compact-brand-scale));
+    --svhz: calc(1svh / var(--ui-compact-brand-scale));
+  }
+  :where(body[data-density="compact"]) #menu-buttons {
+    zoom: calc(var(--ui-compact-scale) * var(--tf, 1));
+    padding-inline: calc(var(--gap) + var(--gap) * 0.25 / var(--ui-compact-scale));
+    --vwz: calc(1vw / var(--ui-compact-scale));
+    --vhz: calc(1vh / var(--ui-compact-scale));
+    --svhz: calc(1svh / var(--ui-compact-scale));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale)));
+  }
+  :where(body[data-density="compact"]) .sheet {
+    --_sheet-z: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    zoom: var(--_sheet-z);
+    --vwz: calc(1vw / var(--_sheet-z));
+    --vhz: calc(1vh / var(--_sheet-z));
+    --svhz: calc(1svh / var(--_sheet-z));
+    --slider: calc(32px / var(--_sheet-z));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--_sheet-z)));
+  }
+
+  :where(body[data-density="compact"]) #menu-buttons .bigbtn {
+    font-size: calc(var(--fs-4) * var(--ui-compact-text));
+  }
+  :where(body[data-density="compact"]) :is(#audiostate, #disclaimer, #soundbtn) {
+    font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
+  }
+  :where(body[data-density="compact"]) :is(.mb-sub, #menu-buttons .minibtn) {
+    font-size: calc(var(--fs-micro) * var(--ui-compact-text));
+  }
+}
+}

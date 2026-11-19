@@ -1,0 +1,152 @@
+const EditorWorkspace = (function () {
+  "use strict";
+  const mounted = new WeakMap();
+  function attach(root, options = {}) {
+    if (!root || !root.ownerDocument) return null;
+    if (mounted.has(root)) return mounted.get(root);
+    const sheet = root.querySelector(".sheet");
+    if (!sheet) return null;
+    const doc = root.ownerDocument;
+    const make = (tag, text, cls) => {
+      const el = doc.createElement(tag);
+      if (text) el.textContent = text;
+      if (cls) el.className = cls;
+      return el;
+    };
+    const rows = options.rows && doc.getElementById(options.rows);
+    if (rows) {
+      const sequences = make("div", null, "balanced-row");
+      sequences.dataset.editorSequences = "";
+      sequences.setAttribute("role", "group"); sequences.setAttribute("aria-label", "Preview sequence");
+      for (const [id, text] of options.sequences || []) {
+        const button = doc.getElementById(id);
+        if (button) { button.textContent = text; sequences.append(button); }
+      }
+      if (sequences.children.length) sheet.insertBefore(sequences, rows);
+      const help = make("details", null, "ew-tools");
+      help.dataset.editorHelp = ""; help.open = false;
+      help.append(make("summary", "Help and reset"));
+      const reset = options.reset && doc.getElementById(options.reset);
+      if (reset) help.append(reset);
+      for (const paragraph of [...rows.querySelectorAll(".adv-help")]) help.append(paragraph);
+      rows.append(help);
+      const first = options.first && doc.getElementById(options.first);
+      const row = first && first.closest(".set-row");
+      if (row && row.parentNode === rows) { row.remove(); rows.prepend(row); }
+    }
+    const bar = make("div", null, "ew-toolbar");
+    const label = make("h2", options.title || root.getAttribute("aria-label") || "Editor", "ew-title");
+    const toggle = make("button", "Preview", "ew-preview");
+    toggle.type = "button";
+    toggle.setAttribute("aria-pressed", "false");
+    toggle.setAttribute("aria-label", "Show unobstructed preview");
+    bar.append(label, toggle);
+    const entry = options.entry && doc.getElementById(options.entry);
+    if (entry) bar.append(entry);
+    const note = make("p", options.note || "Changes save automatically on this device.", "ew-note");
+    sheet.prepend(note);
+    sheet.prepend(bar);
+    sheet.classList.add("editor-workspace");
+    let tools = null;
+    const rail = options.rail && doc.getElementById(options.rail);
+    const foot = sheet.querySelector(".sheet-foot");
+    const actions = foot && options.done ? [...foot.querySelectorAll("button")].filter(b => b.id !== options.done) : [];
+    if ((rail && rail.parentNode === sheet) || actions.length) {
+      tools = make("details", null, "ew-tools");
+      tools.append(make("summary", "Scope, presets and preview tools"));
+      sheet.insertBefore(tools, rail || sheet.children[2] || foot);
+      if (rail && rail.parentNode === sheet) tools.append(rail);
+      const help = options.help && sheet.querySelector(options.help);
+      if (help) tools.append(help);
+      if (actions.length) {
+        const row = make("div", null, "balanced-row");
+        row.setAttribute("role", "group"); row.setAttribute("aria-label", "Editor actions");
+        row.append(...actions); tools.append(row);
+      }
+      const previews = options.previews && doc.getElementById(options.previews);
+      if (previews) tools.append(previews);
+      const json = sheet.querySelector("textarea");
+      if (json) tools.append(json);
+    }
+    function setPreview(on) {
+      sheet.dataset.editorView = on ? "preview" : "edit";
+      toggle.textContent = on ? "Edit" : "Preview";
+      toggle.setAttribute("aria-pressed", String(on));
+      toggle.setAttribute("aria-label", on ? "Return to editor controls" : "Show unobstructed preview");
+    }
+    toggle.onclick = () => {
+      const on = sheet.dataset.editorView !== "preview";
+      const session = options.previewSession && doc.getElementById(options.previewSession);
+      if (on && options.defaultPreview && (!session || session.hidden)) {
+        const button = doc.getElementById(options.defaultPreview);
+        if (button) {
+          setPreview(false); button.click(); return;
+        }
+      }
+      setPreview(on);
+    };
+    const media = doc.defaultView && doc.defaultView.matchMedia("(max-width: 600px)");
+    const fit = () => { if (tools) tools.open = !(sheet.dataset.density === "compact" || (media && media.matches)); };
+    if (media && media.addEventListener) media.addEventListener("change", fit);
+    const Shape = doc.defaultView && doc.defaultView.MutationObserver;
+    if (Shape && tools) new Shape(fit).observe(sheet, { attributes: true, attributeFilter: ["data-density"] });
+    fit(); setPreview(false);
+    const nav = options.nav || (typeof SettingsNav !== "undefined" ? SettingsNav : null);
+    const settings = doc.getElementById("pmsettings");
+    const launcher = options.launcher && doc.getElementById(options.launcher);
+    const nested = options.nested && doc.getElementById(options.nested);
+    let pending = null, origin = null, opened = !root.hidden, suspended = false;
+    if (launcher) launcher.addEventListener("click", () => {
+      pending = settings && !settings.hidden && nav && nav.current
+        ? { page: nav.current(), focus: launcher } : null;
+    }, true);
+    const Observer = doc.defaultView && doc.defaultView.MutationObserver;
+    const observer = Observer && new Observer(() => {
+      if (!root.hidden) {
+        if (!opened) { origin = pending || (suspended ? origin : null); pending = null; }
+        suspended = false;
+        opened = true; setPreview(false); fit();
+      } else if (opened) {
+        opened = false;
+        if (origin && nested && !nested.hidden && settings && settings.hidden) {
+          suspended = true; return;
+        }
+        const back = origin; origin = null;
+        if (!back || !settings || settings.hidden) return;
+        if (nav && nav.show) nav.show(back.page);
+        const focus = () => {
+          if (root.hidden && !settings.hidden && back.focus.isConnected &&
+              (!back.focus.getClientRects || back.focus.getClientRects().length)) back.focus.focus();
+        };
+        if (doc.defaultView && doc.defaultView.requestAnimationFrame) doc.defaultView.requestAnimationFrame(focus);
+        else focus();
+      } else if (suspended && (!nested || nested.hidden)) {
+        suspended = false; origin = null;
+      }
+    });
+    if (observer) {
+      observer.observe(root, { attributes: true, attributeFilter: ["hidden"] });
+      if (nested) observer.observe(nested, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    const api = Object.freeze({ setPreview, setNote: (text) => { note.textContent = text; } });
+    mounted.set(root, api);
+    return api;
+  }
+  function init(doc = document) {
+    return [
+      ["lighting", "lt-rail", "Lighting", "Auto-saved · displayed circuit, time and weather"],
+      ["camtune", "ct-rail", "Camera", "Auto-saved · selected camera scope"],
+      ["flyby", "fb-rail", "Flyby", "Auto-saved · next race’s flyby"],
+      ["garrival", null, "Garage animation", "Changes save automatically."],
+    ].map(([id, rail, title, note]) => attach(doc.getElementById(id), {
+      rail, title, note, done: ({ lighting: "lt-close", camtune: "ct-close", flyby: "fb-close", garrival: "ga-close" })[id],
+      previews: id === "camtune" ? "ct-previews" : null,
+      entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
+      rows: id === "garrival" ? "ga-rows" : null, first: "ga-angle", reset: "ga-reset",
+      defaultPreview: id === "garrival" ? "ga-preview-out" : null, previewSession: id === "garrival" ? "ga-transport" : null,
+      sequences: [["ga-preview-in", "Pit stop"], ["ga-preview-out", "Race start"], ["ga-preview-home", "Return"]],
+      launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
+    }));
+  }
+  return Object.freeze({ attach, init });
+})();

@@ -1,0 +1,479 @@
+@layer components {
+#pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
+#pmsettings  { --sheet-w: 760px; }
+#pm-hud-sample {
+  zoom: var(--hud-scale);
+  align-self: start;
+  pointer-events: none;
+  margin-top: calc(var(--gap) * 0.5);
+  display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.5);
+}
+#pm-hud-sample::before {
+  content: "SIZE PREVIEW";
+  display: block; flex-basis: 100%;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
+  margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
+}
+#pm-hud-sample::after {
+  content: "GAS";
+  --pad: calc(54px * var(--hud-btn-scale) / var(--hud-scale));
+  width: var(--pad); height: var(--pad);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--card-line);
+  background: var(--plate-opaque);
+  font-family: var(--font-hud); font-weight: 800;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  letter-spacing: var(--ls-4); color: var(--dim);
+}
+#results     { --sheet-w: 760px; --fit-at: 300px; }
+#standings   { --sheet-w: 760px; --fit-at: 300px; }
+@media (min-width: 1680px) {
+  #results, #standings { --sheet-w: min(var(--menu-fit-sheet), calc(100vw - 80px)); }
+  #pausemenu { --sheet-w: min(var(--menu-fit-pause), calc(100vw - 48px)); }
+}
+@media (min-width: 2400px) {
+  #results, #standings { --sheet-w: min(var(--menu-fit-sheet-wide), calc(100vw - 96px)); }
+}
+#howtoplay   { --sheet-w: 1000px; }
+#spotifypanel { --sheet-w: 760px; --fit-at: 300px; }
+#results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
+#standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
+#spotifypanel .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
+#customize .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
+#pausemenu .sheet:not([data-shape="tall"])   { --fit-at: 180px; }
+#customize   { --sheet-w: 760px; --fit-at: 300px; }
+#vsfriend    { --sheet-w: 760px; }
+#vsfriend-inner { --fit-at: 280px; --compact-at: 480px; }
+#vsfriend-inner:not([data-shape="tall"]) { --fit-at: 200px; }
+
+#results .sheet,
+#standings .sheet,
+#customize .sheet { --compact-at: 480px; }
+
+.screen.dim {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(0, 0, 0, 0.42);
+}
+
+body:has(> dialog.screen:not([hidden])) #overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(> #teampicker:not([hidden])) #select,
+body:has(> #race-settings:not([hidden])) #select,
+body:has(> #track-detail:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(> #customize:not([hidden])) #select,
+body:has(> #season-setup:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(> #career-offers:not([hidden])) #career,
+body:has(> #career-history:not([hidden])) #career,
+body:has(> #career-guide:not([hidden])) #career,
+body:has(> #teampicker:not([hidden])) #career {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(> #customize:not([hidden])) #carsetup,
+body:has(> #teampicker:not([hidden])) #carsetup {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(> #howtoplay:not([hidden])) #pmsettings {
+  opacity: 0;
+  pointer-events: none;
+}
+
+
+.stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
+.stack button { width: 100%; margin: 0; }
+
+#pm-resume {
+  background: var(--grad-primary); color: var(--text) !important; border-color: transparent;
+  font-weight: 700; font-size: var(--fs-5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 6px 20px color-mix(in oklab, var(--red) 42%, transparent);
+}
+#pm-quit {
+  color: color-mix(in oklab, var(--red) 62%, #fff);
+  border-top-color: var(--plate-line);
+  position: relative;
+}
+#pm-quit::before {
+  content: ""; position: absolute; left: 10%; right: 10%;
+  top: calc(var(--gap) * -0.5 - 1px); height: 1px;
+  background: rgba(255, 255, 255, 0.10);
+}
+#pausemenu .sheet[data-density="compact"] .stack {
+  gap: 4px;
+}
+#pausemenu .sheet[data-density="compact"] .stack button {
+  min-height: max(36px, var(--tap-min));
+  padding-block: 6px;
+}
+#pausemenu .sheet[data-density="compact"] .stack button:not(.as-tbtn) {
+  min-height: max(36px, var(--tap-min), calc(44px / var(--ui-scale)));
+}
+#pausemenu .sheet[data-density="compact"] #pm-quit {
+  margin-top: 4px;
+}
+#pausemenu .sheet[data-density="compact"] .build-tag {
+  margin: 2px 0 0;
+}
+#pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+}
+#pausemenu #pm-resume {
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+}
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  padding-block: 3px;
+}
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context { padding-block: 1px; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context :is(span, small) { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-build { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-height: 400px) {
+  #pausemenu > .sheet {
+    max-height: min(100%, calc(100 * var(--svhz) - 24px));
+  }
+  #pausemenu .sheet-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-height: 0;
+  }
+  #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+    min-height: var(--tap);
+    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  }
+  #pausemenu #pm-resume {
+    min-height: var(--tap);
+    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  }
+}
+#pausemenu.screen.dim {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--pause-wash, 14%), transparent), transparent 58%),
+    rgba(6, 6, 10, var(--pause-scrim, 0.58));
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .screen.dim, #pausemenu.screen.dim { background: rgba(0, 0, 0, 0.92); }
+}
+:root[data-pause-dim="soft"] #pausemenu { --pause-wash: 7%; --pause-scrim: 0.29; }
+:root[data-pause-dim="soft"] #pausemenu::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-pause-dim="off"] #pausemenu,
+:root[data-pause-dim="off"] #pausemenu::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+:root[data-pause-side="left"] #pausemenu { justify-items: start; }
+:root[data-pause-side="right"] #pausemenu { justify-items: end; }
+#pausemenu .sheet-body.stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(var(--gap) * 0.6);
+  align-items: start;
+}
+:root[data-pause-layout="list"] #pausemenu .sheet-body.stack { grid-template-columns: minmax(0, 1fr); }
+#pm-resume,
+#pm-quit,
+#pm-standings,
+#pm-howto,
+#pm-build,
+#pm-now-card { grid-column: 1 / -1; } 
+#pm-quit { margin-top: calc(var(--gap) * 0.65); }
+#pausemenu .sheet .stack .as-tbtn {
+  width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  flex: 0 0 max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  padding: 0;
+  margin: 0;
+}
+#pausemenu .sheet-body.stack > button:not(#pm-resume):not(#pm-quit) {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+#pausemenu .bigbtn.alt {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+#pausemenu .sheet-body.stack > button:is(#pm-quit, #pm-restart):not(#pm-resume).armed {
+  background: var(--armed-fill);
+  border-color: var(--red);
+  color: var(--text);
+}
+:root[data-pause-layout="compact"] #pausemenu .sheet-body.stack { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:root[data-pause-layout="compact"] #pausemenu .sheet-body.stack > button { min-height: var(--chip-h); }
+:root[data-pause-layout="compact"] :is(#pm-quit, #pm-standings, #pm-howto) { grid-column: auto; }
+:root[data-pause-layout="compact"] #pausemenu .sheet #pm-quit { margin-top: 0; }
+:root[data-pause-layout="compact"] #pm-quit::before { content: none; }
+:root[data-pause-layout="wide"] #pausemenu { --sheet-w: 1020px; align-items: end; }
+:root[data-pause-layout="wide"] #pausemenu .sheet-body.stack { display: flex; flex-direction: row; flex-wrap: wrap; } 
+:root[data-pause-layout="wide"] #pausemenu .sheet-body.stack > button { flex: 1 1 0; min-width: calc(var(--tap-0) * 3); }
+:root[data-pause-layout="wide"] :is(#pm-now-card, #pm-build) { flex-basis: 100%; }
+:root[data-pause-layout="wide"] :is(#pm-race-context, #pm-quick-doors) { flex-basis: 100%; } 
+:root[data-pause-layout="wide"] #pausemenu .sheet #pm-quit { margin-top: 0; }
+:root[data-pause-layout="wide"] #pm-quit::before { content: none; }
+:root[data-look-pause-vpos="top"] #pausemenu { align-items: start; }
+:root[data-look-pause-vpos="bottom"] #pausemenu { align-items: end; }
+:root[data-pause-layout="sidebar"] #pausemenu { --sheet-w: 320px; justify-items: start; align-items: stretch; }
+:root[data-pause-layout="sidebar"][data-pause-side="right"] #pausemenu { justify-items: end; }
+:root[data-pause-layout="sidebar"] #pausemenu .sheet { height: 100%; }
+:root[data-pause-layout="sidebar"] #pausemenu .sheet-body.stack { grid-template-columns: minmax(0, 1fr); align-content: start; }
+
+:root[data-look-pause-btn] #pausemenu .sheet .sheet-body.stack > button { min-height: calc(var(--tap-0) * var(--look-pause-btn)); }
+:root[data-look-pause-btn][data-pause-layout="compact"] #pausemenu .sheet .sheet-body.stack > button { min-height: calc(var(--chip-h) * var(--look-pause-btn)); }
+:root[data-look-pause-w] #pausemenu { --sheet-w: calc(420px * var(--look-pause-w)); }
+:root[data-look-pause-w][data-pause-layout="wide"] #pausemenu { --sheet-w: calc(1020px * var(--look-pause-w)); }
+:root[data-look-pause-w][data-pause-layout="sidebar"] #pausemenu { --sheet-w: calc(320px * var(--look-pause-w)); }
+:root[data-look-pause-gap] #pausemenu .sheet-body.stack { gap: calc(var(--gap) * 0.6 * var(--look-pause-gap)); }
+:root[data-look-pause-style="outline"] #pausemenu .sheet-body.stack > button:is(#pm-restart, #pm-settings, #pm-howto, #pm-standings, #pm-quit):not(#pm-resume):not(.armed) {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--steel) 70%, transparent);
+  box-shadow: none;
+}
+:root[data-look-pause-style="outline"] #pausemenu #pm-resume { background: transparent; border-color: var(--red); box-shadow: none; }
+:root[data-look-pause-align="left"] #pausemenu .sheet-body.stack > button { justify-content: flex-start; text-align: start; }
+:root[data-look-pause-align="left"] #pausemenu .sheet-head { justify-content: flex-start; text-align: start; }
+:root[data-look-pause-music="hide"] #pm-now-card { display: none; }
+:root[data-look-pause-build="hide"] #pm-build { display: none; }
+
+#pm-replay-dock {
+  --tap-paint: max(24px, var(--tap-paint-at));
+  --tap: max(44px, var(--tap-paint-at));
+  position: fixed;
+  left: calc(var(--safe-l) + var(--gap));
+  right: calc(var(--safe-r) + var(--gap));
+  width: fit-content;
+  margin-inline: auto;
+  bottom: calc(var(--safe-b) + var(--gap));
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: calc(var(--gap) * 0.67);
+  max-width: calc(100vw - var(--safe-l) - var(--safe-r));
+  padding: calc(var(--gap) * 0.67) var(--gap);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+}
+#pm-replay-dock[hidden] { display: none; }
+#pm-replay-dock button { min-height: var(--tap-paint); padding-inline: var(--gap); }
+#pm-replay-scrub { flex: 1 1 12rem; width: 12rem; min-width: 0; max-width: 100%; }
+#pm-replay-label { min-width: 4ch; text-align: end; font-variant-numeric: tabular-nums; }
+@media (pointer: coarse), (max-height: 520px) {
+  #pm-replay-scrub { order: -1; flex: 1 0 100%; width: 100%; height: max(32px, var(--tap)); margin: 0; accent-color: var(--red); }
+  #pm-replay-dock button { padding-inline: calc(var(--gap) * 0.5); }
+}
+} 
+
+@layer overlays {
+  #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy) {
+    background: var(--plate-opaque);
+    color: var(--text);
+    border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+    font-weight: 600;
+    letter-spacing: var(--ls-1);
+    box-shadow: none;
+  }
+  #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer) {
+    background: var(--plate-opaque);
+    color: var(--text);
+    border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+    font-weight: 600;
+    letter-spacing: var(--ls-1);
+    box-shadow: none;
+  }
+  #vsfriend :is(#vs-scan-answer, #vs-scan-invite) {
+    background: var(--plate-opaque);
+    color: var(--text);
+    border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+    font-weight: 600;
+    letter-spacing: var(--ls-1);
+    box-shadow: none;
+  }
+  @media (hover: hover) {
+    #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):hover,
+    #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):hover,
+    #vsfriend :is(#vs-scan-answer, #vs-scan-invite):hover {
+      background: var(--plate-hover);
+      border-color: var(--plate-line);
+      box-shadow: none;
+    }
+  }
+  #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):active,
+  #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):active,
+  #vsfriend :is(#vs-scan-answer, #vs-scan-invite):active {
+    background: var(--plate-press);
+    box-shadow: none;
+  }
+
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer) {
+    color-scheme: dark;
+    background: color-mix(in oklab, var(--carbon) 78%, transparent);
+    color: var(--text);
+    border: 1px solid var(--plate-line);
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--steel) 55%, transparent) transparent;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::-webkit-scrollbar {
+    width: 8px; height: 8px; background: transparent;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--steel) 55%, transparent);
+    border-radius: 4px;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::placeholder {
+    color: var(--dim);
+    opacity: 1;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
+  }
+  #vsfriend :is(#vs-code-in, #vs-answer-in, #vs-invite-in):placeholder-shown {
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  #vsfriend #vs-body:has(#vs-code:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+  }
+  #vsfriend #vs-code:not([hidden]),
+  #vsfriend #vs-code-input:not([hidden]) {
+    display: contents;
+  }
+  #vsfriend #vs-code:not([hidden]) > h3 {
+    order: 1;
+    width: min(100%, 22rem);
+    margin-inline: auto;
+    justify-content: center;
+  }
+  #vsfriend #vs-code:not([hidden]) > p {
+    order: 2;
+    width: min(100%, 22rem);
+    margin-inline: auto;
+    text-align: center;
+  }
+  #vsfriend #vs-code-show:not([hidden]) {
+    order: 3;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--gap) * 2 / 3);
+  }
+  #vsfriend #vs-code-in {
+    order: 4;
+    width: min(100%, 22rem);
+    max-width: none;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+  #vsfriend #vs-body:has(#vs-code-input:not([hidden])) #vs-status {
+    order: 5;
+    text-align: center;
+    margin-inline: auto;
+    max-width: min(100%, 22rem);
+    width: 100%;
+  }
+  #vsfriend #vs-code-go {
+    order: 6;
+    width: min(100%, 22rem);
+    max-width: none;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+  #vsfriend:has(#vs-code-input:not([hidden])):has(#vs-status[class~="vs-error"]) #vs-code-in {
+    border-color: var(--red);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--red) 70%, transparent);
+  }
+
+  #vsfriend #vs-code > h3 > span:first-child { display: none; }
+
+  #vsfriend #vs-joining section > p {
+    margin-inline: 0;
+    text-align: start;
+    align-self: stretch;
+  }
+  #vsfriend #vs-code-entry > p {
+    text-align: center;
+  }
+
+  #vsfriend #vsfriend-inner[data-shape="tall"] > .sheet-foot,
+  #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > .sheet-foot {
+    position: relative;
+    top: auto;
+    right: auto;
+    z-index: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    height: auto;
+    max-height: none;
+    min-height: var(--tap-paint);
+    padding: calc(var(--pad) * 0.35) var(--pad);
+    background: revert-layer;
+  }
+  #vsfriend #vsfriend-inner[data-shape="tall"] > .sheet-foot::before,
+  #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > .sheet-foot::before {
+    content: "";
+    display: block;
+    position: absolute; left: 0; right: 0; top: 0; height: 1px;
+    background: var(--grad-rule);
+    pointer-events: none;
+  }
+  #vsfriend #vsfriend-inner[data-shape="tall"] > #vs-head,
+  #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > #vs-head {
+    padding-right: var(--pad);
+  }
+  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
+    position: absolute;
+    top: 0;
+    right: var(--pad);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: var(--tap-paint);
+    min-height: var(--tap-paint);
+    max-height: var(--tap-paint);
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: calc(var(--tap-paint) * tan(6deg) * 0.6);
+    padding-right: calc(var(--tap-paint) * tan(6deg) * 0.6);
+    background: none;
+  }
+  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
+    display: none;
+  }
+  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close {
+    min-width: var(--tap);
+    min-height: var(--tap-paint);
+    margin: 0;
+    padding: 0 var(--gap);
+    font-size: var(--fs-micro);
+    line-height: 1;
+    box-sizing: border-box;
+    align-self: stretch;
+  }
+} 

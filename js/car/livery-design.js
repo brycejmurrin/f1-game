@@ -1,0 +1,345 @@
+"use strict";
+const LiveryDesign = (function () {
+  const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade", "speedlines",
+    "keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade",
+    "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade",
+    "lightning", "keylineSplit", "chevronStack", "slashBlock", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines", "keylineSplit",
+    "tartanBand", "borderedStripe", "spearhead", "deckSplit"]);
+  const NO_REPEAT = Object.freeze(["ribbon", "gradient", "twoTone", "keylineSplit", "slashBlock", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  const KEY_PATTERNS = Object.freeze(["keylineSplit", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  const KEY_SLOTS = Object.freeze(["auto", "accent", "design", "second", "body"]);
+  const LABELS = Object.freeze({ keylineSplit: "Keyline split", halftone: "Halftone fade", chevronStack: "Chevron stack",
+    gradBands: "Graduated bands", slashBlock: "Slash block", lineFade: "Line fade",
+    tartanBand: "Tartan band", borderedStripe: "Bordered stripe", tricolour: "Tricolour sweep", spearhead: "Spearhead", deckSplit: "Deck split" });
+  const RANGES = Object.freeze({
+    patternWidth: [20, 100, 70], patternRepeat: [2, 12, 6], patternOffset: [-40, 40, 0],
+    patternTaper: [0, 80, 20], patternOpacity: [10, 100, 100],
+    patternRotation: [-180, 180, 0], patternStretch: [50, 200, 100], patternWeight: [25, 200, 100],
+  });
+  const PALETTES = Object.freeze([
+    { name: "Midnight electric", colors: ["#101728", "#27e6bd", "#f6f4e9"] },
+    { name: "Heritage cream", colors: ["#731b27", "#f2dfb0", "#182623"] },
+    { name: "Glacier", colors: ["#e8f2f7", "#2078cf", "#202735"] },
+    { name: "Solar", colors: ["#251d35", "#ff742b", "#ffe65b"] },
+    { name: "Orchid", colors: ["#271b42", "#df68ed", "#83e5f1"] },
+    { name: "Gulf coast", colors: ["#14384c", "#fa8636", "#9ae3f2"] },
+    { name: "Acid carbon", colors: ["#15191b", "#c9fa36", "#f0f2e7"] },
+    { name: "Cherry blossom", colors: ["#441b38", "#ffb9d0", "#fff0d8"] },
+    { name: "Copper storm", colors: ["#182b37", "#cc854d", "#aec9ce"] },
+  ]);
+  function value(liv, key) {
+    const r = RANGES[key], raw = liv && liv[key];
+    const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+    return Number.isFinite(n) ? Math.max(r[0], Math.min(r[1], n)) : r[2];
+  }
+  function color(v, fallback) {
+    return Array.isArray(v) && v.length === 3 && v.every(Number.isFinite)
+      ? "rgb(" + v.map((n) => Math.round(Math.max(0, Math.min(1, n)) * 255)).join(",") + ")" : fallback;
+  }
+  const DESIGN_FLOOR = 2.0;
+  const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
+  function lumArr(c) {
+    if (!Array.isArray(c) || c.length < 3) return null;
+    const f = (v) => { v = Math.max(0, Math.min(1, +v)); return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  }
+  function contrastArr(a, b) {
+    const la = lumArr(a), lb = lumArr(b);
+    if (la == null || lb == null) return 0;
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function pickOnArr(cands, bg, floor) {
+    const bgs = Array.isArray(bg) && bg.length && Array.isArray(bg[0]) ? bg.filter(Boolean) : (bg ? [bg] : []);
+    const list = (cands || []).filter((c) => Array.isArray(c) && c.length >= 3);
+    const worst = (c) => bgs.length ? bgs.reduce((m, b) => Math.min(m, contrastArr(c, b)), Infinity) : 0;
+    for (const c of list) if (worst(c) >= floor) return c;
+    let best = list[0] || INK_LIGHT, score = worst(best);
+    for (const c of list) { const v = worst(c); if (v > score) { score = v; best = c; } }
+    return best;
+  }
+  function designPair(liv, kind) {
+    const cover = Array.isArray(liv.cover) ? liv.cover : liv.c1;
+    const pool = [liv.c2, liv.c1, liv.accent, INK_LIGHT, INK_DARK];
+    const needsFloor = kind === "lightning" || kind === "twoTone" || kind === "keylineSplit";
+    let prim = Array.isArray(liv.patternTint) ? liv.patternTint : null;
+    let sec = Array.isArray(liv.patternSecond) ? liv.patternSecond : null;
+    if (needsFloor) {
+      if (!prim) prim = pickOnArr(pool, cover, DESIGN_FLOOR);
+      if (!sec) sec = pickOnArr(pool, prim, DESIGN_FLOOR);
+    }
+    if (!prim) prim = liv.c2;
+    if (!sec) sec = liv.c1;
+    return {
+      primary: color(prim, color(liv.c2, "#ffffff")),
+      secondary: color(sec, color(liv.c1, "#161b25")),
+    };
+  }
+  function paint(ctx, liv) {
+    const kind = liv.spineLogo;
+    const width = value(liv, "patternWidth") / 100 * 0.8;
+    const offset = value(liv, "patternOffset") / 100;
+    const taper = value(liv, "patternTaper") / 100;
+    const step = 1.5 / Math.round(value(liv, "patternRepeat"));
+    const { primary, secondary } = designPair(liv, kind);
+    const half = (z) => width * (1 - taper * Math.max(0, Math.min(1, (z - 0.5) / 1.5)));
+    ctx.save(); ctx.globalAlpha *= value(liv, "patternOpacity") / 100;
+    ctx.beginPath(); ctx.moveTo(offset - half(0.5), 0.5); ctx.lineTo(offset + half(0.5), 0.5);
+    ctx.lineTo(offset + half(2), 2); ctx.lineTo(offset - half(2), 2); ctx.closePath(); ctx.clip();
+    const angle = value(liv, "patternRotation") * Math.PI / 180, stretch = value(liv, "patternStretch") / 100;
+    if (angle || stretch !== 1) {
+      const a = Math.cos(angle), b = Math.sin(angle), c = -b * stretch, d = a * stretch;
+      ctx.transform(a, b, c, d, offset - a * offset - c * 1.25, 1.25 - b * offset - d * 1.25);
+    }
+    const weight = value(liv, "patternWeight") / 100;
+    const keyline = (auto) => ({ accent: color(liv.accent, auto), design: primary, second: secondary, body: color(liv.c1, auto) })[liv.patternKey] || auto;
+    ctx.fillStyle = primary; ctx.strokeStyle = primary; ctx.lineWidth = 0.018 * weight;
+    if (kind === "ribbon") ctx.fillRect(offset - width, 0.5, width * 2, 1.5);
+    else if (kind === "gradient") {
+      const fill = ctx.createLinearGradient(0, 0.5, 0, 2);
+      fill.addColorStop(0, primary); fill.addColorStop(1, secondary);
+      ctx.fillStyle = fill; ctx.fillRect(-1.2, 0.5, 2.4, 1.5);
+    } else if (kind === "twoTone") {
+      ctx.fillRect(-1.2, 0.5, 2.4, 1.5);
+      ctx.fillStyle = secondary; ctx.beginPath(); ctx.moveTo(offset - 0.18, 0.5);
+      ctx.lineTo(offset + 0.18, 2); ctx.lineTo(1.2, 2); ctx.lineTo(1.2, 0.5); ctx.closePath(); ctx.fill();
+    } else if (kind === "brokenChevron") {
+      for (let z = 0.3; z < 2.3; z += step) {
+        for (const side of [-1, 1]) {
+          ctx.beginPath(); ctx.moveTo(offset + side * 0.035, z);
+          ctx.lineTo(offset + side * width, z + step * 0.65);
+          ctx.lineTo(offset + side * width, z + step * 0.9);
+          ctx.lineTo(offset + side * 0.035, z + step * 0.25); ctx.closePath(); ctx.fill();
+        }
+      }
+    } else if (kind === "contours") {
+      for (let z = 0.25; z < 2.5; z += step) {
+        ctx.beginPath();
+        for (let j = 0; j <= 48; j++) {
+          const x = -1.2 + j * 0.05, y = z + Math.sin((x - offset) * 5) * step * 0.55;
+          if (j) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+      }
+    } else if (kind === "segments") {
+      for (let z = 0.5; z < 2; z += step) for (const side of [-1, 1]) {
+        ctx.fillStyle = side < 0 ? primary : secondary;
+        ctx.fillRect(offset + (side < 0 ? -width : 0.025), z, width - 0.025, step * 0.68);
+      }
+    } else if (kind === "pinstripes") {
+      for (let col = -12; col <= 12; col++) ctx.fillRect(offset + col * step - step * 0.09, 0.5, step * 0.18, 1.5);
+    } else if (kind === "slashes" || kind === "lightning") {
+      for (let z = -1, band = 0; z < 3; z += step, band++) {
+        if (kind === "lightning") ctx.fillStyle = band % 2 ? secondary : primary;
+        ctx.beginPath(); ctx.moveTo(-1.2, z);
+        if (kind === "lightning") { ctx.lineTo(offset + 0.1, z + 0.3); ctx.lineTo(offset - 0.1, z + 0.48); }
+        ctx.lineTo(1.2, z + 0.8); ctx.lineTo(1.2, z + 0.8 + step * 0.3);
+        if (kind === "lightning") { ctx.lineTo(offset - 0.2, z + 0.48 + step * 0.3); ctx.lineTo(offset, z + 0.3 + step * 0.3); }
+        ctx.lineTo(-1.2, z + step * 0.3); ctx.closePath(); ctx.fill();
+      }
+    } else if (["checker", "diamonds", "dots"].includes(kind)) {
+      for (let col = -12; col <= 12; col++) for (let row = 0; row <= 12; row++) {
+        const x = offset + col * step, z = 0.5 + row * step;
+        if (x < offset - width - step || x > offset + width + step || z > 2 + step) continue;
+        ctx.fillStyle = (col + row) % 2 ? primary : secondary;
+        if (kind === "checker") ctx.fillRect(x, z, step, step);
+        else {
+          ctx.beginPath();
+          const points = kind === "dots" ? 16 : 4, radius = step * (kind === "dots" ? 0.22 : 0.44);
+          for (let i = 0; i < points; i++) {
+            const angle = i * Math.PI * 2 / points, px = x + Math.cos(angle) * radius, pz = z + Math.sin(angle) * radius;
+            if (i) ctx.lineTo(px, pz); else ctx.moveTo(px, pz);
+          }
+          ctx.closePath(); ctx.fill();
+        }
+      }
+    } else if (kind === "waves" || kind === "speedlines") {
+      for (let row = -6; row <= 18; row++) {
+        const z = 0.5 + row * step;
+        ctx.strokeStyle = kind === "waves" && row % 2 ? secondary : primary;
+        ctx.beginPath();
+        for (let j = 0; j <= 48; j++) {
+          const x = offset - 1.8 + j * 0.075;
+          const y = z + (kind === "waves" ? Math.sin((x - offset) * 9 + row * 0.65) * step * 0.38 : (x - offset) * 0.12);
+          if (j) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+      }
+    } else if (kind === "sunburst") {
+      const rays = Math.round(value(liv, "patternRepeat")) * 2;
+      for (let i = 0; i < rays; i++) {
+        const a = i * Math.PI * 2 / rays, b = (i + 1) * Math.PI * 2 / rays;
+        ctx.fillStyle = i % 2 ? primary : secondary;
+        ctx.beginPath(); ctx.moveTo(offset, 1.25);
+        ctx.lineTo(offset + Math.cos(a) * 4, 1.25 + Math.sin(a) * 4);
+        ctx.lineTo(offset + Math.cos(b) * 4, 1.25 + Math.sin(b) * 4); ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "scallops") {
+      for (let row = -6; row <= 18; row++) for (let col = -10; col <= 10; col++) {
+        const x = offset + (col + (Math.abs(row) % 2) / 2) * step, z = 0.5 + row * step * 0.8;
+        ctx.fillStyle = row % 2 ? primary : secondary;
+        ctx.beginPath(); ctx.moveTo(x - step * 0.5, z);
+        for (let i = 0; i <= 5; i++) {
+          const a = Math.PI - i * Math.PI / 5;
+          ctx.lineTo(x + Math.cos(a) * step * 0.5, z + Math.sin(a) * step * 0.8);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "herringbone" || kind === "circuit") {
+      for (let row = -6; row <= 18; row++) for (let col = -12; col <= 12; col++) {
+        const x = offset + col * step, z = 0.5 + row * step;
+        ctx.strokeStyle = (col + row) % 2 ? primary : secondary;
+        ctx.beginPath(); ctx.moveTo(x, z);
+        if (kind === "herringbone") {
+          ctx.lineTo(x + step * 0.5, z + step * 0.45); ctx.lineTo(x + step, z);
+        } else {
+          ctx.lineTo(x + step * 0.65, z); ctx.lineTo(x + step * 0.65, z + step * 0.6);
+          ctx.lineTo(x + step * 0.9, z + step * 0.6);
+        }
+        ctx.stroke();
+        if (kind === "circuit") { ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(x - 0.018 * weight, z - 0.018 * weight, 0.036 * weight, 0.036 * weight); }
+      }
+    } else if (kind === "shards" || kind === "pixelFade") {
+      for (let row = -6; row <= 18; row++) for (let col = -12; col <= 12; col++) {
+        const x = offset + col * step, z = 0.5 + row * step;
+        const hash = ((Math.imul(col + 29, 73856093) ^ Math.imul(row + 17, 19349663)) >>> 0) / 4294967296;
+        ctx.fillStyle = hash < 0.5 ? primary : secondary;
+        if (kind === "pixelFade") {
+          if (hash > Math.max(0.08, Math.min(1, (2.15 - z) / 1.65))) continue;
+          ctx.fillRect(x, z, step * 0.85, step * 0.85);
+        } else {
+          ctx.beginPath(); ctx.moveTo(x, z); ctx.lineTo(x + step, z + step * hash);
+          ctx.lineTo(x + step * 0.25, z + step); ctx.closePath(); ctx.fill();
+        }
+      }
+    } else if (kind === "honeycomb") {
+      const radius = step * 0.44, dz = Math.sqrt(3) * radius;
+      for (let col = -12; col <= 12; col++) for (let row = -1; row < 18; row++) {
+        const x = offset + col * radius * 1.5, z = 0.5 + (row + (Math.abs(col) % 2) / 2) * dz;
+        if (x < -1.2 || x > 1.2 || z > 2.2) continue;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = i * Math.PI / 3, xx = x + Math.cos(angle) * radius, yy = z + Math.sin(angle) * radius;
+          if (i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy);
+        }
+        ctx.closePath(); ctx.stroke();
+      }
+    } else if (kind === "keylineSplit") {
+      const edge = (z) => offset - 0.25 + (z - 0.5) * 0.3, key = keyline(color(liv.accent, "#ffffff"));
+      ctx.fillRect(-1.2, 0.5, 2.4, 1.5);
+      ctx.fillStyle = secondary; ctx.beginPath(); ctx.moveTo(edge(0.5), 0.5); ctx.lineTo(edge(2), 2);
+      ctx.lineTo(1.2, 2); ctx.lineTo(1.2, 0.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = key; ctx.lineWidth = 0.03 * weight;
+      ctx.beginPath(); ctx.moveTo(edge(0.5), 0.5); ctx.lineTo(edge(2), 2); ctx.stroke();
+    } else if (kind === "halftone") {
+      const pitch = step * 0.7;
+      for (let row = 0; row <= 24; row++) for (let col = -12; col <= 12; col++) {
+        const z = 0.5 + row * pitch, x = offset + (col + (row % 2) / 2) * pitch;
+        const r = pitch * 0.42 * Math.max(0, 1 - (z - 0.5) / 1.5);
+        if (z > 2 || r < 0.004 || Math.abs(x - offset) > width + pitch) continue;
+        ctx.beginPath(); ctx.moveTo(x + r, z);
+        for (let i = 1; i < 8; i++) ctx.lineTo(x + Math.cos(i * Math.PI / 4) * r, z + Math.sin(i * Math.PI / 4) * r);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "chevronStack") {
+      for (let i = 0, z = 0.5; z < 2.2; i++, z += step) {
+        const depth = step * (0.9 - Math.min(0.5, i * 0.06));
+        ctx.fillStyle = i % 2 ? secondary : primary;
+        ctx.beginPath(); ctx.moveTo(offset, z); ctx.lineTo(offset + width, z + depth);
+        ctx.lineTo(offset + width, z + depth + step * 0.5); ctx.lineTo(offset, z + step * 0.5);
+        ctx.lineTo(offset - width, z + depth + step * 0.5); ctx.lineTo(offset - width, z + depth); ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "gradBands") {
+      const n = Math.max(2, Math.min(7, Math.round(value(liv, "patternRepeat"))));
+      let x = offset - width;
+      for (let i = 0; i < n && x < offset + width; i++) {
+        const w = width * 0.5 * Math.pow(0.68, i);
+        ctx.beginPath(); ctx.moveTo(x, 0.5); ctx.lineTo(x + w, 0.5); ctx.lineTo(x + w + 0.45, 2); ctx.lineTo(x + 0.45, 2); ctx.closePath(); ctx.fill();
+        x += w * 1.6;
+      }
+    } else if (kind === "slashBlock") {
+      const slash = (x0, w) => {
+        ctx.beginPath(); ctx.moveTo(x0 - 0.7, 0.5); ctx.lineTo(x0 - 0.7 + w, 0.5);
+        ctx.lineTo(x0 + 0.7 + w, 2); ctx.lineTo(x0 + 0.7, 2); ctx.closePath(); ctx.fill();
+      };
+      slash(offset - width * 0.4, width * 0.55);
+      ctx.fillStyle = secondary; slash(offset + width * 0.25, width * 0.12);
+    } else if (kind === "lineFade") {
+      for (let z = 0.5; z < 2; z += step * 0.5) {
+        const t = Math.max(0, 1 - (z - 0.5) / 1.5) * step * 0.45;
+        if (t > 0.003) ctx.fillRect(-1.2, z, 2.4, t);
+      }
+    } else if (kind === "tartanBand") {
+      const pitch = step * 0.8, key = keyline(color(liv.accent, "#ffffff"));
+      ctx.fillStyle = secondary; ctx.fillRect(offset - width, 0.5, width * 2, 1.5);
+      ctx.globalAlpha *= 0.62; ctx.fillStyle = primary;
+      for (let i = -12; i <= 12; i++) ctx.fillRect(offset + i * pitch - pitch * 0.2, 0.5, pitch * 0.4, 1.5);
+      for (let z = 0.5; z < 2; z += pitch) ctx.fillRect(offset - width, z, width * 2, pitch * 0.4);
+      ctx.globalAlpha /= 0.62; ctx.fillStyle = key;
+      for (let i = -12; i <= 12; i++) ctx.fillRect(offset + (i + 0.5) * pitch - 0.006 * weight, 0.5, 0.012 * weight, 1.5);
+      for (let z = 0.5 + pitch * 0.7; z < 2; z += pitch) ctx.fillRect(offset - width, z, width * 2, 0.012 * weight);
+    } else if (kind === "borderedStripe") {
+      const w = width * 0.45, gap = 0.03, line = 0.03 * weight;
+      ctx.fillRect(offset - w, 0.5, w * 2, 1.5);
+      ctx.fillStyle = keyline(secondary);
+      for (const side of [-1, 1]) ctx.fillRect(offset + side * (w + gap) - (side < 0 ? line : 0), 0.5, line, 1.5);
+    } else if (kind === "tricolour") {
+      const w = width * 0.32, key = keyline(color(liv.bandTint2, color(liv.accent, "#ffffff")));
+      [primary, key, secondary].forEach((fill, i) => {
+        const x0 = offset - w * 1.5 + i * w;
+        ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x0 - 0.5, 1.05); ctx.lineTo(x0 - 0.5 + w, 1.05);
+        ctx.lineTo(x0 + 0.25 + w, 2); ctx.lineTo(x0 + 0.25, 2); ctx.closePath(); ctx.fill();
+      });
+    } else if (kind === "spearhead") {
+      const shaft = width * 0.3, neck = 1.15;
+      ctx.beginPath(); ctx.moveTo(offset, 0.5); ctx.lineTo(offset + width, neck); ctx.lineTo(offset + shaft, neck);
+      ctx.lineTo(offset + shaft, 2); ctx.lineTo(offset - shaft, 2); ctx.lineTo(offset - shaft, neck);
+      ctx.lineTo(offset - width, neck); ctx.closePath();
+      ctx.fill(); ctx.strokeStyle = keyline(secondary); ctx.lineWidth = 0.035 * weight; ctx.stroke();
+    } else if (kind === "deckSplit") {
+      const key = keyline(color(liv.accent, "#ffffff"));
+      ctx.fillRect(-1.2, 0.5, offset + 1.2, 1.5);
+      ctx.fillStyle = secondary; ctx.fillRect(offset, 0.5, 1.2 - offset, 1.5);
+      ctx.fillStyle = key; ctx.fillRect(offset - 0.02 * weight, 0.5, 0.04 * weight, 1.5);
+      ctx.fillRect(offset + 0.05 * weight, 0.5, 0.012 * weight, 1.5);
+    }
+    ctx.restore();
+  }
+  function drawAtlas(ctx, liv, regions, flank, eachFlank) {
+    if (!liv || !PATTERNS.includes(liv.spineLogo)) return false;
+    const region = (r, transform) => {
+      if (!r) return;
+      ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+      ctx.transform(...transform); paint(ctx, liv); ctx.restore();
+    };
+    const c = regions.crest, t = regions.tail;
+    if (c) region(c, [c.w / (2 * flank.sTop), 0, 0, -c.h / 0.66, c.x + c.w / 2, c.y + c.h * 1.28 / 0.66]);
+    if (t && liv.finHandoff !== "hardCut") region(t, [t.w / (2 * flank.sTop), 0, 0, -t.h / 0.64, t.x + t.w / 2, t.y + t.h * 1.92 / 0.64]);
+    if (liv.patternPlacement === "wrap") eachFlank((f) => {
+      const left = f.R === regions.spineSideL;
+      if (liv.patternSide === "left" && !left || liv.patternSide === "right" && left) return;
+      const sign = left ? -1 : 1, dx = (f.fx(1) - f.fx(0)) / flank.zLen;
+      region(f.R, [0, sign * f.R.h / flank.sLen, dx, 0, f.fx(0) + flank.zF * dx, f.R.y - flank.sTop * f.R.h / flank.sLen]);
+    });
+    return true;
+  }
+  function history(initial, limit = 50) {
+    const clone = (d) => JSON.parse(JSON.stringify(d));
+    const original = clone(initial), entries = [clone(initial)]; let at = 0, dragging = false;
+    return {
+      record(d, drag = false) {
+        if (JSON.stringify(entries[at]) === JSON.stringify(d)) { if (!drag) dragging = false; return; }
+        entries.splice(at + 1);
+        if (dragging) entries[at] = clone(d); else { entries.push(clone(d)); at++; }
+        if (entries.length > limit + 1) { entries.shift(); at--; }
+        dragging = drag;
+      },
+      undo() { dragging = false; return at > 0 ? clone(entries[--at]) : null; },
+      redo() { dragging = false; return at < entries.length - 1 ? clone(entries[++at]) : null; },
+      canUndo: () => at > 0, canRedo: () => at < entries.length - 1,
+      original: () => clone(original),
+    };
+  }
+  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, NO_REPEAT, KEY_PATTERNS, KEY_SLOTS, LABELS, RANGES, PALETTES, value, drawAtlas, history });
+})();

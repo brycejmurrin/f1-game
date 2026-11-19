@@ -1,0 +1,551 @@
+const CustomTracks = (function () {
+  "use strict";
+  const store = GameStore.store;
+  const KEY = "customTracks", DRAFT_KEY = "customTrackDraft", DRAFT_PREV_KEY = "customTrackDraftPrev", V = 1;
+  const LIMITS = Object.freeze({
+    items: 24, name: 24, country: 32, ptsMin: 8, ptsMax: 200, coord: 10000,
+    hwMin: 5, hwMax: 8, zones: 24, halfM: 2000, rise: 60, angleDeg: 30,
+    spacing: 8, loopMin: 1000,
+    loopMax: 14000, loopMaxLoose: 20000,
+  });
+  const KERB_STYLES = Object.freeze(["flat", "sausage", "rumble"]);
+  const q = (v) => Math.round(v * 4) / 4;
+  const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
+  const frac = (v) => (Number.isFinite(v) ? (Math.round((v - Math.floor(v)) * 65535) % 65535) / 65535 : null);
+  const dm = (v) => Math.round(v * 10) / 10, mil = (v) => Math.round(v * 1000) / 1000;
+
+  function sanitizeName(s) {
+    let t = String(s == null ? "" : s);
+    try { t = t.normalize("NFC"); } catch (_) {  }
+    t = t.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim().toUpperCase().slice(0, LIMITS.name);
+    return t || "MY CIRCUIT";
+  }
+
+  function sanitizeCountry(s) {
+    if (typeof s !== "string") return "";
+    return s.normalize("NFC").replace(/[^\p{L}\p{N} .'-]/gu, "").replace(/\s+/g, " ").trim().slice(0, LIMITS.country);
+  }
+  function sanitizePts(pts) {
+    if (!Array.isArray(pts) || pts.length < LIMITS.ptsMin || pts.length > LIMITS.ptsMax) return null;
+    const out = [];
+    for (const p of pts) {
+      if (!Array.isArray(p) || p.length < 2) return null;
+      const x = +p[0], z = +p[1];
+      if (!Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > LIMITS.coord || Math.abs(z) > LIMITS.coord) return null;
+      out.push([q(x), q(z)]);
+    }
+    return out;
+  }
+  function sanitizeHeights(pts, heights) {
+    const n = pts.length, out = new Array(n);
+    const src = Array.isArray(heights) ? heights : null;
+    for (let i = 0; i < n; i++) {
+      const h = src && i < src.length && Number.isFinite(+src[i]) ? +src[i] : 0;
+      out[i] = q(Math.min(LIMITS.rise, Math.max(-LIMITS.rise, h))) || 0;
+    }
+    return out;
+  }
+  const heightsFlat = (h) => { for (let i = 0; i < h.length; i++) if (h[i]) return false; return true; };
+
+  function sanitizeZones(list, shape) {
+    if (!Array.isArray(list)) return null;
+    const out = [];
+    for (const z of list.slice(0, LIMITS.zones)) {
+      if (!z || typeof z !== "object") continue;
+      const row = shape(z);
+      if (row) out.push(row);
+    }
+    return out.length ? out : null;
+  }
+  const BUMP = (z) => {
+    const s = frac(z.s), halfM = num(z.halfM, 20, LIMITS.halfM, null);
+    let rise = num(z.rise, -LIMITS.rise, LIMITS.rise, null);
+    if (s == null || halfM == null || rise == null) return null;
+    const length = Math.round(halfM), cap = length / 19.6;
+    if (Math.abs(rise) > cap) rise = Math.sign(rise) * cap;
+    return { s, halfM: length, rise: q(rise) };
+  };
+  const HWZ_FULL_END = (65535 - 0.25) / 65535;
+  const HWZ = (z) => {
+    const hw = num(z.hw, LIMITS.hwMin, LIMITS.hwMax, null);
+    if (hw == null || !Number.isFinite(+z.s0) || !Number.isFinite(+z.s1)) return null;
+    let s0 = +z.s0, s1 = +z.s1;
+    if ((s0 === 0 && s1 === 1) || (s0 === 1 && s1 === 0) || (s0 === 0 && s1 >= HWZ_FULL_END)) {
+      return { s0: 0, s1: 1, hw: dm(hw), ease: mil(num(z.ease, 0.005, 0.2, 0.025)) };
+    }
+    s0 = frac(s0); s1 = frac(s1);
+    if (s0 == null || s1 == null || s0 === s1) return null;
+    return { s0, s1, hw: dm(hw), ease: mil(num(z.ease, 0.005, 0.2, 0.025)) };
+  };
+  const BANK = (z) => {
+    const f = frac(z.frac), angleDeg = num(z.angleDeg, 1, LIMITS.angleDeg, null), widthM = num(z.widthM, 20, 600, null);
+    return f == null || angleDeg == null || widthM == null ? null : { frac: f, angleDeg: q(angleDeg), widthM: Math.round(widthM) };
+  };
+
+  function sanitizeKerbStyle(v) {
+    return KERB_STYLES.includes(v) ? v : "flat";
+  }
+  function sanitizeBerms(v) {
+    return v === false ? false : true;
+  }
+
+  function canonical(it) {
+    const parts = [it.theme, it.baseHW, it.seed, it.pts.map((p) => p[0] + "," + p[1]).join(";"),
+      JSON.stringify([it.hwZones, it.bankZones, it.elevations, it.bridges])];
+    if (it.heights && !heightsFlat(it.heights)) parts.push("h:" + it.heights.join(","));
+    if (it.look) parts.push("look:" + it.look.time + "," + it.look.trees + "," + it.look.crowd);
+    const kerb = sanitizeKerbStyle(it.kerbStyle);
+    if (kerb !== "flat") parts.push("kerb:" + kerb);
+    if (it.berms === false) parts.push("berms:0");
+    if (it.props && it.props.length) {
+      parts.push("props:" + it.props.map((p) => p.kind + "@" + p.s + ":" + p.side + ":" + p.gap).join(","));
+    }
+    return parts.join("|");
+  }
+  function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
+
+  function polyLength(pts) {
+    let C = 0;
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    return C;
+  }
+  const lengthOf = (claimed, perimeter) => (Number.isFinite(claimed) && claimed >= 0.75 * perimeter && claimed <= 1.25 * perimeter ? Math.round(claimed) : Math.round(perimeter));
+  function loopLength(pts) {
+    let L = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (d < LIMITS.spacing) return -1;
+      L += d;
+    }
+    return L;
+  }
+
+  function sanitize(raw, opts) {
+    if (!raw || typeof raw !== "object") return null;
+    const pts = sanitizePts(raw.pts);
+    if (!pts) return null;
+    const loose = !!(opts && opts.loose);
+    const L = loopLength(pts), perimeter = polyLength(pts);
+    if (!loose && L < LIMITS.loopMin) return null;
+    if (perimeter > (loose ? LIMITS.loopMaxLoose : LIMITS.loopMax)) return null;
+    const heights = sanitizeHeights(pts, raw.heights);
+    const elevations = heightsFlat(heights) ? sanitizeZones(raw.elevations, BUMP) : null;
+    const it = {
+      name: sanitizeName(raw.name),
+      seed: Number.isFinite(raw.seed) ? (Math.floor(raw.seed) >>> 0) : 1,
+      theme: TrackThemes.has(raw.theme) ? raw.theme : TrackThemes.ORDER[0],
+      baseHW: Math.round(num(raw.baseHW, LIMITS.hwMin, LIMITS.hwMax, 7) * 10) / 10,
+      pts,
+      heights,
+      hwZones: sanitizeZones(raw.hwZones, HWZ),
+      bankZones: sanitizeZones(raw.bankZones, BANK),
+      elevations,
+      bridges: sanitizeZones(raw.bridges, BUMP),
+      turns: Array.isArray(raw.turns) ? raw.turns.map(frac).filter((v) => v != null).slice(0, 40) : [],
+      lengthM: lengthOf(raw.lengthM, perimeter),
+      created: num(raw.created, 0, 8.64e15, Date.now()),
+      updated: num(raw.updated, 0, 8.64e15, Date.now()),
+    };
+    const look = TrackThemes.sanitizeLook(raw.look);
+    if (look) it.look = look;
+    const country = sanitizeCountry(raw.country);
+    if (country) it.country = country;
+    const kerb = sanitizeKerbStyle(raw.kerbStyle);
+    if (kerb !== "flat") it.kerbStyle = kerb;
+    if (sanitizeBerms(raw.berms) === false) it.berms = false;
+    if (typeof TrackDesignerProps !== "undefined" && TrackDesignerProps.sanitize) {
+      const props = TrackDesignerProps.sanitize(raw.props);
+      if (props) it.props = props;
+    }
+    it.id = idOf(it);
+    return it;
+  }
+
+  function load() {
+    const v = store.get(KEY, null);
+    const items = [];
+    const seen = new Set();
+    if (v && typeof v === "object" && Array.isArray(v.items)) {
+      let dropped = 0;
+      for (const raw of v.items.slice(0, LIMITS.items)) {
+        let it = null;
+        try { it = sanitize(raw); } catch (e) { Log.warn("track", "customTracks: unreadable design skipped: " + (e && e.message || e)); }
+        if (!it) { dropped++; continue; }
+        if (seen.has(it.id)) { const i = items.findIndex((x) => x.id === it.id); if (items[i].updated < it.updated) items[i] = it; continue; }
+        seen.add(it.id); items.push(it);
+      }
+      if (dropped) Log.warn("track", "customTracks: dropped " + dropped + " unreadable design(s)");
+    }
+    return { v: V, items };
+  }
+  const pendingDrops = new Set();
+  function write(items) {
+    const r = store.write(KEY, { v: V, items });
+    if (r && r.durable && pendingDrops.size) {
+      for (const id of pendingDrops) if (!items.some((x) => x.id === id)) dropRuns(id);
+      pendingDrops.clear();
+    }
+    return r;
+  }
+  function dropRunsOnceDurable(r, id) { if (r && r.durable) dropRuns(id); else pendingDrops.add(id); }
+
+  function arcToIndexFrac(pts, f) {
+    const N = pts.length, cum = [0];
+    for (let i = 0; i < N; i++) { const a = pts[i], b = pts[(i + 1) % N]; cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    const L = cum[N];
+    if (!(L > 0)) return f;
+    const x = Math.min(1, Math.max(0, f)) * L;
+    let i = 0;
+    while (i < N - 1 && cum[i + 1] < x) i++;
+    const seg = cum[i + 1] - cum[i];
+    return (i + (seg > 0 ? (x - cum[i]) / seg : 0)) / N;
+  }
+
+  function toRaw(it) {
+    const theme = TrackThemes.defFields(it.theme, it);
+    const hs = Array.isArray(it.heights) ? it.heights : null;
+    const pathPts = it.pts.map((p, i) => {
+      const y = hs && Number.isFinite(+hs[i]) ? +hs[i] : 0;
+      return y ? [p[0], p[1], y] : [p[0], p[1]];
+    });
+    const raw = Object.assign({
+      id: it.id, custom: true, name: it.name, gp: it.name + " GP", country: it.country || "",
+      lengthKm: Math.round(it.lengthM / 100) / 10 || 0.1, classic: false,
+      sceneryCoordinates: "racing", startFrac: 0, undulate: true,
+      baseHW: it.baseHW,
+      path: { len: it.lengthM, pts: pathPts },
+      turns: it.turns && it.turns.length ? it.turns.slice() : null, sectors: null,
+      bankZones: it.bankZones,
+      elevations: (it.heights && !heightsFlat(it.heights)) ? null : it.elevations,
+      bridges: it.bridges,
+    }, theme);
+    if (it.hwZones) raw.hwZones = it.hwZones.map((z) => Object.assign({}, z, { s0: arcToIndexFrac(it.pts, z.s0), s1: arcToIndexFrac(it.pts, z.s1) }));
+    const kerb = sanitizeKerbStyle(it.kerbStyle);
+    if (kerb !== "flat") raw.kerbStyle = kerb;
+    if (it.berms === false) raw.berms = false;
+    else if (it.bankZones && it.bankZones.length) raw.berms = true;
+    raw.scenery = TrackThemes.sceneryFor(it);
+    return raw;
+  }
+
+  const isCustom = (def) => !!(def && def.custom);
+  const _verdicts = new Map();
+
+  function sync() {
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return -1;
+    for (let i = Tracks.LIST.length - 1; i >= 0; i--) if (Tracks.LIST[i].custom) Tracks.LIST.splice(i, 1);
+    const items = load().items;
+    let n = 0;
+    for (const it of items) {
+      try { Tracks.LIST.push(TrackDef.fromRaw(toRaw(it))); n++; }
+      catch (e) { Log.warn("track", "customTracks: skipped " + it.id + ": " + (e && e.message || e)); }
+    }
+    for (const id of _verdicts.keys()) if (!items.some((it) => it.id === id)) _verdicts.delete(id);
+    return n;
+  }
+
+  function list() { return load().items; }
+  function get(id) { return load().items.find((x) => x.id === id) || null; }
+
+  function selectedId() {
+    const t = _G && Number.isInteger(_G.trackIdx) ? Tracks.LIST[_G.trackIdx] : null;
+    const id = t ? t.id : store.get("trackId", null);
+    return typeof id === "string" && id.startsWith("custom-") ? id : null;
+  }
+  function reselect(id) {
+    let idx = id ? Tracks.LIST.findIndex((t) => t.id === id) : -1;
+    if (idx < 0) idx = 0;
+    if (_G) _G.trackIdx = idx;
+    if (Tracks.LIST[idx]) { store.set("trackId", Tracks.LIST[idx].id); store.set("track", idx); }
+    return idx;
+  }
+
+  function dropRuns(id) {
+    try { store.rawDel("ttlb." + id); } catch (_) {  }
+    for (const M of [typeof Ghost !== "undefined" ? Ghost : null, typeof InputGhost !== "undefined" ? InputGhost : null]) {
+      try { if (M && typeof M.clear === "function") M.clear(id); } catch (e) { Log.warn("track", "customTracks: ghost not cleared for " + id + ": " + (e && e.message || e)); }
+    }
+  }
+
+  function upsert(design, opts) {
+    const it = sanitize(design);
+    if (!it) return { ok: false, reason: "geometry" };
+    const sel = selectedId();
+    const items = load().items;
+    const origin = opts && typeof opts.replace === "string" && opts.replace !== it.id ? items.findIndex((x) => x.id === opts.replace) : -1;
+    const i = items.findIndex((x) => x.id === it.id);
+    if (i >= 0) { it.created = items[i].created; items[i] = it; if (origin >= 0) items.splice(origin, 1); }
+    else if (origin >= 0) { it.created = items[origin].created; items[origin] = it; }
+    else { if (items.length >= LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items }; items.push(it); }
+    it.updated = Date.now();
+    const r = write(items);
+    if (origin >= 0) dropRunsOnceDurable(r, opts.replace);
+    if (sync() >= 0 && sel) reselect(sel === (opts && opts.replace) ? it.id : sel);
+    return { ok: true, id: it.id, replaced: origin >= 0 ? opts.replace : null, durable: !!(r && r.durable), reason: r && r.reason };
+  }
+
+  function remove(id) {
+    const sel = selectedId();
+    const items = load().items.filter((x) => x.id !== id);
+    const r = write(items);
+    dropRunsOnceDurable(r, id);
+    if (sync() >= 0 && sel) reselect(sel === id ? null : sel);
+    return { ok: true, durable: !!(r && r.durable) };
+  }
+
+  const COLLECTION_FORMAT = "apex26.tracks";
+  function exportCollection() { return { format: COLLECTION_FORMAT, v: 1, items: list() }; }
+  function importCollection(raw, validate) {
+    if (!raw || raw.format !== COLLECTION_FORMAT || raw.v !== 1 || !Array.isArray(raw.items)) return { ok: false, reason: "format" };
+    if (raw.items.length > LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items };
+    const items = list(), known = new Map(items.map((it) => [it.id, it]));
+    let added = 0, skipped = 0;
+    for (const [index, row] of raw.items.entries()) {
+      let it;
+      try {
+        it = sanitize(row);
+        if (!it || loopLength(it.pts) > 14000 || (validate && !validate(it).ok)) return { ok: false, reason: "invalid", index };
+        TrackDef.fromRaw(toRaw(it));
+      } catch (_) { return { ok: false, reason: "invalid", index }; }
+      const existing = known.get(it.id);
+      if (existing) {
+        if (canonical(existing) !== canonical(it)) return { ok: false, reason: "collision", index };
+        skipped++; continue;
+      }
+      known.set(it.id, it); items.push(it); added++;
+    }
+    if (items.length > LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items, needed: items.length };
+    if (!added) return { ok: true, added, skipped, durable: true };
+    const selected = selectedId(), result = write(items);
+    if (!result || !result.ok) return { ok: false, reason: "write" };
+    if (sync() >= 0 && selected) reselect(selected);
+    return { ok: true, added, skipped, durable: !!result.durable };
+  }
+
+  const collectionPlans = new WeakMap();
+  const collectionRevision = () => JSON.stringify(store.get(KEY, null));
+  async function preflightCollection(raw, validate, options) {
+    const opt = options || {}, valid = () => !opt.valid || opt.valid();
+    const records = [], summary = { ok: false, added: 0, skipped: 0, records };
+    if (!raw || raw.format !== COLLECTION_FORMAT || raw.v !== 1 || !Array.isArray(raw.items)) return Object.assign(summary, { reason: "format" });
+    if (raw.items.length > LIMITS.items) return Object.assign(summary, { reason: "full" });
+    const incoming = JSON.parse(JSON.stringify(raw.items)), revision = collectionRevision();
+    const items = list(), known = new Map(items.map((it) => [it.id, it]));
+    const pause = opt.yieldTask || (() => new Promise((resolve) => setTimeout(resolve, 0)));
+    for (const [index, row] of incoming.entries()) {
+      if (!valid()) return Object.assign(summary, { reason: "canceled" });
+      await pause();
+      if (!valid()) return Object.assign(summary, { reason: "canceled" });
+      let it, reason = null;
+      try {
+        it = sanitize(row);
+        if (!it || loopLength(it.pts) > 14000 || (validate && !validate(it).ok)) reason = "invalid";
+        else TrackDef.fromRaw(toRaw(it));
+      } catch (_) { reason = "invalid"; }
+      const existing = it && known.get(it.id);
+      if (!reason && existing && canonical(existing) !== canonical(it)) reason = "collision";
+      const status = reason ? "error" : existing ? "duplicate" : "add";
+      records.push({ index, name: it ? it.name : sanitizeName(row && row.name), status, reason });
+      if (!reason) {
+        if (existing) summary.skipped++;
+        else { known.set(it.id, it); items.push(it); summary.added++; }
+      }
+      if (opt.onProgress) opt.onProgress({ done: index + 1, total: incoming.length, added: summary.added, skipped: summary.skipped, records: records.map((r) => Object.assign({}, r)) });
+    }
+    if (!valid()) return Object.assign(summary, { reason: "canceled" });
+    const bad = records.find((r) => r.status === "error");
+    if (bad) return Object.assign(summary, { reason: bad.reason, index: bad.index });
+    if (items.length > LIMITS.items) return Object.assign(summary, { reason: "full" });
+    if (revision !== collectionRevision()) return Object.assign(summary, { reason: "changed" });
+    summary.ok = true;
+    collectionPlans.set(summary, { items, revision, added: summary.added, skipped: summary.skipped });
+    return summary;
+  }
+  function cancelCollectionPreflight(plan) { if (plan) collectionPlans.delete(plan); }
+  function commitCollectionPreflight(plan) {
+    const prepared = collectionPlans.get(plan);
+    if (!prepared) return { ok: false, reason: "canceled" };
+    collectionPlans.delete(plan);
+    if (prepared.revision !== collectionRevision()) return { ok: false, reason: "changed" };
+    if (!prepared.added) return { ok: true, added: 0, skipped: prepared.skipped, durable: true };
+    const selected = selectedId(), result = write(prepared.items);
+    if (!result || !result.ok) return { ok: false, reason: "write" };
+    if (sync() >= 0 && selected) reselect(selected);
+    return { ok: true, added: prepared.added, skipped: prepared.skipped, durable: !!result.durable };
+  }
+
+  function select(id) {
+    const idx = Tracks.LIST.findIndex((t) => t.id === id);
+    if (idx < 0) return -1;
+    store.set("trackId", id); store.set("track", idx);
+    return idx;
+  }
+
+  function draft() { return store.get(DRAFT_KEY, null); }
+  function setDraft(d) { if (d == null) store.rawDel(DRAFT_KEY); else store.set(DRAFT_KEY, d); }
+  function draftPrev() { return store.get(DRAFT_PREV_KEY, null); }
+  function setDraftPrev(d) { if (d == null) store.rawDel(DRAFT_PREV_KEY); else store.set(DRAFT_PREV_KEY, d); }
+
+  let _editorLoad = null, _G = null, _hooks = null;
+  const racing = () => typeof UiLayers !== "undefined" && !!UiLayers.inRace && UiLayers.inRace();
+  const say = (msg) => !!(_G && typeof _G.announce === "function") && _G.announce(msg, 5, "info") !== false;
+  const _editorLoaded = new Set();
+  function ensureEditor() {
+    if (_editorLoad) return _editorLoad;
+    const files = typeof ApexRoster !== "undefined" && ApexRoster.LAZY_EDITOR, edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_EDITOR_EDGES) || [];
+    if (!files || !_hooks || typeof _hooks.load !== "function") { Log.warn("track", "track designer bundle is not in this build"); return Promise.resolve(false); }
+    _editorLoad = _hooks.load(files, edges, { strict: true, loaded: _editorLoaded }).then((ok) => {
+      if (!ok) { _editorLoad = null; Log.warn("track", "the track designer bundle did not load"); return false; }
+      if (typeof TrackDesigner !== "undefined" && TrackDesigner.init) TrackDesigner.init(_G, { custom: CustomTracks });
+      return true;
+    }, (e) => { _editorLoad = null; throw e; });
+    return _editorLoad;
+  }
+  const _staleTold = new Set();
+  const later = (fn, ms) => { if (typeof setTimeout === "function") setTimeout(fn, ms); else fn(); };
+  let _judging = null, _sweepFailed = false;
+  const unjudged = () => load().items.filter((it) => !_verdicts.has(it.id));
+  function stale(id) { return _verdicts.get(id) || null; }
+  function judgeStored() {
+    if (_judging) return _judging;
+    if (!unjudged().length) return Promise.resolve(0);
+    const run = _judging = ensureEditor().then(async (ok) => {
+      if (!ok || typeof TrackValidate === "undefined") return -1;
+      let n = 0;
+      for (const it of unjudged()) {
+        if (racing()) break;
+        let red = null;
+        try { const v = TrackValidate.check(it), bad = v.issues.find((i) => i.level === "red"); red = v.ok ? null : (bad && bad.msg) || "This loop cannot be built"; }
+        catch (e) { red = "This loop cannot be checked: " + (e && e.message || e); }
+        _verdicts.set(it.id, red);
+        n++;
+        await new Promise((r) => later(r, 0));
+      }
+      return n;
+    }).catch((e) => { Log.warn("track", "stored designs not re-checked: " + (e && e.message || e)); return -1; })
+      .finally(() => { if (_judging === run) _judging = null; });
+    return run;
+  }
+  function tellStale(id) {
+    id = id || selectedId();
+    if (!id || !stale(id) || _staleTold.has(id) || racing()) return false;
+    const def = Tracks.LIST.find((t) => t.id === id);
+    if (!say(String(def && def.name || "THIS CIRCUIT").toUpperCase() + " BREAKS TODAY'S TRACK RULES — FIX IT IN TRACK DESIGNER")) return false;
+    Log.warn("track", "stored design " + id + " fails today's rules: " + stale(id));
+    _staleTold.add(id);
+    return true;
+  }
+  const _asked = new Set();
+  function badge(id, again) {
+    const why = stale(id);
+    if (why || _verdicts.has(id) || _asked.has(id) || racing()) return why;
+    _asked.add(id);
+    judgeStored().then(() => { if (stale(id)) { tellStale(id); if (again) again(); } });
+    return null;
+  }
+  function staleSweep() {
+    const resident = typeof TrackValidate !== "undefined";
+    if (racing() || !(resident || (selectedId() && !_sweepFailed))) return Promise.resolve(false);
+    return new Promise((res) => { if (typeof requestIdleCallback === "function") requestIdleCallback(() => res(), { timeout: 4000 }); else later(res, 800); })
+      .then(() => judgeStored()).then((n) => { _sweepFailed = n === -1; return tellStale(); }).catch(() => false);
+  }
+  let _ret = null;
+  function armReturn(r) { _ret = r && typeof r === "object" ? r : null; }
+  function afterStart() {
+    if (_ret && typeof TrackDesigner !== "undefined" && TrackDesigner.placeTest) TrackDesigner.placeTest(_ret);
+  }
+  let hashGeneration = 0, _lostLink = null;
+  function loseLink(hash) {
+    _lostLink = hash;
+    const rest = hash.replace(/^#/, "").split("&").filter((p) => p && !p.startsWith("track="));
+    try { history.replaceState(history.state, "", location.pathname + location.search + (rest.length ? "#" + rest.join("&") : "")); } catch (_) {  }
+    say("TRACK LINK DID NOT LOAD — TAP TRACK DESIGNER TO RETRY");
+  }
+  function consumeTrackHash() {
+    const generation = ++hashGeneration;
+    if (_ret) {
+      if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return Promise.resolve(null);
+      const r = _ret; _ret = null;
+      return ensureEditor().then((ok) => {
+        if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+          _ret = r;
+          return null;
+        }
+        if (!ok || typeof TrackDesigner === "undefined") return false;
+        Log.info("track", "back from the test drive on " + r.id);
+        TrackDesigner.open({ resume: r });
+        return true;
+      }).catch((e) => { Log.warn("track", "test drive return failed: " + (e && e.message || e)); return false; });
+    }
+    const hash = typeof location !== "undefined" ? String(location.hash || "") : "";
+    if (!/[#&]track=/.test(hash)) { staleSweep(); return Promise.resolve(false); }
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) { Log.info("track", "share link deferred: racing"); return Promise.resolve(null); }
+    return ensureEditor().then(async (ok) => {
+      if (!ok || typeof TrackCodec === "undefined" || typeof TrackDesigner === "undefined") {
+        if (generation === hashGeneration && location.hash === hash && !racing()) loseLink(hash);
+        return false;
+      }
+      let code = null;
+      try { code = TrackCodec.fromHash(hash); } catch (_) { code = null; }
+      const r = code ? await TrackCodec.decode(code) : { ok: false, reason: "malformed" };
+      if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+        Log.info("track", "share link deferred: racing after decode");
+        return null;
+      }
+      if (generation !== hashGeneration || location.hash !== hash) return false;
+      try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(hash)); } catch (_) {  }
+      if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
+      Log.info("track", "share link opened " + r.id);
+      TrackDesigner.open({ design: r.design, shared: true });
+      return true;
+    }).catch((e) => {
+      if (generation !== hashGeneration || location.hash !== hash) return false;
+      Log.warn("track", "share link failed: " + (e && e.message || e));
+      if (!racing()) loseLink(hash);
+      return false;
+    });
+  }
+  function create(G, hooks) {
+    _G = G; _hooks = hooks || {};
+    const door = _hooks.door || null;
+    let doorGeneration = 0;
+    if (door) door.onclick = () => {
+      if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiSelect();
+      const generation = ++doorGeneration;
+      const layers = typeof UiLayers !== "undefined" ? UiLayers : null;
+      const owner = layers && layers.top ? layers.top() : null;
+      let cancelled = false;
+      const cancel = (event) => {
+        if (event.type === "keydown" ? event.key === "Escape" : event.target !== door && !(door.contains && door.contains(event.target))) cancelled = true;
+      };
+      const doc = typeof document !== "undefined" ? document : null;
+      if (doc && doc.addEventListener) {
+        doc.addEventListener("click", cancel, true);
+        doc.addEventListener("keydown", cancel, true);
+      }
+      return ensureEditor().then((ok) => {
+        if (!ok || cancelled || generation !== doorGeneration || typeof TrackDesigner === "undefined") return;
+        if (layers && ((layers.inRace && layers.inRace()) || (layers.top && layers.top() !== owner))) return;
+        if (_lostLink && !/[#&]track=/.test(String(location.hash || ""))) {
+          const rest = String(location.hash || "").replace(/^#/, ""), link = _lostLink.replace(/^#/, "").split("&").filter((p) => p.startsWith("track="))[0];
+          _lostLink = null;
+          try { history.replaceState(history.state, "", location.pathname + location.search + "#" + (rest ? rest + "&" : "") + link); } catch (_) {  }
+          return consumeTrackHash().then((opened) => { if (opened === false) TrackDesigner.open(); });
+        }
+        TrackDesigner.open();
+      }).finally(() => {
+        if (doc && doc.removeEventListener) {
+          doc.removeEventListener("click", cancel, true);
+          doc.removeEventListener("keydown", cancel, true);
+        }
+      });
+    };
+    if (typeof window !== "undefined" && window.addEventListener) { consumeTrackHash(); window.addEventListener("hashchange", consumeTrackHash); }
+    return { ensureEditor, consumeTrackHash };
+  }
+
+  sync();
+
+  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, stale, badge, judgeStored, tellStale, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
+})();
+Object.freeze(CustomTracks);

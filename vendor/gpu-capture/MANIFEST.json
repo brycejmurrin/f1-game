@@ -1,0 +1,26 @@
+{
+  "generatedBy": "hunter #2964",
+  "date": "2026-10-19",
+  "packages": {
+    "spectorjs": "0.9.30",
+    "webglLint": "1.11.4"
+  },
+  "files": {
+    "spector.bundle.js": {
+      "sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "bytes": 682744
+    },
+    "SPECTOR-LICENSE.txt": {
+      "sha256": "2d0995ba877a5f0ee647e8ccd3e185179994954d00d4957aedd66f76f6debd87",
+      "bytes": 1075
+    },
+    "webgl-lint.js": {
+      "sha256": "17b14abb3ccd4aa57f379c374dc0bb395b31c7ecdb99adb7d6fa5581ddd3572d",
+      "bytes": 150774
+    },
+    "WEBGL-LINT-LICENSE.md": {
+      "sha256": "a5887987c58bac1c242439ebc7170a9759a9a344a9bfd444265eecee8687a3a7",
+      "bytes": 2241
+    }
+  }
+}

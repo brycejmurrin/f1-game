@@ -1,0 +1,424 @@
+const CamFeel = (function () {
+  "use strict";
+
+  const clamp = M4.clamp;
+  const DEG = Math.PI / 180;
+  const store = typeof GameStore !== "undefined" ? GameStore.store : null;
+
+  const DriveLens = (function () {
+
+    function abs(v) { return v < 0 ? -v : v; }
+
+    function chase(mode, eye, tgt, ctx) {
+      const sp = ctx.sp, yaw = ctx.yaw, brake = ctx.brake, slip = ctx.slip;
+      if (mode === "chase") return 4 * sp + 2 * abs(yaw) + 2 * brake;
+      if (mode === "far") return 7 * sp + 0.4 * abs(yaw);
+      if (mode === "drift") return 3 * sp + 6 * abs(yaw) + 4 * abs(slip);
+      if (mode === "low") return 5 * sp;
+      if (mode === "reverse") return 1.5 * sp;
+      return null;
+    }
+
+    function n(v) {
+      return typeof v === "number" && isFinite(v) ? v : 0;
+    }
+    function read(ctx) {
+      ctx = ctx || {};
+      return { sp: n(ctx.sp), yaw: n(ctx.yaw), brake: n(ctx.brake), slip: n(ctx.slip) };
+    }
+    function broadcast(mode, eye, tgt, ctx) {
+      const c = read(ctx);
+      if (mode === "heli") return 8 * c.sp + 3 * Math.abs(c.yaw);
+      if (mode === "side") return 5 * c.sp;
+      if (mode === "cinematic") return 4 * c.sp;
+      if (mode === "overhead") return 3 * c.sp;
+      if (mode === "drone") return 6 * c.sp + 2 * Math.abs(c.yaw);
+      if (mode === "rival") return 6 * c.sp;
+      if (mode === "pitwall") return 2 * c.sp;
+      if (mode === "trackside") return 3 * c.sp + 0.5 * Math.abs(c.yaw);
+      return null;
+    }
+
+    function spOf(ctx) { return (ctx && ctx.sp) || 0; }
+    function brakeOf(ctx) { return (ctx && ctx.brake) || 0; }
+    function onboard(mode, eye, tgt, ctx) {
+      if (mode === "cockpit" || mode === "helmet") return 1.5 * spOf(ctx) + 1 * brakeOf(ctx);
+      if (mode === "visor") return 1 * spOf(ctx);
+      if (mode === "hood") return 2 * spOf(ctx) + 1.5 * brakeOf(ctx);
+      if (mode === "tcam") return 2.5 * spOf(ctx);
+      if (mode === "rear") return 1 * spOf(ctx) + 4 * brakeOf(ctx);
+      return null;
+    }
+
+    function apply(mode, eye, tgt, ctx) {
+      let delta = chase(mode, eye, tgt, ctx);
+      if (delta == null) delta = broadcast(mode, eye, tgt, ctx);
+      if (delta == null) delta = onboard(mode, eye, tgt, ctx);
+      return delta;
+    }
+
+    return { apply };
+  })();
+  Object.freeze(DriveLens);
+
+  const BUZZ_MODES = Object.freeze(["cockpit", "hood", "visor", "tcam", "helmet"]);
+  const FREELOOK_MODES = BUZZ_MODES;
+  const LOOKBACK_SKIP = Object.freeze(["reverse", "rear"]);
+
+  const K_LATCH = "lookBackLatch";
+  const K_VIGNETTE = "speedVignette";
+
+  let latchOn = false;
+  let vignetteOn = false;
+  let latchHeld = false;
+  let prevLookDown = false;
+  let lookBackOn = false;
+  let aimSnap = false;
+
+  let lookYaw = 0, lookPitch = 0;
+  const YAW_MAX = 75, PITCH_MAX = 35;
+  const STICK_RATE = 90;
+  const MOUSE_SENS = 0.08;
+  const RECENTER = 6;
+
+  let _vigEl = null;
+
+  function readBool(key, def) {
+    if (!store) return def;
+    const v = store.get(key, null);
+    if (v === null || v === undefined) return def;
+    if (v === true || v === "1" || v === "on") return true;
+    if (v === false || v === "0" || v === "off") return false;
+    return def;
+  }
+  function loadSettings() {
+    latchOn = readBool(K_LATCH, false);
+    vignetteOn = readBool(K_VIGNETTE, false);
+  }
+  loadSettings();
+
+  function lookBackLatch() { return latchOn; }
+  function setLookBackLatch(on) {
+    latchOn = !!on;
+    if (store) store.set(K_LATCH, latchOn);
+    if (!latchOn) latchHeld = false;
+    return latchOn;
+  }
+  function speedVignette() { return vignetteOn; }
+  function setSpeedVignette(on) {
+    vignetteOn = !!on;
+    if (store) store.set(K_VIGNETTE, vignetteOn);
+    if (!vignetteOn) paintVignette(0);
+    return vignetteOn;
+  }
+
+  function isBuzzMode(mode) { return BUZZ_MODES.indexOf(mode) >= 0; }
+  function isFreeLookMode(mode) { return FREELOOK_MODES.indexOf(mode) >= 0; }
+  function looksAftAlready(mode) { return LOOKBACK_SKIP.indexOf(mode) >= 0; }
+
+  function speedFov(base, widen, spN, scale, depBoost) {
+    return CamFov.speedFov(base, widen, spN, scale, depBoost);
+  }
+  function modeFov(mode, sp, deploy) {
+    return CamFov.modeFov(mode, sp, deploy);
+  }
+
+  function shouldLookBack(mode, held) {
+    if (looksAftAlready(mode)) return false;
+    if (latchOn) return latchHeld;
+    return !!held;
+  }
+
+  function applyAim(eye, tgt, yawDeg, pitchDeg) {
+    if (!yawDeg && !pitchDeg) return;
+    let dx = tgt[0] - eye[0], dy = tgt[1] - eye[1], dz = tgt[2] - eye[2];
+    if (yawDeg) {
+      const c = Math.cos(yawDeg * DEG), s = Math.sin(yawDeg * DEG);
+      const nx = dx * c - dz * s, nz = dz * c + dx * s;
+      dx = nx; dz = nz;
+    }
+    if (pitchDeg) {
+      const L = Math.hypot(dx, dz), len = Math.hypot(L, dy) || 1;
+      const el = clamp(Math.atan2(dy, L) + pitchDeg * DEG, -1.45, 1.45);
+      const nl = Math.cos(el) * len;
+      dy = Math.sin(el) * len;
+      if (L > 1e-6) { const k = nl / L; dx *= k; dz *= k; }
+      else { dx = 0; dz = nl; }
+    }
+    tgt[0] = eye[0] + dx; tgt[1] = eye[1] + dy; tgt[2] = eye[2] + dz;
+  }
+
+  function applyFreeLook(eye, tgt) {
+    if (lookYaw || lookPitch) applyAim(eye, tgt, lookYaw, lookPitch);
+  }
+
+  function dampToward(cur, target, lambda, dt) {
+    if (dt <= 0) return cur;
+    return cur + (target - cur) * (1 - Math.exp(-lambda * dt));
+  }
+
+  const _fol = Object.create(null);
+  let _ns = "";
+  function scoped(prefix, fn) {
+    const prev = _ns;
+    _ns = prev + prefix;
+    try { return fn(); } finally { _ns = prev; }
+  }
+  function scopeKey(key) { return _ns + key; }
+  function follow(key, target, lambda, dt) {
+    if (_ns) key = _ns + key;
+    if (!(dt > 0)) { _fol[key] = target; return target; }
+    const cur = _fol[key];
+    const next = cur == null || cur !== cur ? target : dampToward(cur, target, lambda, dt);
+    _fol[key] = next;
+    return next;
+  }
+  function resetFollow(key) {
+    if (key) delete _fol[_ns + key];
+    else for (const k in _fol) delete _fol[k];
+  }
+
+  const DRIVE_RESPONSE = Object.freeze({
+    chase:     { sp: 4.2, yaw: 2.2, brake: 9, slip: 3.2 },
+    far:       { sp: 1.3, yaw: 1.0, brake: 1.6, slip: 1.0 },
+    drift:     { sp: 6.0, yaw: 6.5, brake: 7.5, slip: 12 },
+    low:       { sp: 5.5, yaw: 4.0, brake: 9, slip: 4.0 },
+    reverse:   { sp: 2.4, yaw: 2.0, brake: 8, slip: 2.0 },
+    heli:      { sp: 1.8, yaw: 0.75, brake: 1.2, slip: 1.0 },
+    side:      { sp: 6.5, yaw: 3.5, brake: 4, slip: 3 },
+    cinematic: { sp: 1.05, yaw: 0.9, brake: 1.0, slip: 0.9 },
+    overhead:  { sp: 2.2, yaw: 2.2, brake: 1.4, slip: 2 },
+    drone:     { sp: 1.2, yaw: 0.65, brake: 1.0, slip: 0.8 },
+    rival:     { sp: 3.2, yaw: 2.4, brake: 6, slip: 2.5 },
+    pitwall:   { sp: 2.2, yaw: 2.2, brake: 7, slip: 2 },
+    trackside: { sp: 2.0, yaw: 1.6, brake: 2, slip: 2 },
+    cockpit:   { sp: 3.5, yaw: 3, brake: 8, slip: 3 },
+    helmet:    { sp: 3.5, yaw: 3, brake: 8, slip: 3 },
+    hood:      { sp: 4.5, yaw: 4, brake: 9, slip: 4 },
+    visor:     { sp: 3.0, yaw: 3, brake: 3, slip: 3 },
+    tcam:      { sp: 5.0, yaw: 4, brake: 8, slip: 4 },
+    rear:      { sp: 5.5, yaw: 7, brake: 8, slip: 4 },
+  });
+  const _driveRateFallback = Object.freeze({ sp: 3, yaw: 3, brake: 5, slip: 3 });
+  const _driveCtx = { sp: 0, yaw: 0, brake: 0, slip: 0 };
+  const _driveKeys = Object.create(null);
+  for (const _driveMode of Object.keys(DRIVE_RESPONSE)) {
+    _driveKeys[_driveMode] = {
+      sp: "sp:" + _driveMode,
+      yaw: "yaw:" + _driveMode,
+      brk: "brk:" + _driveMode,
+      slp: "slp:" + _driveMode,
+    };
+  }
+  function drive(mode, eye, tgt, fov, extra, spN) {
+    if (!extra || extra.reduceMotion) return fov;
+    const dt = extra.dt > 0 ? extra.dt : 0;
+    if (!dt && !extra.snap) return fov;
+    const att = extra.att || {};
+    const rate = DRIVE_RESPONSE[mode] || _driveRateFallback;
+    let delta = null;
+    let keys = _driveKeys[mode];
+    if (!keys) {
+      keys = _driveKeys[mode] = {
+        sp: "sp:" + mode,
+        yaw: "yaw:" + mode,
+        brk: "brk:" + mode,
+        slp: "slp:" + mode,
+      };
+    }
+    _driveCtx.sp = follow(keys.sp, clamp(spN || 0, 0, 1), rate.sp, dt);
+    _driveCtx.yaw = follow(keys.yaw, clamp((att.yawRateCur || 0) / 1.1, -1, 1), rate.yaw, dt);
+    _driveCtx.brake = follow(keys.brk, clamp((att.baPitch || 0) / 0.025, 0, 1), rate.brake, dt);
+    _driveCtx.slip = follow(keys.slp, clamp((extra.slipLat || 0) / 6, -1, 1), rate.slip, dt);
+    const ctx = _driveCtx;
+    delta = DriveLens.apply(mode, eye, tgt, ctx);
+    return delta == null ? fov : fov + delta;
+  }
+
+  function tick(opts) {
+    opts = opts || {};
+    const mode = opts.mode || "chase";
+    const dt = opts.dt || 0;
+    const comfort = !!opts.comfort;
+    const racing = !!opts.racing;
+    const held = !!opts.lookHeld;
+
+    if (looksAftAlready(mode)) {
+      latchHeld = false;
+      prevLookDown = held;
+    } else if (latchOn && racing) {
+      if (held && !prevLookDown) latchHeld = !latchHeld;
+      prevLookDown = held;
+    } else {
+      prevLookDown = held;
+      if (!latchOn) latchHeld = false;
+    }
+
+    const lb = shouldLookBack(mode, held);
+    if (lb !== lookBackOn) { lookBackOn = lb; aimSnap = true; }
+
+    if (!racing || comfort || !isFreeLookMode(mode)) {
+      lookYaw = dampToward(lookYaw, 0, RECENTER * 1.5, dt);
+      lookPitch = dampToward(lookPitch, 0, RECENTER * 1.5, dt);
+    } else {
+      const sx = clamp(opts.stickX || 0, -1, 1);
+      const sy = clamp(opts.stickY || 0, -1, 1);
+      const mx = opts.mouseDx || 0, my = opts.mouseDy || 0;
+      const active = Math.abs(sx) > 0.02 || Math.abs(sy) > 0.02 || mx || my || !!opts.mouseHeld;
+      if (active) {
+        lookYaw = clamp(lookYaw + sx * STICK_RATE * dt + mx * MOUSE_SENS, -YAW_MAX, YAW_MAX);
+        lookPitch = clamp(lookPitch - sy * STICK_RATE * dt - my * MOUSE_SENS, -PITCH_MAX, PITCH_MAX);
+      } else {
+        lookYaw = dampToward(lookYaw, 0, RECENTER, dt);
+        lookPitch = dampToward(lookPitch, 0, RECENTER, dt);
+      }
+    }
+
+    if (!vignetteOn || comfort || !racing) paintVignette(0);
+    else {
+      const n = clamp(opts.spN || 0, 0, 1);
+      paintVignette(n * n * 0.55);
+    }
+  }
+
+  const _NO_STICK = Object.freeze({ x: 0, y: 0 }), _NO_MOUSE = Object.freeze({ dx: 0, dy: 0 });
+  const _raceOpts = { mode: null, dt: 0, comfort: false, racing: false, lookHeld: false, mouseHeld: false,
+    stickX: 0, stickY: 0, mouseDx: 0, mouseDy: 0, spN: 0 };
+  function tickRace(mode, dt, comfort, racing, spN) {
+    const ls = (typeof Input !== "undefined" && Input.lookStick) ? Input.lookStick() : _NO_STICK;
+    const lm = (typeof Input !== "undefined" && Input.consumeLookMouse) ? Input.consumeLookMouse() : _NO_MOUSE;
+    const o = _raceOpts;
+    o.mode = mode; o.dt = dt; o.comfort = comfort; o.racing = racing;
+    o.lookHeld = !!(typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack());
+    o.mouseHeld = !!(typeof Input !== "undefined" && Input.lookMouseHeld && Input.lookMouseHeld());
+    o.stickX = ls.x; o.stickY = ls.y; o.mouseDx = lm.dx; o.mouseDy = lm.dy; o.spN = spN;
+    tick(o);
+  }
+  function lookingBackNow() { return lookBackOn; }
+  function consumeAimSnap() { const v = aimSnap; aimSnap = false; return v; }
+
+  const SHAKE_W = Object.freeze([[37.1, 0.0, 53.3, 1.9], [41.7, 2.3, 59.9, 0.7], [33.4, 4.1, 47.2, 3.3], [44.9, 5.2, 61.3, 0.4]]);
+  const TUB_EYE_MAX = 0.03;
+  const ONBOARD_AIM_DEG = 6;
+  function shakeNoise(ch, tSec) {
+    const w = SHAKE_W[ch];
+    return 0.5 * (0.6 * Math.sin(tSec * w[0] + w[1]) + 0.4 * Math.sin(tSec * w[2] + w[3]));
+  }
+  function shake(eye, tgt, amt, tSec, onboard) {
+    if (!(amt > 0)) return;
+    const n0 = shakeNoise(0, tSec), n1 = shakeNoise(1, tSec), n2 = shakeNoise(2, tSec), n3 = shakeNoise(3, tSec);
+    if (onboard) {
+      eye[0] += clamp(n0 * amt * 0.1, -TUB_EYE_MAX, TUB_EYE_MAX);
+      eye[1] += clamp(n1 * amt * 0.07, -TUB_EYE_MAX, TUB_EYE_MAX);
+      applyAim(eye, tgt, n2 * amt * ONBOARD_AIM_DEG, n3 * amt * ONBOARD_AIM_DEG * 0.6);
+      return;
+    }
+    eye[0] += n0 * amt; eye[1] += n1 * amt * 0.7;
+    tgt[0] += n2 * amt * 0.6; tgt[1] += n3 * amt * 0.6;
+  }
+
+  let _vigOp = "";
+  function setVigOpacity(v) {
+    if (v !== _vigOp) { _vigOp = v; _vigEl.style.opacity = v; }
+  }
+  function paintVignette(amt) {
+    if (typeof document === "undefined") return;
+    if (!(amt > 0.01)) {
+      if (_vigEl) setVigOpacity("0");
+      return;
+    }
+    if (!_vigEl) {
+      _vigEl = document.createElement("div");
+      _vigEl.id = "speed-vignette";
+      _vigEl.setAttribute("aria-hidden", "true");
+      _vigEl.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:-1;" +
+        "opacity:0;transition:opacity .12s linear;" +
+        "background:radial-gradient(ellipse at center," +
+        "rgba(0,0,0,0) 42%,rgba(0,0,0,.55) 100%)";
+      const hud = document.getElementById("hud");
+      if (hud) hud.insertBefore(_vigEl, hud.firstChild);
+      else document.body.appendChild(_vigEl);
+    }
+    setVigOpacity(String(Math.round(clamp(amt, 0, 0.7) * 100) / 100));
+  }
+
+  function freeLookState() {
+    return { yaw: lookYaw, pitch: lookPitch };
+  }
+  function resetFreeLook() { lookYaw = 0; lookPitch = 0; }
+  function resetLatch() { latchHeld = false; prevLookDown = false; lookBackOn = false; aimSnap = false; }
+
+  function initUI() {
+    if (typeof SettingRow === "undefined" || !SettingRow.build) return;
+    if (document.getElementById("pm-looklatch")) return;
+    const panel = document.getElementById("pm-panel-display");
+    const host = panel || (document.getElementById("pm-res") && document.getElementById("pm-res").parentNode);
+    if (!host) return;
+    const fold = document.createElement("details");
+    fold.id = "pm-camfeel";
+    fold.className = "pm-renderer-sub";
+    const sum = document.createElement("summary");
+    sum.className = "adv-more-btn";
+    sum.id = "pm-camfeel-sum";
+    sum.textContent = "CAMERA FEEL";
+    const body = document.createElement("div");
+    body.id = "pm-camfeel-body";
+    body.setAttribute("role", "group");
+    body.setAttribute("aria-label", "Camera feel");
+    fold.appendChild(sum);
+    fold.appendChild(body);
+    const tools = document.getElementById("pm-visual-tuners");
+    const cock = document.getElementById("pm-cockpit");
+    if (cock && cock.parentNode === host) host.insertBefore(fold, cock.nextSibling);
+    else if (tools && tools.parentNode === host) host.insertBefore(fold, tools);
+    else host.appendChild(fold);
+
+    const help = (text) => {
+      const p = document.createElement("p");
+      p.className = "adv-help";
+      p.textContent = text;
+      body.appendChild(p);
+    };
+    const row = (id, label, title, read, write) => {
+      const r = SettingRow.build(id, label, SettingRow.labels(["off", "on"]));
+      r.row.title = title;
+      SettingRow.wire(r.row, { read, write });
+      body.appendChild(r.row);
+      help(title);
+    };
+    row("pm-looklatch", "LOOK BACK LATCH",
+      "OFF = hold B / the pad button to glance behind. ON = press once to latch the rear view, press again to release. Never flips reverse or rear cams.",
+      () => (latchOn ? "on" : "off"),
+      (v) => setLookBackLatch(v === "on"));
+    row("pm-pitentry", "PIT ENTRY SHOT",
+      "ON = a called stop's entry road cuts for about 2 s to a trackside camera that follows your car; you keep driving, and a tap, brake or steer cuts back.",
+      () => (store && store.get("pitEntryShot", true) === false ? "off" : "on"),
+      (v) => { if (store) store.set("pitEntryShot", v === "on"); });
+    row("pm-speedvig", "SPEED VIGNETTE",
+      "Soft tunnel darkening that grows with speed (motion comfort). Off by default; also forced off when Reduce Motion is on.",
+      () => (vignetteOn ? "on" : "off"),
+      (v) => setSpeedVignette(v === "on"));
+  }
+
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
+    else initUI();
+  }
+
+  return {
+    BUZZ_MODES, FREELOOK_MODES, LOOKBACK_SKIP,
+    get FOV_BY_MODE() { return CamFov.FOV_BY_MODE; },
+    K_LATCH, K_VIGNETTE,
+    speedFov, modeFov,
+    isBuzzMode, isFreeLookMode, looksAftAlready,
+    shouldLookBack, lookBackLatch, setLookBackLatch,
+    speedVignette, setSpeedVignette,
+    applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
+    lookingBackNow, consumeAimSnap, shake, shakeNoise, TUB_EYE_MAX,
+    follow, resetFollow, drive, lens: DriveLens,
+    initUI, loadSettings, scoped, scopeKey,
+  };
+})();
+Object.freeze(CamFeel);

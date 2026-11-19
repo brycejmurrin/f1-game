@@ -1,0 +1,13 @@
+@layer overlays {
+#loading[data-phase="run"] #ld-card::after {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 0.35em 0.65em;
+  border-radius: var(--r-xs, 2px);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.95),
+    0 1px 3px rgba(0, 0, 0, 0.85);
+}
+} 

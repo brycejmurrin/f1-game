@@ -1,0 +1,695 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["jeddah"] =
+  function (api) {
+      const { K, out, MAT, pyMin, place, backdrop,
+        addBox, addCyl, addCone, addFrustum, addPrism, anchor, vadd, building, tower, billboard,
+        grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
+        cityFront, modelGroup, waterBand, onTrack, hash, every, circuitKit,
+        lampPost, seat, along } = api;
+
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+
+      const SEA     = [0.02, 0.04, 0.08];
+      const SPANGLE = [1.0,  0.80, 0.40];
+      const LED     = [0.92, 0.96, 1.0 ];
+      const WINWARM = [1.0,  0.84, 0.48];
+      const WINCOOL = [0.58, 0.82, 1.0 ];
+      const WINGOLD = [1.0,  0.76, 0.28];
+      const WINTEAL = [0.42, 0.96, 0.94];
+      const GREEN   = [0.10, 0.56, 0.24];
+      const GOLD    = [0.95, 0.80, 0.12];
+      const GREY    = [0.72, 0.72, 0.74];
+      const MAGENTA = [0.96, 0.28, 0.64];
+      const DARKPOLE= [0.09, 0.09, 0.12];
+      const POOLAMB = [0.44, 0.38, 0.22];
+
+      const WALL_INL = [[0.27, 0.28, 0.34], [0.30, 0.31, 0.37],
+                        [0.25, 0.26, 0.32], [0.33, 0.33, 0.39]];
+
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:jeddah:pit-hospitality", frac: sl(0.99), side: -1, gap: 40,
+          size: [20, 10, 42], modules: 6,
+        });
+        circuitKit.hospitality({
+          id: "kit:jeddah:marina-hospitality", frac: 0.455, side: 1, gap: 112,
+          size: [22, 11, 46], modules: 6,
+        });
+      }
+
+      const floodMast = (k, side, dist) => {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 5)) return;
+        addCyl(out, a.c, 0.65, 38, DARKPOLE, 6, b);
+        addBox(out, vadd(a.c, a.u, 35.5), [8.0, 1.6, 1.0], LED, b);
+        addBox(out, vadd(a.c, a.u, 0.20), [5.0, 0.28, 5.0], POOLAMB, b);
+      };
+
+      const ledHead = (k, side, dist, col, lamp) => {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 2)) return;
+        addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
+        const yoke = vadd(vadd(a.c, a.u, 7.2), a.r, -side * 0.9);
+        addBox(out, vadd(vadd(a.c, a.u, 7.2), a.r, -side * 0.45), [1.0, 0.16, 0.16], DARKPOLE, b);
+        addBox(out, vadd(yoke, a.u, 0.02), [0.18, 0.18, 1.8], DARKPOLE, b);
+        for (const fork of [-0.85, 0.85]) {
+          const head = vadd(yoke, a.t, fork);
+          addBox(out, head, [0.55, 0.28, 0.55], col || LED, b);
+        }
+        addBox(out, vadd(vadd(a.c, a.u, 3.8), a.r, -side * 0.14),
+          [0.08, 5.2, 0.08], [1.05, 0.12, 0.18], b);
+        if (lamp && typeof lampPost === "function") {
+          const head = yoke;
+          lampPost({ pos: head, k, side, kind: "led" });
+        }
+      };
+
+      const lightTower = (k, side, dist) => {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 3)) return;
+        addCyl(out, a.c, 0.40, 22, DARKPOLE, 5, b);
+        addBox(out, vadd(a.c, a.u, 22.0), [3.0, 1.2, 3.0], LED, b);
+      };
+
+      const canyon = api.concreteCanyon;
+      const SAUDI_BLOCKS = [
+        [0.00, 0.16, GREEN], [0.16, 0.31, GOLD], [0.31, 0.47, GREEN],
+        [0.53, 0.68, GOLD], [0.68, 0.84, GREEN], [0.84, 0.997, GOLD],
+      ];
+      const terrainYAt = api.terrainYAt;
+      const seatCanyonFeet = (s0, s1, side, gap) => {
+        if (typeof along !== "function") return;
+        let fi = 0;
+        along(s0, s1, 5.5, (k, spacing) => {
+          if ((fi++ % 2) !== 0) return;
+          spacing = 11;
+          const p = anchor(k, side, gap);
+          const b = [p.r, p.u, p.t];
+          let lo = Infinity;
+          if (terrainYAt) {
+            for (const ox of [-0.35, 0, 0.35]) {
+              const x = p.c[0] + p.r[0] * ox + p.t[0] * ox * 0.5;
+              const z = p.c[2] + p.r[2] * ox + p.t[2] * ox * 0.5;
+              const y = terrainYAt(x, z);
+              if (y != null && y < lo) lo = y;
+            }
+          }
+          const idx = fi - 1;
+          if (Number.isFinite(lo)) {
+            const gapM = p.c[1] - lo;
+            if (gapM < 0.15 || gapM > 3.5) return;
+            const h = gapM + 0.28 + (idx % 5) * 0.022 + hash(k + side * 0.7) * 0.04;
+            const lift = hash(k * 1.3 + side) * 0.06;
+            addBox(out, [p.c[0] + p.r[0] * lift, lo + h * 0.5, p.c[2] + p.r[2] * lift],
+              [0.68, h, spacing * 0.88], [0.56, 0.57, 0.60], b);
+          } else if (side < 0) {
+            const h = 3.05 + (idx % 3) * 0.12;
+            addBox(out, vadd(p.c, p.u, -h * 0.5 + 0.08),
+              [0.70, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
+          }
+        }, `jeddah-canyon-feet:${side}:${gap.toFixed(2)}`);
+      };
+      const PIT_W0 = sl(0.9448), PIT_W1 = sl(0.0312);
+      for (const side of [-1, 1]) {
+        for (const [b0, b1, accent] of SAUDI_BLOCKS) {
+          const a1 = side === -1 && b0 === 0.00 ? PIT_W0 : b1;
+          const a0 = side === -1 && b0 === 0.16 ? PIT_W1 : b0;
+          canyon(a0, a1, side, 4.35, {
+            h: (b0 < 0.5 ? 1.35 : 1.40) + (side > 0 ? 0.06 : 0.08),
+            stripeCol: accent, stripeEvery: 5,
+          });
+          seatCanyonFeet(a0, a1, side, 4.35);
+        }
+        canyon(0.47, 0.53, side, 5.05, {
+          h: 1.40 + (side > 0 ? 0.08 : 0.00),
+          stripeCol: GOLD, stripeEvery: 2,
+        });
+        seatCanyonFeet(0.47, 0.53, side, 5.05);
+      }
+
+      let poleI = 0;
+      every(22, (k) => {
+        for (const side of [1, -1]) {
+          const accent = (poleI % 5 === 2) ? [0.24, 1.10, 0.48]
+                       : (poleI % 5 === 4) ? [1.10, 0.88, 0.18] : LED;
+          ledHead(k, side, (side > 0 ? 4.6 : 4.9) + hash(k * 1.7 + side) * 1.0, accent,
+                  poleI % 7 === 0);
+          poleI++;
+        }
+      });
+      for (let i = 0; i < 4; i++) {
+        floodMast(K(i / 4 + 0.02), (i % 2) ? -1 : 1, 20 + (i % 2) * 6);
+      }
+      for (let i = 0; i < 4; i++) {
+        lightTower(K(i / 4 + 0.08), (i % 2) ? 1 : -1, 11 + (i % 2) * 2);
+      }
+
+      const PALMFROND = [0.12, 0.44, 0.19];
+      const palmLit = (k, side, dist, h, frond) => {
+        palm(k, side, dist, h, frond);
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 4)) return;
+        addCyl(out, vadd(a.c, a.u, 0.4), 0.38, Math.min(h * 0.55, 5.5),
+          [1.05, 0.92, 0.55], 6, b);
+      };
+      for (let i = 0; i < 8; i++) {
+        palmLit(K(0.42 + i * 0.04), 1, 18 + hash(i * 5) * 4, 6 + hash(i * 3) * 3, PALMFROND);
+      }
+      for (let i = 0; i < 8; i++) {
+        palmLit(K(i / 8 + 0.01), -1, 22 + hash(i * 7) * 5, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
+      }
+      for (let i = 0; i < 9; i++) {
+        palmLit(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
+          6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
+      }
+      for (let i = 0; i < 16; i++) {
+        const s = 0.655 + i * 0.0138;
+        palmLit(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
+        if (i % 3 === 0) palmLit(K(s + 0.007), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
+      }
+      for (let i = 0; i < 20; i++) {
+        const s = 0.08 + i * 0.015;
+        palmLit(K(s), 1, 9.5 + (i % 3) * 2.2, 7.2 + hash(i * 19) * 2.4, PALMFROND);
+        if (i % 2 === 0)
+          palmLit(K(s + 0.008), 1, 15.5 + (i % 2) * 2, 6.4 + hash(i * 23) * 2, [0.10, 0.40, 0.18]);
+      }
+      for (let i = 0; i < 12; i++) {
+        palmLit(K(0.42 + i * 0.014), 1, 10 + (i % 2) * 3.5,
+          6.8 + hash(i * 29) * 2.2, (i % 2) ? PALMFROND : [0.14, 0.48, 0.20]);
+      }
+      if (typeof along === "function") {
+        const SEA_WALL = [0.78, 0.76, 0.70];
+        const SEA_CAP  = [0.88, 0.86, 0.80];
+        const seatRail = (k, side, dist, spacing, b, a) => {
+          if (!terrainYAt) return;
+          let lo = Infinity;
+          for (const ox of [-0.2, 0, 0.2]) {
+            const x = a.c[0] + a.r[0] * ox, z = a.c[2] + a.r[2] * ox;
+            const y = terrainYAt(x, z);
+            if (y != null && y < lo) lo = y;
+          }
+          if (!Number.isFinite(lo)) return;
+          const gapM = a.c[1] - lo;
+          if (gapM < 0.22 || gapM > 2.5) return;
+          const h = gapM + 0.1;
+          addBox(out, [a.c[0], lo + h * 0.5, a.c[2]],
+            [0.50, h, spacing * 0.88], [0.62, 0.60, 0.55], b);
+        };
+        along(0.07, 0.36, 7.0, (k, spacing) => {
+          const a = anchor(k, 1, 7.2), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 2.5)) return;
+          addBox(out, vadd(a.c, a.u, 0.55), [0.45, 1.1, spacing * 0.92], SEA_WALL, b);
+          addBox(out, vadd(a.c, a.u, 1.15), [0.55, 0.18, spacing * 0.92], SEA_CAP, b);
+          seatRail(k, 1, 7.2, spacing, b, a);
+        });
+        along(0.44, 0.62, 8.0, (k, spacing) => {
+          const a = anchor(k, 1, 8.0), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 2.5)) return;
+          addBox(out, vadd(a.c, a.u, 0.50), [0.40, 1.0, spacing * 0.90], SEA_WALL, b);
+          addBox(out, vadd(a.c, a.u, 1.05), [0.50, 0.16, spacing * 0.90], WINTEAL, b);
+          seatRail(k, 1, 8.0, spacing, b, a);
+        });
+      }
+
+      for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
+        [0.62, -1], [0.74, 1], [0.81, -1], [0.92, 1]]) {
+        marshalPost(K(s), side, 3.5);
+      }
+
+      waterBand(sl(0.036), 0.375, 1, 35, 550, 12, SEA, { id: "jeddah-red-sea" });
+      waterBand(0.43, 0.64, 1, 22, 150, 12, [0.018, 0.035, 0.080],
+        { id: "jeddah-marina-water" });
+      for (let i = 0; i < 11; i++) {
+        const s = 0.425 + i * 0.019;
+        const k = K(s), col = (i % 3 === 0) ? WINTEAL : SPANGLE;
+        place(k, 1, 12 + (i % 2) * 1.5, [0.34, 1.7, 0.34], col);
+        place(k, 1, 14.5 + (i % 2), [2.8, 0.84, 1.2], col);
+      }
+
+      {
+        const a = anchor(K(0.20), 1, 260);
+        const b = [a.r, a.u, a.t];
+        modelGroup("jeddah-fountain", {
+          center: [a.c[0], pyMin + 175, a.c[2]], size: [40, 360, 40], basis: b,
+        }, (stage) => {
+          const PLUME = [0.96, 0.98, 1.20];
+          const SPRAY = [0.92, 0.96, 1.25];
+          addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 2.4, 280, PLUME, 8, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 3.6, 55, [0.90, 0.94, 1.15], 8, b);
+          addCone(stage, [a.c[0], pyMin + 278.5, a.c[2]], 16, 78, SPRAY, 8, b);
+          addCone(stage, [a.c[0], pyMin + 310, a.c[2]], 9, 40, [0.98, 0.99, 1.25], 8, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 12, 3.0, [0.16, 0.18, 0.22], 8, b);
+          addCyl(stage, [a.c[0], pyMin + 2.2, a.c[2]], 13.5, 0.7, LED, 10, b);
+          for (let r = 0; r < 8; r++) {
+            const ang = (r / 8) * Math.PI * 2;
+            const ox = Math.cos(ang) * 10.5, oz = Math.sin(ang) * 10.5;
+            addBox(stage, [a.c[0] + ox, pyMin + 3.0, a.c[2] + oz], [1.8, 0.9, 1.8], SPANGLE, b);
+          }
+          for (const yh of [50, 100, 150, 200, 245]) {
+            addCyl(stage, [a.c[0], pyMin + yh, a.c[2]], 3.0, 1.6, LED, 8, b);
+          }
+        }, { required: true });
+      }
+
+      {
+        const CORAL   = [0.84, 0.79, 0.68];
+        const CORAL_D = [0.76, 0.71, 0.60];
+        const TEAL    = [0.24, 0.46, 0.44];
+        const TEAL_L  = [0.32, 0.55, 0.51];
+        const WOOD_D  = [0.34, 0.26, 0.18];
+        for (let i = 0; i < 16; i++) {
+          const sf = 0.545 + i * 0.0125;
+          const kk = K(sf), hv = hash(kk * 37 + i * 11);
+          const gap = 150 + (i % 4) * 30 + hv * 22;
+          const a = anchor(kk, -1, gap);
+          if (onTrack(a.c[0], a.c[2], 30)) continue;
+          const b = [a.r, a.u, a.t];
+          const floors = 4 + Math.floor(hv * 3);
+          const fh = 3.9;
+          const h = floors * fh;
+          const w = 11 + hv * 5, d = 10 + hash(kk * 13) * 5;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, d],
+                 hv < 0.45 ? CORAL_D : CORAL, b);
+          addBox(out, vadd(a.c, a.u, h + 0.55), [w + 0.7, 1.1, d + 0.7], CORAL_D, b);
+          for (let f = 1; f < floors; f++) {
+            const y = f * fh + fh * 0.45;
+            const col  = ((f + i) % 2) ? TEAL : TEAL_L;
+            for (const t of [-d * 0.24, d * 0.24]) {
+              const p = vadd(vadd(a.c, a.t, t), a.u, y);
+              addBox(out, vadd(p, a.r, w * 0.5 + 0.55), [1.1, fh * 0.72, d * 0.34], col, b);
+              for (let m = -1; m <= 1; m++) {
+                addBox(out, vadd(vadd(p, a.r, w * 0.5 + 1.12), a.t, m * d * 0.10),
+                       [0.12, fh * 0.66, 0.13], WOOD_D, b);
+              }
+              addPrism(out, vadd(vadd(p, a.r, w * 0.5 + 0.55), a.u, fh * 0.42),
+                       [1.35, 0.42, d * 0.36], WOOD_D, b);
+            }
+            const q = vadd(vadd(a.c, a.t, d * 0.5 + 0.5), a.u, y);
+            addBox(out, q, [w * 0.34, fh * 0.72, 1.05], col, b);
+          }
+        }
+      }
+
+      gantry(sl(0.0), 13, [0.12, 0.13, 0.17]);
+      gantry(sl(0.0235), 11, [0.12, 0.13, 0.17]);
+
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:jeddah:pit-building", frac: sl(0.0), side: -1, gap: 11.8,
+          size: [18, 11, 120], garages: 12,
+        });
+      } else {
+        building(K(sl(0.0)), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+      }
+      const STAND_GREEN = [0.07, 0.30, 0.16];
+      const STAND_GOLD  = [0.72, 0.58, 0.16];
+      grandstandEx(sl(0.99), 1, 48, 60, STAND_GREEN, [0.42, 0.46, 0.40],
+        { tiers: 2, roof: "cantilever", endWalls: true, pylons: true,
+          roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
+      grandstandEx(sl(0.97), 1, 48, 50, STAND_GREEN, [0.40, 0.44, 0.40],
+        { tiers: 1, roof: "cantilever", endWalls: true,
+          roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
+
+      cityFront(0.88, 0.98, 1, 72, {
+        minH: 8, maxH: 16, depth: 12,
+        palette: WALL_INL, lit: true,
+        step: 70, floor: 3,
+      });
+
+      {
+        const NEON_ROW = [MAGENTA, WINTEAL, GOLD, GREEN, SPANGLE, WINCOOL];
+        const closedMass = (frac, side, dist, w, h, d, wallCol, neonCol) => {
+          const a = anchor(K(frac), side, dist), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.35)) return;
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (c, sz, col) => {
+            if (box) box(out, c, sz, col, b);
+            else addBox(out, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          put(a.c, [w, h, d], wallCol);
+          put(vadd(a.c, a.r, -side * (w * 0.5 + 0.06)), [0.14, h * 0.70, d * 0.70], neonCol);
+          put(vadd(a.c, a.u, h), [w * 1.02, 0.9, d * 1.02], neonCol);
+        };
+        for (let i = 0; i < 10; i++) {
+          const sf = 0.880 + i * 0.012;
+          const hv = hash(i * 41 + 3);
+          closedMass(sf, -1, 48,
+            6 + hv * 3, 14 + hv * 8, 9 + hv * 2,
+            WALL_INL[i % WALL_INL.length], NEON_ROW[i % NEON_ROW.length]);
+        }
+        for (let i = 0; i < 7; i++) {
+          const sf = 0.90 + i * 0.013;
+          const hv = hash(i * 67 + 11);
+          closedMass(sf, -1, 108 + (i % 3) * 6,
+            12 + hv * 5, 40 + hv * 36, 12 + hv * 5,
+            WALL_INL[i % WALL_INL.length], NEON_ROW[i % NEON_ROW.length]);
+        }
+        for (let i = 0; i < 3; i++) {
+          const sf = 0.012 + i * 0.016;
+          const hv = hash(i * 71 + 13);
+          closedMass(sf, -1, 110 + i * 5,
+            11 + hv * 4, 42 + hv * 32, 11 + hv * 4,
+            WALL_INL[(i + 1) % WALL_INL.length], NEON_ROW[(i + 2) % NEON_ROW.length]);
+        }
+      }
+
+      cityFront(0.04, 0.24, -1, 64, {
+        minH: 10, maxH: 22, depth: 14,
+        palette: WALL_INL, lit: true,
+        step: 55, floor: 3,
+      });
+      cityFront(0.35, 0.48, -1, 72, {
+        minH: 12, maxH: 24, depth: 14,
+        palette: WALL_INL, lit: true,
+        step: 55, floor: 3,
+      });
+      cityFront(0.56, 0.74, -1, 64, {
+        minH: 10, maxH: 22, depth: 14,
+        palette: WALL_INL, lit: true, windowCol: WINGOLD,
+        step: 55, floor: 3,
+      });
+
+      {
+        const a = anchor(K(0.275), -1, 86), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 28)) {
+          const H = 128;
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          modelGroup("jeddah-blue-sail", {
+            center: vadd(a.c, a.u, H * 0.5), size: [22, H + 10, 48], basis: b,
+          }, (stage) => {
+            const SAIL = [0.18, 0.55, 1.15];
+            const SAIL_HI = [0.42, 0.82, 1.25];
+            stage._mat = MAT.METAL;
+            put(stage, a.c, [8, H, 36], [0.14, 0.16, 0.22]);
+            stage._mat = MAT.GLASS;
+            put(stage, vadd(vadd(a.c, a.r, -4.2), a.u, -0.1), [1.2, H * 0.92 + 0.1, 34], SAIL);
+            put(stage, vadd(vadd(a.c, a.r, -5.0), a.u, -0.2), [0.6, H * 0.88 + 0.2, 28], SAIL_HI);
+            for (const z of [-12, -4, 4, 12]) {
+              put(stage, vadd(vadd(vadd(a.c, a.r, -5.5), a.t, z), a.u, -0.3),
+                [0.4, H * 0.85 + 0.3, 1.2], (z < 0) ? SAIL_HI : SAIL);
+            }
+            stage._mat = 0;
+            put(stage, vadd(a.c, a.u, H), [18, 2.2, 22], [0.72, 0.74, 0.78]);
+            put(stage, vadd(a.c, a.u, H + 2.2), [14, 0.6, 16], LED);
+          }, { required: true });
+        }
+      }
+      {
+        const a = anchor(K(0.295), -1, 90), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 30)) {
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          modelGroup("jeddah-golden-twins", {
+            center: vadd(a.c, a.u, 70), size: [48, 148, 28], basis: b,
+          }, (stage) => {
+            const GOLDW = [1.05, 0.88, 0.42];
+            for (const lat of [-12, 12]) {
+              const base = vadd(a.c, a.t, lat);
+              put(stage, base, [16, 132, 18], [0.22, 0.20, 0.18]);
+              stage._mat = MAT.GLASS;
+              put(stage, vadd(base, a.u, 8), [16.6, 116, 18.6], GOLDW);
+              stage._mat = 0;
+              put(stage, vadd(base, a.u, 132), [17, 4, 19], [0.55, 0.48, 0.28]);
+            }
+            put(stage, vadd(a.c, a.u, 8), [6, 116, 10], [0.10, 0.10, 0.12]);
+          }, { required: true });
+        }
+      }
+      building(K(0.27), -1, 82, 22, 24, 18, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 5 });
+      building(K(0.30), -1, 88, 20, 22, 16, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 5 });
+      tower(K(0.285), -1, 92, 14, 24, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 6 });
+      cityFront(0.245, 0.335, -1, 68, {
+        minH: 11, maxH: 23, depth: 14,
+        palette: WALL_INL, lit: true, windowCol: WINCOOL,
+        step: 68, floor: 3,
+      });
+
+      {
+        const a = anchor(K(sl(api.def.turns[0])), -1, 74), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          modelGroup("jeddah-golden-tower-hotel", {
+            center: vadd(a.c, a.u, 28), size: [18, 58, 22], basis: b,
+          }, (stage) => {
+            put(stage, a.c, [14, 52, 18], [0.28, 0.26, 0.22]);
+            stage._mat = MAT.GLASS;
+            put(stage, vadd(a.c, a.u, 4), [14.5, 44, 18.5], WINGOLD);
+            stage._mat = 0;
+            put(stage, vadd(a.c, a.u, 52), [15, 3.5, 19], GOLD);
+            put(stage, vadd(a.c, a.u, 55.5), [8, 1.2, 10], LED);
+          }, { required: true });
+        }
+      }
+
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.42 + i * 0.011);
+        const a = anchor(k, 1, 40 + (i % 3) * 12), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 9)) continue;
+        const hl = 5.5 + (i % 3) * 1.5;
+        addBox(out, vadd(a.c, a.u, 1.0), [2.8, 2.6, hl], [0.94, 0.94, 0.96], b);
+        addBox(out, vadd(a.c, a.u, 2.3), [2.9, 0.3, hl], (i % 2) ? SPANGLE : WINCOOL, b);
+        addCyl(out, vadd(a.c, a.u, 2.5), 0.18, 12, [0.88, 0.88, 0.92], 4, b);
+      }
+      {
+        const a = anchor(K(0.45), 1, 78), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          addBox(out, vadd(a.c, a.u, 3), [26, 6, 11], [0.25, 0.26, 0.29], b);
+          addBox(out, vadd(a.c, a.u, 4.5), [26.3, 1.0, 11.3], WINWARM, b);
+        }
+      }
+      const slabOnGround = (k, dist, w, len, col, lift) => {
+        const a = anchor(k, 1, dist), b = [a.r, a.u, a.t];
+        const hs = [-w / 2, 0, w / 2].map((o) => {
+          const s = anchor(k, 1, dist + o).c;
+          return (s[0] - a.c[0]) * a.u[0] + (s[1] - a.c[1]) * a.u[1] + (s[2] - a.c[2]) * a.u[2];
+        });
+        const top = Math.max(...hs) + 0.3 + lift, bot = Math.min(...hs) + 0.3 - 0.05;
+        addBox(out, vadd(a.c, a.u, (top + bot) / 2), [w, top - bot, len], col, b);
+      };
+      {
+        const PROMO = [
+          [0.30, 0.62, 0.68], [0.22, 0.55, 0.58], [0.86, 0.55, 0.32],
+          [0.90, 0.62, 0.70], [0.92, 0.82, 0.28], [0.55, 0.78, 0.82],
+        ];
+        for (let i = 0; i < 14; i++) {
+          const sf = 0.58 + i * 0.011;
+          const a = anchor(K(sf), 1, 9.5);
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          slabOnGround(K(sf), 9.5, 2.8, 7.5, PROMO[i % PROMO.length], 0.04);
+          slabOnGround(K(sf), 9.5 - 1.6, 0.25, 7.5, [0.92, 0.92, 0.94], 0.04);
+          slabOnGround(K(sf), 9.5 + 1.6, 0.25, 7.5, [0.92, 0.92, 0.94], 0.04);
+        }
+      }
+
+      floodMast(K(0.49), -1, 22);
+      floodMast(K(0.51),  1, 26);
+      if (typeof scaffoldStand === "function") {
+        scaffoldStand(0.466, 0.534, 1, 17, {
+          rows: 5, rise: 1.25, setback: 1.9, step: 21, density: 0.5, legEvery: 1,
+          tubeCol: [0.66, 0.67, 0.70], deckCol: [0.62, 0.58, 0.50],
+          bench: [[0.08, 0.34, 0.18], [0.74, 0.60, 0.16], [0.86, 0.86, 0.84]],
+        });
+      } else {
+        grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
+        grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
+        grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
+      }
+      tyreWall(0.485, 0.515,  1, 4.5, MAGENTA);
+
+      building(K(0.69), -1, 70, 22, 22, 18, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 5 });
+      tower(K(0.71), -1, 86, 14, 24, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 6 });
+
+      billboard(K(0.70), -1, 13, 10, 11, GREEN);
+      billboard(K(0.69), -1, 20, 9,  11, MAGENTA);
+      billboard(K(0.73), -1, 24, 9,  10, WINTEAL);
+
+      {
+        const NEON_COLS = [MAGENTA, WINTEAL, GOLD, GREEN, SPANGLE, [0.20, 0.75, 1.15], [1.10, 0.35, 0.55]];
+        for (let i = 0; i < 20; i++) {
+          const s = i / 20;
+          const col = NEON_COLS[i % NEON_COLS.length];
+          const side = (i % 2) ? 1 : -1;
+          const a = anchor(K(s), side, 4.55), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 2)) continue;
+          addBox(out, vadd(a.c, a.u, 1.35), [0.28, 0.55, 7.0], col, b);
+          addBox(out, vadd(a.c, a.u, 1.00), [0.18, 0.35, 7.0], LED, b);
+          if (i % 2 === 0) {
+            addBox(out, vadd(vadd(a.c, a.r, -side * 0.35), a.u, 3.2),
+              [0.22, 4.5, 0.55], col, b);
+          }
+        }
+        const boards = [
+          [0.98, -1, 52, 12, 10, MAGENTA],
+          [0.99,  1, 52, 11,  9, WINTEAL],
+          [0.015,-1, 52, 10,  9, GOLD],
+          [0.04,  1, 52,  9,  8, GREEN],
+          [0.48, -1, 14, 10,  9, MAGENTA],
+          [0.52,  1, 16, 11, 10, WINTEAL],
+          [0.80, -1, 14,  9,  8, SPANGLE],
+          [0.83,  1, 15, 10,  9, [0.20, 0.75, 1.15]],
+          [0.91, -1, 52, 11, 10, MAGENTA],
+          [0.94,  1, 52, 10,  9, GOLD],
+          [0.25, -1, 16,  9,  8, WINTEAL],
+          [0.33, -1, 15,  8,  8, GREEN],
+        ];
+        for (const [s, side, gap, w, h, col] of boards) {
+          billboard(K(s), side, gap, w, h, col);
+        }
+        for (let i = 0; i < 16; i++) {
+          const s = 0.06 + i * 0.055;
+          const side = (i % 2) ? -1 : 1;
+          const col = NEON_COLS[i % NEON_COLS.length];
+          const sfHot = s >= 0.88 || s <= 0.08;
+          const gap = sfHot ? (48 + (i % 3) * 1.5) : (9.5 + (i % 3) * 1.2);
+          const a = anchor(K(s), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 3)) continue;
+          addBox(out, vadd(a.c, a.u, 1.6), [2.4, 3.2, 4.5], [0.12, 0.12, 0.15], b);
+          addBox(out, vadd(a.c, a.u, 3.4), [2.5, 0.55, 4.6], col, b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * 1.25), a.u, 2.0), [0.12, 2.2, 3.8], col, b);
+        }
+      }
+
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 5; i++) {
+          place(K(0.78 + i * 0.010), side, 5, [5.5, 0.84, 2.8],
+                (i % 2) ? [0.92, 0.08, 0.08] : [0.96, 0.96, 0.97]);
+        }
+      }
+
+      if (typeof scaffoldStand === "function") {
+        scaffoldStand(0.876, 0.944, 1, 48, {
+          rows: 4, rise: 1.25, setback: 1.9, step: 21, density: 0.52, legEvery: 1,
+          tubeCol: [0.66, 0.67, 0.70], deckCol: [0.62, 0.58, 0.50],
+          bench: [[0.08, 0.34, 0.18], [0.74, 0.60, 0.16], [0.86, 0.86, 0.84]],
+          awning: true, awningCols: [[0.90, 0.89, 0.85], [0.10, 0.38, 0.20]],
+        });
+      } else {
+        grandstand(0.89, 1, 48, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
+        grandstand(0.925, 1, 52, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
+      }
+      lightTower(K(0.90),  1, 52);
+      lightTower(K(0.93), -1, 52);
+      floodMast(K(0.91), -1, 24);
+
+      tyreWall(sl(api.def.turns[0] - 0.008), sl(api.def.turns[0] + 0.010), 1, 2.8, GREEN);
+      tyreWall(0.79, 0.82,  1, 2.8, SPANGLE);
+      guardrail(0.34, 0.38, -1, 2.4, [0.55, 0.56, 0.6]);
+      guardrail(0.96, 0.99,  1, 2.4, [0.55, 0.56, 0.6]);
+
+      billboard(K(0.95),  1, 52, 10, 10, GREEN);
+      billboard(K(0.96), -1, 52, 10,  9, SPANGLE);
+      billboard(K(0.97), -1, 52, 10, 10, MAGENTA);
+      billboard(K(0.10),  1, 15,  8,  8, [0.12, 0.68, 0.98]);
+      billboard(K(0.55),  1, 13,  8,  7, [0.92, 0.12, 0.68]);
+
+      {
+        const sA = anchor(K(0.50), 1, 42), sBasis = [sA.r, sA.u, sA.t];
+        if (!onTrack(sA.c[0], sA.c[2], 10)) {
+          out._mat = MAT.STONE;
+          addCyl(out, sA.c, 3.2, 22, [0.82, 0.78, 0.68], 8, sBasis);
+          addCone(out, vadd(sA.c, sA.u, 22), 5, 9, [0.94, 0.86, 0.64], 8, sBasis);
+          out._mat = 0;
+        }
+      }
+
+      const floatingMosque = (k, gap) => {
+        const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
+        const base = [a.c[0], pyMin - 0.3, a.c[2]];
+        modelGroup("jeddah-floating-mosque", {
+          center: vadd(base, a.u, 21), size: [34, 44, 30], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 1.7), [26, 4.6, 26], [0.90, 0.90, 0.86], b);
+          addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
+          addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
+          addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
+          addFrustum(stage, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
+          addCone(stage, vadd(base, a.u, 16), 4.7, 5.5, [0.96, 0.96, 0.93], 12, b);
+          for (const dx of [-6.5, 6.5]) for (const dz of [-6.5, 6.5]) {
+            const cc = vadd(vadd(vadd(base, a.u, 11), a.r, dx), a.t, dz);
+            addCone(stage, cc, 1.4, 3.2, [0.95, 0.95, 0.92], 8, b);
+          }
+          const mc = vadd(base, a.r, 14);
+          addCyl(stage, vadd(mc, a.u, 2), 1.4, 26, [0.94, 0.94, 0.91], 8, b);
+          addFrustum(stage, vadd(mc, a.u, 28), 2.0, 1.1, 3, WINWARM, 8, b);
+          addCyl(stage, vadd(mc, a.u, 31), 1.0, 5, [0.94, 0.94, 0.91], 8, b);
+          addCone(stage, vadd(mc, a.u, 36), 1.5, 4.5, [0.96, 0.90, 0.66], 8, b);
+          stage._mat = 0;
+          addBox(stage, vadd(mc, a.u, 41), [0.5, 2.2, 0.5], SPANGLE, b);
+        }, { required: true });
+      };
+      floatingMosque(K(0.165), 230);
+
+      {
+        const a = anchor(K(0.30), -1, 130), b = [a.r, a.u, a.t];
+        modelGroup("jeddah-flagpole", {
+          center: vadd(vadd(a.c, a.u, 84), a.t, 23), size: [10, 170, 50], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addFrustum(stage, a.c, 4.0, 2.6, 14, [0.55, 0.56, 0.60], 8, b);
+          stage._mat = MAT.METAL;
+          addCyl(stage, vadd(a.c, a.u, 14), 1.15, 152, [0.82, 0.84, 0.88], 8, b);
+          stage._mat = 0;
+          addBox(stage, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+
+      {
+        const a = anchor(K(0.29), -1, 260), b = [a.r, a.u, a.t];
+        modelGroup("jeddah-tower-construction", {
+          center: vadd(a.c, a.u, 134), size: [56, 272, 56], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addFrustum(stage, a.c, 26, 9, 250, [0.40, 0.41, 0.45], 8, b);
+          stage._mat = 0;
+          addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);
+          addBox(stage, vadd(a.c, a.u, 258.4), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 259.1), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b);
+        }, { required: false });
+      }
+
+      const dhow = (k, gap, sc) => {
+        const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 6)) return;
+        const hull = [a.c[0], pyMin - 0.95 + 0.05 * sc, a.c[2]];
+        out._mat = MAT.WOOD;
+        addBox(out, vadd(hull, a.u, 0.8 * sc), [2.6 * sc, 1.7 * sc, 9 * sc], [0.30, 0.20, 0.11], b);
+        addBox(out, vadd(hull, a.u, 1.8 * sc), [2.2 * sc, 0.5 * sc, 8 * sc], [0.42, 0.29, 0.16], b);
+        const mast = vadd(hull, a.u, 2.0 * sc);
+        addCyl(out, mast, 0.13 * sc, 11 * sc, [0.5, 0.36, 0.2], 4, b);
+        out._mat = MAT.FABRIC;
+        addPrism(out, vadd(vadd(mast, a.u, 4.5 * sc), a.t, 2.2 * sc),
+          [0.3, 8 * sc, 7 * sc], [0.90, 0.88, 0.82], b);
+        out._mat = 0;
+        addBox(out, vadd(hull, a.u, 0.03), [3.0 * sc, 0.3, 9.6 * sc], SPANGLE, b);
+      };
+      for (let i = 0; i < 5; i++) dhow(K(0.43 + i * 0.010), 56 + (i % 3) * 14, 1.0 + (i % 2) * 0.4);
+      for (let i = 0; i < 3; i++) dhow(K(0.57 + i * 0.014), 46 + (i % 2) * 12, 0.9 + (i % 2) * 0.3);
+
+      for (let i = 0; i < 12; i++) {
+        const s = i / 12 + 0.002;
+        const w = 40 + hash(i * 11) * 30, h = 80 + hash(i * 7) * 100;
+        backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.22, 0.23, 0.31]);
+      }
+      for (let i = 0; i < 4; i++) {
+        const s = 0.55 + i * 0.10;
+        const w = 30 + hash(i * 13) * 20, h = 50 + hash(i * 9) * 60;
+        backdrop(K(s), 1, 240 + (i % 2) * 30, [w, h, w], [0.20, 0.20, 0.27]);
+      }
+    };

@@ -1,0 +1,1053 @@
+{
+  "version": 1,
+  "materials": {
+    "size": 256,
+    "albedo": "mat-albedo-256.png",
+    "normal": "mat-normal-256.png",
+    "layers": [
+      {
+        "mat": 1,
+        "id": "concrete",
+        "scale": 5.5,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 2,
+        "id": "brick",
+        "scale": 2.8,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 4,
+        "id": "metal",
+        "scale": 2.8,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 5,
+        "id": "wood",
+        "scale": 2.8,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 6,
+        "id": "foliage",
+        "scale": 4,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 7,
+        "id": "fabric",
+        "scale": 1.8,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 8,
+        "id": "sand",
+        "scale": 11,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 9,
+        "id": "grass",
+        "scale": 4.5,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 10,
+        "id": "rock",
+        "scale": 8,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 11,
+        "id": "snow",
+        "scale": 7,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 12,
+        "id": "roof",
+        "scale": 2.6,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 13,
+        "id": "stone",
+        "scale": 3.5,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 14,
+        "id": "rust",
+        "scale": 2.5,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 16,
+        "id": "asphalt",
+        "scale": 3.5,
+        "source": "procedural:tools/gen/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      }
+    ],
+    "low": {
+      "size": 128,
+      "albedo": "mat-albedo-128.png",
+      "normal": "mat-normal-128.png",
+      "layers": [
+        {
+          "mat": 1,
+          "id": "concrete",
+          "scale": 5.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 2,
+          "id": "brick",
+          "scale": 2.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 4,
+          "id": "metal",
+          "scale": 2.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 5,
+          "id": "wood",
+          "scale": 2.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 6,
+          "id": "foliage",
+          "scale": 4,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 7,
+          "id": "fabric",
+          "scale": 1.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 8,
+          "id": "sand",
+          "scale": 11,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 9,
+          "id": "grass",
+          "scale": 4.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 10,
+          "id": "rock",
+          "scale": 8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 11,
+          "id": "snow",
+          "scale": 7,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 12,
+          "id": "roof",
+          "scale": 2.6,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 13,
+          "id": "stone",
+          "scale": 3.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 14,
+          "id": "rust",
+          "scale": 2.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 16,
+          "id": "asphalt",
+          "scale": 3.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        }
+      ],
+      "albedoMd5": "65e32c76512843491b211ffec92e65c9",
+      "normalMd5": "2793b6b4827222ef2a6d7f89862dfcb3"
+    },
+    "albedoMd5": "d7c21c5f34dc46cffd4f279654952a91",
+    "normalMd5": "95a9d4bd450f745d82a66f0eeef80148"
+  },
+  "models": {
+    "k_bannertowergreen": {
+      "file": "models/k_bannertowergreen.bin",
+      "verts": 831,
+      "tris": 426,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.93,
+        6.23,
+        1.93
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "c2002f10aad3948e3640de99342c8c35"
+    },
+    "k_bannertowerred": {
+      "file": "models/k_bannertowerred.bin",
+      "verts": 831,
+      "tris": 426,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.93,
+        6.23,
+        1.93
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "487468f49dd24d60f73bec661cfb7204"
+    },
+    "k_barrierred": {
+      "file": "models/k_barrierred.bin",
+      "verts": 48,
+      "tris": 28,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.25,
+        0.66,
+        0.62
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "e61cfaac47edd6a1f037a1b1079e19d6"
+    },
+    "k_barrierwhite": {
+      "file": "models/k_barrierwhite.bin",
+      "verts": 48,
+      "tris": 28,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.25,
+        0.66,
+        0.62
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "27587ed6c4b8ccaa1a49e1bd97743a68"
+    },
+    "k_billboard": {
+      "file": "models/k_billboard.bin",
+      "verts": 184,
+      "tris": 136,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        5,
+        2.38
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "0dc7074fc5bb665646ca3dff84d58082"
+    },
+    "k_billboardlow": {
+      "file": "models/k_billboardlow.bin",
+      "verts": 184,
+      "tris": 136,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        3.45,
+        2.38
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "7876a4792cb7523a0508e1bc11188041"
+    },
+    "k_camera_exclusive": {
+      "file": "models/k_camera_exclusive.bin",
+      "verts": 238,
+      "tris": 136,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.53,
+        2.05,
+        1.32
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b8a8f6ff95f6cfea982625ec670ee137"
+    },
+    "k_grandstand": {
+      "file": "models/k_grandstand.bin",
+      "verts": 261,
+      "tris": 128,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        4.48,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "8f913fb3d71a41fb129206aaadbd2f07"
+    },
+    "k_grandstandawning": {
+      "file": "models/k_grandstandawning.bin",
+      "verts": 474,
+      "tris": 280,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        6.93,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "ee643ba86f42c416d8a19a8d1f6eee90"
+    },
+    "k_lightpostlarge": {
+      "file": "models/k_lightpostlarge.bin",
+      "verts": 552,
+      "tris": 340,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.9,
+        3.98,
+        0.49
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "d60dc3310dbbcec9fe696b42bf70b5be"
+    },
+    "k_lightpostmodern": {
+      "file": "models/k_lightpostmodern.bin",
+      "verts": 386,
+      "tris": 198,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.25,
+        3.91,
+        0.89
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "d6301f9ea7e4c27657cd8be57533703c"
+    },
+    "k_pitsgarage": {
+      "file": "models/k_pitsgarage.bin",
+      "verts": 164,
+      "tris": 96,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        3.5,
+        5.45
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "7beea83e1fc03e6690579ac0be398ebc"
+    },
+    "k_pitsgarageclosed": {
+      "file": "models/k_pitsgarageclosed.bin",
+      "verts": 241,
+      "tris": 162,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        3.5,
+        5.45
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "169556d0deaa9ca97b88455c0510c301"
+    },
+    "k_pitsoffice": {
+      "file": "models/k_pitsoffice.bin",
+      "verts": 144,
+      "tris": 88,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.55,
+        5.2
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "e28b7284151e0d03bd73aa13fc6ca0f4"
+    },
+    "k_pitsofficecorner": {
+      "file": "models/k_pitsofficecorner.bin",
+      "verts": 194,
+      "tris": 126,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5.2,
+        2.55,
+        5.2
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "d581c91880db5a2baa107b9d3dffc52c"
+    },
+    "k_pitsofficeroof": {
+      "file": "models/k_pitsofficeroof.bin",
+      "verts": 230,
+      "tris": 142,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        4.26,
+        5.2
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "98a172c35cb00393d8f0d5503837819f"
+    },
+    "k_pylon": {
+      "file": "models/k_pylon.bin",
+      "verts": 168,
+      "tris": 108,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.6,
+        0.66,
+        0.6
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "1fe17ac4fef76c76f23ce2fe859e5005"
+    },
+    "k_radarequipment": {
+      "file": "models/k_radarequipment.bin",
+      "verts": 466,
+      "tris": 292,
+      "mat": "CONCRETE",
+      "sizeM": [
+        2.94,
+        2.72,
+        2.07
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "3aff1f4cd81f441e2969c526cdb2c01d"
+    },
+    "k_tent": {
+      "file": "models/k_tent.bin",
+      "verts": 156,
+      "tris": 86,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        3.5,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "cf84406d61913ffcccfea4797a8de263"
+    },
+    "k_tentclosed": {
+      "file": "models/k_tentclosed.bin",
+      "verts": 198,
+      "tris": 110,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        3.5,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "466d12137522a6fdb60a0b0f779ffaa0"
+    },
+    "k_tentclosedlong": {
+      "file": "models/k_tentclosedlong.bin",
+      "verts": 198,
+      "tris": 110,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        3.5,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "d8ac0b168e68a69983e8a32cbf260a40"
+    },
+    "k_tentlong": {
+      "file": "models/k_tentlong.bin",
+      "verts": 156,
+      "tris": 86,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        3.5,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "c594c903f69241743bc337b680575679"
+    },
+    "pine_lod0": {
+      "file": "models/pine_lod0.bin",
+      "verts": 72,
+      "tris": 36,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.59,
+        6.42,
+        1.43
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "2488e9f311568bd802647aed84d52137"
+    },
+    "pine_lod1": {
+      "file": "models/pine_lod1.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.12,
+        5.92,
+        1.21
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "2ed1011f808b30647998f1baaec52142"
+    },
+    "tree_lod0": {
+      "file": "models/tree_lod0.bin",
+      "verts": 80,
+      "tris": 40,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.43,
+        7.59,
+        1.53
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "4f6bc8496036444fb98bf7e919445878"
+    },
+    "tree_lod1": {
+      "file": "models/tree_lod1.bin",
+      "verts": 40,
+      "tris": 20,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.41,
+        7.4,
+        1.58
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "c96ad54685ebefe1c8a87842db185bac"
+    },
+    "palm_lod0": {
+      "file": "models/palm_lod0.bin",
+      "verts": 110,
+      "tris": 80,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        7.08,
+        16.39,
+        7.21
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "1c23ec67760b3e5edb66b96e17509a84"
+    },
+    "palm_lod1": {
+      "file": "models/palm_lod1.bin",
+      "verts": 68,
+      "tris": 48,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        7.9,
+        16.06,
+        7.86
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "cd4ccea2a977004d7e2e73bb367898e5"
+    }
+  },
+  "env": {
+    "*|default": {
+      "ambientSky": [
+        0.369,
+        0.3743,
+        0.386
+      ],
+      "ambientGround": [
+        0.0712,
+        0.0919,
+        0.1251
+      ],
+      "source": "procedural:tools/gen/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
+    },
+    "*|day": {
+      "ambientSky": [
+        0.369,
+        0.3743,
+        0.386
+      ],
+      "ambientGround": [
+        0.0712,
+        0.0919,
+        0.1251
+      ],
+      "source": "procedural:tools/gen/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
+    },
+    "*|dusk": {
+      "ambientSky": [
+        0.2092,
+        0.246,
+        0.2999
+      ],
+      "ambientGround": [
+        0.1379,
+        0.1634,
+        0.2016
+      ],
+      "source": "procedural:tools/gen/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
+    },
+    "*|dawn": {
+      "ambientSky": [
+        0.2011,
+        0.22,
+        0.2827
+      ],
+      "ambientGround": [
+        0.068,
+        0.0632,
+        0.0675
+      ],
+      "source": "procedural:tools/gen/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
+    }
+  },
+  "credits": [
+    {
+      "kind": "material",
+      "id": "concrete",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "brick",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "metal",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "wood",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "foliage",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "fabric",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "sand",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "grass",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "rock",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "snow",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "roof",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "stone",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "rust",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "asphalt",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "k_bannertowergreen",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_bannertowerred",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_barrierred",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_barrierwhite",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_billboard",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_billboardlow",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_camera_exclusive",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_grandstand",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_grandstandawning",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_lightpostlarge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_lightpostmodern",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_pitsgarage",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_pitsgarageclosed",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_pitsoffice",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_pitsofficecorner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_pitsofficeroof",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_pylon",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_radarequipment",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_tent",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_tentclosed",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_tentclosedlong",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_tentlong",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "pine_lod0",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "pine_lod1",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "tree_lod0",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "tree_lod1",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "palm_lod0",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "palm_lod1",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "env",
+      "id": "*|default",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "env",
+      "id": "*|day",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "env",
+      "id": "*|dusk",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    },
+    {
+      "kind": "env",
+      "id": "*|dawn",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/gen/assets.mjs"
+    }
+  ]
+}

@@ -1,0 +1,727 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["baku"] =
+  function (api) {
+      const {
+        K, out, MAT, ds, backdrop, groundPatch, waterBand, modelGroup, building, tower, wall,
+        fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
+        gantry, marshalPost, billboard,
+        palm, anchor, along, onTrack, addBox, addCyl, addCone, addPrism,
+        addFrustum, ferrisWheel, vadd, hash, cityFront,
+        circuitKit, plane, cypress, terrace, terrainYAt,
+        bakedModel } = api;
+
+      const SAND        = [0.62, 0.50, 0.34];
+      const SAND_LIT    = [0.85, 0.62, 0.30];
+      const SAND_DARK   = [0.42, 0.34, 0.22];
+      const GLASS       = [0.20, 0.28, 0.40];
+      const WIN_WARM    = [0.95, 0.88, 0.55];
+      const WIN_COOL    = [0.60, 0.70, 0.95];
+      const FLAME       = [0.95, 0.35, 0.10];
+      const FLAME_PALE  = [0.98, 0.55, 0.18];
+      const DARK        = [0.08, 0.09, 0.13];
+      const DARK2       = [0.11, 0.12, 0.18];
+      const CONCRETE    = [0.30, 0.30, 0.34];
+      const ARMCO       = [0.74, 0.76, 0.82];
+      const FENCE_COL   = [0.55, 0.58, 0.66];
+      const SEA         = [0.07, 0.10, 0.20];
+      const TARMAC_AD   = [0.85, 0.20, 0.18];
+      const AZ_BLUE     = [0.10, 0.45, 0.78];
+      const LAMP_WARM   = [1.00, 0.96, 0.70];
+      const AZ_TEAL     = [0.06, 0.66, 0.62];
+      const AZ_ORANGE   = [0.94, 0.42, 0.10];
+
+      const SAND_PAL = [
+        [0.62, 0.50, 0.34],
+        [0.68, 0.56, 0.38],
+        [0.58, 0.47, 0.30],
+        [0.72, 0.60, 0.42],
+      ];
+      const GLASS_PAL = [
+        [0.17, 0.19, 0.27],
+        [0.20, 0.22, 0.30],
+        [0.14, 0.18, 0.28],
+        [0.24, 0.22, 0.32],
+      ];
+      const CIVIC_PAL = [
+        [0.42, 0.40, 0.38],
+        [0.48, 0.45, 0.40],
+        [0.52, 0.48, 0.43],
+        [0.38, 0.37, 0.35],
+      ];
+
+      if (circuitKit) {
+        circuitKit.pedestrianBridge({
+          id: "kit:baku:finish-bridge", frac: 0.91,
+          clearance: 7.2, thickness: 0.9, depth: 3.2, required: true,
+        });
+      }
+
+      wall(0.0261, 0.42, 1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.50, 0.65, 1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.82, 0.9203, 1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.0, 0.42, -1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.50, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.97, 1.0, -1, 2.0, 1.3, CONCRETE, 0.4);
+
+      fence(0.0261, 0.35, 1, 2.6, 3.4, FENCE_COL);
+      fence(0.86, 0.9203, 1, 2.6, 3.4, FENCE_COL);
+      fence(0.0, 0.32, -1, 2.6, 3.4, FENCE_COL);
+      guardrail(0.63, 0.9203, 1, 3.0, ARMCO);
+      fence(0.63, 0.9203, 1, 4.0, 3.0, FENCE_COL);
+
+      for (let i = 0; i < 22; i++) {
+        const k = K(i / 22), side = (i % 2) ? 1 : -1;
+        const a = anchor(k, side, 5);
+        const b = [a.r, a.u, a.t];
+        addCyl(out, a.c, 0.18, 13, [0.22, 0.22, 0.25], 5, b);
+        addBox(out, vadd(vadd(a.c, a.u, 12.5), a.r, side * 1.2), [2.4, 0.25, 0.5], [0.28, 0.28, 0.32], b);
+        if (addBox(out, vadd(vadd(a.c, a.u, 12.0), a.r, side * 2.0), [1.4, 0.5, 1.4], [0.26, 0.26, 0.30], b) !== false)
+          addBox(out, vadd(vadd(a.c, a.u, 11.8), a.r, side * 2.0), [1.2, 0.25, 1.2], LAMP_WARM, b);
+        const pool = vadd(a.c, a.r, side * 1.0), pg = terrainYAt(pool[0], pool[2]);
+        addBox(out, [pool[0], (pg != null ? Math.max(pg, a.c[1]) : a.c[1]) + 0.05, pool[2]],
+          [3.0, 0.08, 5.0], [0.30, 0.28, 0.20], b);
+      }
+
+      for (let i = 0; i < 12; i++) {
+        const k = K(0.63 + i * 0.028), side = -1;
+        const a = anchor(k, side, 6);
+        const b = [a.r, a.u, a.t];
+        addCyl(out, a.c, 0.16, 10, [0.22, 0.22, 0.25], 5, b);
+        addBox(out, vadd(vadd(a.c, a.u, 9.7), a.r, side * 0.8), [1.6, 0.2, 0.4], [0.24, 0.24, 0.28], b);
+        addBox(out, vadd(vadd(a.c, a.u, 9.6), a.r, side * 1.6), [1.2, 0.4, 1.2], [0.26, 0.26, 0.30], b);
+        addBox(out, vadd(vadd(a.c, a.u, 9.4), a.r, side * 1.6), [1.0, 0.2, 1.0], LAMP_WARM, b);
+      }
+
+      for (let i = 0; i < 9; i++) marshalPost(K(0.05 + i * 0.105), (i % 2) ? 1 : -1, 3.5);
+
+      for (let i = 0; i < 8; i++) {
+        const kC = K(i / 8 * 0.22);
+        backdrop(kC, 1,  140 + hash(i * 5)  * 60,  [28 + hash(i * 7)  * 18, 32 + hash(i * 11) * 44, 22], DARK2);
+        backdrop(kC, -1, 140 + hash(i * 9)  * 60,  [24 + hash(i * 3)  * 16, 28 + hash(i * 13) * 40, 20], DARK2);
+        backdrop(kC, 1,  280 + hash(i * 15) * 120, [32 + hash(i * 17) * 24, 46 + hash(i * 19) * 80, 22], DARK);
+        backdrop(kC, -1, 260 + hash(i * 21) * 110, [30 + hash(i * 23) * 22, 42 + hash(i * 25) * 72, 22], DARK);
+      }
+      for (let i = 0; i < 10; i++) {
+        const kM = K(0.22 + i / 10 * 0.36);
+        backdrop(kM, 1,  160 + i * 0.37 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 18 + hash(i * 11 + 22) * 8, 22], DARK2);
+        backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 18 + hash(i * 13 + 22) * 8, 20], [0.08, 0.09, 0.14]);
+        backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 20 + hash(i * 19 + 22) * 6, 28], DARK);
+      }
+      for (let i = 0; i < 12; i++) {
+        const kS = K(0.58 + i / 12 * 0.39);
+        backdrop(kS, 1,  150 + hash(i * 5 + 58) * 70, [28 + hash(i * 7 + 58) * 20, 38 + hash(i * 11 + 58) * 62, 22], DARK2);
+        backdrop(kS, 1,  320 + hash(i * 15 + 58) * 180, [32 + hash(i * 17 + 58) * 26, 48 + hash(i * 19 + 58) * 92, 24], DARK);
+      }
+
+      cityFront(0.0261, 0.12, 1, 14, {
+        minH: 14, maxH: 28, depth: 18, step: 20,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+      });
+
+      cityFront(0.06, 0.12, -1, 14, {
+        minH: 12, maxH: 24, depth: 16, step: 20,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+      });
+
+      {
+        const k = K(0.02);
+        building(k, 1, 42, 52, 22, 30, { kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
+        const aBase = anchor(k, 1, 68);
+        addBox(out, vadd(aBase.c, aBase.u, 1.1), [58, 3.0, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
+
+        for (const tOff of [-20, 20]) {
+          const aTow = anchor(k, 1, 75);
+          const tc = vadd(aTow.c, aTow.t, tOff);
+          const b  = [aTow.r, aTow.u, aTow.t];
+          addBox(out, vadd(tc, aTow.u, 4.9), [14, 10.2, 14], SAND,   b);
+          addCyl(out, vadd(tc, aTow.u, 10), 6.0, 20, SAND,     8, b);
+          addFrustum(out, vadd(tc, aTow.u, 30), 6.5, 5.0, 3, SAND_LIT, 8, b);
+          addFrustum(out, vadd(tc, aTow.u, 33), 5.0, 1.5, 6, SAND_LIT, 8, b);
+          addCone(out, vadd(tc, aTow.u, 39), 1.5, 8, SAND_LIT, 8, b);
+          addFrustum(out, vadd(tc, aTow.u, 29), 7.0, 6.5, 1.2, WIN_WARM, 8, b);
+        }
+
+        const aGate = anchor(k, 1, 40);
+        addBox(out, vadd(aGate.c, aGate.u, 2.9), [40, 6.2, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
+        addBox(out, vadd(aGate.c, aGate.u, 7), [42, 2, 3], WIN_WARM, [aGate.r, aGate.u, aGate.t]);
+
+        const aGov = anchor(k, 1, 64);
+        addBox(out, vadd(aGov.c, aGov.u, 0.35), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
+      }
+
+      if (grandstandEx) {
+        grandstandEx(0.99, -1, 12, 88, null, null, {
+          livery: "steel", tiers: 3, roof: "truss",
+          pylons: true, endWalls: true, suites: true,
+        });
+        grandstandEx(0.04, -1, 12, 68, null, null, {
+          livery: "steel", tiers: 2, roof: "truss",
+          pylons: true, endWalls: true,
+        });
+      } else {
+        grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
+        grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
+      }
+      gantry(0.0, 7.5, [0.14, 0.14, 0.18]);
+      gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
+      billboard(K(0.01), 1, 30, 14, 5, FLAME);
+
+      if (broadcastCompound) {
+        broadcastCompound(K(0.975), 1, 55, { vans: 4, dishes: 2, mastH: 10 });
+      }
+
+      {
+        const flagOffs = [-12, 0, 12];
+        const flagCols = [AZ_BLUE, [0.80, 0.16, 0.16], [0.14, 0.55, 0.28]];
+        for (let fi = 0; fi < 3; fi++) {
+          const aF = anchor(K(0.045), -1, 28);
+          const b  = [aF.r, aF.u, aF.t];
+          const fc = vadd(aF.c, aF.t, flagOffs[fi]);
+          addCyl(out, fc, 0.18, 20, [0.72, 0.72, 0.76], 6, b);
+          addBox(out, vadd(fc, aF.u, 17), [0.15, 4, 7], flagCols[fi], b);
+        }
+      }
+
+      {
+        const a = anchor(K(0.045), -1, 44);
+        addFrustum(out, vadd(a.c, a.u, 0), 1.4, 0.3, 16, SAND_LIT, 4, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 14), [1.0, 1.0, 1.0], WIN_WARM, [a.r, a.u, a.t]);
+      }
+
+      cityFront(0.12, 0.22, 1, 14, {
+        minH: 18, maxH: 40, depth: 18, step: 18,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      });
+      cityFront(0.12, 0.22, -1, 14, {
+        minH: 14, maxH: 30, depth: 16, step: 18,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 3.5,
+      });
+
+      {
+        const k  = K(0.22);
+        const aF = anchor(k, 1, 180);
+        const b  = [aF.r, aF.u, aF.t];
+        const heights   = [210, 240, 210];
+        const towerOffs = [-50, 0, 50];
+        const FIRE_BANDS = [
+          FLAME, FLAME_PALE, [0.98, 0.42, 0.08], [0.88, 0.18, 0.06],
+          [1.00, 0.62, 0.20], [0.95, 0.30, 0.08], [0.90, 0.50, 0.12],
+        ];
+
+        modelGroup("baku-flame-towers", {
+          center: vadd(aF.c, aF.u, 133.5),
+          size: [140, 267, 50],
+          basis: b,
+        }, (stage) => {
+          for (let t = 0; t < 3; t++) {
+            const H  = heights[t];
+            const tc = vadd(aF.c, aF.r, towerOffs[t]);
+
+            addFrustum(stage, tc, 16, 3.0, H, [0.10, 0.12, 0.22], 8, b);
+
+            const nBands = 16;
+            for (let band = 0; band < nBands; band++) {
+              const yFr  = (band + 0.5) / nBands;
+              const rAtY = 16 * (1 - yFr) + 3.0 * yFr;
+              const col  = FIRE_BANDS[band % FIRE_BANDS.length];
+              addFrustum(stage, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
+                rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.84, col, 8, b);
+              if (band % 2 === 0) {
+                const hot = vadd(vadd(tc, aF.u, yFr * H), aF.r, -rAtY * 1.10);
+                addBox(stage, hot, [0.7, (H / nBands) * 0.62, 4.2],
+                  band % 4 ? FLAME_PALE : [1.0, 0.72, 0.28], b);
+              }
+            }
+
+            addCone(stage, vadd(tc, aF.u, H),        3.0, 12, FLAME,      8, b);
+            addCone(stage, vadd(tc, aF.u, H + 12),   2.2,  9, FLAME_PALE, 8, b);
+            addCone(stage, vadd(tc, aF.u, H + 21),   1.2,  6, [1.0, 0.72, 0.28], 8, b);
+          }
+
+          addBox(stage, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.22, 0.08, 0.02], b);
+          addBox(stage, vadd(aF.c, aF.u, 1.0), [130, 2.0, 44], SAND_DARK, b);
+          addBox(stage, vadd(aF.c, aF.u, 3.0), [110, 2.0, 38], [0.30, 0.25, 0.20], b);
+          addBox(stage, vadd(aF.c, aF.u, 5.0), [88, 2.0, 32], [0.22, 0.20, 0.19], b);
+          for (let t = 0; t < 3; t++) {
+            const tc = vadd(aF.c, aF.r, (t - 1) * 50);
+            addBox(stage, vadd(tc, aF.u, 0.2), [28, 0.5, 30], [0.30, 0.12, 0.03], b);
+          }
+        }, { required: true });
+      }
+
+      cityFront(0.22, 0.36, 1, 14, {
+        minH: 30, maxH: 80, depth: 20, step: 22,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      });
+
+      cityFront(0.22, 0.36, -1, 14, {
+        minH: 18, maxH: 48, depth: 18, step: 20,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+      });
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.245 + i * 0.017), -1, 16.5);
+        const b = [a.r, a.u, a.t];
+        for (let floor = 0; floor < 3; floor++) {
+          const deck = vadd(a.c, a.u, 5.0 + floor * 4.0);
+          addBox(out, deck, [3.2, 0.28, 7.6], [0.66, 0.62, 0.54], b);
+          const rail = vadd(vadd(deck, a.r, 1.48), a.u, 0.55);
+          addBox(out, rail, [0.16, 1.0, 7.7], [0.78, 0.73, 0.64], b);
+        }
+      }
+      const PLANE_LEAF = [0.24, 0.40, 0.20], CYPRESS_LEAF = [0.09, 0.20, 0.13];
+      for (let i = 0; i < 14; i++) {
+        const s = 0.23 + i * 0.009;
+        const dist = 9 + (i % 2);
+        if (i % 4 === 1) {
+          cypress(K(s), -1, dist, 9.5 + hash(i * 5) * 3, CYPRESS_LEAF, { slim: 0.85 });
+        } else if (i % 7 === 3) {
+          palm(K(s), -1, dist, 8 + hash(i * 7) * 3, [0.18, 0.44, 0.24]);
+        } else {
+          plane(K(s), -1, dist, 9 + hash(i * 7) * 2.5, PLANE_LEAF,
+                { stages: 2, spread: 0.62 });
+        }
+      }
+
+      wall(0.36, 0.389, 1, 20, 9, SAND, 1.2);
+      wall(0.4129, 0.537, 1, 20, 9, SAND, 1.2);
+      wall(0.553, 0.56, 1, 20, 9, SAND, 1.2);
+
+      const wallLoK = K(0.36), wallHiK = K(0.537);
+      const squeezeLoK = K(0.42), squeezeHiK = K(0.50);
+      for (let p = 0; p < 10; p++) {
+        if (p === 9) continue;
+        const k = K(0.36 + p * 0.020);
+        for (let j = 0; j < 14; j++) {
+          if (j % 2 === 0) {
+            const kj = k + Math.round(((j - 6.5) * 3.8) / ds);
+            if (kj < wallLoK || kj > wallHiK) continue;
+            if (kj > K(0.389) - 8 && kj < K(0.412) + 8) continue;
+            if (kj >= squeezeLoK && kj <= squeezeHiK) continue;
+            const aj = anchor(kj, 1, 20);
+            addBox(out, vadd(aj.c, aj.u, 9.9), [2.4, 1.8, 2.2], SAND, [aj.r, aj.u, aj.t]);
+          }
+        }
+      }
+
+      for (let i = 0; i < 22; i++) {
+        const s = 0.362 + i * 0.0082;
+        if (s > 0.535 && s < 0.556) continue;
+        if (s > 0.386 && s < 0.415) continue;
+        const a = anchor(K(s), 1, 19.55), b = [a.r, a.u, a.t];
+        const col = (i % 2) ? AZ_TEAL : AZ_ORANGE;
+        addBox(out, vadd(a.c, a.u, 5.4), [0.14, 6.4, 1.9], col, b);
+        addBox(out, vadd(a.c, a.u, 8.2), [0.18, 0.7, 2.1], [0.86, 0.72, 0.26], b);
+      }
+
+      for (const s of [0.365, 0.385, 0.405, 0.555]) {
+        const a = anchor(K(s), 1, 17.6);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 4.4), [2.6, 9.2, 3.2], SAND_DARK, b);
+        addBox(out, vadd(a.c, a.u, 0.18), [3.4, 0.34, 3.8], SAND_LIT, b);
+        addBox(out, vadd(vadd(a.c, a.u, 2.4), a.r, -0.75), [0.28, 3.2, 1.2],
+          WIN_WARM, b);
+      }
+
+      cityFront(0.36, 0.380, 1, 32, {
+        minH: 6, maxH: 14, depth: 12, step: 16,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+      });
+      cityFront(0.553, 0.56, 1, 26, {
+        minH: 6, maxH: 16, depth: 12, step: 16,
+        palette: SAND_PAL, lit: false, windowCol: WIN_WARM, floor: 3,
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const dist = 38 + hash(i * 13) * 12;
+        const a    = anchor(K(0.365 + i * 0.028), 1, dist);
+        const b    = [a.r, a.u, a.t];
+        const shH  = 16 + hash(i * 7) * 6;
+        addCyl(out, a.c, 1.6, shH, SAND, 8, b);
+        addFrustum(out, vadd(a.c, a.u, shH),   2.2, 1.4, 3, SAND_LIT, 8, b);
+        addCone(out,   vadd(a.c, a.u, shH + 3), 1.4, 5,   SAND_LIT, 8, b);
+        addBox(out, vadd(a.c, a.u, shH + 7.5), [0.8, 0.8, 0.8], WIN_WARM, b);
+      }
+
+      for (let i = 0; i < 4; i++) {
+        const dist = 48 + hash(i * 9) * 18;
+        const a    = anchor(K(0.37 + i * 0.028), 1, dist);
+        const b    = [a.r, a.u, a.t];
+        const dH   = 6 + hash(i * 3) * 4;
+        addFrustum(out, a.c, 5.0, 0.5, dH, SAND, 8, b);
+        addCyl(out, vadd(a.c, a.u, dH), 0.4, 2.5, SAND_LIT, 6, b);
+      }
+
+      cityFront(0.36, 0.390, -1, 26, {
+        minH: 6, maxH: 12, depth: 10, step: 14,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
+      });
+
+      {
+        const sqGap = 2.0, sqTh = 1.4, sqH = 11, sqTop = sqH + 0.4;
+        along(0.42, 0.50, 4, (k, spacing) => {
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, sqGap);
+            addBox(out, vadd(a.c, a.u, 5.1), [sqTh, sqTop - 0.2, spacing * 0.98], SAND, [a.r, a.u, a.t]);
+          }
+        });
+        along(0.42, 0.50, 7.2, (k) => {
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, sqGap);
+            const b = [a.r, a.u, a.t];
+            addBox(out, vadd(a.c, a.u, 5.5), [1.0, 11.4, 1.0], SAND, b);
+            addBox(out, vadd(a.c, a.u, 11.7), [1.8, 1.4, 2.2], SAND, b);
+          }
+        });
+      }
+      {
+        const aL = anchor(K(0.46), -1, 2.0);
+        const aR = anchor(K(0.46),  1, 2.0);
+        addCyl(out, vadd(aL.c, aL.u, 11), 1.4, 8, SAND, 8, [aL.r, aL.u, aL.t]);
+        addCyl(out, vadd(aR.c, aR.u, 11), 1.4, 8, SAND, 8, [aR.r, aR.u, aR.t]);
+        addCone(out, vadd(aL.c, aL.u, 19), 1.4, 4, SAND_LIT, 8, [aL.r, aL.u, aL.t]);
+        addCone(out, vadd(aR.c, aR.u, 19), 1.4, 4, SAND_LIT, 8, [aR.r, aR.u, aR.t]);
+        addBox(out, vadd(aL.c, aL.u, 22.5), [1.0, 0.8, 1.0], WIN_WARM, [aL.r, aL.u, aL.t]);
+        addBox(out, vadd(aR.c, aR.u, 22.5), [1.0, 0.8, 1.0], WIN_WARM, [aR.r, aR.u, aR.t]);
+      }
+
+      {
+        const k = K(0.46);
+        const a = anchor(k, 1, 9.5);
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const c0 = [a.c[0], (gy != null ? gy : a.c[1]) - 0.25, a.c[2]];
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(c0[0], c0[2], 4)) {
+          modelGroup("baku-icheri-sheher-wall", {
+            center: vadd(c0, a.u, 9), size: [12, 22, 44], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(c0, a.u, 5.5), [3.6, 11.5, 38], SAND, b);
+            addBox(stage, vadd(vadd(c0, a.r, -0.4), a.u, 11.5), [1.2, 1.0, 40], SAND_LIT, b);
+            for (let j = 0; j < 9; j++) {
+              if (j % 2 === 0) continue;
+              addBox(stage, vadd(vadd(vadd(c0, a.t, (j - 4) * 4.0), a.r, -0.4), a.u, 13.0),
+                [1.2, 2.0, 2.2], SAND, b);
+            }
+            for (const off of [-16, 16]) {
+              const tc = vadd(c0, a.t, off);
+              addCyl(stage, vadd(tc, a.u, 0), 2.8, 13.5, SAND_DARK, 8, b);
+              addCone(stage, vadd(tc, a.u, 13.5), 2.8, 4.2, SAND_LIT, 8, b);
+              addBox(stage, vadd(tc, a.u, 17.2), [0.9, 0.7, 0.9], WIN_WARM, b);
+            }
+            addBox(stage, vadd(vadd(c0, a.r, -2.0), a.u, 4.5), [1.0, 8.0, 5.5], SAND_DARK, b);
+            for (const off of [-10, 0, 10])
+              addBox(stage, vadd(vadd(vadd(c0, a.t, off), a.r, -1.9), a.u, 7.2),
+                [0.35, 0.5, 0.35], LAMP_WARM, b);
+          }, { required: true });
+        }
+      }
+
+
+      {
+        const k = K(0.52);
+        const a = anchor(k, -1, 16);
+        const b = [a.r, a.u, a.t];
+
+        modelGroup("baku-maiden-tower", {
+          center: vadd(a.c, a.u, 25.5),
+          size: [24, 51, 24],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 1.5), [22, 3, 22], SAND_DARK, b);
+
+          addFrustum(stage, vadd(a.c, a.u, 3), 11.5, 9.2, 2, [0.55, 0.44, 0.30], 8, b);
+
+          addCyl(stage, vadd(a.c, a.u, 5), 9.2, 28, SAND, 12, b);
+
+          for (let wl = 0; wl < 4; wl++) {
+            const wy = 5 + 5 + wl * 6;
+            addFrustum(stage, vadd(a.c, a.u, wy), 9.3, 9.3, 1.2, WIN_WARM, 12, b);
+          }
+
+          addFrustum(stage, vadd(a.c, a.u, 33), 10.0, 9.5, 1.5, SAND_LIT, 12, b);
+          addFrustum(stage, vadd(a.c, a.u, 34.5), 9.5, 7.0, 1.5, SAND, 12, b);
+
+          addFrustum(stage, vadd(a.c, a.u, 36), 7.0, 4.5, 6, SAND_LIT, 12, b);
+
+          addCone(stage, vadd(a.c, a.u, 42), 4.5, 7, SAND_LIT, 12, b);
+
+          addBox(stage, vadd(a.c, a.u, 49), [2.0, 2.0, 2.0], [0.94, 0.84, 0.64], b);
+
+          addFrustum(stage, vadd(a.c, a.u, 3.2), 12.0, 11.5, 0.8, SAND_LIT, 8, b);
+        }, { required: true });
+
+        groundPatch(k, -1, 1, [30, 0.5, 30], [0.20, 0.16, 0.08],
+          { id: "baku-maiden-forecourt", samples: 6 });
+      }
+
+      {
+        const PAL = [0.72, 0.66, 0.54], PD = [0.58, 0.52, 0.40], PL = [0.86, 0.76, 0.58];
+        const k = K(0.50);
+        const a = anchor(k, 1, 32);
+        let baseY = a.c[1];
+        for (const [to, ro] of [[0, 0], [22, 0], [-22, 0], [0, 10], [0, -8], [18, 8], [-18, 8], [18, -6], [-18, -6], [30, 4], [-30, 4]]) {
+          const q = vadd(vadd(a.c, a.t, to), a.r, ro);
+          const g = terrainYAt(q[0], q[2]);
+          if (g != null && g > baseY) baseY = g;
+        }
+        const c0 = [a.c[0], baseY + 0.4, a.c[2]];
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(c0[0], c0[2], 12)) {
+          modelGroup("baku-shirvanshah-palace", {
+            center: vadd(c0, a.u, 11), size: [28, 26, 70], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(c0, a.u, 7), [18, 14, 40], PAL, b);
+            addBox(stage, vadd(c0, a.u, 0.8), [16, 0.9, 36], PD, b);
+            addBox(stage, vadd(vadd(c0, a.r, -9.9), a.u, 5.7), [2.4, 11, 9], PL, b);
+            addBox(stage, vadd(vadd(c0, a.r, -11.0), a.u, 4), [0.8, 7, 4.5], PD, b);
+            const mau = vadd(vadd(c0, a.t, 28), a.r, 2);
+            addBox(stage, vadd(mau, a.u, 5), [11, 10, 11], PAL, b);
+            addFrustum(stage, vadd(mau, a.u, 10), 6.0, 1.8, 5.5, PL, 8, b);
+            addCone(stage, vadd(mau, a.u, 15.5), 2.0, 3.5, PL, 8, b);
+            const min = vadd(vadd(c0, a.t, -26), a.r, 2);
+            addCyl(stage, vadd(min, a.u, 0), 1.2, 16, PD, 8, b);
+            addCone(stage, vadd(min, a.u, 16), 1.2, 3.0, PL, 8, b);
+            addBox(stage, vadd(vadd(vadd(c0, a.t, -12), a.r, 8), a.u, 6), [12, 10, 14], PAL, b);
+            for (let f = 0; f < 3; f++)
+              addBox(stage, vadd(vadd(c0, a.r, -9.2), a.u, 3.8 + f * 3.6),
+                [0.35, 1.1, 36], WIN_WARM, b);
+            for (const off of [-12, 0, 12])
+              addBox(stage, vadd(vadd(vadd(c0, a.t, off), a.r, -9.3), a.u, 6.2),
+                [0.35, 0.5, 0.35], LAMP_WARM, b);
+          }, { required: true });
+        }
+      }
+
+      {
+        const STONE = [0.58, 0.52, 0.42];
+        const oldCityData = [
+          [0.51, 1, 36, 10, 10, 14],
+          [0.54, 1, 38, 12, 12, 12],
+          [0.56, 1, 30, 14,  8, 16],
+        ];
+        for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {
+          building(K(s), side, dist, w, h, d, {
+            kind: ["hall", "arch", "dome", "chevron", "drum"][i % 5],
+            wall: STONE, window: WIN_WARM, floor: 3, lit: true,
+          });
+        }
+      }
+
+      if (grandstandEx) {
+        grandstandEx(0.532, 1, 18, 58, null, null, {
+          livery: "sandstone", tiers: 2, roof: "cantilever",
+          pylons: true, endWalls: true,
+        });
+      }
+      if (typeof terrace === "function") {
+        terrace(0.540, 0.552, 1, 28, {
+          rows: 5, rise: 1.45, depth: 2.4, step: 16, density: 0.4,
+          conc: [0.66, 0.58, 0.44], concAlt: [0.57, 0.50, 0.38],
+          backWall: false,
+        });
+      }
+
+      if (grandstandEx) {
+        grandstandEx(0.830, -1, 16, 48, null, null, {
+          livery: "scaffold", tiers: 2, roof: "truss",
+          pylons: true, endWalls: true,
+        });
+      }
+
+      wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
+      along(0.58, 0.96, 6, (k, spacing) => {
+        const q = anchor(k, -1, 4.85);
+        if (onTrack(q.c[0], q.c[2], 0.5)) return;
+        addBox(out, vadd(q.c, q.u, 0.15), [0.5, 1.5, spacing * 0.9], [1.1, 0.62, 0.18], [q.r, q.u, q.t]);
+      });
+      for (let i = 0; i < 12; i++) {
+        const s = 0.58 + i * 0.031;
+        const a = anchor(K(s), -1, 5.7);
+        addCyl(out, vadd(a.c, a.u, -0.1), 0.16, 1.9, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);
+      }
+
+      {
+        const a = anchor(K(0.78), -1, 90);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.5), [2.4, 1.0, 36], [0.40, 0.40, 0.46], b);
+      }
+
+      {
+        const aFt = anchor(K(0.75), -1, 72);
+        const b   = [aFt.r, aFt.u, aFt.t];
+        addFrustum(out, vadd(aFt.c, aFt.u, 0.3), 6, 5.2, 0.8, [0.38, 0.38, 0.42], 10, b);
+        addCone(out, vadd(aFt.c, aFt.u, 0.6), 1.0, 6, [0.60, 0.80, 0.95], 8, b);
+        addCone(out, vadd(aFt.c, aFt.u, 4.5), 0.5, 3, WIN_COOL, 6, b);
+      }
+
+      cityFront(0.63, 0.738, 1, 14, {
+        minH: 40, maxH: 100, depth: 20, step: 20,
+        palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
+      });
+      cityFront(0.762, 0.9203, 1, 48, {
+        minH: 40, maxH: 100, depth: 20, step: 26,
+        palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
+      });
+
+      {
+        const k  = K(0.70);
+        const aH = anchor(k, 1, 62);
+        const b  = [aH.r, aH.u, aH.t];
+        addBox(out, vadd(aH.c, aH.u, 1.8), [48, 3.6, 36], [0.28, 0.28, 0.32], b);
+        addFrustum(out, vadd(aH.c, aH.u, 3.6), 10, 20, 14, [0.18, 0.22, 0.32], 10, b);
+        addFrustum(out, vadd(aH.c, aH.u, 17.6), 20, 12, 10, [0.20, 0.24, 0.36], 10, b);
+        addFrustum(out, vadd(aH.c, aH.u, 27), 23, 22, 1.8, [0.24, 0.30, 0.44], 10, b);
+        addFrustum(out, vadd(aH.c, aH.u, 9), 20.5, 20.5, 5, WIN_COOL, 10, b);
+        addFrustum(out, vadd(aH.c, aH.u, 26.5), 13, 12, 1.2, AZ_TEAL, 10, b);
+        addBox(out, vadd(aH.c, aH.u, 0.1), [54, 0.4, 44], [0.10, 0.12, 0.20], b);
+      }
+
+      if (grandstandEx) {
+        grandstandEx(0.75, 1, 14, 70, null, null, {
+          livery: "scaffold", tiers: 3, roof: "truss",
+          pylons: true, endWalls: true, suites: true,
+        });
+        grandstandEx(0.755, -1, 14, 70, null, null, {
+          livery: "scaffold", tiers: 2, roof: "truss",
+          pylons: true, endWalls: true,
+        });
+      } else {
+        grandstand(0.75, 1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
+        grandstand(0.755, -1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
+      }
+
+      for (let i = 0; i < 9; i++) {
+        const k   = K(0.77 + i * 0.011);
+        const isPortBaku = i === 2 || i === 3;
+        const bW  = 14 + (i % 2) * 4;
+        const h   = isPortBaku ? 150 : 85 + (i % 3) * 45;
+        const gap = 96 + (i % 4) * 24;
+        tower(k, 1, gap, bW, h,
+          { col: GLASS, seg: 7, cap: true, capCol: i % 3 ? WIN_COOL : WIN_WARM });
+        const a = anchor(k, 1, gap);
+        addFrustum(out, vadd(a.c, a.u, h - 6), bW * 0.32 * 1.1, bW * 0.32 * 0.9, 4,
+          i % 3 ? WIN_COOL : WIN_WARM, 7, [a.r, a.u, a.t]);
+        if (isPortBaku) {
+          addFrustum(out, vadd(a.c, a.u, h), bW * 0.30, bW * 0.14, 10, WIN_COOL, 7, [a.r, a.u, a.t]);
+          addCone(out, vadd(a.c, a.u, h + 10), bW * 0.10, 6, WIN_COOL, 7, [a.r, a.u, a.t]);
+        }
+      }
+
+      for (let i = 0; i < 5; i++) {
+        billboard(K(0.65 + i * 0.065), 1, 9, 14, 6, i % 2 ? AZ_ORANGE : AZ_TEAL);
+      }
+
+      if (sponsorHoarding) {
+        sponsorHoarding(0.655, 0.738, 1, 2.4, {
+          h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
+          palette: [AZ_TEAL, AZ_ORANGE, [0.90, 0.90, 0.92], AZ_BLUE, TARMAC_AD],
+        });
+        sponsorHoarding(0.762, 0.94, 1, 2.4, {
+          h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
+          palette: [AZ_TEAL, AZ_ORANGE, [0.90, 0.90, 0.92], AZ_BLUE, TARMAC_AD],
+        });
+      }
+
+      tyreWall(0.955, 0.99, -1, 3.0, [0.9, 0.9, 0.92]);
+      {
+        const a = anchor(K(0.97), -1, 4);
+        addBox(out, vadd(a.c, a.u, 1.0), [2, 0.3, 12], [0.9, 0.9, 0.92], [a.r, a.u, a.t]);
+      }
+      billboard(K(0.93), 1, 11, 18, 11, FLAME);
+      billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);
+
+
+      billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
+
+      waterBand(0.63, 0.748, -1, 16, 236, 12, SEA, { id: "baku-caspian-a" });
+      waterBand(0.748, 0.762, -1, 32, 236, 12, SEA, { id: "baku-caspian-b" });
+      waterBand(0.762, 0.93, -1, 16, 236, 12, SEA, { id: "baku-caspian-c" });
+
+      ferrisWheel(K(0.80), -1, 60, 28);
+      {
+        const a = anchor(K(0.80), -1, 60);
+        const b = [a.r, a.u, a.t];
+        const t0 = terrainYAt(a.c[0], a.c[2]);
+        const gy = t0 != null ? t0 : a.c[1];
+        let gHi = gy, gLo = gy;
+        for (const [to, ro] of [[-16, -16], [-16, 16], [16, -16], [16, 16]]) {
+          const g = terrainYAt(a.c[0] + a.t[0] * to + a.r[0] * ro, a.c[2] + a.t[2] * to + a.r[2] * ro);
+          if (g != null) { gHi = Math.max(gHi, g); gLo = Math.min(gLo, g); }
+        }
+        const pc = [a.c[0], gy, a.c[2]];
+        addBox(out, vadd(pc, a.u, (gHi + 0.22 + gLo - 0.3) / 2 - gy), [32, gHi - gLo + 0.52, 32], [0.14, 0.12, 0.18], b);
+        addCyl(out, vadd(pc, a.u, 28), 3.0, 2.8, AZ_TEAL, 14, b);
+      }
+
+      const nightYacht = (a, sc, hullCol) => {
+        const b = [a.r, a.u, a.t];
+        const HULL = hullCol || [0.90, 0.91, 0.94];
+        const L = 26 * sc, W = 7 * sc;
+        out._mat = MAT.METAL;
+        addBox(out, vadd(a.c, a.u, 1.8 * sc), [W, 3.0 * sc, L * 0.86], HULL, b);
+        addPrism(out, vadd(vadd(a.c, a.t, L * 0.47), a.u, 1.8 * sc), [W, 3.0 * sc, L * 0.16], HULL, b);
+        addBox(out, vadd(a.c, a.u, 0.5 * sc), [W * 1.02, 0.9 * sc, L * 0.88], [0.06, 0.08, 0.14], b);
+        const sup = vadd(a.c, a.t, L * 0.02);
+        addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
+        addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
+        out._mat = 0;
+        addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.52], WIN_WARM, b);
+        addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.34], WIN_COOL, b);
+        out._mat = MAT.METAL;
+        addCyl(out, vadd(sup, a.u, 7.6 * sc), 0.12 * sc, 4.5 * sc, [0.80, 0.82, 0.86], 4, b);
+        out._mat = 0;
+        addBox(out, vadd(sup, a.u, 12.3 * sc), [0.4 * sc, 0.4 * sc, 0.4 * sc], [0.95, 0.30, 0.25], b);
+      };
+      for (let i = 0; i < 3; i++) {
+        const k = K(0.64 + i * 0.10);
+        const a = anchor(k, -1, 95 + hash(k * 7) * 40);
+        if (onTrack(a.c[0], a.c[2], 10)) continue;
+        const hull = (i % 2 === 0) ? [0.12, 0.14, 0.22] : [0.85, 0.86, 0.90];
+        nightYacht(a, 0.7 + hash(k * 9) * 0.5, hull);
+      }
+      for (let i = 0; i < 5; i++) {
+        if (i === 1) continue;
+        const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
+        addCyl(out, a.c, 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
+      }
+
+      {
+        const kFlag = K(0.705);
+        const aFlag = anchor(kFlag, -1, 110);
+        if (!onTrack(aFlag.c[0], aFlag.c[2], 2)) {
+          const bFlag = [aFlag.r, aFlag.u, aFlag.t];
+          const poleH = 150;
+          const plinthH = 0.6;
+          addBox(out, vadd(aFlag.c, aFlag.u, plinthH / 2), [16, plinthH, 16], [0.30, 0.30, 0.32], bFlag);
+          const stage1H = poleH * 0.84, stage2H = poleH * 0.16;
+          const stage1Base = plinthH, stage2Base = stage1Base + stage1H;
+          const poleTop = stage2Base + stage2H;
+          addCyl(out, vadd(aFlag.c, aFlag.u, stage1Base), 1.1, stage1H, [0.72, 0.73, 0.76], 8, bFlag);
+          addCyl(out, vadd(aFlag.c, aFlag.u, stage2Base), 0.65, stage2H, [0.76, 0.77, 0.80], 8, bFlag);
+          const flagY = plinthH + poleH * 0.86;
+          const flagW = 22, flagH = 14;
+          addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY + flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], AZ_BLUE, bFlag);
+          addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.80, 0.16, 0.16], bFlag);
+          addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY - flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.14, 0.55, 0.28], bFlag);
+          addCyl(out, vadd(aFlag.c, aFlag.u, poleTop), 0.9, 1.4, [0.85, 0.72, 0.30], 8, bFlag);
+          addBox(out, vadd(aFlag.c, aFlag.u, poleTop + 1.4 + 0.25), [0.5, 0.5, 0.5], [1.6, 0.2, 0.15], bFlag);
+        }
+      }
+
+      {
+        const a = anchor(K(0.72), -1, 78);
+        const rollB = [a.r, a.t, a.u];
+        const b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
+        addBox(out, vadd(a.c, a.u, 3), [36, 5, 22], [0.34, 0.32, 0.30], b);
+        out._mat = MAT.FABRIC;
+        addCyl(out, vadd(vadd(a.c, a.t, -14), a.u, 12), 9, 28, [0.62, 0.24, 0.18], 14, rollB);
+        addCyl(out, vadd(vadd(a.c, a.t, 14), a.u, 12), 9.2, 1.8, [0.78, 0.66, 0.40], 14, rollB);
+        out._mat = 0;
+        for (let s = -2; s <= 2; s++) {
+          addBox(out, vadd(vadd(a.c, a.t, s * 4.5), a.u, 20), [3.5, 0.4, 2.6],
+                 s % 2 ? [0.90, 0.55, 0.20] : WIN_WARM, b);
+        }
+      }
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.088, 0.2705, 0.434, 0.663]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
+    };

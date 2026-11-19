@@ -1,0 +1,2047 @@
+const AgentView = (function () {
+  const _partsCap = (team) =>
+    (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
+      ? Career.budget() : Parts.BUDGET;
+  "use strict";
+
+  const API_VERSION = 1;
+
+  const PHYSICS_VERSION = 1;
+
+  const CONVENTIONS =
+    "metres, m/s, seconds, radians unless the key says otherwise; " +
+    "+x = right of centreline; +k = LEFT-hand turn; " +
+    "side is centreline-relative (which side of the road) EXCEPT scene()'s side, " +
+    "which is egocentric (which side of your nose — see its bearingDeg; its " +
+    "trackSide is the centreline side for cross-referencing); " +
+    "rival lateralM is relative to the player (+ = to your right)";
+
+  const LAT_GRIP = 26;
+  const BRAKE_DECEL = 30;
+
+  const SEVERITY = [[30, "hairpin"], [70, "slow"], [150, "medium"], [350, "fast"]];
+  const STRAIGHT_R = 800;
+  const CORNER_K = 0.004;
+  const STRAIGHT_EXIT_M = 120;
+
+  function severityOf(r) {
+    for (const [lim, name] of SEVERITY) if (r < lim) return name;
+    return r < STRAIGHT_R ? "kink" : "straight";
+  }
+
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+  const clamp = M4.clamp;
+
+  const isNum = (v) => v != null && v !== "" && Number.isFinite(+v);
+  const numOr = (v, dflt) => (isNum(v) ? +v : dflt);
+
+  function radiusOf(k) {
+    const a = Math.abs(k);
+    return a < 1e-6 ? 99999 : Math.min(99999, 1 / a);
+  }
+
+  function raceOrder(cars) {
+    const byProg = (a, b) => b.prog - a.prog;
+    return cars.filter((c) => !c.retired).sort(byProg)
+      .concat(cars.filter((c) => c.retired).sort(byProg));
+  }
+
+  function slipBudget(p, longGrip, gripMul) {
+    const axFrac = p.axFrac ?? Math.min(1, Math.abs(p.axEstSm ?? 0) / (longGrip * gripMul));
+    return { axFrac, slipFactor: Math.sqrt(Math.max(0, 1 - axFrac * axFrac)) };
+  }
+
+  function syncRenderAnchors(cars) {
+    const list = Array.isArray(cars) ? cars : [cars];
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      c.rPrevS = c.s; c.rPrevX = c.x;
+      c.rPrevPx = c.px; c.rPrevPz = c.pz;
+      c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
+    }
+  }
+
+  function create(G) {
+    Log.info("game", "AgentView.create");
+    const { wrapS, gripMult, LONG_GRIP, update, els, camVantage } = G;
+
+    const _vView = new Float32Array(16), _vProj = new Float32Array(16),
+          _vVP = new Float32Array(16);
+    function buildVP(eye, tgt, fovDeg, far) {
+      const aspect = (G.gfx && G.gfx.aspect) || 2.16;
+      M4.lookAtTo(_vView, eye, tgt, [0, 1, 0]);
+      M4.perspectiveTo(_vProj, fovDeg * Math.PI / 180, aspect, 0.3, far || 3000);
+      M4.mulTo(_vVP, _vProj, _vView);
+      return _vVP;
+    }
+
+    function resolveCamera(o) {
+      const p = G.player;
+      if (o.camera || o.orbit) {
+        if (!p || p.px == null) {
+          return fail("PlayerNotPlacedError",
+                      "a chosen camera frames the car, which has no position yet",
+                      "call __apex.jump(frac, speed) first, or omit camera to use the live view");
+        }
+      }
+      if (o.orbit) {
+        const az = (o.orbit.az || 0) * Math.PI / 180, el = (o.orbit.el || 15) * Math.PI / 180;
+        const dist = clamp(o.orbit.dist || 12, 2, 400);
+        const head = p.head || 0;
+        const dx = Math.sin(head + Math.PI + az), dz = Math.cos(head + Math.PI + az);
+        Tracks.sample(G.track, wrapS(p.s), scr);
+        const y0 = scr.p[1] + 0.6;
+        const eye = [p.px + dx * dist * Math.cos(el), y0 + dist * Math.sin(el),
+                     p.pz + dz * dist * Math.cos(el)];
+        const tgt = [p.px, y0, p.pz];
+        return { vp: buildVP(eye, tgt, o.fov || 45), eye, tgt, mode: "orbit", synthetic: true };
+      }
+      if (o.camera) {
+        const m = String(o.camera).toLowerCase();
+        if (!CamModes.CAM_MODES.some((c) => (c.id || c) === m)) {
+          return fail("BadArgumentError",
+                      'unknown camera "' + o.camera + '"',
+                      "one of: " + CamModes.CAM_MODES.map((c) => c.id || c).join(", "));
+        }
+        const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {
+          carPos: (p.px != null && p.pz != null) ? [p.px, p.pz] : null,
+          carHead: p.head,
+        });
+        return { vp: buildVP(v.eye, v.tgt, v.fov), eye: v.eye.slice(),
+                 tgt: v.tgt.slice(), mode: m, fovDeg: v.fov, synthetic: true };
+      }
+      const fr = G.frame, vp = fr && fr.viewProj;
+      if (!vp) {
+        return fail("NoFrameError",
+                    "no rendered frame yet, and no camera was named",
+                    'name a camera — render({what:"view", camera:"chase"}) — or headless(false) '
+                    + "and let a frame draw");
+      }
+      return { vp, eye: fr.eye || G.camEye, tgt: G.camTgt,
+               mode: (CamModes.CAM_MODES[G.camMode] || {}).id
+                     || String(CamModes.CAM_MODES[G.camMode] || G.camMode),
+               fovDeg: G.camFov, synthetic: false };
+    }
+
+    const scr = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+
+    const SMOOTH_W = 30;
+
+    function headingAt(s) {
+      Tracks.sample(G.track, wrapS(s), scr);
+      return Math.atan2(scr.t[0], scr.t[2]);
+    }
+
+    function angDiff(a, b) {
+      let d = a - b;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      return d;
+    }
+
+    const bearingDegTo = (dx, dz, head) =>
+      r1(-angDiff(Math.atan2(dx, dz), head) * 180 / Math.PI);
+
+    function smoothK(s, w) {
+      const W = w || SMOOTH_W;
+      return angDiff(headingAt(s + W), headingAt(s - W)) / (2 * W);
+    }
+
+    function sweep(from, to) {
+      const step = 5;
+      let psi = 0;
+      for (let s = from; s < to; s += step) {
+        psi += angDiff(headingAt(Math.min(s + step, to)), headingAt(s));
+      }
+      return psi;
+    }
+
+    let seq = 0, episodeId = 0;
+    function beginEpisode() { episodeId++; lastPayload = null; lastSeq = 0; return episodeId; }
+    let lastPayload = null;
+    let lastSeq = 0;
+
+    function fail(error, message, fix) {
+      return {
+        ok: false, error, message, fix,
+        state: { raceState: G.state, track: G.track ? G.track.def.id : null,
+                 playerReady: !!(G.player && G.player.px != null) },
+      };
+    }
+
+    function notReady() {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      if (!G.player) {
+        return fail("NoPlayerError", "the car grid has not been built",
+                    "call __apex.race(id) then __apex.go()");
+      }
+      if (G.player.px == null) {
+        return fail("PlayerNotPlacedError",
+                    "player.px is uninitialised, so world position is unknown",
+                    "call __apex.jump(frac, speed) or __apex.step(1/60, 1) first");
+      }
+      return null;
+    }
+
+    const { corners, nextCorner, upcomingCorners } = AgentCorners.create({ G, r1, wrapS, smoothK, sweep, severityOf,
+      LAT_GRIP, BRAKE_DECEL, STRAIGHT_R, STRAIGHT_EXIT_M });
+
+    function paceSev(radiusM) {
+      if (radiusM == null || radiusM >= STRAIGHT_R) return 6;
+      if (radiusM < 30) return 1;
+      if (radiusM < 60) return 2;
+      if (radiusM < 120) return 3;
+      if (radiusM < 250) return 4;
+      if (radiusM < 500) return 5;
+      return 6;
+    }
+
+    function pacenotes(s, speed) {
+      const seq = upcomingCorners(s, speed, 3);
+      if (!seq.length) return "clear road ahead";
+      return seq.map((c) => {
+        const sev = paceSev(c.radiusM);
+        const tags = [];
+        if (c.elevation === "uphill") tags.push("uphill");
+        else if (c.elevation === "downhill") tags.push("downhill");
+        if (c.camber === "off-camber") tags.push("off-camber");
+        if (c.exitsOntoStraight) tags.push("into-str");
+        if (sev <= 2) tags.push("don't-cut");
+        return c.dir + sev + " @" + Math.round(c.distM) + "m"
+             + (tags.length ? " " + tags.join(" ") : "");
+      }).join(", ");
+    }
+
+    function lookahead(s, speed, horizonS, pts) {
+      const v = Math.max(speed, 8);
+      const horizon = clamp(v * horizonS, 40, 600);
+      const n = Math.max(2, Math.min(pts | 0 || 5, 12));
+      const out = [];
+      for (let i = 1; i <= n; i++) {
+        const d = horizon * (i / n);
+        const ss = wrapS(s + d);
+        const k = smoothK(ss);
+        Tracks.sample(G.track, ss, scr);
+        const radius = radiusOf(k);
+        out.push({
+          d: r1(d), t: r1(d / v),
+          radiusM: radius >= STRAIGHT_R ? null : r1(radius),
+          dir: Math.abs(k) < CORNER_K ? "straight" : k > 0 ? "L" : "R",
+          widthM: r1(scr.hw * 2),
+        });
+      }
+      return { horizonS, horizonM: r1(horizon), pts: out };
+    }
+
+    function roadGap(c) {
+      const p = G.player, L = G.track.total;
+      const raw = (c.prog || 0) - (p.prog || 0);
+      const lapsAhead = (c.lap || 0) - (p.lap || 0);
+      let gap = raw - lapsAhead * L;
+      if (lapsAhead !== 0) gap -= Math.round(gap / L) * L;
+      return { gap, lapsAhead };
+    }
+
+    function rivals(limit) {
+      const p = G.player, out = [];
+      for (const c of G.cars) {
+        if (c.isPlayer) continue;
+        const { gap, lapsAhead } = roadGap(c);
+        const ahead = gap >= 0, gapM = Math.abs(gap);
+        const lateralM = (c.x || 0) - (p.x || 0);
+        const closing = ahead ? (p.speed - c.speed) : (c.speed - p.speed);
+        out.push({
+          id: c.id != null ? c.id : G.cars.indexOf(c),
+          code: c.code || null,
+          team: teamIdOf(c),
+          rel: ahead ? "ahead" : "behind",
+          gapM: r1(gapM),
+          lapsAhead,
+          speedKph: r1((c.speed || 0) * 3.6),
+          lap: c.lap || 0,
+          retired: !!c.retired,
+          gapS: r2(gapM / Math.max(p.speed, 5)),
+          lateralM: r1(lateralM),
+          side: lateralM > 0.5 ? "right" : lateralM < -0.5 ? "left" : "same line",
+          closingMps: r1(closing),
+          pace: r3(c.skill != null ? c.skill : 1),
+          threat: !ahead && gapM < 25 && closing > 0.5 ? "under attack"
+                : ahead && gapM < 25 && closing > 0.5 ? "closing"
+                : gapM < 25 ? "in range" : "clear",
+        });
+      }
+      out.sort((a, b) => a.gapM - b.gapM);
+      return limit ? out.slice(0, limit) : out;
+    }
+
+    function teamIdOf(c) {
+      const t = c && c.team;
+      if (!t) return null;
+      return (typeof t === "object" ? (t.id || t.short || null) : t);
+    }
+
+    function field(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = opts || {};
+      const detail = o.detail || "brief";
+      if (["brief", "full"].indexOf(detail) < 0) {
+        return fail("BadArgumentError", 'detail must be "brief" or "full"',
+                    'call field({detail:"full"})');
+      }
+      const total = G.track.total;
+      const sorted = raceOrder(G.cars);
+      const leader = sorted[0];
+      const rows = sorted.map((c, i) => {
+        const ahead = sorted[i - 1];
+        const gapLeadM = leader.prog - c.prog;
+        const intervalM = ahead ? ahead.prog - c.prog : 0;
+        const v = Math.max(c.speed || 0, 5);
+        const row = {
+          pos: i + 1,
+          id: c.id != null ? c.id : G.cars.indexOf(c),
+          code: c.code || null,
+          team: teamIdOf(c),
+          isPlayer: !!c.isPlayer,
+          retired: !!c.retired,
+          inPit: !!(c.pitState && c.pitState !== "none"),
+          lap: c.lap || 0,
+          gapToLeaderS: i === 0 ? 0 : r2(gapLeadM / Math.max(leader.speed || v, 5)),
+          intervalS: i === 0 ? 0 : r2(intervalM / v),
+        };
+        if (detail !== "brief") {
+          row.frac = +(c.s / total).toFixed(4);
+          row.speedKph = r1((c.speed || 0) * 3.6);
+          row.gapToLeaderM = r1(gapLeadM);
+          row.finished = !!c.finished;
+          row.pace = r3(c.skill != null ? c.skill : 1);
+          row.cuts = c.cuts || 0;
+          row.timePenaltyS = c.penalty || 0;
+        }
+        return row;
+      });
+      const playerRow = rows.find((r) => r.isPlayer);
+      return {
+        apiVersion: API_VERSION, seq: ++seq, t: r2(G.raceT || 0),
+        raceState: G.state,
+        of: G.cars.length,
+        lapsTarget: G.lapsTarget || null,
+        player: playerRow ? { pos: playerRow.pos, lap: playerRow.lap,
+                              gapToLeaderS: playerRow.gapToLeaderS,
+                              intervalS: playerRow.intervalS } : null,
+        positions: rows,
+        note: "allocentric race order; gaps in seconds. world().rivals is the "
+              + "egocentric nearest-few for a driving decision",
+      };
+    }
+
+    function affordances(nc, rv) {
+      const p = G.player, can = [], cannot = [];
+
+      if (nc && nc.status.startsWith("BRAKE")) {
+        can.push({ id: "brake", why: nc.status });
+      } else if (nc && nc.suggestBrakeM > 0) {
+        can.push({ id: "coast_to_brake_point",
+                   why: nc.turn + " in " + nc.distM + " m; brake at "
+                        + r1(nc.distM - nc.suggestBrakeM) + " m" });
+      }
+
+      const energy = p.energy || 0;
+      if (energy > 0.05) {
+        can.push({ id: "deploy_ers", why: "energy " + r2(energy) });
+      } else {
+        cannot.push({ id: "deploy_ers", why: "energy " + r2(energy) + " is below 0.05" });
+      }
+
+      if (p.xArmed) {
+        can.push({ id: "active_aero_x_mode",
+                   why: "inside an X-mode zone; X-mode trades downforce for ~+10.5% top speed" });
+      } else {
+        cannot.push({ id: "active_aero_x_mode",
+                      why: "not armed here — needs an X-mode zone, crawl speed, and no braking" });
+      }
+
+      const wallR = Tracks.wallAt(G.track, p.s, 1), wallL = -Tracks.wallAt(G.track, p.s, -1);
+      const clearR = wallR - p.x, clearL = p.x - wallL;
+      const ahead = rv.find((r) => r.rel === "ahead" && r.gapM < 40);
+      if (ahead) {
+        for (const [side, clear] of [["left", clearL], ["right", clearR]]) {
+          const blocked = ahead.side === side && ahead.gapM < 12;
+          if (clear > 3 && !blocked) {
+            const who = ahead.code || ("car " + ahead.id);
+            can.push({ id: "overtake_" + side,
+                       why: who + " " + ahead.gapS + " s ahead, "
+                            + r1(clear) + " m clear to your " + side });
+          } else {
+            cannot.push({ id: "overtake_" + side,
+                          why: blocked ? "rival is on that line"
+                                       : r1(clear) + " m to the barrier" });
+          }
+        }
+      }
+      if (p.wrongWay) {
+        can.push({ id: "reset", why: "facing the wrong way — __apex.resetPlayer()" });
+      }
+      return { affordances: can, unavailable: cannot };
+    }
+
+    function briefLine(ego, nc, rv) {
+      const bits = [];
+      bits.push("Lap " + ego.lap + ", P" + ego.pos);
+      bits.push(r1(ego.speedKph) + " km/h in " + ego.gear);
+      if (nc) {
+        bits.push(nc.status.startsWith("in ")
+          ? nc.status + " (" + nc.dir + ", " + nc.radiusM + " m)"
+          : nc.turn + " " + nc.dir + " in " + nc.distM + " m — " + nc.status);
+      }
+      bits.push(ego.onTrack
+        ? r1(Math.abs(ego.lateralM)) + " m " + (ego.lateralM > 0 ? "right" : "left") + " of centre"
+        : "OFF TRACK");
+      const near = rv[0];
+      if (near && near.gapM < 40) {
+        bits.push((near.code || "car " + near.id) + " " + near.gapS + " s "
+                  + near.rel + " (" + near.threat + ")");
+      }
+      return bits.join(", ") + ".";
+    }
+
+    const DEAD_ABS = 0.25;
+    const DEAD_REL = 0.02;
+
+    const DEAD_TIGHT = 0.005;
+    const TIGHT_KEYS = { frac: 1, energy: 1, flap: 1, slipFactor: 1, gripMult: 1 };
+
+    function sameEnough(a, b, key) {
+      if (typeof a !== "number" || typeof b !== "number") return a === b;
+      if (key && TIGHT_KEYS[key] === 1) return Math.abs(a - b) <= DEAD_TIGHT;
+      return Math.abs(a - b) <= Math.max(DEAD_ABS, Math.abs(a) * DEAD_REL);
+    }
+
+    function deltaOf(prev, next, key) {
+      if (prev === undefined) return next;
+      if (Array.isArray(next) || Array.isArray(prev)) {
+        if (Array.isArray(prev) && Array.isArray(next) && prev.length === next.length) {
+          for (let i = 0; i < next.length; i++) {
+            if (deltaOf(prev[i], next[i]) !== undefined) return next;
+          }
+          return undefined;
+        }
+        return next;
+      }
+      if (next && typeof next === "object" && prev && typeof prev === "object") {
+        const out = {};
+        let changed = false;
+        for (const k of Object.keys(next)) {
+          const d = deltaOf(prev[k], next[k], k);
+          if (d !== undefined) { out[k] = d; changed = true; }
+        }
+        return changed ? out : undefined;
+      }
+      return sameEnough(prev, next, key) ? undefined : next;
+    }
+
+    const DELTA_META = { note: 1, deltaBase: 1 };
+    function keysShrank(prev, next, top) {
+      if (!prev || typeof prev !== "object") return false;
+      if (Array.isArray(prev)) {
+        if (!Array.isArray(next) || next.length !== prev.length) return false;
+        for (let i = 0; i < prev.length; i++) if (keysShrank(prev[i], next[i], false)) return true;
+        return false;
+      }
+      if (!next || typeof next !== "object" || Array.isArray(next)) return true;
+      for (const k of Object.keys(prev)) {
+        if (top && DELTA_META[k]) continue;
+        if (!Object.prototype.hasOwnProperty.call(next, k)) return true;
+        if (keysShrank(prev[k], next[k], false)) return true;
+      }
+      return false;
+    }
+
+    function applyDelta(base, d) {
+      if (d === undefined) return base;
+      if (d === null || typeof d !== "object" || Array.isArray(d)) return d;
+      const out = Array.isArray(base) ? base.slice()
+                : (base && typeof base === "object") ? Object.assign({}, base) : {};
+      for (const k of Object.keys(d)) out[k] = applyDelta(out[k], d[k]);
+      return out;
+    }
+
+    function world(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+
+      const o = opts || {};
+      const detail = o.detail || "drive";
+      if (["brief", "drive", "full"].indexOf(detail) < 0) {
+        return fail("BadArgumentError", 'detail must be "brief", "drive" or "full"',
+                    'call world({detail:"drive"})');
+      }
+
+      if (o.horizonS !== undefined && (!Number.isFinite(o.horizonS) || o.horizonS <= 0)) {
+        return fail("BadArgumentError", "horizonS must be a positive finite number", "omit horizonS for the default 4 seconds");
+      }
+      const p = G.player, total = G.track.total;
+      Tracks.sample(G.track, p.s, scr);
+      const hw = scr.hw;
+      const wallR = Tracks.wallAt(G.track, p.s, 1);
+      const wallL = -Tracks.wallAt(G.track, p.s, -1);
+
+      const headErr = angDiff(Math.atan2(scr.t[0], scr.t[2]), p.head);
+
+      const pos = raceOrder(G.cars).findIndex((c) => c.isPlayer) + 1;
+      const { axFrac, slipFactor } = slipBudget(p, LONG_GRIP || 34, gripMult ? gripMult() : 1);
+
+      const ego = {
+        lap: p.lap, pos, of: G.cars.length,
+        frac: +(p.s / total).toFixed(4), s: r1(p.s),
+        speedKph: r1(p.speed * 3.6), speed: r1(p.speed), gear: p.gear || 1,
+        lateralM: r2(p.x), headingErrDeg: r1(headErr * 180 / Math.PI),
+        onTrack: Math.abs(p.x) <= hw,
+        halfWidthM: r1(hw),
+        clearLeftM: r1(p.x - wallL), clearRightM: r1(wallR - p.x),
+        energy: r2(p.energy || 0),
+        penalties: {
+          cuts: p.cuts || 0,
+          freeCutsLeft: Math.max(0, 3 - (p.cutWarn || 0)),
+          timePenaltyS: p.penalty || 0,
+          note: "cuts 1-2 warn, the 3rd is the black-and-white flag; each cut from the 4th adds +5 s to your race time and every cut deletes that lap's time",
+        },
+        ers: {
+          charge: r2(p.energy || 0),
+          deploying: !!p.deploying,
+          overtakeArmed: !!p.otArmed,
+          boostRemainingS: r1(p.otT || 0),
+          overtakeEarned: !!p.otEarned, overtakeMJ: typeof OvertakeMode !== "undefined" ? +OvertakeMode.mj(p).toFixed(2) : 0,
+          note: "overtake: under 1 s behind at the detection line (~90% of the lap) earns 0.5 MJ for the next lap; the button toggles it; off under SC and in low grip",
+        },
+        aero: {
+          mode: (p.aeroX || 0) > 0.05 ? "X" : "Z",
+          flap: r2(p.aeroX || 0),
+          requested: !!p.xOn,
+          armed: !!p.xArmed,
+          note: "X-mode = low drag, ~+10.5% top / ~60% less aero DF at mid wing; "
+              + "arms inside an X-mode zone (not a live look-ahead), shuts under braking",
+        },
+        grip: {
+          slipFactor: r2(slipFactor),
+          longUsedPct: Math.round(axFrac * 100),
+          state: axFrac < 0.1 ? "neutral — full lateral grip available"
+               : (p.axEstSm || 0) < 0 ? Math.round(axFrac * 100)
+                   + "% of grip spent braking; lateral grip reduced"
+               : Math.round(axFrac * 100)
+                   + "% of grip spent accelerating; lateral grip reduced",
+          surface: G.raceWeather === "dry" ? "dry" : G.raceWeather,
+          gripMult: r2(gripMult ? gripMult() : 1),
+          tyreGrip: r2(gripMult ? gripMult(p) : 1),
+          fieldGrip: r2(gripMult ? gripMult({ tread: null }) : 1),
+        },
+      };
+
+      const nc = nextCorner(p.s, p.speed);
+      const rv = rivals(detail === "full" ? 0 : 4);
+
+      const payload = {
+        apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
+        seq: ++seq, episodeId, t: r2(G.raceT || 0), detail,
+        conventions: CONVENTIONS,
+        raceState: G.state,
+        track: { id: G.track.def.id, name: G.track.def.name, lengthM: r1(total) },
+        ego,
+        nextCorner: nc,
+        brief: briefLine(ego, nc, rv),
+      };
+
+      if (detail !== "brief") {
+        payload.pacenotes = pacenotes(p.s, p.speed);
+        payload.ahead = lookahead(p.s, p.speed, o.horizonS || 4, o.points || 5);
+        payload.nextCorners = upcomingCorners(p.s, p.speed, o.corners || 3);
+        payload.rivals = rv;
+        const aff = affordances(nc, rv);
+        payload.affordances = aff.affordances;
+        payload.unavailable = aff.unavailable;
+      }
+
+      if (detail === "full") {
+        payload.session = {
+          weather: G.raceWeather, timeOfDay: G.raceTimeOfDay,
+          lapsTarget: G.lapsTarget, timeTrial: !!G.timeTrial,
+          sector: (G.sectorIdx || 0) + 1,
+          sectorBests: (G.sectorBests || []).map((v) => (isFinite(v) ? r2(v) : null)),
+          sectorLast: (G.sectorLast || []).map((v) => (v == null ? null : r2(v))),
+          seed: G.seed,
+          seasonMode: !!G.seasonMode,
+          difficulty: G.difficulty != null ? G.difficulty : null,
+          raceLineAssist: G.raceLineAssist != null ? G.raceLineAssist : null,
+          unlimitedBudget: !!G.unlimitedBudget,
+        };
+        payload.terminal = terminal();
+        payload.physics = {
+          kRaw: +Tracks.curvature(G.track, p.s).toFixed(5),
+          kSmoothed: +smoothK(p.s).toFixed(5),
+          slipDeg: r1((p.slipDeg != null ? p.slipDeg : 0)),
+          vLat: r2(p.vLat || 0), axEstSm: r2(p.axEstSm || 0),
+          offTrackS: r2(p.offT || 0), onKerb: !!p.onKerb,
+          brakeHeat: r2(p.brakeHeat || 0),
+          rpm: Math.round(p.rpm || 0),
+          offroad: !!p.offroad,
+          stuckS: r2(p.stuckT || 0),
+          wallContactS: r2(p.wallT || 0),
+          vertLoad: r2(p.vertLoad != null ? p.vertLoad : 0),
+        };
+        payload.tunables = {
+          WHEELBASE: G.WHEELBASE, PACE: G.PACE, DRIFT: G.DRIFT,
+          ROAD_FOLLOW: G.ROAD_FOLLOW, PLAYER_GRIP: G.PLAYER_GRIP,
+          FRONT_GRIP: G.FRONT_GRIP, YAW_DAMP: G.YAW_DAMP,
+          YAW_INERTIA: G.YAW_INERTIA, LONG_GRIP: LONG_GRIP,
+          note: "live values — __apex.setPhysics() mutates these at runtime",
+        };
+      }
+
+      if (o.since != null) {
+        const shrank = !!lastPayload && keysShrank(lastPayload, payload, true);
+        if (!lastPayload || o.since !== lastSeq || shrank) {
+          payload.deltaBase = null;
+          payload.note = shrank
+            ? "this payload drops keys the delta base carried (detail level changed?) — " +
+              "a delta cannot express a removed key, so the full payload is returned"
+            : "no delta available for seq " + o.since + " — full payload returned";
+        } else {
+          const d = deltaOf(lastPayload, payload) || {};
+          lastPayload = applyDelta(lastPayload, d);
+          lastPayload.seq = payload.seq;
+          lastSeq = payload.seq;
+          d.apiVersion = API_VERSION; d.seq = payload.seq; d.episodeId = episodeId;
+          d.deltaBase = o.since;
+          return d;
+        }
+      }
+      lastPayload = payload; lastSeq = payload.seq;
+      return payload;
+    }
+
+    function terminal() {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      if (!G.player) {
+        return fail("NoPlayerError", "the car grid has not been built",
+                    "call __apex.race(id) then __apex.go()");
+      }
+      const p = G.player;
+      const rescued = p.rescueLastT != null && (G.raceT - p.rescueLastT) < 0.5;
+      let reason = null;
+      if (p.retired) reason = "retired";
+      else if (p.finished) reason = "finished";
+      else if (p.wrongWay) reason = "wrong_way";
+      else if (rescued) reason = "rescued";
+      return { done: reason != null, reason };
+    }
+
+    const _raster = AgentRaster.create({
+      G, fail, resolveCamera, model, corners, nextCorner, carWorld, scr,
+      clamp, r1, r2, API_VERSION, CONVENTIONS, wrapS,
+    });
+    const frame = _raster.frame, plan = _raster.plan, carRender = _raster.carRender, unitRight = _raster.unitRight;
+    function carView(opts) {
+      const o = opts || {};
+      const pt = G.player && G.player.team;
+      const teamId = o.team
+                     || (pt && typeof pt === "object" ? pt.id : pt)
+                     || (Teams.LIST[G.teamIdx] || Teams.LIST[0]).id;
+      const team = Teams.LIST.find((t) => t.id === teamId);
+      if (!team) {
+        return fail("NoTeamError", 'unknown team "' + teamId + '"',
+                    "call __apex.teams() for the valid ids");
+      }
+      const setup = o.parts || G.getTeamParts(team.id);
+      const res = Parts.resolveSetup(setup, team);
+      const bodyKey = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, o.bodyStyle) : team.id;
+      const style = Car3D.teamStyleOf(bodyKey);
+
+      let geom = null, parts = null, render, meshRef = null;
+      try {
+        const mesh = Car3D.build(team.color, team.color2,
+                                 { parts: res.visual, teamId: team.id, measure: true,
+                                   livery: o.bodyStyle ? { bodyStyle: o.bodyStyle } : undefined });
+        meshRef = mesh;
+        const pos = mesh.pos;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
+            z0 = Infinity, z1 = -Infinity;
+        for (let i = 0; i < pos.length; i += 3) {
+          if (pos[i] < x0) x0 = pos[i]; if (pos[i] > x1) x1 = pos[i];
+          if (pos[i + 1] < y0) y0 = pos[i + 1]; if (pos[i + 1] > y1) y1 = pos[i + 1];
+          if (pos[i + 2] < z0) z0 = pos[i + 2]; if (pos[i + 2] > z1) z1 = pos[i + 2];
+        }
+        const mats = {};
+        for (const m of (mesh.mat || [])) mats[m] = (mats[m] || 0) + 1;
+        parts = mesh.parts || null;
+        geom = {
+          vertices: pos.length / 3, triangles: (mesh.idx || []).length / 3,
+          lengthM: r2(z1 - z0), widthM: r2(x1 - x0), heightM: r2(y1 - y0),
+          wheelbaseM: r2(Car3D.AXLES.frontZ - Car3D.AXLES.rearZ),
+          wheelRadiusM: Car3D.AXLES.wheelY,
+          boundsM: { x: [r2(x0), r2(x1)], y: [r2(y0), r2(y1)], z: [r2(z0), r2(z1)] },
+          note: "car local space: +z forward, +y up, +x right; origin at the "
+                + "chassis datum, not the floor",
+        };
+      } catch (e) {
+        geom = { error: "build failed: " + (e && e.message) };
+      }
+
+      if ((o.detail === "render" || o.detail === "all" || o.render) && meshRef && !geom.error) {
+        render = carRender(meshRef, o.cols | 0 || 46, o.edgeThresh, o.ss);
+      }
+
+      return {
+        apiVersion: API_VERSION,
+        team: { id: team.id, name: team.name, short: team.short,
+                engine: team.engine, tier: team.tier,
+                colors: { primary: team.color, secondary: team.color2 },
+                stats: team.stats,
+                drivers: team.drivers.map((d) => ({ name: d.name, code: d.code, num: d.num })) },
+        parts: {
+          budget: _partsCap(team), spent: res.cost,
+          remaining: _partsCap(team) - res.cost,
+          chosen: Parts.CATALOG.map((cat) => {
+            const id = res.setup[cat.id];
+            const opt = cat.options.find((x) => x.id === id) || cat.options[0];
+            return { category: cat.id, label: cat.label, option: opt.id,
+                     optionLabel: opt.label, cost: opt.cost, desc: opt.desc,
+                     tier: res.tiers ? res.tiers[cat.id] : undefined,
+                     supplier: opt.supplier };
+          }),
+          mods: res.mods,
+        },
+        chassis: {
+          style, bodyStyle: bodyKey,
+          bespokeSilhouette: Object.prototype.hasOwnProperty.call(
+            Car3D.TEAM_STYLE, team.id),
+          axles: Car3D.AXLES,
+          stations: { nose: Car3D.CHASSIS.nose, monocoque: Car3D.CHASSIS.monocoque,
+                      cockpit: Car3D.CHASSIS.cockpit, floor: Car3D.CHASSIS.floor },
+        },
+        geometry: geom,
+        render,
+        partGeometry: (o.detail === "parts" || o.detail === "all") ? parts : undefined,
+        partCount: parts ? parts.length : undefined,
+        note: "everything the car viewer shows except appearance itself — for a "
+              + "visual check use tools/car/render-car.mjs. "
+              + 'Pass {detail:"parts"} for per-part measured boxes.',
+      };
+    }
+
+    const GROUNDED_KINDS = ["tree", "pine", "palm", "conifer", "bush", "hedge",
+                            "prop", "building", "house", "motorhome", "tower",
+                            "grandstand", "billboard", "signBoard", "marshalPost"];
+    const FLOAT_M = 0.6;
+    const BURIED_M = 4;
+    const CLIFF_SLOPE = 0.55;
+    const OVER_ROAD_M = 0.15;
+
+    function survey(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const o = opts || {};
+      const track = G.track, total = track.total;
+      const nAt = clamp((o.stations | 0) || (o.at | 0) || 24, 2, 200);
+      const reach = clamp(o.reachM || 60, 10, 400);
+      const nLat = clamp(o.lats | 0 || 13, 3, 41);
+      const cap = clamp(o.limit | 0 || 20, 1, 200);
+
+      const profile = [], holes = [], cliffs = [], overRoad = [];
+      for (let i = 0; i < nAt; i++) {
+        const frac = i / nAt;
+        const s = frac * total;
+        Tracks.sample(track, s, scr);
+        const [ex, ez] = unitRight(scr);
+        const roadY = scr.p[1];
+        const row = [];
+        for (let j = 0; j < nLat; j++) {
+          const lat = -reach + (2 * reach) * (j / (nLat - 1));
+          const ty = Tracks.terrainY(track, scr.p[0] + ex * lat, scr.p[2] + ez * lat);
+          row.push({ latM: r1(lat), terrainY: ty == null ? null : r2(ty) });
+          if (ty != null && Math.abs(lat) <= scr.hw && ty - roadY > OVER_ROAD_M) {
+            overRoad.push({ frac: +frac.toFixed(3), latM: r1(lat),
+                            aboveRoadM: r2(ty - roadY) });
+          }
+        }
+        const ribbonFrom = scr.hw + 2.4;
+        for (let j = 1; j < row.length - 1; j++) {
+          if (Math.abs(row[j].latM) < ribbonFrom) continue;
+          if (row[j].terrainY == null && row[j - 1].terrainY != null
+              && row.slice(j + 1).some((c) => c.terrainY != null)) {
+            holes.push({ frac: +frac.toFixed(3), latM: row[j].latM });
+          }
+        }
+        const gY = (c) => (Math.abs(c.latM) < ribbonFrom ? r2(roadY) : c.terrainY);
+        for (let j = 1; j < row.length; j++) {
+          const a = gY(row[j - 1]), b = gY(row[j]);
+          const dLat = Math.abs(row[j].latM - row[j - 1].latM) || 1;
+          if (a != null && b != null && Math.abs(b - a) / dLat > CLIFF_SLOPE) {
+            cliffs.push({ frac: +frac.toFixed(3),
+                          fromLatM: row[j - 1].latM, toLatM: row[j].latM,
+                          riseM: r2(b - a), slope: r2(Math.abs(b - a) / dLat) });
+          }
+        }
+        profile.push({ frac: +frac.toFixed(3), roadY: r2(roadY),
+                       halfWidthM: r1(scr.hw), samples: row });
+      }
+
+      const reg = track.props;
+      const floating = [], buried = [], voidProps = [], propsOverRoad = [];
+      let checked = 0;
+      if (reg) {
+        for (const p of reg.list) {
+          const grounded = GROUNDED_KINDS.indexOf(p.kind) >= 0;
+          if (grounded && p.measured) {
+            checked++;
+            const base = p.y - p.h / 2;
+            const ty = Tracks.terrainY(track, p.x, p.z);
+            if (ty == null) {
+              voidProps.push({ kind: p.kind, at: [p.x, p.y, p.z] });
+            } else {
+              const gap = base - ty;
+              if (gap > FLOAT_M) {
+                floating.push({ kind: p.kind, at: [p.x, p.y, p.z], gapM: r2(gap),
+                                sizeM: [p.w, p.h, p.d] });
+              } else if (gap < -BURIED_M) {
+                buried.push({ kind: p.kind, at: [p.x, p.y, p.z], gapM: r2(gap),
+                              sizeM: [p.w, p.h, p.d] });
+              }
+            }
+          }
+          const judgeable = p.kind !== "gantry"
+                            && ((p.measured && p.kind !== "structure")
+                                || (p.fill != null && p.fill > 0.3));
+          const pr = judgeable ? Tracks.project(track, p.x, p.z, null, p.y) : null;
+          if (pr) {
+            Tracks.sample(track, pr.s, scr);
+            const [ex, ez] = unitRight(scr);
+            const latHalf = Math.abs(p.w / 2 * ex) + Math.abs(p.d / 2 * ez);
+            const over = scr.hw - (Math.abs(pr.lat) - latHalf);
+            if (over > 0 && p.y + p.h / 2 > scr.p[1] + 0.3) {
+              propsOverRoad.push({ kind: p.kind, at: [p.x, p.y, p.z],
+                                   frac: +(pr.s / total).toFixed(3),
+                                   lateralM: r1(pr.lat), halfWidthM: r1(scr.hw),
+                                   overlapM: r2(over) });
+            }
+          }
+        }
+      }
+
+      const md = track.modelDiagnostics || {};
+      const byWorst = (a, b) => Math.abs(b.gapM || b.overlapM || 0)
+                              - Math.abs(a.gapM || a.overlapM || 0);
+      floating.sort(byWorst); buried.sort(byWorst); propsOverRoad.sort(byWorst);
+
+      return {
+        apiVersion: API_VERSION, conventions: CONVENTIONS,
+        track: { id: track.def.id, name: track.def.name, lengthM: r1(total) },
+        sampledAt: nAt, reachM: reach, latsPerStation: nLat,
+        thresholds: { floatingAboveM: FLOAT_M, buriedBelowM: BURIED_M,
+                      cliffSlope: CLIFF_SLOPE, terrainAboveRoadM: OVER_ROAD_M,
+                      note: "props are deliberately sunk below grade (place 0.8 m, "
+                            + "anchor 0.3 m), so `floating` means base above "
+                            + "TERRAIN, not above zero" },
+        summary: {
+          propsChecked: checked,
+          floating: floating.length, buried: buried.length,
+          overVoid: voidProps.length,
+          propsOverRoadCandidates: propsOverRoad.length,
+          terrainHoles: holes.length, groundCliffs: cliffs.length,
+          terrainOverRoad: overRoad.length,
+          modelsSuppressed: (md.suppressed || []).length,
+          modelsInvalid: (md.invalid || []).length,
+          clean: !floating.length && !buried.length && !overRoad.length
+                 && !holes.length && !cliffs.length && !(md.invalid || []).length,
+        },
+        floating: floating.slice(0, cap),
+        buried: buried.slice(0, cap),
+        overVoid: voidProps.slice(0, cap),
+        propsOverRoadCandidates: propsOverRoad.slice(0, cap),
+        terrainHoles: holes.slice(0, cap),
+        groundCliffs: cliffs.slice(0, cap),
+        terrainOverRoad: overRoad.slice(0, cap),
+        modelDiagnostics: { suppressed: (md.suppressed || []).slice(0, cap),
+                            invalid: (md.invalid || []).slice(0, cap) },
+        profile: o.profile ? profile : undefined,
+        authoritative: {
+          propsOverRoad: "tools/track/measure-props-over-road.mjs (vertex-level)",
+          terrainOverRoad: "tests/specs/terrain-over-road.spec.js",
+        },
+        note: "pass {profile:true} for the full lateral ground table. A terrain "
+              + "hole (null between solid readings) is the classic cause of "
+              + "floating props — the closed-form ground estimate takes over there.",
+      };
+    }
+
+    const CLUSTER_KINDS = ["pine", "tree", "palm", "conifer", "bush", "hedge",
+                           "prop", "signBoard", "marshalPost", "billboard",
+                           "ridge", "peak", "structure"];
+    const BIG_STRUCTURE_M3 = 6000;
+    const LANDMARK_KINDS = ["grandstand", "building", "house", "motorhome",
+                            "tower", "mountain", "gantry"];
+    const CLUSTER_GAP_M = 60;
+    const CLUSTER_MAX_RUN_M = 400;
+
+    let modelCache = null;
+
+    function sideOf(v) {
+      if (v == null) return "off-course";
+      return v > 0 ? "right" : v < 0 ? "left" : "across";
+    }
+
+    function propPos(p) {
+      if (p.k != null) {
+        const k = ((p.k % G.track.n) + G.track.n) % G.track.n;
+        return { s: k / G.track.n * G.track.total, lat: null, sideSel: p.side != null ? p.side : null };
+      }
+      const pr = Tracks.project(G.track, p.x, p.z, null, p.y);
+      return pr ? { s: pr.s, lat: pr.lat } : { s: 0, lat: null };
+    }
+    function propS(p) { return propPos(p).s; }
+
+    function buildModel() {
+      const track = G.track, total = track.total;
+      const reg = track.props;
+      const pts = reg.list.map((p) => {
+        const pos = propPos(p);
+        const side = p.side != null ? sideOf(p.side)
+                   : pos.lat == null ? "off-course"
+                   : pos.lat > 0 ? "right" : "left";
+        return { p, s: pos.s, frac: pos.s / total, side, lat: pos.lat };
+      });
+      pts.sort((a, b) => (a.p.kind === b.p.kind
+        ? (a.side === b.side ? a.s - b.s : a.side < b.side ? -1 : 1)
+        : (a.p.kind < b.p.kind ? -1 : 1)));
+
+      const features = [], landmarks = [], singles = [];
+      let i = 0;
+      while (i < pts.length) {
+        const cur = pts[i];
+        const bigStructure = cur.p.kind === "structure"
+          && cur.p.w * cur.p.h * cur.p.d >= BIG_STRUCTURE_M3;
+        if (bigStructure) { landmarks.push(cur); i++; continue; }
+        if (CLUSTER_KINDS.indexOf(cur.p.kind) < 0) {
+          (LANDMARK_KINDS.indexOf(cur.p.kind) >= 0 ? landmarks : singles).push(cur);
+          i++; continue;
+        }
+        let j = i + 1;
+        while (j < pts.length && pts[j].p.kind === cur.p.kind
+               && pts[j].side === cur.side
+               && pts[j].s - pts[j - 1].s <= CLUSTER_GAP_M
+               && pts[j].s - cur.s <= CLUSTER_MAX_RUN_M) j++;
+        const run = pts.slice(i, j);
+        if (run.length < 3) { singles.push(...run); i = j; continue; }
+        let hSum = 0, hMax = 0;
+        for (const r of run) { hSum += r.p.h; if (r.p.h > hMax) hMax = r.p.h; }
+        features.push({
+          kind: cur.p.kind, count: run.length, side: cur.side,
+          fromFrac: +run[0].frac.toFixed(4),
+          toFrac: +run[run.length - 1].frac.toFixed(4),
+          fromS: r1(run[0].s), toS: r1(run[run.length - 1].s),
+          runLengthM: r1(run[run.length - 1].s - run[0].s),
+          avgHeightM: r1(hSum / run.length), maxHeightM: r1(hMax),
+        });
+        i = j;
+      }
+      features.sort((a, b) => a.fromS - b.fromS);
+      landmarks.sort((a, b) => a.s - b.s);
+      singles.sort((a, b) => a.s - b.s);
+      return { pts, features, landmarks, singles };
+    }
+
+    function model() {
+      const key = G.track.def.id + "|" + G.track.props.count + "|" + Math.round(G.track.total);
+      if (!modelCache || modelCache.key !== key) {
+        modelCache = { key, m: buildModel() };
+      }
+      return modelCache.m;
+    }
+
+    function propId(i) { return "prop:" + i; }
+
+    function parseId(id) {
+      const s = String(id == null ? "" : id);
+      const c = s.indexOf(":");
+      return c < 0 ? { kind: s, ref: "" } : { kind: s.slice(0, c), ref: s.slice(c + 1) };
+    }
+
+    function describe(idOrOpts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = (idOrOpts && typeof idOrOpts === "object") ? idOrOpts : { id: idOrOpts };
+      if (o.id == null || o.id === "") {
+        return fail("BadArgumentError", "describe(id) needs an id",
+                    'ids look like "prop:12", "corner:T3", "car:4", "span:2" — '
+                    + "scene()/trackInfo()/field() return them");
+      }
+      const { kind, ref } = parseId(o.id);
+      const track = G.track, total = track.total;
+
+      if (kind === "corner") {
+        const want = String(ref).toUpperCase();
+        const c = corners().find((x) => x.turn.toUpperCase() === want);
+        if (!c) {
+          return fail("NotFoundError", 'no corner "' + ref + '" on ' + track.def.id,
+                      'call trackInfo({what:"corners"}) for the turn ids');
+        }
+        const m = model();
+        const near = m.pts.filter((q) => {
+          return Math.abs(M4.wrapDelta(q.s - c.s, total)) <= 80;
+        });
+        const byKind = {};
+        for (const q of near) byKind[q.p.kind] = (byKind[q.p.kind] || 0) + 1;
+        return {
+          apiVersion: API_VERSION, id: "corner:" + c.turn, type: "corner",
+          corner: c,
+          sceneryWithin80m: byKind,
+          note: "the full corner record plus what stands within 80 m of its apex",
+        };
+      }
+
+      if (kind === "car") {
+        const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
+        const car = G.cars.find((c, i) => (c.id != null ? c.id : i) === idx);
+        if (!car) {
+          return fail("NotFoundError", "no car " + ref,
+                      "call field() for the grid and its car ids");
+        }
+        const gap = car.isPlayer ? 0 : roadGap(car).gap;
+        return {
+          apiVersion: API_VERSION, id: "car:" + idx, type: "car",
+          code: car.code || null, name: car.name || null, team: teamIdOf(car),
+          isPlayer: !!car.isPlayer,
+          lap: car.lap || 0, frac: +((car.s || 0) / total).toFixed(4), s: r1(car.s || 0),
+          speedKph: r1((car.speed || 0) * 3.6), lateralM: r2(car.x || 0),
+          onKerb: !!car.onKerb, gapToPlayerM: car.isPlayer ? 0 : r1(Math.abs(gap)),
+          rel: car.isPlayer ? "self" : gap >= 0 ? "ahead" : "behind",
+          finished: !!car.finished,
+        };
+      }
+
+      if (kind === "span") {
+        const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
+        const sp = (track.props && track.props.spans) || [];
+        if (!(idx >= 0 && idx < sp.length)) {
+          return fail("NotFoundError", "no span " + ref,
+                      "spans are indexed 0.." + Math.max(0, sp.length - 1)
+                      + '; call render({what:"circuit"}) to list them');
+        }
+        const s = sp[idx];
+        const s0M = s.s0 * total, s1M = s.s1 * total;
+        return {
+          apiVersion: API_VERSION, id: "span:" + idx, type: "span",
+          kind: s.kind, side: sideOf(s.side),
+          fromS: r1(s0M), toS: r1(s1M),
+          lengthM: r1(((((s.s1 - s.s0) % 1 + 1) % 1) || 1) * total),
+          fromFrac: +s.s0.toFixed(4), toFrac: +s.s1.toFixed(4),
+          heightM: s.h != null ? r1(s.h) : null,
+          gapM: s.gap != null ? r1(s.gap) : null,
+          note: "linear furniture recorded as a span, not per segment",
+        };
+      }
+
+      if (kind === "prop") {
+        const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
+        const list = (track.props && track.props.list) || [];
+        if (!(idx >= 0 && idx < list.length)) {
+          return fail("NotFoundError", "no prop " + ref,
+                      "props are indexed 0.." + Math.max(0, list.length - 1)
+                      + "; call scene() or query() for ids near you");
+        }
+        const p = list[idx];
+        const pos = propPos(p);
+        const out = {
+          apiVersion: API_VERSION, id: propId(idx), type: "prop",
+          kind: p.kind,
+          world: [r1(p.x), r1(p.y), r1(p.z)],
+          sizeM: [r1(p.w), r1(p.h), r1(p.d)],
+          volumeM3: r1(p.w * p.h * p.d),
+          s: r1(pos.s), frac: +(pos.s / total).toFixed(4),
+          side: p.side != null ? sideOf(p.side)
+              : pos.lat == null ? "off-course" : pos.lat > 0 ? "right" : "left",
+          lateralM: pos.lat == null ? null : r1(pos.lat),
+          measured: !!p.measured, parts: p.parts != null ? p.parts : null,
+          fill: p.fill != null ? r2(p.fill) : null,
+        };
+        if (p.board) out.boardText = p.board;
+        if (p.value != null) out.value = p.value;
+        if (G.player && G.player.px != null) {
+          const dx = p.x - G.player.px, dz = p.z - G.player.pz;
+          out.distM = r1(Math.hypot(dx, dz));
+          out.bearingDeg = bearingDegTo(dx, dz, G.player.head);
+        }
+        const cs = corners();
+        if (cs.length) {
+          let best = null, bestD = Infinity;
+          for (const c of cs) {
+            const d = M4.wrapDelta(pos.s - c.s, total);
+            if (Math.abs(d) < Math.abs(bestD)) { bestD = d; best = c; }
+          }
+          if (best) {
+            out.nearestCorner = { id: "corner:" + best.turn, turn: best.turn,
+                                  alongM: r1(bestD) };
+          }
+        }
+        return out;
+      }
+
+      return fail("BadArgumentError", 'unknown id kind "' + kind + '"',
+                  'ids are "prop:<n>", "corner:<turn>", "car:<n>" or "span:<n>"');
+    }
+
+    function lum(c) { return c ? 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] : 0; }
+
+    function atmosphere() {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const fr = G.frame || {}, sky = G.frameSky || {};
+      const tod = G.raceTimeOfDay || "default";
+      const wx = G.raceWeather || "dry";
+      const sun = fr.sunDir || sky.sunDir || null;
+
+      const dark = tod === "night" || tod === "dusk" || tod === "dawn"
+                || (tod === "default" && !!(G.track.def && G.track.def.night));
+
+      const body = dark ? "moon" : "sun";
+      let elevDeg = null, relBearingDeg = null, where = null;
+      if (sun) {
+        elevDeg = r1(Math.asin(clamp(sun[1], -1, 1)) * 180 / Math.PI);
+        if (G.player && G.player.px != null) {
+          const b = bearingDegTo(sun[0], sun[2], G.player.head);
+          relBearingDeg = r1(b);
+          const a = Math.abs(b);
+          where = elevDeg < 0 ? "below the horizon"
+                : a < 30 ? (dark ? "ahead" : "ahead — low sun in your eyes on this stretch")
+                : a > 150 ? "behind you"
+                : b > 0 ? "to your right" : "to your left";
+        }
+      }
+
+      const ambSky = fr.ambientSky ? fr.ambientSky.slice(0, 3) : null;
+      const ambGround = fr.ambientGround ? fr.ambientGround.slice(0, 3) : null;
+      const skyL = lum(ambSky), sunL = lum(fr.sunColor);
+      const nLights = fr.lights ? fr.lights.length / 15 : 0;
+      const flood = G._lastFloodEmit || 0;
+
+      const fog = fr.fogDensity != null ? +fr.fogDensity : null;
+      const visM = fog && fog > 1e-6 ? Math.round(Math.sqrt(3) / fog) : null;
+
+      const brightness = skyL > 0.55 ? "bright"
+                       : skyL > 0.25 ? "overcast-bright"
+                       : skyL > 0.08 ? "dim"
+                       : "dark";
+      const wet = wx === "wet" || wx === "rain";
+
+      const bits = [];
+      bits.push(tod === "default" ? (dark ? "night" : "day") : tod);
+      bits.push(brightness);
+      if (wet) bits.push(wx === "rain" ? "raining, road wet and reflective"
+                                       : "road wet and reflective");
+      else if (wx !== "dry") bits.push(wx);
+      if (dark && (flood > 0.01 || nLights > 0)) {
+        bits.push("floodlit (" + Math.round(nLights) + " lights active)");
+      }
+      if (where) bits.push(body + " " + where);
+      if (visM != null && visM < 900) bits.push("visibility ~" + visM + " m");
+      const cloud = +sky.cloud || 0, decked = cloud >= 0.6;
+      if (sky.stars) bits.push(decked ? "stars mostly behind cloud" : "stars out");
+      if (sky.moon) bits.push(decked ? "moon behind cloud" : "moon up");
+
+      return {
+        apiVersion: API_VERSION, seq: ++seq,
+        brief: bits.join(", ") + ".",
+        timeOfDay: tod, weather: wx, wetRoad: wet,
+        dark, brightness,
+        sun: { body, elevationDeg: elevDeg, relBearingDeg, where,
+               brightness: r2(sunL),
+               note: "elevation + = above the horizon; relBearingDeg is from the "
+                     + "car's nose, + = to its right. At night the renderer keeps "
+                     + "the sun direction and dims it to moonlight, so `body` says "
+                     + "which one this actually is" },
+        lights: { active: Math.round(nLights), floodEmit: r2(flood),
+                  builtForNight: !!G.builtTrackNight },
+        visibility: { fogDensity: fog != null ? +fog.toFixed(5) : null,
+                      approxRangeM: visM },
+        exposure: fr.exposure != null ? r2(fr.exposure) : null,
+        cloudCover: r2(cloud),
+        raw: { ambientSky: ambSky ? ambSky.map(r2) : null,
+               ambientGround: ambGround ? ambGround.map(r2) : null,
+               sunColor: fr.sunColor ? fr.sunColor.slice(0, 3).map(r2) : null,
+               sunDir: sun ? sun.slice(0, 3).map(r2) : null,
+               fogColor: fr.fogColor ? fr.fogColor.slice(0, 3).map(r2) : null },
+        note: "grip is affected by weather — see world().ego.grip.gripMult. "
+              + "Raw RGB is kept for measurement; read `brief` to know the scene",
+      };
+    }
+
+    function query(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = opts || {};
+      const track = G.track, total = track.total;
+      const reg = track.props;
+      if (!reg) {
+        return fail("NoRegistryError", "this track was built without a prop registry",
+                    'reload the track with __apex.race("<id>")');
+      }
+      const cap = clamp(o.limit | 0 || 40, 1, 400);
+      const kinds = o.kind ? (Array.isArray(o.kind) ? o.kind : [o.kind]) : null;
+
+      if (o.near != null && !isNum(o.near)) {
+        return fail("BadArgumentError", "near must be a finite number of metres",
+                    "e.g. query({kind:'pine', near:150})");
+      }
+      if ((o.fromS != null && !isNum(o.fromS)) || (o.toS != null && !isNum(o.toS))) {
+        return fail("BadArgumentError",
+                    "fromS/toS must be finite arc positions in metres",
+                    "e.g. query({fromS:0, toS:400}); a non-numeric bound used to "
+                    + "filter every row out and read as an empty result");
+      }
+      const nearM = o.near != null ? Math.max(1, +o.near) : null;
+      const hasWin = o.fromS != null && o.toS != null;
+      const s0 = hasWin ? wrapS(+o.fromS) : 0, s1 = hasWin ? wrapS(+o.toS) : 0;
+      const inWindow = (s) => {
+        if (!hasWin) return true;
+        return s0 <= s1 ? (s >= s0 && s <= s1) : (s >= s0 || s <= s1);
+      };
+      const px = G.player.px, pz = G.player.pz, head = G.player.head;
+
+      const hits = [];
+      for (let i = 0; i < reg.list.length; i++) {
+        const p = reg.list[i];
+        if (kinds && kinds.indexOf(p.kind) < 0) continue;
+        const pos = propPos(p);
+        if (!inWindow(pos.s)) continue;
+        const dx = p.x - px, dz = p.z - pz;
+        const d = Math.hypot(dx, dz);
+        if (nearM != null && d > nearM) continue;
+        hits.push({ i, p, pos, d,
+                    bearingDeg: bearingDegTo(dx, dz, head) });
+      }
+      hits.sort((a, b) => (nearM != null ? a.d - b.d : a.pos.s - b.pos.s));
+      const total_ = hits.length;
+      const page = hits.slice(0, cap);
+
+      const protos = {};
+      for (const h of page) {
+        const k = h.p.kind;
+        (protos[k] || (protos[k] = [])).push(h.p);
+      }
+      const prototypes = {};
+      for (const k of Object.keys(protos)) {
+        const arr = protos[k];
+        const mid = arr[Math.floor(arr.length / 2)];
+        prototypes[k] = { sizeM: [r1(mid.w), r1(mid.h), r1(mid.d)], count: arr.length };
+      }
+
+      const instances = page.map((h) => {
+        const row = {
+          id: propId(h.i), kind: h.p.kind,
+          s: r1(h.pos.s),
+          side: h.p.side != null ? sideOf(h.p.side)
+              : h.pos.lat == null ? "off-course" : h.pos.lat > 0 ? "right" : "left",
+          distM: r1(h.d), bearingDeg: h.bearingDeg,
+        };
+        const pr = prototypes[h.p.kind].sizeM;
+        const dv = [h.p.w, h.p.h, h.p.d];
+        for (let a = 0; a < 3; a++) {
+          if (pr[a] > 0.01 && Math.abs(dv[a] - pr[a]) / pr[a] > 0.25) {
+            row.sizeM = [r1(dv[0]), r1(dv[1]), r1(dv[2])];
+            break;
+          }
+        }
+        if (h.p.board) row.boardText = h.p.board;
+        return row;
+      });
+
+      return {
+        apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
+        filter: { kind: kinds, near: nearM, fromS: hasWin ? r1(s0) : null,
+                  toS: hasWin ? r1(s1) : null, limit: cap },
+        matched: total_, returned: instances.length,
+        truncated: total_ > instances.length ? total_ - instances.length : 0,
+        prototypes,
+        instances,
+        note: "prototypes give the shape per kind; an instance repeats sizeM only "
+              + "when it differs >25%. Call describe(id) for everything about one. "
+              + "Results are capped — narrow with kind/near/fromS+toS rather than "
+              + "raising limit",
+      };
+    }
+
+    function sectionsOf(list, total) {
+      if (!list.length) return [{ from: "start", to: "start", s0: 0, s1: total }];
+      const out = [];
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i], b = list[(i + 1) % list.length];
+        out.push({ from: a.turn, to: b.turn, s0: a.s, s1: b.s });
+      }
+      return out;
+    }
+
+    function inSection(s, sec, total) {
+      return sec.s0 <= sec.s1 ? (s >= sec.s0 && s < sec.s1)
+                              : (s >= sec.s0 || s < sec.s1);
+    }
+
+    function worldModel(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      if (!G.track.props) {
+        return fail("NoRegistryError",
+                    "this track was built without a prop registry",
+                    'reload the track with __apex.race("<id>")');
+      }
+      const o = opts || {};
+      const detail = o.detail || "summary";
+      if (["summary", "sections", "full"].indexOf(detail) < 0) {
+        return fail("BadArgumentError",
+                    'detail must be "summary", "sections" or "full"',
+                    'call render({what:"circuit", detail:"sections"})');
+      }
+      const track = G.track, total = track.total, def = track.def;
+      const reg = track.props;
+      const m = model();
+      const cs = corners();
+
+      const byKind = {};
+      for (const p of reg.list) byKind[p.kind] = (byKind[p.kind] || 0) + 1;
+      const spanByKind = {};
+      for (const sp of reg.spans) spanByKind[sp.kind] = (spanByKind[sp.kind] || 0) + 1;
+
+      const out = {
+        apiVersion: API_VERSION, conventions: CONVENTIONS, detail,
+        track: {
+          id: def.id, name: def.name, country: def.country || null,
+          lengthM: r1(total), street: !!def.street, laps: def.laps || null,
+          theme: def.theme || null, night: !!def.night,
+        },
+        layout: {
+          corners: cs.length,
+          turns: cs.map((c) => c.turn + " " + c.dir + " r" + c.radiusM),
+          sectors: def.sectors
+            ? [{ sector: 1, fromFrac: 0, toFrac: def.sectors[0] },
+               { sector: 2, fromFrac: def.sectors[0], toFrac: def.sectors[1] },
+               { sector: 3, fromFrac: def.sectors[1], toFrac: 1 }]
+            : null,
+        },
+        totals: {
+          objects: reg.count, spans: reg.spanCount,
+          byKind, spansByKind: spanByKind,
+          lampPosts: (track.lampPosts || []).length,
+          registryComplete: reg.dropped === 0, dropped: reg.dropped,
+        },
+        features: m.features,
+        spans: reg.spans.map((sp) => ({
+          kind: sp.kind, side: sp.side > 0 ? "right" : "left",
+          fromFrac: sp.s0, toFrac: sp.s1,
+          lengthM: r1(((((sp.s1 - sp.s0) % 1 + 1) % 1) || 1) * total),
+          gapM: sp.gap, h: sp.h != null ? sp.h : undefined,
+        })),
+        landmarks: m.landmarks.map((L) => ({
+          kind: L.p.kind, frac: +L.frac.toFixed(4), s: r1(L.s), side: L.side,
+          sizeM: [L.p.w, L.p.h, L.p.d], at: [L.p.x, L.p.y, L.p.z],
+          parts: L.p.parts,
+          offsetM: L.lat != null && L.p.side == null ? r1(Math.abs(L.lat)) : undefined,
+        })),
+        note: "kind 'structure' is an ANONYMOUS assembly of primitives the "
+              + "circuit's own scenery() emitted without a named helper — real "
+              + "measured bounds, no label. features are CLUSTERED runs of one kind on one side; landmarks "
+              + "are individually notable structures; spans are linear furniture. "
+              + 'Use detail:"full" for the unaggregated object list.',
+      };
+
+      if (detail === "sections" || detail === "full") {
+        const secs = sectionsOf(cs, total);
+        out.sections = secs.map((sec) => {
+          const contains = {};
+          for (const q of m.pts) if (inSection(q.s, sec, total)) {
+            contains[q.p.kind] = (contains[q.p.kind] || 0) + 1;
+          }
+          const corner = cs.find((c) => c.turn === sec.from);
+          return {
+            from: sec.from, to: sec.to,
+            fromFrac: +(sec.s0 / total).toFixed(4),
+            lengthM: r1(((sec.s1 - sec.s0 + total) % total)),
+            corner: corner ? { dir: corner.dir, radiusM: corner.radiusM,
+                               severity: corner.severity } : null,
+            contains,
+          };
+        });
+      }
+
+      if (detail === "full") {
+        const off = Math.max(0, o.offset | 0);
+        const lim = clamp(o.limit | 0 || 500, 1, 5000);
+        out.objects = reg.list.slice(off, off + lim).map((p) => ({
+          kind: p.kind, at: [p.x, p.y, p.z], sizeM: [p.w, p.h, p.d],
+          side: sideOf(p.side),
+          frac: +(propS(p) / total).toFixed(4),
+          board: p.board, value: p.value,
+        }));
+        out.objectPage = { offset: off, limit: lim, returned: out.objects.length,
+                           total: reg.count,
+                           more: off + out.objects.length < reg.count };
+      }
+
+      return out;
+    }
+
+    function cornerAt(s, list) {
+      for (const c of list) {
+        if (c.entryS <= c.exitS) { if (s >= c.entryS && s <= c.exitS) return c; }
+        else if (s >= c.entryS || s <= c.exitS) return c;
+      }
+      return null;
+    }
+
+    function rollout(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = opts || {};
+      if ((o.dt != null && !isNum(o.dt)) || (o.seconds != null && !isNum(o.seconds))
+          || (o.policyHz != null && !isNum(o.policyHz))) {
+        return fail("BadArgumentError",
+                    "dt, seconds and policyHz must be finite numbers",
+                    "omit them for the defaults (dt 1/60, seconds 5, policyHz 10)");
+      }
+      if (o.policyHz != null && o.policyHz <= 0) {
+        return fail("BadArgumentError", "policyHz must be greater than 0",
+                    "omit it for 10 Hz, or pass e.g. policyHz: 20");
+      }
+      if (G.state !== "race" && G.state !== "count") {
+        return fail("RaceOverError", "rollout() needs a running race (state is " + G.state + ")",
+                    'start one with __apex.race("<id>") then go()');
+      }
+      if (G.player && G.player.finished) {
+        return fail("RaceOverError", "rollout() needs a running race (player already finished)",
+                    'start one with __apex.race("<id>") then go()');
+      }
+      if (o.policy != null && typeof o.policy !== "function") {
+        return fail("BadArgumentError", "policy must be a function",
+                    "policy is world => ({steer,throttle,brake}); use `input` for "
+                    + "a constant input instead");
+      }
+      const dt = clamp(numOr(o.dt, 1 / 60), 1 / 240, 1 / 10);
+      const seconds = clamp(numOr(o.seconds, 5), 0.05, 120);
+      const ticks = Math.max(1, Math.round(seconds / dt));
+      const policy = typeof o.policy === "function" ? o.policy : null;
+      const policyEvery = Math.max(1, Math.round(1 / (numOr(o.policyHz, 10) * dt)));
+      const nSamples = clamp(o.samples | 0 || 12, 2, 60);
+      const sampleEvery = Math.max(1, Math.floor(ticks / nSamples));
+
+      if (G.flyingStart && G.flyingStart.active()) G.flyingStart.stop();
+      if (G.state === "count") {
+        G.state = "race"; G.raceT = 0;
+        G.lightsLit = 0;
+        if (els && els.lights) {
+          els.lights.hidden = true;
+          for (const l of els.lights.children) l.classList.remove("on");
+        }
+      }
+      const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq, savedInput = G._testInput;
+      try {
+      if (o.input !== undefined) G._testInput = o.input || null;
+
+      const p = G.player, list = corners();
+      const startProg = p.prog || 0, startT = G.raceT || 0, startLap = p.lap || 0;
+      const startFrac = p.s / G.track.total;
+      let minSpeed = Infinity, maxSpeed = -Infinity, sumSpeed = 0;
+      let offTicks = 0, offEvents = 0, wasOff = false;
+      let minClear = Infinity, contacts = 0, wasContact = false;
+      let terminalReason = null, terminalAtT = null;
+      const terminalEvents = []; let lastSeenReason = null;
+      const cornerMin = {};
+      const samples = [];
+      let ran = 0, stoppedEarly = null;
+
+      for (let i = 0; i < ticks; i++) {
+        if (G.state !== "race" && G.state !== "count") {
+          stoppedEarly = { atS: r2(G.raceT - startT), reason: "state:" + G.state };
+          break;
+        }
+        if (policy && i % policyEvery === 0) {
+          let inp = null;
+          try { inp = policy(world({ detail: "brief" })); }
+          catch (e) {
+            return fail("PolicyError", "the policy function threw: " + (e && e.message),
+                        "fix the policy; it receives world({detail:'brief'}) and "
+                        + "must return {steer,throttle,brake} or null");
+          }
+          if (inp && !isNum(inp.steer)) inp = Object.assign({}, inp, { steer: 0 });
+          G._testInput = inp || null;
+        }
+        syncRenderAnchors(G.cars);
+        update(dt);
+        ran++;
+
+        const sp = p.speed || 0;
+        if (sp < minSpeed) minSpeed = sp;
+        if (sp > maxSpeed) maxSpeed = sp;
+        sumSpeed += sp;
+
+        Tracks.sample(G.track, p.s, scr);
+        const off = Math.abs(p.x) > scr.hw;
+        if (off) { offTicks++; if (!wasOff) offEvents++; }
+        wasOff = off;
+
+        const cl = Math.min(Tracks.wallAt(G.track, p.s, 1) - p.x,
+                            p.x + Tracks.wallAt(G.track, p.s, -1));
+        if (cl < minClear) minClear = cl;
+        const inContact = (p.contactT || 0) > 0;
+        if (inContact && !wasContact) contacts++;
+        wasContact = inContact;
+
+        const cAt = cornerAt(p.s, list);
+        if (cAt) {
+          const prev = cornerMin[cAt.turn];
+          if (prev === undefined || sp < prev) cornerMin[cAt.turn] = sp;
+        }
+
+        {
+          const t = terminal();
+          if (t.done && t.reason) {
+            const atS = r2(G.raceT - startT);
+            if (t.reason !== lastSeenReason) {
+              terminalEvents.push({ reason: t.reason, atS });
+              lastSeenReason = t.reason;
+            }
+            if (!terminalReason) { terminalReason = t.reason; terminalAtT = atS; }
+          } else if (!t.done) {
+            lastSeenReason = null;
+          }
+        }
+
+        if (i % sampleEvery === 0 || i === ticks - 1 || G.state === "results" || p.finished) {
+          samples.push({ t: r2(G.raceT - startT), frac: +(p.s / G.track.total).toFixed(4),
+                         speedKph: r1(sp * 3.6), lateralM: r1(p.x), gear: p.gear || 1 });
+        }
+        if (p.finished) {
+          stoppedEarly = { atS: r2(G.raceT - startT), reason: "finished" };
+          break;
+        }
+      }
+
+      const elapsed = (G.raceT || 0) - startT;
+      const lapsDone = (p.lap || 0) - startLap;
+      return {
+        apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
+        conventions: CONVENTIONS,
+        episodeId,
+        ran: { ticks: ran, requestedTicks: ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
+               stoppedEarly,
+               policy: policy ? "closed-loop at " + r1(1 / (policyEvery * dt)) + " Hz"
+                              : "open-loop constant input" },
+        from: { frac: +startFrac.toFixed(4), lap: startLap },
+        to: { frac: +(p.s / G.track.total).toFixed(4), lap: p.lap || 0 },
+        distanceM: r1((p.prog || 0) - startProg),
+        speedKph: { min: r1(minSpeed * 3.6), max: r1(maxSpeed * 3.6),
+                    mean: r1(sumSpeed / Math.max(1, ran) * 3.6), final: r1((p.speed || 0) * 3.6) },
+        offTrack: { events: offEvents, seconds: r2(offTicks * dt),
+                    pct: r1(offTicks / Math.max(1, ran) * 100) },
+        minClearanceM: r1(minClear),
+        wallContacts: contacts,
+        lapsCompleted: lapsDone,
+        lastLapS: lapsDone > 0 && p.lastLap ? r2(p.lastLap) : null,
+        cornerMinSpeedKph: Object.keys(cornerMin).map((t) =>
+          ({ turn: t, minSpeedKph: r1(cornerMin[t] * 3.6) })),
+        terminal: { done: !!terminalReason, reason: terminalReason, atS: terminalAtT,
+                    events: terminalEvents,
+                    last: terminalEvents.length
+                      ? terminalEvents[terminalEvents.length - 1] : null },
+        samples,
+        note: "a digest of " + ran + " physics ticks — call world() for the "
+              + "current state, this describes the interval",
+      };
+      } finally {
+        lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter; G._testInput = savedInput;
+      }
+    }
+
+    function render(opts) {
+      const o = opts || {};
+      const what = o.what || "view";
+      let out, kind;
+      switch (what) {
+        case "view":    out = frame(o);      kind = "camera view";   break;
+        case "map":     out = plan(o);       kind = "top-down map";  break;
+        case "circuit": out = worldModel(o); kind = "whole circuit"; break;
+        case "car":
+          out = carView(Object.assign({}, o, { detail: o.detail || "render" }));
+          kind = "car elevations";
+          break;
+        default:
+          return fail("BadArgumentError",
+                      'what must be "view", "map", "circuit" or "car"',
+                      'call render({what:"view"})');
+      }
+      if (out && out.ok !== false) {
+        out.what = what;
+        out.aid = "APPROXIMATE " + kind + " raster — a coarse composition aid, "
+                + "not a measurement. Read geometry from world()/scene()/"
+                + "trackInfo(), not from these glyphs.";
+      }
+      return out;
+    }
+
+    function objective() {
+      return {
+        apiVersion: API_VERSION,
+        goal: "Finish the race ahead of the other 21 cars. Race position is by "
+            + "distance covered (prog), so completing laps fastest wins.",
+        winCondition: {
+          race: "lowest total time over lapsTarget laps; time penalties are added",
+          timeTrial: "lowest single lap time; no rivals to pass",
+        },
+        tradeoffs: [
+          "TRACK LIMITS: running wide is faster but cuts 1-3 warn and every cut "
+          + "from the 4th adds +5 s. Free speed until it suddenly is not.",
+          "ERS: charge drains ~0.20/s deploying and regenerates ~0.115/s, so "
+          + "deployment costs roughly 2 s of recharge per 1 s spent. Spend it "
+          + "where speed converts to distance — long straights, not corners.",
+          "OVERTAKE BOOST: under 1 s behind at the detection line (~90% lap) earns 0.5 MJ next lap (~3–5 s push); no cooldown.",
+          "PARTS: a 780-credit budget across 12 categories. Every credit in "
+          + "engine/aero is a credit not in brakes/tyres — see carView().",
+        ],
+        constraints: [
+          "Driving backwards flags wrongWay; staying stuck ~3 s triggers an "
+          + "automatic rescue that costs far more time than recovering yourself.",
+          "Barriers are hard: the car is clamped, not stopped. Contact scrubs "
+          + "speed and you keep the position loss.",
+        ],
+        units: "metres, m/s, seconds, degrees where a key says Deg. +x is right "
+             + "of the centreline; +k is a LEFT-hand turn.",
+        note: "STATIC facts about the game. How the CAR behaves is not described "
+            + "here on purpose — learn it by calling rollout()/act() and reading "
+            + "world(), which stays true when the physics is retuned.",
+      };
+    }
+
+    function agentHelp() {
+      return {
+        apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
+        conventions: CONVENTIONS,
+        perceive: {
+          "world({detail,horizonS,points,corners,since})":
+            "WHERE AM I — egocentric snapshot, the per-tick spine. "
+            + "detail brief|drive|full; `since` returns only what changed",
+          "field({detail})":
+            "THE GRID — race order, gap-to-leader and interval. "
+            + "world().rivals is the egocentric nearest-few",
+          "scene({radius,kinds,limit} | {visible:true})":
+            "WHAT IS AROUND ME — named scenery by distance and bearing; "
+            + "{visible:true} switches to the camera's on-screen list",
+          "atmosphere()":
+            "WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, "
+            + "fog visibility, wet road. Raw values kept for measurement",
+          "render({what,cols,ss,...})":
+            "SHOW IT — the one optional raster, APPROXIMATE. "
+            + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
+          "awaitPresent(timeoutMs)?":
+            "WAIT FOR THE PIXELS — resolves once a real frame is on screen; "
+            + "screenshot after it (before: stale or black canvas)",
+        },
+        detail: {
+          "describe(id)":
+            "EVERYTHING ABOUT ONE THING — 'prop:12' | 'corner:T3' | 'car:4' | "
+            + "'span:2'. ids come back from scene()/query()/trackInfo()/field()",
+          "query({kind,near,fromS,toS,limit})":
+            "A BOUNDED SLICE — filters compose; returns prototype + instances so "
+            + "repeated dressing costs one shape plus a position each. Narrow the "
+            + "filter rather than raising limit",
+        },
+        know: {
+          "trackInfo({what})":
+            "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners "
+            + "carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no "
+            + "line), plus bankingDeg/camber, gradientPct/elevation and kerbs",
+          "carView({team,parts,bodyStyle,detail})":
+            "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, "
+            + 'measured geometry; detail:"parts" adds per-part boxes',
+          "survey({stations,lats,reachM,limit,profile})":
+            "IS ANYTHING BROKEN — floating/buried props, props over the line, "
+            + "terrain through the road, holes and cliffs",
+          "perf()":
+            "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes "
+            + "(alias of renderScale report)",
+          "spatialUpscale(0|1)":
+            "GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on "
+            + "AND renderScale<~1; see UPSCALING-2026-09 §6–7",
+        },
+        act: {
+          "rollout({seconds,dt,input,policy,policyHz,samples})":
+            "drive an interval, return a digest instead of every frame",
+          "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
+          "ersPlan(plan?)": "sector ERS plan, 3× manual|deploy|save; get/set",
+          "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once",
+        },
+        fields: {
+          "ego.headingErrDeg": "+ = nose right of the road; steer the opposite sign to null it",
+          "ego.lateralM": "+ = right of centreline; the road runs out at halfWidthM",
+          "ego.clearLeftM/RightM": "metres to the barrier each side; small = no room to defend",
+          "ego.onTrack": "false means you are on grass — grip is gone, straighten first",
+          "nextCorner.status": "the braking call — BRAKE NOW means brake this instant",
+          "nextCorner.apexSpeedKph": "roughly the fastest you can be at the apex and still hold it",
+          "nextCorner.exitsOntoStraight": "true = prioritise exit speed over entry speed here",
+          "pacenotes": "the road ahead as a co-driver call: dir + severity 1-6 @ distance",
+          "rivals[].closingMps": "+ = the gap is shrinking, whichever side they are on",
+          "rivals[].pace": "AI skill ~0.92-1.02; a slower car will not hold the position",
+          "terminal.reason": "why the episode ended — retired vs finished vs wrong_way vs rescued",
+          "episodeId": "view-local episode counter; reset increments it and clears the delta baseline",
+          "session.seed": "replay this exact episode with reset(frac, speed, x, seed)",
+        },
+        read: {
+          telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
+          timing: "timing() sectorState() lapHistory() fieldState()",
+          rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)",
+          geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
+          catalog: "tracks() teams() info()",
+        },
+        control: {
+          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)',
+          reproduce: "seed(n) sets the sim seed; same seed + same inputs => same "
+                   + "result. Pin it before any A/B or the comparison is noise",
+          drive: "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()",
+          world: "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)",
+          field: "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)",
+        },
+        model: {
+          "static vs dynamic": "trackInfo()+carView() are constant — fetch once. "
+            + "world()+field()+scene() are the live frame — read per decision",
+          "decide vs show": "read world()/scene()/trackInfo()/the read hooks to "
+            + "DECIDE; call render() only to SEE — its glyphs are approximate",
+          "lean default, pull detail": "the world is stored in FULL but never "
+            + "dumped — a flat serialisation is huge and reads worse. Keep the "
+            + "default lean and pull with describe(id)/query() where a decision "
+            + "needs it",
+          "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
+            + "34x cheaper than full. detail is the big lever",
+        },
+        setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
+        loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
+        cli: "node tools/shot/agent.mjs <track> <help|world|field|scene|atmosphere|"
+             + "objective|model|describe|query|render|track|car|survey|rollout> [flags]",
+        notes: [
+          "agent-view fails as {ok:false}; obs/physState/probe null until armed",
+          "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
+            + "(default 10) while physics runs every tick",
+          "render({what}) and scene({visible:true}) reflect the LAST RENDERED "
+            + "frame and are stale under headless(true) — flagged when so",
+        ],
+      };
+    }
+
+    function scene(opts) {
+      const o0 = opts || {};
+      if (o0.visible) return visible(o0);
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const reg = G.track.props;
+      if (!reg) {
+        return fail("NoRegistryError",
+                    "this track was built without a prop registry "
+                    + "(centreline-only build, or props were never generated)",
+                    'reload the track with __apex.race("<id>")');
+      }
+      const o = opts || {};
+      if (o.radius != null && !isNum(o.radius)) {
+        return fail("BadArgumentError", "radius must be a finite number of metres",
+                    "pass radius as a number (5-2000), e.g. scene({radius:150}) — "
+                    + "a non-numeric radius used to disable the distance filter "
+                    + "and return the whole registry");
+      }
+      const radius = Math.max(5, Math.min(numOr(o.radius, 150), 2000));
+      const cap = Math.max(1, Math.min(o.limit | 0 || 24, 200));
+      const kinds = Array.isArray(o.kinds) && o.kinds.length ? o.kinds : null;
+
+      let ox, oz, head, from;
+      if (G.player && G.player.px != null) {
+        ox = G.player.px; oz = G.player.pz; head = G.player.head; from = "player";
+      } else {
+        const eye = (G.frame && G.frame.eye) || G.camEye;
+        ox = eye[0]; oz = eye[2]; from = "camera";
+        head = Math.atan2(G.camTgt[0] - ox, G.camTgt[2] - oz);
+      }
+      const rel = (x, z) => {
+        const d = Math.hypot(x - ox, z - oz);
+        const b = bearingDegTo(x - ox, z - oz, head);
+        return { distM: r1(d), bearingDeg: b };
+      };
+
+      const byKind = {};
+      const near = [];
+      for (let pi = 0; pi < reg.list.length; pi++) {
+        const p = reg.list[pi];
+        byKind[p.kind] = (byKind[p.kind] || 0) + 1;
+        if (kinds && kinds.indexOf(p.kind) < 0) continue;
+        const dx = p.x - ox, dz = p.z - oz;
+        if (dx * dx + dz * dz > radius * radius) continue;
+        const rr = rel(p.x, p.z);
+        const psd = propPos(p);
+        near.push({ id: propId(pi),
+                    kind: p.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
+                    side: rr.bearingDeg > 8 ? "right" : rr.bearingDeg < -8 ? "left" : "ahead",
+                    trackSide: p.side != null ? sideOf(p.side)
+                             : psd.lat == null ? "off-course"
+                             : psd.lat > 0 ? "right" : "left",
+                    sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z],
+                    measured: p.measured || undefined,
+                    parts: p.parts, fill: p.fill });
+      }
+      near.sort((a, b) => a.distM - b.distM);
+
+      const lamps = [];
+      for (const l of (G.track.lampPosts || [])) {
+        const dx = l.x - ox, dz = l.z - oz;
+        if (dx * dx + dz * dz > radius * radius) continue;
+        const rr = rel(l.x, l.z);
+        const lp = Tracks.project(G.track, l.x, l.z, null, l.y);
+        lamps.push({ kind: l.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
+                     side: rr.bearingDeg > 0 ? "right" : "left",
+                     trackSide: lp ? (lp.lat > 0 ? "right" : "left") : "off-course" });
+      }
+      lamps.sort((a, b) => a.distM - b.distM);
+
+      return {
+        apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
+        origin: { from, x: r1(ox), z: r1(oz),
+                  headingDeg: r1(head * 180 / Math.PI),
+                  note: "distM and bearingDeg are from " + from
+                        + "; +bearing = to its right, 0 = straight ahead" },
+        radiusM: radius,
+        counts: { lapTotal: reg.count, byKindLapTotal: byKind, inRadius: near.length },
+        props: near.slice(0, cap),
+        truncated: near.length > cap ? near.length - cap : 0,
+        lamps: lamps.slice(0, cap),
+        registry: {
+          recorded: reg.count, dropped: reg.dropped, cap: reg.cap,
+          complete: reg.dropped === 0,
+          note: reg.dropped
+            ? reg.dropped + " placements past the " + reg.cap + " cap were not "
+              + "recorded — the registry is emission-ordered, so the omissions "
+              + "are NOT spatially uniform and this list under-reports late-built areas"
+            : "every semantic placement on this track is recorded",
+        },
+        note: "semantic placements only (trees, buildings, grandstands, billboards, "
+              + "mountains, generic props) — not every primitive, and not kerbs, "
+              + "barriers or road furniture",
+      };
+    }
+
+
+    function project(vp, x, y, z) {
+      const cx = vp[0] * x + vp[4] * y + vp[8] * z + vp[12];
+      const cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13];
+      const cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+      if (!(cw > 1e-6)) return null;
+      const nx = cx / cw, ny = cy / cw;
+      const inFrame = nx >= -1 && nx <= 1 && ny >= -1 && ny <= 1;
+      return {
+        inFrame,
+        ndc: inFrame ? [r2(nx), r2(ny)] : null,
+        screenPct: inFrame ? [r1((nx + 1) * 50), r1((1 - ny) * 50)] : null,
+      };
+    }
+
+    function carWorld(c) {
+      Tracks.sample(G.track, c.s, scr);
+      const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x || 0) : null, y = scr.p[1] + (bank ? bank.dy : 0);
+      if (c.px != null) return [c.px, c.pz, y];
+      const [ex, ez] = unitRight(scr);
+      return [scr.p[0] + ex * c.x, scr.p[2] + ez * c.x, y];
+    }
+
+    function visible(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const frame = G.frame;
+      const vp = frame && frame.viewProj;
+      if (!vp) {
+        return fail("NoFrameError",
+                    "no rendered frame yet, so there is no camera matrix to test against",
+                    "headless(true) skips render() — call __apex.headless(false) "
+                    + "and let one frame draw before calling scene({visible:true})");
+      }
+      const o = opts || {};
+      const cap = Math.max(1, Math.min(o.limit | 0 || 16, 64));
+      const eye = frame.eye || G.camEye;
+
+      const fwd = [G.camTgt[0] - eye[0], G.camTgt[1] - eye[1], G.camTgt[2] - eye[2]];
+      const fl = Math.hypot(fwd[0], fwd[2]) || 1;
+      const bearingTo = (wx, wz) => {
+        const a = Math.atan2(fwd[0] / fl, fwd[2] / fl);
+        return bearingDegTo(wx - eye[0], wz - eye[2], a);
+      };
+      const distTo = (wx, wz) => r1(Math.hypot(wx - eye[0], wz - eye[2]));
+
+      const out = {
+        apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
+        camera: {
+          eye: eye.map(r1), target: G.camTgt.map(r1), fovDeg: r1(G.camFov),
+          mode: (CamModes.CAM_MODES[G.camMode] || {}).id
+                || String(CamModes.CAM_MODES[G.camMode] || G.camMode),
+          debugCam: !!G.dbgCam,
+        },
+        framePending: !!G.headlessMode,
+      };
+      if (G.headlessMode) {
+        out.warning = "headless(true) skips render(), so this reflects the last "
+                    + "drawn frame and may be stale — call headless(false) and "
+                    + "let a frame draw for a live answer";
+      }
+
+      const mesh = G.track.meshes && G.track.meshes.props;
+      const chunks = mesh && mesh.chunks;
+      if (!chunks) {
+        out.scenery = {
+          available: false,
+          why: mesh ? "this track's props mesh is too small to be chunked "
+                      + "(under 2000 tris), so there is no spatial index"
+                    : "no props mesh on this track",
+        };
+      } else if (typeof GLX === "undefined" || !GLX.makeFrustumPlanes) {
+        out.scenery = { available: false,
+                        why: "chunk culling is a GLX feature; the active renderer does not expose it" };
+      } else {
+        const planes = GLX.makeFrustumPlanes(vp);
+        const cd = frame.cullDist || 0;
+        const hits = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          if (!GLX.aabbInFrustum(planes, ch.min, ch.max)) continue;
+          const cx = (ch.min[0] + ch.max[0]) / 2, cz = (ch.min[2] + ch.max[2]) / 2;
+          const d = distTo(cx, cz);
+          if (Frustum.radialCulled(ch.min, ch.max, eye[0], eye[1], eye[2], cd, frame.cullFog)) continue;
+          hits.push({ distM: d, bearingDeg: bearingTo(cx, cz),
+                      centre: [r1(cx), r1((ch.min[1] + ch.max[1]) / 2), r1(cz)],
+                      sizeM: [r1(ch.max[0] - ch.min[0]), r1(ch.max[1] - ch.min[1]),
+                              r1(ch.max[2] - ch.min[2])] });
+        }
+        hits.sort((a, b) => a.distM - b.distM);
+        out.scenery = {
+          available: true, cellSizeM: mesh.cellSize || null,
+          totalCells: chunks.length, visibleCells: hits.length,
+          cullDistM: cd || null,
+          nearest: hits.slice(0, cap),
+          truncated: hits.length > cap ? hits.length - cap : 0,
+          note: "cells are " + (mesh.cellSize || "?") + " m of MIXED anonymous "
+                + "geometry — this locates scenery mass, it does not name it",
+        };
+      }
+
+      out.cars = [];
+      for (const c of G.cars) {
+        const [wx, wz, wy] = carWorld(c);
+        const p = project(vp, wx, wy + 0.6, wz);
+        const bearing = bearingTo(wx, wz);
+        out.cars.push({
+          id: c.id != null ? c.id : G.cars.indexOf(c),
+          code: c.code || null, isPlayer: !!c.isPlayer,
+          distM: distTo(wx, wz), bearingDeg: bearing,
+          inFrame: !!(p && p.inFrame),
+          screenPct: p ? p.screenPct : null,
+          behindCamera: Math.abs(bearing) > 90,
+        });
+      }
+      out.cars.sort((a, b) => a.distM - b.distM);
+      out.carsInFrame = out.cars.filter((c) => c.inFrame).length;
+
+      out.corners = [];
+      for (const c of corners()) {
+        Tracks.sample(G.track, c.s, scr);
+        const wx = scr.p[0], wz = scr.p[2];
+        const d = distTo(wx, wz);
+        const p = project(vp, wx, scr.p[1], wz);
+        if (!(p && p.inFrame) && d > 400) continue;
+        const bearing = bearingTo(wx, wz);
+        out.corners.push({ turn: c.turn, dir: c.dir, distM: d,
+                           bearingDeg: bearing,
+                           inFrame: !!(p && p.inFrame),
+                           behindCamera: Math.abs(bearing) > 90,
+                           screenPct: p ? p.screenPct : null });
+      }
+      out.corners.sort((a, b) => a.distM - b.distM);
+
+      return out;
+    }
+
+    function trackInfo(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const what = (opts && opts.what) || "corners";
+      if (["corners", "sectors", "profile", "all"].indexOf(what) < 0) {
+        return fail("BadArgumentError",
+                    'what must be "corners", "sectors", "profile" or "all"',
+                    'call trackInfo({what:"all"})');
+      }
+      const def = G.track.def;
+      const base = {
+        apiVersion: API_VERSION, conventions: CONVENTIONS,
+        track: { id: def.id, name: def.name, country: def.country || null,
+                 gp: def.gp || null,
+                 lengthM: r1(G.track.total),
+                 realLengthKm: def.lengthKm || null,
+                 lengthErrorPct: def.lengthKm
+                   ? r1((G.track.total / 1000 - def.lengthKm) / def.lengthKm * 100)
+                   : null,
+                 street: !!def.street,
+                 laps: def.laps || null,
+                 startFrac: def.startFrac != null ? def.startFrac : null,
+                 reverse: !!def.reverse },
+      };
+      if (what === "corners" || what === "all") {
+        base.corners = corners();
+        base.cornerCount = base.corners.length;
+        base.source = def.turns && def.turns.length ? "def.turns (curated FIA apexes)"
+                                                    : "curvature peaks (no curated turn list)";
+      }
+      if (what === "sectors" || what === "all") {
+        const sec = def.sectors || null;
+        base.sectors = sec
+          ? [{ sector: 1, fromFrac: 0, toFrac: sec[0] },
+             { sector: 2, fromFrac: sec[0], toFrac: sec[1] },
+             { sector: 3, fromFrac: sec[1], toFrac: 1 }]
+          : null;
+      }
+      if (what === "profile" || what === "all") {
+        const n = 60, pts = [];
+        for (let i = 0; i < n; i++) {
+          const s = i / n * G.track.total;
+          Tracks.sample(G.track, s, scr);
+          pts.push({ frac: +(i / n).toFixed(3), y: r1(scr.p[1]),
+                     widthM: r1(scr.hw * 2),
+                     radiusM: r1(Math.min(radiusOf(Tracks.curvature(G.track, s)), 9999)) });
+        }
+        base.profile = pts;
+      }
+      return base;
+    }
+
+    return { beginEpisode, world, field, trackInfo, scene, describe, query, atmosphere, objective,
+             carView, render, survey, rollout, agentHelp, corners, terminal,
+             API_VERSION, PHYSICS_VERSION };
+  }
+
+  return { create, syncRenderAnchors, raceOrder, slipBudget };
+})();
+Object.freeze(AgentView);

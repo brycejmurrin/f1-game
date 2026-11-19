@@ -1,0 +1,1076 @@
+"use strict";
+
+(function () {
+  const GR_MAX_LIGHTS = 6;
+
+  function post(THREE, TSL, ctx) {
+    const {
+      Fn, If, Loop, Break, Continue, uniform, uniformArray, texture,
+      float, int, vec2, vec3, vec4,
+      screenUV, screenCoordinate,
+      fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, exp2,
+      log2, sqrt, abs, max, min, normalize, length, reflect, select, sin, cos,
+      dFdx, dFdy,
+    } = TSL;
+    const { vnoise, ignoise } = ctx.chunks;
+    const SHD = ctx.shadow || null;
+    const VP = ctx.vp || { enabled: false, view: () => null, uv: () => screenUV, tex: (n) => n };
+
+    const TL = (u) => vec2(u.x, u.y.oneMinus());
+    const flipUV = TL;
+
+    const sceneT = VP.tex(texture(ctx.sceneTex));
+    const tagT = VP.tex(texture(ctx.sceneTagTex || ctx.sceneTex));
+    const depthT = VP.tex(texture(ctx.sceneDepthTex));
+    const dirtT = texture(ctx.dirtTex || ctx.blackTex);
+    const depthAt = (uvGl) => float(depthT.sample(TL(uvGl)));
+    const _pinKeys = Object.create(null);
+    function passMaterial(fragNode, key) {
+      const m = new THREE.NodeMaterial();
+      if (typeof ctx.trackMaterial === "function") ctx.trackMaterial(m);
+      m.fragmentNode = fragNode;
+      m.depthTest = false;
+      m.depthWrite = false;
+      m.blending = THREE.NoBlending;
+      m.fog = false;
+      m.lights = false;
+      const k = key || "tlx-post";
+      m.customProgramCacheKey = _pinKeys[k] || (_pinKeys[k] = () => k);
+      return m;
+    }
+
+    const brightU = { threshold: uniform(0.75), exposure: uniform(1.0) };
+    const brightV = VP.view();
+    const bright = {
+      U: brightU, V: brightV,
+      mat: passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(brightV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const c = vec3(sceneT.sample(TL(vUV)).rgb).toVar();
+        const l = max(max(c.r, c.g), c.b).mul(brightU.exposure).toVar();
+        const knee = brightU.threshold.mul(0.5).add(1e-4).toVar();
+        const soft = clamp(l.sub(brightU.threshold).add(knee), 0.0, knee.mul(2.0)).toVar();
+        soft.assign(soft.mul(soft).div(knee.mul(4.0)));
+        const k = max(soft, l.sub(brightU.threshold)).div(max(l, 1e-4));
+        return vec4(c.mul(k), 1.0);
+      })(), "tlx-post-bright"),
+    };
+
+    function makeBlur(key) {
+      const tex = VP.tex(texture(ctx.blackTex));
+      const V = VP.view();
+      const U = { dir: uniform(new THREE.Vector2()), aoA: uniform(0) };
+      const mat = passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(V)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const o1 = U.dir.mul(1.3846153846);
+        const o2 = U.dir.mul(3.2307692308);
+        const c0 = vec4(tex.sample(TL(vUV))).toVar();
+        const s = vec4(c0.mul(0.2270270270)).toVar();
+        s.addAssign(tex.sample(TL(vUV.add(o1))).mul(0.3162162162));
+        s.addAssign(tex.sample(TL(vUV.sub(o1))).mul(0.3162162162));
+        s.addAssign(tex.sample(TL(vUV.add(o2))).mul(0.0702702703));
+        s.addAssign(tex.sample(TL(vUV.sub(o2))).mul(0.0702702703));
+        return vec4(s.rgb, select(U.aoA.greaterThan(0.5), s.a, c0.a));
+      })(), key);
+      return { mat, tex, U, V };
+    }
+    const blurAO = makeBlur("tlx-post-blur-ao");
+    const blurGR = makeBlur("tlx-post-blur-godray");
+    const blurAOH = makeBlur("tlx-post-blur-ao-h");
+    const blurAOV = makeBlur("tlx-post-blur-ao-v");
+    const blurGRH = makeBlur("tlx-post-blur-gr-h");
+    const blurGRV = makeBlur("tlx-post-blur-gr-v");
+
+    function makeDown(key) {
+      const downTex = VP.tex(texture(ctx.blackTex));
+      const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
+      const V = VP.view();
+      return {
+        tex: downTex, U: downU, V,
+        mat: passMaterial(Fn(() => {
+          const suv = vec2(VP.uv(V)).toVar();
+          const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+          const t = vec2(downU.texel).toVar();
+          const tap = (x, y) => vec3(downTex.sample(TL(vUV.add(t.mul(vec2(x, y))))).rgb);
+          const a = tap(-2, 2).toVar(), b = tap(0, 2).toVar(), c = tap(2, 2).toVar();
+          const d = tap(-2, 0).toVar(), e = tap(0, 0).toVar(), f = tap(2, 0).toVar();
+          const g = tap(-2, -2).toVar(), h = tap(0, -2).toVar(), i = tap(2, -2).toVar();
+          const j = tap(-1, 1).toVar(), k = tap(1, 1).toVar();
+          const l = tap(-1, -1).toVar(), m = tap(1, -1).toVar();
+          const g0 = a.add(b).add(d).add(e).mul(0.25).toVar();
+          const g1 = b.add(c).add(e).add(f).mul(0.25).toVar();
+          const g2 = d.add(e).add(g).add(h).mul(0.25).toVar();
+          const g3 = e.add(f).add(h).add(i).mul(0.25).toVar();
+          const g4 = j.add(k).add(l).add(m).mul(0.25).toVar();
+          const res = vec3(0.0).toVar();
+          If(downU.karis.greaterThan(0.5), () => {
+            const w0 = float(0.125).div(max(g0.r, max(g0.g, g0.b)).add(1.0)).toVar();
+            const w1 = float(0.125).div(max(g1.r, max(g1.g, g1.b)).add(1.0)).toVar();
+            const w2 = float(0.125).div(max(g2.r, max(g2.g, g2.b)).add(1.0)).toVar();
+            const w3 = float(0.125).div(max(g3.r, max(g3.g, g3.b)).add(1.0)).toVar();
+            const w4 = float(0.5).div(max(g4.r, max(g4.g, g4.b)).add(1.0)).toVar();
+            res.assign(g0.mul(w0).add(g1.mul(w1)).add(g2.mul(w2)).add(g3.mul(w3)).add(g4.mul(w4))
+              .div(w0.add(w1).add(w2).add(w3).add(w4)));
+          }).Else(() => {
+            res.assign(g0.add(g1).add(g2).add(g3).mul(0.125).add(g4.mul(0.5)));
+          });
+          return vec4(res, 1.0);
+        })(), key),
+      };
+    }
+    const down = makeDown("tlx-post-down");
+    const DOWN_FIXED_N = 4;
+    const downFixed = [];
+    for (let di = 0; di < DOWN_FIXED_N; di++) {
+      downFixed.push(makeDown("tlx-post-down-" + (di + 1)));
+    }
+
+    const spread = uniform(1.0);
+    function makeUp(additive, key) {
+      const tex = VP.tex(texture(ctx.blackTex));
+      const V = VP.view();
+      const U = { texel: uniform(new THREE.Vector2()) };
+      const mat = passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(V)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const t = vec2(U.texel.mul(spread)).toVar();
+        const tp = (x, y) => vec3(tex.sample(TL(vUV.add(t.mul(vec2(x, y))))).rgb);
+        const s = tp(-1, 1).add(tp(1, 1)).add(tp(-1, -1)).add(tp(1, -1))
+          .add(tp(0, 1).add(tp(0, -1)).add(tp(-1, 0)).add(tp(1, 0)).mul(2.0))
+          .add(tp(0, 0).mul(4.0));
+        return vec4(s.div(16.0), 1.0);
+      })(), key || (additive ? "tlx-post-up-add" : "tlx-post-up"));
+      if (additive) {
+        m8Additive(mat);
+      }
+      return { mat, tex, U, V };
+    }
+    function m8Additive(mat) {
+      mat.blending = THREE.CustomBlending;
+      mat.blendEquation = THREE.AddEquation;
+      mat.blendSrc = THREE.OneFactor;
+      mat.blendDst = THREE.OneFactor;
+      mat.blendEquationAlpha = THREE.AddEquation;
+      mat.blendSrcAlpha = THREE.OneFactor;
+      mat.blendDstAlpha = THREE.OneFactor;
+    }
+    const upAdd = makeUp(true);
+    const upFinal = makeUp(false);
+    const upAddFixed = [];
+    for (let ui = 0; ui < DOWN_FIXED_N - 1; ui++) {
+      upAddFixed.push(makeUp(true, "tlx-post-up-add-" + (ui + 2)));
+    }
+    const upFinalFixed = makeUp(false, "tlx-post-up-final");
+
+    const perspU = () => ({
+      ipXY: uniform(new THREE.Vector4(1, 1, 0, 0)), ipZW: uniform(new THREE.Vector3(-1, 0, 1)),
+      pXY: uniform(new THREE.Vector4(1, 1, 0, 0)), pW: uniform(-1),
+    });
+    const viewPosNdc = (U, uvGl, nz) => vec3(uvGl.mul(2.0).sub(1.0).mul(U.ipXY.xy).add(U.ipXY.zw), U.ipZW.x)
+      .div(nz.mul(U.ipZW.y).add(U.ipZW.z));
+    const clipXYW = (U, q) => vec3(q.x.mul(U.pXY.x).add(q.z.mul(U.pXY.z)),
+      q.y.mul(U.pXY.y).add(q.z.mul(U.pXY.w)), q.z.mul(U.pW));
+    const ssaoU = Object.assign(perspU(), {
+      sunVS: uniform(new THREE.Vector3(0, 0, -1)),
+      strength: uniform(0),
+      contact: uniform(0),
+      radius: uniform(0.6),
+    });
+    const ssaoViewPosFromD = (uvGl, d) => viewPosNdc(ssaoU, uvGl, d.mul(2.0).sub(1.0));
+    const ssaoViewPos = (uvGl) => ssaoViewPosFromD(uvGl, depthAt(uvGl));
+    const SSAO_K = [
+      [0.0, 1.0], [0.5, 0.866], [0.866, 0.5], [1.0, 0.0],
+      [0.866, -0.5], [0.5, -0.866], [0.0, -1.0], [-0.5, -0.866],
+    ];
+    function ssaoTerm(vUV, d) {
+        const res = float(1.0).toVar();
+        const P0 = vec3(ssaoViewPosFromD(vUV, d)).toVar();
+        const crN0 = cross(dFdx(P0), dFdy(P0)).toVar();
+        If(d.lessThan(0.99999), () => {
+          const P = P0;
+          const crN = crN0;
+          const crL = length(crN).toVar();
+          const N = select(crL.greaterThan(1e-6), crN.div(crL), vec3(0.0, 0.0, 1.0)).toVar();
+          const radius = float(ssaoU.radius).toVar();
+          const occ = float(0.0).toVar();
+          If(ssaoU.strength.greaterThan(0.0), () => {
+            const scr = clamp(radius.div(max(P.z.negate(), 1.0)).mul(0.9), 0.004, 0.05).toVar();
+            const ang = fract(sin(dot(screenCoordinate.xy, vec2(12.9898, 78.233))).mul(43758.5453)).mul(6.2832).toVar();
+            const ca = cos(ang).toVar(), sa = sin(ang).toVar();
+            for (let ki = 0; ki < 8; ki++) {
+              const kx = SSAO_K[ki][0], ky = SSAO_K[ki][1];
+              const k = vec2(ca.mul(kx).sub(sa.mul(ky)), sa.mul(kx).add(ca.mul(ky)));
+              const S = ssaoViewPos(clamp(vUV.add(k.mul(scr)), vec2(0.001), vec2(0.999))).toVar();
+              const V = S.sub(P).toVar();
+              const len = length(V).toVar();
+              const ndv = max(dot(N, V.div(max(len, 1e-4))).sub(0.10), 0.0);
+              const range = smoothstep(radius, radius.mul(0.4), len);
+              occ.addAssign(ndv.mul(range));
+            }
+          });
+          const ao = clamp(occ.div(8.0).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
+          If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
+            const sh = float(1.0).toVar();
+            Loop({ start: int(1), end: int(6), type: "int", condition: "<" }, ({ i }) => {
+              const q = P.add(ssaoU.sunVS.mul(float(i).mul(0.04))).toVar();
+              const cp = clipXYW(ssaoU, q).toVar();
+              const quv = cp.xy.div(cp.z).mul(0.5).add(0.5).toVar();
+              If(quv.x.lessThan(0.0).or(quv.x.greaterThan(1.0))
+                .or(quv.y.lessThan(0.0)).or(quv.y.greaterThan(1.0)), () => { Break(); });
+              const B = ssaoViewPos(quv).toVar();
+              const dz = B.z.sub(q.z).toVar();
+              const above = dot(N, B.sub(P));
+              const aboveBias = float(0.05).add(max(P.z.negate().sub(6.0), 0.0).mul(0.01));
+              If(dz.greaterThan(0.015).and(dz.lessThan(0.5)).and(above.greaterThan(aboveBias)), () => {
+                sh.assign(ssaoU.contact.oneMinus());
+                Break();
+              });
+            });
+            const front = clamp(ssaoU.sunVS.z.negate().mul(6.0), 0.0, 1.0);
+            ao.mulAssign(mix(float(1.0), sh, front));
+          });
+          res.assign(ao);
+        });
+        return res;
+    }
+    const ssaoV = VP.view();
+    const ssao = {
+      U: ssaoU, V: ssaoV,
+      mat: passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(ssaoV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const d = depthAt(vUV).toVar();
+        const res = ssaoTerm(vUV, d);
+        return vec4(res, res, res, 1.0);
+      })(), "tlx-post-ssao"),
+    };
+
+    let godray = null;
+    if (SHD && SHD.sunTex) {
+      const grU = {
+        invVP: uniform(new THREE.Matrix4()),
+        lightVP: uniform(new THREE.Matrix4()),
+        eye: uniform(new THREE.Vector3()),
+        sunDir: uniform(new THREE.Vector3(0, 1, 0)),
+        sunColor: uniform(new THREE.Vector3(1, 1, 1)),
+        str: uniform(0),
+        time: uniform(0),
+        cloudCover: uniform(0),
+        cloudSpeed: uniform(1),
+        numLights: uniform(0),
+        mist: uniform(0),
+        lampStr: uniform(0),
+        hgAniso: uniform(0.60),
+        hgFloor: uniform(0.020),
+        lampShadowVP: uniform(new THREE.Matrix4()),
+        lampShadowIdx: uniform(-1.0),
+        aoOn: uniform(0),
+      };
+      const grPos = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3());
+      const grCol = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3());
+      const grDir = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
+      const grGeo = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector4(1, 1, 0.8, 0));
+      grU.lightPos = uniformArray(grPos);
+      grU.lightCol = uniformArray(grCol);
+      grU.lightDir = uniformArray(grDir);
+      grU.lightGeo = uniformArray(grGeo);
+
+      const worldPos = (uvGl, d) => {
+        const c = vec4(uvGl.mul(2.0).sub(1.0), d.mul(2.0).sub(1.0), 1.0);
+        const w = grU.invVP.mul(c);
+        return w.xyz.div(w.w);
+      };
+      const gCloudFBM = (pIn) => {
+        const s1 = vnoise(pIn).mul(0.5);
+        const s2 = vnoise(pIn.mul(2.03).add(1.7)).mul(0.25);
+        const s3 = vnoise(pIn.mul(2.03 * 2.03).add(1.7 * 2.03 + 1.7)).mul(0.125);
+        return s1.add(s2).add(s3);
+      };
+      const gCloud = Fn(([wpIn]) => {
+        const wp = vec3(wpIn).toVar();
+        const res = float(0.0).toVar();
+        If(grU.cloudCover.greaterThan(0.001).and(grU.sunDir.y.greaterThan(0.06)), () => {
+          const t = float(360.0).sub(wp.y).div(max(grU.sunDir.y, 0.15));
+          const cT = grU.time.mul(grU.cloudSpeed);
+          const cp = wp.xz.add(grU.sunDir.xz.mul(t)).mul(0.0052)
+            .add(vec2(cT.mul(0.012), cT.mul(0.005)));
+          res.assign(smoothstep(float(0.54).sub(grU.cloudCover.mul(0.40)), 0.92, gCloudFBM(cp))
+            .mul(grU.cloudCover));
+        });
+        return res;
+      });
+
+      const grV = VP.view();
+      godray = {
+        U: grU, V: grV,
+        lightPos: grPos, lightCol: grCol, lightDir: grDir, lightGeo: grGeo,
+        mat: passMaterial(Fn(() => {
+          const suv = vec2(VP.uv(grV)).toVar();
+          const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+          const d = depthAt(vUV).toVar();
+          const aoA = float(1.0).toVar();
+          If(grU.aoOn.greaterThan(0.5), () => { aoA.assign(ssaoTerm(vUV, d)); });
+          const viewDir = normalize(worldPos(vUV, float(0.5)).sub(grU.eye)).toVar();
+          const endP = select(d.greaterThanEqual(0.99999),
+            grU.eye.add(viewDir.mul(400.0)), worldPos(vUV, d)).toVar();
+          const ro = vec3(grU.eye).toVar();
+          const rd = endP.sub(ro).toVar();
+          const dist = length(rd).toVar();
+          rd.assign(rd.div(max(dist, 1e-4)));
+          const march = min(dist, 260.0).toVar();
+          const stepLen = march.div(16.0).toVar();
+          const ign = ignoise(screenCoordinate.xy);
+          const t0 = stepLen.mul(ign).toVar();
+          const accum = float(0.0).toVar();
+          const lampAccum = vec3(0.0).toVar();
+          const trans = float(1.0).toVar();
+          const groundY = grU.eye.y.sub(4.0).toVar();
+          const stepT = exp(stepLen.mul(-0.010)).toVar();
+          Loop({ start: int(0), end: int(16), type: "int", condition: "<" }, ({ i }) => {
+            const td = t0.add(stepLen.mul(float(i))).toVar();
+            const p = ro.add(rd.mul(td)).toVar();
+            trans.mulAssign(stepT);
+            If(grU.str.greaterThan(0.0), () => {
+            const hSun = exp(max(p.y.sub(groundY), 0.0).mul(-0.03)).toVar();
+            const lc = grU.lightVP.mul(vec4(p, 1.0)).toVar();
+            const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
+            const lit = float(1.0).toVar();
+            If(sc.x.greaterThan(0.0).and(sc.x.lessThan(1.0))
+              .and(sc.y.greaterThan(0.0)).and(sc.y.lessThan(1.0))
+              .and(sc.z.lessThan(1.0)), () => {
+              lit.assign(texture(SHD.sunTex, flipUV(sc.xy)).compare(sc.z.sub(0.002)));
+            });
+            If(lit.greaterThan(0.0), () => {
+              lit.mulAssign(gCloud(p).mul(0.62).oneMinus());
+            });
+            accum.addAssign(lit.mul(hSun).mul(trans));
+            });
+            If(grU.lampStr.greaterThan(0.0).and(td.lessThan(200.0)), () => {
+              const hLamp = exp(max(p.y.sub(groundY), 0.0).mul(-0.07)).toVar();
+              Loop({ start: int(0), end: int(6), type: "int", condition: "<" }, ({ i: li }) => {
+                If(float(li).greaterThanEqual(grU.numLights), () => { Break(); });
+                const geo = grU.lightGeo.element(li);
+                const LP = grU.lightPos.element(li).sub(p).toVar();
+                const ld2 = dot(LP, LP).toVar();
+                const rad = float(geo.x).toVar();
+                If(ld2.lessThanEqual(rad.mul(rad)), () => {
+                  const ld = sqrt(ld2).toVar();
+                  const Ld = LP.div(max(ld, 1e-3)).toVar();
+                  const s = ld.div(rad);
+                  const win = clamp(s.mul(s).mul(s).mul(s).oneMinus(), 0.0, 1.0);
+                  const att = win.mul(win).div(ld.mul(ld).add(1.0));
+                  const cd = dot(Ld.negate(), grU.lightDir.element(li));
+                  const spot = smoothstep(geo.z, geo.y, cd);
+                  const cosL = max(dot(rd, Ld), 0.0);
+                  const hgLd = float(1.36).sub(cosL.mul(1.2)).toVar();
+                  const hgL = float(1.0 - 0.36).div(hgLd.mul(sqrt(hgLd)));
+                  const lampLit = float(1.0).toVar();
+                  if (SHD.lampTex) {
+                    If(float(li).equal(grU.lampShadowIdx), () => {
+                      const lq = grU.lampShadowVP.mul(vec4(p, 1.0)).toVar();
+                      If(lq.w.greaterThan(0.0), () => {
+                        const lqs = lq.xyz.div(lq.w).mul(0.5).add(0.5).toVar();
+                        If(lqs.x.greaterThan(0.002).and(lqs.x.lessThan(0.998))
+                          .and(lqs.y.greaterThan(0.002)).and(lqs.y.lessThan(0.998))
+                          .and(lqs.z.lessThan(1.0)), () => {
+                          lampLit.assign(texture(SHD.lampTex, flipUV(lqs.xy)).compare(lqs.z.sub(0.004)));
+                        });
+                      });
+                    });
+                  }
+                  lampAccum.addAssign(grU.lightCol.element(li)
+                    .mul(att.mul(spot).mul(hgL.mul(0.14).add(0.12)).mul(lampLit))
+                    .mul(float(geo.w)).mul(hLamp).mul(trans));
+                });
+              });
+            });
+          });
+          accum.divAssign(16.0);
+          lampAccum.mulAssign(grU.mist.mul(grU.lampStr).mul(2.0 / 16.0));
+          const sunTerm = vec3(0.0).toVar();
+          If(grU.str.greaterThan(0.0), () => {
+          const cosT = max(dot(rd, grU.sunDir), 0.0);
+          const g = clamp(grU.hgAniso, 0.0, 0.95).toVar();
+          const hgD = g.mul(g).add(1.0).sub(g.mul(cosT).mul(2.0)).toVar();
+          const hg = g.mul(g).oneMinus().div(hgD.mul(sqrt(hgD)));
+          const phase = hg.mul(0.16).add(grU.hgFloor);
+          sunTerm.assign(grU.sunColor.mul(accum).mul(phase).mul(grU.str));
+          });
+          return vec4(sunTerm.add(lampAccum), aoA);
+        })(), "tlx-post-godray"),
+      };
+    }
+
+    const C = {
+      aoTexel: uniform(new THREE.Vector2(0, 0)),
+      aoAlpha: uniform(0),
+      haveGodray: uniform(0),
+      bloomAmt: uniform(0.55), bloomKnee: uniform(0.5),
+      sunUV: uniform(new THREE.Vector2(-2, -2)),
+      flareStr: uniform(0), exposure: uniform(1), sunShaft: uniform(0),
+      gradeShadow: uniform(new THREE.Vector3(1, 1, 1)),
+      gradeHi: uniform(new THREE.Vector3(1, 1, 1)),
+      gradeStr: uniform(0),
+      contrast: uniform(1.12), vibrance: uniform(0.20), saturation: uniform(1.0),
+      tint: uniform(0), vignette: uniform(0.80), vigSoft: uniform(0.35),
+      tone0: uniform(new THREE.Vector4(0, 0, 0, 0)),
+      tone1: uniform(new THREE.Vector4(0, 0, 0, 0)),
+      lift: uniform(new THREE.Vector3(0, 0, 0)),
+      gamma: uniform(new THREE.Vector3(1, 1, 1)),
+      gain: uniform(new THREE.Vector3(1, 1, 1)),
+      hdrGradeOn: uniform(0),
+      sceneHdr: uniform(1),
+      carReflect: uniform(0.05), carGloss: uniform(1.0),
+      ...perspU(),
+      upVS: uniform(new THREE.Vector3(0, 1, 0)),
+      reflTexel: uniform(new THREE.Vector2()),
+      reflect: uniform(0), ssrOk: uniform(0), ssrQuality: uniform(0),
+      reflSkyHi: uniform(new THREE.Vector3(0.05, 0.06, 0.09)),
+      reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
+      ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
+      ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
+      grainTime: uniform(0),
+      dthOff: uniform(0), vigAspect: uniform(1), vigNorm: uniform(1),
+      sharpen: uniform(0), sharpenLimit: uniform(0), blackLift: uniform(0.005),
+      whitePoint: uniform(1.0),
+      acesA: uniform(2.51), acesB: uniform(0.03), acesC: uniform(2.43),
+      acesD: uniform(0.59), acesE: uniform(0.14),
+      speedBlur: uniform(0), lensDirt: uniform(0.15),
+      hazeUV: uniform(new THREE.Vector2(-9, -9)), hazeStr: uniform(0),
+      hazeTime: uniform(0),
+      shaftDecay: uniform(0.82), shaftSpread: uniform(1.0),
+      flareStreak: uniform(7.0), flareStreak2: uniform(0.5),
+    };
+    const bloomTexN = VP.tex(texture(ctx.blackTex));
+    const ssaoTexN = VP.tex(texture(ctx.whiteTex));
+    const grOffTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    grOffTex.colorSpace = THREE.NoColorSpace;
+    grOffTex.needsUpdate = true;
+    const godrayTexN = VP.tex(texture(grOffTex));
+
+    const acesTonemap = (x0) => {
+      const x = max(x0, vec3(0.0));
+      return clamp(x.mul(C.acesA.mul(x).add(C.acesB))
+        .div(x.mul(C.acesC.mul(x).add(C.acesD)).add(C.acesE)), 0.0, 1.0);
+    };
+
+    const ssrViewPos = (uvGl) => viewPosNdc(C, uvGl, depthAt(uvGl).mul(2.0).sub(1.0));
+    const caScene = (uvGl) => {
+      const sampled = vec3(0.0).toVar();
+      If(C.chromAb.equal(0.0), () => {
+        sampled.assign(sceneT.sample(TL(uvGl)).rgb);
+      }).Else(() => {
+        const dd = uvGl.sub(0.5);
+        const a = C.chromAb.mul(0.004).mul(dot(dd, dd));
+        sampled.assign(vec3(
+          sceneT.sample(TL(uvGl.add(dd.mul(a)))).r,
+          sceneT.sample(TL(uvGl)).g,
+          sceneT.sample(TL(uvGl.sub(dd.mul(a)))).b));
+      });
+      return sampled;
+    };
+
+    function colourGradeT(c) {
+      c.mulAssign(vec3(1.015, 1.008, 0.992));
+      c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
+      c.assign(pow(max(c, vec3(1e-6)), vec3(C.contrast)));
+      const luma = dot(c, vec3(0.299, 0.587, 0.114)).toVar();
+      const mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+      const sat = mx.sub(mn);
+      c.assign(mix(vec3(luma), c,
+        clamp(sat.mul(1.5), 0.0, 1.0).oneMinus().mul(C.vibrance).add(1.0)));
+      c.assign(mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, C.saturation));
+      c.mulAssign(vec3(C.tint.mul(0.07).add(1.0), 1.0, C.tint.mul(-0.07).add(1.0)));
+      const gl2 = dot(c, vec3(0.299, 0.587, 0.114));
+      const toneTint = mix(C.gradeShadow, C.gradeHi, smoothstep(0.0, 0.85, gl2));
+      c.assign(mix(c, c.mul(toneTint), C.gradeStr));
+      c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
+    }
+    function ditherT(c, xy) {
+      const dc = xy.add(C.dthOff).toVar();
+      const d0n = ignoise(dc);
+      const d1n = fract(fract(dot(dc.add(17.31), vec2(0.00583715, 0.06711056))).mul(52.9829189));
+      c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
+    }
+
+    const compV = VP.view();
+    const composite = {
+      U: C, V: compV, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN }, grOffTex,
+      mat: passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(compV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const fragXY = vec2(screenCoordinate.xy).toVar();
+
+        const hazeUV = vec2(vUV).toVar();
+        If(C.hazeStr.greaterThan(0.002), () => {
+          const hd = vUV.sub(C.hazeUV).sub(vec2(0.0, 0.08)).mul(vec2(3.2, 1.0)).toVar();
+          const hm = exp(dot(hd, hd).mul(-70.0)).mul(C.hazeStr).toVar();
+          If(hm.greaterThan(0.003), () => {
+          const carHere = smoothstep(0.42, 0.55, tagT.sample(TL(vUV)).r).oneMinus();
+          If(carHere.lessThan(0.25), () => {
+            const hp = vUV.y.mul(90.0).sub(C.hazeTime.mul(11.0)).toVar();
+            hazeUV.addAssign(vec2(sin(hp.add(vUV.x.mul(70.0))), cos(hp.mul(0.63)))
+              .mul(hm.mul(0.0075)));
+          });
+          });
+        });
+        const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();
+        const c = vec3(scn.rgb).toVar();
+        const caDir = vec2(vUV.sub(0.5)).toVar();
+
+        If(C.chromAb.greaterThan(0.001), () => {
+          const caAmt = C.chromAb.mul(0.004).mul(dot(caDir, caDir));
+          c.r.assign(sceneT.sample(TL(hazeUV.add(caDir.mul(caAmt)))).r);
+          c.b.assign(sceneT.sample(TL(hazeUV.sub(caDir.mul(caAmt)))).b);
+        });
+
+        If(C.speedBlur.greaterThan(0.001), () => {
+          const acc = vec3(c).toVar();
+          for (let i = 1; i <= 4; i++) {
+            const t = C.speedBlur.mul((i / 4) * 0.05);
+            acc.addAssign(caScene(vUV.sub(caDir.mul(t))));
+          }
+          c.assign(acc.div(5.0));
+        });
+
+        If(C.sharpen.greaterThan(0.001), () => {
+          const left = caScene(vUV.sub(vec2(C.reflTexel.x, 0.0)));
+          const right = caScene(vUV.add(vec2(C.reflTexel.x, 0.0)));
+          const down = caScene(vUV.sub(vec2(0.0, C.reflTexel.y)));
+          const up = caScene(vUV.add(vec2(0.0, C.reflTexel.y)));
+          const bl = right.add(left).add(up).add(down).mul(0.25);
+          const candidate = c.add(c.sub(bl).mul(C.sharpen).mul(0.9));
+          If(C.sharpenLimit.greaterThan(0.5), () => {
+            const lo = min(c, min(min(left, right), min(down, up)));
+            const hi = max(c, max(max(left, right), max(down, up)));
+            c.assign(clamp(candidate, lo, hi));
+          }).Else(() => { c.assign(candidate); });
+        });
+
+        const aoV = float(1.0).toVar();
+        If(C.aoTexel.x.greaterThan(0.0), () => {
+          const aoDc = depthAt(vUV).toVar();
+          const aoG = vUV.div(C.aoTexel).sub(0.5).toVar();
+          const aoF = fract(aoG).toVar();
+          const aoB = floor(aoG).add(0.5).mul(C.aoTexel).toVar();
+          const aoSum = float(0.0).toVar();
+          const aoW = float(0.0).toVar();
+          for (let ai = 0; ai < 4; ai++) {
+            const auv = aoB.add(vec2(
+              (ai === 1 || ai === 3) ? C.aoTexel.x : float(0.0),
+              (ai >= 2) ? C.aoTexel.y : float(0.0))).toVar();
+            const bw = (ai === 0 ? aoF.x.oneMinus().mul(aoF.y.oneMinus())
+              : ai === 1 ? aoF.x.mul(aoF.y.oneMinus())
+              : ai === 2 ? aoF.x.oneMinus().mul(aoF.y)
+              : aoF.x.mul(aoF.y)).add(1e-4);
+            const w = bw.div(abs(aoDc.sub(depthAt(auv))).mul(30.0).add(1e-4)).toVar();
+            const aoS = float(0.0).toVar();
+            If(C.aoAlpha.greaterThan(0.5), () => { aoS.assign(godrayTexN.sample(TL(auv)).a); })
+              .Else(() => { aoS.assign(ssaoTexN.sample(TL(auv)).r); });
+            aoSum.addAssign(aoS.mul(w));
+            aoW.addAssign(w);
+          }
+          aoV.assign(aoSum.div(aoW));
+        });
+        c.mulAssign(aoV);
+
+        If(C.haveGodray.greaterThan(0.5), () => {
+          c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
+        });
+
+        const carPx = float(0.0).toVar();
+        const roadPx = float(0.0).toVar();
+        If(C.ssrOk.greaterThan(0.5)
+          .and(C.reflect.greaterThan(0.001).or(C.carReflect.greaterThan(0.001)))
+          .and(vUV.y.lessThan(C.ssrTopUV)), () => {
+          const receiverTag = tagT.sample(TL(hazeUV)).r;
+          carPx.assign(smoothstep(0.42, 0.55, receiverTag).oneMinus());
+          roadPx.assign(smoothstep(0.85, 0.95, receiverTag));
+        });
+        If(C.ssrOk.greaterThan(0.5)
+          .and(roadPx.mul(C.reflect).greaterThan(0.001)
+            .or(carPx.greaterThan(0.3).and(C.carReflect.greaterThan(0.001))))
+          .and(vUV.y.lessThan(C.ssrTopUV))
+          .and(depthAt(vUV).lessThan(0.9999)), () => {
+          const P = vec3(ssrViewPos(vUV)).toVar();
+          const roadFar = select(C.ssrQuality.greaterThan(1.5), vec2(-12.0, -42.0),
+            select(C.ssrQuality.greaterThan(0.5), vec2(-18.0, -60.0), vec2(-22.0, -78.0))).toVar();
+          If(C.reflect.greaterThan(0.001).and(P.z.greaterThan(roadFar.y))
+            .or(C.carReflect.greaterThan(0.001).and(P.z.greaterThan(-55.0))), () => {
+          const nT = C.reflTexel.mul(3.0).toVar();
+          const dpx = ssrViewPos(vUV.add(vec2(nT.x, 0.0))).sub(P).toVar();
+          const dpy = ssrViewPos(vUV.add(vec2(0.0, nT.y))).sub(P).toVar();
+          const crv = cross(dpx, dpy).toVar();
+          const crvL = length(crv).toVar();
+          const upVSn = normalize(C.upVS).toVar();
+          const sinT = crvL.div(max(length(dpx).mul(length(dpy)), 1e-12)).toVar();
+          const Nv = select(crvL.greaterThan(1e-6).and(sinT.greaterThan(0.08)),
+            crv.div(crvL), upVSn).toVar();
+          If(Nv.z.lessThan(0.0), () => { Nv.assign(Nv.negate()); });
+          If(dot(Nv, upVSn).lessThan(-0.25), () => { Nv.assign(Nv.negate()); });
+          const upDot = dot(Nv, upVSn).toVar();
+          const roadMask = smoothstep(0.25, 0.55, upDot)
+            .mul(roadPx)
+            .mul(smoothstep(C.ssrNear.mul(2.8), C.ssrNear, P.z).oneMinus())
+            .mul(smoothstep(roadFar.y, roadFar.x, P.z)).toVar();
+          const carMask = carPx.mul(smoothstep(0.30, 0.65, upDot))
+            .mul(smoothstep(-3.0, -1.0, P.z).oneMinus())
+            .mul(smoothstep(-55.0, -22.0, P.z)).toVar();
+          const edgeGrad = length(dpx).add(length(dpy)).div(3.0);
+          carMask.mulAssign(smoothstep(0.35, 0.9, edgeGrad).oneMinus());
+          const roadTerm = roadMask.mul(C.reflect).toVar();
+          const carTerm = carMask.mul(C.carReflect).toVar();
+          const ssrGate = max(roadTerm, carTerm).toVar();
+          If(ssrGate.greaterThan(0.001), () => {
+            const carDomEarly = carTerm.greaterThan(roadTerm);
+            const V = normalize(P.negate()).toVar();
+            const Nr = select(carDomEarly, Nv, normalize(mix(Nv, upVSn, 0.85))).toVar();
+            const R = reflect(V.negate(), Nr).toVar();
+            const quality = select(carDomEarly, float(0.0), C.ssrQuality).toVar();
+            const marchSteps = select(quality.greaterThan(1.5), int(8), select(quality.greaterThan(0.5), int(16), int(24)));
+            const refineSteps = select(quality.greaterThan(1.5), int(1), select(quality.greaterThan(0.5), int(2), int(4)));
+            const stepGrowth = select(quality.greaterThan(1.5), float(1.5), select(quality.greaterThan(0.5), float(1.22), float(1.16)));
+            const ign = ignoise(fragXY).toVar();
+            const pos = vec3(P).toVar();
+            const prevPos = vec3(P).toVar();
+            const stepLen = select(quality.greaterThan(1.5), float(1.4), select(quality.greaterThan(0.5), float(0.75), float(0.55))).toVar();
+            pos.addAssign(R.mul(stepLen.mul(ign)));
+            const hit = float(0.0).toVar();
+            const hitDist = float(0.0).toVar();
+            const hitUV = vec2(0.0).toVar();
+            const found = float(0.0).toVar();
+            Loop({ start: int(0), end: int(24), type: "int", condition: "<" }, ({ i }) => {
+              If(i.greaterThanEqual(marchSteps), () => { Break(); });
+              prevPos.assign(pos);
+              pos.addAssign(R.mul(stepLen));
+              stepLen.mulAssign(stepGrowth);
+              const cp = clipXYW(C, pos).toVar();
+              If(cp.z.lessThanEqual(0.0), () => { Break(); });
+              const muv = cp.xy.div(cp.z).mul(0.5).add(0.5).toVar();
+              If(muv.x.lessThan(0.0).or(muv.x.greaterThan(1.0))
+                .or(muv.y.lessThan(0.0)).or(muv.y.greaterThan(1.0)), () => { Break(); });
+              const dz = ssrViewPos(muv).z.sub(pos.z).toVar();
+              If(dz.greaterThan(C.ssrThick).and(dz.lessThan(max(float(5.0), stepLen.mul(1.5)))), () => {
+                const aP = vec3(prevPos).toVar();
+                const bP = vec3(pos).toVar();
+                Loop({ start: int(0), end: int(4), type: "int", condition: "<" }, ({ i }) => {
+                  If(i.greaterThanEqual(refineSteps), () => { Break(); });
+                  const mid = aP.add(bP).mul(0.5).toVar();
+                  const mc = clipXYW(C, mid).toVar();
+                  const midUV = mc.xy.div(mc.z).mul(0.5).add(0.5).toVar();
+                  If(ssrViewPos(midUV).z.sub(mid.z).greaterThan(0.20), () => {
+                    bP.assign(mid);
+                  }).Else(() => {
+                    aP.assign(mid);
+                  });
+                });
+                const fc = clipXYW(C, bP).toVar();
+                const huv = fc.xy.div(fc.z).mul(0.5).add(0.5).toVar();
+                const hP = vec3(ssrViewPos(huv)).toVar();
+                const hdx = ssrViewPos(huv.add(vec2(nT.x, 0.0))).sub(hP).toVar();
+                const hdy = ssrViewPos(huv.add(vec2(0.0, nT.y))).sub(hP).toVar();
+                const hcr = cross(hdx, hdy).toVar();
+                const hcl = length(hcr).toVar();
+                const hN = select(hcl.greaterThan(1e-6), hcr.div(hcl), upVSn).toVar();
+                If(hN.z.lessThan(0.0), () => { hN.assign(hN.negate()); });
+                const selfHit = carDomEarly.not().and(dot(hN, upVSn).greaterThan(0.55));
+                If(selfHit, () => { Continue(); });
+                hitUV.assign(huv);
+                hitDist.assign(length(bP.sub(P)));
+                const e = abs(hitUV.sub(0.5)).mul(2.0).toVar();
+                hit.assign(pow(max(e.x, e.y), 4.0).oneMinus());
+                found.assign(1.0);
+                Break();
+              });
+            });
+            const hitCol = vec3(0.0).toVar();
+            const carDom = carTerm.greaterThan(roadTerm);
+            If(found.greaterThan(0.5), () => {
+              const carSoft = clamp(float(1.4).sub(C.carGloss).mul(0.5), 0.0, 1.0);
+              const streak = select(carDom,
+                C.carReflect.mul(carSoft.mul(0.030).add(0.006)),
+                C.reflect.mul(clamp(C.ssrTopUV.sub(vUV.y).div(C.ssrTopUV), 0.0, 1.0).mul(0.022).add(0.010))).toVar();
+              streak.mulAssign(mix(float(0.3), float(1.6), clamp(hitDist.div(25.0), 0.0, 1.0)));
+              const sTap = (k) => sceneT.sample(TL(hitUV.add(vec2(0.0, streak.mul(k))))).rgb;
+              const w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
+              If(quality.greaterThan(1.5), () => { hitCol.assign(sTap(0.0)); })
+                .ElseIf(quality.greaterThan(0.5), () => {
+                  hitCol.assign(sTap(0.0).mul(w0).add(sTap(-0.5).add(sTap(0.5)).mul(w1)).div(w0 + 2 * w1));
+                }).Else(() => {
+                  hitCol.assign(sTap(0.0).mul(w0)
+                    .add(sTap(-0.5).mul(w1)).add(sTap(-1.0).mul(w2))
+                    .add(sTap(-1.6).mul(w3)).add(sTap(-2.3).mul(w4))
+                    .add(sTap(0.5).mul(w1)).add(sTap(1.0).mul(w2)));
+                  hitCol.divAssign(w0 + 2 * w1 + 2 * w2 + w3 + w4);
+                });
+            });
+            const skyRefl = mix(C.reflSkyHi, C.reflSkyLo, clamp(dot(R, upVSn), 0.0, 1.0));
+            const conf = select(found.greaterThan(0.5), clamp(hit, 0.0, 1.0), float(0.0)).toVar();
+            const reflCol = mix(skyRefl, hitCol, conf).toVar();
+            reflCol.mulAssign(aoV.mul(aoV));
+            reflCol.assign(reflCol.div(reflCol.mul(0.35).add(1.0)));
+            const cover = select(carDom, conf, float(0.60)).toVar();
+            const fres = pow(max(dot(Nr, V), 0.0).oneMinus(), 3.0).toVar();
+            const strength = ssrGate.mul(select(carDom,
+              fres.mul(0.45).add(0.50), fres.mul(0.42).add(0.55))).toVar();
+            const gateSrc = select(carDom, C.carReflect, C.reflect);
+            strength.mulAssign(min(gateSrc.div(0.20), 1.0));
+            strength.mulAssign(smoothstep(C.ssrTopUV.sub(0.06), C.ssrTopUV, vUV.y).oneMinus());
+            const mixAmt = clamp(strength.mul(cover), 0.0, select(carDom, float(0.85), float(0.80)));
+            const mirrored = select(carDom,
+              c.mul(0.22).add(reflCol.mul(0.88)),
+              c.mul(0.10).add(reflCol.mul(0.92)));
+            c.assign(mix(c, mirrored, mixAmt));
+          });
+          });
+        });
+
+        c.mulAssign(C.exposure);
+
+        const bloomSample = vec3(0.0).toVar();
+        If(C.bloomAmt.greaterThan(0.001), () => {
+          bloomSample.assign(bloomTexN.sample(TL(vUV)).rgb);
+          const bloomMask = clamp(max(c.r, max(c.g, c.b)).sub(0.7), 0.0, 0.3)
+            .div(0.3).mul(C.bloomKnee).oneMinus();
+          c.addAssign(bloomSample.mul(C.bloomAmt).mul(bloomMask).mul(C.exposure));
+        });
+
+        const dirt = float(0.0).toVar();
+        If(C.lensDirt.greaterThan(0.001).and(C.bloomAmt.greaterThan(0.001).or(C.flareStr.greaterThan(0.0)
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)))), () => {
+          dirt.assign(dirtT.sample(TL(vUV)).r);
+          c.addAssign(bloomSample.mul(C.exposure).mul(dirt).mul(C.lensDirt).mul(2.2));
+        });
+
+        If(C.sunShaft.greaterThan(0.0).and(C.bloomAmt.greaterThan(0.001)), () => {
+          const toSun = C.sunUV.sub(vUV).toVar();
+          const dist = length(toSun).toVar();
+          If(dist.greaterThan(0.005)
+            .and(dist.mul(float(2.6).div(max(C.shaftSpread, float(1e-3)))).lessThan(1.0)), () => {
+            const stp = toSun.div(dist).mul(min(dist, 0.40)).div(8.0).toVar();
+            const shaft = vec3(0.0).toVar();
+            const ign = ignoise(fragXY);
+            const uvi = vUV.add(stp.mul(ign)).toVar();
+            const decay = float(1.0).toVar();
+            Loop({ start: int(0), end: int(8), type: "int", condition: "<" }, () => {
+              uvi.addAssign(stp);
+              const suv2 = clamp(uvi, vec2(0.0), vec2(1.0)).toVar();
+              const reach = float(0.32).mul(C.shaftSpread);
+              const sw = clamp(length(suv2.sub(C.sunUV)).div(reach), 0.0, 1.0).oneMinus().toVar();
+              shaft.addAssign(bloomTexN.sample(TL(suv2)).rgb.mul(decay.mul(sw).mul(sw)));
+              decay.mulAssign(C.shaftDecay);
+            });
+            shaft.divAssign(8.0);
+            const radial = clamp(dist.mul(float(2.6).div(C.shaftSpread)), 0.0, 1.0).oneMinus();
+            c.addAssign(shaft.mul(C.sunShaft).mul(radial).mul(radial).mul(0.60));
+          });
+        });
+
+        If(C.hdrGradeOn.greaterThan(0.5).and(C.sceneHdr.greaterThan(0.5)), () => {
+          const lift = vec3(C.lift).toVar();
+          const gain = max(C.gain, vec3(1e-3)).toVar();
+          If(C.gamma.x.equal(1.0).and(C.gamma.y.equal(1.0)).and(C.gamma.z.equal(1.0)), () => {
+            c.assign(lift.add(gain.sub(lift).mul(max(c, vec3(0.0)))));
+          }).Else(() => {
+            const invGamma = vec3(1.0).div(max(C.gamma, vec3(1e-3))).toVar();
+            c.assign(lift.add(gain.sub(lift).mul(pow(max(c, vec3(0.0)), invGamma))));
+          });
+          const y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
+          const z = log2(y.div(0.18)).toVar();
+          const w0x = smoothstep(-4.0, -0.75, z).oneMinus().toVar();
+          const w0y = smoothstep(-4.0, -1.5, z).mul(smoothstep(-1.0, 0.75, z).oneMinus()).toVar();
+          const w0z = smoothstep(-2.5, -0.5, z).mul(smoothstep(0.5, 2.5, z).oneMinus()).toVar();
+          const w0w = smoothstep(0.0, 1.5, z).mul(smoothstep(3.0, 5.0, z).oneMinus()).toVar();
+          const wWhite = smoothstep(2.5, 5.0, z).toVar();
+          const stops = w0x.mul(C.tone0.x.mul(3.0)).add(w0y.mul(C.tone0.y.mul(2.0)))
+            .add(w0z.mul(C.tone0.z)).add(w0w.mul(C.tone0.w))
+            .add(wWhite.mul(C.tone1.x));
+          c.mulAssign(exp2(clamp(stops, -4.0, 4.0)));
+          c.addAssign(w0x.mul(C.tone0.x).mul(0.05).add(w0y.mul(C.tone0.y).mul(0.025)));
+          c.assign(max(c, vec3(0.0)));
+          If(C.tone1.y.notEqual(0.0).or(C.tone1.z.notEqual(0.0)), () => {
+            const oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
+            const exponent = select(oldY.lessThan(0.18),
+              exp2(clamp(C.tone1.y, -1.0, 1.0)),
+              exp2(clamp(C.tone1.z.negate(), -1.0, 1.0)));
+            const newY = pow(oldY.div(0.18), exponent).mul(0.18);
+            c.assign(max(c.mul(newY.div(max(oldY, 1e-6))), vec3(0.0)));
+          });
+        });
+
+        If(C.sceneHdr.greaterThan(0.5), () => {
+          c.assign(acesTonemap(c.div(C.whitePoint)));
+        });
+        If(C.sceneHdr.lessThanEqual(0.5), () => {
+          c.assign(clamp(c.div(max(C.whitePoint, float(1e-3))), vec3(0.0), vec3(1.0)));
+        });
+
+        colourGradeT(c);
+
+        const sunVis = float(0.0).toVar();
+        If(C.flareStr.greaterThan(0.0)
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)), () => {
+          sunVis.assign(smoothstep(0.9990, 0.9999, depthAt(C.sunUV)));
+        });
+        const flare = vec3(0.0).toVar();
+        If(C.flareStr.greaterThan(0.0).and(sunVis.greaterThan(0.0))
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)), () => {
+          const streakY = exp(abs(vUV.y.sub(C.sunUV.y)).mul(-110.0));
+          const streakX = exp(abs(vUV.x.sub(C.sunUV.x)).mul(C.flareStreak).negate());
+          flare.addAssign(vec3(1.0, 0.80, 0.52).mul(streakY.mul(streakX).mul(0.75)));
+          const streakX2 = exp(abs(vUV.x.sub(C.sunUV.x)).mul(-10.0));
+          flare.addAssign(vec3(1.0, 0.92, 0.78)
+            .mul(exp(abs(vUV.y.sub(C.sunUV.y)).mul(-320.0))).mul(streakX2).mul(C.flareStreak2));
+          const toCenter = vec2(0.5).sub(C.sunUV).toVar();
+          const d0 = length(vUV.sub(C.sunUV.add(toCenter.mul(0.5))));
+          flare.addAssign(vec3(1.0, 0.88, 0.65).mul(smoothstep(0.055, 0.020, d0)).mul(0.35));
+          const d1 = length(vUV.sub(C.sunUV.add(toCenter.mul(1.3))));
+          flare.addAssign(vec3(0.70, 0.60, 1.00).mul(smoothstep(0.038, 0.012, d1)).mul(0.25));
+          const d2 = length(vUV.sub(C.sunUV.add(toCenter.mul(1.8))));
+          flare.addAssign(vec3(0.50, 1.00, 0.70).mul(smoothstep(0.028, 0.008, d2)).mul(0.18));
+          flare.mulAssign(C.flareStr.mul(sunVis));
+          If(C.lensDirt.greaterThan(0.001), () => {
+            flare.mulAssign(mix(float(1.0), dirt.mul(2.2).add(0.35),
+              clamp(C.lensDirt.mul(2.0), 0.0, 0.85)));
+          });
+          flare.assign(flare.div(flare.mul(0.6).add(1.0)));
+        });
+        c.addAssign(flare);
+
+        const q = vec2(vUV.sub(0.5)).toVar();
+        q.x.mulAssign(C.vigAspect);
+        const vr = length(q).mul(C.vigNorm);
+        const vig = smoothstep(min(C.vigSoft, 0.69), 0.70710678, vr).oneMinus();
+        c.mulAssign(mix(C.vignette, float(1.0), vig));
+
+        ditherT(c, fragXY);
+        If(C.grain.greaterThan(0.001), () => {
+          const gUV = vUV.add(vec2(fract(C.grainTime.mul(1.37)), fract(C.grainTime.mul(0.61))).mul(3.17));
+          const gn = fract(sin(dot(gUV, vec2(93.9898, 47.233))).mul(61237.312)).sub(0.5);
+          const gLuma = dot(c, vec3(0.299, 0.587, 0.114));
+          c.addAssign(vec3(gn.mul(C.grain).mul(abs(gLuma.sub(0.5)).mul(1.4).oneMinus())));
+        });
+        return vec4(c, 1.0);
+      })(), "tlx-post-comp"),
+    };
+
+    const mirrorTex = texture(ctx.blackTex);
+    const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1), flip: uniform(1) };
+    const fxaaTex = VP.tex(texture(ctx.blackTex));
+    const fxaaV = VP.view();
+    const fxaaMirTex = texture(ctx.blackTex);
+    const fxaaU = { texel: uniform(new THREE.Vector2()), mir: uniform(0) };
+    const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
+    const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
+    const FXAA_SUBPIX = 0.75;
+    const fxaa = {
+      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex,
+      mat: passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(fxaaV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const t = vec2(fxaaU.texel).toVar();
+        const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
+        const mf = vec2(screenCoordinate).toVar();
+        const mp = mf.sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
+        const mu = vec2(mix(mp.x, mp.x.oneMinus(), mirrorU.flip), mp.y).toVar();
+        const mx = vec2(mix(float(1), float(-1), mirrorU.flip).div(mirrorU.rect.z), 0).toVar();
+        const my = vec2(0, float(1).div(mirrorU.rect.w)).toVar();
+        const res = vec3(0.0).toVar();
+        If(fxaaU.mir.greaterThan(0.5).and(mf.x.greaterThanEqual(mirrorU.rect.x))
+          .and(mf.x.lessThan(mirrorU.rect.x.add(mirrorU.rect.z)))
+          .and(mf.y.greaterThanEqual(mirrorU.rect.y))
+          .and(mf.y.lessThan(mirrorU.rect.y.add(mirrorU.rect.w))), () => {
+          res.assign(mirrorTone(fxaaMirTex.sample(mu).grad(mx, my).rgb));
+        }).Else(() => {
+          const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
+          res.assign(cM);
+          const lM = fxLuma(cM).toVar();
+          const lN = fxL(vUV.add(vec2(0.0, t.y.negate()))).toVar();
+          const lS = fxL(vUV.add(vec2(0.0, t.y))).toVar();
+          const lW = fxL(vUV.add(vec2(t.x.negate(), 0.0))).toVar();
+          const lE = fxL(vUV.add(vec2(t.x, 0.0))).toVar();
+          const lMin = min(lM, min(min(lN, lS), min(lW, lE))).toVar();
+          const lMax = max(lM, max(max(lN, lS), max(lW, lE))).toVar();
+          const range = lMax.sub(lMin).toVar();
+          If(range.greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
+            const lNW = fxL(vUV.add(vec2(t.x.negate(), t.y.negate()))).toVar();
+            const lNE = fxL(vUV.add(vec2(t.x, t.y.negate()))).toVar();
+            const lSW = fxL(vUV.add(vec2(t.x.negate(), t.y))).toVar();
+            const lSE = fxL(vUV.add(t)).toVar();
+            const lNS = lN.add(lS).toVar(), lWE = lW.add(lE).toVar();
+            const edgeH = abs(lW.mul(-2.0).add(lNW).add(lSW)).add(abs(lM.mul(-2.0).add(lNS)).mul(2.0)).add(abs(lE.mul(-2.0).add(lNE).add(lSE)));
+            const edgeV = abs(lN.mul(-2.0).add(lNW).add(lNE)).add(abs(lM.mul(-2.0).add(lWE)).mul(2.0)).add(abs(lS.mul(-2.0).add(lSW).add(lSE)));
+            const horz = edgeH.greaterThanEqual(edgeV).toVar();
+            const subpix = clamp(abs(lNS.add(lWE).mul(2.0).add(lNW).add(lSW).add(lNE).add(lSE).div(12.0).sub(lM)).div(range), 0.0, 1.0).toVar();
+            subpix.assign(subpix.mul(-2.0).add(3.0).mul(subpix).mul(subpix));
+            subpix.assign(subpix.mul(subpix).mul(FXAA_SUBPIX));
+            const l1 = select(horz, lN, lW).toVar(), l2 = select(horz, lS, lE).toVar();
+            const g1 = l1.sub(lM).toVar(), g2 = l2.sub(lM).toVar();
+            const pair1 = abs(g1).greaterThanEqual(abs(g2)).toVar();
+            const gradScaled = max(abs(g1), abs(g2)).mul(0.25).toVar();
+            const lenSign = select(pair1, select(horz, t.y, t.x).negate(), select(horz, t.y, t.x)).toVar();
+            const lAvg = select(pair1, l1, l2).add(lM).mul(0.5).toVar();
+            const posB = select(horz, vec2(vUV.x, vUV.y.add(lenSign.mul(0.5))), vec2(vUV.x.add(lenSign.mul(0.5)), vUV.y)).toVar();
+            const off = select(horz, vec2(t.x, 0.0), vec2(0.0, t.y)).toVar();
+            const posN = posB.sub(off.mul(FXAA_STEP[0])).toVar();
+            const posP = posB.add(off.mul(FXAA_STEP[0])).toVar();
+            const endN = fxL(posN).sub(lAvg).toVar();
+            const endP = fxL(posP).sub(lAvg).toVar();
+            const doneN = abs(endN).greaterThanEqual(gradScaled).toVar();
+            const doneP = abs(endP).greaterThanEqual(gradScaled).toVar();
+            for (let i = 1; i < FXAA_STEP.length; i++) {
+              If(doneN.not(), () => {
+                posN.subAssign(off.mul(FXAA_STEP[i]));
+                endN.assign(fxL(posN).sub(lAvg));
+                doneN.assign(abs(endN).greaterThanEqual(gradScaled));
+              });
+              If(doneP.not(), () => {
+                posP.addAssign(off.mul(FXAA_STEP[i]));
+                endP.assign(fxL(posP).sub(lAvg));
+                doneP.assign(abs(endP).greaterThanEqual(gradScaled));
+              });
+            }
+            const dstN = select(horz, vUV.x.sub(posN.x), vUV.y.sub(posN.y)).toVar();
+            const dstP = select(horz, posP.x.sub(vUV.x), posP.y.sub(vUV.y)).toVar();
+            const mLow = lM.sub(lAvg).lessThan(0.0).toVar();
+            const goodN = endN.lessThan(0.0).notEqual(mLow);
+            const goodP = endP.lessThan(0.0).notEqual(mLow);
+            const nearN = dstN.lessThan(dstP);
+            const dst = min(dstN, dstP);
+            const good = select(nearN, goodN, goodP);
+            const pixOff = select(good, dst.negate().div(dstN.add(dstP)).add(0.5), float(0.0));
+            const o = max(pixOff, subpix).mul(lenSign).toVar();
+            const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
+            res.assign(fxaaTex.sample(TL(pos)).rgb);
+          });
+        });
+        return vec4(res, 1.0);
+      })(), "tlx-post-fxaa"),
+    };
+
+    const sgsrTex = VP.tex(texture(ctx.blackTex));
+    const sgsrU = { viewport: uniform(new THREE.Vector4(1, 1, 1, 1)) };
+    if (VP.enabled) sgsrU.plain = uniform(1);
+    const sgsrV = VP.view();
+    const sgsr = {
+      tex: sgsrTex, U: sgsrU, V: sgsrV,
+      mat: passMaterial(Fn(() => {
+        const EdgeThreshold = float(8.0 / 255.0);
+        const EdgeSharpness = float(2.0);
+        const suv = vec2(VP.uv(sgsrV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const vp = vec4(sgsrU.viewport).toVar();
+        const t = vec2(vp.x, vp.y).toVar();
+        const rgb = vec3(sgsrTex.sample(TL(vUV)).rgb).toVar();
+        const color = vec4(rgb, rgb.g).toVar();
+        const outC = vec3(rgb).toVar();
+        const imgCoord = vUV.mul(vec2(vp.z, vp.w)).add(vec2(-0.5, 0.5)).toVar();
+        const imgCoordPixel = floor(imgCoord).toVar();
+        const coord0 = imgCoordPixel.mul(t).toVar();
+        const pl = imgCoord.sub(imgCoordPixel).toVar();
+        const gatherG = (p) => {
+          const a = sgsrTex.sample(TL(p.add(vec2(0.0, t.y)))).g;
+          const b = sgsrTex.sample(TL(p.add(t))).g;
+          const c = sgsrTex.sample(TL(p.add(vec2(t.x, 0.0)))).g;
+          const d = sgsrTex.sample(TL(p)).g;
+          return vec4(a, b, c, d);
+        };
+        const left0 = gatherG(coord0).toVar();
+        const edgeVote = abs(left0.z.sub(left0.y))
+          .add(abs(color.w.sub(left0.y)))
+          .add(abs(color.w.sub(left0.z))).toVar();
+        const sharpGate = VP.enabled ? edgeVote.greaterThan(EdgeThreshold).and(sgsrU.plain.lessThan(0.5))
+          : edgeVote.greaterThan(EdgeThreshold);
+        If(sharpGate, () => {
+          const coord = vec2(coord0.x.add(t.x), coord0.y).toVar();
+          const right0 = gatherG(coord.add(vec2(t.x, 0.0))).toVar();
+          const ud0 = gatherG(coord.add(vec2(0.0, t.y.negate()))).toVar();
+          const ud1 = gatherG(coord.add(vec2(0.0, t.y))).toVar();
+          const upDown = vec4(ud0.w, ud0.z, ud1.y, ud1.x).toVar();
+          const mean = left0.y.add(left0.z).add(right0.x).add(right0.w).mul(0.25).toVar();
+          const left = left0.sub(vec4(mean)).toVar();
+          const right = right0.sub(vec4(mean)).toVar();
+          const ud = upDown.sub(vec4(mean)).toVar();
+          const colorW = color.w.sub(mean).toVar();
+          const sum = abs(left.x).add(abs(left.y)).add(abs(left.z)).add(abs(left.w))
+            .add(abs(right.x)).add(abs(right.y)).add(abs(right.z)).add(abs(right.w))
+            .add(abs(ud.x)).add(abs(ud.y)).add(abs(ud.z)).add(abs(ud.w)).toVar();
+          const std = float(2.181818).div(max(sum, float(1e-4))).toVar();
+          const fastLanczos2 = (x) => {
+            const wA0 = x.sub(4.0).toVar();
+            const wB = x.mul(wA0).sub(wA0).toVar();
+            const wA = wA0.mul(wA0);
+            return wB.mul(wA);
+          };
+          const weightY = (dx, dy, c) => {
+            const x = dx.mul(dx).add(dy.mul(dy)).mul(0.55)
+              .add(clamp(abs(c).mul(std), float(0.0), float(1.0)));
+            const w = fastLanczos2(x);
+            return vec2(w, w.mul(c));
+          };
+          let aWY = weightY(pl.x, pl.y.add(1.0), ud.x).toVar();
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y.add(1.0), ud.y)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y.sub(2.0), ud.z)));
+          aWY.assign(aWY.add(weightY(pl.x, pl.y.sub(2.0), ud.w)));
+          aWY.assign(aWY.add(weightY(pl.x.add(1.0), pl.y.sub(1.0), left.x)));
+          aWY.assign(aWY.add(weightY(pl.x, pl.y.sub(1.0), left.y)));
+          aWY.assign(aWY.add(weightY(pl.x, pl.y, left.z)));
+          aWY.assign(aWY.add(weightY(pl.x.add(1.0), pl.y, left.w)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y.sub(1.0), right.x)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(2.0), pl.y.sub(1.0), right.y)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(2.0), pl.y, right.z)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y, right.w)));
+          let finalY = aWY.y.div(max(aWY.x, float(1e-4))).toVar();
+          const maxY = max(max(left.y, left.z), max(right.x, right.w));
+          const minY = min(min(left.y, left.z), min(right.x, right.w));
+          finalY.assign(clamp(EdgeSharpness.mul(finalY), minY, maxY));
+          const deltaY = clamp(finalY.sub(colorW), float(-23.0 / 255.0), float(23.0 / 255.0));
+          outC.assign(vec3(
+            clamp(color.x.add(deltaY), float(0.0), float(1.0)),
+            clamp(color.y.add(deltaY), float(0.0), float(1.0)),
+            clamp(color.z.add(deltaY), float(0.0), float(1.0))));
+        });
+        return vec4(outC, 1.0);
+      })(), "tlx-post-sgsr"),
+    };
+
+    const blitTex = VP.tex(texture(ctx.blackTex));
+    const blitU = { mono: uniform(0), gain: uniform(1) };
+    const blitV = VP.view();
+    const blit = {
+      tex: blitTex, U: blitU, V: blitV,
+      mat: passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(blitV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const s = vec4(blitTex.sample(TL(vUV))).toVar();
+        const c = select(blitU.mono.greaterThan(0.5), vec3(s.r), s.rgb).mul(blitU.gain);
+        return vec4(clamp(c, vec3(0.0), vec3(1.0)), 1.0);
+      })(), "tlx-post-blit"),
+    };
+
+    const mirror = {
+      tex: mirrorTex, U: mirrorU,
+      mat: passMaterial(Fn(() => vec4(mirrorTone(mirrorSample(mirrorTex)), 1.0))(), "tlx-post-mirror"),
+    };
+    function mirrorSample(texN) {
+      const p = vec2(screenCoordinate).sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
+      return vec3(texN.sample(vec2(mix(p.x, p.x.oneMinus(), mirrorU.flip), p.y)).rgb).toVar();
+    }
+    function mirrorTone(c) {
+      const t = vec3(acesTonemap(c.mul(C.exposure).div(C.whitePoint))).toVar();
+      colourGradeT(t);
+      ditherT(t, vec2(screenCoordinate.xy));
+      return select(mirrorU.hdr.greaterThan(0.5), t, c);
+    }
+
+    return { bright, blurAO, blurGR, blurAOH, blurAOV, blurGRH, blurGRV,
+             down, downFixed, upAdd, upFinal, upAddFixed, upFinalFixed, spread,
+             ssao, godray, composite, fxaa, sgsr, blit, mirror };
+  }
+
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post });
+})();

@@ -1,0 +1,539 @@
+const ScreenLooks = (function () {
+  "use strict";
+
+  const store = GameStore.store;
+  const doc = typeof document !== "undefined" ? document : null;
+  const root = doc ? doc.documentElement : null;
+  const byId = (id) => (doc ? doc.getElementById(id) : null);
+
+  const CORE = {
+    w: { k: "w", label: "WIDTH", kind: "range", min: 60, max: 140, step: 5, def: 100 },
+    density: { k: "density", label: "DENSITY", kind: "cycle", reflow: true,
+      values: [["auto", "AUTO"], ["roomy", "ROOMY"], ["tight", "TIGHT"]], def: "auto" },
+    btn: { k: "btn", label: "BUTTON HEIGHT", kind: "range", min: 80, max: 150, step: 5, def: 100 },
+    corners: { k: "corners", label: "CORNERS", kind: "cycle",
+      values: [["sharp", "SHARP"], ["round", "ROUND"], ["pill", "PILL"]], def: "round" },
+    dim: { k: "dim", label: "BACKGROUND", kind: "cycle",
+      values: [["solid", "SOLID"], ["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]], def: "full" },
+    head: { k: "head", label: "HEADINGS", kind: "cycle",
+      values: [["left", "LEFT"], ["centre", "CENTRE"]], def: "left" },
+  };
+  function core(list, over) {
+    return list.map((k) => Object.freeze(Object.assign({}, CORE[k], (over && over[k]) || {})));
+  }
+  const cyc = (k, label, values, def, extra) => Object.freeze(Object.assign({ k, label, kind: "cycle", values, def }, extra || {}));
+  const rng = (k, label, min, max, step, def, extra) => Object.freeze(Object.assign({ k, label, kind: "range", min, max, step, def }, extra || {}));
+  const SHOWHIDE = [["show", "SHOW"], ["hide", "HIDE"]];
+  const ROWS3 = [["tight", "TIGHT"], ["shipped", "SHIPPED"], ["roomy", "ROOMY"]];
+  const VPOS = [["top", "TOP"], ["middle", "MIDDLE"], ["bottom", "BOTTOM"]];
+
+
+  const SCREENS = Object.freeze([
+    Object.freeze({
+      id: "pause", key: "lookPause", title: "PAUSE MENU", host: "pm-pausemenu-body",
+      help: "BUTTON HEIGHT, CARD WIDTH and BUTTON GAP size the pause card's buttons. CORNERS, BUTTON STYLE and TEXT ALIGN change how they look; VERTICAL POSITION moves the card up or down; MUSIC CARD and BUILD TAG hide those two lines.",
+      target: () => byId("pausemenu"),
+      knobs: Object.freeze([
+        rng("btn", "BUTTON HEIGHT", 80, 150, 5, 100, { phone: 115 }),
+        rng("w", "CARD WIDTH", 70, 200, 5, 100, { phone: 115 }),
+        rng("gap", "BUTTON GAP", 0, 200, 10, 100),
+        ...core(["corners"]),
+        cyc("style", "BUTTON STYLE", [["filled", "FILLED"], ["outline", "OUTLINE"]], "filled"),
+        cyc("align", "TEXT ALIGN", [["centre", "CENTRE"], ["left", "LEFT"]], "centre"),
+        cyc("vpos", "VERTICAL POSITION", VPOS, "middle"),
+        cyc("music", "MUSIC CARD", SHOWHIDE, "show"),
+        cyc("build", "BUILD TAG", SHOWHIDE, "show"),
+      ]),
+    }),
+    Object.freeze({
+      id: "datahub", key: "lookDatahub", title: "DATA HUB",
+      help: "The F1 DATA HUB card: its width, row height and tab style. ROW STRIPES shades every other row of a table.",
+      target: () => byId("datahub"),
+      knobs: Object.freeze([
+        ...core(["w", "btn", "corners", "dim", "head"]),
+        cyc("rows", "ROW HEIGHT", ROWS3, "shipped"),
+        cyc("tabs", "TAB STYLE", [["filled", "FILLED"], ["underline", "UNDERLINE"], ["pill", "PILL"]], "filled"),
+        cyc("stripes", "ROW STRIPES", [["off", "OFF"], ["on", "ON"]], "off"),
+      ]),
+    }),
+    Object.freeze({
+      id: "select", key: "lookSelect", title: "TRACK SELECTOR",
+      help: "The circuit picker: card width and density, the size of the circuit tiles, how many rows the strip uses, and whether it sits above or below the circuit.",
+      target: () => byId("select"),
+      knobs: Object.freeze([
+        ...core(["w", "density", "btn", "corners", "dim", "head"], { w: { phone: 125 } }),
+        rng("tile", "TILE SIZE", 70, 160, 5, 100, { phone: 95 }),
+        cyc("rows", "STRIP ROWS", [["1", "1"], ["2", "2"], ["3", "3"]], "1"),
+        cyc("names", "TILE NAMES", SHOWHIDE, "show"),
+        cyc("strip", "STRIP POSITION", [["top", "TOP"], ["bottom", "BOTTOM"]], "top"),
+      ]),
+    }),
+    Object.freeze({
+      id: "race", key: "lookRace", title: "RACE SETTINGS",
+      help: "The pre-race settings sheet: width, density, columns, and how the preset buttons show.",
+      target: () => byId("race-settings"),
+      knobs: Object.freeze([
+        ...core(["w", "density", "btn", "corners", "dim", "head"], { w: { phone: 120 }, btn: { phone: 90 } }),
+        cyc("cols", "COLUMNS", [["auto", "AUTO"], ["one", "ONE"], ["two", "TWO"]], "auto", { reflow: true }),
+        cyc("presets", "PRESETS", [["cards", "CARDS"], ["compact", "COMPACT"], ["hide", "HIDE"]], "cards"),
+      ]),
+    }),
+    Object.freeze({
+      id: "career", key: "lookCareer", title: "CAREER",
+      help: "DRIVER CAREER and MY TEAM: width, density, whether the two columns sit side by side or stacked, how wide the left one is, and which side the calendar and championship sit on.",
+      target: () => byId("career"),
+      knobs: Object.freeze([
+        ...core(["w", "density", "btn", "corners", "dim", "head"]),
+        cyc("layout", "COLUMNS", [["auto", "AUTO"], ["split", "SPLIT"], ["stacked", "STACKED"]], "auto", { reflow: true }),
+        rng("split", "LEFT COLUMN", 30, 70, 1, 49, { token: "pct" }),
+        cyc("side", "CALENDAR SIDE", [["swapped", "LEFT"], ["shipped", "RIGHT"]], "shipped"),
+      ]),
+    }),
+    Object.freeze({
+      id: "garage", key: "lookGarage", title: "GARAGE",
+      help: "The garage panel: which side it docks on (the car moves over to the other side), its width, how see-through it is, and the stat bars.",
+      target: () => byId("carsetup"),
+      knobs: Object.freeze([
+        ...core(["density", "btn", "corners", "head"]),
+        cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
+        rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
+        cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
+        cyc("stats", "STAT BARS", SHOWHIDE, "show", { phone: "hide" }),
+      ]),
+    }),
+    Object.freeze({
+      id: "designer", key: "lookDesigner", title: "TRACK DESIGNER",
+      help: "The in-game circuit designer. DESIGNER SIZE scales the whole screen; MAP WIDTH is how much of the width the map gets against the controls panel (side-by-side layouts); TEXT SIZE and PROFILE HEIGHT (the elevation strip) tune the rest. Tap targets never drop below their floor.",
+      target: () => byId("trackdesigner"),
+      knobs: Object.freeze([
+        rng("size", "DESIGNER SIZE", 70, 200, 5, 100, { phone: 75 }),
+        rng("split", "MAP WIDTH", 40, 70, 1, 55, { token: "pct" }),
+        cyc("text", "TEXT SIZE", [["small", "SMALL"], ["medium", "MEDIUM"], ["large", "LARGE"]], "medium"),
+        cyc("profile", "PROFILE HEIGHT", [["short", "SHORT"], ["normal", "NORMAL"], ["tall", "TALL"]], "normal"),
+      ]),
+    }),
+    Object.freeze({
+      id: "popups", key: "lookPopups", title: "POPUPS",
+      help: "Every pop-up sheet — standings, results, qualifying, the team and duel pickers, season setup, VS FRIEND, customise, HOW TO PLAY, music, the career offers / guide / history and circuit details. WIDTH scales each one's own size.",
+      target: () => byId("standings"),
+      knobs: Object.freeze([
+        ...core(["w", "density", "btn", "corners", "dim", "head"]),
+        cyc("vpos", "POSITION", VPOS, "middle"),
+        cyc("rows", "ROW HEIGHT", ROWS3, "shipped"),
+      ]),
+    }),
+  ]);
+  const PEEK_ONLY = Object.freeze({
+    title: Object.freeze({ id: "title", title: "TITLE SCREEN", fold: "pm-titlescreen",
+      peekable: () => { const o = byId("overlay"); return !!o && !o.hidden; } }),
+    hud: Object.freeze({ id: "hud", title: "RACE HUD", fold: "pm-hudlayout",
+      peekable: () => !!doc && !!doc.body && doc.body.classList.contains("in-race") }),
+  });
+  const BY_ID = {};
+  for (const s of SCREENS) BY_ID[s.id] = s;
+  const screen = (id) => BY_ID[id] || null;
+  const knobOf = (s, k) => { for (const n of s.knobs) if (n.k === k) return n; return null; };
+
+  const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
+  const shipDef = (n) => (n.phone !== undefined && phone() ? n.phone : n.def);
+  function clampKnob(n, v) {
+    if (n.kind === "cycle") {
+      for (const [id] of n.values) if (id === v) return v;
+      return shipDef(n);
+    }
+    const x = typeof v === "number" && isFinite(v) ? v : shipDef(n);
+    const snapped = n.min + Math.round((x - n.min) / n.step) * n.step;
+    return Math.max(n.min, Math.min(n.max, Math.round(snapped * 100) / 100));
+  }
+  function normalize(id, o) {
+    const s = screen(id);
+    if (!s) return {};
+    const src = o && typeof o === "object" ? o : {};
+    const out = {};
+    for (const n of s.knobs) out[n.k] = clampKnob(n, src[n.k] === undefined ? shipDef(n) : src[n.k]);
+    return out;
+  }
+  const read = (id) => normalize(id, store.get(screen(id) ? screen(id).key : "", null));
+  function save(id, look) {
+    const s = screen(id);
+    const diff = {};
+    let any = false;
+    for (const n of s.knobs) if (look[n.k] !== shipDef(n)) { diff[n.k] = look[n.k]; any = true; }
+    store.set(s.key, any ? diff : null);
+  }
+  function isShipped(id) {
+    const s = screen(id);
+    if (!s) return true;
+    const l = read(id);
+    for (const n of s.knobs) if (l[n.k] !== shipDef(n)) return false;
+    return true;
+  }
+
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const dataKey = (s, n) => "look" + cap(s.id) + cap(n.k);
+  const tokenOf = (s, n) => "--look-" + s.id + "-" + n.k;
+  function tokenValue(n, v) { return n.token === "pct" ? v + "%" : String(v / 100); }
+  function apply(only) {
+    if (!root || !root.dataset) return;
+    for (const s of SCREENS) {
+      if (only && s.id !== only) continue;
+      const l = read(s.id);
+      for (const n of s.knobs) {
+        const v = l[n.k], dk = dataKey(s, n);
+        if (v === n.def) {
+          delete root.dataset[dk];
+          if (n.kind === "range" && root.style) root.style.removeProperty(tokenOf(s, n));
+        } else {
+          root.dataset[dk] = String(v);
+          if (n.kind === "range" && root.style) root.style.setProperty(tokenOf(s, n), tokenValue(n, v));
+        }
+      }
+    }
+  }
+
+  const listeners = {};
+  function onChange(id, fn) { (listeners[id] = listeners[id] || []).push(fn); }
+  function changed(id, reflow) {
+    if (reflow && typeof SheetShape !== "undefined" && SheetShape.reclassify) {
+      try { SheetShape.reclassify(); } catch (_) {  }
+    }
+    for (const fn of listeners[id] || []) { try { fn(); } catch (e) { Log.warn("ui", "ScreenLooks listener", e); } }
+  }
+  function set(id, k, v) {
+    const s = screen(id), n = s && knobOf(s, k);
+    if (!n) return undefined;
+    const l = read(id);
+    l[k] = clampKnob(n, n.kind === "range" ? Number(v) : v);
+    save(id, l);
+    apply(id);
+    changed(id, !!n.reflow);
+    return l[k];
+  }
+  function reset(id) {
+    const s = screen(id);
+    if (!s) return;
+    store.set(s.key, null);
+    apply(id);
+    changed(id, s.knobs.some((n) => n.reflow));
+  }
+
+  const PEEK_MS = 1800;
+  const pk = { id: null, t: 0, button: false, cleanups: [], swallowClick: false, swallowGen: 0 };
+  const peekUi = {};
+  const settingsOpen = () => { const p = byId("pmsettings"); return !!p && !p.hidden; };
+  function foldOf(id) {
+    if (peekUi[id] && peekUi[id].fold) return peekUi[id].fold;
+    const po = PEEK_ONLY[id];
+    if (po) return byId(po.fold);
+    return id === "pause" ? byId("pm-pausemenu") : null;
+  }
+  function paintPeekUi() {
+    for (const id in peekUi) {
+      const u = peekUi[id];
+      const on = pk.id === id && pk.button;
+      if (u.btn) { u.btn.setAttribute("aria-pressed", on ? "true" : "false"); u.btn.textContent = on ? "BACK TO SETTINGS" : "PEEK"; }
+      if (u.status) u.status.textContent = on
+        ? "Previewing " + (screen(id) || PEEK_ONLY[id]).title + ". Tap anywhere or press Esc to return." : "";
+    }
+  }
+  function peek(id, ms) {
+    if (!root || !root.dataset) return false;
+    const s = screen(id) || PEEK_ONLY[id];
+    if (!s || !settingsOpen()) return false;
+    if (s.peekable && !s.peekable()) return false;
+    clearTimeout(pk.t);
+    if (pk.id !== id) {
+      endPeek();
+      pk.id = id;
+      root.dataset.appearancePeek = id;
+      const standIn = typeof LookAvail !== "undefined" ? LookAvail.STAND_INS[id] : null;
+      if (standIn) {
+        try { const undo = standIn(s.target ? s.target() : null); if (undo) pk.cleanups.push(undo); }
+        catch (e) { Log.warn("ui", "ScreenLooks stand-in", e); }
+      }
+    }
+    pk.button = false;
+    if (ms) pk.t = setTimeout(endPeek, ms);
+    paintPeekUi();
+    return true;
+  }
+  function endPeek() {
+    clearTimeout(pk.t);
+    if (!pk.id) return;
+    const s = screen(pk.id);
+    pk.id = null;
+    pk.button = false;
+    if (root && root.dataset) delete root.dataset.appearancePeek;
+    const t = s && s.target ? s.target() : null;
+    if (t && t.tagName === "DIALOG") void t.offsetWidth;
+    const c = pk.cleanups;
+    pk.cleanups = [];
+    for (const f of c) { try { f(); } catch (e) { Log.warn("ui", "ScreenLooks stand-in cleanup", e); } }
+    paintPeekUi();
+  }
+  function holdPeek(id) {
+    if (pk.id === id && pk.button) { endPeek(); return false; }
+    if (!peek(id, 0)) return false;
+    pk.button = true;
+    paintPeekUi();
+    return true;
+  }
+
+  function onKey(e) {
+    if (!pk.id || !e) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      endPeek();
+      return;
+    }
+    const f = foldOf(pk.id), a = doc && doc.activeElement;
+    if (!(f && a && f.contains && f.contains(a))) endPeek();
+  }
+  function onCancel(e) {
+    if (!pk.id) return;
+    if (e.preventDefault) e.preventDefault();
+    e.stopImmediatePropagation();
+    endPeek();
+  }
+  function onPointer(e) {
+    if (!pk.id) return;
+    const f = foldOf(pk.id);
+    const t = e && e.target;
+    if (f && t && f.contains && f.contains(t)) return;
+    const swallow = pk.button;
+    endPeek();
+    if (swallow) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      pk.swallowClick = true;
+      const gen = ++pk.swallowGen;
+      const up = () => {
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", up, true);
+        setTimeout(() => { if (pk.swallowGen === gen) pk.swallowClick = false; }, 0);
+      };
+      window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", up, true);
+    }
+  }
+  function onClick(e) {
+    if (!pk.swallowClick) return;
+    pk.swallowClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+  let endsWired = false;
+  function wirePeekEnds() {
+    if (endsWired || typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+    endsWired = true;
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("cancel", onCancel, true);
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("click", onClick, true);
+    if (doc) doc.addEventListener("visibilitychange", () => { if (doc.hidden) endPeek(); });
+    const p = byId("pmsettings");
+    if (p && typeof MutationObserver !== "undefined")
+      new MutationObserver(() => { if (p.hidden) endPeek(); }).observe(p, { attributes: true, attributeFilter: ["hidden"] });
+  }
+
+  function el(tag, props, kids) {
+    const e = doc.createElement(tag);
+    for (const k in props || {}) {
+      if (k === "attrs") { for (const a in props.attrs) e.setAttribute(a, props.attrs[a]); } else e[k] = props[k];
+    }
+    for (const c of kids || []) e.appendChild(c);
+    return e;
+  }
+  const rangeTxt = (n, v) => (n.token === "pct" ? v + "%" : v + "%");
+  function mountPeekButton(host, id, before) {
+    if (!host || !doc) return null;
+    const btn = el("button", { type: "button", textContent: "PEEK", attrs: { "aria-pressed": "false", "data-peek": id } });
+    btn.addEventListener("click", () => holdPeek(id));
+    const status = el("p", { className: "adv-help", attrs: { "aria-live": "polite", "data-help": "keep" } });
+    peekUi[id] = Object.assign(peekUi[id] || {}, { btn, status });
+    if (before && before.parentNode === host) { host.insertBefore(btn, before); host.insertBefore(status, before); }
+    else { host.appendChild(btn); host.appendChild(status); }
+    const s = PEEK_ONLY[id];
+    if (s && s.peekable) {
+      const paint = () => { btn.disabled = !s.peekable(); };
+      paint();
+      const o = byId("overlay");
+      if (o && typeof MutationObserver !== "undefined")
+        new MutationObserver(paint).observe(o, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    return btn;
+  }
+
+  function whyPainter(s, n, id, ctl, row, disableRow) {
+    const note = el("p", { id: id + "-why", className: "adv-help", hidden: true, attrs: { "data-help": "keep", "data-look-why": n.k } });
+    if (ctl && ctl.setAttribute) ctl.setAttribute("aria-describedby", note.id);
+    const paint = () => {
+      if (typeof LookAvail !== "undefined") LookAvail.paintWhy(s.id, n, row, note, disableRow, read(s.id));
+    };
+    return { note, paint };
+  }
+
+  function buildRows(s, body, paintSum) {
+    const painters = [], avail = [];
+    for (const n of s.knobs) {
+      const id = "pm-look-" + s.id + "-" + n.k;
+      if (n.kind === "cycle") {
+        if (typeof SettingRow === "undefined" || !SettingRow.build) continue;
+        const r = SettingRow.build(id, n.label, n.values);
+        SettingRow.wire(r.row, {
+          values: n.values,
+          read: () => read(s.id)[n.k],
+          write: (v) => { const out = set(s.id, n.k, v); paintSum(); peek(s.id, PEEK_MS); return out; },
+        });
+        body.appendChild(r.row);
+        const w = whyPainter(s, n, id, r.sel, r.row, (off) => SettingRow.disable(r.row, off));
+        body.appendChild(w.note);
+        avail.push(w.paint);
+        painters.push(() => SettingRow.paint(r.row, read(s.id)[n.k]));
+      } else {
+        const out = el("b");
+        const inp = el("input", { id, type: "range", min: String(n.min), max: String(n.max), step: String(n.step),
+          attrs: { "aria-label": s.title.toLowerCase() + " " + n.label.toLowerCase() } });
+        const paint = () => {
+          const v = read(s.id)[n.k];
+          if (doc.activeElement !== inp) inp.value = String(v);
+          out.textContent = rangeTxt(n, v);
+        };
+        inp.addEventListener("input", () => {
+          const v = set(s.id, n.k, parseFloat(inp.value));
+          out.textContent = rangeTxt(n, v);
+          paintSum();
+          peek(s.id, PEEK_MS);
+        });
+        inp.addEventListener("pointerdown", () => peek(s.id, 0));
+        inp.addEventListener("pointerup", () => peek(s.id, 1500));
+        inp.addEventListener("pointercancel", () => endPeek());
+        body.appendChild(el("label", { className: "tune-row" }, [
+          el("span", { className: "tune-label" }, [el("span", { textContent: n.label + " " }), out]), inp]));
+        const w = whyPainter(s, n, id, inp, null, (off) => { inp.disabled = off; });
+        body.appendChild(w.note);
+        avail.push(w.paint);
+        painters.push(paint);
+      }
+    }
+    const paintAvail = () => { for (const p of avail) p(); };
+    return { paintRows: () => { for (const p of painters) p(); paintAvail(); }, paintAvail };
+  }
+
+  const built = {};
+  function buildScreen(s, after) {
+    const paintSumFns = [];
+    const paintSum = () => { for (const f of paintSumFns) f(); };
+    let body, fold;
+    if (s.host) {
+      body = byId(s.host);
+      if (!body) return after;
+      fold = body.closest ? body.closest("details") : null;
+      if (typeof PauseOpts !== "undefined" && PauseOpts.wireRows) PauseOpts.wireRows();
+      body.appendChild(el("h4", { className: "pm-look-h", textContent: "BUTTONS & CARD" }));
+      body.appendChild(el("p", { className: "adv-help", textContent: s.help }));
+      paintSumFns.push(() => { if (typeof PauseOpts !== "undefined" && PauseOpts.apply) PauseOpts.apply(); });
+    } else {
+      const sum = el("summary", { className: "adv-more-btn" });
+      sum.id = "pm-look-" + s.id + "-sum";
+      body = el("div", { attrs: { role: "group", "aria-label": s.title.toLowerCase() + " appearance" } });
+      body.id = "pm-look-" + s.id + "-body";
+      fold = el("details", { className: "pm-renderer-sub" }, [sum, body]);
+      fold.id = "pm-look-" + s.id;
+      body.appendChild(el("p", { className: "adv-help", textContent: s.help + " Change anything to see the real screen behind this page." }));
+      paintSumFns.push(() => { sum.textContent = s.title + " · " + (isShipped(s.id) ? "SHIPPED" : "CUSTOM"); });
+    }
+    const { paintRows, paintAvail } = buildRows(s, body, paintSum);
+    paintSumFns.push(paintAvail);
+    const resetBtn = el("button", { type: "button", textContent: "RESET " + s.title });
+    resetBtn.addEventListener("click", () => {
+      reset(s.id);
+      if (s.id === "pause" && typeof PauseOpts !== "undefined") {
+        PauseOpts.setLayout("grid"); PauseOpts.setSide("centre"); PauseOpts.setDim("full"); PauseOpts.setConfirm("on");
+      }
+      paintRows(); paintSum(); peek(s.id, PEEK_MS);
+    });
+    const row = el("div", { className: "balanced-row" }, [resetBtn]);
+    body.appendChild(row);
+    peekUi[s.id] = { fold };
+    mountPeekButton(row, s.id);
+    if (peekUi[s.id].status) body.appendChild(peekUi[s.id].status);
+    paintSum();
+    onChange(s.id, () => { paintRows(); paintSum(); });
+    built[s.id] = { fold, paintRows, paintSum, paintAvail };
+    if (!s.host && fold) {
+      if (after && after.parentNode) after.parentNode.insertBefore(fold, after.nextSibling);
+      else { const panel = byId("pm-panel-appearance"); if (panel) panel.appendChild(fold); }
+      return fold;
+    }
+    return after;
+  }
+
+  function build() {
+    if (!doc || built._done) return;
+    const panel = byId("pm-panel-appearance");
+    if (!panel) return;
+    built._done = true;
+    Log.info("ui", "ScreenLooks.build");
+    let after = byId("pm-titlescreen");
+    for (const s of SCREENS) after = buildScreen(s, after);
+    const tsBody = byId("pm-titlescreen-body");
+    if (tsBody) {
+      peekUi.title = { fold: byId("pm-titlescreen") };
+      mountPeekButton(tsBody, "title");
+    }
+    wirePeekEnds();
+  }
+
+  let lastEnv = "";
+  function refreshAvail(force) {
+    const e = typeof LookAvail !== "undefined" ? LookAvail.liveEnv() : null;
+    const key = e ? Math.round(e.w) + "x" + Math.round(e.h) + (e.shortLandscape ? "s" : "") : "";
+    if (!force && key === lastEnv) return;
+    lastEnv = key;
+    for (const id in built) if (id !== "_done") built[id].paintAvail();
+  }
+  function refresh() { for (const id in built) if (id !== "_done") { built[id].paintRows(); built[id].paintSum(); } }
+
+  function registerSearch() {
+    if (typeof SettingsSearch === "undefined") return;
+    const descriptors = [];
+    for (const s of SCREENS) for (const n of s.knobs) descriptors.push({
+      id: "look-" + s.id + "-" + n.k,
+      label: s.title + " " + n.label.toLowerCase(),
+      page: "appearance",
+      target: "pm-look-" + s.id + "-" + n.k,
+      aliases: "layout screen appearance " + s.id,
+    });
+    SettingsSearch.register("screen-looks", descriptors);
+  }
+
+  function arm() {
+    registerSearch();
+    const panel = byId("pm-panel-appearance");
+    if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) {
+      SettingsNav.onEnter((id) => { if (id === "appearance") build(); });
+      const sheet = byId("pmsettings");
+      if (panel && !panel.hidden && !(sheet && sheet.hidden)) build();
+    } else build();
+  }
+
+  apply();
+
+  if (doc) {
+    if (doc.readyState === "complete") arm();
+    else doc.addEventListener("DOMContentLoaded", arm, { once: true });
+  }
+
+  return {
+    SCREENS, PEEK_ONLY, CORE, PEEK_MS, refreshAvail,
+    read, set, reset, apply, normalize, isShipped, onChange,
+    peek, endPeek, holdPeek, build, refresh, mountPeekButton,
+    shipDef: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? shipDef(n) : undefined; },
+    dataKey: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? dataKey(s, n) : null; },
+    token: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? tokenOf(s, n) : null; },
+    get peeking() { return pk.id; },
+  };
+})();
+Object.freeze(ScreenLooks);

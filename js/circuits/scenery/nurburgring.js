@@ -1,0 +1,429 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["nurburgring"] =
+  function (api) {
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        px, pz, pine, tree, bush, ridge, mountain, building, grandstandEx,
+        spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
+        motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
+        bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
+        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid, groundUnder, bakedModel } = api;
+
+      function scaffoldStand(s0, s1, side, gap, rows) {
+        const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
+        const BENCH = [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
+        indexSolid(s0, s1, side, gap, rows * 1.9 + 1);
+        let i = 0;
+        along(s0, s1, 6, (k, spacing) => {
+          const seg = spacing * 0.98;
+          for (let t = 0; t < rows; t++) {
+            const a = anchor(k, side, gap + t * 1.9);
+            const b = [a.r, a.u, a.t];
+            const y = 1.2 + t * 1.15;
+            addBox(out, vadd(a.c, a.u, y), [1.95, 0.18, seg], DECK, b);
+            addBox(out, vadd(a.c, a.u, y + 0.62), [0.9, 1.05, seg * 0.94],
+              BENCH[(i + t) % 3], b);
+            if ((i & 1) === 0)
+              addCyl(out, a.c, 0.09, y, TUBE, 4, b);
+          }
+          const top = anchor(k, side, gap + rows * 1.9);
+          const railY = 1.2 + rows * 1.15 + 0.9;
+          for (const off of [-seg * 0.42, seg * 0.42]) {
+            const head = vadd(vadd(top.c, top.t, off), top.u, railY);
+            let down = railY + 0.1;
+            for (let j = 0; j < 3; j++) {
+              const foot = vadd(head, top.u, -down);
+              const y = groundUnder(foot[0], foot[2]);
+              if (!Number.isFinite(y) || top.u[1] <= 0.1) break;
+              down += (foot[1] - y + 0.1) / top.u[1];
+            }
+            if (Number.isFinite(down) && down > 0)
+              addCyl(out, vadd(head, top.u, -down), 0.09, down, TUBE, 4,
+                [top.r, top.u, top.t]);
+          }
+          addBox(out, vadd(top.c, top.u, 1.2 + rows * 1.15 + 0.9),
+            [0.09, 0.09, seg], TUBE, [top.r, top.u, top.t]);
+          i++;
+        });
+      }
+
+      const FIR_D = [0.07, 0.22, 0.12], FIR = [0.09, 0.27, 0.14];
+      const LEAF = [0.17, 0.40, 0.19], LEAF_D = [0.13, 0.33, 0.16];
+      const GRAVEL = [0.62, 0.58, 0.48];
+
+      const openArena = (s) => (s >= 0.915 || s <= 0.20);
+      const veedolS = (s) => (s >= 0.766 && s <= 0.798);
+      for (const [s0, s1] of [[0.205, 0.565], [0.640, 0.766], [0.798, 0.915]]) {
+        for (const side of [-1, 1]) {
+          const front = side > 0 && s0 === 0.205 ? [[s0, 0.4409], [0.4424, s1]] : [[s0, s1]];
+          for (const [f0, f1] of front) forestEdge(f0, f1, side, 8, {
+            density: 0.88, hMin: 15, hMax: 27, pineFrac: 0.88,
+            col: FIR, col2: LEAF_D,
+          });
+          forestEdge(s0, s1, side, 25, {
+            density: 0.66, hMin: 20, hMax: 34, pineFrac: 0.94,
+            col: FIR_D, col2: FIR_D,
+          });
+        }
+      }
+      const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
+        ? [[0.215, 0.430], [0.480, 0.5500], [0.5631, s1]] : [[s0, s1]]);
+      for (const [a0, a1] of [[0.215, 0.575], [0.645, 0.766], [0.798, 0.925]]) {
+        for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
+          forestEdge(s0, s1, side, 41, {
+            density: 0.2, hMin: 24, hMax: 40, pineFrac: 0.97,
+            col: FIR_D, col2: FIR_D,
+          });
+        }
+      }
+      every(20, (k) => {
+        const s = k / n;
+        if (openArena(s) || veedolS(s)) return;
+        const h = hash(k * 31);
+        if (h < 0.12) return;
+        const side = h < 0.5 ? -1 : 1;
+        pine(k, side, 9 + h * 7, 16 + h * 14, h < 0.4 ? FIR_D : FIR);
+        if (h > 0.30) pine(k, -side, 11 + h * 8, 14 + h * 12, FIR);
+      });
+      every(32, (k) => {
+        const s = k / n;
+        if (openArena(s) || veedolS(s)) return;
+        const h = hash(k * 53 + 9);
+        if (h < 0.25) return;
+        tree(k, h < 0.5 ? -1 : 1, 15 + h * 10, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
+        if (h > 0.66) pine(k, h > 0.84 ? -1 : 1, 30 + h * 16, 20 + h * 12, FIR_D);
+      });
+      every(52, (k) => {
+        const s = k / n;
+        if (openArena(s) || veedolS(s)) return;
+        const h = hash(k * 67 + 17);
+        if (h < 0.34) return;
+        pine(k, h < 0.5 ? -1 : 1, 46 + h * 28, 23 + h * 15, FIR_D);
+      });
+      every(28, (k) => {
+        const s = k / n;
+        if (openArena(s) || veedolS(s)) return;
+        const h = hash(k * 97 + 23);
+        if (h < 0.58) return;
+        bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.14, 0.31, 0.15]);
+      });
+
+      grandstandEx(0.115, 1, 15, 96, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      bowlSeatWall(0.145, 0.205, 1, 15, {
+        h: 6.4, thick: 4.2, shell: [0.50, 0.51, 0.54], step: 8,
+      });
+      bowlSeatWall(0.100, 0.185, -1, 13, {
+        h: 5.2, thick: 3.6, shell: [0.56, 0.56, 0.55], step: 8,
+      });
+      spectatorHill(0.205, 0.245, -1, 14, { rows: 4, rise: 1.2, depth: 1.9, density: 0.52, step: 8 });
+      {
+        const winLit = [0.96, 0.88, 0.56];
+        const a = anchor(K(0.115), 1, 23);
+        addBox(out, vadd(a.c, a.u, 10.2), [0.22, 1.4, 88], winLit, [a.r, a.u, a.t]);
+      }
+      groundPatch(K(0.135), 1, 6, [18, 0.18, 26], GRAVEL,
+        { id: "nurburgring-arena-gravel", samples: 6 });
+      tyreWall(0.120, 0.155, 1, 5, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.140), -1, 10);
+      groundPatch(K(0.028), 1, 5, [20, 0.18, 28], GRAVEL,
+        { id: "nurburgring-haug-haken-gravel", samples: 6 });
+      tyreWall(0.018, 0.040, 1, 4.5, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.030), -1, 9);
+
+      {
+        const STONE = [0.60, 0.60, 0.59], STONE_D = [0.47, 0.47, 0.47];
+        const SLATE = [0.30, 0.31, 0.35], GLASS = [0.30, 0.40, 0.48];
+        const RECESS = [0.20, 0.21, 0.23];
+        for (let i = 0; i < 6; i++) {
+          const s = 0.950 + i * 0.011;
+          const a = anchor(K(s), 1, 20);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`nurburgring-pit-bay-${i + 1}`, {
+            center: vadd(a.c, a.u, 9), size: [22, 18, 30], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [15, 0.9, 28], STONE_D, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 3.2), [10, 5.6, 28], RECESS, b);
+            addBox(stage, vadd(a.c, a.u, 8.4), [14, 4.8, 28], STONE, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -7.1), a.u, 8.6), [0.4, 2.8, 26], GLASS, b);
+            stage._mat = MAT.CONCRETE;
+            for (let d = 0; d < 5; d++) {
+              const p = vadd(vadd(a.c, a.r, -5.4), a.t, (d - 2) * 6.2);
+              addBox(stage, vadd(p, a.u, 3.0), [1.5, 6.0, 1.6], STONE, b);
+            }
+            addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 11.1), [20, 1.0, 29], STONE_D, b);
+            stage._mat = MAT.METAL;
+            for (const off of [-4.2, 4.2])
+              addPrism(stage, vadd(vadd(a.c, a.r, off), a.u, 11.6), [9, 4.2, 28], SLATE, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+        const a = anchor(K(0.988), 1, 38);
+        const b = [a.r, a.u, a.t];
+        modelGroup("nurburgring-race-control", {
+          center: vadd(a.c, a.u, 19), size: [10, 44, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addFrustum(stage, a.c, 3.4, 2.6, 24, [0.62, 0.62, 0.62], 8, b);
+          stage._mat = MAT.GLASS;
+          addFrustum(stage, vadd(a.c, a.u, 24), 4.4, 4.4, 4.2, [0.18, 0.26, 0.32], 8, b);
+          addFrustum(stage, vadd(a.c, a.u, 24.6), 4.0, 4.0, 3.0, [0.90, 0.86, 0.62], 8, b);
+          stage._mat = MAT.METAL;
+          addCone(stage, vadd(a.c, a.u, 28.2), 5.0, 3.4, [0.30, 0.31, 0.35], 8, b);
+          addCyl(stage, vadd(a.c, a.u, 31.4), 0.14, 12, [0.32, 0.33, 0.36], 4, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
+      gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
+      grandstandEx(0.005, -1, 11, 150, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      grandstandEx(0.960, -1, 11, 96, null, null, { livery: "concrete", endWalls: true });
+      {
+        const a = anchor(K(0.998), -1, 12);
+        const b = [a.r, a.u, a.t];
+        const discB = [a.u, a.r, a.t];
+        modelGroup("nurburgring-mercedes-tribune-header", {
+          center: vadd(a.c, a.u, 15), size: [10, 34, 64], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 17.6), [1.1, 3.2, 60], [0.90, 0.90, 0.88], b);
+          addBox(stage, vadd(vadd(a.c, a.r, 0.3), a.u, 17.6), [0.9, 1.9, 52],
+            [0.16, 0.18, 0.22], b);
+          addCyl(stage, vadd(vadd(a.c, a.r, 0.5), a.u, 19.6), 3.0, 0.35,
+            [0.20, 0.21, 0.24], 8, discB);
+          addCyl(stage, vadd(vadd(a.c, a.r, 0.8), a.u, 19.6), 2.5, 0.3,
+            [0.82, 0.83, 0.85], 8, discB);
+          stage._mat = 0;
+        });
+      }
+
+      {
+        const glass = [0.46, 0.60, 0.72], frame = [0.36, 0.38, 0.42];
+        for (let i = 0; i < 2; i++) {
+          const a = anchor(K(0.966 + i * 0.024), 1, 62);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`nurburgring-boulevard-${i + 1}`, {
+            center: vadd(a.c, a.u, 12), size: [34, 26, 74], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, 4), [24, 8, 70], [0.72, 0.73, 0.76], b);
+            stage._mat = MAT.GLASS;
+            for (const [off, y, w] of [[-8, 11.6, 10], [0, 13.2, 10], [8, 11.6, 10]])
+              addBox(stage, vadd(vadd(a.c, a.r, off), a.u, y), [w, 0.7, 70], glass, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -12.2), a.u, 6.5), [0.4, 9, 68], glass, b);
+            stage._mat = MAT.METAL;
+            for (let d = 0; d < 5; d++) {
+              const p = vadd(vadd(a.c, a.r, -13.5), a.t, (d - 2) * 15);
+              addCyl(stage, p, 0.3, 17, frame, 6, b);
+              addBox(stage, vadd(p, a.u, 15.5), [7.5, 0.3, 0.4], frame, b);
+            }
+            stage._mat = 0;
+          });
+        }
+      }
+      for (let i = 0; i < 4; i++) {
+        building(K(0.930 + i * 0.014), 1, 38, 23, 15, 18,
+          { kind: "tiered", wall: [0.76, 0.77, 0.79], window: [0.30, 0.34, 0.42], floor: 4.0 });
+      }
+      every(46, (k) => {
+        const s = k / n, h = hash(k * 71 + 31);
+        if (!(s > 0.90 || s < 0.04) || h < 0.52) return;
+        motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.62 + h * 0.28, 0.62, 0.64] });
+      });
+      broadcastCompound(K(0.920), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
+      for (const s of [0.975, 0.005, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.86, 0.30]);
+      sponsorHoarding(0.965, 0.045, -1, 6.5, {
+        h: 1.25, step: 10,
+        palette: [[0.72, 0.20, 0.18], [0.86, 0.86, 0.84], [0.16, 0.30, 0.54], [0.80, 0.70, 0.16]],
+      });
+      sponsorHoarding(0.105, 0.200, 1, 6.5, { h: 1.2, step: 10 });
+      cameraTower(K(0.108), -1, 9, { h: 16 });
+      cameraTower(K(0.190), 1, 9, { h: 14 });
+      cameraTower(K(0.605), -1, 10, { h: 15 });
+
+      groundPatch(K(0.605), -1, 6, [30, 0.18, 40], GRAVEL,
+        { id: "nurburgring-t11-gravel", samples: 7 });
+      tyreWall(0.588, 0.624, -1, 5, [0.20, 0.40, 0.85]);
+      scaffoldStand(0.590, 0.628, 1, 15, 7);
+      marshalPost(K(0.598), 1, 9);
+
+      groundPatch(K(0.785), 1, 5, [24, 0.18, 32], GRAVEL,
+        { id: "nurburgring-veedol-gravel", samples: 6 });
+      indexSolid(0.766, 0.798, -1, 16, 6 * 1.9 + 1);
+      indexSolid(0.766, 0.798, 1, 12, 6 * 1.9 + 1);
+      marshalPost(K(0.790), -1, 9);
+
+      groundPatch(K(0.832), -1, 5, [22, 0.18, 30], GRAVEL,
+        { id: "nurburgring-coca-cola-entry-gravel", samples: 6 });
+      tyreWall(0.818, 0.846, -1, 4, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.826), 1, 9);
+      groundPatch(K(0.855), 1, 5, [18, 0.18, 24], GRAVEL,
+        { id: "nurburgring-coca-cola-gravel", samples: 5 });
+      tyreWall(0.848, 0.868, 1, 4.2, [0.86, 0.20, 0.18]);
+      {
+        const a = anchor(K(0.860), -1, 14);
+        const b = [a.r, a.u, a.t];
+        modelGroup("nurburgring-coca-cola-kurve", {
+          center: vadd(a.c, a.u, 6), size: [8, 14, 28], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 1.2), [3.2, 2.4, 22], [0.50, 0.51, 0.54], b);
+          addBox(stage, vadd(a.c, a.u, 3.6), [2.6, 2.0, 20], [0.56, 0.56, 0.58], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -1.4), a.u, 5.8), [0.5, 1.6, 18],
+            [0.78, 0.12, 0.14], b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+
+      for (const [s0, s1] of [[0.20, 0.29], [0.32, 0.50], [0.54, 0.575], [0.64, 0.77]]) {
+        guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
+      }
+      for (const [s0, s1] of [[0.80, 0.816], [0.860, 0.90]]) guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
+      for (const [s0, s1] of [[0.80, 0.844], [0.872, 0.90]]) guardrail(s0, s1, 1, 7, [0.80, 0.81, 0.83]);
+      guardrail(0.955, 0.045, 1, 4.0, [0.85, 0.85, 0.88]);
+      fence(0.96, 0.04, -1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.10, 0.19, 1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.585, 0.635, 1, 9, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.25, 0.37, 0.46, 0.57, 0.72, 0.82]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
+      }
+
+      const { cx, cz, radius: rad } = lapBounds();
+      for (const rg of [
+        { extra: 240, wMin: 150, hMin: 44, hVar: 40, wVar: 70, count: 30, phase: 0.0,
+          opts: { seg: 7, rough: 0.30, forest: [0.08, 0.24, 0.12], rock: [0.10, 0.27, 0.14], snowline: 2 } },
+        { extra: 300, wMin: 300, hMin: 74, hVar: 56, wVar: 130, count: 24, phase: 0.5,
+          opts: { seg: 7, rough: 0.32, forest: [0.10, 0.28, 0.14], rock: [0.13, 0.30, 0.16], snowline: 2 } },
+        { extra: 440, wMin: 360, hMin: 104, hVar: 84, wVar: 140, count: 20, phase: 0.25,
+          opts: { seg: 7, rough: 0.34, forest: [0.14, 0.32, 0.17], rock: [0.18, 0.34, 0.20], snowline: 2 } },
+      ]) {
+        const ring = rad + rg.extra;
+        for (let i = 0; i < rg.count; i++) {
+          const a = (i + rg.phase) / rg.count * 6.2832, h = hash(i * 7 + rg.extra);
+          const rr = ring - rg.wMin * 0.18 + hash(i * 5 + rg.extra) * rg.wMin * 0.30;
+          mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
+            rg.wMin + h * rg.wVar, rg.hMin + h * rg.hVar,
+            Object.assign({ seed: i * 13 + rg.extra }, rg.opts));
+        }
+      }
+      every(58, (k) => {
+        const s = k / n;
+        if (openArena(s)) return;
+        for (const side of [-1, 1]) {
+          const h = hash(k * 13 + side);
+          const tx = px[k], tz = pz[k];
+          if (onTrack(tx, tz, 20)) continue;
+          ridge(tx, tz, pyMin, 0, 100, 26, 16 + h * 8, [0.11, 0.28, 0.14]);
+        }
+      });
+
+      {
+        const clearance = 7.2, STEEL = [0.58, 0.60, 0.64];
+        api.overheadSpan({
+          id: "nurburgring-dunlop-bridge",
+          frac: 0.215,
+          clearance,
+          thickness: 1.4,
+          depth: 4,
+          span: 26,
+          supports: false,
+          color: [0.52, 0.54, 0.58],
+          required: true,
+        });
+        for (const side of [-1, 1]) {
+          const a = anchor(K(0.215), side, 4.2);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`nurburgring-dunlop-pier-${side < 0 ? "left" : "right"}`, {
+            center: vadd(a.c, a.u, clearance / 2 + 4),
+            size: [3.0, clearance + 10, 4.0],
+            basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addCyl(stage, a.c, 1.0, clearance, [0.54, 0.56, 0.60], 8, b);
+            stage._mat = MAT.METAL;
+            for (const t of [-1.4, 1.4]) {
+              const foot = vadd(vadd(a.c, a.t, t), a.u, clearance);
+              addCyl(stage, foot, 0.28, 5.2, STEEL, 5,
+                [b[0], [b[1][0] - side * b[0][0] * 0.42,
+                        b[1][1] - side * b[0][1] * 0.42,
+                        b[1][2] - side * b[0][2] * 0.42], b[2]]);
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+        const a = anchor(K(0.215), 1, 4.2);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(vadd(a.c, a.r, -18), a.u, clearance + 5.6),
+          [30, 3.2, 1.1], [0.94, 0.86, 0.10], b);
+        addBox(out, vadd(vadd(a.c, a.r, -18), a.u, clearance + 5.6),
+          [26, 1.6, 1.3], [0.10, 0.12, 0.20], b);
+      }
+
+      spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
+      spectatorHill(0.70, 0.762, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
+
+      {
+        const BURG_BEARING = 10 * Math.PI / 180, BURG_DIST = rad + 210;
+        const bx = cx - Math.sin(BURG_BEARING) * BURG_DIST;
+        const bz = cz + Math.cos(BURG_BEARING) * BURG_DIST;
+        mountain(bx, bz, pyMin, 170, 148,
+          { seg: 7, rough: 0.16, forest: [0.08, 0.24, 0.13], rock: [0.12, 0.28, 0.15], snowline: 2, seed: 991 });
+        const STONE = [0.60, 0.60, 0.59], STONE_D = [0.47, 0.47, 0.47];
+        const SLATE = [0.30, 0.31, 0.35];
+        const base = pyMin + 132;
+        const R = 26;
+        modelGroup("nurburgring-burg-nurburg", {
+          center: [bx, base + 18, bz], size: [70, 56, 70], basis: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          for (let i = 0; i < 8; i++) {
+            const t = i / 8 * 6.2832;
+            const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
+            const th = 10 + hash(i * 37 + 3) * 5;
+            addCyl(stage, [tx, base, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
+            addCyl(stage, [tx, base + th, tz], 4.8, 1.2, STONE_D, 6);
+            const t2 = (i + 1) / 8 * 6.2832;
+            const mx = bx + Math.cos((t + t2) / 2) * R * 0.96;
+            const mz = bz + Math.sin((t + t2) / 2) * R * 0.96;
+            addBox(stage, [mx, base + 4.6, mz], [R * 0.72, 9.2, 2.4], STONE_D,
+              [[Math.cos((t + t2) / 2 + 1.5708), 0, Math.sin((t + t2) / 2 + 1.5708)],
+               [0, 1, 0],
+               [Math.cos((t + t2) / 2), 0, Math.sin((t + t2) / 2)]]);
+          }
+          addBox(stage, [bx, base + 15, bz], [14, 30, 14], STONE);
+          addBox(stage, [bx, base + 30.4, bz], [15.4, 1.5, 15.4], STONE_D);
+          for (let i = 0; i < 12; i++) {
+            const t = i / 12 * 6.2832;
+            if (i % 3 === 2) continue;
+            addBox(stage, [bx + Math.cos(t) * 7.2, base + 32.4, bz + Math.sin(t) * 7.2],
+              [2.0, 2.8, 2.0], STONE);
+          }
+          addCyl(stage, [bx + 8.5, base, bz - 8.5], 3.2, 38, STONE, 6);
+          addCone(stage, [bx + 8.5, base + 38, bz - 8.5], 4.0, 9.0, SLATE, 6);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      for (const [id, s, side] of [
+        ["nurburgring-camp-north", 0.44, -1],
+        ["nurburgring-camp-south", 0.74, 1],
+      ]) {
+        const a = anchor(K(s), side, 54);
+        const b = [a.r, a.u, a.t];
+        modelGroup(id, { center: vadd(a.c, a.u, 3.6), size: [22, 8, 40], basis: b }, (stage) => {
+          const cols = [[0.82, 0.18, 0.15], [0.90, 0.88, 0.82], [0.22, 0.44, 0.26]];
+          for (let i = 0; i < 6; i++) {
+            const row = i % 2, off = (Math.floor(i / 2) - 1) * 12;
+            const p = vadd(vadd(a.c, a.r, (row ? 1 : -1) * 5), a.t, off);
+            addPrism(stage, vadd(p, a.u, -0.1), [5.2, 2.8, 6.2], cols[i % cols.length], b);
+          }
+          const flag = vadd(vadd(a.c, a.r, -7.5), a.t, 15);
+          addCyl(stage, flag, 0.10, 8, [0.30, 0.30, 0.31], 6, b);
+          addBox(stage, vadd(vadd(flag, a.u, 6.8), a.t, 1.4), [0.16, 1.8, 4.0], [0.85, 0.16, 0.14], b);
+        });
+      }
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.1075, 0.264, 0.5665, 0.786]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
+    };

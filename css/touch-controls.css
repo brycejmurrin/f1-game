@@ -1,0 +1,505 @@
+@layer overlays {
+:root {
+  --btn: 76px; 
+  --btn-gap: 12px;
+  --btn-pitch: calc(var(--btn) + var(--btn-gap)); 
+  --steer: 84px; 
+  --btn-a: 0.68;
+}
+.dock-grp { opacity: var(--hud-btn-opacity, 1); }
+.touchbtn {
+  position: fixed;
+  z-index: 12;
+  pointer-events: auto;
+  font-weight: 800;
+  --text: var(--hud-ink-light); --dim: #9a9aa8;
+  color: var(--text);
+  background: rgba(20, 20, 30, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: var(--btn); height: var(--btn);
+  font-size: max(var(--fs-micro), var(--touch-label-floor));
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; line-height: 1;
+  padding: 0;
+  touch-action: none;
+}
+:where(#btn-throttle, #btn-brake, #btn-boost, #btn-ot, #btn-aero) { opacity: var(--btn-a); }
+
+.touchbtn.pedal { border-radius: var(--touch-pedal-radius); }
+
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); --idle: rgba(0, 170, 70, 0.85); background: var(--idle); }
+#btn-throttle[data-slid="on"], #btn-throttle:active { background: var(--gas-lit); opacity: 1; }
+#btn-throttle.on { background: var(--gas-lit); opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent); }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); --idle: rgba(180, 35, 35, 0.85); background: var(--idle); }
+#btn-brake[data-slid="on"], #btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
+#btn-throttle[data-slid="off"]:active, #btn-brake[data-slid="off"]:active { background: var(--idle); opacity: var(--btn-a); box-shadow: none; }
+
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab));
+             --e: 1;
+             background: color-mix(in oklab, rgba(96, 232, 130, 0.9) calc(var(--e) * 100%),
+                                             rgba(176, 190, 182, 0.5));
+             border-color: color-mix(in oklab, rgba(190, 250, 208, 0.85) calc(var(--e) * 100%),
+                                               rgba(200, 210, 205, 0.4));
+             color: #04240f; }
+#btn-boost.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
+                box-shadow: 0 0 20px rgba(40, 200, 100, 0.85); opacity: 1; }
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
+             background: rgba(251, 241, 186, 0.82); border-color: rgba(255, 251, 220, 0.75); color: #3a3208; }
+#btn-ot.armed { background: rgba(255, 210, 26, 1); color: #2b2400; border-color: #ffe98a;
+                box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite;
+                opacity: 1; }
+#btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
+             box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); opacity: 1; }
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: max(var(--fs-micro), var(--touch-label-floor));
+             background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
+#btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
+                  box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); opacity: 1; }
+#btn-aero.on { background: rgba(8, 62, 120, 0.96); color: #d6efff; border-color: #3fb6ff;
+               box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); opacity: 1; }
+.touchbtn.dead { opacity: 0.3; pointer-events: none; }
+
+.touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+@media (prefers-reduced-transparency: reduce) {
+  .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+}
+
+#drag-anchor {
+  position: fixed; z-index: 6; top: 0; left: 0;
+  width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  border-radius: 50%; pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+  opacity: 0; transition: opacity 0.45s ease-out;
+}
+#drag-anchor.on { opacity: 0.9; transition: opacity 0.08s ease-out; }
+@media (prefers-reduced-motion: reduce) { #drag-anchor { transition: none; } }
+
+#ios-install {
+  position: fixed; z-index: 40; left: var(--safe-l); right: var(--safe-r);
+  bottom: var(--safe-b); margin: 0 auto; max-width: 30rem;
+  display: flex; align-items: center; gap: var(--gap);
+  padding: var(--gap); border-radius: 10px;
+  background: rgba(12, 12, 18, 0.92); color: var(--text);
+  font-size: var(--fs-micro); line-height: 1.35;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #ios-install {
+  right: auto;
+  bottom: calc(var(--safe-b) + 4.5rem);
+  width: min(22rem, calc(50% - var(--safe-l) - var(--gap)));
+  max-width: none;
+  margin: 0;
+}
+#ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
+#ios-install-x { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
+#ios-install[hidden] { display: none; }
+body.in-race #ios-install { display: none; }
+
+body.mirror-controls #hud-dock { flex-direction: row-reverse; }
+body.mirror-controls #dock-left { justify-content: flex-end; }
+body.mirror-controls #dock-right { justify-content: flex-start; }
+
+body[data-dock-edit] .dock {
+  outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
+  outline-offset: 4px;
+  cursor: grab;
+}
+body[data-dock-edit] .dock:active { cursor: grabbing; }
+
+.shiftbtn { flex-direction: column; font-size: max(15px, var(--touch-label-floor)); line-height: 1.05; }
+.shiftbtn small { font-size: max(var(--fs-micro), var(--touch-label-floor)); letter-spacing: var(--ls-4); color: var(--dim); }
+#shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
+#shift-up   { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
+
+.steerbtn { font-size: 22px; --idle: rgba(20, 20, 30, 0.55); background: var(--idle); width: var(--steer); height: var(--steer); }
+.steerbtn[data-slid="on"], .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+.steerbtn[data-slid="off"]:active { background: var(--idle); box-shadow: none; }
+#btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
+#btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(16px + var(--sab)); }
+
+body.manual #btn-boost { bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
+body.manual #btn-ot    { bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
+body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
+
+body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
+body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
+
+body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
+
+@media (orientation: portrait) {
+  body.steer-buttons .hud-bottom { bottom: calc(max(112px, (28px + var(--steer)) / var(--hud-z)) + var(--sab) / var(--hud-z)); }
+}
+@media (orientation: portrait) {
+  .touchbtn, .hud-bottom {
+    --btn-k: calc(var(--hud-btn-scale) / var(--hud-btn-mult, 1));
+    --btn-room: min(calc((100vw - var(--sal) - var(--sar) - 54px) / 244), calc((100vh - var(--sat) - var(--sab) - 264px) / 380));
+    --btn: clamp(44px, calc(76px * var(--btn-k)), max(76px, calc(var(--btn-room) * 76)));
+    --steer: clamp(calc(44px * 84 / 76), calc(84px * var(--btn-k)), max(84px, calc(var(--btn-room) * 84)));
+    --btn-pitch: calc(var(--btn) + var(--btn-gap));
+  }
+}
+
+@media (orientation: landscape) {
+  #hud-gearbox { gap: calc(var(--gap) / 6); padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); }
+  #hud-gear { font-size: 48px; min-width: 44px; }
+  #hud-tach { width: 96px; height: 13px; }
+  #hud-speed { font-size: calc(28px * var(--hud-text-boost, 1)); }
+  #hud-energy { width: 132px; height: 15px; }
+  .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 6); }
+  body:not(.desktop) #hud-gearbox:not([data-hl-user]) { background: none; border: 0; border-radius: 0; padding: 0 calc(var(--gap) * 2 / 3) 0 0;
+    box-shadow: inset -1px 0 0 var(--card-line); }
+  body:not(.desktop) #hud-speed:not([data-hl-user]) { background: none; box-shadow: none; }
+  body:not(.desktop) #hud-gear { font-size: 34px; }
+  body:not(.desktop) #hud-tach { width: 54px; }
+  body:not(.desktop) #hud-speed { font-size: calc(40px * var(--hud-text-boost, 1)); font-style: normal; }
+  body:not(.desktop) .hud-box { --hud-box-pad: 13px; padding: 5px var(--hud-box-pad); padding-left: calc(var(--hud-box-pad) + var(--hud-box-stripe)); }
+  body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
+  body:not(.desktop) .hud-value { font-size: calc(22px * var(--hud-text-boost, 1)); }
+  #hud-dock {
+    position: absolute;
+    left: calc(12px + var(--sal));
+    right: calc(12px + var(--sar));
+    bottom: calc(10px + var(--sab));
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: var(--gap);
+    pointer-events: none; 
+  }
+  body:not(.desktop) .dock,
+  body.desktop .dock:has(.touchbtn:not([hidden])) {
+    display: flex; gap: calc(var(--gap) * 2 / 3);
+    flex-wrap: nowrap; flex-shrink: 0;
+    align-items: flex-end;
+    pointer-events: auto;
+  }
+  body:not(.desktop) #dock-right,
+  body.desktop #dock-right:has(.touchbtn:not([hidden])) { justify-content: flex-end; }
+  body:not(.desktop) .dock-grp,
+  body.desktop .dock .dock-grp { display: flex; gap: calc(var(--gap) * 2 / 3); pointer-events: auto; }
+  body:not(.desktop) .dock-grp.col,
+  body.desktop .dock .dock-grp.col { flex-direction: column; align-items: center; }
+  body:not(.desktop) .dock-grp.row,
+  body.desktop .dock .dock-grp.row { flex-direction: row; align-items: flex-end; }
+  body:not(.desktop) #grp-steer,
+  body.desktop .dock #grp-steer {
+    background: color-mix(in oklab, var(--look-hud-bg) 92%, transparent);
+    border-radius: 999px;
+  }
+  body:not(.desktop) .dock-grp[hidden],
+  body.desktop .dock .dock-grp[hidden] { display: none; }
+  body:not(.desktop) .dock .touchbtn,
+  body.desktop .dock .touchbtn {
+    position: static; inset: auto; margin: 0;
+  }
+  body:not(.desktop) .dock,
+  body.desktop .dock:has(.touchbtn:not([hidden])) {
+    --tap: max(54px, calc(24px / max(1, var(--hud-btn-scale))));
+    --hold: max(72px, calc(24px / max(1, var(--hud-btn-scale))));
+    --touch-label-z: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    zoom: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+  }
+  body:not(.desktop) #dock-left,
+  body.desktop #dock-left:has(.touchbtn:not([hidden])) {
+    --touch-label-z: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    zoom: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+  }
+  :root { --hud-btn-floor: 0.82; }
+  body:not(.desktop) .dock .touchbtn,
+  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: max(min(var(--fs-micro), calc(var(--tap) * 0.28)), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  body:not(.desktop) .dock .pedal,
+  body:not(.desktop) .dock .steerbtn,
+  body:not(.desktop) .dock .shiftbtn,
+  body.desktop .dock .pedal,
+  body.desktop .dock .steerbtn,
+  body.desktop .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: max(var(--fs-micro), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  body:not(.desktop) .dock .shiftbtn,
+  body.desktop .dock .shiftbtn { font-size: max(15px, calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  body:not(.desktop) .dock .steerbtn,
+  body.desktop .dock .steerbtn { font-size: max(calc(var(--hold) * 0.3), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  body:not(.desktop) #grp-taps,
+  body.desktop .dock #grp-taps { padding-bottom: 0; }
+  body:not(.desktop) #grp-pedals,
+  body:not(.desktop) #grp-shifts,
+  body:not(.desktop) #grp-steer,
+  body.desktop .dock #grp-pedals,
+  body.desktop .dock #grp-shifts,
+  body.desktop .dock #grp-steer { padding-bottom: calc(var(--gap) * 7 / 6); }
+  body.steer-buttons:not(.desktop) #grp-taps .touchbtn,
+  body.desktop.steer-buttons .dock #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
+  body.steer-buttons:not(.desktop) #grp-taps,
+  body.desktop.steer-buttons .dock #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
+  body.steer-buttons:not(.desktop) #dock-right,
+  body.manual:not(.desktop) #dock-right,
+  body.desktop #dock-right:has(#grp-shifts .touchbtn:not([hidden])) {
+    column-gap: max(var(--r-lg), var(--gap));
+    row-gap: calc(var(--gap) * 2 / 3);
+  }
+  @media (max-width: 700px), (max-height: 380px) {
+    :root { --hud-btn-floor: 0.92; } 
+    body:not(.desktop) .dock,
+    body.desktop .dock:has(.touchbtn:not([hidden])) {
+      --tap: max(48px, calc(24px / max(1, var(--hud-btn-scale))));
+      --hold: max(64px, calc(24px / max(1, var(--hud-btn-scale))));
+    }
+    body:not(.desktop) .dock .touchbtn,
+    body.desktop .dock .touchbtn { font-size: max(min(var(--fs-micro), calc(var(--tap) * 0.28)), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+    body:not(.desktop) .dock .pedal,
+    body:not(.desktop) .dock .steerbtn,
+    body:not(.desktop) .dock .shiftbtn,
+    body.desktop .dock .pedal,
+    body.desktop .dock .steerbtn,
+    body.desktop .dock .shiftbtn { font-size: max(var(--fs-micro), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+    body:not(.desktop) .dock .steerbtn,
+    body.desktop .dock .steerbtn { font-size: max(calc(var(--hold) * 0.3), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  }
+
+  .hud-bottom {
+    position: static; transform: none; left: auto; right: auto; bottom: auto;
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    grid-template-areas:
+      "gear speed  ot"
+      "gear energy aero";
+    align-items: start; justify-items: center; justify-content: center;
+    gap: var(--gap) calc(var(--gap) * 2 / 3);
+    min-width: 0; 
+    pointer-events: none;
+  }
+  #hud-ot { grid-area: ot; margin: 0; justify-self: stretch; text-align: center; }
+  #hud-aero { grid-area: aero; margin: 0; justify-self: stretch; text-align: center; }
+  #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; min-width: max-content; }
+  #hud-speed { grid-area: speed; line-height: 1; min-height: 1em; align-self: end; justify-self: start; }
+  #hud-energy { grid-area: energy; margin: 0; align-self: start; min-width: max-content; }
+  body:not(.desktop):not([data-hl-set="helmet"]) #hud-energy:not([data-hl-user]) { translate: none; }
+  #hud-ot,
+  #hud-aero {
+    white-space: nowrap; padding: 5px 10px;
+  }
+
+  @media (min-width: 1100px) {
+    body.desktop .hud-bottom {
+      grid-template-columns: max-content max-content minmax(80px, 190px) max-content max-content;
+      grid-template-areas: "gear speed energy ot aero";
+      gap: 0 20px;
+      align-items: center; 
+    }
+    body.desktop #hud-speed { align-self: center; }
+    body.desktop #hud-gearbox {
+      flex-direction: row; align-items: center; gap: var(--gap);
+      padding: 7px 16px; align-self: center;
+    }
+    body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
+    body.desktop #hud-tach { width: 172px; height: 18px; }
+    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; min-width: 0; }
+    body.desktop #hud-speed { font-size: calc(42px * var(--hud-text-boost, 1)); }
+    body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 3); }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: calc(15px * var(--hud-text-boost, 1)); padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); }
+  }
+  #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
+  #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(12px + var(--sab)); }
+  #btn-ot   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
+  #btn-boost { bottom: calc(12px + var(--sab)); }
+  #btn-aero { bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
+  body.steer-buttons .hud-bottom {
+    grid-template-columns: max-content max-content;
+    grid-template-areas:
+      "gear speed"
+      "gear energy"
+      "ot   aero";
+  }
+  @media (max-width: 740px) {
+    #hud-gear { font-size: 40px; }
+    #hud-tach { width: 84px; }
+    body:not(.desktop) #hud-energy { width: 108px; }
+    body:not(.desktop) #hud-speed { font-size: calc(30px * var(--hud-text-boost, 1)); }
+    body:not(.desktop) #hud-gear { font-size: 28px; }
+    body:not(.desktop) #hud-ot,
+    body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3); }
+    body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
+    body:not(.desktop) .hud-value { font-size: calc(20px * var(--hud-text-boost, 1)); }
+  }
+  body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
+}
+
+@media (orientation: portrait) and (min-width: 744px) {
+  :root {
+    --btn: var(--touch-tablet-btn);
+    --steer: var(--touch-tablet-steer);
+  }
+  .touchbtn, .hud-bottom {
+    --btn: clamp(44px, calc(var(--touch-tablet-btn) * var(--btn-k)), max(var(--touch-tablet-btn), calc(var(--btn-room) * 76)));
+    --steer: clamp(calc(44px * 84 / 76), calc(var(--touch-tablet-steer) * var(--btn-k)), max(var(--touch-tablet-steer), calc(var(--btn-room) * 84)));
+  }
+  body.steer-buttons .hud-bottom {
+    bottom: calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z));
+  }
+  .touchbtn { font-size: max(16px, var(--touch-label-floor)); }
+  .steerbtn { font-size: 32px; }
+}
+@media (orientation: portrait) {
+  body.mirror-controls:not(.steer-buttons) #btn-throttle,
+  body.mirror-controls:not(.steer-buttons) #btn-brake {
+    left: auto; right: calc(16px + var(--sar));
+  }
+  body.mirror-controls:not(.steer-buttons) #btn-boost,
+  body.mirror-controls:not(.steer-buttons) #btn-ot,
+  body.mirror-controls:not(.steer-buttons) #btn-aero,
+  body.mirror-controls #shift-up,
+  body.mirror-controls #shift-down {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls.steer-buttons #btn-throttle,
+  body.mirror-controls.steer-buttons #btn-brake,
+  body.mirror-controls.steer-buttons #btn-boost {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls.steer-buttons #btn-ot,
+  body.mirror-controls.steer-buttons #btn-aero {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls #btn-steer-right {
+    left: auto; right: calc(16px + var(--sar));
+  }
+  body.mirror-controls #btn-steer-left {
+    left: auto; right: calc(16px + var(--steer) + var(--btn-gap) + var(--sar));
+  }
+}
+
+:is(#btn-cam, #pausebtn, #campicker) {
+  --hud-chrome-h: 44px;
+  --hud-chrome-t: calc(8px + var(--sat));
+  --hud-chrome-gap: calc(var(--gap) / 2);
+}
+#pausebtn {
+  position: fixed;
+  top: var(--hud-chrome-t);
+  right: calc(10px + var(--sar));
+  z-index: 14;
+  width: var(--hud-chrome-h); height: var(--hud-chrome-h);
+  font-size: max(var(--touch-label-floor), 100%);
+  border-radius: var(--r-md);
+  padding: 0;
+  background: var(--look-hud-bg);
+  color: var(--look-hud-ink);
+  border: 1px solid var(--look-hud-dim);
+}
+@media (pointer: coarse) {
+  #pausebtn { border-radius: 50%; }
+}
+#btn-cam {
+  position: fixed;
+  top: var(--hud-chrome-t);
+  right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
+  z-index: 14;
+  height: var(--hud-chrome-h);
+  min-width: calc(var(--hud-chrome-h) * 1.6);
+  padding: 0 calc(var(--gap) * 0.75);
+  border-radius: var(--r-md);
+  font-size: max(var(--touch-label-floor), var(--fs-micro));
+  font-weight: 700;
+  letter-spacing: var(--ls-3);
+  background: var(--look-hud-bg);
+  color: var(--look-hud-ink);
+  border: 1px solid var(--look-hud-dim);
+}
+@media (orientation: portrait) {
+  :is(#btn-cam, #pausebtn, #campicker) { --hud-chrome-t: calc(8px + var(--sat)); --hud-chrome-h: var(--tap-hud); }
+  #btn-cam { min-width: calc(76px * var(--hud-btn-z)); padding: 0 calc(var(--gap) * var(--hud-btn-z));
+    font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z))); }
+}
+body.hud-hidden.desktop #hud,
+body.hud-hidden #hud > :not(#hud-dock),
+body.hud-hidden #hud-dock > .hud-bottom:not(:has(> #hud-work:not([hidden]))) { display: none !important; }
+body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-work) { display: none !important; }
+body.hud-hidden #lights,
+body.hud-hidden #announce,
+body.hud-hidden #campicker,
+body.hud-hidden #btn-cam,
+body.hud-hidden.desktop .touchbtn { display: none !important; }
+#hud-restore {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  z-index: 16;
+  width: var(--tap); height: var(--tap);
+  padding: 0;
+  border-radius: var(--r-md);
+  font-size: 16px; line-height: 1;
+  opacity: 0.5;
+  display: none; 
+}
+@media (hover: hover) and (pointer: fine) { #hud-restore:hover { opacity: 0.95; } }
+#hud-restore:active { opacity: 0.95; }
+body.hud-hidden #hud-restore { display: block; }
+body.hud-hidden #pausebtn { right: calc(10px + var(--tap) + 4px + var(--sar)); opacity: 0.75; }
+body.hud-hidden #hud-restore::after {
+  content: "HUD HIDDEN · TAP EYE";
+  position: absolute; right: 0; top: calc(100% + var(--gap) * 0.35);
+  white-space: nowrap; padding: calc(var(--gap) * 0.35) calc(var(--gap) * 0.6);
+  background: var(--plate-opaque); border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm); color: var(--text); font-size: var(--fs-micro);
+  animation: hud-hint-out 3.5s forwards;
+  pointer-events: none; 
+}
+@keyframes hud-hint-out { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { body.hud-hidden #hud-restore::after { animation: none; } }
+:root[data-motion="reduce"] #hud-restore::after { animation: none; }
+#campicker {
+  position: fixed;
+  top: calc(8px + var(--tap-hud) + var(--sat));
+  right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
+  z-index: 24;
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 84px; --balance-min: 84px;
+  width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  max-height: calc(100dvh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 2 / 3);
+  background: rgba(8, 8, 14, 0.92);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-lg);
+}
+#campicker button {
+  height: var(--chip-h);
+  padding: 0 calc(var(--gap) * 2 / 3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-3);
+  background: var(--plate-hover);
+  border: 1px solid var(--card-line);
+  color: var(--text);
+  min-width: max-content;
+  white-space: nowrap;
+}
+#campicker button.active {
+  background: var(--plate-on);
+  border-color: var(--red);
+}
+body[data-density="compact"] #campicker {
+  gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.75);
+  width: min(560px, calc(100vw - var(--sal) - var(--sar) - 24px - var(--tap-hud)));
+}
+
+body[data-retired-wait] .dock-grp, body[data-retired-wait] .touchbtn { display: none !important; }
+#retired-card {
+  position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  box-sizing: border-box; max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  display: flex; flex-direction: column; align-items: center; gap: var(--gap);
+  padding: var(--gap) calc(var(--gap) * 2); border-radius: 12px; background: var(--panel); color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--text) 18%, transparent); text-align: center;
+}
+#retired-card[hidden] { display: none; }
+#retired-card b { font-size: 1.35rem; letter-spacing: .12em; }
+#retired-card span { font-size: .85rem; opacity: .8; }
+#retired-card button { min-height: 44px; min-width: 44px; padding: 0 calc(var(--gap) * 1.5); font: inherit; font-weight: 700;
+  border-radius: 8px; border: 0; background: var(--red); color: var(--text); touch-action: manipulation; }
+} 

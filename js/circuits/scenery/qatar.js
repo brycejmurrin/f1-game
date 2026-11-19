@@ -1,0 +1,592 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["qatar"] =
+  function (api) {
+      const { K, lapBounds, out, MAT, n, pyMin, night, hash, vadd, every,
+        place, anchor, addBox, addCyl, addFrustum, seat,
+        palm, building, fence, wall, mountain, guardrail, tyreWall,
+        billboard, marshalPost, gantry, tower, bush, along,
+        modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
+        bankedKerbStrip, sponsorHoarding, bleacher, acacia,
+        spectatorHill, terrainYAt, onTrack } = api;
+
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      const PIT = 1, STAND = -PIT;
+
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:qatar:hospitality", frac: sl(0.86), side: PIT, gap: 85,
+          size: [18, 9, 34], modules: 4, required: true,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:qatar:paddock-service", frac: sl(0.895), side: PIT, gap: 72,
+          size: [24, 7, 42], vehicles: 8, required: true,
+        });
+        circuitKit.recoveryBay({
+          id: "kit:qatar:recovery-bay", frac: sl(0.845), side: PIT, gap: 58,
+          size: [16, 6, 20], required: true,
+        });
+        circuitKit.marshalShelter({
+          id: "kit:qatar:marshal-shelter", frac: 0.76, side: 1, gap: 30,
+          size: [6, 3, 5], required: true,
+        });
+      }
+
+      const DUNE   = [0.76, 0.64, 0.46], DUNE_N = [0.56, 0.48, 0.36];
+      const SAND   = [0.64, 0.52, 0.36], SAND_D = [0.45, 0.36, 0.24];
+      const STEEL  = [0.13, 0.13, 0.16];
+      const FLOOD  = night ? [1.22, 1.28, 1.40] : [0.96, 1.00, 1.06];
+      const LAMP   = night ? [1.08, 1.12, 1.20] : [0.88, 0.90, 0.94];
+      const WIN_WARM = [0.88, 0.72, 0.32];
+      const WIN_COOL = [0.52, 0.68, 0.88];
+      const FROND  = [0.12, 0.28, 0.12];
+      const GRASS  = [0.20, 0.42, 0.22];
+      const WHITE  = [0.94, 0.94, 0.92];
+      const AD = [
+        [0.85, 0.18, 0.16], [0.16, 0.36, 0.72], [0.92, 0.74, 0.14],
+        [0.10, 0.62, 0.42], [0.90, 0.90, 0.88], [0.62, 0.18, 0.55],
+      ];
+
+      const floodTower = (k, side, gap, h) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        const base = a.c;
+        addCyl(out, base, 0.42, h - 4, STEEL, 6, b);
+        addCyl(out, vadd(base, a.u, h - 5), 0.60, 5, STEEL, 6, b);
+        addBox(out, vadd(base, a.u, h - 1.0), [9.0, 0.40, 0.50], LAMP, b);
+        addBox(out, vadd(base, a.u, h - 2.2), [7.4, 0.32, 0.40], LAMP, b);
+        for (const dx of [-3.8, 3.8]) {
+          const sc = vadd(vadd(base, a.u, h - 1.6), a.r, dx);
+          addBox(out, sc, [0.28, 1.4, 0.28], LAMP, b);
+        }
+        for (const dx of [-3.4, -1.1, 1.1, 3.4]) {
+          const lc = vadd(vadd(base, a.u, h - 0.4), a.r, dx);
+          addBox(out, lc, [1.8, 2.0, 1.6], FLOOD, b);
+        }
+        addBox(out, vadd(base, a.u, h + 0.6), [9.2, 0.28, 1.6], FLOOD, b);
+      };
+      const arabicSign = (k, side, gap, w, h, ink, panel) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        if (typeof api.onTrack === "function" && api.onTrack(a.c[0], a.c[2], 3)) return;
+        const lift = h * 0.5 + 2.2;
+        const c = vadd(a.c, a.u, lift);
+        addBox(out, c, [0.22, h, w], panel, b);
+        for (const dz of [-w * 0.4, w * 0.4])
+          addCyl(out, vadd(a.c, a.t, dz), 0.16, lift - h * 0.4, STEEL, 4, b);
+        const face = vadd(c, a.r, -side * 0.16);
+        addBox(out, vadd(face, a.u, -h * 0.10), [0.06, h * 0.11, w * 0.86], ink, b);
+        const asc = [0.40, 0.26, 0.05, -0.22, -0.36];
+        for (let i = 0; i < asc.length; i++) {
+          const tall = 0.30 + hash(k * 3.1 + i * 7.7) * 0.34;
+          addBox(out, vadd(vadd(face, a.t, asc[i] * w), a.u, h * (tall * 0.5 - 0.04)),
+                 [0.06, h * tall, w * 0.035], ink, b);
+        }
+        for (const [dz, dy] of [[0.33, 0.24], [0.12, 0.26], [-0.05, -0.28], [-0.30, 0.22]])
+          addBox(out, vadd(vadd(face, a.t, dz * w), a.u, h * dy),
+                 [0.06, h * 0.09, w * 0.030], ink, b);
+      };
+      const qatarStand = (id, s, side, gap, len, shell, crowd, required) => {
+        const depth = 15, h = 18;
+        const a = anchor(K(s), side, gap + depth / 2), b = [a.r, a.u, a.t];
+        return modelGroup(id, {
+          center: vadd(a.c, a.u, (h + 1) / 2),
+          size: [depth + 4, h + 1, len + 2],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, h * 0.28), [depth, h * 0.56, len], shell, b);
+          addBox(stage,
+            vadd(vadd(a.c, a.u, h * 0.62), a.r, -side * (depth * 0.34 + 0.06)),
+            [depth * 0.32, h * 0.48, len * 0.94], crowd, b);
+          addBox(stage, vadd(a.c, a.u, h), [depth + 3, 0.7, len + 1.5], WHITE, b);
+          addBox(stage,
+            vadd(vadd(a.c, a.u, h * 0.96), a.r, -side * (depth * 0.52)),
+            [0.25, 0.45, len * 0.90], FLOOD, b);
+          for (const dz of [-len * 0.42, len * 0.42]) {
+            addBox(stage,
+              vadd(vadd(vadd(a.c, a.u, h * 0.5), a.r, side * depth * 0.45), a.t, dz),
+              [0.55, h, 0.55], STEEL, b);
+          }
+        }, { required: !!required });
+      };
+      const SHELL_SANDSTONE = [0.58, 0.55, 0.50];
+      const SHELL_STEEL     = [0.44, 0.45, 0.50];
+      const SHELL_CONCRETE  = [0.51, 0.52, 0.53];
+
+      (function duneRing() {
+        const { cx, cz, radius: rad } = lapBounds();
+        for (const [extra, wMin, hMin, count, sand, dark] of [
+          [200, 140, 4,  22, SAND,   SAND_D],
+          [360, 200, 7,  16, DUNE,   DUNE_N],
+        ]) {
+          const ring = rad + extra;
+          for (let i = 0; i < count; i++) {
+            const a  = i / count * 6.2832 + hash(i * 3 + extra) * 0.18;
+            const hf = hash(i * 7 + extra);
+            const rr = ring + (hash(i * 5 + extra) - 0.5) * extra * 0.5;
+            const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+            const gy = (typeof terrainYAt === "function" && terrainYAt(x, z));
+            const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.5 : pyMin;
+            mountain(x, z, baseY,
+                     wMin + hf * wMin * 0.9, hMin + hf * hMin * 0.5,
+                     { seg: 6, seed: i * 4 + extra, rough: 0.32, snowline: 1.4,
+                       forest: sand, rock: dark, snow: dark });
+          }
+        }
+      })();
+
+      const MAST_H = 46, MAST_H_SF = 50;
+      if (typeof floodMastRing === "function") {
+        floodMastRing(80, { h: MAST_H, dist: 34, cool: true, pool: false });
+        along(sl(0.89), sl(0.09), 55, (k) => {
+          if (typeof floodMast === "function") {
+            floodMast(k, PIT, 32, { h: MAST_H_SF, cool: true, pool: false });
+            floodMast(k, STAND, 36, { h: MAST_H_SF, cool: true, pool: false });
+          }
+        });
+      } else {
+        every(80, (k) => {
+          for (const side of [-1, 1]) {
+            const gap = 34 + hash(k * 11 + side) * 4;
+            floodTower(k, side, gap, 36 + hash(k * 13) * 4);
+          }
+        });
+        for (const s of [0.0, 0.02, 0.04, 0.90, 0.94, 0.98]) {
+          for (const side of [-1, 1]) {
+            floodTower(K(s), side, 34, 38);
+          }
+        }
+      }
+
+      if (typeof bankedKerbStrip === "function") {
+        const APEX = [0.0415, 0.1914, 0.4199, 0.4636, 0.6217, 0.7404, 0.8487];
+        const KERB_HALF = 25 / 5400;
+        const KERB_R = [0.85, 0.15, 0.15], KERB_W = [0.92, 0.92, 0.90];
+        for (const f of APEX) {
+          for (const side of [-1, 1]) {
+            bankedKerbStrip(f - KERB_HALF, f + KERB_HALF, side,
+              { safer: false, kerbRed: KERB_R, kerbWht: KERB_W });
+          }
+        }
+      }
+
+      (function pitSlab() {
+        const a = anchor(K(sl(0.00)), PIT, 40), b = [a.r, a.u, a.t];
+        const PIT_LEN = 402;
+        const PIT_H = 12;
+        const c = vadd(a.c, a.u, PIT_H * 0.55);
+        const emitPit = (stage) => {
+          addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, PIT_LEN], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 10.2), a.r, -PIT * 8.12),
+            [0.20, 0.9, PIT_LEN - 6], [0.42, 0.44, 0.48], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, -PIT * 8.05),
+            [0.25, 0.5, PIT_LEN - 2], [0.78, 0.78, 0.76], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, -PIT * 8.08),
+            [0.22, 1.2, PIT_LEN - 4], WIN_WARM, b);
+          addBox(stage, vadd(a.c, a.u, 11.4), [17.2, 0.7, PIT_LEN + 1], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 12.05), a.r, PIT * 1.5),
+            [11, 0.4, PIT_LEN * 0.70], [0.88, 0.88, 0.86], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 12.7), a.r, -PIT * 8.15),
+            [0.18, 1.0, PIT_LEN * 0.68], WIN_COOL, b);
+          for (let i = -2; i <= 2; i++) {
+            const pod = vadd(vadd(a.c, a.u, 13.5), a.t, i * 70);
+            addBox(stage, pod, [9, 3.0, 14], WHITE, b);
+            addBox(stage, vadd(vadd(pod, a.r, -PIT * 4.6), a.u, 0.1),
+              [0.16, 2.0, 12], WIN_WARM, b);
+          }
+          const rcBase = vadd(vadd(a.c, a.t, -(PIT_LEN * 0.46)), a.r, PIT * 2);
+          addBox(stage, vadd(rcBase, a.u, 14), [12, 28, 12], WHITE, b);
+          addBox(stage, vadd(vadd(rcBase, a.u, 22), a.r, -PIT * 6.1),
+            [0.22, 10, 10], WIN_COOL, b);
+          addBox(stage, vadd(rcBase, a.u, 28.4), [14, 0.7, 14], WHITE, b);
+          addBox(stage, vadd(rcBase, a.u, 30.0), [7, 3.2, 7], [0.82, 0.84, 0.86], b);
+          addCyl(stage, vadd(rcBase, a.u, 31.8), 0.18, 7, STEEL, 4, b);
+          for (let g = 0; g < 25; g++) {
+            const dz = (g - 12) * (PIT_LEN / 25);
+            const col = (g % 2) ? [0.16, 0.16, 0.18] : [0.26, 0.26, 0.28];
+            addBox(stage, vadd(vadd(a.c, a.u, 2.4), a.t, dz),
+              [0.35, 4.6, PIT_LEN / 25 - 0.8], col, b);
+          }
+        };
+        modelGroup("qatar-pit-slab", {
+          center: c, size: [18, PIT_H + 20, PIT_LEN + 2], basis: b,
+        }, emitPit, { required: true });
+      })();
+      building(K(sl(0.01)), PIT, 24, 12, 8, 80,
+        { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
+      wall(sl(0.96), sl(0.08), PIT, 3, 1.0, [0.85, 0.85, 0.85]);
+
+      for (let i = 0; i < 6; i++) {
+        const s = (0.965 + i * 0.024) % 1;
+        const hf = hash(i * 11 + 7);
+        const hallH = 6 + hf * 3;
+        building(K(sl(s)), PIT, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
+          { kind: "hall", wall: WHITE, window: WIN_COOL, floor: 3.0 });
+        const roofTop = hallH * 0.5;
+        const a = anchor(K(sl(s)), PIT, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, roofTop - 0.05), [14, 0.55, 16], WHITE, b);
+      }
+
+      (function paddockMediaCentre() {
+        const a = anchor(K(sl(0.925)), PIT, 72), b = [a.r, a.u, a.t];
+        modelGroup("qatar-paddock-media-centre", {
+          center: vadd(a.c, a.u, 5.5), size: [30, 12, 76], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 4.5), [28, 9, 74], [0.82, 0.83, 0.84], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 6.8), a.r, -PIT * 14.05),
+            [0.24, 2.0, 68], WIN_COOL, b);
+          addBox(stage, vadd(a.c, a.u, 9.3), [30, 0.65, 76], WHITE, b);
+          for (const dz of [-26, -13, 0, 13, 26]) {
+            addBox(stage, vadd(vadd(a.c, a.u, 9.8), a.t, dz),
+              [24, 0.20, 0.38], LAMP, b);
+          }
+        }, { required: true });
+      })();
+
+      gantry(sl(0.0), 7.5, [0.12, 0.12, 0.14]);
+      tower(K(sl(0.985)), PIT, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
+
+      (function mainGrandstand() {
+        const MAIN_GAP = 36;
+        for (let i = 0; i < 5; i++) {
+          const s = 0.9565 + i * (82 / 5400);
+          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), STAND, MAIN_GAP, 80,
+            [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
+        }
+      })();
+
+      (function straightAds() {
+        let i = 0;
+        along(sl(0.90), sl(0.085), 28, (k) => {
+          if (i % 4 === 3) arabicSign(k, STAND, 5, 9, 3.2, [0.98, 0.94, 0.66], [0.10, 0.30, 0.20]);
+          else billboard(k, STAND, 5, 9, 3.2, AD[i % AD.length]);
+          i++;
+        });
+      })();
+      arabicSign(K(0.205), 1, 30, 22, 4.6, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
+      arabicSign(K(0.735), -1, 34, 20, 4.2, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
+      arabicSign(K(0.935), 1, 26, 18, 4.0, [0.98, 0.90, 0.40], [0.12, 0.13, 0.17]);
+
+      const T1OUT = -1;
+      qatarStand("qatar-t1-stand-a", sl(0.084), T1OUT, 20, 95,
+        SHELL_SANDSTONE, [0.18, 0.18, 0.21], true);
+      qatarStand("qatar-t1-stand-b", sl(0.100), T1OUT, 20, 65,
+        SHELL_SANDSTONE, [0.18, 0.18, 0.21]);
+      tyreWall(sl(0.088), sl(0.128), T1OUT, 5, [0.90, 0.86, 0.20]);
+      marshalPost(K(sl(0.05)), -1, 6);
+      billboard(K(sl(0.065)), 1, 6, 12, 3.8, AD[0]);
+
+      (function lusailHill() {
+        const HS = -T1OUT;
+        const a = anchor(K(sl(0.114)), T1OUT, 62), b = [a.r, a.u, a.t];
+        modelGroup("qatar-lusail-hill", {
+          center: vadd(a.c, a.u, 7.2), size: [48, 17, 92], basis: b,
+        }, (stage) => {
+          addFrustum(stage, a.c, 40, 26, 6.4, [0.42, 0.36, 0.26], 8, b);
+          addFrustum(stage, vadd(a.c, a.u, 6.0), 26, 15, 4.2, [0.38, 0.32, 0.24], 8, b);
+          for (let row = 0; row < 5; row++) {
+            const y = 1.4 + row * 1.55;
+            const inset = 7 + row * 3.2;
+            const outR = 7 + row * 2.5;
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -HS * outR),
+              [17 - row * 1.4, 0.5, 74 - inset * 1.3], GRASS, b);
+            addBox(stage, vadd(vadd(a.c, a.u, y - 0.4), a.r, HS * (-outR + 0.55)),
+              [1.1, 0.95, 72 - inset * 1.3], [0.30, 0.26, 0.20], b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.u, 11.2), a.r, -HS * 14),
+            [0.22, 1.15, 58], STEEL, b);
+          addBox(stage, vadd(a.c, a.u, 10.4), [8, 0.32, 64], [0.50, 0.50, 0.47], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 9.6), a.r, -HS * 18),
+            [0.35, 2.4, 50], [0.22, 0.20, 0.18], b);
+        }, { required: true });
+        if (typeof spectatorHill === "function") {
+          spectatorHill(sl(0.104), sl(0.126), T1OUT, 88, {
+            rows: 3, rise: 1.15, depth: 2.1, density: 0.42, step: 12,
+            grass: GRASS, riser: [0.36, 0.32, 0.24],
+          });
+        }
+      })();
+
+      {
+        const hallH = 7;
+        building(K(sl(0.060)), 1, 54, 16, hallH, 34,
+          { kind: "hall", wall: WHITE, window: WIN_WARM, floor: 3.0 });
+        const roofTop = hallH * 0.5;
+        const a = anchor(K(sl(0.060)), 1, 63), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, roofTop - 0.05), [20, 0.30, 42], FLOOD, b);
+      }
+      arabicSign(K(sl(0.064)), 1, 44, 16, 3.4, [0.98, 0.92, 0.60], [0.13, 0.14, 0.18]);
+
+      (function t1Vvip() {
+        building(K(sl(0.125)), T1OUT, 36, 18, 9, 32,
+          { kind: "dome", wall: WHITE, window: WIN_COOL, floor: 3.4 });
+        building(K(sl(0.134)), T1OUT, 40, 14, 7, 24,
+          { kind: "arch", wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
+        const a = anchor(K(sl(0.129)), T1OUT, 48), b = [a.r, a.u, a.t];
+        modelGroup("qatar-t1-vvip-canopy", {
+          center: vadd(a.c, a.u, 8.3), size: [62, 17, 38], basis: b,
+        }, (stage) => {
+          addCyl(stage, a.c, 0.55, 16, STEEL, 8, b);
+          addBox(stage, vadd(a.c, a.u, 16.0), [58, 0.65, 32], WHITE, b);
+          for (const dx of [-18, -9, 0, 9, 18]) {
+            addBox(stage, vadd(vadd(a.c, a.u, 7.6), a.r, dx * 0.15), [0.35, 15.0, 0.35], STEEL, b);
+            addBox(stage, vadd(vadd(a.c, a.u, 16.55), a.t, dx * 0.75), [54, 0.28, 0.35], LAMP, b);
+          }
+          addBox(stage, vadd(a.c, a.u, 15.2), [48, 0.22, 1.2], FLOOD, b);
+        }, { required: true });
+      })();
+
+      if (typeof acacia === "function") {
+        for (let i = 0; i < 14; i++) {
+          const k = (K(0.09) + i * Math.round(n * 0.014)) % n;
+          const side = hash(k * 19 + i) < 0.5 ? -1 : 1;
+          const hgt = 4.5 + hash(k * 7 + i) * 2.6;
+          acacia(k, side, 44 + hash(k * 5 + i) * 46, hgt, [0.30, 0.36, 0.20],
+                 { spread: hgt * (1.15 + hash(k * 11 + i) * 0.5), layers: 2 });
+        }
+      }
+      for (let i = 0; i < 5; i++) {
+        const k = (K(0.10) + i * Math.round(n * 0.006)) % n;
+        palm(k, -1, 48 + hash(k * 5) * 24, 7.5 + hash(k * 9) * 2.5, FROND);
+      }
+
+      if (typeof bleacher === "function") {
+        bleacher(0.152, 0.216, 1, 20, {
+          rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
+          frameCol: [0.56, 0.55, 0.54], plankCol: [0.66, 0.63, 0.58],
+        });
+      } else {
+        for (const [i, s] of [0.162, 0.183, 0.204].entries()) {
+          qatarStand(`qatar-t23-stand-${i}`, s, 1, 22, 52,
+            SHELL_STEEL, [0.18, 0.18, 0.21]);
+        }
+      }
+      guardrail(0.14, 0.24, 1, 4, [0.78, 0.78, 0.80]);
+      marshalPost(K(0.19), 1, 6);
+      billboard(K(0.21), 1, 6, 11, 3.4, AD[2]);
+
+      for (let i = 0; i < 7; i++) {
+        const k = (K(0.28) + i * Math.round(n * 0.009)) % n;
+        const gap = 60 + i * 16 + hash(k * 3) * 18;
+        const w   = 36 + hash(k * 5) * 18;
+        const h   =  2.5 + hash(k * 7) * 2.5;
+        const a = anchor(k, -1, gap + w * 0.62);
+        const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+        const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+        mountain(a.c[0], a.c[2], baseY, w, h,
+          { seg: 6, seed: k * 4 + 28, rough: 0.40, snowline: 1.6,
+            forest: DUNE, rock: DUNE_N, snow: DUNE_N });
+      }
+      marshalPost(K(0.30), -1, 6);
+
+      for (let i = 0; i < 5; i++) {
+        const k = (K(0.305) + i * Math.round(n * 0.012)) % n;
+        for (const side of [-1, 1]) {
+          if (hash(k * 53 + side * 17) <= 0.38) {
+            const dd = 26 + hash(k * 59 + side) * 36;
+            const scrubCol = hash(k * 61 + side) < 0.5 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
+            bush(k, side, dd, scrubCol);
+          }
+        }
+      }
+      if (typeof sponsorHoarding === "function") {
+        sponsorHoarding(0.303, 0.357, 1, 6, { palette: AD });
+      }
+
+      for (let i = 0; i < 5; i++) {
+        const k = (K(0.36) + i * Math.round(n * 0.014)) % n;
+        for (const side of [-1, 1]) {
+          const gap = 90 + i * 20 + hash(k * 7 + side) * 20;
+          const w   = 40 + hash(k * 9 + side) * 18;
+          const h   =  2.5 + hash(k * 11 + side) * 2.5;
+          const a = anchor(k, side, gap + w * 0.62);
+          const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+          const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+          mountain(a.c[0], a.c[2], baseY, w, h,
+            { seg: 6, seed: k * 5 + side * 3 + 40, rough: 0.38, snowline: 1.6,
+              forest: SAND, rock: SAND_D, snow: SAND_D });
+        }
+      }
+      guardrail(0.36, 0.50, -1, 4, [0.78, 0.78, 0.80]);
+      marshalPost(K(0.43), 1, 6);
+
+      (function katharaAndStadium() {
+        const BRONZE = [0.20, 0.15, 0.10];
+        const GOLD = [0.58, 0.46, 0.20], GOLD_ROOF = [0.66, 0.54, 0.26];
+        const lb = lapBounds();
+        const compass = (deg, dist) => {
+          const th = deg * Math.PI / 180, ux = -Math.sin(th), uz = Math.cos(th);
+          const x = lb.cx + ux * dist, z = lb.cz + uz * dist;
+          const gy = (typeof terrainYAt === "function" && terrainYAt(x, z));
+          const y = (gy != null && Number.isFinite(gy)) ? gy - 0.3 : pyMin;
+          const t = [-uz, 0, ux];
+          return { c: [x, y, z], t, u: [0, 1, 0], r: [-ux, 0, -uz] };
+        };
+
+        (function kataraTowers() {
+          const a = compass(151, 740), b = [a.r, a.u, a.t];
+          modelGroup("qatar-katara-towers", {
+            center: vadd(a.c, a.u, 55), size: [40, 112, 40], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(a.c, a.u, 1.0), [34, 2.0, 34], BRONZE, b);
+            for (const dz of [-14, 14]) {
+              const lean = dz > 0 ? 0.05 : -0.05;
+              const tiltU = [b[1][0] + b[2][0] * lean, b[1][1], b[1][2] + b[2][2] * lean];
+              const base = vadd(a.c, a.t, dz);
+              addFrustum(stage, base, 8.5, 4.0, 110, BRONZE, 4, [b[0], tiltU, b[2]]);
+            }
+          }, { required: true });
+        })();
+
+        (function lusailStadium() {
+          const a = compass(163, 720), b = [a.r, a.u, a.t];
+          modelGroup("qatar-lusail-stadium", {
+            center: vadd(a.c, a.u, 22.5), size: [92, 46, 92], basis: b,
+          }, (stage) => {
+            addCyl(stage, a.c, 45, 32, GOLD, 16, b);
+            addFrustum(stage, vadd(a.c, a.u, 32), 45, 30, 13, GOLD_ROOF, 16, b);
+          }, { required: true });
+        })();
+      })();
+
+      for (let i = 0; i < 4; i++) {
+        const k = (K(0.62) + i * 2) % n;
+        place(k, 1, 26 + i * 5, [4, 4, 5], [0.90, 0.90, 0.88]);
+        const a = anchor(k, 1, 26 + i * 5), bv = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.475), [4.4, 1.25, 5.4], [0.55, 0.18, 0.16], bv);
+        addBox(out, vadd(a.c, a.u, 2.8), [0.18, 1.4, 1.4], WIN_WARM, bv);
+      }
+      marshalPost(K(0.61), 1, 6);
+      marshalPost(K(0.66), -1, 6);
+      guardrail(0.58, 0.68, 1, 4, [0.78, 0.78, 0.80]);
+      billboard(K(0.63), -1, 6, 10, 3.2, AD[3]);
+
+      fence(0.66, 0.84, 1, 6, 3.4, [0.66, 0.68, 0.72]);
+      fence(0.66, 0.84, -1, 6, 3.4, [0.66, 0.68, 0.72]);
+      guardrail(0.66, 0.84, 1, 3.2, [0.78, 0.78, 0.80]);
+      guardrail(0.66, 0.84, -1, 3.2, [0.78, 0.78, 0.80]);
+      tyreWall(0.70, 0.74, -1, 5, [0.85, 0.16, 0.16]);
+      marshalPost(K(0.76), 1, 6);
+      billboard(K(0.72), 1, 6, 10, 3.2, AD[1]);
+      billboard(K(0.80), -1, 6, 10, 3.2, AD[4]);
+
+      if (typeof floodMast === "function") {
+        for (const s of [0.63, 0.72, 0.80]) {
+          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: false, arms: 3 });
+          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: false, arms: 3 });
+        }
+      }
+
+      for (let i = 0; i < 8; i++) {
+        const k = (K(0.84) + i * Math.round(n * 0.008)) % n;
+        palm(k, -1, 42 + i * 8, 7.2 + hash(k * 3) * 3, FROND);
+      }
+      marshalPost(K(0.88), 1, 6);
+
+      if (typeof bleacher === "function") {
+        bleacher(0.927, 0.961, 1, 15, {
+          rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
+          frameCol: [0.54, 0.53, 0.53], plankCol: [0.64, 0.61, 0.57],
+        });
+      } else {
+        qatarStand("qatar-t16-stand-a", 0.930, 1, 17, 75,
+          SHELL_CONCRETE, [0.18, 0.18, 0.21]);
+        qatarStand("qatar-t16-stand-b", 0.952, 1, 17, 55,
+          SHELL_CONCRETE, [0.18, 0.18, 0.21]);
+      }
+      tyreWall(0.91, 0.945, 1, 5, [0.90, 0.86, 0.20]);
+      marshalPost(K(0.94), -1, 6);
+      billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
+
+      every(140, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 29 + side * 7) <= 0.28) {
+            const dd = 40 + hash(k * 31 + side) * 50;
+            const scrubCol = hash(k * 41 + side) < 0.55 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
+            bush(k, side, dd, scrubCol);
+          }
+        }
+      });
+
+      const vergeStep = 14;
+      const vergeLen = Math.max(1, Math.round(vergeStep / api.ds)) * api.ds - 0.4;
+      const GREEN_GAP = 1.55, GREEN_W = 3.4;
+      every(vergeStep, (k) => {
+        const s = (((k % n) + n) % n / n + 1 - SL) % 1;
+        for (const side of [-1, 1]) {
+          if (side === PIT && (s >= 0.94 || s <= 0.10)) continue;
+          groundPatch(k, side, GREEN_GAP + side * 0.08, [GREEN_W, 0.15, vergeLen], GRASS,
+            { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
+        }
+      });
+      {
+        const SAND_W = 8.0, SAND_COL = [0.72, 0.58, 0.38];
+        const SAND_GAP = GREEN_GAP + GREEN_W * 0.5 + SAND_W * 0.5 + 0.6;
+        const bays = [
+          [0.10, 0.22, 1, 16],
+          [0.10, 0.22, -1, 16],
+          [0.26, 0.38, 1, 16],
+          [0.26, 0.38, -1, 16],
+          [0.52, 0.66, 1, 16],
+          [0.52, 0.66, -1, 16],
+          [0.78, 0.90, 1, 16],
+          [0.78, 0.90, -1, 16],
+        ];
+        for (const [s0, s1, side, step] of bays) {
+          const bayLen = Math.max(1, Math.round(step / api.ds)) * api.ds - 1.6;
+          along(s0, s1, step, (k) => {
+            groundPatch(k, side, SAND_GAP + side * 0.12, [SAND_W, 0.12, bayLen], SAND_COL,
+              { id: `qatar-sand-apron-${k}-${side}`, samples: 2 });
+          });
+        }
+      }
+
+      (function hospitalityVillas() {
+        const LED = [
+          [0.85, 0.18, 0.16], [0.16, 0.42, 0.78], [0.92, 0.74, 0.14], [0.10, 0.62, 0.42],
+        ];
+        const emitVillaCluster = (stage, a0, b, g) => {
+          for (let v = 0; v < 4; v++) {
+            const dz = (v - 1.5) * 10.2;
+            const base = vadd(a0.c, a0.t, dz);
+            const wall = (v & 1) ? [0.93, 0.93, 0.91] : WHITE;
+            stage._mat = MAT.STONE;
+            if (seat && seat.box) {
+              seat.box(stage, base, [11.0, 0.7, 9.2], [0.82, 0.82, 0.80], b);
+            } else {
+              addBox(stage, vadd(base, a0.u, 0.35), [11.0, 0.7, 9.2], [0.82, 0.82, 0.80], b);
+            }
+            addFrustum(stage, vadd(base, a0.u, 0.7), 9.2, 7.0, 7.6, wall, 8, b);
+            addBox(stage, vadd(vadd(base, a0.r, -PIT * 1.0), a0.u, 5.0),
+              [7.6, 3.8, 7.8], wall, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(base, a0.r, PIT * 4.4), a0.u, 5.0),
+              [0.20, 2.8, 6.4], LED[(g + v) % LED.length], b);
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(base, a0.u, 7.15), [9.6, 0.5, 8.6], WHITE, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(base, a0.r, PIT * 4.8), a0.u, 3.6),
+              [2.2, 0.20, 6.6], LAMP, b);
+            stage._mat = 0;
+          }
+        };
+        {
+          const a0 = anchor(K(sl(0.955)), PIT, 56), b = [a0.r, a0.u, a0.t];
+          if (!(typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16))) {
+            modelGroup("qatar-hospitality-villas-1", {
+              center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
+            }, (stage) => emitVillaCluster(stage, a0, b, 0), { required: true });
+          }
+        }
+        for (const [g, s0, id] of [
+          [1, 0.975, "qatar-hospitality-villas-2"],
+          [2, 0.995, "qatar-hospitality-villas-3"],
+          [3, 0.025, "qatar-hospitality-villas-4"],
+        ]) {
+          const a0 = anchor(K(sl(s0)), PIT, 56);
+          if (typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16)) continue;
+          const b = [a0.r, a0.u, a0.t];
+          modelGroup(id, {
+            center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
+          }, (stage) => emitVillaCluster(stage, a0, b, g));
+        }
+      })();
+    };

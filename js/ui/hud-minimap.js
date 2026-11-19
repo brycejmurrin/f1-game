@@ -1,0 +1,270 @@
+const HudMinimap = (function () {
+  "use strict";
+
+function create(G, deps) {
+const { vpW, vpH, teamCss, replayGhost, motionReduced } = deps;
+const els = G.els;
+const mm = els.minimap.getContext("2d");
+let minimapBg = null;
+let minimapBgKey = "";
+let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;
+let _mmKeyNow = "", _mmVw = -1, _mmVh = -1, _mmDpr = -1;
+let _mmObs = null, _mmDirty = true;
+function mmWatchDirty() {
+  if (_mmObs === null) {
+    if (typeof MutationObserver !== "function") return true;
+    _mmObs = new MutationObserver(() => { _mmDirty = true; });
+    _mmObs.observe(document.body, { attributes: true, attributeFilter: ["class", "data-density"] });
+    _mmObs.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    _mmObs.observe(els.minimap, { attributes: true, attributeFilter: ["style"] });
+    return true;
+  }
+  const d = _mmDirty || _mmObs.takeRecords().length > 0;
+  _mmDirty = false;
+  return d;
+}
+let _mmBgKey = "140|140|1";
+let _mmPitP = null, _mmYou = "";
+let minimapBgCues = false;
+const SECTOR_DASH = [[6, 3], [2, 3], [6, 2, 2, 2]];
+const mmYou = () => _mmYou || (typeof CvdPalette !== "undefined" && CvdPalette.hex("you")) || "#fff";
+
+function drawMinimap() {
+  const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
+  if (!player || !track || !track.map) return;
+  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) { _mmKey = null; return; }
+  const root = document.documentElement, body = document.body;
+  const cbCues = root.dataset.cbCues === "on";
+  const vw = vpW(), vh = vpH(), dpr = window.devicePixelRatio || 1;
+  if (mmWatchDirty() || vw !== _mmVw || vh !== _mmVh || dpr !== _mmDpr || _mmKey === null) {
+    _mmVw = vw; _mmVh = vh; _mmDpr = dpr;
+    _mmKeyNow = vw + "x" + vh + "|" + body.className
+      + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
+      + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + dpr
+      + "|" + els.minimap.style.getPropertyValue("--hl-s");
+  }
+  const measureKey = _mmKeyNow;
+  if (_mmKey !== measureKey || deps.fitKey() === "" || !minimapBg) {
+    _mmKey = measureKey;
+    _mmCssW = els.minimap.clientWidth || 140;
+    _mmCssH = els.minimap.clientHeight || 140;
+    _mmRatio = Math.min(3, Math.max(1,
+      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)
+      * (parseFloat(els.minimap.style.getPropertyValue("--hl-s")) || 1)));
+    _mmBgKey = _mmCssW + "|" + _mmCssH + "|" + _mmRatio;
+  }
+  const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;
+  const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
+  if (els.minimap.width !== W || els.minimap.height !== H) {
+    els.minimap.width = W; els.minimap.height = H;
+  }
+  const bgKey = _mmBgKey;
+  if (!minimapBg || minimapBgKey !== bgKey || minimapBgCues !== cbCues) {
+    minimapBgKey = bgKey;
+    minimapBgCues = cbCues;
+    minimapBg = document.createElement("canvas");
+    minimapBg.width = W; minimapBg.height = H;
+    const mc = minimapBg.getContext("2d");
+    mc.setTransform(ratio, 0, 0, ratio, 0, 0);
+    const map = track.map, n = map.length;
+    mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
+    const SC = TrackMaps.sectorColors();
+    mc.globalAlpha = 0.8;
+    const sec = track.def && track.def.sectors;
+    const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
+    for (let s = 0; s < 3; s++) {
+      const from = Math.floor(splits[s] * n);
+      const to = s === 2 ? n - 1 : Math.max(from, Math.floor(splits[s + 1] * n));
+      mc.strokeStyle = SC[s];
+      if (cbCues) mc.setLineDash(SECTOR_DASH[s]);
+      mc.beginPath();
+      for (let i = from; i <= to; i++) {
+        const p = map[i % n];
+        const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+        i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
+      }
+      if (s === 2) {
+        const p0 = map[0];
+        mc.lineTo(8 + p0[0] * (cssW - 16), 8 + p0[1] * (cssH - 16));
+      }
+      mc.stroke();
+      if (cbCues) {
+        mc.setLineDash([]);
+        const p = map[Math.floor((from + to) / 2)];
+        const x = Math.max(12, Math.min(cssW - 12, 8 + p[0] * (cssW - 16)));
+        const y = Math.max(8, Math.min(cssH - 8, 8 + p[1] * (cssH - 16)));
+        mc.font = "700 10px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+        mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+        mc.strokeText("S" + (s + 1), x, y); mc.fillText("S" + (s + 1), x, y);
+        mc.lineWidth = 2;
+      }
+    }
+    mc.globalAlpha = 1;
+    const zones = TrackMaps.drsZones(track.def);
+    if (zones && zones.length) {
+      mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+      for (const z of zones) {
+        const from2 = Math.floor(z.a * n), to2 = Math.floor(z.b * n);
+        mc.beginPath();
+        for (let i = from2; i <= to2; i++) {
+          const p = map[i % n];
+          mc.lineTo(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16));
+        }
+        mc.stroke();
+        if (cbCues) {
+          mc.strokeStyle = "#fff"; mc.lineWidth = 1;
+          mc.beginPath();
+          let sinceHatch = 6;
+          for (let i = from2; i < to2; i++) {
+            const p = map[i % n], next = map[(i + 1) % n];
+            const dx = (next[0] - p[0]) * (cssW - 16), dy = (next[1] - p[1]) * (cssH - 16);
+            const length = Math.hypot(dx, dy);
+            if (length > 0 && sinceHatch >= 6) {
+              const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+              mc.moveTo(x - dy / length * 4, y + dx / length * 4);
+              mc.lineTo(x + dy / length * 4, y - dx / length * 4);
+              sinceHatch = 0;
+            }
+            sinceHatch += length;
+          }
+          mc.stroke();
+          const start = map[from2 % n];
+          const x = Math.max(20, Math.min(cssW - 20, 8 + start[0] * (cssW - 16)));
+          const y = Math.max(8, Math.min(cssH - 8, 8 + start[1] * (cssH - 16)));
+          mc.font = "700 9px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+          mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+          mc.strokeText("AERO", x, y); mc.fillText("AERO", x, y);
+          mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+        }
+      }
+    }
+    const pit = track.pit;
+    _mmPitP = null;
+    if (pit && pit.entryRoadM != null) {
+      const L = track.total, fOf = (s) => (((s % L) + L) % L) / L;
+      const fa = fOf(pit.sA), fb = fOf(pit.sB);
+      const i0 = Math.floor(fa * n), steps = Math.max(2, Math.round((((fb - fa) % 1) + 1) % 1 * n));
+      mc.strokeStyle = "rgba(236,236,246,0.85)"; mc.lineWidth = 3; mc.setLineDash([3, 3]);
+      mmRun(mc, map, n, i0, steps, cssW, cssH);
+      mc.stroke(); mc.setLineDash([]);
+      const il = Math.floor(fOf(pit.sIn) * n) % n, pe = map[il], pn = map[(il + 1) % n];
+      const ex = 8 + pe[0] * (cssW - 16), ey = 8 + pe[1] * (cssH - 16);
+      let tx = (pn[0] - pe[0]) * (cssW - 16), ty = (pn[1] - pe[1]) * (cssH - 16);
+      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      mc.strokeStyle = "rgba(255,255,255,0.95)"; mc.lineWidth = 2;
+      mc.beginPath(); mc.moveTo(ex - ty * 4, ey + tx * 4); mc.lineTo(ex + ty * 4, ey - tx * 4); mc.stroke();
+      const pa = map[i0 % n];
+      _mmPitP = [8 + pa[0] * (cssW - 16), 8 + pa[1] * (cssH - 16), i0 % n];
+      mmPitMark(mc, _mmPitP[0], _mmPitP[1], 5, "rgba(255,255,255,0.95)");
+      _mmYou = (typeof getComputedStyle === "function"
+        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "";
+    }
+  }
+  mm.setTransform(ratio, 0, 0, ratio, 0, 0);
+  mm.clearRect(0, 0, cssW, cssH);
+  mm.drawImage(minimapBg, 0, 0, cssW, cssH);
+  const map = track.map, n = map.length;
+  const at = (v) => {
+    const i = Math.floor(v / track.total * n) % n;
+    return Number.isFinite(i) ? map[(i + n) % n] : null;
+  };
+  for (const c of cars) {
+    if (c === player) continue;
+    const p = at(c.s);
+    if (!p) continue;
+    const x = 6 + p[0] * (cssW - 16), y = 6 + p[1] * (cssH - 16);
+    mm.fillStyle = teamCss(c);
+    if (c.human && !c.local) {
+      mm.fillRect(x - 1, y - 1, 6, 6);
+      mm.strokeStyle = "#fff";
+      mm.lineWidth = 1;
+      mm.strokeRect(x - 1.5, y - 1.5, 7, 7);
+    } else {
+      mm.fillRect(x, y, 4, 4);
+    }
+  }
+  const ghost = replayGhost();
+  if (timeTrial && (player.lap | 0) >= 1 && (GhostShare.hasGuest() || Ghost.hasGhost())) {
+    const gh = ghost.at(player.lapTime);
+    if (gh) {
+      const gp = at(gh.s);
+      if (gp) {
+        if (cbCues) {
+          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, "rgba(120, 220, 255, 0.95)", "G", true);
+        } else {
+          mm.fillStyle = "rgba(120, 220, 255, 0.95)";
+          mm.beginPath();
+          mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
+          mm.fill();
+        }
+      }
+    }
+  }
+  const p = at(player.s);
+  if (!p) return;
+  const pits = G.pits, inPit = !!player.pitState && player.pitState !== "none";
+  if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
+    const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
+    if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
+      mm.strokeStyle = mmYou(); mm.lineWidth = 2;
+      mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
+      mm.stroke();
+    }
+    if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, mmYou());
+    mm.globalAlpha = 1;
+  }
+  mm.fillStyle = inPit ? mmYou() : "#fff";
+  mm.beginPath();
+  mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
+  mm.fill();
+}
+
+function mmRun(ctx, map, n, i0, steps, cssW, cssH) {
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const p = map[(i0 + i) % n];
+    const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+}
+const _mmPitGlyph = new Map();
+function mmPitMark(ctx, x, y, r, fill, letter = "P", ring = false) {
+  const key = letter + "|" + ring + "|" + r + "|" + fill + "|" + _mmRatio;
+  let g = _mmPitGlyph.get(key);
+  if (g === undefined) {
+    if (_mmPitGlyph.size > 8) _mmPitGlyph.clear();
+    g = null;
+    const cw = Math.ceil((2 * r + 2) * _mmRatio), cv = document.createElement("canvas");
+    cv.width = cw; cv.height = cw;
+    const gc = cv.getContext && cv.getContext("2d");
+    if (gc) {
+      const L = cw / _mmRatio, c = L / 2;
+      gc.setTransform(_mmRatio, 0, 0, _mmRatio, 0, 0);
+      gc.fillStyle = fill; gc.strokeStyle = fill; gc.lineWidth = 1.5;
+      gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); if (ring) gc.stroke(); else gc.fill();
+      gc.fillStyle = "#14161c"; gc.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+      if (ring) gc.fillStyle = fill;
+      gc.textAlign = "center"; gc.textBaseline = "middle";
+      gc.fillText(letter, c, c + 0.5);
+      g = { cv, L };
+    }
+    _mmPitGlyph.set(key, g);
+  }
+  if (g) { ctx.drawImage(g.cv, x - g.L / 2, y - g.L / 2, g.L, g.L); return; }
+  ctx.fillStyle = fill; ctx.strokeStyle = fill; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); if (ring) ctx.stroke(); else ctx.fill();
+  ctx.fillStyle = "#14161c"; ctx.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+  if (ring) ctx.fillStyle = fill;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(letter, x, y + 0.5);
+}
+
+return {
+  draw: drawMinimap,
+  invalidate() { minimapBg = null; },
+};
+}
+
+return { create };
+})();

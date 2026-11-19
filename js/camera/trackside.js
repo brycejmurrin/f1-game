@@ -1,0 +1,122 @@
+const TracksideCams = (function () {
+  "use strict";
+
+  const FENCE = 1.5;
+  const HEIGHT = 4.8;
+  const LOOK_UP = 0.9;
+  const HYST_M = 18;
+  const FOV = 42;
+  const FOV_NEAR = 50;
+  const FOV_FAR = 18;
+  const FOV_SPAN = 16;
+  const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  const _eye = [0, 0, 0], _tgt = [0, 0, 0];
+
+  function wrapS(track, s) {
+    const L = track.total || 1;
+    s %= L; return s < 0 ? s + L : s;
+  }
+
+  function ahead(a, b, L) {
+    let d = b - a;
+    if (d < 0) d += L;
+    return d;
+  }
+
+  function build(track) {
+    if (!track) return [];
+    if (track._tsCams) return track._tsCams;
+    const out = [];
+    if (typeof FlybySeq !== "undefined" && FlybySeq.cornerS) {
+      FlybySeq.cornerS(track, 1);
+    }
+    const corners = track._fbCorners || [];
+    for (let i = 0; i < corners.length; i++) {
+      const n = i + 1;
+      const s = wrapS(track, (corners[i].f || 0) * track.total);
+      const side = (typeof FlybySeq !== "undefined" && FlybySeq.cornerSide)
+        ? FlybySeq.cornerSide(track, n) : ((n % 2) ? 1 : -1);
+      Tracks.sample(track, s, _smp);
+      let lat = (_smp.hw || 7) + FENCE;
+      if (track.def && track.def.street && Tracks.wallAt) {
+        const w = Tracks.wallAt(track, s, side > 0 ? 1 : -1);
+        if (w > 0) lat = Math.min(lat, w + FENCE);
+      }
+      const eye = [
+        _smp.p[0] + _smp.r[0] * side * lat,
+        _smp.p[1] + HEIGHT,
+        _smp.p[2] + _smp.r[2] * side * lat,
+      ];
+      if (typeof CamAvoid !== "undefined") {
+        CamAvoid.freeEye(track, eye, _smp);
+      } else if (typeof FlybySeq !== "undefined" && FlybySeq.clearEye) {
+        FlybySeq.clearEye(track, eye);
+      }
+      out.push({
+        n: n,
+        s: s,
+        eye: eye,
+        lookS: s,
+        fov: FOV,
+      });
+    }
+    out.sort((a, b) => a.s - b.s);
+    track._tsCams = out;
+    return out;
+  }
+
+  function pick(cams, s, total, prev, snap) {
+    if (!cams || !cams.length) return 0;
+    const L = total || 1;
+    const ss = wrapS({ total: L }, s);
+    let best = 0, bestBehind = Infinity;
+    for (let i = 0; i < cams.length; i++) {
+      const behind = ahead(cams[i].s, ss, L);
+      if (behind < bestBehind) { bestBehind = behind; best = i; }
+    }
+    const prevIdx = ((prev | 0) % cams.length + cams.length) % cams.length;
+    if (!snap && prevIdx !== best) {
+      const pastNew = ahead(cams[best].s, ss, L);
+      if (pastNew < HYST_M) return prevIdx;
+    }
+    return best;
+  }
+
+  function pose(track, s, x, extra) {
+    const cams = build(track);
+    if (!cams.length) return null;
+    const prev = track._tsIdx | 0;
+    const idx = pick(cams, s, track.total, prev, extra && extra.snap);
+    track._tsIdx = idx;
+    const c = cams[idx];
+    const cut = idx !== prev;
+    _eye[0] = c.eye[0]; _eye[1] = c.eye[1]; _eye[2] = c.eye[2];
+    if (extra && extra.carPos) {
+      const cp = extra.carPos;
+      if (cp.length >= 3) {
+        _tgt[0] = cp[0]; _tgt[1] = cp[1] + LOOK_UP; _tgt[2] = cp[2];
+      } else {
+        Tracks.sample(track, wrapS(track, s), _smp);
+        _tgt[0] = cp[0]; _tgt[1] = _smp.p[1] + LOOK_UP; _tgt[2] = cp[1];
+      }
+    } else {
+      Tracks.sample(track, wrapS(track, c.lookS), _smp);
+      _tgt[0] = _smp.p[0]; _tgt[1] = _smp.p[1] + LOOK_UP; _tgt[2] = _smp.p[2];
+    }
+    const dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
+    let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
+    if (fov < FOV_FAR) fov = FOV_FAR;
+    if (fov > FOV_NEAR) fov = FOV_NEAR;
+    return { eye: _eye, tgt: _tgt, fov: fov, index: idx, count: cams.length, n: c.n, cut: cut };
+  }
+
+  function reset(track) { if (track) track._tsIdx = 0; }
+
+  function status(track) {
+    if (!track) return { count: 0, index: 0 };
+    const cams = build(track);
+    return { count: cams.length, index: track._tsIdx | 0, n: cams.length ? cams[track._tsIdx | 0].n : 0 };
+  }
+
+  return Object.freeze({ build, pick, pose, reset, status, FENCE, HEIGHT, HYST_M, FOV });
+})();

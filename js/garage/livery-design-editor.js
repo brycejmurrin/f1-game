@@ -1,0 +1,302 @@
+"use strict";
+const GarageLiveryDesignEditor = (function () {
+  const sessions = new WeakMap();
+  const attr = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+  const prop = (el, k, v) => { if (el[k] !== v) el[k] = v; };
+  const LABELS = { ribbon: "Ribbon", brokenChevron: "Broken chevrons", contours: "Contour lines",
+    honeycomb: "Honeycomb", segments: "Segmented panels", gradient: "Gradient", twoTone: "Two-tone sweep",
+    checker: "Checkered flag", diamonds: "Diamond tiles", slashes: "Diagonal slashes",
+    pinstripes: "Pinstripes", dots: "Rivet dots", lightning: "Lightning bolts", waves: "Wave bands", sunburst: "Sunburst rays", scallops: "Scallop scales",
+    herringbone: "Herringbone weave", circuit: "Circuit traces", shards: "Angular shards", pixelFade: "Pixel fade", speedlines: "Speed lines",
+    design: "Design", body: "Body" };
+  function attach(root, draft, api) {
+    let h = sessions.get(draft);
+    if (!h) { h = LiveryDesign.history(draft); sessions.set(draft, h); }
+    let restoring = false, comparing = false;
+    const bindings = [], controls = document.createElement("div"); controls.className = "cs-liv-ed-finish";
+    const status = document.createElement("p"); status.className = "cs-opt-desc"; status.setAttribute("role", "status");
+    function button(label, action, host = controls) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "cs-liv-ed-none";
+      b.textContent = label; b.onclick = action; host.appendChild(b); return b;
+    }
+    let inputs = null, choiceButtons = null;
+    function sync() {
+      prop(undo, "disabled", !h.canUndo()); prop(redo, "disabled", !h.canRedo());
+      prop(compare, "textContent", comparing ? "SHOW EDITED" : "COMPARE ORIGINAL");
+      attr(compare, "aria-pressed", String(comparing));
+      if (!inputs) {
+        inputs = Array.from(root.querySelectorAll("input[data-liv-field]"));
+        choiceButtons = Array.from(root.querySelectorAll("[data-cs-pill], [data-cs-finish]"));
+      }
+      for (const input of inputs) {
+        const key = input.dataset.livField;
+        prop(input, "value", draft[key] || (input.type === "color" ? "#000000" : ""));
+        if (input.type === "color") input.classList.toggle("cs-liv-off", !draft[key]);
+      }
+      for (const b of choiceButtons) {
+        const pair = b.dataset.csPill ? b.dataset.csPill.split(":") : ["finish", b.dataset.csFinish];
+        const on = draft[pair[0]] === pair[1]; b.classList.toggle("active", on); attr(b, "aria-pressed", String(on));
+      }
+      for (const bind of bindings) bind();
+    }
+    function restore(next, message) {
+      if (!next) return;
+      api.flush(); comparing = false; restoring = true;
+      for (const key of Object.keys(draft)) if (!Object.hasOwn(next, key)) delete draft[key];
+      Object.assign(draft, next); sync(); api.changed(); restoring = false;
+      status.textContent = message;
+    }
+    const undo = button("UNDO", () => restore(h.undo(), "Previous edit restored."));
+    const redo = button("REDO", () => restore(h.redo(), "Edit restored."));
+    const compare = button("COMPARE ORIGINAL", () => {
+      api.flush(); comparing = !comparing; api.preview(comparing ? h.original() : draft); sync();
+      status.textContent = comparing ? "Showing the original paint job. Your edits are kept; the next edit returns to your draft." : "Showing your edited paint job.";
+    });
+    const before = api.spineRow.nextSibling;
+    function insert(node) { root.insertBefore(node, before); return node; }
+    function row(label) {
+      const r = document.createElement("div"); r.className = "cs-liv-ed-row";
+      const text = document.createElement("span"); text.className = "cs-liv-ed-lbl"; text.textContent = label;
+      r.appendChild(text); return r;
+    }
+    const historyRow = row("EDITS"); historyRow.appendChild(controls);
+    root.insertBefore(historyRow, api.nameRow); root.insertBefore(status, api.nameRow);
+    const patternRows = [];
+    for (const [label, key, values, fallback] of [
+      ["DESIGN AREA", "patternPlacement", ["crown", "wrap"], "crown"],
+      ["WRAP SIDES", "patternSide", ["both", "left", "right"], "both"],
+      ["KEYLINE", "patternKey", LiveryDesign.KEY_SLOTS, "auto"],
+    ]) {
+      const r = insert(api.pillRow(label, key, values, fallback));
+      const when = { patternSide: () => draft.patternPlacement === "wrap", patternKey: () => LiveryDesign.KEY_PATTERNS.includes(draft.spineLogo) }[key];
+      patternRows.push({ row: r, when: when || (() => true) });
+    }
+    for (const [label, key] of [["NOSE TIP", "decalNoseTip"], ["COCKPIT SIDE", "decalCockpit"], ["SIDEPOD TOP", "decalPodTop"], ["HALO TOP", "decalHalo"]])
+      insert(api.pillRow(label, key, ["on", "off"], "on"));
+    const rangeLabels = { patternWidth: "DESIGN WIDTH", patternRepeat: "REPEATS", patternOffset: "SIDE OFFSET", patternTaper: "TAIL TAPER", patternOpacity: "OPACITY", patternRotation: "ROTATION", patternStretch: "LENGTH STRETCH", patternWeight: "LINE WEIGHT" };
+    for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) {
+      const r = document.createElement("label"); r.className = "tune-row";
+      const label = document.createElement("span"), text = document.createElement("span"), output = document.createElement("b");
+      label.className = "tune-label"; text.textContent = rangeLabels[key]; label.append(text, output);
+      const input = document.createElement("input");
+      input.type = "range"; input.min = limits[0]; input.max = limits[1]; input.step = 1;
+      input.setAttribute("aria-label", rangeLabels[key]); input.dataset.livField = key;
+      input.oninput = () => { draft[key] = input.value; api.changed(true); };
+      input.onchange = () => { api.changed(); api.flush(); };
+      r.append(label, input); insert(r);
+      patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !LiveryDesign.NO_REPEAT.includes(draft.spineLogo) });
+      bindings.push(() => { prop(input, "value", String(LiveryDesign.value(draft, key))); prop(output, "textContent", input.value + (key === "patternRepeat" ? "" : key === "patternRotation" ? "°" : "%")); });
+    }
+    bindings.push(() => {
+      const enabled = LiveryDesign.PATTERNS.includes(draft.spineLogo);
+      for (const item of patternRows) {
+        const off = !enabled || !item.when();
+        attr(item.row, "aria-disabled", String(off)); item.row.classList.toggle("tune-off", off);
+        prop(item.row, "title", !enabled ? "Choose an adjustable design in SPINE TOP" : off ? "Not used by the current design or area" : "");
+        for (const input of item.row.querySelectorAll("button, input")) if (input !== swap && input !== reset) prop(input, "disabled", off);
+      }
+    });
+    const palettes = row("PALETTE"), paletteButtons = document.createElement("span"); paletteButtons.className = "cs-liv-ed-finish";
+    palettes.appendChild(paletteButtons); root.insertBefore(palettes, api.bodyRow);
+    for (const p of LiveryDesign.PALETTES) button(p.name.toUpperCase(), () => {
+      [draft.c1, draft.c2, draft.patternTint] = p.colors; draft.patternSecond = p.colors[1];
+      api.changed(); status.textContent = p.name + " applied to primary, accent and design colours. Other authored surface colours are kept.";
+    }, paletteButtons);
+    Array.from(paletteButtons.children).forEach((b, i) => {
+      const colours = LiveryDesign.PALETTES[i].colors, swatch = document.createElement("span");
+      swatch.className = "cs-liv-swatch"; swatch.setAttribute("aria-hidden", "true");
+      swatch.style.width = "100%"; swatch.style.height = "6px"; swatch.style.flexBasis = "100%";
+      swatch.style.background = "linear-gradient(90deg," + colours[0] + " 0 33%," + colours[1] + " 33% 66%," + colours[2] + " 66% 100%)";
+      b.style.flexWrap = "wrap"; b.style.gap = "4px"; b.appendChild(swatch);
+      b.title = "Apply " + LiveryDesign.PALETTES[i].name + " to body primary, accent and adjustable-pattern colours";
+    });
+    const actionRow = row("DESIGN"), actions = document.createElement("span"); actions.className = "cs-liv-ed-finish"; actionRow.appendChild(actions); insert(actionRow);
+    const swap = button("SWAP COLOURS", () => {
+      [draft.patternTint, draft.patternSecond] = [draft.patternSecond || draft.c1, draft.patternTint || draft.c2];
+      api.changed(); status.textContent = "Design colours swapped. Body colours are unchanged.";
+    }, actions);
+    const reset = button("RESET SETTINGS", () => {
+      for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) draft[key] = String(limits[2]);
+      draft.patternPlacement = "crown"; draft.patternSide = "both";
+      api.changed(); status.textContent = "Design size, placement, rotation, stretch, line weight and opacity reset. Colours and selected design are kept. Undo restores your settings.";
+    }, actions);
+    patternRows.push({ row: actionRow, when: () => true });
+    bindings.push(() => {
+      prop(reset, "disabled", !LiveryDesign.PATTERNS.includes(draft.spineLogo));
+      prop(swap, "disabled", !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo));
+      prop(swap, "title", swap.disabled ? "Needs a two-colour design in SPINE TOP" : "");
+    });
+    const fields = new Map();
+    for (const r of Array.from(root.children)) {
+      for (const c of r.querySelectorAll("input, button")) {
+        const key = c.dataset.livField || (c.dataset.csPill || "").split(":")[0] || (c.dataset.csFinish ? "finish" : "");
+        if (key) fields.set(key, r);
+      }
+      if (r.classList.contains("cs-liv-ed-sec")) r.remove();
+    }
+    function section(title, description, keys, extras = []) {
+      const heading = document.createElement("div"); heading.className = "cs-liv-ed-sec";
+      heading.setAttribute("role", "heading"); heading.setAttribute("aria-level", "3"); heading.textContent = title;
+      heading.title = description; heading.setAttribute("data-liv-section", title); root.appendChild(heading);
+      const note = document.createElement("p"); note.className = "cs-opt-desc"; note.textContent = description;
+      note.setAttribute("data-liv-section", title); root.appendChild(note);
+      for (const item of [...keys.map((key) => fields.get(key)), ...extras]) {
+        if (!item) continue;
+        item.setAttribute("data-liv-section", title); root.appendChild(item);
+      }
+    }
+    section("COLOUR PALETTE", "Changes body primary, accent and adjustable-pattern colours. Other painted surfaces keep their colours.", [], [palettes]);
+    section("BODY PAINT & BASE FINISH", "Body silhouette, cooling-package style, fuel details, nose and sidepods. FINISH is the whole-car default; regional INHERIT buttons use it.",
+      ["bodyStyle", "engineShape", "fuelShape", "finish", "c1", "c2", "stripe", "noseStripe", "accent", "nose", "noseFinish", "pod", "podFinish", "lower", "upper", "bodySplit"]);
+    section("ENGINE COVER — SHAPE & PAINT", "The raised cover behind the cockpit. Shape, vents, base colour and finish.",
+      ["cover", "coverFinish", "spineHeight", "coverVents"]);
+    section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
+      ["spineLogo", "patternTint", "patternSecond", "patternKey", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
+    section("SPINE PATTERN — SIZE & PLACEMENT", "Rotate or stretch adjustable artwork and tune its coverage. LINE WEIGHT applies to stroked designs. CROWN paints the top and tail; WRAP extends onto the selected cover sides.",
+      ["patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)], [actionRow]);
+    section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
+      ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
+    section("WINGS", "Choose an aero shape and front/rear wing paint. FITTED follows the installed part; shape overrides change looks only. Carbon flaps keep their carbon material.",
+      ["aeroShape", "wingCarbon", "wing", "rearWing", "endplate", "wingFinish"]);
+    section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
+      ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
+    section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
+      ["crestStyle", "crestTone", "crestFrame", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint", "boardFinish", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo"], [api.markNote]);
+    section("COCKPIT & CAMERA", "Cockpit style, halo, mirror and T-cam: shape, paint and finish.", ["cockpitShape", "halo", "haloFinish", "mirrorTint", "mirrorFinish", "cockpitTint", "cockpitFinish", "gripTint", "tcam"]);
+    section("WHEELS & BRAKES", "Wheel, brake and tyre styles plus colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["wheelsShape", "brakesShape", "tyresShape", "rimTint", "caliperTint", "sidewallInk", "rimFinish"]);
+    section("FLOOR, SUSPENSION & RUNNING GEAR", "Floor, suspension, ERS, gearbox and exhaust styles. Paint and finish the running gear; unset colours keep bare carbon.",
+      ["floorShape", "suspensionShape", "ersShape", "gearboxShape", "exhaustShape", "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "ductFinish", "deflectorTint", "deflectorFinish", "exhaustTint"]);
+    section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
+    section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
+    const group = api.spineRow.querySelector(".cs-liv-ed-finish"), seen = new Set();
+    const choices = Array.from(group.querySelectorAll("button")).filter((b) => !seen.has(b.dataset.csPill) && seen.add(b.dataset.csPill));
+    const marks = ["logo", "none", "bigmark", "wordmark", "number"];
+    group.replaceChildren();
+    for (const [label, accepts] of [
+      ["MARKS & IDENTITY", (id) => marks.includes(id)],
+      ["FIXED GRAPHICS", (id) => !marks.includes(id) && !LiveryDesign.PATTERNS.includes(id)],
+      ["ADJUSTABLE PATTERNS", (id) => LiveryDesign.PATTERNS.includes(id)],
+    ]) {
+      const labelNode = document.createElement("span"); labelNode.className = "cs-liv-ed-sec";
+      labelNode.textContent = label; labelNode.style.flexBasis = "100%"; group.appendChild(labelNode);
+      for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
+    }
+    const AREAS = [
+      ["quick", "QUICK START", ["COLOUR PALETTE"]],
+      ["body", "BODY", ["BODY PAINT & BASE FINISH"]],
+      ["cover", "ENGINE COVER", ["ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "SPINE PATTERN — SIZE & PLACEMENT", "COVER SIDES & TAIL LINK"]],
+      ["wings", "WINGS", ["WINGS"]], ["fin", "TAIL FIN", ["TAIL FIN"]], ["marks", "MARKS & NUMBERS", ["TEAM MARKS & NUMBERS"]],
+      ["cockpit", "COCKPIT", ["COCKPIT & CAMERA"]], ["wheels", "WHEELS", ["WHEELS & BRAKES"]],
+      ["running", "RUNNING GEAR", ["FLOOR, SUSPENSION & RUNNING GEAR"]], ["helmet", "HELMET", ["HELMET"]],
+    ];
+    const ADVANCED = new Set(["podFinish", "coverFinish", "wingFinish", "finFinish", "haloFinish", "mirrorFinish", "coverBind", "finHandoff",
+      "logo3", "lower", "upper", "bodySplit", "noseStripe", "accent", "spineHeight", "coverVents", "tcam", "sidewallInk",
+      "patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)]);
+    const QUICK = ["c1", "c2", "finish"];
+    const keyOfRow = (r) => { for (const [k, row] of fields) if (row === r) return k; return ""; };
+    const nodes = Array.from(root.children).filter((n) => n.hasAttribute("data-liv-section"));
+    const first = nodes[0];
+    const tablist = document.createElement("div"); tablist.setAttribute("role", "tablist"); tablist.setAttribute("aria-label", "Livery areas");
+    root.insertBefore(tablist, first);
+    const panes = [];
+    for (const [id, title, sections] of AREAS) {
+      let list = nodes.filter((n) => sections.includes(n.getAttribute("data-liv-section")));
+      if (id === "quick") list = [historyRow, status, api.nameRow, ...list, ...QUICK.map((k) => fields.get(k))].filter(Boolean);
+      else list = list.filter((n) => !QUICK.includes(keyOfRow(n)));
+      if (!list.some((n) => n && !n.classList.contains("cs-liv-ed-sec") && !n.classList.contains("cs-opt-desc"))) continue;
+      const pane = document.createElement("div"); pane.setAttribute("role", "tabpanel"); pane.id = "cs-liv-pane-" + id;
+      const advanced = list.filter((n) => ADVANCED.has(keyOfRow(n)) || n === actionRow);
+      for (const n of list) if (!advanced.includes(n)) pane.appendChild(n);
+      if (advanced.length) {
+        const head = document.createElement("div"); head.className = "cs-liv-ed-sec"; head.textContent = "ADVANCED";
+        head.setAttribute("role", "heading"); head.setAttribute("aria-level", "4"); pane.appendChild(head);
+        for (const n of advanced) pane.appendChild(n);
+      }
+      const tab = document.createElement("button"); tab.type = "button"; tab.className = "cs-liv-ed-none";
+      tab.setAttribute("role", "tab"); tab.id = "cs-liv-tab-" + id; tab.textContent = title;
+      tab.setAttribute("aria-controls", pane.id); pane.setAttribute("aria-labelledby", tab.id);
+      tablist.appendChild(tab); root.insertBefore(pane, api.saveRow);
+      panes.push({ id, tab, pane });
+    }
+    for (const n of nodes) if (n.getAttribute("data-liv-section") === "REVIEW & SAVE" && n !== api.saveRow && !panes.some((p) => p.pane.contains(n))) n.remove();
+    const TAB_KEY = "apex26.liveryTab";
+    function showTab(i, focus) {
+      panes.forEach((p, j) => {
+        const on = i === j;
+        p.pane.hidden = !on; p.tab.setAttribute("aria-selected", String(on)); p.tab.tabIndex = on ? 0 : -1;
+        p.tab.classList.toggle("active", on);
+      });
+      if (api.scrollRoot) api.scrollRoot.scrollTop = 0;
+      try { sessionStorage.setItem(TAB_KEY, panes[i].id); } catch (_) {  }
+      if (focus) panes[i].tab.focus();
+    }
+    panes.forEach((p, i) => { p.tab.onclick = () => showTab(i, false); });
+    tablist.onkeydown = (e) => {
+      const at = panes.findIndex((p) => p.tab.getAttribute("aria-selected") === "true");
+      const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: panes.length - 1 }[e.key];
+      if (to == null) return;
+      e.preventDefault(); showTab((to + panes.length) % panes.length, true);
+    };
+    let remembered = "";
+    try { remembered = sessionStorage.getItem(TAB_KEY) || ""; } catch (_) {  }
+    showTab(Math.max(0, panes.findIndex((p) => p.id === remembered)), false);
+    const rules = [
+      { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
+      { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
+    ];
+    const pills = Array.from(root.querySelectorAll("button"));
+    for (const rule of rules) if (rule.pill) rule.pill = pills.find((b) => b.dataset.csPill === rule.pill) || null;
+    bindings.push(() => {
+      for (const rule of rules) {
+        const off = !rule.when();
+        if (rule.pill === null) continue;
+        if (rule.pill) { prop(rule.pill, "disabled", off); prop(rule.pill, "title", off ? rule.why : ""); continue; }
+        if (!rule.row) continue;
+        attr(rule.row, "aria-disabled", String(off)); prop(rule.row, "title", off ? rule.why : "");
+        for (const input of rule.row.querySelectorAll("button, input")) prop(input, "disabled", off);
+      }
+    });
+    const reasons = new Map();
+    let reasonSeq = 0;
+    function describe(el, id, on) {
+      const was = el.getAttribute("aria-describedby"), ids = (was || "").split(" ").filter((x) => x && x !== id);
+      if (on) ids.push(id);
+      if (ids.length) { if (was !== ids.join(" ")) el.setAttribute("aria-describedby", ids.join(" ")); }
+      else if (was !== null) el.removeAttribute("aria-describedby");
+    }
+    function explain() {
+      for (const r of root.querySelectorAll(".cs-liv-ed-row, .tune-row")) {
+        let text = "";
+        if (r.getAttribute("aria-disabled") === "true") text = r.title;
+        else {
+          const why = [];
+          for (const b of r.querySelectorAll("button")) if (b.disabled && b.title && !b.dataset.csColour) why.push(b.textContent + " — " + b.title);
+          text = why.join(" · ");
+        }
+        let line = reasons.get(r);
+        if (!text && !line) continue;
+        if (!line) {
+          line = document.createElement("span"); line.dataset.livWhy = "";
+          line.id = "cs-liv-why-" + ++reasonSeq; line.setAttribute("aria-hidden", "true"); reasons.set(r, line);
+        }
+        for (const c of [r, ...r.querySelectorAll("button, input")]) if (c !== line) describe(c, line.id, !!text);
+        if (!text) { line.remove(); reasons.delete(r); continue; }
+        if (line.parentNode !== r) r.appendChild(line);
+        prop(line, "textContent", text);
+      }
+    }
+    const teamTail = pills.find((b) => b.dataset.csPill === "finStyle:team");
+    const kind = teamTail && api.teamId && typeof LiveryTex !== "undefined" && LiveryTex.tailStyleOf && LiveryTex.tailStyleOf(api.teamId);
+    if (kind) teamTail.textContent = "TEAM · " + (LABELS[kind] || kind).toUpperCase();
+    bindings.push(() => { Promise.resolve().then(explain); });
+    sync();
+    return Object.freeze({
+      changed(drag) {
+        if (comparing) api.preview(draft);
+        comparing = false; if (!restoring) h.record(draft, !!drag); sync();
+      },
+      dirty: () => JSON.stringify(draft) !== JSON.stringify(h.original()),
+    });
+  }
+  return Object.freeze({ attach, label: (id) => LABELS[id] || (typeof LiveryDesign !== "undefined" && LiveryDesign.LABELS && LiveryDesign.LABELS[id]) || id });
+})();

@@ -1,0 +1,158 @@
+"use strict";
+
+const ApexXR = (function () {
+  const LS_XR = "apex26.xr";
+  const LS_BACKEND = "apex26.xrBackend";
+  const LS_CAPS = "apex26.xrCaps";
+  const SS_FALLBACK = "apex26.xrFallback";
+
+  let _plan = null;
+  let _caps = null;
+  let _fallbacks = [];
+  let _detecting = null;
+
+  function lsGet(k) {
+    try { return localStorage.getItem(k); } catch (_) { return null; }
+  }
+  function lsSet(k, v) {
+    try { localStorage.setItem(k, v); return true; } catch (_) { return false; }
+  }
+  function ssGet(k) {
+    try { return sessionStorage.getItem(k); } catch (_) { return null; }
+  }
+  function ssSet(k, v) {
+    try { sessionStorage.setItem(k, v); return true; } catch (_) { return false; }
+  }
+
+  function storeCaps(vr) {
+    if (typeof XrBoot !== "undefined" && XrBoot.storeVrCaps) XrBoot.storeVrCaps(vr);
+  }
+
+  function readPrefs() {
+    let xr = "0";
+    let xrBackend = "webgl2";
+    let gfxBackend = null;
+    try {
+      if (typeof XROpts !== "undefined") {
+        xr = XROpts.xr() ? "1" : "0";
+        xrBackend = XROpts.xrBackend();
+      } else {
+        xr = XRPlan.normXr(lsGet(LS_XR));
+        xrBackend = XRPlan.normBackend(lsGet(LS_BACKEND));
+      }
+      gfxBackend = lsGet("apex26.gfxBackend");
+    } catch (_) {  }
+    return { xr, xrBackend, gfxBackend };
+  }
+
+  function questUa(ua) {
+    return /OculusBrowser/i.test(ua || "");
+  }
+
+  function syncCapsFromCache() {
+    const cached = lsGet(LS_CAPS);
+    return {
+      xr: typeof navigator !== "undefined" && !!navigator.xr,
+      vr: cached === "1",
+      gpu: typeof navigator !== "undefined" && !!navigator.gpu,
+      xrgpu: typeof globalThis !== "undefined" && typeof globalThis.XRGPUBinding !== "undefined",
+      mobileQuest: typeof navigator !== "undefined" && questUa(navigator.userAgent),
+    };
+  }
+
+  async function detect(force) {
+    if (_detecting) return _detecting;
+    _detecting = (async () => {
+      const caps = syncCapsFromCache();
+      caps.xr = typeof navigator !== "undefined" && !!navigator.xr;
+      caps.gpu = typeof navigator !== "undefined" && !!navigator.gpu;
+      caps.xrgpu = typeof globalThis !== "undefined" && typeof globalThis.XRGPUBinding !== "undefined";
+      caps.mobileQuest = typeof navigator !== "undefined" && questUa(navigator.userAgent);
+      const stored = lsGet(LS_CAPS);
+      let known = true;
+      if (!force && (stored === "1" || stored === "0")) {
+        caps.vr = stored === "1";
+      } else if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
+        try {
+          const vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
+          caps.vr = vr;
+          storeCaps(vr);
+        } catch (_) { known = false;  }
+      } else {
+        caps.vr = false;
+        storeCaps(false);
+      }
+      _caps = caps;
+      _plan = null;
+      if (known && typeof XrSession !== "undefined" && XrSession.seed) XrSession.seed(caps.vr);
+      if (typeof XROpts !== "undefined" && XROpts.onCaps) {
+        try { XROpts.onCaps(caps); } catch (_) {  }
+      }
+      return caps;
+    })();
+    try {
+      return await _detecting;
+    } finally {
+      _detecting = null;
+    }
+  }
+
+  function caps() {
+    if (_caps) return _caps;
+    _caps = syncCapsFromCache();
+    return _caps;
+  }
+
+  function plan(force) {
+    if (_plan && !force) return _plan;
+    const boot = { xrFallback: ssGet(SS_FALLBACK) };
+    const resolved = XRPlan.resolve({ caps: caps(), prefs: readPrefs(), boot });
+    _plan = resolved;
+    return resolved;
+  }
+
+  function bootPick() {
+    const p = plan(true);
+    if (p.xrMode !== "armed") return null;
+    return p.backendPref || null;
+  }
+
+  function fallbacks() {
+    return (_fallbacks.length ? _fallbacks : plan().fallbacks).slice();
+  }
+
+  function noteFallback(from, to, reason) {
+    const entry = { from: String(from || ""), to: String(to || ""), reason: String(reason || "") };
+    _fallbacks.push(entry);
+    try { Log.warn("xr", entry.from + "→" + entry.to + ": " + entry.reason); } catch (_) {  }
+    if (entry.to === "webgl2") ssSet(SS_FALLBACK, "webgl2");
+    _plan = null;
+    return entry;
+  }
+
+  function stats() {
+    const p = plan();
+    const session = (typeof XrSession !== "undefined") ? XrSession : null;
+    return {
+      path: p.path,
+      xrMode: p.xrMode,
+      backendPref: p.backendPref,
+      reasons: p.reasons.slice(),
+      fallbacks: fallbacks(),
+      caps: caps(),
+      presenting: !!(session && session.isPresenting && session.isPresenting()),
+      sessionBackend: session && session.backend ? session.backend() : null,
+      frameCount: session && session.frameCount ? session.frameCount() : 0,
+    };
+  }
+
+  function invalidate() {
+    _plan = null;
+    _caps = null;
+  }
+
+  return {
+    detect, caps, plan, bootPick, fallbacks, noteFallback, stats, invalidate,
+  };
+})();
+Object.freeze(ApexXR);

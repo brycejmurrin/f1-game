@@ -1,0 +1,533 @@
+
+@layer reset, base, components, hud, overlays, responsive, layout;
+
+@font-face {
+  font-family: "Titillium Web"; font-style: normal; font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Titillium Web"; font-style: italic; font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-700-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Saira Wordmark"; font-style: italic; font-weight: 800;
+  font-display: swap;
+  src: url("../assets/fonts/saira-apex26-800-italic.woff2") format("woff2");
+}
+@keyframes apex-vt-fade-out { to { opacity: 0; } }
+@keyframes apex-vt-fade-in { from { opacity: 0; } }
+::view-transition { background-color: var(--bg); pointer-events: none; }
+::view-transition-group(*),::view-transition-image-pair(*),::view-transition-old(*),::view-transition-new(*) { pointer-events: none; }
+::view-transition-old(root) {
+  animation-name: apex-vt-fade-out;
+  animation-duration: 0.10s;
+  animation-timing-function: var(--ease-in);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+  z-index: 0;
+}
+::view-transition-new(root) {
+  animation-name: apex-vt-fade-in;
+  animation-duration: 0.14s;
+  animation-delay: 0.10s;
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+  z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important; 
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-motion="reduce"]::view-transition-group(*),
+:root[data-motion="reduce"]::view-transition-old(*),
+:root[data-motion="reduce"]::view-transition-new(*) { animation: none !important; }
+
+@media (forced-colors: active) {
+  [aria-pressed="true"], [aria-selected="true"], .active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .sheet, .hud-box, dialog { border: 1px solid CanvasText; }
+  .cs-liv-swatch, .tm-colour, .sel-chip .swatch, .res-swatch, .dh-swatch,
+  .pm-accent-chip,
+  input[type="color"] { forced-color-adjust: none; }
+  #hud-flag { forced-color-adjust: none; }
+  button:disabled { color: GrayText; opacity: 1; }
+}
+
+@property --sfade-t { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --sfade-b { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --sf-h { syntax: "<length>"; inherits: true; initial-value: 24px; }
+@property --sf-y { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --sheen { syntax: "<percentage>"; inherits: false; initial-value: -30%; }
+@property --compact-at { syntax: "<length>"; inherits: false; initial-value: 380px; }
+@property --tall-at { syntax: "<number>"; inherits: false; initial-value: 1.05; }
+@property --tap { syntax: "<length>"; inherits: true; initial-value: 44px; }
+@property --chip-h { syntax: "<length>"; inherits: true; initial-value: 40px; }
+@property --tap-min { syntax: "<length>"; inherits: true; initial-value: 24px; }
+@property --tap-paint { syntax: "<length>"; inherits: true; initial-value: 24px; }
+@property --slider { syntax: "<length>"; inherits: true; initial-value: 32px; }
+@property --tap-sm { syntax: "<length>"; inherits: true; initial-value: 30px; }
+
+@layer base {
+
+:root {
+  color-scheme: dark;
+  --red: #e10600;
+  --carbon: #15151E;
+  --bg: #0c0c14;
+  --spark: #ff8c42;
+  --steel: var(--dim);
+  --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
+  --text: #f6f6f9;
+  --hud-ink-light: #f6f6f9;
+  --hud-ink-dark: #0c0c14;
+  --visor-neutral: var(--hud-ink-dark);
+  --visor-amber: #503d20;
+  --visor-ice: #233b50;
+  --visor-rose: #4c2d3c;
+  --dim: #bdbdca; 
+  --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim));
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --gut: 12px;
+  --safe-t: max(var(--sat), var(--gut));
+  --safe-r: max(var(--sar), var(--gut));
+  --safe-b: max(var(--sab), var(--gut));
+  --safe-l: max(var(--sal), var(--gut));
+  --safe-w: calc(100svw - var(--safe-l) - var(--safe-r));
+  --safe-h: calc((100svh - var(--safe-t) - var(--safe-b)) / var(--ui-scale));
+  --bp-phone: 480px;
+  --bp-tablet: 700px;
+  --bp-laptop: 900px;
+  --bp-desktop: 1440px;
+  --bp-wide: 1920px;
+  --bp-ultra: 2200px;
+  --layout-active: var(--bp-phone);
+  --col-max: 660px;
+  --touch-label-floor: 11px; --touch-pedal-radius: 28%; --touch-tablet-btn: 96px; --touch-tablet-steer: 108px;
+  --menu-fit-sheet: 1180px; --menu-fit-sheet-wide: 1360px; --menu-fit-pause: 480px;
+  --seg-w: env(viewport-segment-width 0 0, 100vw);
+  --seg-h: env(viewport-segment-height 0 0, 100svh);
+  --fold-gap: max(0, calc(env(viewport-segment-left 1 0, 0) - env(viewport-segment-right 0 0, 0)));
+  --fold-gap-y: max(0, calc(env(viewport-segment-top 0 1, 0) - env(viewport-segment-bottom 0 0, 0)));
+  --kb: 0px;
+  --pad: 22px; 
+  --gap: 12px; 
+  --tap: max(44px, calc(24px / var(--ui-scale))); 
+  --chip-h: max(40px, calc(24px / var(--ui-scale))); 
+  --tap-sm: max(30px, calc(24px / var(--ui-scale))); 
+  --tap-0: var(--tap);
+  --chip-h-0: var(--chip-h);
+  --tap-min: max(24px, calc(24px / var(--ui-scale)));
+  --tap-paint-at: 24px;
+  --tap-paint: var(--tap-min);
+  --slider: calc(32px / var(--ui-scale));
+  --label: 14px; 
+  --fs-micro: 14px;
+  --fs-1: var(--fs-micro);
+  --fs-2: 15px;
+  --fs-3: 16px;
+  --fs-4: 17px;
+  --fs-5: 18px;
+  --fs-6: 20px;
+  --ls-1: 0.02em; 
+  --ls-2: 0.04em; 
+  --ls-3: 0.06em; 
+  --ls-4: 0.08em; 
+  --ls-5: 0.12em; 
+  --r-xs:   3px;
+  --r-sm:   6px;
+  --r-md:   8px;
+  --r-lg:   14px;
+  --r-pill: 999px;
+  --font-ui:  "Titillium Web", "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  --font-hud: "Barlow Condensed", "Titillium Web", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --accent: var(--red);
+  --accent-dim: color-mix(in oklab, var(--accent) 40%, var(--bg));
+  --accent-ink: var(--text);
+  --focus: #fff;
+
+  --surf-1: color-mix(in oklab, #fff 4%, var(--bg)); 
+  --surf-3: color-mix(in oklab, #fff 11%, var(--bg)); 
+  --plate: color-mix(in oklab, var(--carbon) 62%, transparent);
+  --plate-line: rgba(255, 255, 255, 0.16);
+  --card-line: rgba(255, 255, 255, 0.12);
+  --hairline: color-mix(in oklab, var(--text) 8%, transparent); 
+  --plate-hover: color-mix(in oklab, var(--carbon) 78%, #fff 8%);
+  --plate-press: color-mix(in oklab, var(--carbon) 84%, #fff 12%);
+  --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
+  --plate-on-strong: color-mix(in oklab, var(--red) 24%, transparent);
+  --lift-sel: 0 0 14px color-mix(in oklab, var(--red) 36%, transparent);
+  --armed-fill: color-mix(in oklab, var(--red) 35%, transparent);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 74%, transparent);
+  --scrim: rgba(6, 6, 10, 0.42);
+  --scrim-heavy: rgba(6, 6, 10, 0.92);
+  --gold: #ffd700;
+  --silver: #c0c0c0;
+  --bronze: #cd9b5a;
+  --look-sunlight-hi: #f7e7a4;
+  --look-sunlight-lo: #e0b84a;
+  --you: #aeea00;
+  --zone: #26a5f5; 
+  --ghost: #78dcff; 
+  --faster: #5fe88a;
+  --slower: #ff3b30;
+  --slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text));
+  --flag-red: #c8102e;
+  --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
+  --sec-best: #dfa3ff;
+  --sec-slow: #f6d200;
+  --gas-lit: rgba(0, 210, 90, 0.95);
+  --del-ink: rgba(255, 120, 110, 0.85);
+  --del-fill: rgb(255, 60, 50);
+  --edit-ink: rgba(120, 200, 255, 0.9);
+  --edit-fill: rgb(60, 150, 255);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  --lift-2:
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 12px 30px rgba(0, 0, 0, 0.5),
+    0 26px 56px rgba(0, 0, 0, 0.35);
+
+  --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
+  --grad-primary:     linear-gradient(135deg in oklab,
+                        color-mix(in oklab, var(--red-fill) 76%, #fff) 0%,
+                        color-mix(in oklab, var(--red-fill) 74%, #000) 100%);
+  --grad-primary-hot: linear-gradient(135deg in oklab,
+                        color-mix(in oklab, var(--red-fill) 58%, #fff) 0%,
+                        color-mix(in oklab, var(--red-fill) 84%, #000) 100%);
+  --grad-head:
+    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 34%, transparent), transparent 56%),
+    linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.07), transparent 72%);
+  --grad-rule: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 58%, rgba(255, 255, 255, 0.22)), rgba(255, 255, 255, 0.04) 78%, transparent);
+  --grad-accent: linear-gradient(150deg in oklab,
+    color-mix(in oklab, var(--accent) 18%, transparent), transparent 62%);
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  --dur-1: 120ms;
+  --dur-3: 320ms;
+  --dur-4: 600ms;
+  --dur-draw: 1400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --press-lit: inset 0 -3px 0 var(--red), 0 0 0 2px color-mix(in oklab, var(--red) 70%, transparent);
+  --ease-spring: var(--ease-out);
+}
+
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.063, 0.209, 0.388, 0.565, 0.721, 0.847, 0.939,
+      1.001, 1.038, 1.056, 1.06, 1.055, 1.046, 1.035, 1.025, 1.016, 1.008,
+      1.003, 1, 0.998, 0.997, 0.996, 0.997, 1);
+  }
+}
+
+body:not(.desktop) {
+  --tap: max(52px, calc(44.2px / var(--ui-scale)));
+  --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(24px / var(--ui-scale)));
+  --tap-sm: max(36px, calc(24px / var(--ui-scale)));
+  --tap-paint-at: 52px;
+  --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-scale)));
+  --tap-0: var(--tap); 
+  --chip-h-0: var(--chip-h);
+  --label: 14px;
+}
+
+:root {
+  --ui-scale: 1; --hud-scale: 1;
+  --hud-btn-scale: 1;
+  --hud-btn-opacity: 1;
+  --hud-panel-a-eff: max(0.45, var(--hud-panel-a, 1));
+  --ui-compact-brand-scale: min(var(--ui-scale), 1);
+  --ui-compact-scale: min(var(--ui-scale), 1.25);
+  --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
+  --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
+}
+@media (pointer: coarse) {
+  :root {
+    --ui-scale: 1.09; --hud-scale: 1;
+    --hud-btn-mult: 1.25;
+    --hud-btn-scale: var(--hud-btn-mult);
+  }
+}
+@media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px) {
+  :root { --ui-scale: 0.7; }
+}
+
+:root {
+  --vwz:   calc(1vw  / var(--ui-scale));
+  --vhz:   calc(1vh  / var(--ui-scale));
+  --svhz:  calc(1svh / var(--ui-scale));
+  --vwzh:  calc(1vw  / var(--hud-scale));
+}
+
+:root[data-team="mercedes"]    { --accent: #00b4ab; --accent-ink: var(--hud-ink-dark); } 
+:root[data-team="ferrari"]     { --accent: #dc0000; --accent-ink: var(--hud-ink-light); } 
+:root[data-team="mclaren"]     { --accent: #ff8000; --accent-ink: var(--hud-ink-dark); } 
+:root[data-team="redbull"]     { --accent: #ffd700; --accent-ink: var(--hud-ink-dark); } 
+:root[data-team="alpine"]      { --accent: #0093cc; --accent-ink: var(--hud-ink-dark); } 
+:root[data-team="racingbulls"] { --accent: #1634cb; --accent-ink: var(--hud-ink-light); } 
+:root[data-team="haas"]        { --accent: #da291c; --accent-ink: var(--hud-ink-light); } 
+:root[data-team="williams"]    { --accent: #0f3cc9; --accent-ink: var(--hud-ink-light); } 
+:root[data-team="audi"]        { --accent: #fa470d; --accent-ink: var(--hud-ink-dark); } 
+:root[data-team="astonmartin"] { --accent: #b7e11b; --accent-ink: var(--hud-ink-dark); } 
+:root[data-team="cadillac"]    { --accent: #f5f5f5; --accent-ink: var(--hud-ink-dark); } 
+
+:root[data-menu-accent="ember"]  { --red: #ff4d1a; }
+:root[data-menu-accent="amber"]  { --red: #ffb000; }
+:root[data-menu-accent="cyan"]   { --red: #00a3e0; }
+:root[data-menu-accent="violet"] { --red: #7a5cff; }
+:root[data-menu-accent="lime"]   { --red: #b7e11b; }
+
+:root[data-ui-theme="light"] {
+  color-scheme: light;
+  --bg: #f0f0f4;
+  --carbon: #e6e6ec;
+  --text: #14141c;
+  --dim: #5a5a68;
+  --panel: color-mix(in oklab, #fff 78%, var(--carbon));
+  --surf-1: color-mix(in oklab, #000 3.5%, var(--bg));
+  --surf-3: color-mix(in oklab, #000 8%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 70%, transparent);
+  --plate-line: rgba(20, 20, 28, 0.16);
+  --card-line: rgba(20, 20, 28, 0.12);
+  --plate-hover: color-mix(in oklab, var(--carbon) 82%, #000 6%);
+  --plate-press: color-mix(in oklab, var(--carbon) 88%, #000 10%);
+  --plate-opaque: color-mix(in oklab, #fff 86%, var(--carbon));
+  --scrim: rgba(20, 20, 28, 0.28);
+  --scrim-heavy: rgba(20, 20, 28, 0.72);
+  --hud-halo: 0 1px 3px rgba(255, 255, 255, 0.85);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  --focus: #111118;
+  --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+  --gold: #7a5600;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] {
+    --bg: #f0f0f4;
+    --carbon: #e6e6ec;
+    --text: #14141c;
+    --dim: #5a5a68;
+    --panel: color-mix(in oklab, #fff 78%, var(--carbon));
+    --surf-1: color-mix(in oklab, #000 3.5%, var(--bg));
+    --surf-3: color-mix(in oklab, #000 8%, var(--bg));
+    --plate: color-mix(in oklab, var(--carbon) 70%, transparent);
+    --plate-line: rgba(20, 20, 28, 0.16);
+    --card-line: rgba(20, 20, 28, 0.12);
+    --plate-hover: color-mix(in oklab, var(--carbon) 82%, #000 6%);
+    --plate-press: color-mix(in oklab, var(--carbon) 88%, #000 10%);
+    --plate-opaque: color-mix(in oklab, #fff 86%, var(--carbon));
+    --scrim: rgba(20, 20, 28, 0.28);
+    --scrim-heavy: rgba(20, 20, 28, 0.72);
+    --hud-halo: 0 1px 3px rgba(255, 255, 255, 0.85);
+    --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+    --focus: #111118;
+    --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+    --gold: #7a5600;
+  }
+}
+:root[data-ui-theme="system"] { color-scheme: dark light; }
+:root {
+  --look-hud-bg: rgba(8, 8, 14, 0.78);
+  --look-hud-ink: #fff;
+  --look-hud-dim: rgba(255, 255, 255, 0.7);
+}
+:root[data-text-size="large"] {
+  --fs-micro: 16px; --fs-2: 17px; --fs-3: 18px; --fs-4: 20px; --fs-5: 21px; --fs-6: 23px;
+  --hud-text-boost: 1.10;
+}
+:root[data-text-size="larger"] {
+  --fs-micro: 18px; --fs-2: 20px; --fs-3: 21px; --fs-4: 22px; --fs-5: 23px; --fs-6: 26px;
+  --hud-text-boost: 1.18;
+}
+:root {
+  --fs-floor: calc(12px / var(--ui-scale, 1));
+  --fs-micro: max(14px, var(--fs-floor)); --fs-2: max(15px, var(--fs-floor)); --fs-3: max(16px, var(--fs-floor));
+  --fs-4: max(17px, var(--fs-floor)); --fs-5: max(18px, var(--fs-floor)); --fs-6: max(20px, var(--fs-floor));
+}
+:root[data-text-size="large"] {
+  --fs-micro: max(16px, var(--fs-floor)); --fs-2: max(17px, var(--fs-floor)); --fs-3: max(18px, var(--fs-floor));
+  --fs-4: max(20px, var(--fs-floor)); --fs-5: max(21px, var(--fs-floor)); --fs-6: max(23px, var(--fs-floor));
+}
+:root[data-text-size="larger"] {
+  --fs-micro: max(18px, var(--fs-floor)); --fs-2: max(20px, var(--fs-floor)); --fs-3: max(21px, var(--fs-floor));
+  --fs-4: max(22px, var(--fs-floor)); --fs-5: max(23px, var(--fs-floor)); --fs-6: max(26px, var(--fs-floor));
+}
+
+:root[data-cvd="deutan"],
+:root[data-cvd="protan"] {
+  --faster: #4aa3ff;
+  --slower: #ee7733;
+  --sec-slow: #ddcc77;
+  --sec-best: #c8f4ff;
+  --you: #ff9ec8;
+  --zone: #7ec8ff;
+  --ghost: #ffffff;
+  --red: #cc3311;
+}
+:root[data-cvd="tritan"] {
+  --faster: #00e0c0;
+  --slower: #ff9eb0;
+  --sec-slow: #ffe56a;
+  --sec-best: #e8fff4;
+  --you: #ff5c96;
+  --zone: #00e0c0;
+  --ghost: #ffffff;
+}
+:root[data-ui-contrast="high"] {
+  --dim: color-mix(in oklab, var(--text) 86%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 96%, transparent);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 98%, transparent);
+  --plate-line: color-mix(in oklab, var(--text) 55%, transparent);
+  --card-line: color-mix(in oklab, var(--text) 40%, transparent);
+  --hairline: color-mix(in oklab, var(--text) 30%, transparent);
+  --hc-hud-plate: color-mix(in oklab, #000 92%, transparent);
+  --hc-hud-line: rgba(255, 255, 255, 0.55);
+  --hud-panel-a-eff: 1; 
+  --hud-halo: 0 0 2px #000, 0 1px 3px #000;
+  --look-hud-bg: var(--hc-hud-plate);
+  --look-hud-dim: var(--look-hud-ink);
+}
+:is(#hud, #announce, #game-metrics) {
+  color-scheme: dark;
+  --bg: #0c0c14;
+  --carbon: #15151E;
+  --text: #f6f6f9;
+  --dim: #bdbdca;
+  --slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text));
+  --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
+  --surf-1: color-mix(in oklab, #fff 4%, var(--bg));
+  --surf-3: color-mix(in oklab, #fff 11%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 62%, transparent);
+  --plate-line: rgba(255, 255, 255, 0.16);
+  --card-line: rgba(255, 255, 255, 0.12);
+  --plate-hover: color-mix(in oklab, var(--carbon) 78%, #fff 8%);
+  --plate-press: color-mix(in oklab, var(--carbon) 84%, #fff 12%);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 74%, transparent);
+  --scrim: rgba(6, 6, 10, 0.42);
+  --scrim-heavy: rgba(6, 6, 10, 0.92);
+  --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  --focus: #fff;
+  --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
+  --gold: #ffd700;
+  color: var(--text);
+}
+:root[data-ui-contrast="high"] :is(#hud, #announce, #game-metrics) {
+  --dim: color-mix(in oklab, var(--text) 86%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 96%, transparent);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 98%, transparent);
+  --plate-line: color-mix(in oklab, var(--text) 55%, transparent);
+  --card-line: color-mix(in oklab, var(--text) 40%, transparent);
+  --hud-halo: 0 0 2px #000, 0 1px 3px #000;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  touch-action: manipulation;
+}
+
+input, textarea, [contenteditable] {
+  -webkit-user-select: text; user-select: text;
+  -webkit-touch-callout: default;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+#game {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+#fx-droplets { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#fx-droplets[hidden] { display: none; }
+
+body.in-race .touchbtn,
+body.in-race #hud,
+body.in-race #pausebtn,
+body.in-race #btn-cam {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+h1, h2, .hud-value, .bigbtn {
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: background 0.14s, box-shadow 0.14s;
+}
+@media (hover: hover) and (pointer: fine) {
+  button:hover { background: var(--plate-hover); }
+  button:disabled:hover { background: var(--plate); }
+}
+button:active { background: var(--plate-press); }
+button:disabled { opacity: 0.55; cursor: default; }
+button:disabled:active { background: var(--plate); }
+
+:focus-visible {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+}
+:root[data-focus="high"] :focus-visible {
+  outline-width: max(3px, calc(3px / var(--ui-scale, 1)));
+  outline-offset: calc(-1 * max(3px, calc(3px / var(--ui-scale, 1))));
+  box-shadow: inset 0 0 0 max(1px, calc(1px / var(--ui-scale, 1))) color-mix(in srgb, var(--focus) 55%, transparent);
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  :root {
+    --pad: 13px;
+    --gap: 8px;
+    --gut: 8px;
+  }
+}
+.sheet[data-density="compact"] {
+  --pad: 13px;
+  --gap: 8px;
+  --gut: 8px;
+}
+@media (min-width: 700px) { :root { --layout-active: var(--bp-tablet); } }
+@media (min-width: 900px) { :root { --layout-active: var(--bp-laptop); } }
+@media (min-width: 1440px) { :root { --layout-active: var(--bp-desktop); } }
+@media (min-width: 1920px) { :root { --layout-active: var(--bp-wide); } }
+@media (min-width: 2200px) { :root { --layout-active: var(--bp-ultra); } }
+} 

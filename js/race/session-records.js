@@ -1,0 +1,135 @@
+"use strict";
+var SessionRecords = (function () {
+  const PHYS = SessionPhys.PHYS;
+  function create(G) {
+    let key = null, revision = -1, spoiled = false, dailyRestore = null, assistRestore = null;
+    let comparedGuest = null, comparedKey = null;
+    const STANDARD = { PACE: 0.84, DRIFT: 0, FRONT_GRIP: 0.94, PLAYER_GRIP: 1.15, ROAD_FOLLOW: 0,
+      STEER_EXPO: 2.4, STEER_MAX_SLIP: 0.29, STEER_SPEED_REF: 41.7, WHEELBASE: 3.6, YAW_DAMP: 1, YAW_INERTIA: 0.58, raceLineAssist: 0 };
+    function prepareDaily() {
+      if (!dailyRestore) dailyRestore = Object.fromEntries([...PHYS, "teamIdx", "driverIdx", "difficulty"].map(k => [k, G[k]]));
+      for (const [k, v] of Object.entries(STANDARD)) G[k] = v;
+      G.teamIdx = Math.max(0, Teams.LIST.findIndex(t => t.id === "mclaren")); G.driverIdx = 0; G.difficulty = "normal";
+      Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+      if (!assistRestore) assistRestore = { grip: typeof GripSteer !== "undefined" ? GripSteer.level() : 1, wheel: typeof WheelState !== "undefined" && WheelState.enabled() };
+      if (typeof GripSteer !== "undefined") GripSteer.setLevel(1);
+      if (typeof WheelState !== "undefined") WheelState.setEnabled(false, false);
+    }
+    function restoreDaily() {
+      if (assistRestore) {
+        if (typeof GripSteer !== "undefined") GripSteer.setLevel(assistRestore.grip);
+        if (typeof WheelState !== "undefined") WheelState.setEnabled(assistRestore.wheel, false);
+        assistRestore = null;
+      }
+      if (!dailyRestore) return;
+      for (const [k, v] of Object.entries(dailyRestore)) G[k] = v;
+      dailyRestore = null;
+      Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+    }
+    function config() {
+      const c = G.player, t = G.track;
+      return { physics: PhysicsConsts.REVISION, circuit: t && t.def.id, layout: t && [t.def.revision || 1, t.n, t.total],
+        car: c && [c.team.id, c.tierV, c.mods, c.aeroLoad, c.ersDeploy, c.ersRegen, c.tread, c.brakeBias, c.rollBalance],
+        tune: PHYS.map(k => G[k]), controls: G.recordControls(), weather: G.weatherArc ? G.weatherArc.from : G.raceWeather,
+        weatherPlan: G.weatherArc ? [G.weatherArc.from, G.weatherArc.to, G.weatherArc.dur] : null,
+        tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay };
+    }
+    function current() { return Ghost.contextKey(config()); }
+    function comparableKeys() {
+      const cfg = config();
+      return G.session === "tt" ? ["off", "light", "real"].map(tyreWear => Ghost.contextKey({ ...cfg, tyreWear })) : [current()];
+    }
+    function selectGhost(module, id, keys) {
+      let selected = keys[0], best = Infinity;
+      for (const candidate of keys) {
+        module.setTrack(id, candidate);
+        if ((!module.compatible || module.compatible(module.envelope())) && module.bestTime() < best) { best = module.bestTime(); selected = candidate; }
+      }
+      return selected;
+    }
+    function comparableBoard(id) {
+      return comparableKeys().flatMap(context => GameStore.ttBoard(id, context)).sort((a, b) => a.t - b.t);
+    }
+    function inputMeta() {
+      return {
+        seed: G.seed >>> 0 || 1,
+        physRev: PhysicsConsts.REVISION,
+        build: (typeof window !== "undefined" && window.__APEX_BUILD) || 0,
+        dt: PhysicsConsts.FIXED_DT,
+      };
+    }
+    function begin() {
+      key = current(); revision = G.store.rev; spoiled = false;
+      const keys = comparableKeys();
+      Ghost.setTrack(G.track.def.id, selectGhost(Ghost, G.track.def.id, keys));
+      if (typeof InputGhost !== "undefined") {
+        InputGhost.setTrack(G.track.def.id, selectGhost(InputGhost, G.track.def.id, keys));
+        InputGhost.startLap(inputMeta());
+      }
+      const b = comparableBoard(G.track.def.id);
+      G.ttRecord = b.length ? b[0].t : Infinity;
+      if (typeof GhostShare !== "undefined" && GhostShare.hasGuest(G.track.def.id)) {
+        const guest = GhostShare.guest();
+        if (guest !== comparedGuest || key !== comparedKey) {
+          G.announce(GhostShare.contextNotice(keys.includes(guest.context) ? key : guest.context, key), 6, "info");
+          comparedGuest = guest; comparedKey = key;
+        }
+      }
+      return key;
+    }
+    function invalidate() { if (G.practice) spoiled = true; }
+    function sampleInput(c, inp) {
+      if (revision !== G.store.rev) { revision = G.store.rev; if (current() !== key) spoiled = true; }
+      if (!spoiled && !c.incidentInvalidLap && typeof InputGhost !== "undefined") InputGhost.record(inp);
+    }
+    function sample(c, inp, inputRecorded) {
+      if (revision !== G.store.rev) {
+        revision = G.store.rev;
+        if (current() !== key) spoiled = true;
+      }
+      if (!spoiled && !c.incidentInvalidLap) {
+        Ghost.record(c.lapTime, c.s, c.x);
+        if (!inputRecorded && typeof InputGhost !== "undefined" && inp) InputGhost.record(inp);
+      }
+    }
+    function accept() {
+      const daily = G.daily.current();
+      if (daily && daily.class === "standard" && (PHYS.some(k => G[k] !== STANDARD[k]) || Object.keys(SessionPhys.assists()).length)) {
+        spoiled = true;
+        G.announce("STANDARD DAILY SETTINGS CHANGED — RESTART DAILY", 3, "info");
+        return false;
+      }
+      if (!spoiled && current() === key) return true;
+      G.announce("SETTINGS CHANGED — NEXT LAP STARTS A NEW CLASS", 3, "info");
+      begin(); Ghost.startLap();
+      if (typeof InputGhost !== "undefined") InputGhost.startLap(inputMeta());
+      return false;
+    }
+    function finish(lapTime, laps, pole) {
+      if (!accept()) return false;
+      laps.push(lapTime);
+      const c = G.player;
+      GameStore.ttBoardAdd(G.track.def.id, { t: lapTime, teamId: c.team.id, code: c.code, name: c.name, ts: Date.now(), context: key });
+      const medal = Quali.medalFor(lapTime, pole), held = Ghost.medal();
+      const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
+        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+      if (typeof InputGhost !== "undefined") {
+        InputGhost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
+          pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+        InputGhost.startLap(inputMeta());
+      }
+      Ghost.startLap();
+      const won = up && medal && medal !== held ? medal.toUpperCase() + " MEDAL" : "";
+      if (G.daily.isActive()) G.daily.record(lapTime, key);
+      const record = lapTime < G.ttRecord;
+      if (record) { G.ttRecord = lapTime; G.ttNewRecord = true; }
+      const line = record ? (won ? won + " — NEW RECORD " : "NEW RECORD ") + G.fmtTime(lapTime) : won;
+      if (line) G.announce(line, record && won ? 2.6 : 2, "info");
+      return true;
+    }
+    function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
+    return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
+  }
+  return { create };
+})();
+Object.freeze(SessionRecords);

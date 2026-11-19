@@ -1,0 +1,457 @@
+"use strict";
+const FreeCam = (function () {
+
+
+const SPD_MIN = 5, SPD_MAX = 200, SPD_DEF = 34;
+const BOOST = 95 / 34;
+const ROLL_MAX = 45;
+const ROLL_RATE = 40;
+const WHEEL_STEP = 1.15;
+const SLIDER_MAX = 1000;
+const FOV_MIN = 20, FOV_MAX = 110;
+
+const clamp = M4.clamp;
+const fin = (v) => typeof v === "number" && isFinite(v);
+
+function speedFromSlider(v) {
+  const t = clamp(fin(+v) ? +v : 0, 0, SLIDER_MAX) / SLIDER_MAX;
+  return SPD_MIN * Math.pow(SPD_MAX / SPD_MIN, t);
+}
+function sliderFromSpeed(s) {
+  const c = clampSpeed(s);
+  return Math.round(SLIDER_MAX * Math.log(c / SPD_MIN) / Math.log(SPD_MAX / SPD_MIN));
+}
+function clampSpeed(s) { return clamp(fin(+s) ? +s : SPD_DEF, SPD_MIN, SPD_MAX); }
+function wheelSpeed(s, deltaY) {
+  if (!deltaY) return clampSpeed(s);
+  return clampSpeed(clampSpeed(s) * (deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP));
+}
+function clampRoll(deg) { return clamp(fin(+deg) ? +deg : 0, -ROLL_MAX, ROLL_MAX); }
+function clampFov(f) { return clamp(fin(+f) ? +f : 60, FOV_MIN, FOV_MAX); }
+
+const r2 = (n) => Math.round(n * 100) / 100;
+const v3 = (a) => "[" + r2(a[0]) + "," + r2(a[1]) + "," + r2(a[2]) + "]";
+function viewSnippet(eye, target, fov) {
+  return "__apex.view({eye:" + v3(eye) + ",target:" + v3(target) + ",fov:" + r2(fov) + "})";
+}
+
+function aim(eye, target) {
+  let dx = target[0] - eye[0], dy = target[1] - eye[1], dz = target[2] - eye[2];
+  const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+  return { yaw: Math.atan2(dx, -dz), pitch: clamp(Math.asin(clamp(dy, -1, 1)), -1.45, 1.45) };
+}
+
+const CAR_BACK = 9, CAR_UP = 3.2, CAR_AHEAD = 14, CAR_LOOK_UP = 1;
+function carPose(car, y) {
+  const fx = Math.sin(car.head || 0), fz = Math.cos(car.head || 0);
+  return {
+    eye: [car.px - fx * CAR_BACK, y + CAR_UP, car.pz - fz * CAR_BACK],
+    target: [car.px + fx * CAR_AHEAD, y + CAR_LOOK_UP, car.pz + fz * CAR_AHEAD],
+  };
+}
+
+const CN_OUT = 30, CN_BACK = 18, CN_UP = 9;
+function cornerPose(track, n) {
+  FlybySeq.cornerS(track, 1);
+  const count = (track._fbCorners || []).length;
+  if (!count) return null;
+  const k = ((((n | 0) - 1) % count) + count) % count + 1;
+  const memo = track._fcCorner || (track._fcCorner = {});
+  let hit = memo[k];
+  if (!hit) {
+    const eye = { at: "corner", n: k, off: -CN_BACK, x: CN_OUT, y: CN_UP }, look = { at: "corner", n: k, off: 0, x: 0, y: 1 };
+    const v = FlybySeq.solve(track, 0, [{ id: "snap", dur: 1, ease: "linear", eye: [eye, eye], look: [look, look], fov: [50, 50] }]);
+    hit = memo[k] = { n: k, count, eye: v.eye.slice(), target: v.tgt.slice() };
+    FlybySeq.reset();
+  }
+  return { n: hit.n, count: hit.count, eye: hit.eye.slice(), target: hit.target.slice() };
+}
+
+function anchorText(pose) {
+  if (!pose) return "—";
+  const sg = (v) => (v >= 0 ? "+" : "") + r2(v || 0);
+  switch (pose.at) {
+    case "corner": return "T" + pose.n + " " + sg(pose.off) + " m, " + sg(pose.x) + " m out";
+    case "start": return "start " + sg(pose.off) + " m";
+    case "landmark": return "landmark #" + (pose.rank + 1);
+    case "centre": return "whole circuit";
+    default: return String(pose.at);
+  }
+}
+
+let live = null;
+
+function create(G, photo) {
+Log.info("game", "FreeCam.create");
+const { $, photoCam } = G;
+const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0,
+  back: null, actions: null, overlays: true, grid: "off", dofFocus: 0.4, dofBlur: 0 };
+const rk = { q: false, e: false };
+const kitOverlays = (typeof PhotoKit !== "undefined" && typeof document !== "undefined")
+  ? PhotoKit.mountOverlays(document.body, document) : { grid: null, dof: null };
+
+const root = $("freecam");
+const E = {};
+const mk = (tag, props, kids) => {
+  const el = document.createElement(tag);
+  if (props && props.id) E[props.id] = el;
+  if (props) for (const k in props) {
+    if (k === "attrs") { for (const a in props.attrs) el.setAttribute(a, props.attrs[a]); } else el[k] = props[k];
+  }
+  if (kids) for (const c of kids) el.appendChild(c);
+  return el;
+};
+const slider = (id, label, min, max, step, valId) => mk("label", { className: "tune-row", id: id + "-row" }, [
+  mk("span", { className: "tune-label" }, [mk("span", { textContent: label + " " }), mk("b", { id: valId })]),
+  mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), attrs: { "aria-label": label } }),
+]);
+const btn = (id, text, title) => mk("button", { id, type: "button", textContent: text, title: title || "" });
+let inner = null;
+if (root) {
+  inner = mk("div", { id: "freecam-inner", className: "sheet" }, [
+    mk("div", { id: "fc-head" }, [mk("h2", { textContent: "FREE CAMERA" })]),
+    mk("div", { id: "fc-status" }),
+    mk("div", { id: "fc-rows", className: "pane" }, [
+      mk("div", { id: "fc-shot", className: "balanced-row", hidden: true, attrs: { role: "group", "aria-label": "Use this view in the flyby" } }),
+      slider("fc-speed", "SPEED", 0, SLIDER_MAX, 1, "fc-speed-val"),
+      slider("fc-roll", "ROLL", -ROLL_MAX, ROLL_MAX, 1, "fc-roll-val"),
+      slider("fc-fov", "FOV", FOV_MIN, FOV_MAX, 1, "fc-fov-val"),
+      mk("div", { id: "fc-snaps", className: "balanced-row", attrs: { role: "group", "aria-label": "Snap the camera" } }, [
+        btn("fc-snap-car", "SNAP TO CAR", "Put the camera behind your car"),
+        btn("fc-corner-prev", "‹ CORNER", "Jump to the previous corner, seen from its outside"),
+        btn("fc-corner-next", "CORNER ›", "Jump to the next corner, seen from its outside"),
+      ]),
+      mk("div", { id: "fc-lens", className: "balanced-row", attrs: { role: "group", "aria-label": "Lens" } }, [
+        btn("fc-lens-race", "RACE LENS", "The race camera's far plane and fog"),
+        btn("fc-lens-flyby", "FLYBY LENS", "The pre-race flyby's far plane, near plane and thinned fog"),
+      ]),
+      mk("div", { id: "fc-copies", className: "balanced-row", attrs: { role: "group", "aria-label": "Copy this view" } }, [
+        btn("fc-copy-view", "COPY VIEW", "Copy an __apex.view({eye,target,fov}) line that frames this picture"),
+        btn("fc-copy-pose", "COPY FLYBY POSE", "Copy this view as a held flyby shot, anchored to the nearest corner or landmark"),
+      ]),
+      mk("div", { id: "fc-kit", className: "balanced-row", attrs: { role: "group", "aria-label": "Photo kit" } }, [
+        btn("fc-grid", "GRID: OFF", "Cycle composition grid: off, rule of thirds, golden ratio"),
+        btn("fc-mark-save", "SAVE MARK", "Bookmark this camera pose for this circuit"),
+        btn("fc-mark-load", "LOAD MARK", "Load the selected bookmark; defaults to the latest"),
+        mk("input", { id: "fc-mark-name", maxLength: 40, placeholder: "Bookmark name", attrs: { "aria-label": "New bookmark name" } }),
+        mk("select", { id: "fc-mark-picker", attrs: { "aria-label": "Saved camera bookmarks" } }),
+        btn("fc-mark-delete", "DELETE MARK", "Delete the selected bookmark"),
+        mk("span", { id: "fc-mark-warning", attrs: { "aria-live": "polite" } }),
+      ]),
+      slider("fc-dof-focus", "DoF FOCUS", 0, 100, 1, "fc-dof-focus-val"),
+      slider("fc-dof-blur", "DoF BLUR", 0, 100, 1, "fc-dof-blur-val"),
+      mk("p", { id: "fc-help", className: "adv-help", textContent: "WASD move · R/F up and down · Q/E roll · mouse wheel speed · drag or arrow keys look (arrows while focus is outside this panel) · Shift boost · GRID / SAVE MARK / DoF for photo kit" }),
+      mk("p", { id: "fc-msg", attrs: { "aria-live": "polite" } }),
+      mk("textarea", { id: "fc-out", readOnly: true, hidden: true, attrs: { "aria-label": "Copied camera text" } }),
+    ]),
+  ]);
+  const close = $("fc-close");
+  const foot = mk("div", { className: "sheet-foot balanced-row" }, close ? [close] : []);
+  inner.appendChild(foot);
+  root.appendChild(inner);
+}
+
+function paint() {
+  const set = (id, v, txt) => { const i = E[id]; if (i && document.activeElement !== i) i.value = String(v); const b = E[id + "-val"]; if (b) b.textContent = txt; };
+  set("fc-speed", sliderFromSpeed(st.speed), Math.round(st.speed) + " m/s");
+  set("fc-roll", Math.round(st.roll), Math.round(st.roll) + "°");
+  set("fc-fov", Math.round(photoCam.fov), Math.round(photoCam.fov) + "°");
+  set("fc-dof-focus", Math.round(st.dofFocus * 100), Math.round(st.dofFocus * 100) + "%");
+  set("fc-dof-blur", Math.round(st.dofBlur * 100), Math.round(st.dofBlur * 100) + "%");
+  for (const [id, on] of [["fc-lens-race", st.lens === "race"], ["fc-lens-flyby", st.lens === "flyby"]]) {
+    const b = E[id]; if (!b) continue;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  const gb = E["fc-grid"];
+  if (gb) gb.textContent = "GRID: " + (st.grid === "off" ? "OFF" : st.grid === "thirds" ? "THIRDS" : "GOLDEN");
+}
+function paintStatus() {
+  const s = E["fc-status"]; if (!s) return;
+  const e = photoCam.pos;
+  s.textContent = "(" + Math.round(e[0]) + ", " + Math.round(e[1]) + ", " + Math.round(e[2]) + ") · " + st.anchor +
+    (st.poseErr ? " · pose err " + st.poseErr : "");
+}
+function refreshAnchor() {
+  if (!G.track || typeof FlybySeq === "undefined" || !FlybySeq.poseFromWorld) return;
+  try { st.anchor = anchorText(FlybySeq.poseFromWorld(G.track, photoCam.pos).pose); } catch (_) { st.anchor = "—"; }
+}
+function say(msg) { const m = E["fc-msg"]; if (m) m.textContent = msg; }
+function paintActions() {
+  const box = E["fc-shot"]; if (!box) return;
+  box.replaceChildren();
+  const list = st.actions || [];
+  for (const a of list) {
+    const b = btn("", a.label, a.title);
+    b.addEventListener("click", () => {
+      tick();
+      const r = flybyPose();
+      say(r ? (a.run(r) || "Could not use this view.") : "No circuit to anchor a pose to.");
+    });
+    box.appendChild(b);
+  }
+  box.hidden = !list.length;
+}
+
+function place(eye, target, fov) {
+  photoCam.pos[0] = eye[0]; photoCam.pos[1] = eye[1]; photoCam.pos[2] = eye[2];
+  const a = aim(eye, target); photoCam.yaw = a.yaw; photoCam.pitch = a.pitch;
+  if (fov != null) setFov(fov);
+  if (photo && photo.releaseKeys) photo.releaseKeys();
+  publish();
+}
+function publish() {
+  if (photo && photo.publish) photo.publish(); else decorate(G.dbgCam, 0);
+  refreshAnchor(); paintStatus(); paint();
+}
+function setFov(f) {
+  photoCam.fov = clampFov(f);
+  const pc = $("pc-fov"); if (pc) pc.value = String(Math.round(photoCam.fov));
+}
+function setLens(l) { st.lens = l === "flyby" ? "flyby" : "race"; }
+function snapCar() {
+  const c = G.player;
+  if (!c || c.px == null || !G.track) return false;
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  Tracks.sample(G.track, c.s || 0, smp);
+  const p = carPose(c, smp.p[1]);
+  place(p.eye, p.target);
+  say("Behind the car.");
+  return true;
+}
+function snapCorner(n) {
+  if (!G.track) return false;
+  const p = cornerPose(G.track, n);
+  if (!p) { say("This circuit has no measured corners."); return false; }
+  st.corner = p.n;
+  place(p.eye, p.target);
+  say("Turn " + p.n + " of " + p.count + ".");
+  return true;
+}
+const stepCorner = (d) => snapCorner((st.corner || (d > 0 ? 0 : 1)) + d);
+
+function speed(boost) { return st.speed * (boost ? BOOST : 1); }
+function decorate(cam, dt) {
+  if (!st.open || !cam) return;
+  const d = (rk.e ? 1 : 0) - (rk.q ? 1 : 0);
+  if (d && dt > 0) { st.roll = clampRoll(st.roll + d * ROLL_RATE * dt); paint(); }
+  cam.roll = st.roll * Math.PI / 180;
+  if (st.lens === "flyby" && typeof FlybySeq !== "undefined") {
+    cam.cine = true; cam.far = FlybySeq.FAR; cam.fog = FlybySeq.FOG;
+  }
+  if (st.overlays && typeof PhotoKit !== "undefined") {
+    PhotoKit.applyDof(cam, st.dofFocus, st.dofBlur, kitOverlays.dof);
+    PhotoKit.setGrid(kitOverlays.grid, st.grid);
+  }
+  st.statusT -= dt;
+  if (st.statusT <= 0) { st.statusT = 0.25; refreshAnchor(); paintStatus(); }
+}
+function key(code, down, focused) {
+  if (!st.open) return 0;
+  if (code === "KeyQ") { rk.q = down; return 1; }
+  if (code === "KeyE") { rk.e = down; return 1; }
+  if (/^Arrow/.test(code) && inner && focused && inner.contains(focused)) return -1;
+  return 0;
+}
+function releaseKeys() { rk.q = rk.e = false; }
+function onWheel(e) {
+  if (!st.open || e.ctrlKey || e.defaultPrevented || (inner && e.target && inner.contains(e.target))
+    || (e.target && e.target.closest && e.target.closest("#ps-panel"))) return;
+  st.speed = wheelSpeed(st.speed, e.deltaY); paint();
+}
+
+function setOverlaysVisible(on) {
+  st.overlays = !!on;
+  if (typeof PhotoKit === "undefined") return;
+  if (!on || !st.open) PhotoKit.showOverlays(false, kitOverlays.grid, kitOverlays.dof);
+  else { PhotoKit.setGrid(kitOverlays.grid, st.grid); PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof); }
+}
+
+function isOpen() { return st.open; }
+function open() {
+  paintMarks();
+  if (st.open) return true;
+  if (!G.track || !root) return false;
+  Log.info("game", "FreeCam.open");
+  st.open = true; st.roll = 0; st.lens = "race"; st.poseErr = null; st.statusT = 0;
+  releaseKeys();
+  root.hidden = false;
+  const out = E["fc-out"]; if (out) out.hidden = true;
+  say("");
+  document.body.classList.add("lt-open");
+  if (typeof PhotoKit !== "undefined") {
+    PhotoKit.setGrid(kitOverlays.grid, st.grid);
+    PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof);
+  }
+  const ps = $("pmsettings"); if (ps) ps.hidden = true;
+  const dp = $("pm-panel-display"); if (dp) dp.hidden = true;
+  if (photo && photo.enter) photo.enter();
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("blur", releaseKeys);
+  }
+  publish();
+  return true;
+}
+function close(showPauseMenu, keepPhotoMode) {
+  if (!st.open) return;
+  Log.info("game", "FreeCam.close");
+  const back = st.back;
+  st.open = false; st.overlays = true; st.roll = 0; st.lens = "race"; st.back = null; st.actions = null;
+  paintActions();
+  releaseKeys();
+  if (root) root.hidden = true;
+  if (inner) inner.hidden = false;
+  document.body.classList.remove("lt-open");
+  if (typeof PhotoKit !== "undefined") PhotoKit.showOverlays(false, kitOverlays.grid, kitOverlays.dof);
+  if (typeof window !== "undefined" && window.removeEventListener) {
+    window.removeEventListener("wheel", onWheel, { passive: true });
+    window.removeEventListener("blur", releaseKeys);
+  }
+  if (!keepPhotoMode && G.photoMode && photo && photo.exit) photo.exit();
+  if (showPauseMenu && back) { back(); return; }
+  if (showPauseMenu && G.paused) {
+    const ps = $("pmsettings"); if (ps) ps.hidden = false;
+    const dp = $("pm-panel-display"); if (dp) dp.hidden = false;
+    const b = $("pm-visual-tuners-sum"); if (b && b.focus) b.focus();
+  }
+}
+function enterFrom(opts) {
+  opts = opts || {};
+  if (!cmd(opts)) return false;
+  st.back = typeof opts.back === "function" ? opts.back : null;
+  st.actions = Array.isArray(opts.actions) ? opts.actions : null;
+  paintActions();
+  return true;
+}
+function onPhotoExit() { if (st.open) close(false); }
+
+function copyOut(text, okMsg) {
+  const ta = E["fc-out"];
+  if (ta) { ta.value = text; ta.hidden = false; ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(0, text.length); }
+  ApexClipboard.write(text, { preferSync: true }).then((ok) => {
+    if (ok && ta && ta.blur) ta.blur();
+    say(ok ? okMsg : "Select the text below and copy it.");
+  });
+  return text;
+}
+function cam() { return G.dbgCam || { eye: photoCam.pos, target: photoCam.pos, fov: photoCam.fov }; }
+function copyView() { const c = cam(); return copyOut(viewSnippet(c.eye, c.target, c.fov), "Copied the __apex.view() line."); }
+function flybyPose() {
+  if (!G.track || typeof FlybySeq === "undefined" || !FlybySeq.shotFromView) return null;
+  const c = cam();
+  return FlybySeq.shotFromView(G.track, c.eye, c.target, c.fov);
+}
+function copyPose() {
+  const r = flybyPose();
+  if (!r) { say("No circuit to anchor a pose to."); return null; }
+  st.poseErr = "eye " + r.err.eye + " m, look " + r.err.look + " m";
+  paintStatus();
+  copyOut(JSON.stringify(r.shot, null, 2), "Copied the flyby pose (round trip: " + st.poseErr + ").");
+  return r;
+}
+
+function state() {
+  const c = G.dbgCam;
+  return {
+    open: st.open, speed: r2(st.speed), roll: r2(st.roll), lens: st.lens, corner: st.corner,
+    eye: c ? c.eye.map(r2) : null, target: c ? c.target.map(r2) : null, fov: c ? r2(c.fov) : null,
+    anchor: st.anchor, poseErr: st.poseErr,
+    grid: st.grid, dofFocus: r2(st.dofFocus), dofBlur: r2(st.dofBlur),
+  };
+}
+function cmd(opts) {
+  if (opts === undefined) return state();
+  if (opts === false) { close(!!G.paused); return state(); }
+  if (!open()) return false;
+  if (opts === true || typeof opts !== "object" || !opts) return state();
+  if (opts.speed != null) st.speed = clampSpeed(opts.speed);
+  if (opts.roll != null) st.roll = clampRoll(opts.roll);
+  if (opts.lens != null) setLens(opts.lens);
+  if (opts.snap === "car" && !snapCar()) return false;
+  if (opts.snap === "corner" && !(opts.n != null ? snapCorner(opts.n) : stepCorner(1))) return false;
+  if (opts.eye && opts.target) place(opts.eye, opts.target, opts.fov);
+  else if (opts.fov != null) setFov(opts.fov);
+  publish();
+  return state();
+}
+
+const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
+const tick = () => { if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiTick(); };
+on($("fc-close"), "click", () => { tick(); close(true); });
+on(E["fc-speed"], "input", (e) => { st.speed = speedFromSlider(e.target.value); paint(); });
+on(E["fc-roll"], "input", (e) => { st.roll = clampRoll(e.target.value); paint(); publish(); });
+on(E["fc-fov"], "input", (e) => { setFov(e.target.value); paint(); publish(); });
+on($("pc-fov"), "input", () => paint());
+on(E["fc-snap-car"], "click", () => { tick(); if (!snapCar()) say("No car on track to snap to."); });
+on(E["fc-corner-prev"], "click", () => { tick(); stepCorner(-1); });
+on(E["fc-corner-next"], "click", () => { tick(); stepCorner(1); });
+on(E["fc-lens-race"], "click", () => { tick(); setLens("race"); publish(); });
+on(E["fc-lens-flyby"], "click", () => { tick(); setLens("flyby"); publish(); });
+on(E["fc-copy-view"], "click", copyView);
+on(E["fc-copy-pose"], "click", copyPose);
+on(E["fc-grid"], "click", () => {
+  tick();
+  if (typeof PhotoKit === "undefined") return;
+  st.grid = PhotoKit.nextGrid(st.grid);
+  PhotoKit.setGrid(kitOverlays.grid, st.grid);
+  paint();
+});
+function paintMarks(selected) {
+  const picker = E["fc-mark-picker"]; if (!picker || typeof PhotoKit === "undefined") return;
+  const list = PhotoKit.marksFor(G.store, G.track && (G.track.id || G.track.name) || "track");
+  picker.replaceChildren();
+  list.forEach((m, i) => picker.appendChild(mk("option", { value: String(i), textContent: m.name })));
+  picker.value = String(selected == null ? list.length - 1 : Math.min(selected, list.length - 1));
+  picker.disabled = !list.length; E["fc-mark-load"].disabled = !list.length; E["fc-mark-delete"].disabled = !list.length;
+  E["fc-mark-warning"].textContent = list.length >= PhotoKit.MAX_MARKS ? "Next save replaces “" + list[0].name + "”." : "";
+}
+on(E["fc-mark-delete"], "click", () => {
+  if (typeof PhotoKit === "undefined" || !G.track || !G.store) return;
+  const index = +E["fc-mark-picker"].value;
+  PhotoKit.deleteMark(G.store, G.track.id || G.track.name || "track", index); paintMarks(index); say("Bookmark deleted.");
+});
+on(E["fc-mark-save"], "click", () => {
+  tick();
+  if (typeof PhotoKit === "undefined" || !G.track || !G.store) { say("No circuit to bookmark."); return; }
+  const c = cam();
+  const list = PhotoKit.saveMark(G.store, G.track.id || G.track.name || "track", {
+    eye: c.eye, target: c.target, fov: c.fov, roll: st.roll, name: E["fc-mark-name"].value,
+  });
+  paintMarks();
+  say(list ? ("Saved mark " + list.length + " of " + PhotoKit.MAX_MARKS + ".") : "Could not save bookmark.");
+});
+on(E["fc-mark-load"], "click", () => {
+  tick();
+  if (typeof PhotoKit === "undefined" || !G.track || !G.store) { say("No bookmarks."); return; }
+  const list = PhotoKit.marksFor(G.store, G.track.id || G.track.name || "track");
+  if (!list.length) { say("No bookmarks on this circuit."); return; }
+  const m = list[+E["fc-mark-picker"].value] || list[list.length - 1];
+  st.roll = clampRoll(m.roll || 0);
+  place(m.eye, m.target, m.fov);
+  say("Loaded “" + m.name + "”.");
+});
+on(E["fc-dof-focus"], "input", (e) => {
+  st.dofFocus = clamp((+e.target.value || 0) / 100, 0, 1); paint(); publish();
+});
+on(E["fc-dof-blur"], "input", (e) => {
+  st.dofBlur = clamp((+e.target.value || 0) / 100, 0, 1); paint(); publish();
+});
+paint();
+
+const api = { open, close, isOpen, onPhotoExit, enterFrom, speed, decorate, key, releaseKeys, cmd, state,
+  place, snapCar, snapCorner, copyView, copyPose, flybyPose, setOverlaysVisible, panel: () => inner };
+live = api;
+return api;
+}
+
+return Object.freeze({
+  create,
+  cmd: (opts) => (live ? live.cmd(opts) : false),
+  enterFrom: (opts) => (live ? live.enterFrom(opts) : false),
+  close: (showPauseMenu, keepPhotoMode) => { if (live) live.close(showPauseMenu, keepPhotoMode); },
+  panel: () => live ? live.panel() : null,
+  speedFromSlider, sliderFromSpeed, clampSpeed, wheelSpeed, clampRoll, clampFov,
+  viewSnippet, aim, carPose, cornerPose, anchorText,
+  SPD_MIN, SPD_MAX, SPD_DEF, ROLL_MAX, BOOST,
+});
+})();

@@ -1,0 +1,336 @@
+"use strict";
+(window.TrackScenery = window.TrackScenery || {})["estoril"] =
+  function (api) {
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
+        broadcastCompound, billboard, gantry, marshalPost,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        addBox, addCyl, addFrustum, cameraTower, acacia, circuitKit } = api;
+
+      const LIME = [0.95, 0.94, 0.90], LIME_D = [0.86, 0.85, 0.80];
+      const TILE = [0.68, 0.33, 0.21], TILE_D = [0.54, 0.27, 0.18];
+      const AZUL = [0.24, 0.42, 0.66];
+      const TUBE = [0.60, 0.58, 0.56];
+      const PINE = [0.16, 0.31, 0.17], PINE_D = [0.12, 0.25, 0.14];
+      const SCRUB = [0.33, 0.38, 0.21], SCRUB_D = [0.27, 0.32, 0.18];
+      const GRAVEL = [0.66, 0.58, 0.42];
+
+      const stonePine = (k, side, dist, h, col) => {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        const lean = (hash(k * 13 + dist) - 0.5) * 0.9;
+        const foot = vadd(a.c, a.r, lean * 0.6);
+        out._mat = MAT.WOOD;
+        seat.cyl(out, foot, 0.20 + h * 0.014, h * 0.66, [0.40, 0.31, 0.23], 5, b);
+        out._mat = MAT.FOLIAGE;
+        const crown = vadd(vadd(foot, a.u, h * 0.60), a.r, lean);
+        seat.frustum(out, crown, h * 0.12, h * 0.44, h * 0.16, col, 7, b);
+        seat.cone(out, vadd(crown, a.u, h * 0.16), h * 0.44, h * 0.22, col, 7, b);
+        out._mat = 0;
+      };
+      const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.34 && s <= 0.46);
+      every(18, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 31);
+        if (h < 0.22) return;
+        stonePine(k, h < 0.5 ? -1 : 1, 12 + h * 12, 11 + h * 8, h < 0.55 ? PINE : PINE_D);
+        if (h > 0.62) stonePine(k, h > 0.82 ? -1 : 1, 30 + h * 18, 13 + h * 8, PINE_D);
+      });
+      every(16, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 97 + 23);
+        if (h < 0.32) return;
+        bush(k, h < 0.72 ? -1 : 1, 9 + h * 7, h < 0.6 ? SCRUB : SCRUB_D);
+      });
+      every(32, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 67 + 19);
+        if (h < 0.42) return;
+        stonePine(k, h < 0.5 ? -1 : 1, 48 + h * 20, 10 + h * 4, PINE_D);
+      });
+
+      {
+        const BAYS = 30, PITCH = 6.7, LEN = BAYS * PITCH;
+        const a = anchor(K(0.978), 1, 34), b = [a.r, a.u, a.t];
+        modelGroup("estoril-pit-terrace", {
+          center: vadd(a.c, a.u, 7), size: [22, 16, LEN + 6], basis: b,
+        }, (stage) => {
+          stage._mat = 0;
+          seat.box(stage, a.c, [17, 7.0, LEN], LIME, b);
+          for (let i = 0; i < BAYS; i++) {
+            const p = vadd(vadd(a.c, a.t, (i - (BAYS - 1) / 2) * PITCH), a.r, -8.2);
+            seat.box(stage, p, [0.35, 4.4, 5.2], [0.19, 0.21, 0.23], b);
+          }
+          seat.box(stage, vadd(vadd(a.c, a.u, 4.6), a.r, -8.55), [0.3, 0.7, LEN], AZUL, b);
+          seat.box(stage, vadd(a.c, a.u, 7.0), [18.5, 0.4, LEN], LIME_D, b);
+          seat.box(stage, vadd(vadd(a.c, a.u, 7.4), a.r, -9.0), [0.3, 1.05, LEN], LIME, b);
+          for (let i = 0; i <= BAYS; i++) {
+            const p = vadd(vadd(vadd(a.c, a.t, (i - BAYS / 2) * PITCH), a.r, -8.4), a.u, 7.4);
+            seat.cyl(stage, p, 0.15, 3.4, LIME, 6, b);
+          }
+          for (const ti of [-12, 0, 12]) {
+            const st = vadd(vadd(a.c, a.t, ti * PITCH), a.r, 10.2);
+            seat.box(stage, st, [2.2, 7.2, 3.2], LIME_D, b);
+          }
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(a.c, a.u, 10.8), [19.2, 2.1, LEN + 2], TILE, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
+        const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
+        modelGroup("estoril-timing-tower", {
+          center: vadd(a.c, a.u, 13), size: [14, 30, 14], basis: b,
+        }, (stage) => {
+          stage._mat = 0;
+          seat.box(stage, a.c, [8, 19, 8], LIME, b);
+          for (let f = 1; f <= 4; f++)
+            seat.box(stage, vadd(vadd(a.c, a.u, f * 4.0), a.r, -4.15), [0.3, 1.6, 6.4], [0.18, 0.21, 0.25], b);
+          seat.box(stage, vadd(a.c, a.u, 19), [11, 0.4, 11], LIME_D, b);
+          seat.box(stage, vadd(vadd(a.c, a.u, 19.4), a.r, -5.4), [0.3, 1.1, 11], LIME, b);
+          for (const [dr, dt] of [[-5.2, -5.2], [5.2, -5.2], [-5.2, 5.2], [5.2, 5.2]])
+            seat.cyl(stage, vadd(vadd(vadd(a.c, a.r, dr), a.t, dt), a.u, 19.4), 0.16, 3.0, LIME, 6, b);
+          seat.box(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 0), [1.6, 19, 1.6], LIME_D, b);
+          stage._mat = MAT.ROOF;
+          addFrustum(stage, vadd(a.c, a.u, 18.8), 6.4, 1.0, 7.2, TILE, 4, b);
+        }, { required: true });
+      }
+      gantry(0.0, 8, [0.15, 0.15, 0.18]);
+      gantry(0.968, 7.5, [0.15, 0.15, 0.18]);
+      broadcastCompound(K(0.918), 1, 90, { vans: 2, dishes: 2, mastH: 9 });
+      sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 11,
+        palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
+
+      const BENCH = [[0.84, 0.30, 0.24], [0.90, 0.88, 0.82], [0.28, 0.42, 0.66], [0.72, 0.64, 0.32]];
+      const CROWD = [[0.90, 0.88, 0.84], [0.22, 0.28, 0.40], [0.78, 0.26, 0.20],
+                     [0.26, 0.46, 0.32], [0.92, 0.76, 0.28], [0.46, 0.40, 0.36]];
+      const scaffoldStand = (id, k, side, dist, bays, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 4, pitch = 6.4, len = bays * pitch;
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        const IN = -side;
+        const topH = 2.6 + rows * 1.55;
+        modelGroup(id, {
+          center: vadd(a.c, a.u, topH * 0.6), size: [11, topH + (opts.awning ? 6 : 1), len + 2], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            seat.cyl(stage, vadd(p, a.r, IN * -3.6), 0.15, topH, TUBE, 6, b);
+            seat.cyl(stage, vadd(p, a.r, IN * 3.6), 0.15, 2.4, TUBE, 6, b);
+            addBox(stage, vadd(vadd(p, a.r, 0), a.u, topH * 0.45),
+              [7.6, 0.13, 0.13], TUBE, b);
+          }
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (3.2 - t * 1.55), y = 1.5 + t * 1.55;
+            stage._mat = MAT.WOOD;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.5, 0.22, len], [0.70, 0.66, 0.60], b);
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.22), [1.1, 0.85, len - 2],
+              BENCH[t % BENCH.length], b);
+            stage._mat = MAT.FABRIC;
+            for (let j = 0; j * 0.9 < len - 3; j++) {
+              const h2 = hash(k * 17 + t * 89 + j * 29);
+              if (h2 < 0.45) continue;
+              seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.5 + j * 0.9), a.u, y + 1.07),
+                [0.55, 0.95, 0.45], CROWD[Math.floor(h2 * 89) % CROWD.length], b);
+            }
+          }
+          if (opts.awning) {
+            stage._mat = MAT.FABRIC;
+            for (let i = 0; i <= bays; i++)
+              seat.cyl(stage, vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, IN * -3.6),
+                0.12, topH + 3.4, TUBE, 6, b);
+            for (let i = 0; i < bays; i++)
+              seat.box(stage, vadd(vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch), a.u, topH + 3.4), a.r, IN * -0.6),
+                [8.4, 0.22, pitch - 0.5], (i % 2) ? [0.92, 0.90, 0.86] : [0.80, 0.24, 0.20], b);
+          }
+          stage._mat = 0;
+        });
+      };
+      scaffoldStand("estoril-stand-parabolica-exit", K(0.005), -1, 13, 20, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-parabolica-mid", K(0.028), -1, 15, 12, { rows: 4, awning: true });
+      scaffoldStand("estoril-stand-main-straight", K(0.078), -1, 20, 16, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-main-straight-upper", K(0.108), -1, 28, 10, { rows: 4 });
+      scaffoldStand("estoril-stand-pitlane-superseded", K(0.140), 1, 20, 9, { rows: 4 });
+      scaffoldStand("estoril-stand-t13", K(0.900), 1, 18, 16, { rows: 5, awning: true });
+      grandstandEx(0.048, -1, 14, 64, null, null,
+        { livery: "terracotta", roof: "none", endWalls: true, h: 7 });
+      grandstandEx(0.955, -1, 12, 78, null, null,
+        { livery: "terracotta", roof: "none", endWalls: true, h: 8 });
+
+      groundPatch(K(0.078), 1, 5, [30, 0.18, 40], GRAVEL,
+        { id: "estoril-pit-entry-gravel-superseded", samples: 7 });
+      tyreWall(0.062, 0.096, 1, 4, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.072), -1, 9);
+
+      groundPatch(K(0.420), -1, 5, [26, 0.18, 34], GRAVEL,
+        { id: "estoril-t5-gravel", samples: 6 });
+      tyreWall(0.406, 0.436, -1, 4, [0.20, 0.40, 0.85]);
+      marshalPost(K(0.424), 1, 9);
+
+      groundPatch(K(0.780), 1, 5, [24, 0.18, 32], GRAVEL,
+        { id: "estoril-t11-gravel", samples: 6 });
+      marshalPost(K(0.775), -1, 9);
+
+      for (const [g, id] of [[0.876, "z"], [0.884, "a"], [0.900, "b"], [0.916, "c"], [0.928, "d"]])
+        groundPatch(K(g), -1, 10, [44, 0.18, 34], GRAVEL,
+          { id: "estoril-t13-gravel-" + id, samples: 9 });
+      tyreWall(0.870, 0.932, -1, 5, [0.85, 0.78, 0.20]);
+      spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.78, step: 6 });
+      spectatorHill(0.878, 0.922, 1, 42, { rows: 3, rise: 1.0, depth: 1.7, density: 0.55, step: 8 });
+      marshalPost(K(0.895), 1, 10);
+      for (const s of [0.875, 0.890, 0.905, 0.920]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.20, 0.16]);
+
+      for (const [s0, s1] of [[0.11, 0.32], [0.37, 0.52], [0.57, 0.72], [0.78, 0.86]]) {
+        guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
+      }
+      guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
+      fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.16, 0.26, 0.48, 0.62, 0.70, 0.83]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
+      }
+
+      const { cx, cz, radius: rad } = lapBounds();
+      for (const [extra, count, len, w, hMin, hVar, col] of [
+        [120, 42, 130, 42, 14, 8, [0.24, 0.34, 0.19]],
+        [220, 32, 180, 58, 26, 16, [0.26, 0.31, 0.21]],
+        [360, 24, 240, 76, 48, 28, [0.36, 0.38, 0.36]],
+      ]) {
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832, h = hash(i * 7 + extra);
+          const r = rad + extra + h * 32;
+          const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
+          if (onTrack(tx, tz, 32)) continue;
+          ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
+        }
+      }
+      {
+        const bear = (deg) => { const r = deg * Math.PI / 180; return [-Math.sin(r), Math.cos(r)]; };
+        for (const [deg, dist, w, h, sd] of [
+          [324.4, 5090, 3400, 348, 7],
+          [312.0, 5400, 2300, 262, 13],
+          [336.5, 5600, 2100, 224, 19],
+        ]) {
+          const [dx, dz] = bear(deg);
+          mountain(cx + dx * dist, cz + dz * dist, pyMin - 10, w, h,
+            { seg: 14, seed: sd, rough: 0.34, snowline: 1.6,
+              forest: [0.17, 0.26, 0.17], rock: [0.38, 0.36, 0.33] });
+        }
+      }
+
+      {
+        const a = anchor(K(0.26), -1, 96), b = [a.r, a.u, a.t];
+        modelGroup("estoril-aldeia", {
+          center: vadd(a.c, a.u, 11), size: [32, 26, 64], basis: b,
+        }, (stage) => {
+          stage._mat = 0;
+          for (let i = 0; i < 6; i++) {
+            const h = hash(i * 29 + 5);
+            const p = vadd(vadd(a.c, a.t, (i - 2.5) * 11), a.r, -(4 + h * 8));
+            const w = 6.5 + h * 2.5, ht = 4.5 + h * 2.5, d = 6 + hash(i * 41) * 2.5;
+            seat.box(stage, p, [w, ht, d], h < 0.4 ? LIME_D : LIME, b);
+            stage._mat = MAT.ROOF;
+            seat.prism(stage, vadd(p, a.u, ht), [w + 0.4, 1.5, d + 0.4], h < 0.5 ? TILE : TILE_D, b);
+            stage._mat = 0;
+          }
+          const c = vadd(a.c, a.r, 10);
+          seat.box(stage, c, [11, 8, 18], LIME, b);
+          const camp = vadd(c, a.t, -14);
+          seat.box(stage, camp, [6, 17, 6], LIME, b);
+          seat.box(stage, vadd(vadd(camp, a.u, 12.5), a.r, -3.1),
+            [0.3, 3.2, 3.0], [0.16, 0.16, 0.18], b);
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(c, a.u, 8), [11.5, 2.6, 18.5], TILE, b);
+          addFrustum(stage, vadd(camp, a.u, 17), 4.4, 0.5, 3.2, TILE_D, 4, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
+        const a = anchor(K(0.62), -1, 150), b = [a.r, a.u, a.t];
+        modelGroup("estoril-deposito", {
+          center: vadd(a.c, a.u, 13), size: [20, 32, 40], basis: b,
+        }, (stage) => {
+          stage._mat = 0;
+          addFrustum(stage, a.c, 2.6, 2.1, 17, LIME, 10, b);
+          seat.cyl(stage, vadd(a.c, a.u, 8.5), 2.35, 0.5, LIME_D, 10, b);
+          addFrustum(stage, vadd(a.c, a.u, 17), 3.0, 4.6, 5.4, LIME, 12, b);
+          seat.cyl(stage, vadd(a.c, a.u, 22.4), 4.6, 2.6, LIME, 12, b);
+          seat.cyl(stage, vadd(a.c, a.u, 21.2), 4.75, 0.35, LIME_D, 12, b);
+          stage._mat = MAT.ROOF;
+          seat.cyl(stage, vadd(a.c, a.u, 25.0), 4.8, 0.4, TILE_D, 12, b);
+          seat.cone(stage, vadd(a.c, a.u, 25.4), 3.6, 1.6, TILE_D, 12, b);
+          stage._mat = 0;
+          seat.cyl(stage, vadd(a.c, a.u, 27.0), 0.5, 1.4, [0.42, 0.42, 0.44], 6, b);
+          const cot = vadd(a.c, a.t, 11);
+          seat.box(stage, cot, [9, 4.2, 12], LIME, b);
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(cot, a.u, 4.2), [9.5, 1.5, 12.5], TILE, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
+        const a = anchor(K(0.44), 1, 118), b = [a.r, a.u, a.t];
+        modelGroup("estoril-moinho", {
+          center: vadd(a.c, a.u, 8), size: [18, 20, 18], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addFrustum(stage, a.c, 3.4, 2.6, 7.5, LIME, 9, b);
+          stage._mat = MAT.ROOF;
+          seat.cone(stage, vadd(a.c, a.u, 7.5), 3.2, 2.6, TILE_D, 9, b);
+          stage._mat = MAT.WOOD;
+          const hub = vadd(vadd(a.c, a.u, 8.4), a.t, -3.0);
+          for (let i = 0; i < 4; i++) {
+            const ang = i * 1.5708 + 0.4;
+            const dr = Math.cos(ang), du = Math.sin(ang);
+            const mid = vadd(vadd(hub, a.r, dr * 3.6), a.u, du * 3.6);
+            addBox(stage, mid, [Math.abs(dr) * 7 + 0.35, Math.abs(du) * 7 + 0.35, 0.25],
+              [0.62, 0.55, 0.44], b);
+          }
+          stage._mat = 0;
+        }, { required: true });
+      }
+      for (const [s, side, gap] of [[0.030, -1, 24], [0.078, -1, 40], [0.900, 1, 34]]) {
+        const a = anchor(K(s), side, gap);
+        addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
+      }
+      every(12, (k) => {
+        const s = k / n;
+        if (!((s >= 0.12 && s <= 0.32) || (s >= 0.48 && s <= 0.90))) return;
+        for (const side of [-1, 1]) {
+          const h = hash(k * 41 + side * 7);
+          if (h < 0.44) continue;
+          stonePine(k, side, 24 + h * 14, 10 + h * 6, h < 0.77 ? PINE : PINE_D);
+          if (h > 0.78)
+            stonePine(k, side, 40 + h * 16, 9 + h * 5, PINE_D);
+        }
+      });
+
+      every(14, (k) => {
+        const s = k / n;
+        if (s < 0.345 || s > 0.455) return;
+        const h = hash(k * 59 + 7);
+        if (h < 0.40) return;
+        acacia(k, h < 0.75 ? -1 : 1, 40 + h * 30, 6 + h * 3,
+          h < 0.65 ? [0.20, 0.27, 0.15] : [0.17, 0.23, 0.13],
+          { spread: 1.25, barkCol: [0.36, 0.24, 0.17] });
+      });
+      every(14, (k) => {
+        const s = k / n;
+        if (s < 0.345 || s > 0.455) return;
+        const h = hash(k * 113 + 3);
+        if (h < 0.42) return;
+        bush(k, h < 0.55 ? -1 : 1, 28 + h * 16, h < 0.6 ? SCRUB : SCRUB_D);
+      });
+      sponsorHoarding(0.388, 0.412, -1, 9, { h: 1.2, step: 10,
+        palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
+      cameraTower(K(0.430), 1, 26, { h: 14, col: [0.58, 0.60, 0.64] });
+      cameraTower(K(0.700), -1, 24, { h: 12, col: [0.58, 0.60, 0.64] });
+      if (circuitKit) {
+        circuitKit.recoveryBay({
+          id: "kit:estoril:hairpin-recovery", frac: 0.405, side: -1, gap: 30, size: [12, 5, 16],
+        });
+      }
+    };

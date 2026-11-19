@@ -1,0 +1,157 @@
+"use strict";
+
+var Reliability = {
+  _stub: true,
+  TIER_RISK: [0.04, 0.055, 0.075, 0.10, 0.12],
+  REASONS: ["engine", "gearbox", "accident"],
+  isLevel: (v) => v === "off" || v === "low" || v === "real",
+  arm: (cars) => cars,
+  plan: () => [],
+  buildQuality: () => 0,
+};
+
+var Damage = {
+  _stub: true,
+  SHOW: 0.08,
+  ZONE_FRONT: "front", ZONE_REAR: "rear", ZONE_SIDE: "side",
+  blank: () => ({ fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0, hits: 0, cool: 0, onWall: false, served: false, spd: 0, yaw: 0 }),
+  reset: function () {}, contact: function () {}, observe: function () {}, apply: function () {},
+  get: () => null, state: () => null, worst: () => 0, zoneOf: () => null,
+};
+
+var DamageHandling = {
+  _stub: true, KEY: "damageHandling", _on: false,
+  factors: () => ({ aeroF: 1, aeroR: 1, grip: 1 }), forCar: () => null, axles: () => ({ f: 1, r: 1 }),
+  setEnabled: function (on) { this._on = on === true; }, isEnabled: function () { return this._on; },
+  fromStore: function (store) { this._on = !!store && store.get("damageHandling", false) === true; return this._on; },
+};
+
+var Duel = {
+  _stub: true,
+  BUMP: 1.04, LEGEND_BUMP: 1.06, LEGEND_CAR: 1.02,
+  bump: function () {}, pick: () => null, asLegend: function () {},
+};
+
+var RadioLines = {
+  _stub: true,
+  POOLS: {}, WHY: {}, why: () => "",
+  create: () => ({ pick: () => "", reset: function () {} }),
+  fill: function () {}, gapText: () => "", timeText: () => "",
+  surname: (c) => (c && (c.code || c.name)) || "",
+};
+
+var RaceFacts = {
+  _stub: true,
+  create: () => ({ update: function () {}, reset: function () {}, snapshot: () => ({}) }),
+};
+
+var Spotter = {
+  _stub: true,
+  KEYS: {}, GAP_S: 0,
+  create: () => ({ update: function () {}, occupied: () => false, status: () => ({}) }),
+  step: function () {}, occupancy: () => 0, fresh: () => false,
+};
+
+var PitLane = {
+  _stub: true,
+  create: (G = {}) => {
+    const pinId = (id) => { const t = G.track, d = t && t.def; return ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); };
+    return ({
+    _stub: true,
+    zoneOf: () => null, limit: () => 999, toBox: () => Infinity,
+    approachV: () => 999, entryV: () => 999, exitV: () => 999,
+    stopAnim: () => ({ lift: 0, off: 0, u: 0 }),
+    inLane: () => false, held: () => false, roadOf: () => null, inWindow: () => false,
+    update: function () {}, think: function () {}, stepBegin: function () {}, stepEnd: function () {}, releaseTrack: function () {}, clearArm: function () {}, reset: function () {},
+    planFor: () => null, planInfo: () => null, twoCompoundApplies: () => false,
+    pinnedStops(id) {
+      const v = G.store && G.store.get ? G.store.get("pitPlan." + pinId(id), "auto") : "auto";
+      return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
+    },
+    setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set("pitPlan." + pinId(id), v == null ? "auto" : (v | 0)); },
+    lossS: () => 0,
+    compoundDue: () => false, nextCode: () => "", nextFor: () => null, replan: function () {},
+    laneX: (_c, _hw, x) => x, laneUniform: () => null, boxUniform: () => null,
+    lastCue: () => null, canWork: () => false, addWork: () => 0,
+    cue: () => null, windowOf: () => null, worthStopping: () => false,
+    estimate: () => ({ lossS: 0, gapS: null, marginS: null, caution: false, estimated: true }),
+    status: () => ({}), info: () => ({}), arm: function () {}, setNext: function () {},
+    serviceCar: function () {}, boxSquare: () => false, boxThroughFor: () => -1,
+    cueM: 0, boxCueM: 0, moveM: 0, boxTol: 0, squareByM: 0, squareLat: 0,
+    servedS: 0, mergeS: 0,
+    commitFrac: () => 0, toEntry: () => -1,
+    choices: () => [], ownedTyres: () => [], pickFor: () => null, selectNext: () => false,
+    });
+  },
+  zoneOf: () => null, inWindow: () => false, throughM: () => 0,
+  ENTRY_M: 0, EXIT_M: 0, BOX_M: 0, LIMIT_FRAC: 0, BOX_S: 0, PIT_SIDE: 1,
+};
+
+var RaceEngineer = {
+  _stub: true,
+  WEAR_STEPS: [], AXLE_SPLIT: 0.5, COLD_CALL: 0, QUIET_S: 0,
+  DIRECTIONAL: {}, BOX_CALLS: {},
+  create: () => ({ update: function () {}, reset: function () {}, callFor: function () {}, senseOf: () => null }),
+};
+
+var RaceRadio = {
+  _stub: true,
+  create: () => ({
+    _stub: true,
+    update: function () {}, reset: function () {}, request: function () {},
+    replayEvent: function () {}, setWatching: function () {},
+    setChat: function (v) { return v || "normal"; }, setComm: function (v) { return v || "tv"; },
+    setSpotter: () => false, spotter: () => false,
+    chat: () => "normal", comm: () => "tv", commentates: () => true,
+    callsResult: () => false, callsLastLap: () => false,
+    trafficBusy: () => false,
+    status: () => ({}), tick: function () {}, debug: () => ({}),
+  }),
+  durFor: () => 0,
+};
+
+var SessionRecords = {
+  _stub: true,
+  create: () => ({
+    _stub: true,
+    begin: function () {}, current: () => null, config: () => ({}), sample: function () {}, sampleInput: function () {},
+    accept: () => false, board: () => [], invalidate: function () {}, finish: function () {},
+    prepareDaily: function () {}, restoreDaily: function () {}, key: () => "",
+  }),
+};
+
+var StartLights = {
+  _stub: true,
+  create: () => ({ update: function () {}, lampsFor: () => [], countCredit: () => 0 }),
+};
+
+var MarshalPanels = {
+  _stub: true,
+  create: () => ({ update: function () {}, postsFor: () => [], showing: () => false }),
+};
+
+var FlyingStart = {
+  _stub: true,
+  create: () => ({ update: function () {}, stop: function () {}, owns: () => false, active: () => false }),
+};
+
+var JumpStartPenalty = {
+  _stub: true,
+  create: () => ({
+    tickAtGreen: function () {},
+    tickReaction: function () {},
+    reactWindowOpen: () => false,
+  }),
+};
+
+var RaceCeremony = {
+  _stub: true,
+  get: () => null, want: () => false, resetLive: function () {}, create: function () {},
+  apexCall: (arg) => (arg === undefined ? { phase: "idle", age: 0, eligible: false, skipped: false } : false),
+  afterClassify: function (G) { if (G && G.els && G.els.results) G.els.results.hidden = false; return false; },
+  finishThrough: function (G, endRace, raceOrder) {
+    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = G.raceT > 0.5 ? G.raceT : 0; } });
+    endRace(raceOrder(G.cars));
+    return { state: G.state };
+  },
+};

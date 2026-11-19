@@ -1,0 +1,26 @@
+@layer hud {
+
+@font-face {
+  font-family: "Titillium Web"; font-style: normal; font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Titillium Web"; font-style: normal; font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed"; font-style: normal; font-weight: 600;
+  font-display: swap; size-adjust: 91.9%;
+  src: url("../assets/fonts/barlow-condensed-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed"; font-style: normal; font-weight: 700;
+  font-display: swap; size-adjust: 91.9%;
+  src: url("../assets/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2");
+}
+
+body { font-variant-numeric: tabular-nums; }
+
+} 
