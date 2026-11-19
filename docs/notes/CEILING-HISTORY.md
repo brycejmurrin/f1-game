@@ -50,6 +50,17 @@ merge base: `js/career/save-migrate.js` +874 (import range clamps), `js/physics/
 `js/physics/aero-zones.js` +264, `js/physics/consts.js` +190 and `js/physics/ai-band.js` +175
 (fix 6, the stale-text corrections). About +1379 of it is whole-line comments, which carry
 fix 6's corrected facts. Fragment: `ratchets.d/claude--gameplay-hunt-1118.json`.
+## 2026-11-19 — PR #5793 (claude/tt-garage-pit-end): TIME TRIAL pit lane and END TIME TRIAL (#5789)
+
+`(tree) eagerBytes` 8015286 → **8016346** (+1060), measured on the merge with tip `dec94440`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is the END TIME TRIAL hook in
+eager files: `js/game.js` `endTimeTrialFromBox` and the WORK ON CAR slot's TT branch,
+`js/garage/setup-camera.js` `startPitIn` (the pit drive-in with a hand-back),
+`js/ui/hud.js` the END TIME TRIAL label, and `js/garage/arrival.js` the SKIP label option. This
+PR's own comments were trimmed first (−242 B). The pit-lane changes live in the lazy
+`js/race/pit-lane.js` and cost no boot bytes. A lazy split would need new seams into
+setup-camera's closure and game.js locals, so it was not taken. Fragment: `ratchets.d/claude--tt-garage-pit-end.json`.
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 
 `(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the
