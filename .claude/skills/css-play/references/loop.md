@@ -30,7 +30,8 @@ const g = document.querySelector("#game");
 if (g) g.style.visibility = "hidden";
 ```
 
-Catalog: `node tools/ui/css-play.mjs --list` is the truth (ids, roots, clicks and aliases such as `menu` → title, `help` → howtoplay, `paused` → pause); `pause` boots a Monza race, `hud`/`hudpause` use `?APEX_SURVEY_HUD=1` with no race.
+Catalog: `node tools/ui/css-play.mjs --list` is the truth for ids, roots and clicks; the aliases (`menu` → title, `help` → howtoplay, `paused` → pause) are
+`ALIASES` in `tools/ui/css-play.mjs` and are not printed; `pause` boots a Monza race, `hud`/`hudpause` use `?APEX_SURVEY_HUD=1` with no race.
 
 Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
 (`--click` replaces the catalog path, so include `#mb-settings`).
@@ -53,7 +54,8 @@ components`), but the tray chips (`#pm-quick-doors button`, `#pm-checkpoint summ
 owned by `css/experience.css` (base plus a `landscape and max-height: 500px` block) and
 `css/overlays.css` (the `max-height: 400px` 2-col grid and `--tap` floor), both `@layer
 overlays`, which beats components. At 844×390 both media blocks apply. `css/menus.css` is
-the title chrome, not the pause sheet. Always `grep -n '<element id>' css/*.css` and read
+the title chrome, not the pause sheet. Always `grep -n '<element id>' css/*.css` AND its classes (a HUD readout's size is a class
+rule: `#hud-lap`'s font-size at 844×390 is `body:not(.desktop) .hud-value` in `css/touch-controls.css`), and read
 each hit's `@layer` before editing.
 
 **Sizing tokens** (`css/tokens.css`; read live values from `dom.json`, never
@@ -112,7 +114,7 @@ shot as UI evidence.
 ## 5. Ship
 
 When the look is right: `node tools/gen/gen-shell.mjs --check` (last edit),
-then push and request the groups `node tools/ci/pick-tests.mjs` names (`node tools/ci/remote-group.mjs <group>`; never locally) if the change is more than a token. One-screen
+then push: the PR's own CI runs the groups `node tools/ci/pick-tests.mjs` names (never locally; a whole group is Bryce's opt-in). One-screen
 play is not a matrix proof.
 
 ## Mistakes

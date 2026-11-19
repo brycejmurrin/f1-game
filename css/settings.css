@@ -8,14 +8,22 @@
    white gutter. Career hub is 1020; match that cap and hide the native
    bar so only the themed .sf-scroll thumb (ScrollFade) remains. */
 #pmsettings {
-  /* .screen pads with --safe-*; cap width to the usable box, not raw vw. */
-  --sheet-w: min(1020px, calc(var(--safe-w) - var(--pad) * 2));
+  /* Match #sel-inner / #cr-inner: a fixed cap so `width: min(100%, …)` on
+     .sheet (components.css) can take the zoom-adjusted 100% and paint full
+     width. `calc(safe-w - pad*2)` double-counted .screen's pad and capped the
+     sheet at ~325 own px → ~225 painted on a 393-wide phone at UI 70%. */
+  --sheet-w: 1020px;
 }
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;
 }
+/* Phone landscape own-px height sits ~560 at UI 70% (393/0.7). 480 left it on
+   "normal" so the short-wide 3-up door index never fired and Progress/About
+   sat under the fold. 620 still leaves a roomy desktop sheet on "normal". */
 #pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+/* Touch only: desktop keeps 480. */
+body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 620px; }
 /* UI SIZE 200%: breadcrumb/title band must wrap inside the zoomed sheet, not
    clip under overflow:hidden on #pmsettings (survey #3253). */
 #pmsettings-inner > .sheet-head {
@@ -392,7 +400,7 @@
   border-color: var(--text);
 }
 @media (min-width: 1680px) {
-  #pmsettings { --sheet-w: min(var(--menu-fit-sheet, 1180px), calc(var(--safe-w) - var(--pad) * 2)); }
+  #pmsettings { --sheet-w: min(var(--menu-fit-sheet, 1180px), 100%); }
 }
 .sheet[data-density="compact"] .pm-group-h {
   letter-spacing: var(--ls-4);

@@ -1251,6 +1251,7 @@
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
         "tests/unit/lsp-factory-member.test.mjs",
+        "tests/unit/lsp-mcp-boot.test.mjs",
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/lsp-navigation-efficiency.test.mjs",
@@ -1530,6 +1531,7 @@
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/career-ui-lazy.test.mjs",
@@ -1653,6 +1655,7 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/elevation-smoothness.test.mjs",
+        "tests/unit/footprint-rejected-baseline.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/kerb-berm-surface.test.mjs",
         "tests/unit/kerb-stripes.test.mjs",
@@ -1668,6 +1671,7 @@
         "tests/unit/scenery-seats.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
+        "tests/unit/stand-curve-gap-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
         "tests/unit/track-themes-build.test.mjs",
@@ -1742,6 +1746,7 @@
         "tests/specs/photo-studio.spec.js",
         "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
+        "tests/specs/portrait-button-size.spec.js",
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/settings-stepper-paint.spec.js",
@@ -3471,6 +3476,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/arrival-rows.js",
+      "global": "GarageArrivalRows",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/garage/arrival.js",
       "global": "GarageArrival",
       "roster": "tag"
@@ -4553,7 +4563,7 @@
     {
       "path": "js/share/share-card-chips.js",
       "global": "ShareCardChips",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-data.js",
@@ -4958,7 +4968,7 @@
     {
       "path": "js/ui/quali-sheet.js",
       "global": "QualiSheet",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/ui/race-message-history.js",

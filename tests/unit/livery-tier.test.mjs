@@ -149,8 +149,10 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
     "sync path must never request hi-res inline");
   assert.doesNotMatch(src, /timeout:\s*2500/,
     "requestIdleCallback must not force the upload with a 2500 ms timeout");
-  assert.match(src, /deadline\.didTimeout/,
-    "a timed-out idle callback must re-queue instead of running the 2048 paint");
+  // Bounded, not forever: a starved idle queue (no roomy slot on a busy thread) must still land the 2048
+  // (garage-pick-cost "livery atlas textures seen: 0"; the VM proof is livery-hires-starved.test.mjs).
+  assert.match(src, /const starved = !deadline \|\| deadline\.didTimeout \|\| Date\.now\(\) - since >= HIRES_IDLE_MAX_MS;/,
+    "a timed-out or long-starved idle callback must run the kick, not re-queue it");
   assert.match(src, /getCarDecalTexture\(team, num, true, false\)/,
     "photo rivals mint the player-tier preview with allowHiRes=false");
   assert.match(src, /_hiResGrave\.push\(\{\s*key:\s*key,\s*tex:\s*prev\s*\}\)/,
@@ -207,9 +209,9 @@ function decalRig(opts = {}) {
       flushHiRes() {
         while (idle.length) idle.shift()({ didTimeout: false, timeRemaining: () => 50 });
       },
-      starveHiRes() {
+      starveHiRes(didTimeout) {
         const n = idle.length;
-        for (let i = 0; i < n; i++) idle.shift()({ didTimeout: true, timeRemaining: () => 0 });
+        for (let i = 0; i < n; i++) idle.shift()({ didTimeout: !!didTimeout, timeRemaining: () => 0 });
       },
       hiResDone: () => _hiResDone.size,
       invalidate(teamId) { invalidateDecalTextures(teamId); },
@@ -266,16 +268,17 @@ test("sync player atlas is preview; hi-res lands only after idle flush", () => {
   assert.equal(api.frame(cars)[0], "me#1:hi", "draws swap to hi-res once ready");
 });
 
-test("a starved idle callback re-queues instead of painting 2048", () => {
+test("a tight idle slot re-queues; a timed-out one paints the 2048", () => {
   const { api, built, idle } = decalRig();
   api.frame(grid(1));
   assert.ok(idle.length >= 1, "hi-res is queued");
-  api.starveHiRes();
-  assert.equal(api.hiResDone(), 0, "didTimeout / tight deadline must not run the kick");
+  api.starveHiRes(false);
+  assert.equal(api.hiResDone(), 0, "a tight deadline inside the cap must not run the kick");
   assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0);
   assert.ok(idle.length >= 1, "the callback was re-queued");
-  api.flushHiRes();
-  assert.equal(api.hiResDone(), 1);
+  // didTimeout means the idle queue was starved for the whole {timeout}: run, or it never lands.
+  api.starveHiRes(true);
+  assert.equal(api.hiResDone(), 1, "a timed-out idle callback runs the kick");
 });
 
 // L10: the deferred kick is keyed by the livery at SCHEDULE time but used to build from the

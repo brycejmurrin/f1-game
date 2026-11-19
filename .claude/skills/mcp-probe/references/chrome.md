@@ -9,6 +9,7 @@
 ## Contents
 
 - Chrome DevTools MCP — live 3D / __apex debugging
+- pageId and frame hooks
 
 ## Chrome DevTools MCP — live 3D / __apex debugging
 
@@ -16,7 +17,7 @@
 
 ```
 # 1. serve the working tree yourself (Playwright's own server uses a random port)
-python3 -m http.server 3456        # background it
+python3 -m http.server -b 127.0.0.1 3456   # background it (AGENTS.md §The loop)
 ```
 ```
 mcp__chrome-devtools__navigate_page   http://127.0.0.1:3456/
@@ -188,7 +189,17 @@ Full recipes + measured LCP/heap/a11y numbers:
 Regression coverage, anything that must assert-and-gate, the full spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
 framework, no parallelism, no reporter. That is the PR's CI: groups for a change
-from `node tools/ci/pick-tests.mjs`, one group on the pushed branch with
-`node tools/ci/remote-group.mjs <group>` (no local spec runs, AGENTS.md rule 5).
+from `node tools/ci/pick-tests.mjs`, the PR's own CI runs the browser shard
+(no local spec runs, AGENTS.md rule 5; a whole group, `remote-group.mjs`, is Bryce's opt-in).
 
 ---
+
+## pageId and frame hooks
+
+The pinned chrome-devtools-mcp routes by page: `navigate_page`, `evaluate_script`, `list_console_messages`,
+`take_heapsnapshot`, `performance_start_trace` and the other page-scoped tools take a `pageId`. Get it from `new_page`
+or `list_pages` first and pass it on every call.
+
+Frame stutter, before a trace: `__apex.perf({on:true,reset:true})`, play, then `__apex.perf()` (per-subsystem
+p50/p95/p99 spans and LoAF), `__apex.frametimeBench("reset"|"snapshot")` and `__apex.renderScale().frameTimes`
+(`docs/DEBUG-HOOKS.md`). `world()` holds no frame-time data.
