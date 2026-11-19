@@ -110,14 +110,16 @@ instruction.
 The fix is the rule this file is really about. A band may run to the tail of the
 flank; CONTENT may not — a stripe's aft end behind the wheel is a stripe, a
 sponsor name's is half a word. So `liverytex.js` carries two axes, `su` for
-bands and `sc` clamped to `FLANK_SEEN` for content; the band clears the SUN
+bands and `sc` clamped to `FLANK_SEEN` for content under the `wrap` crown (`sideTo = sideFrom ? FLANK_SEEN : 1`:
+the other crowns, `wordmark` and `duo` included, still run content to u ≈ 0.94); the band clears the SUN
 (a hard disc, `sunReach`) and SHARES the bull (a silhouette, and every mark
 carries a keyline, halo or plate); `SIDE_FILL` puts flat fills UNDER the crown's
 flank graphic and lettering over it, so a solid colour fill (`band`/`sash`; the
 culled `split` was the same class) cannot erase the bull's
 legs and the bull cannot erase a sponsor; and `BULL.top` drops the animal clear
-of the crease strip the lettering rides. Everything that has to be read now
-measures 0 % from the side, and `fin-design.test.mjs` holds content — marks AND
+of the crease strip the lettering rides. Under `wrap`, everything that has to be read
+measures 0 % from the side (not yet the `wordmark` / `duo` crowns: `node tools/car/spine-station.mjs --team=mclaren
+--occlude` reads 24 % / 36 % hidden, and labels anything under 50 % "clear"), and `fin-design.test.mjs` holds content — marks AND
 lettering — under 0.40 on every crown.
 
 ### …and then the bull paid for it

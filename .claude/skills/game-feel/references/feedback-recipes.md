@@ -23,7 +23,8 @@ draw in the frame loop is how cosmetic code breaks headless determinism.
 
 Apex already implements this (chain: workflow.md row 1); `CamFeel.shakeNoise`
 (js/camera/feel.js) is the summed-sine noise. Feed `feel.shake`; never add a second accumulator.
-Per-event trauma: light ≈ 0.15, heavy ≈ 0.8, as ratios of the existing kerb/wall/car-car adds.
+Per-event trauma: light ≈ 0.15, heavy ≈ 0.8. That is a target, not today's scale: the existing adds top out at
+car-car `impact × 0.45` (≤ 0.45), wall `0.1 + 0.3 × incidence` (≤ 0.4, street only) and the kerb floor 0.22.
 
 ## 2. Easing cheat sheet
 

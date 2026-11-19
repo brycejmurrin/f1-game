@@ -708,7 +708,7 @@ body:not(.desktop) {
   /* 44.2, not 44 (#5358): 44 / 0.7 lays out at 62.83 own px and paints 43.98, a hair under the floor it names. */
   --tap: max(52px, calc(44.2px / var(--ui-scale)));
   /* Why: docs/notes/TOKENS-RATIONALE.md §R5. */
-  --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(24px / var(--ui-scale)));
+  --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(44.2px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
   /* --tap-paint (see :root): 52 PAINTED px, local = 52 / --ui-scale. The 24px
      arm keeps the WCAG floor where the division would undercut it. */

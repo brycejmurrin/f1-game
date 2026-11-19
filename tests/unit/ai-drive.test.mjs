@@ -114,6 +114,11 @@ test("brakeTarget: a cached bank grip and the distance-term skip change no resul
   }
   assert.equal(A.bankGrip(0), 1);
   assert.equal(A.bankGrip(undefined), 1);
+  // Infinity / NaN bank must not poison latMax (sin(Infinity) is NaN).
+  assert.equal(A.bankGrip(Infinity), 1);
+  assert.equal(A.bankGrip(NaN), 1);
+  assert.ok(Number.isFinite(A.cornerSpeed(0.05, NaN, 1, 72)));
+  assert.equal(A.cornerSpeed(0.05, NaN, 1, 72), A.cornerSpeed(0.05, 0, 1, 72));
 });
 
 test("awareness shortens the stuck dig-out threshold", () => {

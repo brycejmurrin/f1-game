@@ -71,7 +71,7 @@
     // 9 deg zone at 0.115 sat on the front straight (|k| < 0.5e-3/m from
     // 0.085 to 0.135, T1 at 0.1449) and banked a straight, so it is gone.
     bankZones: [
-      { frac: 0.880, angleDeg: 9.0, widthM: 260 },
+      { frac: 0.880, angleDeg: 9.0, widthM: 260 },  // the banked oval bend (right, 0.81-0.91, k -3.5..-4.7e-3/m smoothed 20 m), no def.turns apex: a deliberate frac zone
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

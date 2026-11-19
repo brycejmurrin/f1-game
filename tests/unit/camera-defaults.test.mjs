@@ -922,3 +922,17 @@ test("CAM secondary contact cycles without a native click and preserves long pre
   h.fire("pointerdown", 4000, extra); h.fire("pointercancel", 4040, extra); h.fire("pointerup", 4080, extra);
   assert.equal(h.G.camMode, 2, "cancelled secondary gestures cannot cycle");
 });
+
+test("M4.lookAtTo keeps an orthonormal basis when eye coincides with target", () => {
+  const math = { console, Math, Float32Array };
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
+    "\nthis.M4 = M4;", math, { filename: absSrc("js/core/mat4.js") });
+  const M4 = math.M4;
+  const out = new Float32Array(16);
+  M4.lookAtTo(out, [5, 1, -2], [5, 1, -2], [0, 1, 0]);
+  const x = Math.hypot(out[0], out[4], out[8]);
+  const y = Math.hypot(out[1], out[5], out[9]);
+  const z = Math.hypot(out[2], out[6], out[10]);
+  assert.ok(Math.abs(x - 1) < 1e-5 && Math.abs(y - 1) < 1e-5 && Math.abs(z - 1) < 1e-5,
+    "eye==target must not collapse the view basis to zeroes");
+});

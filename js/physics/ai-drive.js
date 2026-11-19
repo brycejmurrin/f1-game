@@ -91,7 +91,9 @@ const AiDrive = (function () {
     _look.push(s);
   }
   // The bank's lateral-grip factor for the brake planner: a banked node holds 1 + sin(bank)·0.8 of the flat grip.
-  function bankGrip(bank) { return 1 + Math.sin(bank || 0) * 0.8; }
+  // Number.isFinite: bank || 0 keeps Infinity (truthy), and sin(Infinity) is NaN,
+  // which then multiplies into latMax in brakeTarget / the look-ahead (hunt-physics).
+  function bankGrip(bank) { return 1 + Math.sin(Number.isFinite(bank) ? bank : 0) * 0.8; }
   function endLook() { return _look; }
   // The game's node window already owns typed samples. Keep only its arrays here,
   // never the per-car cache (which carries the track), and preserve d += step.
@@ -595,9 +597,12 @@ const AiDrive = (function () {
   // below the top speed V, and the flat (1 + D) envelope past it.
   // No iterative solver in the per-car, per-node brake lookahead.
   function cornerSpeed(k, lat, pace = 1, vmax = 72) {
-    const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5), L = Math.max(0, lat);
-    return cornerSpeedEnvelope(kk, L, V, V * V);
-  }
+      // Math.max(0, NaN) is NaN in IEEE754 — coerce first so a bad lat cannot
+      // poison the envelope (and any caller that skips brakeTarget's finite gate).
+      const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5);
+      const L = Number.isFinite(lat) ? Math.max(0, lat) : 0;
+      return cornerSpeedEnvelope(kk, L, V, V * V);
+    }
   function cornerSpeedEnvelope(kk, L, V, vSq) {
     const den = kk - L * AI_DF / vSq;
     if (den > 0) {

@@ -369,7 +369,7 @@
       fence(0.30, 0.45, -1, 10, 7, STEEL);   // mid-sector inside
       fence(0.52, 0.62,  1, 10, 7, STEEL);   // twisty-sector stands
       // Tyre walls at high-risk braking points
-      tyreWall(sl(0.045), sl(0.075),  1, 9, RED);   // T1 braking zone (racing .045-.075)
+      tyreWall(sl(0.065), sl(0.095), -1, 6, RED);   // T1 run-off, OUTSIDE (left), in front of the gap-8 armco (racing .065-.095)
       tyreWall(0.14,  0.17,  -1, 9, [0.95, 0.85, 0.15]);
       tyreWall(0.54,  0.57,   1, 9, [0.20, 0.40, 0.85]);
 
@@ -756,7 +756,7 @@
       }
       bowlTerrace(0.35, -1, 12, 48, 7);   // mid-sector inside terrace
       bowlTerrace(0.68, -1, 10, 44, 6);   // back-of-the-bowl terrace
-      bowlTerrace(0.80,  1, 10, 40, 6);   // outside the run to Turn 11
+      bowlTerrace(TURN(11) - 0.006,  1, 10, 40, 6);   // outside the run to Turn 11 (~26 m before its apex)
 
       // ── Trackside jumbotron — a big screen on a truss frame facing the bowl. ──
       (function jumbotron() {
@@ -886,7 +886,7 @@
       // Keep this local ~48 x 3 m margin and its kerb-side separation; do not
       // replace the whole outfield. Append after existing groundPatch calls
       // so their drape lift slots remain unchanged.
-      const t5Exit = 0.447, gravelPieces = 6, gravelStep = 8;
+      const t5Exit = 0.437, gravelPieces = 6, gravelStep = 8;
       const sceneryShift = api.def._sceneryShift || 0;
       for (let i = 0; i < gravelPieces; i++) {
         const racingFrac = t5Exit + (i - (gravelPieces - 1) / 2) * gravelStep / (n * ds);
