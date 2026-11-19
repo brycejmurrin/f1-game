@@ -1270,19 +1270,37 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
 /** The outline's slot inside the hero: 62 % of its width, ~60 % of its height —
-    capped at the map button's CONTENT box, which the phone card (css/select.css,
-    compact + wide) pads so the lower-third numbers band stays clear of the
-    outline (#5153 gap 13). */
+    capped at the map button's CONTENT box. fitPreviewMapBand pads that box to
+    the band the caption and the numbers leave free, and centres the canvas in
+    it (#5656: the compact card's `align-items: flex-start` from the old
+    caption-at-the-bottom layout put the outline under the title row). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
   const btn = map && map.parentElement;
-  if (compact && btn && btn.clientHeight > 0) {
+  if (btn && btn.clientHeight > 0) {
+    fitPreviewMapBand(btn);
     const bs = getComputedStyle(btn);
     const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
     if (room > 0) slotH = Math.min(slotH, room);
   }
   return { slotW: hero.clientWidth * 0.62, slotH };
+}
+/** Pad the map button (inset over the still) to the free band and centre the
+    outline in it. Rects are viewport px; padding is the button's own px (the
+    UI SIZE zoom is their ratio). */
+function fitPreviewMapBand(btn) {
+  const br = btn.getBoundingClientRect();
+  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
+  const k = br.height / btn.offsetHeight;
+  const over = [];
+  for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
+    if (e) over.push(e.getBoundingClientRect());
+  }
+  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
+  btn.style.alignItems = "center";
+  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
+  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
 }
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
@@ -1695,6 +1713,25 @@ function calendarIdSet(cal) {
   for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
   return ids.size ? ids : null;
 }
+/** The circuit preview's free band (#5656), pure. `box` is the still's rect,
+    `over` the rects painted over it (caption, badges, numbers band). An
+    overlay whose centre is in the upper half pushes the band's top down to its
+    bottom edge, one in the lower half pulls the band's bottom up to its top
+    edge; an empty or outside rect is ignored. Returns the insets from the
+    box's top and bottom edges, each plus `margin`, so the outline centred in
+    what is left never touches the title row or the stats row. */
+function previewMapBand(box, over, margin) {
+  const mid = (box.top + box.bottom) / 2;
+  let top = box.top, bot = box.bottom;
+  for (const r of over || []) {
+    if (!r || !(r.bottom > r.top) || !(r.right > r.left)) continue;
+    if (r.bottom <= box.top || r.top >= box.bottom || r.right <= box.left || r.left >= box.right) continue;
+    if ((r.top + r.bottom) / 2 < mid) top = Math.max(top, r.bottom);
+    else bot = Math.min(bot, r.top);
+  }
+  const m = Math.max(0, +margin || 0);
+  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+}
 /** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {
   if (!t) return null;
@@ -1703,6 +1740,6 @@ function calendarGroup(t, ids) {
   return t.classic ? "classic" : "season";
 }
 
-return { create, calendarIdSet, calendarGroup };
+return { create, calendarIdSet, calendarGroup, previewMapBand };
 })();
 Object.freeze(Menus);
