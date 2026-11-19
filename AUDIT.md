@@ -293,3 +293,10 @@ the same recomputation — moving them to files would remove the trap.
 Verified in simulated races, before → after: storm race with safety car, `pen=40, penaltyWhy=null` →
 `pen=40, "overtaking under caution"`; lapped-player race, `pen=20, null` → `pen=20, "ignoring blue flags"`.
 The tool's diagnostics report 0 new errors in `js/game.js`.
+
+### Fix 3 — stall watchdog cover check (finding 11)
+
+`js/perf/loop-health.js:87-92` called `document.getElementById` through an unbound reference, which throws
+"Illegal invocation"; the surrounding `catch` returned false, so the garage and race-setup screens never
+counted as cover. Now called on `document` directly. Verified in Chromium by feeding the watchdog six 1.5 s
+frame gaps, sheds before → after: garage open 1 → 0, race setup open 1 → 0, neither open 1 → 1 (control).

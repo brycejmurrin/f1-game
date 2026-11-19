@@ -84,11 +84,10 @@ const LoopHealth = (() => {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) {  }
     try {
-      const g = typeof document !== "undefined" && document.getElementById;
-      if (!g) return false;
-      const cs = g("carsetup");
+      if (typeof document === "undefined" || !document.getElementById) return false;
+      const cs = document.getElementById("carsetup");
       if (cs && !cs.hidden) return true;
-      const rs = g("race-settings");
+      const rs = document.getElementById("race-settings");
       return !!(rs && !rs.hidden);
     } catch (_) { return false; }
   }
