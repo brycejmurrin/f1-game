@@ -1,6 +1,18 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5793 (claude/tt-garage-pit-end): TIME TRIAL pit lane and END TIME TRIAL (#5789)
+
+`(tree) eagerBytes` 8015286 → **8016346** (+1060), measured on the merge with tip `dec94440`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is the END TIME TRIAL hook in
+eager files: `js/game.js` `endTimeTrialFromBox` and the WORK ON CAR slot's TT branch,
+`js/garage/setup-camera.js` `startPitIn` (the pit drive-in with a hand-back),
+`js/ui/hud.js` the END TIME TRIAL label, and `js/garage/arrival.js` the SKIP label option. This
+PR's own comments were trimmed first (−242 B). The pit-lane changes live in the lazy
+`js/race/pit-lane.js` and cost no boot bytes. A lazy split would need new seams into
+setup-camera's closure and game.js locals, so it was not taken. Fragment: `ratchets.d/claude--tt-garage-pit-end.json`.
+
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
 `(tree) shellNodes` 2256 → **2322** (+66). Deliberate raise past the 40-line absorb; the
