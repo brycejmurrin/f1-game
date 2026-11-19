@@ -817,6 +817,7 @@
     "tests/unit/perf-session-budgets.test.mjs",
     "// PerfSpans ring/percentiles/off-switch + __apex.perf() in the game VM; profile lib noise rule; apex_profile argv pins.",
     "tests/unit/perf-spans.test.mjs",
+    "tests/unit/perf-strict-lanes.test.mjs",
     "tests/unit/perf-try.test.mjs",
     "tests/unit/phone-recorder.test.mjs",
     "tests/unit/phone-shipped-defaults.test.mjs",

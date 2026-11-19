@@ -1606,6 +1606,11 @@ jobs:
           # A dispatched group runs its browser copies of the VM-twinned specs
           # too (locally run-playwright skips them; this is where they still run).
           APEX_WITH_TWINNED: 1
+          # THE PERF SPECS FAIL HERE (#5334): perf-frametime and perf-race-entry are soft
+          # without these, so a lane that runs them could never go red on them. Every
+          # step that can run either spec sets both (tests/unit/perf-strict-lanes.test.mjs).
+          APEX_PERF_FRAMETIME_STRICT: 1
+          APEX_PERF_RACE_ENTRY_STRICT: 1
           # Mesa llvmpipe + Xvfb, installed by the step above (it is skipped
           # with `gl: swiftshader`, and so is this step).
           APEX_GL: llvmpipe
@@ -1624,6 +1629,11 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group || 'tiny' }}
+          # THE PERF SPECS FAIL HERE (#5334): perf-frametime and perf-race-entry are soft
+          # without these, so a lane that runs them could never go red on them. Every
+          # step that can run either spec sets both (tests/unit/perf-strict-lanes.test.mjs).
+          APEX_PERF_FRAMETIME_STRICT: 1
+          APEX_PERF_RACE_ENTRY_STRICT: 1
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4   # zizmor: ignore[template-injection] matrix.shard is a workflow-literal integer (ci-coverage.test.mjs pins this exact form)
       # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
       # Every per-test duration this job measures is written to junit.xml by
@@ -2759,6 +2769,11 @@ jobs:
           SHARD: ${{ matrix.shard }}
           SPECS: ${{ matrix.specs }}
           RETRIES: ${{ matrix.retries || 0 }}
+          # THE PERF SPECS FAIL HERE (#5334): perf-frametime and perf-race-entry are soft
+          # without these, so a lane that runs them could never go red on them. Every
+          # step that can run either spec sets both (tests/unit/perf-strict-lanes.test.mjs).
+          APEX_PERF_FRAMETIME_STRICT: 1
+          APEX_PERF_RACE_ENTRY_STRICT: 1
         run: |
           # matrix.shard is set when shards() split a loop-expanded spec across
           # Playwright --shard=i/n jobs (tracks-walls ~63 tests). Empty for the
