@@ -195,8 +195,6 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
-    // No pit-lane widening of `hw` here: the complex is its own ribbon beside the road (TrackPit, js/track/core/pit.js;
-    // "THE ROAD NEVER MOVES" below), so the racing line bakes from the road's own half-widths.
     if (opts && opts.line === false) track.line = null; else TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;
@@ -824,9 +822,6 @@ const Tracks = (function () {
   // M-3b: keep ribbon attributes until chunked copies exist. A fused upload
   // at LOW can still be chunked after a graphics increase or governor recovery.
   // Pos+idx stay for debris and groundY after the remaining channels are freed.
-  // A backend that never chunks the road (TLX, chunkedTrackCoords:false: its chunked material has no `trk`) has its
-  // final road copy in the plain mesh, so that ribbon is settled at upload; game.js and shadow-pass.js never build a
-  // roadChunked there. Before this, TLX kept every ribbon channel resident (hunt 2026-11-18 (2) row 2).
   function ribbonGpuSettled(track, which) {
     const m = track && track.meshes;
     if (!m) return false;

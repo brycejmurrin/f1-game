@@ -253,9 +253,6 @@ try {
     // The unset default, not a pick: no fallback REASON (gfxFallbackWhy stays for a failed pick). What the boot's own
     // probe saw is still recorded, so a test or a triage can tell "no adapter at boot" (a 4 s cap under load included)
     // from a TLX that failed: an adapter found later by another caller does not say what this boot saw (#5304).
-    // A SLOW adapter is not an absent one (the WGX branch below, #2285): a cold iPhone whose requestAdapter() answers
-    // past the 4 s cap kept GLX for the session. TLX's create() asks again under BOOT_STEP_MS and falls back to GLX
-    // with its own reason if that fails too (hunt 2026-11-18 (2) row 4).
     const ok = await gpuAdapterAvailable();
     if (!ok && !_adapterSlow) pref = "webgl2";
     try { if (ok) sessionStorage.removeItem("apex26.gfxAdapterWhy"); else sessionStorage.setItem("apex26.gfxAdapterWhy", _adapterWhy || "no adapter"); } catch (_) { /* blocked storage */ }

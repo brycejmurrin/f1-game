@@ -240,8 +240,6 @@ const TrackPit = (function () {
       return Math.min(EXIT_ROAD, room,
         Math.max(EXIT_ROAD_MIN, straightRun(track, curvature, wrap(eM, L), 1, EXIT_ROAD)));
     };
-    // The SAME floor build() gives the entry road (ENTRY_ROAD_MIN, not ROAD_MIN): a budget that floored it at 30 m
-    // under-stated the wall's growth by up to 15 m, so the closed form below over-stated the room (#5699 row 20).
     const entryRoad0 = Math.min(ENTRY_ROAD, Math.max(ROAD_MIN, (L / 3 - (entryM + exitM)) * 0.4),
       Math.max(ENTRY_ROAD_MIN, straightRun(track, curvature, wrap(-entryM, L), -1, ENTRY_ROAD)));
     const span = (12 - 1) * PITCH;

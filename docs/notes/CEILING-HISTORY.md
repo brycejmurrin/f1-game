@@ -1,16 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
-## 2026-11-19 — PR #5747 sync onto 8bb193ac (#5303 and the train)
+## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
 
-`(tree) eagerBytes` 8,016,182 → **8,017,535** (+1,353 B). Deliberate raise past the absorb, the exact
-measured wall on the merge (Bryce decision 9, 8:32 PM PT 2026-10-28). The old fragment's −70 was
-against tip `f25747de`; the tip has since grown, and this PR's eager edits versus `8bb193ac` are
-`js/track/tracks.js` +663 (row 2: a TLX plain road counts as settled), `js/render/renderer-boot.js`
-+327, `js/track/core/line.js` +251, `js/track/core/pit.js` +237, `js/track/core/surface.js` +125,
-`js/render/shared/assets.js` +119, `js/track/core/geom.js` −25, `js/render/shared/gltf.js` −344.
-`js/track/tracks.js` lines 847 → 853 (+6), inside the absorb. Fragment:
-`tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
+`(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
+explained them were the bytes over the tip, so they were cut and the fragment records the
+lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
+inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
 
 ## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
 

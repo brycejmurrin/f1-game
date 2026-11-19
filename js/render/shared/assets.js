@@ -699,7 +699,6 @@ const Assets = (function () {
         normalP = _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration)
           .then((v) => v, (error) => { if (error === DECODE_CANCELED) throw error; return null; });
       }
-      // A normal strip still in flight when albedo fails: release its ImageBitmaps when it lands (row 9, #5699).
       const quietNormal = () => { if (normalP) normalP.then(_releaseStrip, () => {}); };
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }

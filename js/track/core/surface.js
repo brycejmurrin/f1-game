@@ -88,8 +88,6 @@ const TrackSurface = (function () {
       }
     }
 
-    // Hoisted out of heightAt: it runs per vertex and per prop, and a closure
-    // per call was an allocation on each (#5699 row 21).
     const bermLiftAt = (i, dist, side) => {
       if (!def.berms || flat || street || !bp) return 0;
       const lift = bp.lift[i] || 0;

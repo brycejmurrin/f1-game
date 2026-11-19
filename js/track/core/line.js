@@ -632,8 +632,6 @@ const TrackLine = (function () {
     const i = Math.floor(s / L * n) % n;
     const ds = L / n;
     let to = track.toTurnIn[i] - (s - i * ds);
-    // A turn-in inside node i that s has already passed: the next one is the
-    // next node's, measured from that node's start (#5699 row 19).
     if (to < 0) to = track.toTurnIn[(i + 1) % n] + ((i + 1) * ds - s);
     _atk.q = track.attackQ[i]; _atk.toTurnIn = to;
     return _atk;
