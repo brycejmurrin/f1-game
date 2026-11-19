@@ -255,7 +255,7 @@ adversarial re-check of the findings above) are added below as they report.
 
 ## Addendum — findings from the later sub-audits
 
-Not folded into the ranking above; the first three would sit in the top ten.
+Not folded into the ranking above; A1–A3 and A14 would sit in the top ten.
 
 - **A1. Voice packs fail on slow connections and re-download every 30 s** — **ran**. `js/audio/voice-pack.js`
   used one 15 s timer for the manifest, the whole binary and the hash check; the default announcer pack is
@@ -293,6 +293,43 @@ Not folded into the ranking above; the first three would sit in the top ten.
   click still downloads 3.6 MB of audio; `ReplayBuf.lerpCar` loops forever on an infinite heading
   (`js/camera/replay-buf.js:51`, no producer found); the same race seed only reproduces on the first race
   after a page load (`js/game.js:1341,1522,3446`).
+
+- **A12. A lap-challenge link whose `~` was percent-encoded is refused when opened but accepted when
+  pasted** — **ran**. `js/ui/share-code.js` `codeFrom`. Fixed (fix 15).
+- **A13. The circuit detail panel stays empty if opened while the circuit is loading** — **ran**.
+  `js/ui/select-screen.js:1109-1131`. Fixed (fix 16).
+- **A14. Service-worker update path** — **ran**. After a release, a slow connection turned the cached game
+  into the browser's error page (`sw.js`, navigation handler, `BUST_WAIT_MS`), and a restarted worker could
+  report a build it had not installed, which made the page refuse every lazy load. Both fixed (fixes 17, 18).
+  Still open: offline, TRACK DESIGNER does nothing and says nothing (`js/editor/` is never precached;
+  `js/editor/custom-tracks.js:398` only logs), while Settings says the core game is ready offline.
+- **A15. An AI shove on the player is about twice the designed cap** — **executed**.
+  `js/physics/collide.js:431` caps the speed a human gains from an AI hit per pass, but
+  `resolveCollisions` runs up to 4 passes (`:504`); a rear-end at 20 vs 50 m/s gave +4.79 m/s against a cap
+  of 2.93.
+- **A16. Wind is on in time trial but ghosts and leaderboards ignore it** — **ran / read**.
+  `js/race/race-settings.js:263` shows WIND (default REAL) in time trial, physics applies it
+  (`js/game.js:2991,3641`), and the record key has no wind field (`js/race/session-records.js:30-35`), so
+  laps with and without wind share one leaderboard and gusts make laps vary run to run.
+- **A17. Career import accepts an unknown team or an impossible round** — **ran**.
+  `js/career/career-backup.js:82`, `js/career/save-migrate.js:272-275`. With team "nosuchteam" the player
+  silently races and is paid as Verstappen; `season.round: 500` is accepted. Also: opening the new-career
+  wizard on an empty slot and leaving changes which career "continue" resumes (`js/career/career-ui.js:248`).
+- **A18. SPOKEN LANGUAGE offers languages the game cannot speak** — **read**. `js/audio/panel.js:65`,
+  `js/audio/radio-voice.js:388`: any choice but English turns off the recorded voice and has a system voice
+  of that language read the English text, or nothing if none is installed.
+- **A19. Text and units:** the results screen names a "VS FRIEND" button that is called RACE A FRIEND
+  (`js/ui/results-sheet.js:481`); the HUD markup says KM/H but shows KPH; the cockpit gauge and pit-lane
+  sign ignore the mph setting (`js/car/cockpit-rig.js:616`, `js/garage/pit-signs.js:69`); "CLOUDY" in race
+  setup is "OVERCAST" in the summary and in-race banner (`js/race/race-settings.js:4,280`); daily history
+  prints raw seconds (`js/ui/title-menu.js:135-136`); two tooltips show source paths (`index.html:2682`).
+  Translation is dormant: 23 tagged nodes of about 1,190 in `index.html` and about 800 hard-coded strings.
+- **A20. In a championship sprint the setup sheet and forecast use the full race lap count** — **executed**.
+  `js/race/race-settings.js:280,353` against `js/game.js:1438`; the forecast differed from the weather
+  actually raced in 130 of 200 seeds.
+- **A21. Licensing, as shipped:** `assets/sfx/f1_engine.mp3` and the six music tracks have no licence on
+  record (disclosed in the credits); real team, driver and supplier names are used with a disclaimer that
+  covers only the Formula 1 marks. THIRD-PARTY-NOTICES matches `vendor/` and `assets/`.
 
 ## Fixes
 
