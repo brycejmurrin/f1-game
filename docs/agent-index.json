@@ -1581,6 +1581,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/session-records-assists.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
