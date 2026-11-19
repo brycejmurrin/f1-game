@@ -435,3 +435,18 @@ again, so opened early it showed "0 turns", no corner list and a blank map until
 repaints when the circuit file arrives, if it is still open on the same circuit. Verified in Chromium with
 Spa's circuit file delayed 9 s: 14 s after opening, "0 turns", 0 corners, blank map → "19 turns", 19 corners,
 map drawn.
+
+### Fix 17 — a slow connection after a release no longer replaces the game with an error page (addendum A14)
+
+`sw.js` (navigation handler): when the new shell (`?b=<build>`) does not arrive within 15 s the worker now
+serves the cached shell, where it used to return `Response.error()`. Verified in Chromium with
+`version.json` advanced to 1696 and the shell delayed 20 s: the tab ended on `chrome-error://chromewebdata/`
+→ it ends on the working 1695 title screen. This path only became live again with fix 1, which re-enabled
+the service worker.
+
+### Fix 18 — the service worker only reports a build it has installed (addendum A14)
+
+`sw.js` `localGeneration`: the build from the network's `version.json` is reported only once its install has
+settled. Verified with `version.json` at 1696, the shell at 1695 and the worker restarted: reported
+generation 1696 → 1695, and TRACK DESIGNER went from refused ("UPDATE READY — RELOAD TO CONTINUE", with the
+reload serving 1695 again) to opening. A normal install (634 files) and an offline reload still work.
