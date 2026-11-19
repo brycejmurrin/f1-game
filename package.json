@@ -1,0 +1,10 @@
+{
+  "name": "racing-game",
+  "private": true,
+  "type": "commonjs",
+  "devDependencies": {
+    "eslint-scope": "9.1.2",
+    "espree": "11.2.0",
+    "typescript": "7.0.2"
+  }
+}

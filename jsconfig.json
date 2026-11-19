@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2022",
+    "lib": [
+      "es2023",
+      "dom",
+      "dom.iterable"
+    ],
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "typeAcquisition": {
+    "enable": false
+  },
+  "include": [
+    "js/**/*.js",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "artifacts",
+    "scratch",
+    "js/vendor/**"
+  ]
+}
