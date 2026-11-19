@@ -5586,6 +5586,7 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -5737,7 +5738,6 @@
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
-        "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -9910,6 +9910,18 @@
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "layout": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
+      "layoutPreset": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
+      "minScale": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
+      "normaliseLayout": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
       "paintHud": [
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -9923,6 +9935,9 @@
       "setSteeringMode": [
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/input/phone-pad.js": {
