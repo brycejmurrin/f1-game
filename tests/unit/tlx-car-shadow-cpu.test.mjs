@@ -139,7 +139,7 @@ test("no renderer entry point records a caster-only geometry, and all of them to
   r.capture(false);
   assert.equal(r.recs.length, 0, "draw, drawChunked, _coAppend, drawMirrorGlass, drawDecal: no draw record");
   assert.equal(r.warns.length, 1, "one Log.warn across every entry, not one per frame");
-  assert.match(String(r.warns[0][1]), /position-only shadow caster/);
+  assert.deepEqual(r.warns[0].slice(0, 2), ["gfx", "TLX: a position-only shadow caster was offered to a lit pass; not drawn"]);
   // The same entries with an ordinary mesh reach pushRec: the stubs above do not hide a refusal.
   r.draw(body, W, {}); r.drawChunked(body, W, {}); r.drawDecal(body, W, tex, {});
   assert.ok(r.recs.length === 3 && r.recs.every((g) => g === body.geo), "an ordinary mesh still draws through each");

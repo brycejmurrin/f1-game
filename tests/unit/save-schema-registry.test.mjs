@@ -80,6 +80,7 @@ const LS_DYNAMIC_EXEMPT = new Map([
 const LITERAL_EXEMPT = new Map([
   ["js/car/ghost.js", new Set(["apex_ghost_v1"])],   // legacy key, only ever read and removed after migration to the registered ghost store
   ["js/perf/phone-recorder.js", new Set(["phoneRec"])],   // transient soak-run scratch blob, kept out of export/backup on purpose
+  ["js/input/phone-pad-page.js", new Set(["padLayout"])],   // controller.html's own WHEEL LAYOUT, written by the phone page's localStorage (never GameStore, the registry's only runtime reader), no export/backup; kept off the eager boot budget (#5803)
 ]);
 
 function loadRegistry() {

@@ -208,6 +208,13 @@ test("splitStints covers the distance when rounding under-allocates and the last
   assert.ok([...out].every((v) => v >= 1));
 });
 
+test("degCost stays finite when life or length is nonfinite", () => {
+  assert.ok(Number.isFinite(A.degCost(5, NaN)));
+  assert.ok(Number.isFinite(A.degCost(NaN, 10)));
+  assert.ok(Number.isFinite(A.degCost(Infinity, 10)));
+  assert.equal(A.degCost(NaN, 10), A.degCost(0, 10));
+});
+
 // ── 4. The reactive rules ──────────────────────────────────────────────────
 
 const now = (o) => A.pitNow(Object.assign(

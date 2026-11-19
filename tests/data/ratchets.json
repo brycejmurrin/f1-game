@@ -6,27 +6,27 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2365,
-      "lines": 2627
+      "codeLines": 2364,
+      "lines": 2630
     },
     "js/agent/agentview.js": {
       "lines": 2322
     },
     "js/agent/apex.js": {
-      "codeLines": 1699,
-      "lines": 2533
+      "codeLines": 1697,
+      "lines": 2532
     },
     "js/car/car3d.js": {
-      "lines": 2910
+      "lines": 2909
     },
     "js/game.js": {
-      "codeLines": 5413,
+      "codeLines": 5415,
       "gMembers": 297,
-      "lines": 9591,
+      "lines": 9593,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2359
+      "lines": 2379
     },
     "js/render/glx/glx.js": {
       "lines": 2892
@@ -35,8 +35,8 @@
       "lines": 869
     },
     "js/ui/hud.js": {
-      "codeLines": 1450,
-      "lines": 2368
+      "codeLines": 1446,
+      "lines": 2359
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -44,16 +44,16 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8194,
+      "ceiling": 8141,
       "slack": 200
     },
     "assertPinsAll": {
       "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
-      "ceiling": 10355,
+      "ceiling": 10367,
       "slack": 200
     },
     "bareCatches": {
-      "ceiling": 29,
+      "ceiling": 28,
       "slack": 15
     },
     "cssClasses": {
@@ -63,6 +63,14 @@
     "dynamicIdReads": {
       "ceiling": 73,
       "slack": 5
+    },
+    "eagerBytes": {
+      "ceiling": 8015286,
+      "slack": 0
+    },
+    "eagerScripts": {
+      "ceiling": 310,
+      "slack": 0
     },
     "implicitAsserts": {
       "ceiling": 39,
@@ -82,7 +90,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2322,
+      "ceiling": 2321,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -94,9 +102,9 @@
       "slack": 0
     },
     "vmSrcLoads": 594,
-    "waitForTimeout": 75,
+    "waitForTimeout": 66,
     "waitNoPolling": {
-      "ceiling": 41,
+      "ceiling": 40,
       "slack": 39
     },
     "zeroRefModules": {

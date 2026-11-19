@@ -73,6 +73,9 @@ const PhonePadCodec = (function () {
   // Accepted sample acknowledgements use STATE ["A", seq]; older peers ignore them.
   const PEER_ID_RE = /^[0-9a-f]{16,64}$/;
   function encodeEvent(k) { return JSON.stringify({ t: "ev", k }); }
+  // SUSPEND: the phone page is going away (pagehide: navigate, switch-away, Safari
+  // unloading it), not unpairing. The next close is a wire loss the game re-hosts for.
+  function encodeSuspend() { return JSON.stringify({ t: "sus" }); }
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
   function encodeHello(side, haptics, extended, id) {
     return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}),
@@ -91,6 +94,7 @@ const PhonePadCodec = (function () {
     try { o = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
     if (!o || typeof o !== "object") return null;
     if (o.t === "ev") return EVENTS.includes(o.k) ? { t: "ev", k: o.k } : null;
+    if (o.t === "sus") return { t: "sus" };
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
     if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}),
       ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
@@ -147,7 +151,7 @@ const PhonePadCodec = (function () {
 
   return {
     PROTO, EVENTS, NAV_REPEAT, num, hudOf,
-    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent, makePeerId,
+    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, encodeSuspend, decodeEvent, makePeerId,
     teamHex, fmtLap, padUrl, codeFromUrl, pairingFromUrl,
   };
 })();

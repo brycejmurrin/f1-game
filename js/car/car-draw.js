@@ -294,7 +294,7 @@ const CarDraw = (function () {
         if (mates) for (const [n, key] of mates) if (extra.seats.get(n)) _seatData.set(key, extra.seats.get(n));
         for (const k of _seatData.keys()) if (_seatData.size > SEAT_DATA_MAX) _seatData.delete(k);
       }
-      if (_pbKind === 1) data._casterOnly = true;   // depth-only: TLX builds position + index alone (GLX / WGX ignore it)
+      if (_pbKind === 1) data._casterOnly = true;   // TLX: depth-only, position + index
       const mesh = G.gfx.createMesh(data);
       // Only the existing covered warm may prepare the partner. Failed/unavailable
       // partners simply retain the detailed body; no CPU geometry is retained.
@@ -546,7 +546,7 @@ const CarDraw = (function () {
     function decalBytes() {
       let b = 0;
       for (let i = 0; i < _decalTexOrder.length; i++) b += _decalTexBytes[_decalTexOrder[i]] || 0;
-      return { bytes: b, live: _decalTexOrder.length, recorded: Object.keys(_decalTexBytes).length };
+      return { bytes: b, live: _decalTexOrder.length, recorded: Object.keys(_decalTexBytes).length, hiPending: _hiResPending.size };
     }
     // A PAINT DRAFT RE-FILLS ITS OWN ATLAS (#3505). Every garage edit drops the draft key and mints the
     // next one at the same size. Through freeTexture that leaned on TLX's shared retire pool: an entry
@@ -714,15 +714,12 @@ const CarDraw = (function () {
       } catch (_) { /* renderer may clamp; ignore */ }
       return t;
     }
-    // Desktop player hi-res (2048×2560, ~26.7 MB) is DEFERRED: boot / garage
-    // open / warmCarAssets / prepareMenuCarAssets sync-upload the 1024 preview
-    // only, then requestIdleCallback (setTimeout fallback) swaps in the full
-    // atlas. AI, mobile, and photo-mode rivals never schedule — atlasDiv has
-    // no larger upload, and photo rivals stay on the preview.
+    // Player hi-res (2048x2560, ~26.7 MB) is DEFERRED: every sync path uploads the 1024 preview, an idle
+    // slot swaps in the 2048. AI, phones and photo rivals never schedule.
     const _hiResPending = new Map(), _hiResDone = new Set();   // pending: key -> the kick that owns it
-    // A failed build used to retry on every draw (each a 2048 paint). Two tries per
-    // key, like the sync path's three; an invalidate / eviction forgets the count.
+    // Two tries per key (a failure used to retry, a 2048 paint, every draw); invalidate forgets them.
     const HIRES_TRIES = 2, _hiResFail = new Map();
+    const HIRES_IDLE_MAX_MS = 4000;   // then the 2048 runs, roomy idle slot or not
     const _hiResGrave = [];   // {key, tex} prev preview; free AFTER the next bind
     function reapHiResGrave() {
       if (!_hiResGrave.length) return;
@@ -775,9 +772,8 @@ const CarDraw = (function () {
       // A live garage paint draft gives every edit a new key: the preview only, or each edit the idle slot
       // reached paid a 2048 paint and a ~26.7 MB upload. Save / cancel / leave clear it: the next draw upgrades once.
       if (G.livDraftOverride) return;
-      // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
-      // slot can fire after the garage moved on, and building from the livery selected
-      // THEN stored another livery's pixels under this key (A -> B -> A).
+      // Resolved NOW, with the key (decalKeyFor embeds its id): a later idle slot built the livery
+      // selected THEN and stored its pixels under this key (A -> B -> A).
       const livery = livOf(team), pickAt = G.teamIdx;
       // Re-checked after every await: the idle slot and the bitmap can both land after the garage moved on.
       const owns = () => _hiResPending.get(key) === kick   // dropped, maybe re-scheduled: the newer kick owns the key
@@ -831,17 +827,19 @@ const CarDraw = (function () {
         }
       };
       _hiResPending.set(key, kick);
+      // Bounded (#5796): a busy thread never offered 10 ms, and the 2048 never came.
+      const since = Date.now();
       const enqueue = function () {
         if (typeof requestIdleCallback === "function") {
           requestIdleCallback(function (deadline) {
             if (!owns()) { done(); return; }
-            if (deadline && (deadline.didTimeout ||
-                (typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 10))) {
+            const starved = !deadline || deadline.didTimeout || Date.now() - since >= HIRES_IDLE_MAX_MS;
+            if (!starved && typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 10) {
               enqueue();
               return;
             }
             kick();
-          });
+          }, { timeout: 2000 });
         } else {
           setTimeout(kick, 0);
         }
@@ -1466,7 +1464,7 @@ const CarDraw = (function () {
       const geom = Car3D.build(liv.c1, liv.c2,
         { livery: liv, teamId: team.id, silhouette: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
           parts: _cbParts });
-      geom._casterOnly = true;   // as the team caster (buildPendingTeamMesh); never the shared rival body, which draws lit
+      geom._casterOnly = true;   // a caster, unlike the lit shared rival body
       return G.gfx.createMesh(geom);
     }
     function cockpitKey(team, car, visualKey) {

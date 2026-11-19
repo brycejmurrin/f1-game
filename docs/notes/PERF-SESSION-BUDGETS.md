@@ -20,8 +20,8 @@ so heap readings go through CDP `Runtime.getHeapUsage` after
 
 | Question | Where | What it gates |
 |---|---|---|
-| Steady frame time after a warm-up | `tests/specs/perf-frametime.spec.js` | Soft, unless `APEX_PERF_FRAMETIME_STRICT=1`. Wall clock vs the blessed sample above. |
-| Menu START RACE vs START PRACTICE stages | `tests/specs/perf-race-entry.spec.js` | Marks must exist. Wall time is soft (`APEX_PERF_RACE_ENTRY_STRICT`). |
+| Steady frame time after a warm-up | `tests/specs/perf-frametime.spec.js` | Soft, unless `APEX_PERF_FRAMETIME_STRICT=1` (set on every ci.yml lane that runs it, #5334). Wall clock vs the blessed sample above. |
+| Menu START RACE vs START PRACTICE stages | `tests/specs/perf-race-entry.spec.js` | Marks must exist. Wall time is soft unless `APEX_PERF_RACE_ENTRY_STRICT=1` (set on every ci.yml lane that runs it, #5334). |
 | Garage paints on entry, no panel tap | `tests/specs/garage-first-frame.spec.js` | Non-black pixels. It does not budget the tap-to-draw time. |
 | Heap slope across many race → menu cycles | `tests/specs/race-cycle-memory.spec.js` | Built-track identity, and a post-warm heap slope. One quit is not its question, and the spec is a long software-GL job. |
 | Bytes per simulated frame | `tests/unit/perf-vm-alloc-budget.test.mjs` | 1.15× the 188 KB baseline. Counts, not milliseconds. |

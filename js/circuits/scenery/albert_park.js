@@ -426,18 +426,19 @@
           }, { required: true });
         }
       }
-      // Fangio — same outside main-straight bank, toward T14 / last corner
-      // (shrunk for 2026 to make room for Piastri). Approximate length.
+      // Fangio — same outside main-straight bank, on the pit straight ~185 m
+      // before the line (shrunk for 2026 to make room for Piastri). Approximate length.
       grandstandEx(0.965, -1, 14, 55, null, null,
         { livery: "pastel", roof: "flat" });
-      // Brabham — Turns 1–2 (outside). Was mislabeled on the S/F as the hero.
+      // Brabham — outside of the braking zone into Turns 1–2 (centre ~165 m
+      // before the T1 apex). Was mislabeled on the S/F as the hero.
       grandstandEx(0.045, -1, 14, 55, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true });
-      // Jones — opposite Brabham at T1–2 (inside / pit-exit side).
+      // Jones — opposite Brabham across the T1 braking zone (inside / pit-exit side).
       grandstandEx(0.04,  1, 14, 55, null, null,
         { livery: "alu", roof: "truss", pylons: true });
-      // Hill — Turn 3 area (approx).
-      grandstandEx(0.12,  1, 16, 48, null, null,
+      // Hill — approach to Turn 3 (approx; ~155 m before the apex, clear of Clark at 0.20).
+      grandstandEx(0.185, 1, 16, 48, null, null,
         { livery: "steel", roof: "cantilever" });
       // Ricciardo — Lakeside Drive infield (T3–4 region in sources; placed on
       // the long lakeside run where the stand reads from the water).
@@ -534,8 +535,13 @@
         groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
                     { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
-      // Grass run-off pads at T1 / chicane exits
-      for (const [s, side] of [[0.04, 1], [0.06, -1], [0.78, -1], [0.78, 1], [0.80, -1]]) {
+      // Grass verge pads in the T1 braking zone (85-190 m before the apex)
+      for (const [s, side] of [[0.04, 1], [0.06, -1]]) {
+        groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
+                    { id: `albert-runoff-${s}-${side}`, samples: 5 });
+      }
+      // Grass run-off pads at the T11-T12 chicane
+      for (const [s, side] of [[0.78, -1], [0.78, 1], [0.80, -1]]) {
         groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
                     { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
