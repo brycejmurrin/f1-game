@@ -137,7 +137,7 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
 }
 
 // [data-say] cards are spoken once per result after the sheet shows (a pre-filled role=status is silent).
-let saidFor = null, saidWatch = null;   // saidFor holds the finished race's car array: dropped when the sheet closes
+let saidFor = null, saidWatch = null, saidMo = null;   // saidFor holds the finished race's car array: dropped when the sheet closes
 function spokenText(n) {
   const kids = n.children ? Array.from(n.children) : [];
   return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
@@ -146,8 +146,10 @@ function sayCards(sheet, table, key) {
   if (!table || typeof LiveRegion === "undefined" || key === saidFor) return;
   saidFor = key;
   if (sheet && saidWatch !== sheet && typeof MutationObserver !== "undefined") {
+    if (saidMo) { saidMo.disconnect(); saidMo = null; }
     saidWatch = sheet;
-    new MutationObserver(() => { if (sheet.hidden) saidFor = null; }).observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
+    saidMo = new MutationObserver(() => { if (sheet.hidden) saidFor = null; });
+    saidMo.observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
   }
   const text = Array.from(table.querySelectorAll("[data-say]"), spokenText).filter(Boolean).join(". ");
   if (!text) return;
@@ -202,6 +204,21 @@ function fitPinsSoon() {
 if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
     && typeof G.els.resultsTable.getBoundingClientRect === "function") {
   new ResizeObserver(fitPins).observe(G.els.resultsTable);
+}
+// #5603: LAY OUT BEFORE REVEAL. Whoever un-hides #results (ceremony, podium beat, game.js), classify the sheets and fit
+// the pins in the same task, after TopModal's own observer has opened the dialog (a queued microtask runs after every
+// observer callback, still before the paint), instead of waiting on ResizeObserver delivery. What still painted YOU on
+// P1 for a frame or two was MOTION: REDUCED replaying the pre-compact geometry; css/overlays.css makes that instant.
+if (typeof MutationObserver === "function" && typeof queueMicrotask === "function"
+    && G.els && G.els.results && G.els.resultsTable && typeof G.els.resultsTable.querySelectorAll === "function") {
+  new MutationObserver(() => {
+    if (G.els.results.hidden) return;
+    queueMicrotask(() => {
+      if (G.els.results.hidden) return;
+      if (typeof SheetShape !== "undefined" && SheetShape.reclassify) SheetShape.reclassify();
+      fitPins();
+    });
+  }).observe(G.els.results, { attributes: true, attributeFilter: ["hidden"] });
 }
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
 if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
@@ -301,10 +318,15 @@ function buildResults(order, race) {
   const cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
-  // A FRIEND race ends with the room still on screen but not alive: RACE AGAIN is a solo race and MENU
-  // drops the connection (game.js resNext/resMenu stop NetPlay). Name both, and offer a fresh room.
+  // A FRIEND race ends with NetPlay sometimes still live (the guest may BYE while the sheet is up):
+  // RACE AGAIN is a solo race and MENU drops the connection (game.js resNext/resMenu stop NetPlay).
+  // Name both, and offer a fresh room. The click reads dataset.friend, never the live peer, so the
+  // label and the action agree even after the guest leaves.
   const friend = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
-  if (els.resMenu) els.resMenu.textContent = friend ? tr("results.newFriendRoom", null, "NEW FRIEND ROOM") : tr("results.menu", null, "MENU");
+  if (els.resMenu) {
+    els.resMenu.textContent = friend ? tr("results.newFriendRoom", null, "NEW FRIEND ROOM") : tr("results.menu", null, "MENU");
+    els.resMenu.dataset.friend = friend ? "1" : "";
+  }
   const sprint = race && typeof race.sprint === "boolean" ? race.sprint
     : G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? tr("results.sprintTitle", { track: track.def.name }, "SPRINT — {track}")
@@ -619,7 +641,7 @@ function buildTTResults() {
   const track = G.track;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";
-  if (els.resMenu) els.resMenu.textContent = tr("results.menu", null, "MENU");   // a friend race's NEW FRIEND ROOM label must not outlive it
+  if (els.resMenu) { els.resMenu.textContent = tr("results.menu", null, "MENU"); els.resMenu.dataset.friend = ""; }   // a friend race's NEW FRIEND ROOM label (and action) must not outlive it
   els.resultsTitle.textContent = tr("results.ttTitle", { track: track.def.name }, "{track} — TIME TRIAL");
   winnerChip(els, "");
   const best = G.player.best;

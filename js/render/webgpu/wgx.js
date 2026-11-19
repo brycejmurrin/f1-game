@@ -6042,6 +6042,8 @@ const WGX = (function () {
       // container's pixel oracle (tools/gfx/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
+      // The caller gave up on a pending capture (photo studio's timeout): free the one slot (#5743 P3).
+      cancelCapture: (why) => _rejectCapture(why || "capture cancelled"),
       awaitSoftPresent,
       invalidateSoftPresent,
       holdSoftPresent,

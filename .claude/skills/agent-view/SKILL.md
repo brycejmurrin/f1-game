@@ -34,8 +34,10 @@ driving policy → [references/surface.md](references/surface.md). Design notes:
 **Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
 (`race` → `go` → `jump` + frames). Browser boots are serialized by AGENTS.md rules 5 and 10; use the Node VM for numeric batches.
-In a subagent a browser cannot boot (bash-guard and mcp-browser-guard refuse it; `launchChromium` refuses under `APEX_SUBAGENT=1`); the Node VM routes (`--vm`, `apex_eval {vm:true}`) need no browser and stay available:
-use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or report the probe unverified.
+In a subagent the VM routes run (`agent.mjs … --vm`, `apex-eval.mjs … --vm`, `apex_eval {vm:true}`, the only VM
+MCP wrap); a browser form is refused (`launchChromium` throws under `APEX_SUBAGENT`; mcp-browser-guard refuses
+`apex_agent`, which always boots a browser, and `apex_eval` without `vm:true`). No VM route for it: a `scratch/`
+`createGame` script (track-geometry.md §Whole-lap recipe) or report the probe unverified.
 
 **Vocab:** `frac` = lap 0→1; `s` = metres along centreline; `lateralM` = +right.
 
@@ -47,7 +49,7 @@ use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or r
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
 - Tests (browser specs run on CI, never locally — AGENTS.md rule 5): `agent-view.spec.js`,
   `agent-drive-bench.spec.js` (group `hooks`), `agent-determinism.spec.js` (group `ui`); `pick-tests.mjs` names
-  the groups per diff, `node tools/ci/remote-group.mjs <group>` runs one on the pushed branch.
+  the groups per diff; the PR's own CI runs the browser shard, and a whole group (`remote-group.mjs`) is Bryce's opt-in.
 - Seeded replay field diff (VM): `node tools/check/episode-diff.mjs`
 
 ## Load on demand

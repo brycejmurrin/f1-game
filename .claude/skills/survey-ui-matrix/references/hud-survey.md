@@ -14,7 +14,7 @@ node tools/shot/hud-survey.mjs --matrix quick --only chase-default   # 1 boot
 node tools/shot/hud-survey.mjs --matrix quick            # a few boots; --list prints cells + cost
 node tools/shot/hud-survey.mjs --matrix quick --no-shots --gl llvmpipe   # MEASURE FIRST, then --only <cells with findings> for pixels
 node tools/shot/hud-survey.mjs --matrix leads            # static-audit repros with numeric checks
-node tools/shot/hud-survey.mjs --matrix quick --settings tests/data/settings-live-export-2026-11-10.json   # his phone (UI SIZE 70, BUTTON 143.25); legacy tests/data/settings-defaults-export.json (2026-10-05: HUD 155, BUTTON 245)
+node tools/shot/hud-survey.mjs --matrix quick --settings tests/data/settings-defaults-export.json   # Bryce's legacy (2026-10-05) export; his live one: OWNER_PROFILES in tools/lib/bryce-phone.mjs
 # full (pairwise) and exhaustive: read the cost from --list; shard big ones: --shard i/n, then --merge <dirs>
 ```
 

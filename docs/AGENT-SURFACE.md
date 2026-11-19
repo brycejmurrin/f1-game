@@ -221,7 +221,7 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Tiny car inspect JPEG | `tools/car/carshot.mjs` (soft→CDP clip) | full `apex-capture` sweep |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
-| Run a Playwright **group** | CI: the PR's tiers, or `node tools/ci/remote-group.mjs <group>` on the pushed branch (agents run no browser test locally, AGENTS.md rule 5) | `test-bg.mjs` (one spec, Bryce-granted sessions only); any `apex_*` wrap; host `browser_*` |
+| Run a Playwright **group** | CI: the PR's tiers; a whole group (`remote-group.mjs`) is Bryce's opt-in (agents run no browser test locally, AGENTS.md rule 5) | `test-bg.mjs` (one spec, Bryce-granted sessions only); any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `code-hunter` (focus dead-code) + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 | Review one skill / agent / hook / AGENTS.md section after an edit | `surface-reviewer` (report in `scratch/`; `retest <old report>` = before/after) | the main session hand-reading every unit |
 | Bug / perf hunt over a slice | `prior-art-scout` (known list) → one `code-hunter` per slice → `finding-verifier` before any fix | a browser run in a hunter; acting on an unverified finding |
@@ -520,7 +520,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 <!-- NEVER-WRAP -->
 | CLI / action | Why | Use instead |
 |---|---|---|
-| `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; agents never start it (AGENTS.md rule 5) | CI groups via `node tools/ci/remote-group.mjs <group>`; skill **check-changes** |
+| `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; agents never start it (AGENTS.md rule 5) | the PR's own CI (a whole group is Bryce's opt-in); skill **check-changes** |
 | `verify-change.mjs` without `--fast` | Starts browser groups | `apex_verify_change_fast` |
 | `node tools/ci/bump-cache.mjs --apply --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |

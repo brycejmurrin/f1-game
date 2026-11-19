@@ -740,6 +740,8 @@
 #career-history .sheet,
 #career-guide .sheet,
 #quali .sheet { --compact-at: 480px; }
+/* QUALIFYING too (#5632): 539 own px at the shipped 70 % on 852x393, so it went NORMAL beside a compact hub. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) { #quali .sheet { --compact-at: 99999px; } }
 #career-offers .sheet:not([data-shape="tall"]),
 #career-history .sheet:not([data-shape="tall"]),
 #career-guide .sheet:not([data-shape="tall"]),

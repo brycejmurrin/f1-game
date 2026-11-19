@@ -168,6 +168,8 @@ const OverlayRender = (function () {
     // Dispose the painted chrome (feed stopped, race quit). Mirrors createDiffer.reset.
     function clear() {
       current = null;
+      for (const id of flashTimers.values()) clearTimeout(id);
+      flashTimers.clear();
       for (let i = 0; i < rows.length; i++) {
         rows[i].el.hidden = true;
         rows[i].key = "";
@@ -212,21 +214,28 @@ const OverlayRender = (function () {
       caption: { id: "waiting", who: "APEX 26", text: "Waiting for a broadcast feed", kind: "status" },
     });
   }
-  // deps: { now(), setInterval(fn, ms) }. Returns { frame(f), check() } (check is exposed for tests).
+  // deps: { now(), setInterval(fn, ms), clearInterval?(id) }. Returns { frame, check, stop }.
   function watch(painter, deps) {
     const now = deps.now;
-    let lastAt = null;
+    const clearInt = deps.clearInterval || ((id) => clearInterval(id));
+    let lastAt = null, timer = 0, open = true;
     function check() {
+      if (!open) return false;
       if (lastAt == null || now() - lastAt < STALE_MS) return false;
       lastAt = null;
       painter.clear();
       painter.paint(waitingFrame());
       return true;
     }
-    deps.setInterval(check, 1000);
+    timer = deps.setInterval(check, 1000);
     return {
-      frame(f) { lastAt = now(); return painter.paint(f); },
+      frame(f) { if (!open) return false; lastAt = now(); return painter.paint(f); },
       check,
+      stop() {
+        if (!open) return;
+        open = false;
+        if (timer) { clearInt(timer); timer = 0; }
+      },
     };
   }
 
@@ -244,15 +253,25 @@ const OverlayRender = (function () {
       painter.paint(waitingFrame());
       // Same-browser feed: a game tab of this origin publishes once it hears us.
       if (typeof OverlayBridge !== "undefined") {
-        const feed = watch(painter, { now: () => performance.now(), setInterval: (fn, ms) => window.setInterval(fn, ms) });
-        OverlayBridge.subscribe((frame) => feed.frame(frame));
+        const feed = watch(painter, {
+          now: () => performance.now(),
+          setInterval: (fn, ms) => window.setInterval(fn, ms),
+          clearInterval: (id) => window.clearInterval(id),
+        });
+        const sub = OverlayBridge.subscribe((frame) => feed.frame(frame));
+        if (typeof window !== "undefined" && window.addEventListener) {
+          window.addEventListener("pagehide", () => { feed.stop(); if (sub) sub.close(); }, { once: true });
+        }
       }
       return painter;
     }
     const started = performance.now();
     const paint = () => painter.paint(demoFrame((performance.now() - started) / 1000));
     paint();
-    window.setInterval(paint, 250);
+    const demoTimer = window.setInterval(paint, 250);
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("pagehide", () => window.clearInterval(demoTimer), { once: true });
+    }
     return painter;
   }
 

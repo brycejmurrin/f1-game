@@ -64,11 +64,8 @@ window.PhysicsConsts = {
   // factor is 1 at each axle's static load).
   LOAD_SENS: 0.10,
 
-  // AERODYNAMIC DOWNFORCE. Aero load rises with v², so a real F1 car pulls
-  // roughly 2 g in a slow corner and 5 g in a fast one; a grip taper that FALLS
-  // with speed (an arcade understeer model) makes quick corners vague and slow
-  // ones sharp. Lateral grip is 1 + DOWNFORCE·aeroDf·min(1,(v/vTopNow)²), vTopNow
-  // the pace-scaled vTop() (VMAX only at PACE 1); see js/physics/player-forces.js.
+  // AERODYNAMIC DOWNFORCE rises with v² (~2 g slow, ~5 g fast corners). Lateral
+  // grip is 1 + DOWNFORCE·aeroDf·min(1,(v/vTop())²) (js/physics/player-forces.js).
   DOWNFORCE: 0.65,     // extra grip fraction at VMAX (0 = no wings)
 
   X_VMAX_GAIN_LO: 0.055,  // top-speed gain at full X-mode, smallest wing
@@ -124,15 +121,10 @@ window.PhysicsConsts = {
   THR_CAP: 0.62,
   THR_VK: 14,          // m/s (a vStd() scale) — charge = THR_VK / vStd above the cap
 
-  // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
-  // indexed by the fitted compound's `wetTread` in the Parts catalog. Read by
-  // gripMult(c) in game.js: tread == null → treadFor(weather, lap-mean wetness)
-  // picks slick, inter or full wet (TyreModel.treadOf); wxFollow cars use their
-  // fitted set. With wear off, AI without a pit plan stay on that weather tread.
-  // With wear on an AI carries its fitted set's tread (TyreModel.applyCompound)
-  // and pits for the weather. gripMult() with no car is the slick column. Dry, overcast and
-  // fog have no row,
-  // so the lookup misses and grip stays 1 as it always did.
+  // Wet road grip by TREAD CLASS [slick, inter, full wet], indexed by the compound's
+  // `wetTread`. gripMult(c) in game.js: tread == null → treadFor(weather, lap-mean
+  // wetness) (TyreModel.treadOf); wxFollow cars and, with wear on, AI use their fitted
+  // set (TyreModel.applyCompound). No car = slick column. Dry, overcast, fog: no row, grip 1.
   //
   // THE SLICK COLUMN IS THE OLD WEATHER-ONLY gripMult() VERBATIM. That is the
   // point: before this table the model read the weather and never the tyre, so

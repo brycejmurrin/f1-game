@@ -2,9 +2,9 @@
 
 `overlay.html` is a broadcast graphic for a stream: a timing tower, the battle
 card, sector times and radio captions, drawn as real text on a transparent page.
-It never loads the game or a renderer, so it costs OBS almost nothing. The design
-and its evidence are in the shipped plan `2026-10-04-stream-overlay.md` (archived with the
-other shipped plans; `git log --follow` finds it).
+It never loads the game or a renderer, so it costs OBS almost nothing. The
+design plan and issue trail are indexed under **Stream overlay mode** in
+[NOTES-INDEX.md](NOTES-INDEX.md).
 
 ## What works today: layout with `?demo=1`
 

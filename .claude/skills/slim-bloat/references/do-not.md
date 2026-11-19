@@ -15,7 +15,7 @@ reaches for these first. They are not bloat.
 | Delete a `catch` without the why-comment | `bareCatches` ratchet: an empty catch needs the sentence. | `tests/data/ratchets.json`, `tools/check/tree-counts.mjs` |
 | Restore `other-file.js:412` citations | Ceiling is 0. Cite the **symbol**. | `tests/unit/comment-citations.test.mjs` |
 | Raise a ceiling so the extract "fits" | Ratchet exists because extraction happened once and the file grew back. | `ARCHITECTURE.md`; ratchets slack rule |
-| Copy constants out instead of moving them | aerozones leftover; settings then `ReferenceError`. `grep` the old names. | `ARCHITECTURE.md` § leftovers |
+| Copy constants out instead of moving them | aerozones leftover; settings then `ReferenceError`. `grep` the old names. | `docs/ARCHITECTURE.md` §Extraction lessons |
 | Flatten `HARD_EDGES` / script order | Eval-time destructure order is load-bearing. | `tools/manifest.cjs`, `load-order.test.mjs` |
 | "Fix" seeded float associativity / lockstep net | Same-machine reproducibility only; peers have authority. | ENGINEERING-PRACTICE-NOTES §2 |
 | Put a skill under `.cursor/skills/` | Second tree = CLAUDE.md vs AGENTS.md drift again. | `skill-progressive.test.mjs` |
