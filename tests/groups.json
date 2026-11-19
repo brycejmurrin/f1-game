@@ -853,6 +853,8 @@
     "// #4070 podium beat: PodiumBeat overlay + RacePodium CONTINUE/timer → #results. ~0.05 s.",
     "tests/unit/podium-beat.test.mjs",
     "tests/unit/poll-live-shell.test.mjs",
+    "// tools/ci/pool-share.mjs (#5848): the runner-pool census's pure parts (classes, quantiles, held-runner timeline). Instant.",
+    "tests/unit/pool-share.test.mjs",
     "// CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.",
     "tests/unit/pr-board.test.mjs",
     "// test-coverage-audit answers \"is this file in SOME topical group\"; this one",
