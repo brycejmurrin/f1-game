@@ -297,6 +297,10 @@ function create(G) {
   }
   const rerender = () => { for (const s of sections) s.render(); };
   if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
+  if (typeof MutationObserver === "function" && document.body) {
+    let wasDesktop = desktop();
+    new MutationObserver(() => { if (desktop() !== wasDesktop) { wasDesktop = desktop(); rerender(); } }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  }
   if (typeof MutationObserver === "function") {
     const helpSheet = document.getElementById("howtoplay");
     if (helpSheet) new MutationObserver(prioritizeHelpInput)
