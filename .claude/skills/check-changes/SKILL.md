@@ -41,8 +41,8 @@ node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the same floor, pl
 ```
 
 The PR's tiers run the rest of the ladder (every draft push gets the fast tier plus a selected browser shard); name
-the groups `pick-tests` lists as not-run in the PR, or run one on the pushed branch with
-`node tools/ci/remote-group.mjs <group>`. No local browser test runs (AGENTS.md rule 5): a Bryce-attended session
+the groups `pick-tests` lists as not-run in the PR; a whole group (`remote-group.mjs`) is Bryce's opt-in
+(`docs/VERIFICATION.md` §By change). No local browser test runs (AGENTS.md rule 5): a Bryce-attended session
 may run ONE named spec on his explicit grant, recorded in the PR body, as a background task.
 
 ```sh
@@ -61,8 +61,8 @@ The commit hook guards Cursor and Codex commits too (AGENTS.md §Agent extension
   new-on-session | already-red-on-ref`; a red you did not cause → skill `steward` §Red.
   A baseline comparison with no selected checks or unread results is unknown;
   both scoped runs green means no red, not a pre-existing failure.
-- **Which groups, in what order?** `--plan`'s `batches` are the groups; they run on the pushed PR
-  (`remote-group.mjs`), the rest named not-run: `references/engine-physics.md`.
+- **Which groups, in what order?** `--plan`'s `batches` are the groups; the PR's own CI runs them
+  (a whole group is Bryce's opt-in), the rest named not-run: `references/engine-physics.md`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
@@ -86,7 +86,7 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
 - A test timed out / hangs / a CI shard passes solo but not loaded (or vice versa) —
-  step 0 (read-only shard-log anchors), the decision tree and the `remote-group.mjs` re-run → [`references/triage.md`](references/triage.md)
+  step 0 (read-only shard-log anchors), the decision tree and what re-runs a group → [`references/triage.md`](references/triage.md)
 - No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
   edit before commit) → [`references/bump.md`](references/bump.md)
 - Engine / physics / `js/game.js` change: which two groups, the master gate, ratchets, vstd-lint →

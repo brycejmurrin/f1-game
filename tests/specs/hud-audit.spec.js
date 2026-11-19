@@ -13,9 +13,13 @@ async function waitReady(page) {
 async function startParked(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  const rd = await page.evaluate(() => { const e = document.getElementById("rotate-device"); if(e) e.hidden=true; });
+  await page.evaluate(() => { const e = document.getElementById("rotate-device"); if (e) e.hidden = true; });
   await page.evaluate(() => window.__apex.park(0.25));
-  await page.waitForTimeout(600);
+  // Park has landed when the HUD is up in race — not after a fixed 600 ms.
+  await page.waitForFunction(() => {
+    const hud = document.getElementById("hud");
+    return !!(hud && !hud.hidden && window.__apex.info().state === "race");
+  }, null, { polling: 50, timeout: BOOT_MS });
 }
 
 // Seed preferences before one boot. These are HUD DOM/canvas checks: headless
@@ -33,8 +37,8 @@ async function loadWithMode(page, steerMode, manual = false) {
 
 async function shot(page, name) {
   // The 3D canvas is intentionally frozen: these captures establish HUD/control
-  // layout only, not renderer or world-camera coverage.
-  await page.waitForTimeout(200);
+  // layout only, not renderer or world-camera coverage. assertHud already waited
+  // for #hud (and mode controls); no fixed 200 ms settle before the PNG.
   await page.screenshot({ path: galleryPath("hud-audit", `hud-audit-${name}.png`), fullPage: false });
 }
 

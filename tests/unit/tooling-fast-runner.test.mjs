@@ -867,10 +867,12 @@ test("#2890 --changed: non-benign index.html still widens and names WIDENED:", (
 test("#2890 --changed CLI prints WIDENED first and the long-run hint when estimated over ~2 min (source pin)", () => {
   const src = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/tooling-fast.mjs", import.meta.url)), "utf8");
   assert.match(src, /widenedLine\(changedMeta/);
-  assert.match(src, /LONG_RUN_HINT/);
-  assert.match(src, /criticalPathMs/);
+  // One pin on the gate itself (the two bare-name pins it replaces matched the export and the estimator alone).
+  assert.match(src, /\(est\.criticalPathMs \|\| 0\) >= LONG_RUN_MS\) console\.log\(LONG_RUN_HINT\)/);
   assert.ok(LONG_RUN_MS >= 120_000);
-  assert.match(LONG_RUN_HINT, /nohup npm run test:tooling-fast -- --changed/);
+  // AGENTS.md rules 3-4: the floor's own flags, one background task, no nohup/& (#5712).
+  assert.match(LONG_RUN_HINT, /tooling-fast\.mjs --changed --jobs=3 --quiet > artifacts\/logs\//);
+  assert.doesNotMatch(LONG_RUN_HINT, /nohup|&\s*\(/);
 });
 
 test("applyFileShard with timings packs longest first onto the least-loaded shard; unmeasured files cost the median", () => {

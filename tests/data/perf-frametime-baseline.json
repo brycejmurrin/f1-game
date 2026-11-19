@@ -16,20 +16,27 @@
     "cars": 22,
     "trackBuilt": "monza"
   },
+  "env": {
+    "renderer": "webgl2",
+    "api": "webgl2",
+    "adapter": "ANGLE (Mesa, llvmpipe (LLVM 21.1.8 256 bits), OpenGL 4.5)",
+    "browser": "chromium 153",
+    "viewport": "844x390@1"
+  },
   "metrics": {
-    "p50": 5783.1,
-    "p95": 16366.1,
-    "p99": 16366.1,
-    "max": 16366.1,
-    "frames": 6,
-    "longTasks": 20,
-    "heapUsedMB": 69.96,
-    "heapTotalMB": 72.19
+    "p50": 516.6,
+    "p95": 3833.1,
+    "p99": 4699.8,
+    "max": 4699.8,
+    "frames": 33,
+    "longTasks": 23,
+    "heapUsedMB": 103.63,
+    "heapTotalMB": 164.04
   },
   "_blessed": {
-    "sha": "73ee2c9e4bf394c42a399a532c774fd723586163",
-    "reason": "initial SwiftShader frametime lane on Monza night seed 4242",
-    "at": "2026-10-14T23:22:24.708Z",
-    "hash": "f3ac5096de716a228ce8863dff516130d8b14cd4b635a672f7f2a9a351cc23f3"
+    "sha": "8068e0d4f32fc8fb59f79acfa6f53a3571b7ca3b",
+    "reason": "re-bless on the llvmpipe lane after the api capture fix (#5734; decision A on #5732): records env, accepts today's ~100 MB heap as the reference",
+    "at": "2026-11-18T11:58:13.829Z",
+    "hash": "77afe9fba902f6c062e56689c6fbc6e5e0d7ff9a26c5a0b862163307492505bb"
   }
 }

@@ -229,25 +229,27 @@ var AudioPanel = (() => {
       const activeSrc = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
         ? "spotify" : ((typeof GameAudio !== "undefined" && GameAudio.musicSource)
           ? GameAudio.musicSource() : musicSrc);
+      // A bus that is ON under a shut master is MUTED, not ON (#5584): the closed fold is all a phone shows.
+      const bus = (on) => (!on ? ["off", "OFF"] : G.soundOn ? ["on", "ON"] : ["off", "MUTED"]);
       Dom.paintFold($("as-music-sum"), [
         ["k", "MUSIC"],
-        [G.musicEnabled ? "on" : "off", G.musicEnabled ? "ON" : "OFF"],
+        bus(G.musicEnabled),
         ["val", SRC_FOLD[activeSrc] || "ALL"],
       ]);
       Dom.paintFold($("as-sound-sum"), [
         ["k", "SOUND"],
-        [sfxOn ? "on" : "off", sfxOn ? "ON" : "OFF"],
+        bus(sfxOn),
       ]);
       const label = (list, v) => (list.find((r) => r[0] === v) || [, ""])[1];
       Dom.paintFold($("as-radio-sum"), [
         ["k", "TEAM RADIO"],
-        [radioOn ? "on" : "off", radioOn ? "ON" : "OFF"],
+        bus(radioOn),
         ["val", label(CHAT_VALUES, chatNow())],
         [spotNow() === "on" ? "on" : "off", "SPOTTER " + (spotNow() === "on" ? "ON" : "OFF")],   // it speaks with the radio OFF: never hide its state
       ]);
       Dom.paintFold($("as-ann-sum"), [
         ["k", "ANNOUNCER"],
-        [annOn() ? "on" : "off", annOn() ? "ON" : "OFF"],
+        bus(annOn()),
         ["val", label(COMM_VALUES, commNow())],
       ]);
       const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
@@ -275,6 +277,7 @@ var AudioPanel = (() => {
     // are shown but unpickable until there is something behind them.
     const SRC_VALUES = [["all", "ALL"], ["builtin", "DEFAULT"], ["user", "MY TRACKS"], ["spotify", "SPOTIFY"]];
     const ONOFF = [["on", "ON"], ["off", "OFF"]];
+    const MASTER_HINT = "Master sound is off — MASTER SOUND ON, at the top of this page, turns it on.";
     function srcOn() {
       return (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
         ? "spotify" : GameAudio.musicSource();
@@ -302,13 +305,18 @@ var AudioPanel = (() => {
     }
 
     function syncNowPlaying(pauseOnly = false) {
-      const musicLive = G.musicEnabled && G.soundOn;
+      // Every track failed to load (an installed app offline streams nothing: sw.js leaves music Range requests to
+      // the network): no track is playing, so the card must not name one (#5584).
+      const stalled = !!(G.musicEnabled && G.soundOn && GameAudio.musicStalled && GameAudio.musicStalled());
+      const musicLive = G.musicEnabled && G.soundOn && !stalled;
       // The master gate is what silences music when SOUND is off, and the MUSIC
       // switch still reads ON then — so the readout names the gate that is
       // actually shut instead of contradicting the switch beside it. The title
       // line ellipsises (css/tuner.css .as-now-title), so the way out goes on
       // the caption under it, which wraps.
-      const nowText = musicLive ? (GameAudio.trackName() || "—") : G.soundOn ? "Music off" : "Sound off";
+      const nowText = musicLive ? (GameAudio.trackName() || "—")
+        : stalled ? (typeof navigator !== "undefined" && navigator.onLine === false ? "Music needs a connection" : "Music could not load")
+        : G.soundOn ? "Music off" : "Sound off";
       // Same words as the SOURCE row (ALL / DEFAULT / MY TRACKS / SPOTIFY):
       // the caption said "Built-in" for the value labelled DEFAULT.
       const SRC_LABEL = { all: "All music", builtin: "Default", user: "My tracks", spotify: "Spotify" };
@@ -414,7 +422,7 @@ var AudioPanel = (() => {
       };
       if (rnote) {
         let note = !radioReady ? "This browser has no speech voices, so the radio stays written."
-          : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
+          : !G.soundOn ? MASTER_HINT
           : "Race control, your engineer and the coach read their messages aloud. The cards are unchanged.";
         if (radioLive && dbg) {
           if (dbg.asked > 0 && dbg.started === 0) {
@@ -468,9 +476,10 @@ var AudioPanel = (() => {
       }
       const anote = $("as-ann-note");
       setText(anote, !annReady ? "This browser has no speech voices, so the loading card stays written."
-        : !G.soundOn ? "Master sound is off — ANNOUNCER ON turns it on."
+        : !G.soundOn ? MASTER_HINT
         : packNow() === "rec" ? "The introduction and race commentary use your recorded announcer. Unrecorded story details stay on the loading card."
         : "The introduction and race commentary use your system voice; network-only voices are used during the introduction. VOICE VOLUME sets the level.");
+      SettingRow.paint($("as-master"), G.soundOn ? "on" : "off", ONOFF);
       syncNowPlaying();
       if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
       syncMusicSrcRow();
@@ -526,6 +535,17 @@ var AudioPanel = (() => {
     $("as-sp-open").onclick = () => {
       if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
     };
+    /* MASTER SOUND (#5584). The master's only control was #soundbtn on the title
+       screen, and a row already reading ON cannot lift it (a stepper never
+       writes an unchanged value): with SOUND off and MUSIC on, this page had no
+       way to make a sound. Built here, not in index.html: the row is this
+       panel's, and it sits above the folds so it is on screen when MUSIC opens. */
+    const masterHost = $("audioset-inner");
+    if (masterHost && masterHost.insertBefore && SettingRow.build && typeof document !== "undefined" && document.createElement) {
+      masterHost.insertBefore(SettingRow.build("as-master", "MASTER SOUND").row, masterHost.firstChild || null);
+    }
+    SettingRow.wire("as-master", { values: ONOFF, read: () => (G.soundOn ? "on" : "off"),
+      write: (v) => { if (v === "on") { setSound(true, true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSound(false, true); } } });
     SettingRow.wire("as-music", { values: ONOFF, read: () => (G.musicEnabled ? "on" : "off"),
       write: (v) => { setMusic(v === "on"); if (G.soundOn) GameAudio.uiTick(); } });
     // ON enables before the tick so the tick has a context to play in; OFF
