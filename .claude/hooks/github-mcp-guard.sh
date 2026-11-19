@@ -1,9 +1,7 @@
 #!/bin/bash
-# PreToolUse table for the GitHub MCP tools — ONE script behind three doors:
-# .claude/settings.json (matcher below), .cursor/hooks/mcp-guard.sh and
-# .codex/hooks/mcp-guard.sh (Cursor sends the bare tool name and tool_input as
-# a JSON string; Codex normalises its hosted spelling first). GUARDED must
-# stay identical to the two doors' matchers (tests/unit/cross-tool-guards.test.mjs).
+# PreToolUse table for the GitHub MCP tools — ONE script behind three doors: .claude/settings.json (matcher below),
+# .cursor/hooks/mcp-guard.sh and .codex/hooks/mcp-guard.sh (Cursor sends the bare tool name and tool_input as a JSON
+# string; Codex normalises its hosted spelling first). GUARDED must stay identical to the two doors' matchers.
 #
 #   DENY  merge_pull_request, enable_pr_auto_merge, disable_pr_auto_merge
 #         (no session merges or arms: land.yml lands — AGENTS.md §Coordination)
@@ -11,14 +9,13 @@
 #         (a file write on the admin token lands on any branch with no PR, no CI)
 #   DENY  update_pull_request_branch (sync through tools/ci/sync-pr.mjs)
 #   DENY  actions_run_trigger: any *cancel* / *rerun* method, run_workflow of
-#         pages.yml / ci.yml; the ORCHESTRATOR (steward §CI) passes cancels, rerun_failed_jobs, ci.yml, deploy-branch pages.yml
+#         pages.yml / ci.yml; the ORCHESTRATOR (steward §CI; the hook's OWN env; as a child session it also needs APEX_ORCH_ENV=env_…, Bryce-set; never from a settings `env`, #5819) passes cancels, rerun_failed_jobs, ci.yml, deploy-branch pages.yml
 #   ASK   update_pull_request with state "closed"
-#   DENY  issue_write whose `labels` (it REPLACES the list) differs from the
-#         live labels by anything but ONE name (live from `gh api`; unknown →
-#         ask), touches `config-ok`, or removes a `hold` Bryce set
+#   DENY  issue_write whose `labels` (it REPLACES the list) differs from the live labels by anything but ONE name
+#         (live from `gh api`; unknown → ask), touches `config-ok`, or removes a `hold` Bryce set
 #   ALLOW the rest, draft→ready included: the Plan gate and CI check a flip.
-# Output is the documented PreToolUse JSON; an unreadable payload or a guarded
-# call with a non-object input is a deny (fail closed).
+# Output is the documented PreToolUse JSON; an unreadable payload or a guarded call with a non-object input is a
+# deny (fail closed).
 command -v python3 >/dev/null 2>&1 || { echo "BLOCKED: github-mcp-guard needs python3 (fail closed)." >&2; exit 2; }
 python3 /dev/fd/3 3<<'PY'
 import json, os, re, subprocess, sys
@@ -62,7 +59,10 @@ if op == "update_pull_request_branch":
     emit("deny", "update-branch merges the base on GitHub as the token's owner; sync through `node tools/ci/sync-pr.mjs <branch>` instead.")
 if op == "actions_run_trigger":
     m, wf, ref = str(ti.get("method") or "").strip().lower(), os.path.basename(str(ti.get("workflow_id") or "").strip().lower()), re.sub(r"^refs/heads/", "", str(ti.get("ref") or "").strip())
-    orch = os.environ.get("APEX_ROLE") == "orchestrator" and os.environ.get("CLAUDE_CODE_CHILD_SESSION") != "1" and not d.get("agent_id")   # the hook's OWN env, never the command's (steward §CI)
+    def planted(fs=[os.path.join(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd(), ".claude", n) for n in ("settings.json", "settings.local.json")] + [os.path.expanduser("~/.claude/settings.json")]):   # a settings `env` reaches this process and any session can write one (#5819)
+        try: return any(k in (json.load(open(f)).get("env") or {}) for f in fs if os.path.exists(f) for k in ("APEX_ROLE", "APEX_ORCH_ENV"))
+        except Exception: return True   # unreadable: fail closed
+    orch = os.environ.get("APEX_ROLE") == "orchestrator" and not d.get("agent_id") and not planted() and (os.environ.get("CLAUDE_CODE_CHILD_SESSION") != "1" or re.fullmatch(r"env_[A-Za-z0-9]{6,}", os.environ.get("APEX_ORCH_ENV") or "") is not None)
     if orch and (m in ("cancel_workflow_run", "force_cancel_workflow_run", "rerun_failed_jobs") or (m == "run_workflow" and not wf.isdigit() and (wf in ("ci.yml", "ci.yaml") or ref == "claude/f1-game-project-26h3ng"))):
         sys.exit(0)
     if "cancel" in m:
