@@ -272,4 +272,11 @@ See "Fix log" at the end of this file; each fix is its own commit with how it wa
 
 ## Fix log
 
-(none yet)
+### Fix 1 — inline-script hashes (finding 1)
+
+Recomputed the SHA-256 allowlist in `index.html:5` (4 of 7 hashes replaced) and `controller.html:5` (3 of 4).
+No script changed. Verified in Chromium, before → after: CSP violations on `index.html` 4 → 0; service
+worker registrations 0 → 1 (installs in 6 s, 634 files cached, and the title screen reloads offline with
+all 17 menu buttons); `window.__APEX_BUILD` undefined → 1695; an uncaught error now shows the error overlay;
+`controller.html` violations 3 → 0 and `window.__apexPad` exists. Any future edit to an inline script needs
+the same recomputation — moving them to files would remove the trap.
