@@ -3100,8 +3100,21 @@ test("WebGPU beginRender honours the single-sample discard hint, storeOp only (P
 test("submit() parks a command buffer on device.apexSubmitHold instead of submitting it (PATCHES.md §21)", () => {
   // tlx-post.js holds its chain's command buffers and submits them in one call. A re-drop without the patch
   // leaves the member unread: the hold array stays empty and every pass submits on its own again, silently.
-  assert.match(THREE_BUNDLE, /const \w+=\w+\.apexSubmitHold;null==\w+\?\([^]{0,60}\.queue\.submit\(\w+\)[^]{0,40}\):\w+\.push\(\w+\)/,
-    "the submit helper no longer parks on device.apexSubmitHold (vendor/three-0.187.0/PATCHES.md §21)");
+  // Behaviour, not a source pin: run the bundle's own submit helper in a VM against a fake device.
+  const m = /function (\w+)\((\w+),\w+\)\{const \w+=\2\.apexSubmitHold;[^{}]*\}/.exec(THREE_BUNDLE);
+  assert.notEqual(m, null, "the submit helper no longer reads device.apexSubmitHold (vendor/three-0.187.0/PATCHES.md §21)");
+  const scratch = (/\((\w+)\[0\]=\w+,/.exec(m[0]) || [])[1];
+  const submitted = [];
+  const ctx = vm.createContext({});
+  if (scratch) ctx[scratch] = [null];
+  const submit = vm.runInContext(`(${m[0]})`, ctx, { filename: absSrc("vendor/three-0.187.0/three.webgpu.min.js") });
+  const device = { queue: { submit: (bufs) => submitted.push([...bufs]) }, apexSubmitHold: null };
+  submit(device, "cb1");
+  assert.deepEqual(submitted, [["cb1"]], "no hold: the buffer submits at once");
+  device.apexSubmitHold = [];
+  submit(device, "cb2"); submit(device, "cb3");
+  assert.deepEqual(device.apexSubmitHold, ["cb2", "cb3"], "a hold parks the buffers in order");
+  assert.equal(submitted.length, 1, "a held buffer is never submitted by the helper");
 });
 test("the WGSL builder gives a 3-component colour target a vec4 output (PATCHES.md §18)", async () => {
   // rg11b10ufloat (RGBFormat) would otherwise get a vec3 @location, and WebGPU refuses every
