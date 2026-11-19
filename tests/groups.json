@@ -2562,6 +2562,7 @@
         "tests/specs/photo-studio.spec.js",
         "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
+        "tests/specs/portrait-button-size.spec.js",
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/settings-stepper-paint.spec.js",

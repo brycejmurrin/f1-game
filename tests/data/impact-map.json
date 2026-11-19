@@ -18905,6 +18905,7 @@
       ],
       "invalidateFit": [
         "tests/specs/hud-layout.spec.js",
+        "tests/specs/portrait-button-size.spec.js",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
