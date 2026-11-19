@@ -245,7 +245,8 @@
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",
     "js/lighting/presets.js",
-    "js/garage/garage-data.js"
+    "js/garage/garage-data.js",
+    "js/garage/arrival-rows.js"
   ],
     LAZY_RACE_SESSION: [
     "js/data/garage-departure-motion.js",

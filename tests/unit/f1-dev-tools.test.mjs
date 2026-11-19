@@ -353,23 +353,57 @@ test('audit: restore bounds a hung race() start with timeoutMs', async () => {
 
 test('audit: design lab skips invalid entries, derives counts and retains existing cards on load-more', async () => {
   class Element {
-    constructor(){this.children=[];this.listeners={};this.classList={add(){},toggle(){}};this.dataset={};}
+    constructor(){this.children=[];this.listeners={};this.classList={add(){},toggle(){}};this.dataset={};this.hidden=false;}
     append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
     get firstElementChild(){return this.children[0];} setAttribute(){} addEventListener(n,fn){this.listeners[n]=fn;}
     querySelector(){return {focus(){}};} focus(){}
   }
   const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
+  get('preview-notice').hidden=true;
+  get('collection-link').href='http://localhost/collection/';
   const items=[null,{},...Array.from({length:30},(_,i)=>({title:'Capture '+i,src:'/img/'+i+'.png',lane:'Current PR combinations',geometryOnly:i===0}))];
+  const fetched=[];
   const ctx=vm.createContext({URL,Intl,Date,window:{location:{href:'http://localhost/',origin:'http://localhost'}},
     document:{getElementById:get,createElement:()=>new Element(),querySelectorAll:()=>[],addEventListener(){}},
-    fetch:async()=>({ok:true,json:async()=>({items,source:{revision:'123'}})})});
+    fetch:async(url,opts)=>{fetched.push({url:String(url),method:(opts&&opts.method)||'GET'});return{ok:true,json:async()=>({items,source:{revision:'123'}})}}});
   vm.runInContext(fs.readFileSync(path.join(root,'sites/design-lab/app.js'),'utf8'),ctx,{filename:path.join(root,'sites/design-lab/app.js')});
+  await new Promise(resolve=>setImmediate(resolve));
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(get('load-error').hidden,true);assert.equal(get('capture-grid').children.length,24);
   assert.equal(get('source-backend').textContent,'29 native screenshots / 1 CPU previews');
   const first=get('capture-grid').children[0];get('load-more').listeners.click();
   assert.equal(get('capture-grid').children.length,30);assert.equal(get('capture-grid').children[0],first);
+  assert.ok(fetched.some(f=>f.url.includes('collection')&&f.method==='HEAD'),'probeSidecars HEADs collection/');
+  assert.ok(!fetched.some(f=>f.url.includes('captures.json')&&f.method==='HEAD'),'does not double-HEAD captures.json');
+  assert.equal(get('preview-notice').hidden,true,'sidecars present → no preview banner');
 });
+
+test('audit: design-lab hides the collection link when the sidecar 404s', async () => {
+  class Element {
+    constructor(){this.children=[];this.listeners={};this.classList={add(){},toggle(){}};this.dataset={};this.hidden=false;this.href='http://localhost/collection/';}
+    append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
+    get firstElementChild(){return this.children[0];} setAttribute(){} addEventListener(n,fn){this.listeners[n]=fn;}
+    querySelector(){return {focus(){}};} focus(){}
+  }
+  const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
+  get('preview-notice').hidden=true;
+  get('collection-link').href='http://localhost/collection/';
+  const ctx=vm.createContext({URL,Intl,Date,window:{location:{href:'http://localhost/',origin:'http://localhost'}},
+    document:{getElementById:get,createElement:()=>new Element(),querySelectorAll:()=>[],addEventListener(){}},
+    fetch:async(url)=>{
+      const u=String(url);
+      if(u.includes('captures.json')) return{ok:false,status:404,json:async()=>({})};
+      if(u.includes('collection')) return{ok:false,status:404};
+      return{ok:true,json:async()=>({items:[]})};
+    }});
+  vm.runInContext(fs.readFileSync(path.join(root,'sites/design-lab/app.js'),'utf8'),ctx,{filename:path.join(root,'sites/design-lab/app.js')});
+  await new Promise(resolve=>setImmediate(resolve));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(get('collection-link').hidden,true);
+  assert.equal(get('preview-notice').hidden,false);
+  assert.equal(get('load-error').hidden,false);
+});
+
 
 test('audit: optics stops scheduling when paused and responds to motion preference changes', () => {
   const html=fs.readFileSync(path.join(root,'examples/visor-lab/optics.html'),'utf8');

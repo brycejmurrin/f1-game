@@ -1282,8 +1282,25 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
   // never under a 48px tap target, growing with the phone's height; the
   // screen is the flex child that gives way.
-  assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 14vh, 80px\); font-weight: 800; font-size: clamp\(12px, 3\.2vh, 18px\);/, "thumb-sized keys");
-  assert.match(page, /#keys \.wide \{[^}]*min-height: clamp\(36px, 9vh, 52px\)/, "the CENTRE TILT bar grows too");
+  assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 16vh, 88px\); font-weight: 800; font-size: clamp\(12px, 3\.6vh, 20px\);/, "thumb-sized keys");
+  // #5801: CENTRE TILT, the steering pick and the link health share ONE 44px bar
+  // inside the face; the wheel grid has no bottom row, so the dash, keys and
+  // pedals get the height. Health is a dot that spells itself out only when bad.
+  // Exact values, read off the page's own rules (rule(sel) is that selector's block).
+  const rule = (sel) => { const i = page.indexOf("  " + sel + " {"); return i < 0 ? "" : page.slice(i, page.indexOf("}", i)); };
+  const val = (sel, prop) => (rule(sel).match(new RegExp("[{;]\\s*" + prop + ": ([^;]+);")) || [])[1];
+  assert.deepEqual({
+    rows: val("#ctl", "grid-template-rows"), bar: val("#phone-input-options", "height"), select: val("#steering-mode", "min-height"),
+    selectFont: val("#steering-mode", "font"), goodDot: val('#input-health[data-state="good"]', "font-size"),
+    dash: val("#screen", "container-type"), gear: val("#h-gear", "font-size"), speed: val("#h-speed", "font-size"),
+    order: [...page.matchAll(/id="(keys|phone-input-options|b-center|steering-mode|input-health|link|right)"/g)].map((m) => m[1]),
+    stateTag: read("js/input/phone-pad-page.js").includes("dom.health.dataset.state = h.state"),
+  }, {
+    rows: "minmax(0, 1fr)", bar: "44px", select: "44px", selectFont: "700 16px/1 var(--font-ui)", goodDot: "0",
+    dash: "size", gear: "min(clamp(48px, 22vh, 120px), 50cqh)", speed: "min(clamp(28px, 11vh, 60px), 30cqh)",
+    order: ["keys", "phone-input-options", "b-center", "steering-mode", "input-health", "link", "right"],
+    stateTag: true,
+  }, "#5801: one 44px pad bar (CENTRE TILT, a 16px select, a health dot) under the keys, no bottom row; the dash digits cap on its height");
   assert.match(page, /#screen \{ flex: 1 1 0; min-height: 0;/, "the screen gives way, the keys do not");
   // The MENU PAD is its own screen: hidden until body.menu, when the wheel
   // hides instead; the D-pad, SELECT/BACK and both PAUSE buttons are wired.

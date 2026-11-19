@@ -45,7 +45,7 @@ id) does it REPLACE the path, so give the whole route: settings DISPLAY panel =
 Door and screen ids drift: read them from `--list` (catalog ids are a subset of
 `SCREENS` in `tools/ui/menu-screens.mjs`), not from this file.
 Every step here is a browser run (Chromium via harness.mjs): session only, never a
-subagent (AGENTS.md rule 10; no hook catches this CLI, so the rule is on you), never beside a Playwright group.
+subagent (AGENTS.md rule 10; no hook names this CLI, but `launchChromium` throws under `APEX_SUBAGENT`), never beside a Playwright group.
 `--help`/`--list` need none. The default viewport is a phone touch shape (`--help`);
 Bryce's own is `--viewport 844x390` — shoot that first. `--desktop` is the exception.
 
@@ -90,7 +90,7 @@ Live MCP session (already on localhost): `browser_resize` →
 ## Evidence handoff
 
 Use `--tokens` for computed design-token/control evidence. Build offline screenshot
-reviews from the emitted `review.json` with `tools/ui/review-captures.mjs`.
+reviews from the `review.json` written beside `shot.png` (only when a shot was taken, never on a dump-only run) with `tools/ui/review-captures.mjs`.
 Does each customization knob value change the picture? `node tools/ui/look-diff.mjs --touch` pixel-diffs every value against the default (DEAD / SUBTLE / VISIBLE, contact sheet).
 See [free design tooling](../../../docs/DESIGN-TOOLS.md) for bounded manifests and
 comparison controls. Accessibility scanning and interpretation stay with

@@ -18,6 +18,7 @@ conditionally overrides authored bumps via `TrackDef.fromRaw` (`js/track/core/de
 profiles do not prove flatness. `startFrac` and width zones use control-index fractions, built
 `s/total` arc fractions, and turns/sectors racing-space fractions. Respect `_sceneryShift` through
 wrapped helpers; never pre-shift `K(s)` (`.claude/rules/game-code.md`).
+Built length: `node tools/shot/apex-eval.mjs <id> "a.info().total" --vm`.
 
 ## The loop
 
@@ -50,8 +51,8 @@ probe, auto-flagged:
 lat 0, where the raycast falls through the ribbon (starts ~10 m out) to
 `floorY`, so a flat circuit flags a cliff at every frac (estoril: all false).
 A blank first capture is the pre-present frame. Real = a `--` sandwiched at
-lat 4-24 or a >1 m step in a lateral `node tools/shot/apex-eval.mjs <id> "a.groundY(frac,lat)"`
-sweep. Record artefact-vs-real per flag in the hand-back.
+lat 4-24 or a >1 m step in a lateral `node tools/shot/apex-eval.mjs <id> "a.groundY(frac,lat)" --vm --raw`
+sweep (`--raw`: without it arrays print as `Array(n)`). Record artefact-vs-real per flag in the hand-back.
 
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 `--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques

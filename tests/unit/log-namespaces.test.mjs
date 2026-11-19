@@ -85,6 +85,22 @@ test("an undefined or function argument is recorded as text, not a blank (hunt 2
   assert.equal(rec.msg, "v= undefined () => 1");
 });
 
+// Hunt #5779: LEVELS is an object literal, so an inherited key (`constructor`,
+// `toString`, `__proto__`) parsed as a level — a function — every threshold
+// comparison went NaN and all logging fell silent.
+test("Log.level ignores Object.prototype keys as level names", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
+  const ctx = vm.createContext({ console, Date, performance: { now: () => 0 } });
+  vm.runInContext(src + "\n;globalThis.__Log = Log;", ctx, { filename: absSrc("js/core/log.js") });
+  const Log = ctx.__Log;
+  const base = Log.level();
+  for (const bad of ["constructor", "toString", "__proto__", "hasOwnProperty", "buffer:constructor", "track:toString"]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(Log.level(bad))), JSON.parse(JSON.stringify(base)), bad);
+  }
+  assert.equal(Log.level().console, "warn");
+  assert.equal(Log.level("debug").console, "debug", "a real level still parses");
+});
+
 test("Log buffer is a fixed ring: wrap keeps newest-last order; overflow emit beats push+shift (perf hunt)", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
   assert.equal(/bufHead[\s\S]*buf\[bufHead\][\s\S]*bufHead = \(bufHead \+ 1\) % RING/.test(src), true);

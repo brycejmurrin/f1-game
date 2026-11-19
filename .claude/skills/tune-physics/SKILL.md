@@ -66,7 +66,7 @@ in `aero`. The PR's own CI runs the browser shard; a whole group (`remote-group.
 No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
 
 ```sh
-TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, trail-brake, midCorner_*
+TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, turnIn_coast/turnIn_brake, midCorner_coast/midCorner_brake
 # --seat pin (default) = the bare driving model; --seat shipped = the car a fresh browser boots. Say which seat an A/B measured.
 node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
 node tools/check/lockup-bench.mjs [--json]                       # braking: straight-line sweep, wheelLock, flat spots

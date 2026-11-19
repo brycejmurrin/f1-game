@@ -202,7 +202,7 @@ const row = (name, r, om) => {
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("usage: node tools/car/spine-station.mjs [--team=<id>|all] [--logo=<id>] [--occlude] [--png]\n  Metric survey of the spine crown lettering boxes across the grid (no browser).");
+    console.log("usage: node tools/car/spine-station.mjs [--team=<id>|all] [--logo=<id>] [--side=<id>,...] [--occlude] [--png=<dir>]\n  Metric survey of the spine crown lettering boxes across the grid (no browser).");
     return;
   }
   const arg = (k, d) => { const h = process.argv.find((a) => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };

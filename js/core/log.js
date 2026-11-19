@@ -50,7 +50,7 @@ const Log = (function () {
 
   function parseLevel(name) {
     const level = LEVELS[String(name).trim().toLowerCase()];
-    return level === undefined ? null : level;
+    return typeof level === "number" ? level : null;
   }
 
   function wipe(table) { for (const k in table) delete table[k]; }

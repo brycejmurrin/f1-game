@@ -904,10 +904,10 @@ const Assets = (function () {
     return _packIndex;
   }
   function rememberPack(m) {
-    if (!m || !m.models) return;
-    const models = {};
-    for (const id in m.models) {
-      const rec = m.models[id];
+    if (!m) return;
+    const models = {}, live = m.models || {};
+    for (const id in live) {
+      const rec = live[id];
       if (!rec || typeof rec.file !== "string" || !/^[0-9a-f]{32}$/.test(rec.md5 || "")) continue;
       models[id] = { file: rec.file, md5: rec.md5 };
     }

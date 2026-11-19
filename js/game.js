@@ -3554,7 +3554,7 @@ customTeam = CustomTeam.create({
   getLivDraftOverride: () => customLiv.livDraftOverride,
   setLivDraftOverride: (v) => { customLiv.livDraftOverride = v; },
   getSoundOn: () => soundOn,
-  GameAudio,
+  GameAudio, announce,
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },
@@ -4006,11 +4006,11 @@ function raceIntroFromSheet(go, sheet, btn) {
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
-  // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
-  // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
+  // A DAILY picked before LAZY_RACE_SESSION's hook ran the stub's no-op prepareDaily; the hook then moves
+  // teamIdx/driverIdx/difficulty (entrySettings): the intro went stale, no garage-out (#3591). `records`, not the
+  // global: the bundle reinjects SessionRecords before its hook swaps the instance (#5813).
   const sessionLate = typeof GarageDepartureMotion === "undefined" || typeof GarageDepartureWheels === "undefined"
-    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub);
+    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && !!(records && records._stub));
   try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();

@@ -624,12 +624,13 @@ const PhonePadPage = (function () {
           onHealth: (h) => {
             const text = h.state === "unavailable" ? "INPUT AGE UNAVAILABLE · UPDATE GAME" : h.state === "waiting" ? "WAITING FOR INPUT ACK" : h.state === "reconnecting" ? "INPUT NOT ACKNOWLEDGED" : "INPUT " + h.state.toUpperCase();
             if (dom.health && dom.health.textContent !== text) dom.health.textContent = text;
+            if (dom.health && dom.health.dataset && dom.health.dataset.state !== h.state) dom.health.dataset.state = h.state;   // the pad bar's dot (controller.html)
             if (dom.healthAge) { const age = h.ageMs == null ? "" : Math.round(h.ageMs / 100) * 100 + " ms since acknowledged sample"; if (dom.healthAge.textContent !== age) dom.healthAge.textContent = age; }
           },
           onClose: (why) => {
             if (attempt !== owner || gen !== bindGen) return;   // a cancel, or a session rebind() replaced
             bound = null; listen.stopped = true; clearConnectDeadline();
-            steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) dom.health.textContent = "INPUT DISCONNECTED"; if (dom.steer) dom.steer.hidden = true;
+            steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) { dom.health.textContent = "INPUT DISCONNECTED"; if (dom.health.dataset) dom.health.dataset.state = "disconnected"; } if (dom.steer) dom.steer.hidden = true;
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
             dropWake(); releaseAll();
@@ -745,6 +746,201 @@ const PhonePadPage = (function () {
     };
   }
 
-  return { HELD, DASH, paintHud, pad };
+  // ── phone: WHEEL LAYOUT (#5801) ───────────────────────────────────────────
+  // Which thumb each wheel-face key sits under: L (the grip on the left of the
+  // screen), C (the face, under the dash) or R. `swap` mirrors the grips, so
+  // paddles go right and pedals left. `pedals` "side" stands BRAKE and GAS up
+  // as two tall bars side by side (a phone racer's dock) instead of stacked;
+  // `strip` "column" stacks the keys moved to a grip in a column beside it
+  // instead of a row above it. Saved on the phone as apex26.padLayout;
+  // everything else about the wheel is unchanged, and a moved button is the
+  // same element (its listeners move with it).
+  const LAYOUT_KEYS = Object.freeze(["overtake", "boost", "aero", "camera", "radio", "look", "recover", "pause"]);
+  const LAYOUT_LABEL = Object.freeze({ overtake: "OT", boost: "BOOST", aero: "AERO", camera: "CAM", radio: "RADIO", look: "LOOK", recover: "RESET", pause: "PAUSE" });
+  const LAYOUT_KEY = "apex26.padLayout";
+  const zonesWith = (side, keys) => Object.fromEntries(LAYOUT_KEYS.map((k) => [k, keys.includes(k) ? side : "C"]));
+  const TRIO = ["overtake", "boost", "aero"];
+  const preset = (zone, more) => Object.assign({ zone, swap: false, pedals: "stack", strip: "row", place: {} }, more);
+  // ARRANGE (MOVE & SIZE, like the game's ARRANGE HUD): any control can be dragged
+  // off its slot and sized. place[id] = { x, y } offset in % of the screen's
+  // width / height, and s, the size in %. The grid stays the base, so a preset
+  // or RESET puts every control back.
+  const ARRANGE_MIN_PX = 44;   // the touch floor: no control sizes below it
+  const clampN = (v, lo, hi, d) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
+  function normalisePlace(raw) {
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const id of Object.keys(raw).slice(0, 40)) {
+      const p = raw[id];
+      if (!/^[\w-]{1,24}$/.test(id) || !p || typeof p !== "object") continue;
+      const r1 = (v) => Math.round(v * 10) / 10;
+      const q = { x: r1(clampN(p.x, -90, 90, 0)), y: r1(clampN(p.y, -90, 90, 0)), s: Math.round(clampN(p.s, 40, 250, 100)) };
+      if (q.x || q.y || q.s !== 100) out[id] = q;
+    }
+    return out;
+  }
+  const LAYOUT_PRESETS = Object.freeze({
+    classic: preset(zonesWith("C", [])),
+    right: preset(zonesWith("R", TRIO)),   // OT/BOOST/AERO above the pedals
+    left: preset(zonesWith("L", TRIO)),    // ... above the paddles
+    mirror: preset(zonesWith("C", []), { swap: true }),
+    phone: preset(zonesWith("R", TRIO), { pedals: "side", strip: "column" }),   // tall BRAKE | GAS, OT/BOOST/AERO in a column beside them
+  });
+  function normaliseLayout(raw) {
+    const r = raw && typeof raw === "object" ? raw : {}, z = r.zone && typeof r.zone === "object" ? r.zone : {};
+    return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true,
+      pedals: r.pedals === "side" ? "side" : "stack", strip: r.strip === "column" ? "column" : "row", place: normalisePlace(r.place) };
+  }
+  /** The preset a layout equals, or "custom". */
+  function layoutPreset(lay) {
+    const n = normaliseLayout(lay);
+    return Object.keys(LAYOUT_PRESETS).find((id) => JSON.stringify(LAYOUT_PRESETS[id]) === JSON.stringify(n)) || "custom";
+  }
+  /** Moves the keys into their zones. dom: { body, keys: {name: el}, home (#keys), grips: { L, R } (the
+   *  key strips of the paddle grip and the pedal grip, in that order) }. */
+  function applyLayout(dom, lay) {
+    const n = normaliseLayout(lay), g = dom.grips || {};
+    const box = { C: dom.home, L: n.swap ? g.R : g.L, R: n.swap ? g.L : g.R };
+    for (const k of LAYOUT_KEYS) {
+      const el = dom.keys && dom.keys[k], to = box[n.zone[k]];
+      if (el && to && to.appendChild) to.appendChild(el);   // canonical order: appended in LAYOUT_KEYS order
+    }
+    const b = dom.body && dom.body.dataset;
+    if (b) { if (n.swap) b.swap = "1"; else delete b.swap; b.pedals = n.pedals; b.strip = n.strip; }
+    for (const [id, el] of Object.entries(dom.arrange || {})) placeEl(el, n.place[id]);   // gears AUTO keeps its big OT/BOOST tiles on the paddle grip wherever the small keys went
+    return n;
+  }
+  function placeEl(el, p) {
+    if (!el || !el.style) return;
+    el.style.translate = p ? p.x + "vw " + p.y + "vh" : "";
+    el.style.scale = p && p.s !== 100 ? String(p.s / 100) : "";
+    if (el.classList) el.classList.toggle("placed", !!p);
+  }
+  /** The smallest size (%) that keeps an element's shorter side at the touch floor. */
+  function minScale(w, h, s) {
+    const base = Math.min(w, h) / ((s || 100) / 100);
+    return base > 0 ? Math.max(40, Math.ceil(ARRANGE_MIN_PX / base * 100)) : 40;
+  }
+  /** The editor sheet. dom adds: sheet, open, done, rows (container), presets ([el with data-preset]),
+   *  swapBtn, pedalsBtn, stripBtn (toggles), doc (document, to build the per-key rows), store (localStorage-like). */
+  function layout(dom, opts) {
+    const store = (opts && opts.store) || null;
+    let cur;
+    try { cur = normaliseLayout(store && JSON.parse(store.getItem(LAYOUT_KEY) || "null")); } catch (e) { cur = normaliseLayout(null); }
+    const picks = {};
+    if (dom.rows && dom.doc) {
+      for (const k of LAYOUT_KEYS) {
+        const row = dom.doc.createElement("div"); row.className = "lay-row";
+        const name = dom.doc.createElement("span"); name.textContent = LAYOUT_LABEL[k]; row.appendChild(name);
+        picks[k] = {};
+        for (const [z, txt] of [["L", "LEFT"], ["C", "MID"], ["R", "RIGHT"]]) {
+          const b = dom.doc.createElement("button"); b.type = "button"; b.textContent = txt;
+          b.setAttribute("aria-label", LAYOUT_LABEL[k] + " " + (z === "C" ? "under the dash" : txt.toLowerCase() + " grip"));
+          b.addEventListener("click", () => set(Object.assign({}, cur, { zone: Object.assign({}, cur.zone, { [k]: z }) })));
+          picks[k][z] = b; row.appendChild(b);
+        }
+        dom.rows.appendChild(row);
+      }
+    }
+    function paint() {
+      const p = layoutPreset(cur);
+      for (const el of dom.presets || []) el.setAttribute("aria-pressed", String(el.dataset.preset === p));
+      for (const k of LAYOUT_KEYS) for (const z of ["L", "C", "R"]) if (picks[k]) picks[k][z].setAttribute("aria-pressed", String(cur.zone[k] === z));
+      if (dom.swapBtn) dom.swapBtn.setAttribute("aria-pressed", String(cur.swap));
+      if (dom.pedalsBtn) dom.pedalsBtn.setAttribute("aria-pressed", String(cur.pedals === "side"));
+      if (dom.stripBtn) dom.stripBtn.setAttribute("aria-pressed", String(cur.strip === "column"));
+    }
+    function set(lay) {
+      cur = applyLayout(dom, lay);
+      try { if (store) store.setItem(LAYOUT_KEY, JSON.stringify(cur)); } catch (e) { /* storage blocked: this session keeps it */ }
+      paint();
+    }
+    for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
+    if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
+    if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
+    if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
+    const show = (on) => { if (dom.sheet) dom.sheet.hidden = !on; if (on && dom.done && dom.done.focus) dom.done.focus(); else if (!on && dom.open && dom.open.focus) dom.open.focus(); };
+    // ARRANGE: capture-phase pointers on the stage, so a drag on GAS moves GAS and never presses it.
+    const A = dom.arrange || {}, idOf = new Map(Object.entries(A).map(([id, el]) => [el, id]));
+    let picked = null, drag = null;
+    const pts = new Map();
+    const W = () => (typeof innerWidth === "number" ? innerWidth : 800), H = () => (typeof innerHeight === "number" ? innerHeight : 400);
+    const placeOf = (id) => cur.place[id] || { x: 0, y: 0, s: 100 };
+    const label = (id) => { const el = A[id]; return el ? (el.getAttribute && el.getAttribute("aria-label")) || el.textContent.trim().split(/\s+/)[0] || id : id; };
+    // Two controls that overlap (more than a 3px touch on both axes) both turn red, as in ARRANGE HUD.
+    function markClashes() {
+      const els = Object.values(A).filter((el) => el && el.getBoundingClientRect && el.classList), rs = els.map((el) => el.getBoundingClientRect());
+      const hitBy = els.map(() => false);
+      for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
+        const a = rs[i], b = rs[j];
+        if (!a.width || !b.width) continue;
+        if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 3 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 3) hitBy[i] = hitBy[j] = true;
+      }
+      els.forEach((el, i) => el.classList.toggle("clash", arranging() && hitBy[i]));
+    }
+    function pick(id) {
+      if (picked && A[picked] && A[picked].classList) A[picked].classList.remove("picked");
+      picked = id; if (id && A[id] && A[id].classList) A[id].classList.add("picked");
+      if (dom.barName) dom.barName.textContent = id ? label(id).toUpperCase() + " · " + Math.round(placeOf(id).s) + "%" : "TAP A CONTROL";
+      markClashes();
+    }
+    function put(id, p, save) {
+      const place = Object.assign({}, cur.place, { [id]: p });
+      if (save) set(Object.assign({}, cur, { place })); else { cur = Object.assign({}, cur, { place: normalisePlace(place) }); placeEl(A[id], cur.place[id]); }
+      pick(id);
+    }
+    function sizeBy(id, factor, save) {
+      const el = A[id], p = placeOf(id), r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
+      put(id, { x: p.x, y: p.y, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
+    }
+    const arranging = () => !!(dom.body && dom.body.classList && dom.body.classList.contains("arranging"));
+    function arrange(on) {
+      if (dom.body && dom.body.classList) dom.body.classList.toggle("arranging", on);
+      if (dom.bar) dom.bar.hidden = !on;
+      if (on) { show(false); pick(null); } else { pts.clear(); drag = null; pick(null); }
+    }
+    if (dom.stage) {
+      const stop = (e) => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); };
+      const hit = (t) => { for (let n = t; n && n !== dom.stage; n = n.parentNode) if (idOf.has(n)) return idOf.get(n); return null; };
+      dom.stage.addEventListener("pointerdown", (e) => {
+        if (!arranging()) return;
+        stop(e);
+        const id = hit(e.target); if (!id) return;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.size === 1) { const p = placeOf(id); drag = { id, x0: e.clientX, y0: e.clientY, p }; pick(id); }
+        else if (pts.size === 2 && drag) { const [a, b] = [...pts.values()]; drag.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: placeOf(drag.id).s }; }
+        try { dom.stage.setPointerCapture && dom.stage.setPointerCapture(e.pointerId); } catch (_) { /* a drag without capture still tracks while over the stage */ }
+      }, true);
+      dom.stage.addEventListener("pointermove", (e) => {
+        if (!arranging() || !drag || !pts.has(e.pointerId)) return;
+        stop(e); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (drag.pinch && pts.size >= 2) {
+          const [a, b] = [...pts.values()], f = Math.hypot(a.x - b.x, a.y - b.y) / drag.pinch.d0;
+          const p = placeOf(drag.id); sizeBy(drag.id, (drag.pinch.s0 * f) / p.s, false);
+        } else if (!drag.pinch) {
+          put(drag.id, { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s }, false);
+        }
+      }, true);
+      const end = (e) => {
+        if (!arranging()) return;
+        stop(e); pts.delete(e.pointerId);
+        if (drag && !pts.size) { const id = drag.id; drag = null; set(Object.assign({}, cur)); pick(id); }
+      };
+      dom.stage.addEventListener("pointerup", end, true); dom.stage.addEventListener("pointercancel", end, true);
+      for (const t of ["click", "contextmenu"]) dom.stage.addEventListener(t, (e) => { if (arranging()) stop(e); }, true);
+    }
+    if (dom.arrangeBtn) dom.arrangeBtn.addEventListener("click", () => arrange(true));
+    if (dom.arrangeDone) dom.arrangeDone.addEventListener("click", () => arrange(false));
+    if (dom.minus) dom.minus.addEventListener("click", () => { if (picked) sizeBy(picked, 0.9, true); });
+    if (dom.plus) dom.plus.addEventListener("click", () => { if (picked) sizeBy(picked, 1.1, true); });
+    if (dom.resetOne) dom.resetOne.addEventListener("click", () => { if (!picked) return; const place = Object.assign({}, cur.place); delete place[picked]; const id = picked; set(Object.assign({}, cur, { place })); pick(id); });
+    if (dom.resetAll) dom.resetAll.addEventListener("click", () => { set(Object.assign({}, cur, { place: {} })); pick(null); });
+    if (dom.open) dom.open.addEventListener("click", () => show(true));
+    if (dom.done) dom.done.addEventListener("click", () => show(false));
+    cur = applyLayout(dom, cur); paint();
+    return { get: () => normaliseLayout(cur), set, show, arrange, sizeBy: (id, f) => sizeBy(id, f, true) };
+  }
+
+  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, layoutPreset, applyLayout, layout };
 })();
 Object.freeze(PhonePadPage);

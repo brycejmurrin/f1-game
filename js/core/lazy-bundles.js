@@ -134,7 +134,6 @@ function ensureCircuit(idx) {
   let p = _circuitLoads.get(def.id);
   if (!p) {
     p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
-      _circuitLoads.delete(def.id);
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
         return false;
@@ -152,7 +151,7 @@ function ensureCircuit(idx) {
         return false;
       }
       return Tracks.hydrate(raw);
-    });
+    }).finally(() => _circuitLoads.delete(def.id));
     _circuitLoads.set(def.id, p);
   }
   // Reject when hydrate/load fails so ensureScenery / startRace never build a
@@ -945,7 +944,7 @@ function ensureLightPresets() {
     if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }
     deps.applyLightTuneIfReady();
     return true;
-  });
+  }).catch(() => false);
   return lightLoad;
 }
 // THE GARAGE'S BLENDER TABLES (GarageData): asked for at idle, on garage entry,

@@ -4,9 +4,8 @@
  * A·H15 load hunt (2026-10-24, docs/notes/LOAD-HUNT-2026-10-24.md). The lazy groups are the boot wins of
  * earlier hunts: the three island (DEFERRED, ~1.1 MB), the track-build toolkit (LAZY_TRACK_BUILD, ~535 KB), the
  * scenery closures (LAZY_SCENERY, 1,083 KB), audio, data, net, agent. Each one back on a <script> tag is parse and
- * eval on every boot, which a functional test never notices. The ceilings sit a few percent over the measured
- * shell (304 tags, 7.80 MB raw on 2026-10-24): ordinary growth fits, a whole lazy group does not. Raising one is
- * a decision — say why in the commit, the way a ratchet raise does.
+ * eval on every boot, which a functional test never notices. The ceilings are tree ratchets (below): raising one
+ * is Bryce's decision, made with his `ratchet-raise` label.
  *
  * 2026-10-28: tip 320 + PedalTravel + GarageCrewDraw + AiStrategy → 323; #4056 OverlayBridge +
  * OverlayPublisher → 325 so the game page can hear overlay.html heartbeats without growing game.js.
@@ -16,55 +15,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { load } from "../../tools/check/ratchets.mjs";
+import { eagerScriptsOf, wallNow } from "../../tools/check/boot-wall.mjs";
 
 const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-// 325: tip PedalTravel + GarageCrewDraw + AiStrategy (323) + OverlayBridge + OverlayPublisher (#4056).
-// 326: + EnergyPlan (#1580, PR #3981): game.js reads it every frame and the Settings ERS rows at boot, so it
-// cannot be lazy without a redesign (Bryce, 2026-10-29: "Raise to 326").
-// 323: #4978 rows 1+4 moved overlay/render.js (OVERLAY_PAGE), three-inspector (LAZY_AGENT) and
-// gfx-debug-overlay (LAZY_DEV) off the wall (326 → 323); the freed slots are not headroom for new eager files.
-// 322: #4748 moved career-backup into LAZY_CAREER_UI (tip 320 → 319 tags).
-// 317: #4978 row 2 moved the perf rig (bench-run, bench-capture, phone-recorder, gpu-test-run, soak-run) to LAZY_PERF (319 → 314).
-// 314: #4978 row 6 moved watch-transport, real-replay, real-race-pace and the real-race body to LAZY_REAL_RACE
-// behind a FULL stub (js/race/real-race-boot.js) (314 → 311).
-// 313: deploy red (#5714 + #5634 overlap) moved share-card-chips.js into LAZY_RESULTS_SHEET (tip 311 → 310 tags).
-const MAX_EAGER_SCRIPTS = 313;
-// 8.25 MB: raised from 8.20 MB by Bryce's grant (2026-10-30 ~16:51Z, quoted via the dispatcher: "Raise budget +50 KB").
-// Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
-// 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
-// 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
-// 8.15 MB: the cap came down from 8,220,000 with #5468 (#4748 career-backup → LAZY_CAREER_UI, #4978 row 2 perf rig →
-// LAZY_PERF). 8,150,000 is the owner's decision of 2026-11-11 (issue #5523, brycejmurrin "decision: 8150000",
-// 16:37:17Z), a deliberate exception to the "freed bytes are not headroom" default. Measured after #5468:
-// 314 scripts, 8,048,913 raw bytes (tip 240426c6) → 101,087 B of room.
-// 8,127,215: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (#5489): tip 7974edf7 8,053,745 →
-// 8,030,960 raw (−22,785), so the room stays the owner's 8,150,000 decision and the freed bytes are not handed out.
-// 8,018,484: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE behind the FULL stub js/race/real-race-boot.js
-// (#5515): tip 2de6f5eb 8,076,221 → 7,967,490 raw (−108,731), so the room stays what the owner's decision left.
-// 8,014,025: deploy red — #5714 (ROUTE SHEETS watcher in eager lazy-bundles.js) + #5634 (eager ui/race growth) ate
-// the room; tip 9b75df12 8,022,147 raw (over by 3,663). share-card-chips.js → LAZY_RESULTS_SHEET: 8,022,147 →
-// 8,014,025 (−8,122). Zero room: growth spent the owner's room, and freed bytes are not handed out.
-// 8,017,936: tip 08886fdb boots 8,017,936 raw against 8,014,025 (+3,911). #5815 merged before re-measure; growth
-// from #5582 and other merges onto the red tip (8a9d0796: 8,026,058 raw before the move). Still under Bryce's
-// 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
-const MAX_EAGER_BYTES = 8_017_936;
+// The two ceilings live in tests/data/ratchets.json `tree` (eagerScripts, eagerBytes, slack 0) plus every
+// tests/data/ratchets.d fragment, since 2026-11-19 (docs/notes/BUDGET-RATCHETS-2026-11-19.md): three fixers each
+// hand-edited one constant measured on a different old tip, so whichever merged second went red. A branch that frees
+// bytes now lowers the ceiling by its own delta (the commit hook writes it); a raise is
+// `node tools/check/ratchets.mjs --update --fragment --reason="<why>"` and lands only under Bryce's `ratchet-raise`
+// (merge-gate raise row). Freed bytes are not headroom: room is the entry's `slack`, and loosening it is a raise.
+// The constants' history (325 → 313 scripts, 8.25 MB → 8,017,936 B): docs/notes/CEILING-HISTORY.md §Boot wall.
+const { tree } = load();
+const ceiling = (metric) => { const e = tree[metric]; return typeof e === "number" ? e : e?.ceiling; };
+const MAX_EAGER_SCRIPTS = ceiling("eagerScripts");
+const MAX_EAGER_BYTES = ceiling("eagerBytes");
 
-function eagerScripts() {
-  const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
-  return [...html.matchAll(/<script\b[^>]*\bsrc="([^"?#]+)/g)].map((m) => m[1]).filter((s) => !/^https?:/.test(s));
-}
+const eagerScripts = () => eagerScriptsOf(read("index.html"));
 
 test("the eager shell stays inside its script budget (count and raw bytes)", () => {
-  const files = eagerScripts();
-  const bytes = files.reduce((n, f) => n + statSync(new URL(f, ROOT)).size, 0);
-  assert.ok(files.length <= MAX_EAGER_SCRIPTS, `index.html loads ${files.length} scripts at boot (budget ${MAX_EAGER_SCRIPTS})`);
-  assert.ok(bytes <= MAX_EAGER_BYTES, `index.html boots ${bytes} raw bytes of script (budget ${MAX_EAGER_BYTES}) — lazy-load it, or raise the budget with a reason`);
+  assert.ok(Number.isInteger(MAX_EAGER_SCRIPTS) && Number.isInteger(MAX_EAGER_BYTES), "tests/data/ratchets.json tree carries eagerScripts and eagerBytes");
+  const { scripts, bytes } = wallNow();
+  const raise = 'lazy-load it, or raise it as a fragment (node tools/check/ratchets.mjs --update --fragment --reason="<why>") under Bryce\'s ratchet-raise';
+  assert.ok(scripts <= MAX_EAGER_SCRIPTS, `index.html loads ${scripts} scripts at boot (budget ${MAX_EAGER_SCRIPTS}) — ${raise}`);
+  assert.ok(bytes <= MAX_EAGER_BYTES, `index.html boots ${bytes} raw bytes of script (budget ${MAX_EAGER_BYTES}) — ${raise}`);
 });
 
 test("no lazy or deferred group is back on the boot wall", () => {

@@ -99,8 +99,8 @@ Load from the SKILL.md index when the task needs this detail.
         `"<id>"` rows of `tests/data/scenery-audit-baseline.json` (`ground-audit.cjs`; `tests/unit/scenery-ground-audit.test.mjs`)
         at EXACTLY the measured
         value. A cap above the measurement fails as loudly as one below, and an
-        absent id means a cap of 0 — so omit the row when the circuit measures
-        clean rather than writing a 0,
+        absent id means a cap of 0 — so a clean circuit needs no row (the shipped
+        baselines also carry explicit 0 rows; both pass),
      7. `tests/data/def-factory-golden.json` `hashes` — one row per shipped circuit
         (`tests/unit/track-def-factory.test.mjs` fails "no golden row" and asserts rows ==
         shipped circuits). To capture it, add the row with a placeholder value, run that
@@ -129,7 +129,7 @@ Load from the SKILL.md index when the task needs this detail.
 4. **Visual check** — `__apex.tracks()` lists the id; then load and screenshot it
    (the `playwright-probe` skill's `shot.mjs`; main session only — in a subagent list this step as not run, AGENTS.md rule 10):
    ```js
-   __apex.race("<id>"); __apex.park(0.1);          // stationary at 10% lap
+   await __apex.race("<id>"); __apex.park(0.1);    // stationary at 10% lap (unawaited, race() leaves the previous track)
    __apex.orbit(0.1, 45, 15, 40);                  // inspect from all sides
    __apex.trackProfile();                          // [{frac,y,k,hw,slope}] elevation/curvature sanity
    ```
