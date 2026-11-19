@@ -6007,6 +6007,7 @@
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -19512,6 +19513,9 @@
     },
     "js/ui/photo-studio.js": {
       "album": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "background": [
         "tests/unit/photo-studio.test.mjs"
       ],
       "capture": [
