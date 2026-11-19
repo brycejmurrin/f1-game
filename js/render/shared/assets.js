@@ -650,12 +650,7 @@ const Assets = (function () {
     return true;
   }
 
-  // The tier FOLLOWS the GRAPHICS preset after boot (#5561): GfxQuality calls
-  // this on a preset change, and only off track (menu or pause card), so the
-  // re-upload never lands on a driven frame. Drops the material arrays, then
-  // loads the tier the preset now wants; models and the manifest stay. False
-  // when nothing is up, the tier already matches, or the tier was forced (the
-  // slow-link retry, __apex.assetLoad(tier)): a forced tier is not undone here.
+  // Reload the material tier the GRAPHICS preset wants, off track only (#5561); a forced tier stays.
   let _pinned = false;
   function followQuality() {
     if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high")) return false;

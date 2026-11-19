@@ -159,9 +159,7 @@ function inRace() {
   } catch (_) { return false; }
 }
 
-// The baked pack's 128 / 256 px tier follows the preset (#5561), but the
-// re-upload only happens off track: in a menu, or under the pause card. A
-// change made while driving waits for the next pause or the race's end.
+// Pack tier follows the preset off track only; while driving it waits for a pause or race end (#5561).
 let packObs = null;
 function driving() {
   if (!inRace()) return false;
