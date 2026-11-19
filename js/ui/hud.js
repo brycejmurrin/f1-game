@@ -1523,8 +1523,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
   // The steer cap rides WITH the shared one (set()'s test): absent together, else explicit (never a fall-back
-  // to --hud-z-dock). A changed steer zoom refits once so TYRES / LIMITS read the new dock top. Compare PAINTED
-  // zooms (zDockPubS is min()ed with the slider): the 3-place write 1.433 vs 1.4325 refit every tick (#4274).
+  // to --hud-z-dock). New PAINTED zoom (min()-ed) refits TYRES/LIMITS once.
   const wantDock = Math.max(btnFloor, btnScale), zSteer = Math.round(Math.min(wantDock, Math.max(DOCK_MIN_Z, capDockS)) * 1000) / 1000;
   if (capDock < wantDock) root.style.setProperty("--hud-z-dock-l", String(zSteer));
   else root.style.removeProperty("--hud-z-dock-l");
