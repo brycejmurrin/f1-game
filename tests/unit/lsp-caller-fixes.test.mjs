@@ -47,3 +47,31 @@ globalThis.keep = { direct, arrow, objA, objB, aliasCaller, destructuredCaller }
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("callers count calls apart from property uses and keep every row", { timeout: 60000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-caller-kinds-"));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(path.join(dir, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
+  fs.writeFileSync(path.join(dir, "src/kinds.js"), `"use strict";
+const Box = (function () {
+  function f() { f.n = (f.n | 0) + 1; }
+  function a() { f(); f(); }
+  function b() { return f.n; }
+  return { a, b };
+})();
+`);
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/kinds.js", idleMs: 0 });
+  try {
+    const result = await callTool(lsp, "lsp_callers", { file: "src/kinds.js", line: 3, column: 12 });
+    assert.equal(result.isError, false, result.content[0].text);
+    assert.deepEqual(result.content[0].text.split("\n"), [
+      "5 uses (2 calls) in 3 functions across 1 file (query at src/kinds.js:3:12)",
+      "src/kinds.js:3  Box › f  ×2 (0 calls)  (line 3)",
+      "src/kinds.js:4  Box › a  ×2  (line 4)",
+      "src/kinds.js:5  Box › b  ×1 (0 calls)",
+    ]);
+  } finally {
+    lsp.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
