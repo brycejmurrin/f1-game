@@ -30,7 +30,7 @@ links kept intact, the STREAK line stops short of the QR; both eager because a H
 `js/ui/results-story.js` +33 (a classified retiree keeps its podium tile) and
 `js/physics/wall-end-face.js` +18 (reverse travel held at the face). The real-replay, real-race,
 share-card-chips, transport and XR hunks are already lazy. Fragment:
-`tests/data/ratchets.d/claude--replay-follow-rank-5653.json`.
+`ratchets.d/claude--replay-follow-rank-5653.json (folded)`.
 
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
