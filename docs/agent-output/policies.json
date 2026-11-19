@@ -526,6 +526,11 @@
       "presentation": "native",
       "preserve": "Caller-readable kind; do not prepend prose"
     },
+    "tools/ci/child-health.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every DEAD child and every PARK/RELAUNCH/NONE row with its cause and reset; exit 1 when a PR has a dead owner; read-only"
+    },
     "tools/ci/ci-coverage.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
