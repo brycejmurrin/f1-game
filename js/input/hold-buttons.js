@@ -29,6 +29,7 @@ const InputHoldButtons = (function () {
     // REUSE the same pointerId self-heals. The stuck throttle then endlessly
     // re-trips the off-track auto-rescue ("throttle held but not moving").
     const holdBtns = [];
+    const holdById = new Map();   // id -> record: a hand-off finds its sibling without a DOM lookup
     const holdByEl = new Map();   // el -> holdBtns record: lostpointercapture looks its button up without a scan
     function holdReleasePointer(pointerId) {
       for (const h of holdBtns) h.release(pointerId);
@@ -45,6 +46,8 @@ const InputHoldButtons = (function () {
         h.anchors && h.anchors.clear();
         h.levels && h.levels.clear();
         h.live && h.live.clear();
+        h.slid.clear(); h.gone.clear(); h.rects.clear();
+        look(h.el, null);
         h.apply(false);
         h.level && h.level(0);
       }
@@ -88,6 +91,27 @@ const InputHoldButtons = (function () {
       return holdTargetGone(el);
     }
 
+    // SLIDE HAND-OFF (#5575). A captured pointer stayed with the control it landed
+    // on, so a thumb slid from GAS up onto BRAKE never braked (and left 12 %
+    // throttle on), and one slid from the left arrow onto the right kept steering
+    // left. A hold button wired with `opts.sibling` now gives the contact away the
+    // moment it is inside that sibling's box: THE CONTROL UNDER THE FINGER WINS.
+    //   - only THAT pointer moves; a second finger on either control is untouched;
+    //   - the arrival is a full press (no ease: the slide that brought it there
+    //     is the same motion as the ease gesture, so it must not read as a lift);
+    //   - it hands back the same way, and every release net above still applies
+    //     to whichever control holds the pointer now.
+    // The sibling's box is read once per contact, never per pointermove: a
+    // rotation releases every hold (Input.onScreenRotate), so it cannot go stale.
+    // data-slid = "on" | "off": the pressed look, which `:active` cannot carry across a hand-off.
+    const look = (el, v) => { if (!el || !el.setAttribute) return; if (v) el.setAttribute("data-slid", v); else el.removeAttribute("data-slid"); };
+    function boxOf(el) {
+      if (!el || el.hidden || el.disabled || !el.getBoundingClientRect) return null;
+      const r = el.getBoundingClientRect();
+      return r && r.width > 0 && r.height > 0 ? r : null;
+    }
+    const inBox = (r, x, y) => !!r && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height;
+
     // PEDAL TRAVEL ON A TOUCHSCREEN. The analog-trigger note above says the
     // physics rewards MODULATION and that thresholding a trigger to a boolean
     // throws all of it away — and then the on-screen pedals did exactly that, so
@@ -118,6 +142,10 @@ const InputHoldButtons = (function () {
       const anchors = level ? new Map() : null;   // pointerId -> axis pos at touch-down
       const levels = level ? new Map() : null;    // pointerId -> current travel
       const live = new Map();                     // pointerId -> visible at pointerdown
+      const sibId = opts && opts.sibling;
+      const slid = new Set();                     // pointerIds that ARRIVED by a slide: full travel, no ease
+      const gone = new Set();                     // pointerIds that slid AWAY and are still down (pressed-look only)
+      const rects = new Map();                    // pointerId -> the sibling's box for this contact
       // Every contact holds independently: easing or releasing one finger must
       // not override another finger's stronger press. Both release routes use
       // the same aggregation, including window capture before the local event.
@@ -132,6 +160,9 @@ const InputHoldButtons = (function () {
         if (strongest !== painted) paint(strongest);
       }
       function release(pointerId) {
+        if (gone.delete(pointerId) && gone.size === 0 && slid.size === 0) look(el, null);
+        rects.delete(pointerId);
+        if (slid.delete(pointerId) && slid.size === 0) look(el, gone.size ? "off" : null);
         anchors && anchors.delete(pointerId);
         levels && levels.delete(pointerId);
         live.delete(pointerId);
@@ -139,13 +170,8 @@ const InputHoldButtons = (function () {
         if (ids.size === 0) apply(false);
         paintLevel();
       }
-      const rec = { ids, apply, level: paint, anchors, levels, el, live, release };
-      holdBtns.push(rec);
-      holdByEl.set(el, rec);
-      el.addEventListener("pointerdown", e => {
-        if (e.pointerType === "mouse" && e.button !== 0) return;   // a right-click opens a context menu and may never send pointerup
+      function press(e, arrived) {
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
-        e.preventDefault();
         // Only the FIRST contact is a press edge: THROTTLE = LATCH toggles on every
         // apply(true), so a second finger landing on GAS cancelled the latch while
         // the first was still down.
@@ -160,10 +186,43 @@ const InputHoldButtons = (function () {
           levels.set(e.pointerId, 1);
           paintLevel();
         }
+        gone.clear();
+        if (arrived) slid.add(e.pointerId);
+        look(el, slid.size ? "on" : null);
+        const sib = sibId && holdById.get(sibId);
+        if (sib) rects.set(e.pointerId, boxOf(sib.el));
+      }
+      // The contact left for the sibling: release it here, press it there.
+      function handOff(e) {
+        const to = holdById.get(sibId);
+        if (!to) return false;
+        release(e.pointerId);
+        try { el.releasePointerCapture(e.pointerId); } catch (_) { /* capture already gone */ }
+        gone.add(e.pointerId); if (!slid.size) look(el, "off");
+        to.press(e, true);
+        return true;
+      }
+      const rec = { ids, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, move: null };
+      holdBtns.push(rec);
+      holdByEl.set(el, rec);
+      holdById.set(id, rec);
+      el.addEventListener("pointerdown", e => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;   // a right-click opens a context menu and may never send pointerup
+        e.preventDefault();
+        press(e, false);
       });
-      if (level) el.addEventListener("pointermove", e => {
-        const a = anchors.get(e.pointerId);
-        if (a == null) return;
+      // After a hand-off the moves normally follow the new capture, but a browser
+      // that keeps a touch with the control it LANDED on must work too, so a move
+      // for a pointer the sibling holds is the sibling's to read.
+      if (level || sibId) el.addEventListener("pointermove", e => {
+        if (ids.has(e.pointerId)) { rec.move(e); return; }
+        const to = sibId && holdById.get(sibId);
+        if (to && to.move && to.ids.has(e.pointerId)) to.move(e);
+      });
+      if (level || sibId) rec.move = (e) => {
+        if (inBox(rects.get(e.pointerId), e.clientX, e.clientY) && handOff(e)) return;
+        const a = anchors ? anchors.get(e.pointerId) : null;
+        if (a == null || slid.has(e.pointerId)) return;
         if (axis === "x") {
           const ease = Math.max(0, (e.clientX - a) * (-dir) - PEDAL_DEAD_PX);
           levels.set(e.pointerId, clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
@@ -174,7 +233,7 @@ const InputHoldButtons = (function () {
         // numbers (v < lo ? lo : v > hi ? hi : v).
         levels.set(e.pointerId, PedalTravel.ease(a, e.clientY));
         paintLevel();
-      });
+      };
       el.addEventListener("pointerup", (e) => release(e.pointerId));
       el.addEventListener("pointercancel", (e) => release(e.pointerId));
       // NOT pointerleave. setPointerCapture fires a boundary pointerleave as it
