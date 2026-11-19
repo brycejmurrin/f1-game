@@ -87,11 +87,11 @@ same reason on 2026-10-26. What it does:
 
 What this PR does:
 
-1. **Now (this commit).** It adds the measurement `tools/check/boot-wall.mjs` (`wallNow`, `wallAt(ref)`) and the tree
+1. **First commit (0e0f876d).** It adds the measurement `tools/check/boot-wall.mjs` (`wallNow`, `wallAt(ref)`) and the tree
    metrics `eagerScripts` / `eagerBytes` (`TREE_METRICS` and `AT_REF`). They stay dormant until seeded, because
    `measure()` reads only the metrics that ratchets.json names. `wallAt` takes a BUILT_PATHS file's size from the
    working tree, because the file is in no git tree. Its change counts 0 toward a branch's own lowering.
-2. **After #5815 merges.** This PR changes no budget number while #5815 is open.
+2. **After #5815 and #5816 merged (synced onto 1cb36d81).** This PR changed no budget number while #5815 was open.
    - Seed both metrics at the tip's measurement with `slack: 0`, meaning exact. #5815 leaves zero room: "growth spent
      the owner's room".
    - `boot-load-budget.test.mjs` then asserts against the effective ceiling, `load().tree.eagerBytes`, instead of a
