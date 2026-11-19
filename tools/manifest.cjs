@@ -456,7 +456,7 @@ const FULL = [
   "js/race/quali-net.js",
   "js/race/race-settings.js",
   "js/career/custom-team.js",
-  "js/ui/quali-sheet.js",
+  // quali-sheet.js (QualiSheet, the #quali painter) is LAZY_RESULTS_SHEET; GameResults.create hands out its stub
   "js/ui/onboard.js",
   "js/physics/debris-draw.js",
   "js/physics/debris-world.js",
@@ -1350,6 +1350,7 @@ const LAZY_UI_PRESETS_EDGES = [];
 // ensureResultsSheet so buildResults stays synchronous at the flag.
 const LAZY_RESULTS_SHEET = [
   "js/ui/results-sheet.js",
+  "js/ui/quali-sheet.js", // QualiSheet: paints only after a session ran (C1 #5807 moved it off the boot wall)
 ];
 const LAZY_RESULTS_SHEET_EDGES = [];
 

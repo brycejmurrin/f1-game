@@ -19413,16 +19413,20 @@
     },
     "js/ui/quali-sheet.js": {
       "build": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "close": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "create": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "open": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/ui/race-message-history.js": {
@@ -19445,7 +19449,7 @@
       ]
     },
     "js/ui/results-boot.js": {
-      "*": [
+      "create": [
         "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
@@ -19470,6 +19474,7 @@
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
@@ -19478,8 +19483,7 @@
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs",
-        "tests/unit/results-sheet-lazy.test.mjs"
+        "tests/unit/mobile-native-download.test.mjs"
       ]
     },
     "js/ui/results-story.js": {

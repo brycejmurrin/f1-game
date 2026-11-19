@@ -3492,7 +3492,7 @@ const onboard = Onboard.create(G),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
-const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
+const { buildResults, buildTTResults, buildStandings, buildChampion, quali: qualiSheet } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
@@ -3575,7 +3575,7 @@ const careerUi = CareerUI.create(G);
 const seasonUi = SeasonUI.create(G);
 // QUALIFYING — the model (js/race/quali-model.js: the flying lap plus the simulated field,
 // holding the classification between session and grid) and its sheet (quali-sheet.js).
-const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
+const quali = Quali.create(G);
 qualiNet = QualiNet.create({
   $, fmtTime, isQuali,
   getPlayer: () => player,
