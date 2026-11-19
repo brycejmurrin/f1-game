@@ -16,7 +16,7 @@ No hook matches these CLIs by name. A subagent runs only `--help`/`--list`/`--pl
 ```sh
 # NO BROWSER (exits before any launch; still parent-only): --help, --list, --report, --diff
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (counts are in its output)
+node tools/ui/layout-audit.mjs --list            # the whole screens × viewports catalog (no counts; ignores --screens/--viewports)
 # BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live;
 #   at >= 3 reap your own Chrome (AGENTS.md rule 7), wait once, else report the cells unmeasured):
 node tools/ui/layout-audit.mjs --survey          # title-path screens + shots (npm run ui:survey): NOT Bryce's cell, NOT every screen
