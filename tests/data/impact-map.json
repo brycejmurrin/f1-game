@@ -8001,6 +8001,7 @@
       "studioShown": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "studioSkip": [
@@ -8205,6 +8206,11 @@
         "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
+    "js/garage/arrival-rows.js": {
+      "*": [
+        "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
     "js/garage/arrival.js": {
       "angleMap": [
         "tests/unit/garage-arrival.test.mjs",
@@ -8220,7 +8226,8 @@
       ],
       "cancel": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-entrance-motion.test.mjs"
+        "tests/unit/garage-entrance-motion.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "carryPlayback": [
         "tests/unit/garage-crew-choreo.test.mjs"
@@ -8231,7 +8238,8 @@
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs",
         "tests/unit/garage-frame-garbage.test.mjs",
-        "tests/unit/garage-personality.test.mjs"
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "crewFor": [
         "tests/unit/garage-arrival.test.mjs",
@@ -8253,7 +8261,8 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
-        "tests/unit/garage-personality.test.mjs"
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "lightFor": [
         "tests/unit/garage-arrival.test.mjs"
@@ -8301,12 +8310,14 @@
       "start": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs",
-        "tests/unit/garage-frame-garbage.test.mjs"
+        "tests/unit/garage-frame-garbage.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "step": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs",
-        "tests/unit/garage-frame-garbage.test.mjs"
+        "tests/unit/garage-frame-garbage.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "styleOf": [
         "tests/unit/garage-arrival.test.mjs"
@@ -8947,6 +8958,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
@@ -8955,6 +8967,9 @@
       ],
       "drawDepartureReflection": [
         "tests/unit/garage-mesh.test.mjs"
+      ],
+      "driveOutCovered": [
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "driveOutEngine": [
         "tests/unit/garage-arrival.test.mjs",
@@ -8973,6 +8988,12 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/garage-personality.test.mjs"
+      ],
+      "exteriorPick": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "exteriorSettled": [
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "garageCtx": [
         "tests/unit/garage-arrival.test.mjs",
@@ -8998,14 +9019,21 @@
       "panelCover": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "prepareExterior": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "previewKey": [
         "tests/unit/setup-preview-hull.test.mjs"
       ],
+      "releaseExterior": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "renderSetupPreview": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "resetSetupCam": [
         "tests/unit/garage-panel-side.test.mjs"

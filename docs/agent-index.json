@@ -3474,6 +3474,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/arrival-rows.js",
+      "global": "GarageArrivalRows",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/garage/arrival.js",
       "global": "GarageArrival",
       "roster": "tag"
