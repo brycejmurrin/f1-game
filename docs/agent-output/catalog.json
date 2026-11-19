@@ -1015,6 +1015,15 @@
       ]
     },
     {
+      "path": "tools/ci/merge-train.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/needs-sync.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

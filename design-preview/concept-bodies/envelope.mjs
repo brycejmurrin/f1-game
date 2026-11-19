@@ -23,3 +23,5 @@ else {
   for (const [n, r] of [["p25", p25], ["p75", p75], ["ceiling", ceiling], ...Object.entries(out.rows).map(([k, v]) => [k, v.dims])]) console.log(n.padEnd(9) + keys.map((k) => String(r[k]).padStart(9)).join(""));
   for (const [k, v] of Object.entries(out.rows)) console.log(k, v.over.length ? "OVER ceiling: " + v.over.join(", ") : "within current/frozen ceiling");
 }
+// Non-zero when any NEW body exceeds the current/frozen ceiling (README contract).
+if (Object.values(out.rows).some((row) => row.over.length)) process.exitCode = 1;

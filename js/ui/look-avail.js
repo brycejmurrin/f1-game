@@ -134,8 +134,9 @@ const LookAvail = (function () {
     return { w: (vw - GUT) / z, h: (vh - GUT) / z, shortLandscape: vw > vh && vh <= 500, phone: !finePointer && Math.min(vw, vh) < 600 };
   }
   const PHONE_KEEPS = "A phone-sized window keeps the compact layout.";
-  /* #5580: a short touch landscape window holds the CAREER hub compact at every UI SIZE (css/overlays.css). */
-  const heldCompact = (id, e) => id === "career" && e.phone && e.shortLandscape;
+  /* #5580 / #5632: a short touch landscape window holds the CAREER hub (css/overlays.css) and RACE SETTINGS
+     (css/race-setup.css) compact at every UI SIZE. */
+  const heldCompact = (id, e) => (id === "career" || id === "race") && e.phone && e.shortLandscape;
   function compactNow(id, look, e) {
     const f = FIT[id];
     if (!f || !f.compactAt) return false;

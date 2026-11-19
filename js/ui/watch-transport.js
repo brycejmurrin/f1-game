@@ -217,6 +217,9 @@ const WatchTransport = (function () {
     }
     function stop() {
       if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0; pendingSeek = null;
+      // Drop a queued scrub rAF so flushSeek cannot hold the replay after teardown.
+      if (seekFrame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(seekFrame);
+      seekFrame = 0;
       if (ro) { ro.disconnect(); ro = null; }
       if (mq && onBand && mq.removeEventListener) mq.removeEventListener("change", onBand);
       mq = null; onBand = null;

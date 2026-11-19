@@ -120,8 +120,8 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
   const stamp = now.toISOString().replace(/[:.]/g, "-").replace(/Z$/, "");
   const out = path.resolve(ROOT, F.flag("--out", path.join("artifacts", "hud-survey", stamp)));
   if (!insideOutput(out)) throw new CliArgError(`--out must stay under artifacts/ or scratch/ (got ${out})`);
-  // --settings: a LOAD SETTINGS export (tests/data/settings-defaults-export.json is the owner's
-  // phone) imported once per boot through SettingsExport.applySettings, then a reload, the way
+  // --settings: a LOAD SETTINGS export (an owner device with no --settings reads tools/lib/bryce-phone.mjs
+  // OWNER_EXPORT, his phone today) imported once per boot through SettingsExport.applySettings, then a reload, the way
   // tools/ui/explorer.mjs seeds one. Every knob a cell names still wins; the rest is the file's.
   let settings = null;
   if (F.has("--settings")) {

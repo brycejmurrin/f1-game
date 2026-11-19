@@ -307,12 +307,24 @@ window.MenuNav = (function () {
     // ties inside a row: as along + across * 2 a slider two rows down beat the
     // next row's chevrons (DISPLAY METRICS, 2026-09-08).
     const tol = Math.max(8, (dx ? a.r - a.l : a.b - a.t) * 0.6);
+    // Down INSIDE a scrolling pane: the pane's own controls come first, however far down they are scrolled. The
+    // foot's BACK is fixed under the pane, so by distance it beat a control one screen down whenever the focused row
+    // sat low in the pane, and TEST RACE MIX (480 px under the last Spotify button) was reachable only by wrapping
+    // Up from the page's first control (#5584). `ownPane` drops out-of-pane targets ahead only while one is in it.
+    const paneDown = dy > 0 && from.closest ? from.closest(SCROLLERS) : null;
+    let ownPane = false;
+    if (paneDown) for (const el of list) {
+      if (el === from || !paneDown.contains(el)) continue;
+      const b = centre(el);
+      if (b.y - a.y > 1 && overlaps(a.l, a.r, b.l, b.r)) { ownPane = true; break; }
+    }
     for (const el of list) {
       if (el === from) continue;
       const b = centre(el);
       const along = dx ? (b.x - a.x) * dx : (b.y - a.y) * dy;
       const inBand = dx ? overlaps(a.t, a.b, b.t, b.b) : overlaps(a.l, a.r, b.l, b.r);
       if (!inBand) continue;
+      if (ownPane && along > 1 && !paneDown.contains(el)) continue;
       if (along > 1) {
         const across = dx ? gap(a.y, b.t, b.b) : gap(a.x, b.l, b.r);
         const nearerRow = along < bestAlong - tol;

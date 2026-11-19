@@ -60,11 +60,15 @@ const Collide = (() => {
   // Deploy tip added k===0 early returns on extLong/extLat; this PR replaced
   // those AABB helpers with oriented extentAngle — yawMix==0 still yields
   // ea=0 → cos=1/sin=0 → HL/WL pair extents (same bit-identical unyawed field).
+  // Same Number.isFinite gate as bodyAngle: `yawVis || 0` keeps Infinity
+  // (truthy), cos/sin(Infinity) is NaN, and pair extents / corrections then
+  // write NaN into prog/s (hunt-physics, fixed dt + yawVis=Infinity).
   function extentAngle(c) {
-    const psi = c.human ? (c.yawVis || 0) : 0;
+    const psi = c.human && Number.isFinite(c.yawVis) ? c.yawVis : 0;
     return psi * yawMix(psi);
   }
   function bodyAngle(c) { const psi = c.human && Number.isFinite(c.yawVis) ? c.yawVis : 0; return psi * yawMix(psi); }
+  function yawVisAngle(c) { return c.human && Number.isFinite(c.yawVis) ? c.yawVis : 0; }
   // Both cars can be human and rotated: each support is bounded by its
   // half-diagonal. Use the pair bound for rejection AND arc buckets.
   const LCAR_MAX = 2 * Math.hypot(HL, WL);
@@ -307,11 +311,17 @@ const Collide = (() => {
       p.sweepGeneration = sweepGeneration;
       p.sweepD = deltaS(c.prog - p.prog); p.sweepX = c.x - p.x;
       p.sweepEligible = false;
+      p.sweepTwist = false;
       // Squared compare: same reject as Math.hypot(...) > lim (D·DP7).
       const lim = Math.max(6, Math.abs(c.speed) * dt * 2 + 1);
       if (p.sweepD * p.sweepD + p.sweepX * p.sweepX > lim * lim) return;
       p.sweepAngle = bodyAngle(c);
-      p.sweepEligible = !(Math.abs(wrapDelta(p.sweepAngle - p.angle, TWO_PI)) > 0.15);
+      // A large heading change this step makes a fixed-orientation TOI wrong.
+      // Skipping the sweep entirely let a fast car tunnel through at low fps
+      // (yaw rate × dt > 0.15 rad). Keep the car eligible and mark the twist so
+      // the pair falls back to an axis-aligned TOI instead.
+      p.sweepTwist = Math.abs(wrapDelta(p.sweepAngle - p.angle, TWO_PI)) > 0.15;
+      p.sweepEligible = true;
     }
     // Body velocity in the contact plane (prog, x), +x RIGHT, angle + = nose
     // toward +x: forward (cs, sn), RIGHT (−sn, cs). c.vLat is +RIGHT (the
@@ -319,11 +329,11 @@ const Collide = (() => {
     // maps below used the LEFT vector, so a sliding car's lateral motion and a
     // shove's lateral impulse entered the contact with the wrong sign.
     function body(c, speed, out) {
-      const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
+      const angle = yawVisAngle(c), cs = Math.cos(angle), sn = Math.sin(angle);
       out.angle = bodyAngle(c);
       out.vx = speed * cs - (c.vLat || 0) * sn;
       out.vy = speed * sn + (c.vLat || 0) * cs;
-      out.omega = c.human ? (c.yawRateCur || 0) : 0;
+      out.omega = c.human && Number.isFinite(c.yawRateCur) ? c.yawRateCur : 0;
       out.invMass = netPlay.owns(c) || c.retired ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
       out.invInertia = c.human ? out.invMass / ContactGeometry.INERTIA : 0;
       return out;
@@ -335,16 +345,16 @@ const Collide = (() => {
     function floorFwd(c, v) { return c.human && c.speed < 0 ? v : Math.max(0, v); }
     // A scrub is a loss of MAGNITUDE, whichever way the car is rolling.
     function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }
-    function pushVelocity(c, state, dx, dy, dw) {
-      if (netPlay.owns(c) || c.retired) return;
-      const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
-      const vx = state.vx + dx, vy = state.vy + dy;
-      c.speed = floorFwd(c, vx * cs + vy * sn);
-      if (c.human) {
-        c.vLat = clamp(vy * cs - vx * sn, -40, 40);   // V · RIGHT, the inverse of body()
-        c.yawRateCur = clamp(state.omega + dw, -4, 4);
+      function pushVelocity(c, state, dx, dy, dw) {
+        if (netPlay.owns(c) || c.retired) return;
+        const angle = yawVisAngle(c), cs = Math.cos(angle), sn = Math.sin(angle);
+        const vx = state.vx + dx, vy = state.vy + dy;
+        c.speed = floorFwd(c, vx * cs + vy * sn);
+        if (c.human) {
+          c.vLat = clamp(vy * cs - vx * sn, -40, 40);   // V · RIGHT, the inverse of body()
+          c.yawRateCur = clamp(state.omega + dw, -4, 4);
+        }
       }
-    }
     function orientedResponse(a, b, ct) {
       const correction = Math.max(0, ct.depth - COL_SLOP) * 0.7;
       shiftLong(a, ct.nx * correction * ct.sA); shiftLong(b, -ct.nx * correction * ct.sB);
@@ -411,8 +421,13 @@ const Collide = (() => {
           if (rd * rd + rx * rx < 1) continue;
           const x0 = deltaS(pa.prog - pb.prog), y0 = pa.x - pb.x, x1 = x0 + da - db, y1 = y0 + xa - xb;
           if (Math.min(x0, x1) > LCAR_MAX || Math.max(x0, x1) < -LCAR_MAX) continue;
-          if (ContactGeometry.overlap(x1, y1, pa.sweepAngle, pb.sweepAngle, geom)) continue;
-          const hit = ContactGeometry.sweep(x0, y0, x1, y1, pa.angle, pb.angle, swept);
+          // Twisted heading this step: axis-aligned TOI (angles 0) still catches a
+          // longitudinal tunnel; oriented TOI with a stale fixed angle does not.
+          const twist = pa.sweepTwist || pb.sweepTwist;
+          const a0 = twist ? 0 : pa.angle, b0 = twist ? 0 : pb.angle;
+          const a1 = twist ? 0 : pa.sweepAngle, b1 = twist ? 0 : pb.sweepAngle;
+          if (ContactGeometry.overlap(x1, y1, a1, b1, geom)) continue;
+          const hit = ContactGeometry.sweep(x0, y0, x1, y1, a0, b0, swept);
           if (!hit) continue;
           const t = hit.time;
           shiftLong(a, da * (t - 1)); shiftLong(b, db * (t - 1));
@@ -535,7 +550,7 @@ const Collide = (() => {
       }
       const penLong = eLong - Math.abs(dProg);
       const penLat = eLat - Math.abs(dX);
-      if (penLong <= 0 || penLat <= 0) return null;
+      if (!(penLong > 0) || !(penLat > 0)) return null;   // NaN-safe: nonfinite pens are not a contact
       const angleA = bodyAngle(a), angleB = bodyAngle(b);
       const oriented = angleA !== 0 || angleB !== 0;
       const exact = oriented ? ContactGeometry.overlap(dProg, dX, angleA, angleB, geom) : null;
