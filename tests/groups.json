@@ -258,6 +258,7 @@
     "tests/unit/cockpit-wheels.test.mjs",
     "// Codex Cloud history export: offline pagination, descendant scope, resume and credential redaction (the MCP adapter left 2026-11-03).",
     "tests/unit/codex-cloud-history.test.mjs",
+    "tests/unit/collide-severity-pace.test.mjs",
     "tests/unit/collide-yawed-fx.test.mjs",
     "tests/unit/comment-citations.test.mjs",
     "// No screenshot outside a *-snapshots/ baseline under tests/, no image over",
