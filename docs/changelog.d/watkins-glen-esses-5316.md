@@ -1,0 +1,1 @@
+Fixed: Watkins Glen's Esses climb from Turn 1 up to the back straight instead of dropping, and its eleven turn numbers now sit on the real corners — the Esses and the Outer Loop are counted, the Boot is no longer double-counted.

@@ -31,9 +31,13 @@
 //             run's commit, so the `ci` row's green was earned on top of the red tip; (2) `deploy:red` or `priority`
 //             last added by Bryce in person after the red run started. An agent's label without the proof does not
 //             count. An infrastructure red holds too and clears on a re-run, the pages.yml cron or route (1).
+//             When that run is not on the base tip's own sha (Pages queued or cancelled in a backlog: #5714 + #5634
+//             red the tip on 2026-11-19 and eight PRs merged onto it), the tip's own budget tests decide on a worktree
+//             of the tip (tools/ci/lib/tip-gate.mjs; ~4 s, cached per sha): a red WAITs like a Pages red, a gate
+//             that cannot run WAITs as `unverified`, and the fixer routes are the same with the tip sha as the red.
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
-//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and every push after it must leave the
+//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455, D-034), and every push after it must leave the
 //             PR's own config diff as the label saw it (configPushState: a tip sync keeps it, #5432); any other diff
 //             passes. A package.json diff that is ONLY the generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
@@ -56,6 +60,11 @@
 //             Bryce's pick, 2026-11-11 ~09:02Z: "Quick re-test at merge (Recommended)" (#5407 option b).
 //             It catches ACCIDENTAL crossings: the merge result's own scripts (gen:check, the ratchets) ran before it
 //             as the same user and could steer it, the same trust the gen and ratchets rows already have.
+// A MERGE TRAIN (a head branch starting `train/`, built by tools/ci/merge-train.mjs; docs/notes/MERGE-TRAIN-2026-11-18.md)
+// has the same rows, but its config and raise rows are its CARS' rows: the head must be exactly the clean fold of the manifest's car heads
+// onto a deploy-branch commit (git objects only: rev-list, merge-tree), and each car must be open at that head, carry
+// `land` and pass its own open, hold, plan, ci, config and raise rows (evaluate --trusted per car). Its own diff is
+// never read. So Bryce's per-PR labels stay per PR, and a `hold` on any car refuses the train.
 // The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
 // ratchets already run on the real merge result, which is what catches composition reds; the row only bought syncs.
 //
@@ -76,6 +85,8 @@ import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
+import { runTipGate, tipView } from "./lib/tip-gate.mjs";
+import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain } from "./merge-train.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -110,16 +121,17 @@ export const CONFIG_PATH = new RegExp("^(" + [
   "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
-/** The PROTECTED config paths (#5455, Bryce 2026-11-11 "Count it, except the gate and safety hooks"): only his own
- *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
- *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
- *  gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs when the gate imports it — a test pins
- *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
- *  host's hooks and settings. */
+/** The PROTECTED config paths (#5455; D-034 narrowed them on 2026-11-18): only Bryce's own `config-ok` tap covers a
+ *  diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every other CONFIG_PATH). Kept: the
+ *  gate (this module, which defines both lists; provenance; deploy-tip; ready-gate; the GitHub client and token, and
+ *  the rest of the gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs
+ *  when the gate imports it — a test pins the closure), the land workflow, and every host's hooks and settings.
+ *  D-034 ("Shrink the list") supersedes the 2026-11-11 ci.yml call ("Protect ci.yml"): ci.yml, pick-tests and
+ *  preflip-probe are ROUTINE now, still config paths, so they still need a `config-ok`, but an agent's counts. */
 export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
-  "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/lib/deploy-tip\\.mjs$", "tools/ci/ready-gate\\.mjs$",
-  "tools/ci/github-api\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
-  "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
+  "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/lib/deploy-tip\\.mjs$", "tools/ci/lib/tip-gate\\.mjs$", "tools/ci/ready-gate\\.mjs$",
+  "tools/ci/github-api\\.mjs$", "tools/ci/merge-train\\.mjs$", "tools/ci/github-token\\.mjs$",
+  "\\.github/workflows/land\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
   "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
@@ -192,7 +204,7 @@ export function fixerProof({ redSha, head, request }) {
  *  a label he set for an earlier red, or `priority` set for scheduling, does not wave through a later red.
  *  Any other state passes. `events` null honours no owner escape; `proof` null honours no proof. Pure. */
 export function baseVerdict(tip, labels, events = null, owner = OWNER, proof = null) {
-  if (tip?.state !== "code-red") return row(true, tip?.evidence || "deploy tip state not given");
+  if (tip?.state !== "code-red" && tip?.state !== "unverified") return row(true, tip?.evidence || "deploy tip state not given");
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name));
   const sha8 = String(tip.sha || "").slice(0, 8) || "?";
   if (names.includes(FIXER_LABEL) && proof?.contains === true) {
@@ -859,7 +871,20 @@ export function listAll(pathQs, request, pick = (j) => j, maxPages = 30) {
  * merge). The hold and config rows read the PR's label events (provenance) and the config row its changed files.
  * Returns { ok, rows, pr, head, base, tip } or { error } for an API/git failure.
  */
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER } = {}) {
+/** The train PR's car rows (merge-train.mjs trainRow): fetch the head (its ancestors are the cars and the base), prove
+ *  the fold with git (objects only, no checkout, no PR code), then each car's own trusted rows through evaluate. */
+export function trainGate({ pr, pull, head, base, request, root = ROOT, owner = OWNER }) {
+  const fetched = fetchForGate({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
+  if (fetched.error) return { error: `train #${pr}: ${fetched.error}` };
+  return trainRow({
+    manifest: trainManifest(pull.body), head, headRef: pull.head?.ref || "", tip: fetched.tip,
+    verify: (a) => verifyTrain({ ...a, cwd: root }),
+    carPull: (n) => request(`pulls/${n}`),
+    carGate: (n, h) => evaluate({ pr: n, sha: h, request, root, trusted: true, owner }),
+  });
+}
+
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -887,16 +912,32 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     if (retry.error) return { error: retry.error };
     rows.ci = retry.ok ? row(true, rows.ci.evidence) : retry;
   }
-  const deployTip = readDeployTip(base, request);
-  if (deployTip.error) return { error: deployTip.error };
+  const pages = readDeployTip(base, request);
+  if (pages.error) return { error: pages.error };
+  // The tip itself (#5714 + #5634, 2026-11-19): Pages lags the tip by hours in a backlog, so when no completed run
+  // covers the tip's sha its own cheap unit gate decides (tools/ci/lib/tip-gate.mjs). Read once: trusted's tip too.
+  const br = request(`branches/${encodeURIComponent(base)}`);
+  if (br.error) return { error: `branch ${base}: ${br.error}` };
+  const baseTip = String(br.json?.commit?.sha || "").toLowerCase();
+  if (!baseTip) return { error: `branch ${base}: no tip sha` };
+  const deployTip = tipView(pages, { tipSha: baseTip, tipAt: br.json?.commit?.commit?.committer?.date || null, gate: () => tipCheck({ sha: baseTip, base, root }) });
   // The fixer's proof: one compare read, only on a code red and only for a PR that claims to be the fixer.
   let proof = null;
-  if (deployTip.state === "code-red" && (pull.labels || []).some((l) => (typeof l === "string" ? l : l?.name) === FIXER_LABEL)) {
+  if ((deployTip.state === "code-red" || deployTip.state === "unverified") && (pull.labels || []).some((l) => (typeof l === "string" ? l : l?.name) === FIXER_LABEL)) {
     proof = fixerProof({ redSha: deployTip.sha, head, request });
     if (proof.error) return { error: proof.error };
   }
   rows.base = baseVerdict(deployTip, pull.labels, ev.rows, owner, proof);
-  const files = listAll(`pulls/${pr}/files`, request);
+  // A merge train (tools/ci/merge-train.mjs; docs/notes/MERGE-TRAIN-2026-11-18.md): its config and raise rows are
+  // its cars' own rows, read per car, after proving the head is exactly the clean fold of those car heads onto a deploy-branch commit.
+  const isTrain = String(pull.head?.ref || "").startsWith(TRAIN_PREFIX);
+  if (isTrain) {
+    const t = trainCheck({ pr, pull, head, base, request, root, owner });
+    if (t.error) return { error: t.error };
+    rows.config = row(t.ok, t.evidence);
+    rows.raise = row(t.ok, t.ok ? "read per car (each car's own raise row, config row above)" : "not evaluated: the train's car rows refused (config row)");
+  }
+  const files = isTrain ? { rows: [] } : listAll(`pulls/${pr}/files`, request);
   if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
   let changed = filePaths(files.rows), generated = null;
   // package.json whose only change is the generated test lists is not a config edit (adding a unit test touches it).
@@ -909,21 +950,21 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
   const pkgGeneratedAt = generated?.ok ? (ref) => (ref === head ? true : generatedPkgCheck({ head: ref, base, request }).ok) : null;
   const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt }) : null;
-  rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
-  // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
-  const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });
-  if (raise.error) return { error: raise.error };
-  rows.raise = raise;
+  if (!isTrain) {
+    rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
+    // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
+    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });
+    if (raise.error) return { error: raise.error };
+    rows.raise = raise;
+  }
   if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";
   if (!rows.open.ok) {
     for (const k of order.filter((r) => LOCAL_ROWS.includes(r))) rows[k] = row(false, "not evaluated: the PR is not open and ready");
   } else if (trusted) {
-    // GitHub only (no git, no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592).
-    const b = request(`branches/${encodeURIComponent(base)}`);
-    if (b.error) return { error: `branch ${base}: ${b.error}` };
-    tip = String(b.json?.commit?.sha || "").toLowerCase();
-    if (!tip) return { error: `branch ${base}: no tip sha` };
+    // GitHub only (no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592). The base
+    // row's tip gate ran deploy-branch code on this same sha, never the PR's.
+    tip = baseTip;
   } else {
     // The re-test compares against the green CI run's creation (the merge ref it tested is that old or newer).
     const ciAt = rows.ci.ok ? String(ciRun?.created_at || "") : null;
@@ -973,7 +1014,10 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
   if (!Number.isInteger(pr) || pr < 1) { log("= merge-gate error — --pr <n> is required"); return 1; }
-  if (argv.includes("--max-behind")) { log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03 (header of this file)"); return 1; }
+  if (argv.includes("--max-behind")) {
+    log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)");
+    return 1;
+  }
   const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner });
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);

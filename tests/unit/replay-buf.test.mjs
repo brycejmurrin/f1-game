@@ -970,3 +970,71 @@ test("a scrub shows a car's recorded pit stop: on its wheels where it was drivin
     assert.equal(sb.ReplayBuf.boxU(c), -1);
   } finally { g.close(); }
 });
+
+test("a NaN pose sample keeps the previous sample, not the origin (#4339)", () => {
+  const R = boot(), field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.reset(field);
+  Object.assign(field[0], { s: 50, px: 7, pz: 9, head: 1.5 });
+  api.sample(0, field);
+  Object.assign(field[0], { s: NaN, px: NaN, pz: Infinity, head: NaN });
+  api.sample(1, field);
+  const p = api.at(1).cars[0];
+  assert.equal(p.px, 7); assert.equal(p.pz, 9); assert.equal(p.head, 1.5); assert.equal(p.s, 50);
+});
+
+// Hunt #5694 I5: paintDock runs every rendered frame while scrubbing.
+test("adjacentFrame's binary search matches a linear scan across a wrapped ring with skipped samples", () => {
+  const R = boot(undefined), field = cars(2), api = R.create({ cars: field, raceT: 0 });
+  let t = 0;
+  const seen = [];
+  for (let i = 0; i < R.HZ * (R.WINDOW_S + 6); i++) { t += (i % 7 === 3 ? 3 : 1) / R.HZ; api.sample(t, field); seen.push(t); }
+  const w = api.window(), kept = seen.filter((x) => x >= w.t0 && x <= w.t1);
+  const linear = (q, d) => { let f = null; for (const x of kept) if (d < 0 ? x < q - 1e-9 : x > q + 1e-9) if (f === null || (d < 0 ? x > f : x < f)) f = x; return f; };
+  for (const q of [w.t0 - 1, w.t0, w.t0 + 0.013, (w.t0 + w.t1) / 2, kept[kept.length >> 1], w.t1 - 0.001, w.t1, w.t1 + 1]) {
+    for (const d of [-1, 1]) assert.equal(api.adjacentFrame(q, d), linear(q, d), `t=${q} dir=${d}`);
+  }
+});
+
+test("a still scrub frame looks the dock up once and writes nothing; slider input is one apply per frame", () => {
+  const writes = [];
+  const mk = (id) => new Proxy({ id, textContent: "", value: "", disabled: false, hidden: false, children: [], replaceChildren() {}, appendChild() {} },
+    { set(o, k, v) { if (o[k] !== v) writes.push(id + "." + String(k)); o[k] = v; return true; } });
+  const els = {}, lookups = [];
+  const dock = { hidden: true, setAttribute() {}, appendChild() {}, querySelector: (sel) => (els[sel.slice(1)] ||= mk(sel.slice(1))) };
+  const doc = { body: { appendChild() {} }, createElement: () => dock,
+    getElementById: (id) => { lookups.push(id); return id === "pm-replay-dock" ? (dock.id ? dock : null) : id === "pm-replay" ? { hidden: true } : (els[id] ||= mk(id)); } };
+  const frames = [];
+  const R = boot(doc, { requestAnimationFrame: (f) => { frames.push(f); return frames.length; } });
+  const field = cars(1), G = { cars: field, paused: true, raceT: 4 }, api = R.create(G);
+  for (let i = 0; i <= R.HZ * 4; i++) { field[0].px = i; api.sample(i / R.HZ, field); }
+  assert.equal(api.beginScrub(), true);
+  api.stepFrame(-1); api.tickScrub(0);
+  writes.length = 0; lookups.length = 0;
+  for (let i = 0; i < 30; i++) api.tickScrub(1 / 60);
+  assert.deepEqual(writes, [], "an unchanged dock is not rewritten");
+  assert.equal(lookups.length, 30, "one getElementById (the dock) per painted frame");
+  const before = api.status().scrubT;
+  for (const v of ["100", "200", "300"]) els["pm-replay-scrub"].oninput({ target: { value: v } });
+  assert.equal(frames.length, 1, "three input events queue one frame");
+  assert.equal(api.status().scrubT, before, "nothing applied before the frame");
+  frames.shift()();
+  const w = api.window();
+  assert.ok(Math.abs(api.status().scrubT - (w.t0 + (w.t1 - w.t0) * 0.3)) < 1 / R.HZ, "the frame applies the latest value");
+  api.endScrub();
+});
+
+test("css/dialogs.css: the dock centres by margins and a thumb gets a full-width slider row (#5694 I1)", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css/dialogs.css"), "utf8");
+  const decls = (block) => Object.fromEntries(block.replace(/\/\*[\s\S]*?\*\//g, "").split(";").map((d) => d.split(":"))
+    .filter((p) => p.length > 1).map(([k, ...v]) => [k.trim(), v.join(":").trim()]));
+  const dock = decls(css.match(/#pm-replay-dock \{([^}]*)\}/)[1]);
+  // left:50% + translate halved the shrink-fit width: 422px x 5 rows at 844x390.
+  assert.equal(dock.transform, undefined);
+  assert.equal(dock["margin-inline"], "auto");
+  assert.equal(dock.left, "calc(var(--safe-l) + var(--gap))");
+  assert.equal(dock["--tap-paint"], "max(24px, var(--tap-paint-at))", "unzoomed dock re-resolves the paint floor at scale 1");
+  const mq = css.match(/@media \(pointer: coarse\), \(max-height: 520px\) \{([\s\S]*?)\n\}/);
+  assert.ok(mq, "coarse / short-window rule exists");
+  const scrub = decls(mq[1].match(/#pm-replay-scrub \{([^}]*)\}/)[1]);
+  assert.deepEqual([scrub.order, scrub.flex, scrub.height], ["-1", "1 0 100%", "max(32px, var(--tap))"]);
+});

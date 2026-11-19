@@ -58,8 +58,8 @@ DEFAULT), **GLX** (`js/render/glx/`, explicit WebGL2 and the universal fallback)
    - WGX: `--static` plus `node --test tests/unit/webgpu-lifecycle.test.mjs`;
      `WGX.gpuErrors()` must be 0, `WGX.lastFailure()` explains a refusal.
    - Cross-backend look: `node --test tests/unit/backend-surface-parity.test.mjs`.
-   - Browser specs (`webgl-probes`, `tlx-probes`, ...) are CI group `gfx`: on the
-     pushed branch, `node tools/ci/remote-group.mjs gfx`.
+   - Browser specs (`webgl-probes`, `tlx-probes`, ...) are CI group `gfx`: the PR's
+     own CI runs them; a whole group (`remote-group.mjs gfx`) is Bryce's opt-in.
 6. **Real GPU check:** dispatch `gpu-census.yml` on `macos-latest` and read its
    Verdict step ([references/phone-reports.md](references/phone-reports.md)).
 

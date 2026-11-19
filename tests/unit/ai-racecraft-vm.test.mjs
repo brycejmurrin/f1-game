@@ -366,6 +366,47 @@ test("under VSC and safety car no pass latch engages, no queue pressure builds a
   }
 });
 
+// NO AI OVERTAKE DEPLOY UNDER A VSC (#5715). otEnabled() closes only at the
+// Safety Car (the human may still press it under a VSC: race-incidents-control),
+// and the AI fire path had no caution check — hunt 2026-11-18 (5) counted 10 AI
+// activations in a held Spa VSC with every car pinned to the delta, buying
+// nothing. The AI branch now fires only below level 2.
+test("under a held VSC no AI car fires Overtake, though armed cars sit within range (#5715)", async () => {
+  // The hunt's repro: the VSC comes out at 70 s on lap 1 and the leader opens
+  // Overtake (lap-1 hold lifted) while the field is still bunched behind the
+  // delta. Without the AI gate this window counted 65 activations.
+  const A = g.apex;
+  const GREEN_S = 70, FLAG_S = 130;
+  await g.race("spa", "day", "dry");
+  A.headless(true);
+  const cars = g.G.cars;
+  A.carRole(cars.findIndex((c) => c.isPlayer), { human: false });
+  restorePace(cars.findIndex((c) => c.isPlayer));
+  A.go();
+  const live = new Map();
+  const edges = () => { let n = 0; for (const c of cars) { const on = (c.otT || 0) > 0; if (on && !live.get(c)) n++; live.set(c, on); } return n; };
+  for (let i = 0; i < Math.round(GREEN_S / DT); i++) { A.step(DT, 1); edges(); }
+  g.G.holdCaution(2, "test");
+  A.step(DT, 1); edges();
+  try {
+    assert.equal(A.caution().level, 2, "the held VSC is flying");
+    let fires = 0, armedOpen = 0;
+    for (let i = 0; i < Math.round(FLAG_S / DT); i++) {
+      A.step(DT, 1);
+      fires += edges();
+      if (g.G.otEnabled()) for (const c of cars) if (c.otArmed && !c.retired && !c.finished) armedOpen++;
+    }
+    assert.equal(A.caution().level, 2, "the flag flew the whole window");
+    // Anti-vacuity: the race-wide gate OPENED under the VSC (the human may still
+    // press it) with armed AI cars in the field, so only the AI gate holds them.
+    assert.ok(armedOpen > 0, "Overtake never opened with an armed AI under the VSC — the check below proves nothing");
+    assert.equal(fires, 0, `${fires} AI Overtake activation(s) under the VSC`);
+  } finally {
+    g.G.holdCaution(0);
+    A.headless(false);
+  }
+});
+
 // ONE YIELDER ALONGSIDE THE PLAYER (2026-10-01). The rule elects the car behind
 // to concede — here the PLAYER, a few metres back, who runs no yield protocol
 // and holds a lane inside the AI's clear gap. The AI merely HOLDING its line

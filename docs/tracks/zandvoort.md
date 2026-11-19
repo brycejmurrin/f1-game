@@ -17,8 +17,8 @@ Bright, breezy seaside daylight with a soft sea haze on the horizon. Pale sandy 
 ## 3. Elevation
 Continuous dune undulation — short rises and dips throughout, plus two heavily banked corners.
 - s≈0.00–0.06: flat pit straight into Tarzan hairpin.
-- s≈0.12–0.18: **Hugenholtz** (T3) — bowl-shaped banked left, ~18°, slingshots up over a dune crest.
-- s≈0.20–0.55: rolling dune ridges (Hunserug, Scheivlak) — fast up-and-over undulations; **sand-first** mid-lap.
+- s≈0.19–0.22: **Hugenholtz** (T3, apex 0.2084) — bowl-shaped banked left, ~18°, slingshots up over a dune crest.
+- s≈0.22–0.55: rolling dune ridges (Hunserug, Scheivlak) — fast up-and-over undulations; **sand-first** mid-lap.
 - s≈0.90–1.00: **Arie Luyendyk** (T14) — banked right, up to ~32% grade, feeding the pit straight.
 
 ## 4. Landmarks & surroundings by lap position
@@ -29,7 +29,7 @@ Continuous dune undulation — short rises and dips throughout, plus two heavily
 | 0.04 | R | near | Tarzan hairpin: gravel apron + grandstand wrapping the turn |
 | 0.05 | L | far | **F1 Fanzone Ferris wheel** (`zandvoort-ferris-wheel`, ≈45 m approx) + stage |
 | 0.06 | both | far | Sand dunes: low rolling tan/green box ridges hemming the track |
-| 0.14 | L | near | Hugenholtz banked bowl: tilted R/W kerbs + SAFER outer rail, orange stand behind |
+| 0.205 | L | near | Hugenholtz banked bowl: tilted R/W kerbs + SAFER outer rail, orange stand behind |
 | 0.20–0.55 | both | near | Closer dune shoulders + thin hedges/pines — sand dominates mid-lap |
 | 0.28–0.80 | R | mid | Intermittent North Sea peeks over seaward dune crests |
 | 0.45 | L | far | North Sea horizon: flat blue band box low behind the dunes, haze-faded |
@@ -59,9 +59,9 @@ Continuous dune undulation — short rises and dips throughout, plus two heavily
   Sea coast — not beside them. Sand should intrude into the outfield
   everywhere: marram-grassed dune ridges crowding the barriers, blown sand on
   the run-offs, no trees of any size on the seaward side.
-- **The two banked corners** are the modern signature: **Tarzanbocht** (Turn 1,
-  in use since 1948, the great overtaking corner) and the **Arie
-  Luyendykbocht**, the banked final turn onto the straight. Both deserve
+- **The two banked corners** are the modern signature: **Hugenholtzbocht** (Turn 3,
+  the 18° bowl) and the **Arie Luyendykbocht**, the banked final turn onto the straight
+  (Tarzanbocht, Turn 1, the great overtaking corner since 1948, carries only 4°). Both deserve
   visibly banked geometry and banked kerbing, not flat corners with a camber
   number.
 - **Orange.** The Dutch crowd is the most monochrome in F1 — grandstands,

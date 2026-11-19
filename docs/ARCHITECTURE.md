@@ -283,7 +283,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
 | `deep-link.js` | `DeepLink` | tag | DeepLink: the installed-icon shortcuts (manifest.json `shortcuts`) land on `./?go=<door>`. |
 | `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
-| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: four one-shot prompts (brake, overtake, active aero, energy harvest clip) shown through the existing #announce channel the first time… |
 | `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
 | `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
@@ -295,6 +294,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
 
 **`js/track/core/`**
@@ -576,6 +576,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 | `entrance-motion.js` | `GarageEntranceMotion` | LAZY_RACE | Blender-authored entrance motion. |
 | `garage-data.js` | `GarageData` | LAZY_RACE | GarageData: the garage's Blender-authored tables, loaded LAZY. |
+| `arrival-rows.js` | `GarageArrivalRows` | LAZY_RACE | the GARAGE ENTER & LEAVE tuner's extra rows (VISUAL STUDIO, #garrival), out of the eager shell (#5660: each PR pays its boot bytes). |
 | `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Cached garage-departure wheel layers; spin is path distance / WHEEL_RADIUS. |
 | `exterior-geometry.js` | `GarageExteriorGeometry` | LAZY_GARAGE_EXTERIOR | Detached circuit pit exterior: build once on selection, never on the render clock. |
 | `exterior.js` | `GarageExterior` | LAZY_GARAGE_EXTERIOR | Selected-world garage exterior. |
@@ -655,7 +656,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
 | `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
-| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
+| `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
 
 **`js/render/glx/shaders/`**
 
@@ -704,6 +705,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
 | `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
+| `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 
 **`js/agent/`**
