@@ -831,7 +831,8 @@
     LAZY_UI_PRESETS_EDGES: [],
     LAZY_RESULTS_SHEET: [
     "js/share/share-card-chips.js",
-    "js/ui/results-sheet.js"
+    "js/ui/results-sheet.js",
+    "js/ui/quali-sheet.js"
   ],
     LAZY_RESULTS_SHEET_EDGES: [],
     LAZY_TRACK_BUILD: [

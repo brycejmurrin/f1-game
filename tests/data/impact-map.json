@@ -7370,6 +7370,7 @@
         "tests/unit/car-fx.test.mjs"
       ],
       "rainActive": [
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -11184,6 +11185,9 @@
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
+      ],
+      "rowsFrom": [
+        "tests/unit/overlay-feed.test.mjs"
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
@@ -17431,6 +17435,7 @@
         "tests/unit/share-card.test.mjs"
       ],
       "close": [
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "preview": [
@@ -17441,8 +17446,7 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/unit/css-has-scope.test.mjs",
-        "tests/unit/results-sheet-lazy.test.mjs"
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -19545,16 +19549,20 @@
     },
     "js/ui/quali-sheet.js": {
       "build": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "close": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "create": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ],
       "open": [
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/ui/race-message-history.js": {
@@ -19577,7 +19585,7 @@
       ]
     },
     "js/ui/results-boot.js": {
-      "*": [
+      "create": [
         "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
@@ -19602,6 +19610,7 @@
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
