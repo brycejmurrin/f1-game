@@ -1004,7 +1004,7 @@ function init() {
 
 if (typeof document !== "undefined") {
   // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
-  // #4798: every node init touches is in the SETTINGS > DISPLAY panel, so it waits for the settings-lazy gate.
+  // #4798: init only touches SETTINGS > DISPLAY, so it waits for the settings-lazy gate.
   const gated = () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(init) : init());
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", gated, { once: true });
   else init();

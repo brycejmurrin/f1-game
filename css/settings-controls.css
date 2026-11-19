@@ -238,6 +238,13 @@
   line-height: 1;
   white-space: nowrap;
 }
+/* #5622: painted 48 x 0.7 = 33.6 px at UI SIZE 70; --tap-paint holds the floor (cf. appearance-studio.css). */
+@media (pointer: coarse) {
+  .set-row > div > button,
+  #pmsettings-inner .pm-groups .set-row > div > button { min-width: var(--tap-paint); min-height: var(--tap-paint); }
+}
+body[data-density="compact"] .set-row > div > button,
+body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > button { min-width: var(--tap-paint); min-height: var(--tap-paint); }
 /* Injected SCREENSHOTS / THREE PATH status — ID-scoped, no new class. */
 #pmsettings-inner .pm-group #pm-gfx-status {
   margin: calc(var(--gap) * 0.25) 0 0;

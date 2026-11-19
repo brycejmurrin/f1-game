@@ -170,11 +170,9 @@ function store(key, val, pinRe) {
 }
 
 // THE PANEL lives in js/perf/metrics-panel.js (GameMetricsPanel, LAZY_PERF,
-// #4978 row 3): snapshot() and the painter are ~25 KB a player who never turns
-// METRICS on never needs at boot. Everything a booting player can reach stays
-// here. The first paint that finds the overlay ON asks LazyBundles for the
-// perf rig (precached by sw.js, so offline too); the 4 Hz loop keeps asking
-// paintOverlay, so the panel shows on the first tick after the bundle lands.
+// #4978 row 3): snapshot() and the painter (~25 KB) stay off the boot wall. The
+// first paint that finds the overlay ON asks LazyBundles for the perf rig (sw.js
+// precaches it); the 4 Hz loop paints on the first tick after it lands.
 // One ask per ON: a failed fetch leaves the overlay off-screen, never a retry loop.
 let _impl = null;
 let _panelAsked = false;
@@ -285,14 +283,8 @@ function restoreBuffer() {
 // js/game.js gates it to tests, localhost and ?apex=1 and NEVER admits a
 // player on github.io — bootAgentSurface() returns at its first line — so on the only
 // build that matters PHYS painted "—" in every row and CAR kept just the speed
-// digit it scrapes out of the HUD. MEASURED on the shipped tree, snapshot()
-// field lists with the surface present vs nulled:
-//   GOV   loses scale auto strikes tierFloor gpuMs track state flow cam
-//         caution build
-//   CAR   loses lap pos total gear energy times gaps sector s x angle k hw
-//   PHYS  loses ALL SEVENTEEN — slipDeg vLat yawRate slipFactor axEstSm
-//         axFrac slope wrongWay rescueT head vmaxNow aeroGrip aeroDf xOn
-//         xArmed aeroLoad aeroX
+// digit it scrapes out of the HUD. MEASURED (snapshot() with the surface nulled):
+// GOV loses 11 fields, CAR 13, PHYS all 17.
 // Every read sits in a try/catch against a NULL __apex, so the failure is
 // silent by construction and tests/unit/metrics.test.mjs pinned the graceful
 // degradation without anyone noticing the degradation IS the shipped panel.
@@ -304,11 +296,8 @@ function restoreBuffer() {
 // leaves the panel exactly as degraded as it is today, never a retry loop.
 let _telemetryLoad = null;    // game.js's memoised loadAgentSurface, or null
 let _telemetryAsked = false;
-// Installed by game.js AFTER its boot await chain, which is later than the
-// DOMContentLoaded initUI that handles a player booting with METRICS already
-// on — so that path reaches ensureTelemetry() with no loader yet and correctly
-// declines WITHOUT burning the one-shot latch. Ask again here, or a panel that
-// was already on would stay degraded until it was toggled off and back on.
+// Installed after game.js's boot awaits, later than the DCL initUI of a METRICS-on
+// boot (which declined without burning the latch): ask again, or it stays degraded.
 function setTelemetryLoader(fn) {
   _telemetryLoad = typeof fn === "function" ? fn : null;
   if (_telemetryLoad && on()) ensureTelemetry();
@@ -464,9 +453,7 @@ function makeMetricsRow(id, label, title, values, read, write, paint) {
 }
 const up = (list) => list.map((v) => [v, String(v).toUpperCase()]);
 
-// #4798: initUI splits in two. The Settings rows (and their fold) wait for the
-// settings-lazy gate; the hotkeys, resize and a METRICS-on boot paint stay in the
-// DOMContentLoaded task, so ` / F9 and a saved ON overlay work from the first frame.
+// #4798: the Settings rows wait for the settings-lazy gate; hotkeys stay in DCL (so ` / F9 and a saved ON overlay work right away).
 function initUI() {
   try { Log.info("game", "GameMetrics.initUI"); } catch (_) { /* Log not loaded */ }
   if (typeof document === "undefined") return;
@@ -574,7 +561,7 @@ function initKeys() {
 }
 
 if (typeof document !== "undefined") {
-  // Deferred scripts evaluate at "interactive": only a COMPLETE document runs now (docs/PERF-FINDINGS.md defer trap).
+  // docs/PERF-FINDINGS.md defer trap.
   if (document.readyState !== "complete")
     document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();

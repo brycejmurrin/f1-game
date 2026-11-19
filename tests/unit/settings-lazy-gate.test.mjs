@@ -137,5 +137,5 @@ test("js/ui/screen-looks.js: the search descriptors register at the gate, not in
   assert.ok(atGate, "the DCL task queues work on the gate");
   assert.deepEqual(atGate, [], "nothing registered before the gate");
   for (const fn of queue.splice(0)) fn();
-  assert.ok(registered.includes("screen-looks"), "registers once the gate flushes");
+  assert.deepEqual(registered, ["screen-looks"], "registers once, when the gate flushes");
 });

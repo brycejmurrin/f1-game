@@ -39,6 +39,16 @@ test("bloat scan reports missing explicit scopes alongside successfully scanned 
   assert.ok(JSON.parse(absolute.stdout).coverage.scanned.includes("tools/check/extract-module.mjs"));
 });
 
+// A bare run sweeps js/ tools/ css/ for 800+ line files with no ratchet: tlx.js
+// (7,320 lines) never showed in the report before (#5712).
+test("a bare bloat scan lists oversized unratcheted files", () => {
+  const result = cli("tools/check/bloat-scan.mjs", ["--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const row = JSON.parse(result.stdout).files.find((f) => f.path === "js/render/three/tlx.js");
+  assert.equal(row.kind, "unratcheted");
+  assert.equal(row.lines, fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8").split("\n").length);
+});
+
 test("ratchet preview is read-only, lower-only receipt exposes skipped raises", async () => {
   const before = fs.readFileSync(DATA);
   const data = { files: { "tools/check/extract-module.mjs": { lines: 1 } }, tree: {} };

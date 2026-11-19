@@ -165,9 +165,12 @@ test("cross-owner browser cancellation retains occupancy until detached descenda
   let childPid, rootPid, pending;
   try {
     const ready = path.join(f.root, "descendant.json");
+    // Publish by rename: writeFileSync creates the file before its bytes land, so
+    // a loaded box let existsSync() see it empty and JSON.parse threw (#5662).
+    const publish = `const fs=require('node:fs'); fs.writeFileSync(${JSON.stringify(`${ready}.tmp`)},JSON.stringify({pid:process.pid})); fs.renameSync(${JSON.stringify(`${ready}.tmp`)},${JSON.stringify(ready)});`;
     const script = `
       const {spawn}=require('node:child_process');
-      const child=spawn(process.execPath,['-e',${JSON.stringify(`process.on('SIGTERM',()=>{}); require('node:fs').writeFileSync(${JSON.stringify(ready)},JSON.stringify({pid:process.pid})); setInterval(()=>{},1000);`)}],{detached:true,stdio:'ignore'});
+      const child=spawn(process.execPath,['-e',${JSON.stringify(`process.on('SIGTERM',()=>{}); ${publish} setInterval(()=>{},1000);`)}],{detached:true,stdio:'ignore'});
       setInterval(()=>{},1000);
     `;
     let held = false;

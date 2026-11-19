@@ -8,8 +8,9 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
 
 ## Gotchas
 
-- `apex-eval`, `slider-effect --live`, the `__apex` probes and every capture boot Chromium:
-  parent session only, never a subagent (AGENTS.md rule 10).
+- `apex-eval … --vm` needs no browser (a subagent may run it); without `--vm`, `apex-eval`, `slider-effect --live`,
+  the live `__apex` probes and every capture boot Chromium: parent session only (AGENTS.md rule 10). The VM's
+  `lightState()` has no lamps (`numLights` 0, `meanLampRGB`/`meanPerChunkRGB` null): those are browser-only.
 - A value a `"<track>|<tod>|<wx>"` row does not pin is INHERITED from the shared `"*|<tod>|<wx>"`
   stamp in `js/lighting/presets.js`, not the knob default. Read the resolved value with
   `__apex.lightTune()` and the stamp's value in presets.js; never quote a remembered number.
@@ -28,9 +29,9 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
    (the owner plays TLX WebGPU on an iPhone; whether precedence layer 5, `"*|tod"`, applies is `condLayer` in
    `js/lighting/profiles.js` — read it, do not assume a backend gate). The key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`:
    tod `default` → `def.night`, storm → rain).
-2. **Measure before any knob** (parent only):
+2. **Measure before any knob** (`--vm`: no browser; drop it for lamp counts and RGB, parent only):
    ```sh
-   node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightState())" --raw
+   node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightState())" --raw --vm
    ```
 3. **Read both rows** in `js/lighting/presets.js`: the track's key and the `"*|<tod>|<wx>"` stamp.
 4. **Map symptom → field → knob** with [references/symptoms.md](references/symptoms.md). Night
@@ -52,7 +53,7 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
    node tools/ci/pick-tests.mjs                                            # names the CI groups
    ```
    `tests/specs/lighting-ab.spec.js` runs in the `gfx` group on CI, never locally (AGENTS.md rule
-   5); to run the whole group on the pushed branch: `node tools/ci/remote-group.mjs gfx`.
+   5); a whole `gfx` group (`remote-group.mjs`) is Bryce's opt-in.
 
 ## References
 

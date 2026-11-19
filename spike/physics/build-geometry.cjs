@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // build-geometry.cjs — extract REAL track geometry for the Rapier spike without
-// a browser. Replicates the tools/verify-track.cjs VM pattern: stub GLX, run
+// a browser. Replicates the tools/track/verify-track.cjs VM pattern: stub GLX, run
 // the manifest's TRACK_VM file list (which includes js/circuits/singapore.js
 // via "@circuits") in a Node VM, call Tracks.build(def, {night:false}), and
 // export ONLY the road mesh {pos,nrm,idx} plus the centreline arrays
