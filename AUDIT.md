@@ -335,3 +335,11 @@ INCOMPLETE OR CORRUPT", matching what setup and ghost links already do. Verified
 truncated code and a garbage code: no message → the message appears (banner and screen-reader live region);
 the hash is still removed; a bad `#share=` link behaves as before. The silent rename when saving a shared
 copy of your own circuit is not fixed — it needs a prompt, which is a design decision.
+
+### Fix 9 — broadcast overlay shows the whole 22-car field (finding 15)
+
+`js/overlay/render.js:4` `MAX_ROWS` 20 → 22 and the `.ov-tower` height in `overlay.html` 680 → 748 px
+(22 rows × 34 px). Verified in Chromium at 1920×1080 by sending a 22-car frame with the player in P22:
+visible rows 20 → 22 and the player's highlighted row hidden → shown; `?rows=10` still shows 10. The other
+two broadcast defects (false "OVERTAKE" on a retirement, FASTEST LAP card never shown) are not fixed; they
+only appear in real-race replays, which could not be exercised here.
