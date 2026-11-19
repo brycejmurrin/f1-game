@@ -5480,7 +5480,8 @@
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "ensureCircuit": [
-        "tests/unit/data-lazy-loader.test.mjs"
+        "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureDataHub": [
         "tests/unit/data-lazy-loader.test.mjs",
