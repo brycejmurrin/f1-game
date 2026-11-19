@@ -903,14 +903,9 @@ const Assets = (function () {
     } catch (e) { /* no stored index: models wait for the manifest */ }
     return _packIndex;
   }
-  // PRUNES BY REBUILDING: the stored index is replaced from the live manifest's
-  // content-addressed rows, so a dead key, a renamed file or a stale md5 never
-  // outlives the next manifest. A manifest with no models stores an empty index
-  // rather than keeping the last pack's guesses (tests/unit/assets-pack.test.mjs).
   function rememberPack(m) {
-    if (!m || typeof m !== "object") return;
-    const live = m.models && typeof m.models === "object" ? m.models : {};
-    const models = {};
+    if (!m) return;
+    const models = {}, live = m.models || {};
     for (const id in live) {
       const rec = live[id];
       if (!rec || typeof rec.file !== "string" || !/^[0-9a-f]{32}$/.test(rec.md5 || "")) continue;
