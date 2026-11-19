@@ -433,6 +433,7 @@ async function precacheAssetLists() {
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
     "js/race/retired-card.js",
+    "js/race/driving-coach.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

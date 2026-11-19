@@ -13431,63 +13431,64 @@
         "tests/unit/damage.test.mjs"
       ]
     },
+    "js/race/driving-coach-boot.js": {
+      "create": [
+        "tests/unit/driving-coach-lazy.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/s8-once-per-frame.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/driving-coach-lazy.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/s8-once-per-frame.test.mjs"
+      ],
+      "setPracticeGoal": [
+        "tests/unit/driving-coach-lazy.test.mjs"
+      ]
+    },
     "js/race/driving-coach.js": {
-      "advice": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "armPractice": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "beginSetupTrial": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "canArm": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
       "captureCar": [
         "tests/unit/coach-clone.test.mjs"
       ],
       "create": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-voice.test.mjs",
-        "tests/unit/s8-once-per-frame.test.mjs"
+        "tests/unit/s8-once-per-frame.test.mjs",
+        "tests/unit/session-stub-surface.test.mjs"
       ],
       "feedback": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "jsonClone": [
         "tests/unit/coach-clone.test.mjs"
       ],
-      "mark": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
       "paint": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "reset": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "retry": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "setPracticeGoal": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "status": [
-        "tests/unit/driving-coach.test.mjs"
-      ],
-      "toggle": [
-        "tests/unit/driving-coach.test.mjs"
+        "tests/unit/driving-coach-lazy.test.mjs"
       ],
       "update": [
-        "tests/unit/driving-coach.test.mjs",
+        "tests/unit/driving-coach-lazy.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
