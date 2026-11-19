@@ -116,7 +116,6 @@ const SaveSchemaRegistry = (function () {
     "musicStream": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "nostrRelays": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "packDecodeWorker": entry("js/workers/bitmap-decode-client.js (apex26.packDecodeWorker \"1\": pack strip decode in the worker; default OFF)", "raw", 1, "rawScalar"),
-    "padLayout": entry("js/input/phone-pad-page.js (controller.html WHEEL LAYOUT: {zone: {key: L|C|R}, swap}; the phone's own page, not in SettingsExport.SPEC, so no backup)", "json", 1, "json"),
     "perChunkOff": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "pitTaught": entry("js/race/pit-lane.js", "json", 1, "json"),
     "propsUnchunked": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

@@ -9923,6 +9923,9 @@
       "setSteeringMode": [
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/input/phone-pad.js": {
