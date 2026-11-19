@@ -25,8 +25,8 @@ before/after counts (`bloat-scan.mjs --json`).
 5. `lsp_references` every removed symbol (grep for text and comments). Then
    `node tools/ci/tooling-fast.mjs --changed --jobs=3` (the full tier in the background only, AGENTS.md rule 4).
    Near `game.js`: `tests/specs/physics-characterization.spec.js` is the master gate. It runs on CI, not
-   locally (AGENTS.md rule 5): `node tools/ci/pick-tests.mjs` names the groups, `node tools/ci/remote-group.mjs
-   <group>` runs one on the pushed branch; the parent names any group not run.
+   locally (AGENTS.md rule 5): `node tools/ci/pick-tests.mjs` names the groups, the PR's own CI runs
+   the browser shard (a whole group is Bryce's opt-in); the parent names any group not run.
 6. Commit in two calls (AGENTS.md rule 12); the hook must pass with the lowered ceiling.
 7. No bump — `bump-cache` is deploy-only (`.claude/rules/game-code.md`); `npm run gen` only if the manifest changed.
 

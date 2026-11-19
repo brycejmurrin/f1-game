@@ -1097,6 +1097,38 @@ test("leaving the tab mid-download drops the queued position requests; a pick he
   assert.deepEqual(invalidated, ["race"], "a WATCH & DRIVE pick invalidates the other session tabs");
 });
 
+test("leaving mid script-body fetch also cancels the OpenF1 queue (WATCH & DRIVE spinner)", async () => {
+  // cancel() only aborted while loadTraces set `loading`. The first paint's
+  // ~11 OpenF1 bodies (raceSession/scriptFor) left the FIFO busy, so STANDINGS
+  // / LIVE spun behind work nobody would render after switching tabs.
+  const { ctx } = load();
+  let cancels = 0;
+  let resolveSessions;
+  ctx.F1API = {
+    sessionsForMeeting: () => new Promise((resolve) => { resolveSessions = resolve; }),
+    cancelAll() { cancels++; },
+  };
+  const D = vm.runInContext("DataRealRace", ctx);
+  const node = () => ({ appendChild() { return this; }, append() {}, isConnected: true,
+    setAttribute() {}, addEventListener() {}, children: [] });
+  // Practice meta forces raceSession → sessionsForMeeting (not a direct Race hit).
+  const practice = { sessionKey: 99, meetingKey: 9, name: "Practice 1", type: "Practice" };
+  const tab = D.create({
+    el: node, clear() {}, emptyMsg: node, spinner: node,
+    sel: { meta: practice, meetingKey: 9 },
+    ensureSession: () => Promise.resolve(practice),
+    buildPicker: () => node(),
+    invalidateOther() {}, teamChip: node, fmtDateTime: String, findTeam: () => null,
+    close() {}, isOpen: () => true,
+  });
+  await tab.loadRealRace();
+  assert.equal(typeof resolveSessions, "function", "script-body fetch is waiting on sessionsForMeeting");
+  assert.equal(cancels, 0, "in-flight body fetch has not been cancelled yet");
+  tab.cancel();
+  assert.equal(cancels, 1, "leaving mid script-body fetch must cancelAll like a traces download");
+  if (resolveSessions) resolveSessions([]);
+});
+
 
 test("JUMP IN preserves historical set age with the production tyre clock", () => {
   const { R, script, Teams, ctx } = load({ realTyres: true });

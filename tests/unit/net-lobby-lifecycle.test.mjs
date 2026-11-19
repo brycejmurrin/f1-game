@@ -277,6 +277,37 @@ test("a link tapped while the host has an offer out is deferred, and close() kee
   } finally { h.lobby.cancel(); }
 });
 
+test("#5739 row 2: a link that arrives while hosting says so on screen, and CLOSE opens it instead of leaving it in the URL", async () => {
+  let hash = null;
+  let consumed = 0;
+  const handshake = {
+    inviteFromUrl: () => hash,
+    consumeInviteUrl: () => { if (!hash) return false; consumed++; hash = null; return true; },
+  };
+  const h = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }), href: "https://x.test/play" });
+  try {
+    h.lobby.wire();
+    assert.equal(h.lobby.open(), true);
+    assert.equal((await h.lobby.host()).ok, true);
+    assert.deepEqual(h.transports, ["host"]);
+    hash = "friend";
+    h.emitWindow("hashchange");
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["host"], "the pending offer is not torn down by the link");
+    assert.equal(h.status.textContent, "A friend's invite link arrived — CLOSE this room to join it.");
+    h.click("vs-close");
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["host", "guest"], "CLOSE ends the room and opens the deferred invite on JOIN");
+    assert.equal(h.elements.get("vsfriend").hidden, false);
+    assert.equal(h.elements.get("vs-invite-in")?.value ?? "friend", "friend");
+    assert.equal(consumed, 0, "still in the URL while the JOIN it opened is on screen");
+    h.click("vs-close");
+    assert.equal(consumed, 1, "the second CLOSE (handled now) consumes the fragment: no stale prefill on reload");
+    assert.equal(hash, null);
+    assert.equal(h.elements.get("vsfriend").hidden, true);
+  } finally { h.lobby.cancel(); }
+});
+
 test("a newer join operation prevents a late host continuation", async () => {
   const ice = deferred();
   const h = harness({ prefetchIce: () => ice.promise, scanFactory: () => ({ stop() {}, start() {} }) });
@@ -1432,6 +1463,81 @@ test("mid-race one guest leaving of two keeps the other — occupancy is transpo
     assert.equal(h.lobby.status().guests, 1, "one transport remains");
     assert.equal(h.lobby.roomState().peers.length, 1,
       "the surviving guest's profile must stay — finishStart keeps _peers on purpose");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a local NetPlay stop after the race does not claim the friend left", async () => {
+  // finishStart leaves transports up for the race. quitToMenu → netPlay.stop("local")
+  // closes them once results are done; without raceHeld that looked like an empty
+  // room ("Your friend left the room.") even though WE ended the session.
+  const made = [], closers = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
+    return t;
+  });
+  h.G.startRace = async () => ({ ok: true });
+  h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1);
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), true);
+    for (let i = 0; i < 40 && /Starting race/.test(h.status.textContent); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    assert.equal(h.lobby.status().guests, 1, "race still holds the transport");
+    h.status.textContent = "Starting race…";
+    closers[0]("local");                         // NetPlay.stop("local") → transport.close
+    assert.notEqual(h.status.textContent, "Your friend left the room.",
+      "a race we ended is not a peer leave");
+    assert.equal(h.lobby.status().guests, 0);
+    assert.equal(h.elements.get("vs-pick").hidden, true,
+      "local race-end cleanup does not show the pick step under a hidden lobby");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a mid-race local quit does not claim Connection closed while still inRace", async () => {
+  // quitToMenu → stop("local") can close the transport while UiLayers.inRace()
+  // is still true for a frame; that used to take the racing peer-leave copy.
+  const made = [], closers = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
+    return t;
+  });
+  h.G.startRace = async () => ({ ok: true });
+  h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  h.context.UiLayers = { inRace: () => true };
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1);
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), true);
+    for (let i = 0; i < 40 && /Starting race/.test(h.status.textContent); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    h.status.textContent = "Racing…";
+    closers[0]("local");
+    assert.notEqual(h.status.textContent, "Connection closed.",
+      "our mid-race quit is not a peer disconnect");
+    assert.equal(h.status.textContent, "Racing…", "status left for quitToMenu / onStop");
   } finally { h.lobby.cancel(); }
 });
 

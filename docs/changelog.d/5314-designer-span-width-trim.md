@@ -1,0 +1,1 @@
+Fixed: Track designer: changing SPAN WIDTH on a span inside a longer width zone, or on a circuit with a full-lap width zone, no longer resets the rest of that zone to the base width; the zone keeps the road either side of the span (#5314).

@@ -63,13 +63,13 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 | `_resolve` | Career-blind; supplier/team lock only |
 | Owned gate | UI: `G.careerOwned()` → `Parts.isOptionAvailable` |
 | ERS / aero | `ersProfile` / `aeroLoad` → game.js battery / X-mode |
-| Finish | `gloss` default; `satin`/`chrome` via `FINISH_SURFACE` |
+| Finish | `gloss` default; every other finish is a `FINISH_SURFACE` key in `js/car/car-materials.js` (satin, chrome, matte, carbon, pearl, …) |
 | `--refl` | Studio dial — **not** in-game chrome finish |
 
 ```sh
 npm run test:garage-unit                   # node gate for a part/wing/livery edit (no browser)
 node tools/ci/pick-tests.mjs              # which groups prove it (car; modes for research locks / ownership UI)
-node tools/ci/remote-group.mjs car         # a whole group, on the PUSHED branch — never browser specs locally
+# the PR's own CI runs the browser shard (never locally); a whole `car` group is Bryce's opt-in
 node tools/car/audit-parts.mjs             # browser-gated (needs :3456) [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme

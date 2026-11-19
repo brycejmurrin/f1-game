@@ -75,8 +75,9 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 5. Was it already red? Find the same workflow's last run on the base (the
    deploy tip for a PR, the previous tip for a ship push) and say
    `already-red-on-base` or `new-on-this-push`, or `unknown` when you did not read
-   that previous run (never write `new-on-this-push` for an unread base). `tools/ci/base-verdict.sh`
-   and `bash tools/ci/pages-live-sha.sh <url>` exist for this.
+   that previous run (never write `new-on-this-push` for an unread base). The run's own
+   "Base verdict" step summary (`tools/ci/base-verdict.sh`, a CI step) answers it when present; you cannot run
+   that script or `pages-live-sha.sh` (your hook refuses `bash <script>`): the live sha is agent `deploy-research`'s read.
 6. **Stale generated files (not a rerun):** when logs or node suites mention
    `gen:check`, `agent-indexes.test.mjs`,
    missing keys in `tests/data/impact-map.json`, or the ARCHITECTURE.md module

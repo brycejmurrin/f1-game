@@ -6,7 +6,7 @@
 //   node tools/check/ratchets.mjs --update [--absolute]   # snap ceilings to the current values: ratchets.json on the deploy branch, a ratchets.d delta on a topic branch (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --fold     # sum tests/data/ratchets.d/*.json into ratchets.json, delete them
-//   node tools/check/ratchets.mjs --auto-raise[=40]   # the commit hook's form: on a topic branch it writes
+//   node tools/check/ratchets.mjs --auto-raise[=N]   # the commit hook's form (bare = a flat 20; =N keeps N): on a topic branch it writes
 //                                      #   tests/data/ratchets.d/<branch>.json (a delta), never ratchets.json
 //   node tools/check/ratchets.mjs --update --fragment --reason="<why>"   # a deliberate tree-metric raise as this branch's delta
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
@@ -98,6 +98,13 @@ export const TREE_METRICS = {
   // browser spec that could run in the VM adapter but still spends
   // SwiftShader minutes. All three are shrink-only.
   zeroRefModules: async () => (await import("./tree-counts.mjs")).zeroRefModules(),
+  // The boot wall (tools/check/boot-wall.mjs; tests/unit/boot-load-budget.test.mjs asserts it): every visit parses
+  // these before the title. They left that test's hand-written MAX_EAGER_* constants (2026-11-19,
+  // docs/notes/BUDGET-RATCHETS-2026-11-19.md): each PR re-measured them on its own old tip, so two fixers'
+  // numbers went stale against each other. Here a lowering is the branch's own fragment delta and a raise is
+  // Bryce's `ratchet-raise` (merge-gate raise row).
+  eagerScripts: async () => (await import("./boot-wall.mjs")).wallNow().scripts,
+  eagerBytes: async () => (await import("./boot-wall.mjs")).wallNow().bytes,
   implicitAsserts: async () => {
     const { audit } = await import("../ci/assert-audit.mjs");
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;

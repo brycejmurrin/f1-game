@@ -234,13 +234,7 @@ function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 // Why: docs/GOVERNOR-RATIONALE.md §gov-21.
 function sentinelResume() {
-  // A CLIMB CANNOT BE ON PROBATION ACROSS TIME NOBODY MEASURED. `_sinceUp`
-  // ages only inside tick(), which never runs while the tab is hidden, so a
-  // climb accepted before a ten-minute background stint came back reading as
-  // seconds old — and the first cut after the resume then charged it the full
-  // doubling penalty for load the climb was never tested against. That is the
-  // same reasoning that keeps this function from resetting the EMAs: a tab
-  // return is not evidence. Drop the probation instead of charging it.
+  // Why: docs/GOVERNOR-RATIONALE.md §gov-40.
   _sinceUp = -1;
   if (!_gfx || !_gfx.isMobile) return;
   GameStore.store.rawSet(SENT_ACTIVE, "1");
@@ -281,13 +275,7 @@ function cleanRace() {
   }
 }
 
-// Re-derive the crash floor from the strike counter. When it DROPS, _perfTier
-// may be sitting on the OLD one (init() seeds it there, and the degrade branch
-// steps from _floorTier(), so it absorbs whatever floor was live when it fired).
-// Release it to the new CRASH floor and let the governor re-earn any shed from
-// its own measurements. Not _floorTier(): that folds in the GRAPHICS preset, so
-// one strike paid down on MEDIUM (2 > 2 is false) left autoTier() pinned at the
-// old floor for the session (#3294). tier() still applies the preset at read time.
+// Why: docs/GOVERNOR-RATIONALE.md §gov-41.
 function _setCrashFloor() {
   const prev = _perfTierFloor;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
@@ -537,10 +525,7 @@ function driftRenderRate() {
   if (!st.mobile || st.mode !== "auto") return false;
   return RenderRate.setMode("45");
 }
-// RESOLUTION MAX's DPR boost (#5222; gfx.setDprBoost, TLX only) is what a missed frame budget or a thermal drift
-// takes back first, ahead of the scale and feature rungs (a drift's 45 Hz rate cap still comes before it): one step
-// down to the tier's DPR cap. Never
-// restored by the governor: it stays off until the player picks a RESOLUTION again or reloads (UiScale re-applies it).
+// Why: docs/GOVERNOR-RATIONALE.md §gov-39.
 function _shedDprBoost() {
   if (!_gfx || typeof _gfx.getDprBoost !== "function" || !(_gfx.getDprBoost() > 0)) return false;
   if (!_gfx.setDprBoost(0)) return false;
