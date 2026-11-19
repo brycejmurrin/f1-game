@@ -246,6 +246,26 @@ console.log("TEST 3: malformed input handling");
   check("parseGLB throws on non-ArrayBuffer", threwNotAB);
 }
 
+// ===== TEST 3b: buffer and extension rules (glTF 2.0 §3.12, §4.4.3.3) =====
+console.log("TEST 3b: required extensions and uri-less buffers");
+{
+  const base = GLTF.parseGLB(makeTriangleGLB([0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2], [1, 1, 1], false));
+  const glb = (edit) => { const j = JSON.parse(JSON.stringify(base.json)); edit(j); return buildGLB(j, base.bin); };
+  const err = (fn) => { try { fn(); return ""; } catch (e) { return String(e && e.message); } };
+
+  const meshopt = glb((j) => { j.extensionsUsed = ["EXT_meshopt_compression"]; j.extensionsRequired = ["EXT_meshopt_compression"]; });
+  check("unsupported required extension rejected by name",
+    /required extension not supported: EXT_meshopt_compression/.test(err(() => GLTF.parseGLB(meshopt))), err(() => GLTF.parseGLB(meshopt)));
+  const quant = glb((j) => { j.extensionsUsed = ["KHR_mesh_quantization"]; j.extensionsRequired = ["KHR_mesh_quantization"]; });
+  check("KHR_mesh_quantization as required still loads", err(() => GLTF.toMesh(quant)) === "", err(() => GLTF.toMesh(quant)));
+
+  // A second uri-less buffer is not the BIN chunk: reading it as BIN would return
+  // buffer 0's bytes for buffer 1's views.
+  const twoBufs = glb((j) => { j.buffers.push({ byteLength: j.buffers[0].byteLength }); for (const v of j.bufferViews) v.buffer = 1; });
+  check("uri-less buffer 1 is refused, not read as BIN",
+    /buffer 1 has no uri/.test(err(() => GLTF.toMesh(twoBufs))), err(() => GLTF.toMesh(twoBufs)));
+}
+
 // ===== TEST 4: node transform applied (translation) =====
 console.log("TEST 4: node translation applied to positions");
 {

@@ -1,0 +1,2 @@
+Fixed: MUSIC & SOUND has a MASTER SOUND switch at the top, so sound can be turned on from settings and from the pause menu; with it off the closed folds read MUTED instead of ON. Music that iOS pauses mid-game (Siri, a call, AirPods) comes back on the next tap or RESUME, and offline the readout says "Music needs a connection" instead of naming a track.
+Fixed: with a controller or the arrow keys, Down inside a scrolling settings page now reaches controls further down the page (TEST RACE MIX) before jumping to BACK.
