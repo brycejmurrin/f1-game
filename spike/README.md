@@ -1,4 +1,4 @@
-# Graphics-library migration spike — three.js r185.1
+# Graphics-library migration spike — three.js (vendored `0.187.0`)
 
 Standalone evaluation harness: renders one **real** circuit (geometry from the
 unmodified game pipeline) with three.js, to measure feasibility and performance
@@ -26,11 +26,12 @@ history to re-run the arm. What stays:
 ## Vendored libraries (this spike carries none of its own)
 
 This directory used to hold ~11 MB of its own `vendor/` copies. Two of them —
-three.js 0.184.0 and Rapier 0.19.3 — were **byte-identical** (md5) to the copies
-the game itself ships in the repo-root `vendor/`, so `three-spike.html` and the
-`physics/` harnesses now import those directly (`../vendor/three-0.187.0/`,
+three.js and Rapier — were **byte-identical** (md5) to the copies the game
+itself ships in the repo-root `vendor/`, so `three-spike.html` and the
+`physics/` harnesses import those directly (`../vendor/three-0.187.0/`,
 `../../vendor/rapier-0.19.3/`) and the duplicates are gone. Nothing about how the
-spikes run changed.
+spikes run changed. The historical harness measured against an older three.js
+pin; the surviving reference and the live game both use `vendor/three-0.187.0/`.
 
 The third, **Babylon.js 9.19.0** (8 MB, `babylon-spike.html/.js`), was the
 comparison arm — and that comparison **concluded**: three.js/TSL was picked and

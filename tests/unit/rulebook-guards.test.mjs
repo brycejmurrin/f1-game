@@ -48,7 +48,8 @@ const CANON = [
   // 2026-11-03: four lane-procedure sentences re-homed from AGENTS.md to skill `steward` (plan §4.4).
   ["sync rule", /never for\s+clean-behind/i, ".claude/skills/steward/SKILL.md"],
   ["merge commits only", /Merge commits only, never squash\s+or rebase/i, "AGENTS.md"],
-  ["never cancel", /NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
+  // 2026-11-18 (owner request): workers never cancel; the orchestrator's CI acts live in skill steward §CI.
+  ["never cancel", /WORKERS NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
   ["commit in two calls", /Commit in two calls: stage in its own command/, "AGENTS.md"],
   ["push without a pipe", /no output pipe/i, "AGENTS.md"],
   // 2026-11-11 (decision 5, #5429): one reading of check-ins — event-driven, one fallback when the subscription is refused.

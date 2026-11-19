@@ -4554,7 +4554,7 @@
     {
       "path": "js/share/share-card-chips.js",
       "global": "ShareCardChips",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-data.js",

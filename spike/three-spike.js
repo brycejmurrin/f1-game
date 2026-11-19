@@ -1,7 +1,7 @@
 /* Apex 26 — three.js migration spike scene.
  *
  * Renders one REAL circuit (geometry straight from the unmodified game pipeline
- * via SpikeData) with three.js r184: WebGPURenderer (auto WebGL2 fallback,
+ * via SpikeData) with three.js (vendor/three-0.187.0): WebGPURenderer (auto WebGL2 fallback,
  * ?gl=1 pins WebGL2), a custom TSL lit material that ports the load-bearing
  * pieces of js/render/shaders/lit.js — the stride-15 32-lamp loop (windowed
  * inverse-square + aimed cone + bleed) and three of the fifteen procedural

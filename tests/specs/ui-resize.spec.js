@@ -959,11 +959,11 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells 
         goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - sr.bottom).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 };
     });
     const rtag = win.name + " race settings: ";
-    // The sheet decides density in its OWN px (window / UI SIZE against --compact-at): at 70 % the two 390-tall
-    // windows are 557-561 own px, a normal sheet; the 283-tall Safari window (404) stays compact. The contract
-    // below (one scroller, two columns, START RACE fixed and 44 px) holds in both.
-    const rsDensity = win.viewport.height / 0.7 < 480 ? "compact" : "normal";
-    expect(rs, rtag + "the density its own height asks for, the sheet grid kept").toMatchObject({ density: rsDensity, shape: "wide", compactAt: "480px", display: "grid" });
+    // #5632: a short touch screen holds race settings compact at every UI SIZE (css/race-setup.css, the career hub's
+    // #5580 gate). At 70 % the two 390-tall windows are 534-539 own px, over --compact-at 480, so the sheet went normal
+    // there while its siblings were compact; measured 2026-11-18 with the gate: compact in A, C and D, and the contract
+    // below (one scroller, two columns, START RACE fixed and 44.2 px) holds in all three.
+    expect(rs, rtag + "compact like its siblings on a short touch screen, the sheet grid kept").toMatchObject({ density: "compact", shape: "wide", compactAt: "99999px", display: "grid" });
     expect(rs.sheetScroll, rtag + "the sheet itself never scrolls").toBeLessThanOrEqual(1);
     expect(rs.scrollers, rtag + "#rs-body is the ONE scroller").toEqual(["rs-body"]);
     expect(rs.columns, rtag + "two columns on a phone").toBe(2);

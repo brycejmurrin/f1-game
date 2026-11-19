@@ -9,7 +9,11 @@
       "dom",
       "dom.iterable"
     ],
-    "skipLibCheck": true
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "types": []
   },
   "typeAcquisition": {
     "enable": false

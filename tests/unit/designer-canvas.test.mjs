@@ -571,3 +571,21 @@ for (const where of ["element", "document"]) {
     assert.deepEqual(send(), []);
   });
 }
+
+// Hunt #5743 D4: an insert-drag cut short by a second finger (a pinch started on
+// the road) left sel on the spliced index — N on the closing segment, no point.
+test("a pinch that starts on the closing segment hands the prior selection back, in range", () => {
+  const h = boot({}, [[0, 0], [400, 0], [400, 400], [200, 500], [0, 400]]);
+  const N = h.pts.length;
+  h.cv.setSelection(2, -1);
+  const a = h.pts[N - 1], b = h.pts[0];
+  const mid = h.scr([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+  h.fire("pointerdown", mid, 1, { pointerType: "mouse" });   // mouse radius: the mid-segment is clear of both handles
+  assert.equal(h.cv.selection().sel, N, "the insert-drag selects the spliced index while it lives");
+  h.fire("pointerdown", h.off(mid, 120, 40), 2, { pointerType: "mouse" });
+  assert.deepEqual(plain(h.cv.selection()), { sel: 2, span: -1 });
+  assert.deepEqual(plain(h.ev.selects.at(-1)), { i: 2, j: -1 });
+  h.fire("pointerup", mid, 1); h.fire("pointerup", h.off(mid, 120, 40), 2);
+  assert.equal(h.ev.changes.length, 0, "the abandoned insert never commits");
+  assert.ok(h.cv.selection().sel < N);
+});

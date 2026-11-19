@@ -9,6 +9,12 @@ const GfxDebug = (() => {
 
   const ID = "gfx-debug";
   const PAINT_MS = 500;
+  // Soft-frame luma used to call getImageData(0,0,w,h) on the full blit canvas.
+  // On a GPU-less soft present that copies the whole backing store every 500 ms:
+  // a 4K RGBA buffer is ~35 MB and the alloc+scan measured ~46 ms here; phone
+  // landscape 2× DPR (~11 MB) ~12 ms. Downscale into a reused SAMPLE_MAX² canvas
+  // so the diagnostic stays pasteable without becoming the stall it diagnoses.
+  const SAMPLE_MAX = 64;
   const PANEL_CSS = "position:fixed;left:8px;top:8px;z-index:9999;max-width:min(92vw,560px);" +
     "max-height:70vh;overflow:auto;background:rgba(0,0,0,.78);color:#9fe;padding:6px 8px;" +
     "border-radius:6px;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;" +
@@ -19,6 +25,8 @@ const GfxDebug = (() => {
   let el = null;
   let pre = null;
   let timer = 0;
+  let sampleCanvas = null;
+  let sampleCtx = null;
   // Previous loop sample, so the heartbeat line in build() can be a DELTA
   let lastFrames = 0;
   let lastPaintAt = 0;
@@ -124,6 +132,35 @@ const GfxDebug = (() => {
     lines.push(`mem heap=${heap} rObj=${rObj} geo=${geo} tex=${tex} tier=${tier} crashStrikes=${strikes}`);
   }
 
+  function sampleSoftLuma(soft, ctx2d) {
+    const w = soft.width | 0, h = soft.height | 0;
+    if (w <= 0 || h <= 0) throw new Error("empty soft canvas");
+    const tw = Math.min(SAMPLE_MAX, w), th = Math.min(SAMPLE_MAX, h);
+    let img;
+    if (tw === w && th === h) {
+      img = ctx2d.getImageData(0, 0, w, h);
+    } else {
+      // Scale the whole frame into SAMPLE_MAX² so a dusk sky is not mistaken for
+      // an unpainted corner (the old top-left 64×64 trap), without copying w×h.
+      if (!sampleCanvas) {
+        sampleCanvas = document.createElement("canvas");
+        sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+      }
+      if (!sampleCtx) throw new Error("no sample 2d");
+      if (sampleCanvas.width !== tw) sampleCanvas.width = tw;
+      if (sampleCanvas.height !== th) sampleCanvas.height = th;
+      sampleCtx.drawImage(soft, 0, 0, tw, th);
+      img = sampleCtx.getImageData(0, 0, tw, th);
+    }
+    let sum = 0, max = 0, n = 0;
+    for (let i = 0; i < img.data.length; i += 4) {
+      const l = (img.data[i] + img.data[i + 1] + img.data[i + 2]) / 3;
+      if (l > max) max = l;
+      sum += l; n++;
+    }
+    return { mean: n ? sum / n : 0, max, n, tw, th };
+  }
+
   function pushFrameState(lines, glx) {
     // The BACKEND says whether it soft-presents, not the DOM: WGX blits onto
     // #game itself (its GPU canvas is offscreen), so "no #game-soft" read as
@@ -140,19 +177,13 @@ const GfxDebug = (() => {
         const ctx = soft.getContext("2d");
         if (!ctx) throw new Error("no 2D context");
         if (soft.id === "game") lines.push("frame: soft-present onto #game (CPU readback + putImageData every frame)");
-        const img = ctx.getImageData(0, 0, soft.width, soft.height);
-        let sum = 0, max = 0, n = 0;
-        for (let i = 0; i < img.data.length; i += 4) {
-          const l = (img.data[i] + img.data[i + 1] + img.data[i + 2]) / 3;
-          if (l > max) max = l;
-          sum += l; n++;
-        }
+        const s = sampleSoftLuma(soft, ctx);
         // max === 0 is ambiguous: an all-zero blit canvas is EITHER a black
         // frame or no blit yet (the soft path only paints when asked). Reporting
         // "black" for the second case cost this project a round
-        lines.push(max === 0
+        lines.push(s.max === 0
           ? "frame(soft): nothing blitted yet (not the same as black)"
-          : `frame(soft) mean=${n ? (sum / n).toFixed(1) : "?"} max=${max.toFixed(0)}`);
+          : `frame(soft) mean=${s.mean.toFixed(1)} max=${s.max.toFixed(0)}`);
       } catch (_) { lines.push("frame(soft) unreadable"); }
     }
     if (glx.softPresentState) {

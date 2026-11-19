@@ -68,7 +68,7 @@ const REKEYED = [
   ["portimao", 2, 0.820, 0.870],
   ["sochi", 1, 0.520, 0.565],
   ["sochi", 2, 0.790, 0.835],
-  ["kyalami", 2, 0.105, 0.150],        // Crowthorne (reverse circuit: authored in the source frame)
+  ["kyalami", 2, 0.894, 0.940],        // T16 Ingwe (source-frame zone; the same narrowing as before the 2026-11-18 direction flip)
   ["watkins_glen", 0, 0.070, 0.115],   // Turn 1 / the 90
   ["watkins_glen", 2, 0.880, 0.925],   // the Anvil
 ];

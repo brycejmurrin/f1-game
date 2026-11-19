@@ -124,15 +124,18 @@ cannot be known from the repo: compare the operator's deployment
   the encoding alone. There is no plaintext compatibility path.
 - Any method other than GET/POST/OPTIONS is answered 405 in the outer Worker,
   before the rate limiter and before a Durable Object is named.
-- The Worker applies a defense-in-depth fixed-window limit before allocating a
-  Durable Object (20 writes and 180 reads per IP per minute). The counters live
-  in one isolate's memory: Cloudflare runs many isolates, each with its own
-  counters, so the real per-IP ceiling is that times the isolates reached. Even
-  a single isolate admits 200 requests/minute per IP (288,000/day), above the
-  100,000 Durable Object requests/day of the Free plan, so the limiter does not
-  keep one determined client inside the free quota. It stops casual bulk room
-  creation only; an operator who needs a real boundary adds a Cloudflare WAF
-  rate-limiting rule (account-wide) in front of the Worker.
+- The Worker applies a defense-in-depth fixed-window limit on every GET/POST
+  before path matching and before allocating a Durable Object (20 writes and
+  180 reads per IP per minute). Junk and legacy paths therefore share the same
+  budget as valid rooms; OPTIONS and other methods stay outside the limiter.
+  The counters live in one isolate's memory: Cloudflare runs many isolates,
+  each with its own counters, so the real per-IP ceiling is that times the
+  isolates reached. Even a single isolate admits 200 requests/minute per IP
+  (288,000/day), above the 100,000 Durable Object requests/day of the Free
+  plan, so the limiter does not keep one determined client inside the free
+  quota. It stops casual bulk room creation and path probing only; an operator
+  who needs a real boundary adds a Cloudflare WAF rate-limiting rule
+  (account-wide) in front of the Worker.
 
 ## If you never deploy it
 

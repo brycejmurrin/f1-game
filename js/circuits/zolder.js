@@ -1,5 +1,5 @@
 /* Apex 26 — ZOLDER circuit definition (data only). Retired circuit (`classic: true`).
-   Belgian GP 1973-1984. Pine heath in Limburg; Gilles Villeneuve was killed here in qualifying in 1982.
+   Belgian GP 1973, 1975-1982 and 1984 (not 1974 or 1983). Pine heath in Limburg; Gilles Villeneuve was killed here in qualifying in 1982.
    LAYOUT: this trace is the MODERN (2002-present, ~4.01 km) circuit with its
    chicanes, not the ~4.26 km layout the Belgian GP used 1975-1984, which no
    longer exists on the ground (docs/tracks/zolder.md, geometry caveat).
