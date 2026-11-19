@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { absSrc } from '../helpers/abs-src.mjs';
 const code = fs.readFileSync(new URL('../../js/ui/experience.js', import.meta.url), 'utf8');
 const ctx = vm.createContext({}); vm.runInContext(code + ';globalThis.api=UiExperience;', ctx);
 test('Home solo practice stays in sync with the coach and does not offer goals requiring rivals', () => {
@@ -189,6 +190,48 @@ test('narrow resize does not stopHome/beginHome; debounced settle only calls gfx
   timers[0].fn();
   assert.equal(resizes, 1, 'settle calls gfx.resize once');
   assert.equal(begins, 1);
+});
+
+test('stopHome cancels a pending Home resize so settle cannot fire mid-race', () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  let resizes = 0, owned = false;
+  const timers = [];
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { owned = true; return true; },
+    endHome() { owned = false; }, homeState: () => owned ? {} : null, renderHome: () => true,
+  };
+  const listeners = {};
+  // 1-based ids (browsers never return 0): stopHome's `if (resizeTimer)` treats 0 as idle.
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1280, innerHeight: 720,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener(type, fn) { (listeners[type] || (listeners[type] = [])).push(fn); },
+    setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) timers[id - 1].fn = null; },
+    Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local,
+    { filename: absSrc('js/race/race-insights.js') });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+  const gfx = { resize() { resizes++; } };
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false, gfx }, { setupCam, trackReady: () => true });
+  ui.renderHome(1 / 60);
+  sandbox.innerWidth = 500; sandbox.innerHeight = 900;
+  listeners.resize.forEach((fn) => fn());
+  assert.equal(timers.length, 1);
+  assert.ok(timers[0].fn, 'resize debounce armed');
+  ui.stopHome();
+  assert.equal(timers[0].fn, null, 'stopHome clearTimeouts the pending settle');
+  assert.equal(resizes, 0, 'no gfx.resize after leaving Home');
+  // Viewport churn while racing must not arm a new Home settle.
+  sandbox.innerWidth = 900; sandbox.innerHeight = 500;
+  listeners.resize.forEach((fn) => fn());
+  assert.ok(timers.every((t) => !t.fn), 'inactive Home ignores resize');
 });
 
 test('previewScene skips software GL and downscales capture edges', async () => {

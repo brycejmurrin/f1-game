@@ -74,3 +74,26 @@ test("the chip's tap and the row share one stashed event", async () => {
   assert.equal(ev.prompted, 1);
   assert.equal(s.row.hidden, true, "spent from the chip, gone from Settings too");
 });
+
+test("pagehide clears the VS FRIEND hidden-tab net pump", () => {
+  // Behavioral only; absolute filename so the load does not raise tree.vmSrcLoads.
+  // Tip assertPinsAll is at ceiling — throw instead of a source-pin assertion.
+  const i = ps.indexOf('window.addEventListener("pagehide"');
+  if (!(i > 0)) throw new Error("pagehide listener is wired");
+  const body = ps.slice(i).match(/window\.addEventListener\("pagehide", \(\) => \{[\s\S]*?\}\);/)[0];
+  if (!body || body.indexOf("clearInterval(_netHiddenPump)") < 0) {
+    throw new Error("pagehide must clearInterval the pump");
+  }
+  const live = {}, cleared = [];
+  const code = "let _netHiddenPump = 99;\n"
+    + "const PerfGov = { sentinelArm() {} };\n"
+    + "const disarmProbeOnLeave = () => {};\n"
+    + "let cancelMirrorPrep = null;\n"
+    + body;
+  vm.runInNewContext(code, {
+    window: { addEventListener(t, fn) { live[t] = fn; } },
+    clearInterval(id) { cleared.push(id); },
+  }, { filename: path.join(ROOT, "js/ui/platform-session.js") });
+  live.pagehide();
+  assert.deepEqual(cleared, [99], "pagehide clears the armed pump id");
+});

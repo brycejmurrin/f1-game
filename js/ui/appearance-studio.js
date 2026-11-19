@@ -329,6 +329,9 @@ const AppearanceStudio = (function () {
           photoGeneration++; photoPanelVisible = false; ui.photoBox.removeAttribute("aria-busy");
           openGen++;
           panel.removeAttribute("aria-busy");
+          // Drop a pending input/store debounce so render()/sceneChanged() cannot
+          // run after Appearance (or Settings) has closed.
+          clearTimeout(pending); pending = 0;
           if (typeof ScreenLooks !== "undefined") ScreenLooks.endPeek();
           return;
         }
