@@ -648,6 +648,7 @@ const TrackLine = (function () {
     const ln = track.line;
     if (!ln) { _out.x = 0; _out.w = 0; return _out; }
     const n = track.n, L = track.total;
+    if (!(n > 0) || !(L > 0) || !isFinite(s)) { _out.x = 0; _out.w = 0; return _out; }
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);

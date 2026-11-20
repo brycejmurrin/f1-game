@@ -67,11 +67,17 @@ function normalize(raw) {
   const def = fresh();
   const c = raw && typeof raw === "object" ? raw : {};
   const ids = knownIds(c.trackIds);
+  const trackIds = ids.length ? ids : def.trackIds;
+  const sprint = c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false;
+  // sprintIds is a SET over the calendar: calendar order, no id that left the
+  // calendar, none outside "rounds" mode — else a no-op SPRINT→GP→SPRINT toggle
+  // (or a ✕ then re-add) reads as a changed setup and arms "SEASON IS LOST".
+  const marked = sprint === "rounds" ? knownIds(c.sprintIds) : [];
   return {
-    trackIds: ids.length ? ids : def.trackIds,
+    trackIds,
     quali: c.quali !== false,
-    sprint: c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false,
-    sprintIds: knownIds(c.sprintIds),
+    sprint,
+    sprintIds: trackIds.filter((id) => marked.indexOf(id) >= 0),
     laps: LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : def.laps,
     points: c.points === "classic" ? "classic" : "modern",
     flPoint: c.flPoint === true,

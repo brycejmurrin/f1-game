@@ -309,7 +309,7 @@ test("setup comparison uses saved rules, not mutable preferences, and compares e
   S.save(season);
   const saved = season.config;
   for (const change of [{ trackIds: [...saved.trackIds].reverse() }, { quali: false }, { sprint: true },
-    { sprintIds: ["monza"] }, { laps: 10 }, { points: "classic" }, { flPoint: true }, { drop: 2 }]) {
+    { sprint: "rounds", sprintIds: ["monza"] }, { laps: 10 }, { points: "classic" }, { flPoint: true }, { drop: 2 }]) {
     assert.equal(S.matchesConfig(season, { ...saved, ...change }), false, JSON.stringify(change));
   }
   S.setConfig({ ...saved, laps: 10 });
@@ -1269,4 +1269,27 @@ test("a save from before #5877 (no `you`) adopts the current seat without moving
   assert.equal(season.you, "redbull:0");
   const again = S.resume(JSON.parse(JSON.stringify(season)));
   assert.equal(again.you, "redbull:0", "the seat survives a save round trip");
+});
+
+test("hunt #5694 B1: sprintIds is a set over the calendar — order, stale ids and mode do not change the setup", () => {
+  const { S, tracks } = load();
+  const ids = tracks.SEASON.map((t) => t.id);
+  const [a, b, c] = [ids[1], ids[3], ids[5]];
+  const base = { ...S.config(), trackIds: ids, sprint: "rounds" };
+  const n = S.normalize({ ...base, sprintIds: [c, a, "nowhere", b] });
+  assert.deepEqual([...n.sprintIds], [a, b, c], "calendar order, unknown id dropped");
+  assert.deepEqual([...S.normalize({ ...base, trackIds: [a, c], sprintIds: [b, c] }).sprintIds], [c],
+    "an id no longer in the calendar is dropped");
+  assert.deepEqual([...S.normalize({ ...base, sprint: false, sprintIds: [a] }).sprintIds], []);
+  assert.deepEqual([...S.normalize({ ...base, sprint: true, sprintIds: [a] }).sprintIds], []);
+  S.engage("season");
+  S.setConfig({ ...base, sprintIds: [a, b] });
+  const season = S.restart();
+  S.save(season);
+  assert.equal(S.matchesConfig(season, { ...base, sprintIds: [b, a] }), true, "SPRINT→GP→SPRINT reorder is a no-op");
+  assert.equal(S.matchesConfig(season, { ...base, sprintIds: [a] }), false, "dropping a sprint round is a change");
+  S.setConfig({ ...base, sprint: false, sprintIds: [] });
+  const off = S.restart();
+  S.save(off);
+  assert.equal(S.matchesConfig(off, { ...base, sprint: false, sprintIds: [a] }), true, "a stale id with sprints off is a no-op");
 });
