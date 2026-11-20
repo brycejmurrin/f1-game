@@ -149,6 +149,19 @@ body:has(> main#overlay) {
   font: 600 var(--fs-2)/1.2 var(--font-ui);
   cursor: pointer;
 }
+/* TITLE: #overlay zooms its children by UI SIZE (css/title.css), which painted
+   this entry 25 px tall at 50 % and pulled its inset inside the notch, and the
+   phone's landscape menu column (PHONE_WIDE) covered it with CAREER (852x393:
+   entry 694..811 x 6..36 under CAREER 391..787 x 15..61). Unzoomed, inside the
+   safe box, and in landscape at the foot of the wordmark's column, over the art. */
+#overlay > #title-arrange-entry { zoom: 1; top: var(--safe-t); inset-inline-end: var(--safe-r); }
+:where(body[data-shape="wide"]) #overlay > #title-arrange-entry {
+  top: auto; bottom: var(--safe-b);
+  inset-inline-end: auto; inset-inline-start: var(--safe-l);
+}
+:root[data-title-side="swap"] :where(body[data-shape="wide"]) #overlay > #title-arrange-entry {
+  inset-inline-start: auto; inset-inline-end: var(--safe-r);
+}
 /* On a short phone Pause reserves every row for the race controls; the
    existing responsive layout removes this entire header there. The same
    editor opens from the Pause page in Appearance on every screen size. */
