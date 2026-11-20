@@ -7575,6 +7575,7 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/onboard.test.mjs",
@@ -7726,7 +7727,8 @@
         "tests/unit/boot-input-shape.test.mjs"
       ],
       "initRainDrops": [
-        "tests/unit/light-presets.test.mjs"
+        "tests/unit/light-presets.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "introBuild": [
         "tests/unit/flyby-intro.test.mjs",
@@ -7925,6 +7927,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/mirror-pass-carbuild.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
@@ -7959,6 +7962,9 @@
       ],
       "seedPlayerPose": [
         "tests/unit/car-fields-vm.test.mjs"
+      ],
+      "setLightTune": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "setPaused": [
         "tests/specs/ui-button-touch.spec.js",
@@ -8070,6 +8076,7 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -8128,6 +8135,7 @@
         "tests/unit/engineer.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/net-authority.test.mjs",
@@ -8173,6 +8181,7 @@
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
         "tests/unit/agent-output.test.mjs",
+        "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/boost-press-census.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
@@ -8191,6 +8200,7 @@
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/game-ctx-closed.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
@@ -20001,6 +20011,7 @@
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/ctx-lost-notice.test.mjs",
+        "tests/unit/game-ctx-closed.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",

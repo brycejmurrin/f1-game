@@ -489,6 +489,7 @@
     "tests/unit/frozen-globals.test.mjs",
     "tests/unit/frustum-buckets.test.mjs",
     "tests/unit/gallery-capture-draws.test.mjs",
+    "tests/unit/game-ctx-closed.test.mjs",
     "tests/unit/game-ctx-surface.test.mjs",
     "// Expensive game-systems CLIs (ai-pace/field/line/human, player-dyn,",
     "// physics-tune-sweep, career-economy) must answer --help without booting",
