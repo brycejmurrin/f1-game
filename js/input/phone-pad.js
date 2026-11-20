@@ -283,7 +283,15 @@ const PhonePad = (function () {
     box.appendChild(card);
     box.addEventListener("cancel", (e) => { if (e && e.preventDefault) e.preventDefault(); });
     doc.body.appendChild(box);
-    try { if (typeof box.showModal === "function") box.showModal(); } catch (e) { /* not connected: the fixed card still covers */ }
+    // RAISED AGAIN after a tick: asking() pauses a solo race first, and js/ui/modal.js shows the
+    // pause menu modal from a MutationObserver, i.e. AFTER this call, over the card. Re-opening a
+    // modal dialog puts it back on top (the clean-room audit's fix 62 found the same order).
+    const raise = () => {
+      if (done || typeof box.showModal !== "function") return;
+      try { if (box.open) box.close(); box.showModal(); } catch (e) { /* not connected: the fixed card still covers */ }
+    };
+    raise();
+    if (typeof setTimeout === "function") setTimeout(raise, 0);
     return { result, dismiss: () => finish(false) };
   }
 

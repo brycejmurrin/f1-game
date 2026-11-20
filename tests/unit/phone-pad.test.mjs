@@ -2607,11 +2607,16 @@ test("ALLOW card opens in the TOP LAYER, over an open modal Settings, and Escape
   assert.equal(topLayer.at(-1), box, "shown modal AFTER Settings: it is on top of it, not under it");
   let prevented = 0; box.fire("cancel", { preventDefault() { prevented++; } });
   assert.equal(prevented, 1, "Escape is not an answer");
+  // modal.js shows a dialog from a MutationObserver: the pause menu that asking() opened lands AFTER the card.
+  const pause = mk("dialog"); pause.id = "pausemenu"; doc.body.appendChild(pause); pause.showModal();
+  assert.equal(topLayer.at(-1), pause, "(the late pause menu is over the card for a moment)");
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(topLayer.at(-1), box, "a tick later the card is raised back over it");
   const allow = box.kids[0].kids[2].kids[0];
   let settled = null; ask.result.then((v) => { settled = v; });
   allow.click({ isTrusted: true }); await settle();
   assert.equal(settled, true);
-  assert.equal(box.open, false); assert.deepEqual(topLayer, [settings], "ALLOW takes the card out of the top layer; Settings stays");
+  assert.equal(box.open, false); assert.deepEqual(topLayer, [settings, pause], "ALLOW takes the card out of the top layer; the screens under it stay");
 });
 
 test("the phone's surface follows the game's screen from the first frame it is admitted: no dead wheel, menu pad in menus, wheel in a race", async () => {
