@@ -1,70 +1,26 @@
-/* Apex 26 — SettingsExport: SETTINGS › SAVES & DATA,
-   which carries a player's state OUT of the browser and back IN. THREE files,
-   deliberately separate:
-
-     SETTINGS  preferences, tuners and control bindings — how you like the game
-               to behave. CHANGED lists only what differs from the shipped
-               default, each with the default it replaced and the source file
-               that owns it, so "make my settings the defaults" is a list of
-               edits rather than a hunt; ALL lists every key's effective value.
-     GARAGE    parts, liveries, setup sheets and an invented team — what you
-               BUILT. A new phone wants the first file; a friend wants the
-               second.
-     CAREER    the six save slots (driver.0..2, myteam.0..2) and the live
-               slot pointer — what a long championship is. Mounted from the
-               CAREER MODES screen the way GARAGE injects its row, so shell
-               node count does not grow.
-
-   Loading any one overwrites what is stored and reloads the page, so the
-   button asks twice. SETTINGS may carry time-trial leaderboards in an optional
-   `ttlb` section (merged on import, never overwriting blindly). GARAGE and
-   SETTINGS still never carry career or season saves, ghosts, replays, or anything
-   account-shaped, in either direction.
-
-   SPEC below is the allowlist — every player-facing preference, tuner and
-   control binding under the `apex26.` prefix, grouped the way SETTINGS is.
-   Nothing else is ever read: the garage (parts, liveries, setup sheets, MY
-   TEAM), saves (career, season, ghosts, replays, daily bests), accounts
-   and network (Spotify tokens, TURN credentials, relays) and the renderer's
-   self-healing latches stay out by construction, and the unit test asserts
-   that a poisoned store leaks none of them. Two lanes, like the store: `json`
-   values went through store.set (JSON), `raw` values are the bare strings the
-   settings panels keep with store.rawSet ("1"/"0", ids).
-   SettingsExport.create(G) is wired from js/game.js; `collect(mode)` is the
-   pure half (__apex.settingsFile). Consumes GameStore, GameAudio,
-   GfxQuality, Input when present. */
+/* SAVES & DATA exports three independently importable files.
+   SETTINGS carries preferences, tuners and bindings. CHANGED records the
+   previous default and its source. ALL includes every effective value.
+   Optional time-trial leaderboards merge on import.
+   GARAGE carries parts, liveries, setups and the invented team.
+   CAREER carries six driver/My Team slots and the current slot pointer.
+   Each import confirms twice before replacing local state and reloading.
+   The SPEC allowlist excludes saves, accounts, network credentials and
+   renderer recovery flags from SETTINGS. GameStore persists json rows
+   via set and raw strings via rawSet. */
 const SettingsExport = (function () {
   "use strict";
 
 const FORMAT = "apex26-settings-v1";
 
-// One row per preference: k = key after the prefix, lane, group, def = the
-// shipped default (a function when it depends on the device or another
-// module), src = where that default lives, changed = an override for keys
-// whose stored form is not comparable to the default by value (the binding
-// tables save a full map even when it is the default one), info = carried in
-// ALL for context but never counted as a change.
-//
-// subsystem = THIS KEY IS NOT A PREFERENCE. A player may set it, and it still
-// must not become a SHIPPED default from someone's export, because what it
-// switches is a whole system rather than a taste: the driving model, the career
-// economy, race control. The string is the reason, and it is read by
-// tools/gen/settings-defaults.mjs, which refuses such a key unless it is named
-// with --include, and by tests/unit/settings-defaults.test.mjs, which fails if
-// one reaches js/data/settings-defaults.js anyway.
-//
-// It lives HERE, on the row, and not in a list inside the tool, because the
-// tool's list was mine and the next person has to remember it exists. Three
-// keys were learned the hard way in one sitting — steering (the physics
-// baseline went red), unlimitedBudget (caught before it shipped), caution (CI
-// went red and the release train never fired) — and each time the question was
-// asked at the wrong moment. Asked at the ROW, it is asked when the key is
-// added.
-//
-// perDevice = the value belongs to the device: an UNSET key exports as null (collect), and a file
-// saved on the other kind of device (file.device.desktop) never writes it (applySettings, #5005).
-// deviceBound = the renderer pins (backend, forced GL, XR backend): only that second half of perDevice.
-// noImport = exported for context, never written back by LOAD SETTINGS (#5032).
+// k is the unprefixed key. def is a value or a device/module-dependent
+// function. src names its owner. changed compares records such as binding
+// maps. info carries context in ALL and never counts as a change.
+// subsystem explains why an export cannot silently set a global gameplay
+// default. The defaults generator needs an explicit --include for these rows.
+// perDevice exports an unset key as null and prevents cross-device import.
+// deviceBound only prevents cross-device import (renderer/backend pins).
+// noImport exports context without restoring it.
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
   { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
@@ -109,9 +65,9 @@ const SPEC = [
   { k: "cbCues", lane: "json", group: "a11y", def: "off", src: "js/ui/a11y-opts.js COLOURBLIND CUES", oneOf: ["off", "on"] },
   { k: "holdMode", lane: "json", group: "a11y", def: { throttle: "hold", lookBack: "hold" }, src: "js/ui/a11y-opts.js GAS / LOOK BACK hold mode" },
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
-  { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
+  { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | medium | soft | off)", oneOf: ["full", "medium", "soft", "off"] },
   { k: "titleButtonStyle", lane: "json", group: "appearance", def: "auto", src: "js/ui/title-fx.js BUTTON STYLE", oneOf: ["auto", "racing", "flat"] },
-  { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
+  { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | medium | soft | off)", oneOf: ["on", "medium", "soft", "off"] },
   { k: "pauseLayout", lane: "json", group: "appearance", def: "grid", src: "js/ui/pause-opts.js PAUSE MENU › LAYOUT (grid | list | compact | wide | sidebar)", oneOf: ["grid", "list", "compact", "wide", "sidebar"] },
   { k: "pauseSide", lane: "json", group: "appearance", def: "centre", src: "js/ui/pause-opts.js PAUSE MENU › SIDE (centre | left | right)", oneOf: ["centre", "left", "right"] },
   { k: "pauseDim", lane: "json", group: "appearance", def: "full", src: "js/ui/pause-opts.js PAUSE MENU › BACKGROUND (full | soft | off)", oneOf: ["full", "soft", "off"] },
@@ -799,17 +755,8 @@ function garageValue(k, v) {
     // SetupTune clamps each field on read; here only the size is bounded.
     return v && typeof v === "object" && !Array.isArray(v) && JSON.stringify(v).length <= 4096 ? v : undefined;
   }
-  // THE FOUR SINGLES USED TO KEEP WHATEVER SHAPE THEY ARRIVED IN. The liveries
-  // above are shape-checked because "A FILE IS PLAYER INPUT AND THE GARAGE DOES
-  // NOT DEFEND ITSELF" — and these four are read by code that defends itself no
-  // better: `team`/`driver` index Teams.LIST, and `customTeam` is pushed into it
-  // whole (js/career/custom-team.js). `{}` there was a boot-time TypeError.
-  // Rejecting one key still applies the rest of the file, which is the same
-  // bargain the custom-livery array already makes.
-  // A shape-sound team is also rebuilt field by field (Teams.sanitizeCustom:
-  // length caps, control characters, num 0-99, a bounded roster), so what is
-  // WRITTEN is already what the dialog could have saved. custom-team.js runs
-  // the same repair again at load — this is the door, that is the reader.
+  // Team and driver index Teams.LIST. Validate both before storing, and
+  // sanitize a custom team as the editor would. Skip malformed records individually.
   if (k === "customTeam") {
     const ok = v && typeof v === "object" && !Array.isArray(v)
       && Array.isArray(v.drivers) && v.drivers.length > 0;
@@ -871,12 +818,8 @@ function applyGarage(file) {
   if (remappedLiveries) res.remappedLiveries = remappedLiveries;
   return res;
 }
-// RESET TO THE SHIPPED GARAGE. Fresh installs never need this — GameStore.get
-// already answers from GarageDefaults on a miss — but a player who diverged
-// and wants the factory look back does. Clear every garage-shaped key first
-// so extras the shipped file does not name (an invented team, a one-off
-// setup.*) cannot linger, then apply GarageDefaults.file() through the same
-// loader a hand-picked export uses. Career / season / settings stay out.
+// Clear all garage keys, including custom teams and setups absent from the
+// shipped garage, then import GarageDefaults.file(). Keep other saves intact.
 function resetGarage() {
   if (typeof GarageDefaults === "undefined" || !GarageDefaults.file) {
     return { ok: false, reason: "no shipped garage defaults", applied: 0, skipped: 0 };
@@ -1047,13 +990,7 @@ function stamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-// Settings backups have their own page; renderer diagnostics stay in DISPLAY.
-//
-// FIVE buttons, two files. Saving is one tap. LOADING IS TWO: it overwrites
-// what is already stored and then reloads the page, which is not something a
-// mis-tap should do, so the first tap arms and says so and the second commits.
-// The arm clears itself after ARM_MS, and arming either loader disarms the
-// other.
+// Each loader requires two taps. Arming one disarms the other and expires after ARM_MS.
 const ARM_MS = 4000;
 // The live UI half, set by create(). js/garage/setup-sheet.js reaches the
 // garage row through the module rather than through the G façade: the row is
@@ -1153,10 +1090,7 @@ function create(G) {
         // Storage refused some writes: a reload would drop them, so say so and stay.
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
         if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
-        // A reload is the honest way to apply this: half these values are read
-        // once at boot (the backend pick, the grid, every tuner's first
-        // paint), so re-reading them without one would leave the page showing
-        // a mix of old and new.
+        // Apply settings read only at boot, including the renderer and grid.
         b.textContent = `${label} — ${r.applied} APPLIED${r.skipped ? `, ${r.skipped} SKIPPED` : ""}${r.droppedLiveries ? `, ${r.droppedLiveries} LIVERIES SKIPPED` : ""}, RELOADING…`;
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
@@ -1326,12 +1260,8 @@ function create(G) {
     if (typeof SaveHealth !== "undefined" && SaveHealth.mount) SaveHealth.mount(host);
   }
 
-  // The contextual garage pair remains in the Garage: a player looking to back up
-  // a livery looks where liveries are. js/garage/setup-sheet.js calls this at
-  // the end of its TEAM tab and appends what comes back. It rebuilds that tab
-  // on every change, so this returns FRESH nodes each call and holds no
-  // singleton — the id-guard mount() uses would leave an empty section behind
-  // the first time the tab was rebuilt.
+  // The garage rebuilds the TEAM tab on every change. Return fresh backup
+  // controls for each render so removing the old tab cannot orphan them.
   function garageRow() {
     if (typeof document === "undefined") return null;
     const wrap = document.createElement("div");

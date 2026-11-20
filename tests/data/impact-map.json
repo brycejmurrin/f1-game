@@ -10443,6 +10443,9 @@
       "refreshLightTunePanel": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
+      "update": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+      ],
       "*": [
         "tests/specs/lighting-tuner-grade.spec.js",
         "tests/unit/game-flow-5100-vm.test.mjs"
@@ -20043,7 +20046,8 @@
       ],
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/audio-panel-settings-ui.test.mjs"
+        "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ],
       "step": [
         "tests/specs/quali.spec.js",
@@ -20068,6 +20072,7 @@
         "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ]
     },
@@ -20351,9 +20356,6 @@
       ]
     },
     "js/ui/title-fx.js": {
-      "artMode": [
-        "tests/unit/title-fx.test.mjs"
-      ],
       "choice": [
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/title-fx.test.mjs"
@@ -20381,9 +20383,6 @@
         "tests/unit/title-fx.test.mjs"
       ],
       "setWash": [
-        "tests/unit/title-fx.test.mjs"
-      ],
-      "washMode": [
         "tests/unit/title-fx.test.mjs"
       ],
       "*": [

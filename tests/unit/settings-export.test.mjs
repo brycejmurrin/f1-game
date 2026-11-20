@@ -1241,6 +1241,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   // Store non-default values so CHANGES includes them (shipped: normal / standard contrast).
   const { SettingsExport, collect } = boot({ disk: {
     "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("high"),
+    "apex26.titleArt": JSON.stringify("medium"), "apex26.menuWash": JSON.stringify("medium"),
     "apex26.speedUnits": JSON.stringify("mph"), "apex26.ldCard": JSON.stringify({ scale: 1.2, x: 4, y: -3 }),
     "apex26.flybyShots": JSON.stringify([{ id: "a" }]),
   } });
@@ -1256,6 +1257,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const res = b.loadSettings(f);
   assert.equal(res.ok, true);
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
+  for (const key of ["titleArt", "menuWash"]) assert.equal(JSON.parse(b.disk.get("apex26." + key)), "medium");
 });
 
 test("caption settings keys are in SPEC and round-trip", () => {

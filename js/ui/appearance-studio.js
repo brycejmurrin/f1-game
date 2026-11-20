@@ -9,7 +9,7 @@ const AppearanceStudio = (function () {
     uiTheme: ["dark", "light", "system"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
     hudAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"], textSize: ["normal", "large", "larger"],
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["auto", "reduce", "off"],
-    titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"], titleButtonStyle: ["auto", "racing", "flat"],
+    titleIntro: ["full", "quick", "off"], menuWash: ["full", "medium", "soft", "off"], titleArt: ["on", "medium", "soft", "off"], titleButtonStyle: ["auto", "racing", "flat"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
     hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
     hudMapVis: ["auto", "on", "off"], hudGapsVis: ["auto", "on", "off"], hudMirror: ["auto", "on", "off"],
@@ -74,7 +74,7 @@ const AppearanceStudio = (function () {
   let photoRows = [], photoGeneration = 0, photoPanelVisible = false;
   function say(message) { if (ui) ui.status.textContent = message; }
   function invoke(name, ...args) { try { if (typeof hooks[name] === "function") return hooks[name](...args); } catch (e) { Log.warn("ui", "Appearance " + name + ": " + e.message); say("Your appearance is saved; the scene preview could not refresh. Try another scene."); } }
-  function scene() { const mode = store.get("homeScene", DEFAULTS.homeScene), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : DEFAULTS.homeScene, motion: motion === "ambient" ? "ambient" : "still" }; }
+  function scene() { const mode = store.get("homeScene", "static"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : DEFAULTS.homeScene, motion: motion === "ambient" ? "ambient" : "still" }; }
   function homeCamera() { const value = store.get("homeCamera", "side"); return ENUMS.homeCamera.includes(value) ? value : "side"; }
   function setHomeCamera(value) { const next = snapshot(); next.homeCamera = value; return applySnapshot(next); }
   function effectiveSceneMotion() {

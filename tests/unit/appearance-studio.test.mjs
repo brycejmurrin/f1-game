@@ -173,6 +173,17 @@ test("Colour Vision profiles, reset and Undo update the actual owner, palette an
   studio.undo(); assertMode("tritan");
 });
 
+test("a Home profile restores medium drawing and wash strengths", () => {
+  const { studio, values } = load({ titleArt: "medium", menuWash: "medium" });
+  studio.saveProfile("Medium");
+  studio.reset("screen");
+  assert.equal(values.titleArt, "on");
+  assert.equal(values.menuWash, "full");
+  studio.loadProfile("profile-1", "screen");
+  assert.equal(values.titleArt, "medium");
+  assert.equal(values.menuWash, "medium");
+});
+
 test("title button style follows Home profiles and undo across a screen reset", () => {
   const { studio, values } = load({ titleButtonStyle: "flat" });
   studio.saveProfile("Flat");

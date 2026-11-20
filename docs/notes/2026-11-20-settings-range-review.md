@@ -40,7 +40,7 @@ These counts come from the literal entries in the settings export allowlist. One
 
 ## Endpoint decisions
 
-Keep the lighting endpoints and stored precision. All shipped lighting profiles round-trip on the existing grid. For controls with thousands of positions, test dragging and fine adjustments on a physical phone before changing their steps. If a desired value is difficult to land on, pair the slider with a precise numeric entry or step buttons. Narrowing the range would remove values authors can select today.
+Lighting Tuner and Photo Studio pair each slider with a numeric field using the same minimum, maximum and step. Drag for a visual adjustment or type a known value for repeatable framing and lighting. The main tuner saves the committed edit to the active lighting profile. Photo Studio applies it only to the current photo session. All shipped lighting profiles retain their original range and precision.
 
 Keep the HUD and driving ranges device- and mode-aware. The owner’s 143.25% driving-button size is reachable at the current quarter-point step. It interacts with tilt and drag steering, so the title-screen update leaves it as a personal setting. The owner’s graphics, race, audio and camera preferences likewise remain separate from the shipped menu appearance.
 

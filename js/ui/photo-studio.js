@@ -279,13 +279,20 @@ function create(G, deps) {
         lab.appendChild(mk("span", { textContent: " (DESKTOP ONLY)" }));
         inp.setAttribute("aria-label", d.label + " (desktop only)");
       }
-      inp.addEventListener("input", () => {
-        if (st.busy || st.closing || !lightSess.active) return;
-        if (!ltWrite(d.id, parseFloat(inp.value))) return;
-        out.textContent = fmtPsTune(d, LightTune.LT[d.id]);
+      const read = () => LightTune.LT[d.id];
+      const write = (value) => {
+        if (inp.disabled || st.busy || st.closing || !lightSess.active || !ltWrite(d.id, value)) return;
+        const applied = read();
+        inp.value = String(applied);
+        exact.value = String(applied);
+        out.textContent = fmtPsTune(d, applied);
         paintLtReset();
-      });
-      const item = mk("div", { className: "adv-item" }, [mk("label", { className: "tune-row" }, [lab, inp])]);
+      };
+      const exact = SettingRow.numberInput(inp, read, write);
+      exact.id = "ps-lt-num-" + d.id;
+      E[exact.id] = exact;
+      inp.addEventListener("input", () => write(parseFloat(inp.value)));
+      const item = mk("div", { className: "adv-item" }, [mk("label", { className: "tune-row" }, [lab, inp]), exact]);
       if (d.help) item.appendChild(mk("p", { className: "adv-help", textContent: d.help }));
       wrap.appendChild(item);
     }
@@ -313,8 +320,10 @@ function create(G, deps) {
     for (const d of LightTune.TUNE_DEFS) {
       const inp = E["ps-lt-in-" + d.id] || G.$("ps-lt-in-" + d.id);
       const out = E["ps-lt-v-" + d.id] || G.$("ps-lt-v-" + d.id);
-      if (inp) inp.value = String(LightTune.LT[d.id]);
-      if (out) out.textContent = fmtPsTune(d, LightTune.LT[d.id]);
+      const value = LightTune.LT[d.id];
+      if (inp) inp.value = String(value);
+      E["ps-lt-num-" + d.id].value = String(value);
+      if (out) out.textContent = fmtPsTune(d, value);
     }
     paintLtReset();
   }

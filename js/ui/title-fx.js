@@ -19,8 +19,8 @@ const TitleFx = (function () {
   // UI labels AUTO / ON / OFF; stored tokens auto / reduce / off (reduce = always reduce).
   const MOTION = [["auto", "AUTO"], ["reduce", "ON"], ["off", "OFF"]];
   const INTROS = [["full", "FULL"], ["quick", "QUICK"], ["off", "OFF"]];
-  const WASHES = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
-  const ARTS = [["on", "ON"], ["soft", "SOFT"], ["off", "OFF"]];
+  const WASHES = [["full", "FULL"], ["medium", "MEDIUM"], ["soft", "SOFT"], ["off", "OFF"]];
+  const ARTS = [["on", "ON"], ["medium", "MEDIUM"], ["soft", "SOFT"], ["off", "OFF"]];
   // Hold windows: FULL covers the CSS timeline (~2.5 s); QUICK matches the
   // halved --intro-* / --dur-* tokens under data-title-intro="quick".
   const INTRO_MS = { full: 2800, quick: 1200, off: 0 };
@@ -61,16 +61,9 @@ const TitleFx = (function () {
     if (v === "quick" || v === "off") return v;
     return "full";
   }
-  function washMode() {
-    const v = store.get(KEY_WASH, null);
-    if (v === "soft" || v === "off") return v;
-    return "full";
-  }
-  function artMode() {
-    const v = store.get(KEY_ART, null);
-    if (v === "soft" || v === "off") return v;
-    return "on";
-  }
+  const strength = (v, fallback) => v === "medium" || v === "soft" || v === "off" ? v : fallback;
+  const washMode = () => strength(store.get(KEY_WASH, null), "full");
+  const artMode = () => strength(store.get(KEY_ART, null), "on");
   function normalizeButtonStyle(v) {
     return v === "racing" || v === "flat" ? v : "auto";
   }
@@ -146,7 +139,7 @@ const TitleFx = (function () {
     return introMode();
   }
   function setWash(v) {
-    const next = (v === "soft" || v === "off") ? v : "full";
+    const next = strength(v, "full");
     store.set(KEY_WASH, next);
     applyWash();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-menuwash", washMode());
@@ -154,7 +147,7 @@ const TitleFx = (function () {
     return washMode();
   }
   function setArt(v) {
-    const next = (v === "soft" || v === "off") ? v : "on";
+    const next = strength(v, "on");
     store.set(KEY_ART, next);
     applyArt();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-titleart", artMode());

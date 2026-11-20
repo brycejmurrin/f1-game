@@ -376,10 +376,15 @@ test("editor: keys nudge, size and cycle the pieces; the bar's steps and RESET P
 });
 
 test("phone sliders expose every width step, Auto and the current orientation's reset values", () => {
-  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  let repaint;
+  const short = { matches: true, addEventListener: (_, fn) => { repaint = fn; } };
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => q === "(pointer: coarse)" ? { matches: true } : short };
   const { dom, M, rotate } = boot({}, { viewport });
   const width = dom.byId("pm-tl-btns-width"), size = dom.byId("pm-tl-btns-size");
   assert.deepEqual([size.value, width.value], ["106", "25"]);
+  assert.equal(width.getAttribute("aria-describedby"), "pm-tl-width-help");
+  assert.match(dom.byId("pm-tl-width-help").textContent, /54% to 80%/);
+  assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25");
   width.focus();
   for (const requested of [24, 23, 22, 21, 20, 19, 20, 100]) {
     width.value = String(requested);
@@ -388,14 +393,18 @@ test("phone sliders expose every width step, Auto and the current orientation's 
     const value = requested === 19 ? 0 : requested;
     assert.equal(M.current().btns.width, value);
     assert.equal(width.value, String(requested));
-    assert.equal(width.getAttribute("aria-valuetext"), value ? value + "%" : "AUTO");
+    assert.equal(width.getAttribute("aria-valuetext"), value ? value + " on the column split scale" : "Auto, use automatic width");
   }
   dom.byId("pm-tl-reset-shape").click();
   assert.equal(width.value, "25", "a reset also repaints the focused range");
   rotate("tall");
-  assert.deepEqual([size.value, width.value, width.getAttribute("aria-valuetext")], ["105", width.min, "AUTO"]);
+  assert.deepEqual([size.value, width.value, width.getAttribute("aria-valuetext")], ["105", width.min, "Auto, use automatic width"]);
   rotate("wide");
   assert.equal(width.value, "25");
+  short.matches = false;
+  repaint();
+  assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25%");
+  assert.equal(width.getAttribute("aria-valuetext"), "25 percent of screen width requested");
 });
 
 test("editor width nudges reach the minimum before Auto from an off-step percentage", () => {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-gXTdoyhaqMGSWY5M4cHRSVGst7iXqeCAN0CcRBkJyDI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-eAcDl7N+gjxNH+Ja9I6163KUUjNhhxH664L7AezMDEc=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -578,8 +578,8 @@
     // OFF never. Focus ring: apex26.focusRing ("high" → data-focus). Colourblind
     // cues: apex26.cbCues ("on" → data-cb-cues).
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
-    // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
-    // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
+    // Wash: apex26.menuWash ("full" | "medium" | "soft" | "off"); unset = full.
+    // Title art: apex26.titleArt ("on" | "medium" | "soft" | "off"); unset = on.
     // Pause menu (js/ui/pause-opts.js): apex26.pauseLayout ("list" |
     // "compact" | "wide" | "sidebar"),
     // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
@@ -612,11 +612,11 @@
       if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
-      if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
+      if (mw === "medium" || mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       if (ts === "flat" || ts === "racing") document.documentElement.dataset.titleButtonStyle = ts;
-      if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
+      if (ta === "medium" || ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       var de = document.documentElement.dataset;
@@ -1751,7 +1751,7 @@
                   <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help" id="pm-menuwash-help">The coloured glow behind the main menu. SOFT tones it down; OFF leaves a plain dark background.</p>
+              <p class="adv-help" id="pm-menuwash-help">Choose FULL, MEDIUM or SOFT for the coloured glow behind the main menu. OFF removes it.</p>
               <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
                 <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
                 <div>
@@ -1760,7 +1760,7 @@
                   <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help" id="pm-titleart-help">The car drawing behind the main menu. SOFT fades it; OFF removes it.</p>
+              <p class="adv-help" id="pm-titleart-help">Choose ON, MEDIUM or SOFT for the car drawing behind the main menu. OFF hides the drawing.</p>
               <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
             </div>
           </details>

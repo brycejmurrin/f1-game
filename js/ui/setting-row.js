@@ -226,8 +226,39 @@ window.SettingRow = (function () {
     return { row, label, sel, prev, next };
   }
 
+  // Type a complete value before committing. Number inputs parse local decimal
+  // separators and validate steps against min; signed knobs need a minus key on iOS.
+  function numberInput(range, read, write) {
+    const field = doc().createElement("input");
+    field.type = "number";
+    field.min = range.min; field.max = range.max; field.step = range.step;
+    field.inputMode = Number(range.min) < 0 ? "text" : Number.isInteger(Number(range.step)) ? "numeric" : "decimal";
+    field.disabled = range.disabled;
+    field.dataset.editEscape = "cancel";
+    field.setAttribute("aria-label", range.getAttribute("aria-label") + " exact value");
+    const restore = () => { field.value = String(read()); };
+    const commit = () => {
+      const n = field.valueAsNumber;
+      if (!field.disabled && field.validity.valid && Number.isFinite(n) && n !== read()) write(n);
+      restore();
+    };
+    field.onchange = commit;
+    field.onblur = restore;
+    field.onkeydown = (event) => {
+      if (event.isComposing || (event.key !== "Enter" && event.key !== "Escape")) return;
+      event.preventDefault(); event.stopPropagation();
+      if (event.key === "Enter") {
+        if (!field.reportValidity()) return;
+        commit();
+      } else restore();
+      field.blur();
+    };
+    restore();
+    return field;
+  }
+
   /* [["auto", "AUTO"], …] from a plain value list. */
   const labels = (list) => list.map((v) => [v, S(v).toUpperCase()]);
 
-  return { parts, paint, disable, optionDisabled, value, wire, build, labels };
+  return { parts, paint, disable, optionDisabled, value, wire, build, labels, numberInput };
 })();

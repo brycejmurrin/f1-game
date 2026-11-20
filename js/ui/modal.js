@@ -151,6 +151,7 @@ window.TopModal = (function () {
     // downstream (a door, the pause switch) sees the key again.
     if (e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
     if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.dataset && e.target.dataset.editEscape === "cancel") return;
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
     // A NESTED DIALOG OWNS ITS OWN ESCAPE. The Data Hub's telemetry popup is a

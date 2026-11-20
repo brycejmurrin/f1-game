@@ -10,7 +10,7 @@
    The three pieces are the BUTTONS (#menu-buttons), the TITLE (#menu-brand:
    wordmark, sound toggle, small print) and the CAR DRAWING (#title-car). Each
    moves on X and Y (percent of the screen) and scales (SIZE). The buttons also
-   take a WIDTH (AUTO for the shipped width; on a short landscape screen 20 is
+   take a WIDTH (AUTO for automatic sizing; on a short landscape screen 20 is
    the shipped column and 100 four fifths of the box, elsewhere a share of the screen), a
    LAYOUT (GRID is the shipped 2x2 of play modes; STACK is one door per line;
    ROW puts the play modes side by side) and a SIDE (SWAPPED trades the title's
@@ -66,7 +66,7 @@ const TitleLayout = (function () {
   const num = (v, k) => {
     const [lo, hi] = LIM[k];
     const n = typeof v === "number" && isFinite(v) ? Math.round(v) : DEFAULT.btns[k];   // btns carries every key
-    // WIDTH: 0 is AUTO; anything else is at least 20 % of the screen.
+    // WIDTH: 0 is AUTO; explicit requests start at 20.
     if (k === "width") return n <= 0 ? 0 : Math.max(WIDTH_MIN, Math.min(hi, n));
     return Math.max(lo, Math.min(hi, n));
   };
@@ -388,12 +388,13 @@ const TitleLayout = (function () {
 
   const pctTxt = (k, n) => {
     if (k === "size") return n + "%";
-    if (k === "width") return n ? n + "%" : "AUTO";
+    if (k === "width") return n ? String(n) + (usesWidthSplit() ? "" : "%") : "AUTO";
     if (!n) return "CENTRE";
     if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
     return Math.abs(n) + "% " + (n < 0 ? "up" : "down");
   };
   const NAMES = { size: "SIZE", width: "WIDTH", x: "LEFT / RIGHT", y: "UP / DOWN" };
+  const usesWidthSplit = () => shape() === "wide" && phoneWide();
 
   /** The whole title screen shipped: this layout AND TitleFx's appearance settings
    *  (TitleFx loads first; MOTION is global, so it does not count here). */
@@ -440,16 +441,19 @@ const TitleLayout = (function () {
     function slider(part, k) {
       const id = `pm-tl-${part}-${k}`;
       const out = el("b", { id: id + "-v" });
-      // The first WIDTH tick represents AUTO. Every following tick is a real percentage.
+      // The first WIDTH tick represents AUTO. The others are explicit requests.
       const min = k === "width" ? WIDTH_MIN - 1 : LIM[k][0];
       const inp = el("input", { id, type: "range", min: String(min), max: String(LIM[k][1]), step: "1",
         attrs: { "aria-label": `${part === "btns" ? "Buttons" : part === "title" ? "Title" : "Car drawing"} ${NAMES[k].toLowerCase()}` } });
+      if (k === "width") inp.setAttribute("aria-describedby", "pm-tl-width-help");
       const paint = (layout = current()) => {
         let n = layout[part][k];
         if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, Number(inp.min)); }
         inp.value = String(k === "width" && !n ? min : n);
         out.textContent = pctTxt(k, n);
-        inp.setAttribute("aria-valuetext", out.textContent);
+        inp.setAttribute("aria-valuetext", k !== "width" ? out.textContent
+          : !n ? "Auto, use automatic width"
+          : usesWidthSplit() ? n + " on the column split scale" : n + " percent of screen width requested");
       };
       inp.addEventListener("input", () => {
         const l = current(), n = Number(inp.value);
@@ -466,6 +470,8 @@ const TitleLayout = (function () {
       sliders.push(paint);
       body.appendChild(el("label", { className: "tune-row" }, [
         el("span", { className: "tune-label" }, [el("span", { textContent: NAMES[k] + " " }), out]), inp]));
+      if (k === "width") body.appendChild(el("p", { id: "pm-tl-width-help", className: "adv-help", attrs: { "data-help": "keep" },
+        textContent: "AUTO lets the layout size the menu. On short landscape screens, 20 to 100 widens the menu column from 54% to 80% of the available space. In other layouts, WIDTH requests a share of screen width. The buttons adjust to fit." }));
     }
     const rows = [];   // [row, key] — held, not looked up again by a built id
     function choice(id, label, values, key, help) {
@@ -560,7 +566,9 @@ const TitleLayout = (function () {
   const uiScale = () => {
     try { return parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { return 1; }
   };
-  const phoneWide = () => { try { return !!win().matchMedia && win().matchMedia("(max-height: 519px) and (min-aspect-ratio: 1/1)").matches; } catch (_) { return false; } };
+  const shortLandscape = (() => { try { return win().matchMedia("(max-height: 519px) and (min-aspect-ratio: 1/1)"); } catch (_) { return null; } })();
+  const phoneWide = () => !!(shortLandscape && shortLandscape.matches);
+  if (shortLandscape && shortLandscape.addEventListener) shortLandscape.addEventListener("change", () => { for (const fn of onShape) fn(); });
   /** The fit is holding this piece under its requested SIZE (#5150): the box is full. */
   const fitted = (p) => { const e = p === "art" ? null : byId(p === "btns" ? "menu-buttons" : "menu-brand"); return !!(e && e.style && parseFloat(e.style.getPropertyValue("--tf")) < 1); };
   // MEASURED where it can be: the piece's base zoom is not --ui-scale on every screen
@@ -674,7 +682,7 @@ const TitleLayout = (function () {
     select(keys[(keys.indexOf(ed.sel) + dir + keys.length) % keys.length]);
   }
   /** One step of one number on the selected piece. WIDTH from AUTO starts at
-   *  the width the buttons have now; under 20 % it goes back to AUTO. */
+   *  the width the buttons have now; below 20 it goes back to AUTO. */
   function nudge(k, d) {
     if (!ed.on) return;
     const l = current(), p = l[ed.sel];
@@ -708,7 +716,8 @@ const TitleLayout = (function () {
     if (!E || !ed.on) return;
     const p = current()[ed.sel];
     E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
-      (ed.sel === "btns" ? " · " + (p.width ? p.width + "% WIDE" : "AUTO WIDTH") : "");
+      (ed.sel === "btns" ? " · " + (!p.width ? "AUTO WIDTH"
+        : (usesWidthSplit() ? "WIDTH SETTING " : "WIDTH REQUEST ") + pctTxt("width", p.width)) : "");
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";
     const car = byId("title-car"), r = car ? car.getBoundingClientRect() : null;
     if (r && r.width >= 1 && r.height >= 1) {
