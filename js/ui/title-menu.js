@@ -8,15 +8,15 @@ const TitleMenu = (function () {
     ["menu-garage", "Garage", ["mb-garage"]],
     ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]],
     ["menu-create", "Create", ["mb-photo", "mb-designer"]],
-    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]],
+    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-steerphone", "mb-help"]],
   ];
   const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data"];
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
   // The shell ships the organized end state (index.html, data-destinations):
-  // then this only wires the two settings shortcuts. The build path below stays
-  // for repairDestinations() and for a shell that predates it.
+  // then this only wires the two settings shortcuts. The build path is for
+  // repairDestinations() and an older shell.
   function organize(doc) {
     const menu = doc && doc.getElementById("menu-buttons");
     if (!menu) return;

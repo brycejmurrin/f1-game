@@ -35,7 +35,7 @@ name: GPU census
 #               the 14 d to 2026-10-27), so DISPATCH is the default route. The
 #               relay stays only for the request-only legs (`leg` =
 #               render-live-matrix-2572 or live-frame, with `lf_*` / `lrm_*`).
-#   nightly   — staggered from ci.yml's boot group (ci.yml 04:17 UTC, this
+#   nightly   — staggered from ci.yml's boot group (ci.yml 16:17 UTC, this
 #               05:47; PROCESS-SPEEDUP-2026-09 §4.5), and SKIPPED when nothing
 #               under the renderer paths changed since the last green nightly
 #               (the plan job's `gate` step; an unknown base runs).

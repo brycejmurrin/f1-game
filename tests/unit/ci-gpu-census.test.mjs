@@ -25,9 +25,10 @@ const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_S
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
   // the boot-group nightly. Stagger them (ci.yml 04:17, gpu-census 05:47) and
-  // keep neither on the old 03:17 pin.
-  assert.match(ciWorkflow, /- cron: "17 4 \* \* \*"/,
-    "ci.yml nightly must leave 03:17 (staggered to 04:17 UTC)");
+  // keep neither on the old 03:17 pin. 2026-11-20: the nightly moved to 16:17
+  // so GitHub's ~8 h delay starts it in the quiet hours (CI-CRON-DELAY-2026-11-20).
+  assert.match(ciWorkflow, /- cron: "17 16 \* \* \*"/,
+    "ci.yml nightly must stay staggered from gpu-census (16:17 UTC)");
   assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "47 5 \* \* \*"\s*\n  workflow_dispatch:/m,
     "gpu-census.yml nightly must be staggered (05:47 UTC), not shared with ci.yml");
   assert.doesNotMatch(ciWorkflow, /- cron: "17 3 \* \* \*"/);

@@ -198,16 +198,8 @@ const LightStore = (() => {
       prof[d.id] = v; return true;
     }
 
-    // A rebuild/reapply/reinit is only worth doing once per call, however many
-    // knobs moved — hence the three flags rather than acting inside the loop.
-    //
-    // apply() and set() ran these in DIFFERENT ORDERS before they shared this
-    // function (set() reinitialised the rain before reapplying race settings;
-    // apply() did the reverse). Unifying them is safe because the two branches
-    // are mutually exclusive: the reinitRain knobs are rainCount, rainStreak,
-    // rainSpeed, drizzleCount, drizzleLen and drizzleSpeed, and NONE of them is
-    // in APPLY_RACE_IDS. Checked, not assumed — if a future knob is ever both,
-    // the order becomes load-bearing and this comment is the warning.
+    // Once per call, however many knobs moved. The order of the last two only
+    // matters if a reinitRain knob ever joins APPLY_RACE_IDS (none does).
     function liveEffects(rebuilt, reapply, reinit, fromApplyRace) {
       const track = G.track;
       if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
@@ -216,23 +208,20 @@ const LightStore = (() => {
       if (reinit && (G.viewRainfall ? G.viewRainfall() > 0.01 : G.isWetRoad())) G.initRainDrops();
     }
 
-    // opts.holdRebuild (the weather arc's blended re-apply, js/lighting/atmosphere.js):
-    // leave the `rebuild` knobs (lampDensity, poolEnergy, lampRadiusMul, bleedMul,
-    // beamCone, beamCore, lampGapFill) and the bake inputs at their live values, so a mid-race weather flip never
-    // nulls track._lights and re-bakes the lamp pools. They stay as the session
-    // resolved them (track x time of day x the weather it started in) until the next
-    // un-blended apply: a chip, a slider, a track load.
-    // The lamp-bake inputs are held with them: LampBake.forTrack keys its bake on
-    // (lights, LT.lampNearClamp, budget), and lampBake / tailLightEmit gate it.
+    // opts.holdRebuild (the arc's blended re-apply, atmosphere.js) leaves the
+    // `rebuild` knobs and the bake inputs (LampBake.forTrack keys on lampNearClamp;
+    // lampBake / tailLightEmit gate it) live, so a mid-race flip never nulls
+    // track._lights; opts.heldOnly lands just those at the fade's end (#5990).
     const BAKE_IDS = new Set(["lampNearClamp", "lampBake", "tailLightEmit"]);
     const held = (d) => !!d.rebuild || BAKE_IDS.has(d.id);
     function apply(fromApplyRace, opts) {
       if (Log.enabled("game", Log.DEBUG)) Log.debug("game", "LightStore.apply");
       const k = key();
-      const hold = !!(opts && opts.holdRebuild);
+      const hold = !!(opts && opts.holdRebuild), only = !!(opts && opts.heldOnly);
       let rebuilt = false, reapply = false, reinit = false;
       for (const d of TUNE_DEFS) {
         if (hold && held(d)) continue;
+        if (only && !held(d)) continue;
         const kk = keyFor(d.id, k);
         let v = shippedAt(kk, d);
         if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
@@ -345,14 +334,21 @@ const LightStore = (() => {
     // whatever the weather. Only those ids leave the dry slot on a wet RESET —
     // a dry-weather edit of any other knob is a different condition's edit.
     function sunSlot(k) { const s = keyFor("sunElev", k); return s !== k ? s : null; }
+    // A mask: reset() pins the shipped value where the global "*" layer reaches.
+    const shipVal = (kk, d) => clamp(shippedAt(kk, d), d.min, d.max);
+    function isMask(kk, id) {
+      const g = profiles["*"], p = profiles[kk], d = TUNE_DEFS.find((t) => t.id === id);
+      return !!(g && d && typeof g[id] === "number" && p && p[id] === shipVal(kk, d));
+    }
     function tuned() {
       const k = key();
       if (!k) return 0;
       const s = sunSlot(k), p = s && profiles[s];
       // In the wet, a TOD_KEYED id under the weather's own key is never resolved.
-      const own = Object.keys(profiles[k] || {}).filter((id) => !s || !TOD_KEYED.has(id));
-      return own.length + (p ? [...TOD_KEYED].filter((id) => id in p).length : 0);
+      const own = Object.keys(profiles[k] || {}).filter((id) => (!s || !TOD_KEYED.has(id)) && !isMask(k, id));
+      return own.length + (p ? [...TOD_KEYED].filter((id) => id in p && !isMask(s, id)).length : 0);
     }
+    // RESET keeps the global "*" layer every other condition resolves through (#5990).
     function reset() {
       const k = key();
       if (k) delete profiles[k];
@@ -361,7 +357,13 @@ const LightStore = (() => {
         for (const id of TOD_KEYED) delete profiles[s][id];
         if (!Object.keys(profiles[s]).length) delete profiles[s];
       }
-      delete profiles["*"];
+      const g = profiles["*"];
+      if (!k || !g) return;
+      for (const d of TUNE_DEFS) {
+        if (typeof g[d.id] !== "number") continue;
+        const kk = keyFor(d.id, k), sv = shipVal(kk, d);
+        if (sv !== clamp(g[d.id], d.min, d.max)) (profiles[kk] || (profiles[kk] = {}))[d.id] = sv;
+      }
     }
 
     const api = {

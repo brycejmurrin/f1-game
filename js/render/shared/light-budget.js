@@ -37,6 +37,13 @@ const LightBudget = (function () {
   // The per-cell cap the TLX lamp grid is BAKED at (boot-time: a shed never re-bakes).
   function bakeChunk() { return hiBuilt() ? GfxHi.HI_CHUNK : CHUNK; }
 
-  return { MAX, MOBILE, LITE, CHUNK, MIRROR, TAIL_RESERVE, setSlots, slots, tlxSlots, hiBuilt, bakeChunk };
+  // Most slots (`per` uniform rows each) whose block, `atMax` rows at MAX, fits
+  // the device's `lim`; MAX when it fits or reads 0, never under LITE (#5990).
+  function fitSlots(lim, atMax, per) {
+    lim |= 0;
+    return lim <= 0 || lim >= atMax ? MAX : Math.max(LITE, Math.min(MAX, Math.floor((lim - atMax) / per) + MAX));
+  }
+
+  return { MAX, MOBILE, LITE, CHUNK, MIRROR, TAIL_RESERVE, setSlots, slots, fitSlots, tlxSlots, hiBuilt, bakeChunk };
 })();
 Object.freeze(LightBudget);

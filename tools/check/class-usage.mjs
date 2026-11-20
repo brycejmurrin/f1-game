@@ -54,6 +54,7 @@ export const KNOWN = {
   // for the pedals, `#status.bad` colours a refusal.
   "bad": "controller.html <style> (#status.bad) — the phone page, not css/",
   "linked": "controller.html <style> (body.linked) — the phone page, not css/",
+  "awaiting": "controller.html <style> (body.awaiting: link open, not yet admitted, no controls) — the phone page, not css/",
   "placed": "controller.html <style> (.placed, a control moved by MOVE & SIZE) — the phone page, not css/",
   "picked": "controller.html <style> (body.arranging .picked) — the phone page, not css/",
   "clash": "controller.html <style> (body.arranging .clash, two overlapping controls) — the phone page, not css/",

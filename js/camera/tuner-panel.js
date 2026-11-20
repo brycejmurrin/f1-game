@@ -10,7 +10,7 @@ const { $, els } = G;
 const { CAM_MODES } = CamModes;
 const DEFS = CamTune.defs();
 const COMFORT = CamTune.comfortDefs();
-const FX = typeof CamComfort !== "undefined" && CamComfort.FX_DEFS || [];
+const FX = (typeof CamComfort !== "undefined" && CamComfort.FX_DEFS || []).filter((d) => !d.hidden);
 
 // Scope: per-mode, global baseline, or current track/car overrides.
 let _scope = "mode";   // "mode" | "global" | "track" | "car"
