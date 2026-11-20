@@ -41,6 +41,8 @@ const DailyChallenge = (function () {
   // Apply one valid lap to the supplied save data. Persistence, badges and
   // the active session belong to record(); these rules mutate only d.
   function recordDay(d, day, lapTime, context) {
+    let newest = "";   // newest stored day before this lap (#5943)
+    for (const k of Object.keys(d.days)) if (k !== day && k > newest) newest = k;
     // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
     const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
     const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -60,12 +62,13 @@ const DailyChallenge = (function () {
       d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
       d.streak.last = day;
     }
-    // Write-only history (readers ask for today): a window, not ~680 chars a day for ever.
-    const floor = new Date(day + "T00:00:00Z");
+    // Write-only history: a window, counted from the earlier of day and newest so a clock set back or ahead
+    // deletes no real day (#5943).
+    const floor = new Date((newest && newest < day ? newest : day) + "T00:00:00Z");
     if (Number.isFinite(floor.getTime())) {
       floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
       const cut = floor.toISOString().slice(0, 10);
-      for (const k of Object.keys(d.days)) if (k < cut || k > soon) delete d.days[k];
+      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
     }
     return e;
   }

@@ -1,0 +1,19 @@
+{
+  "files": {
+    "js/agent/agentview.js": {
+      "lines": 4
+    },
+    "js/agent/apex.js": {
+      "codeLines": 1,
+      "lines": 2
+    },
+    "js/game.js": {
+      "codeLines": 1,
+      "gMembers": 1,
+      "lines": 1
+    }
+  },
+  "tree": {
+    "eagerCodeBytes": 166
+  }
+}
