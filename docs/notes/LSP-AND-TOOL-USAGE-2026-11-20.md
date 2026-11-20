@@ -201,16 +201,16 @@ A bulk script also checked every IIFE module:
 
 All are pinned by `tests/unit/lsp-stress-fixes.test.mjs` and `lsp-eval` 16/16.
 
-**Open (ranked by agent value)**
-1. Re-export chains (B13): `refs TrackSpline.curvature` gives 16 of 68 sites, while `refs Tracks.curvature` gives 67.
-2. Duplicated globals (Damage, GameAudio stubs) drop rows, and PitLane members resolve to `session-stub.js`.
-3. A hung tsc is never reset (each call takes the 30 s timeout), and one serial queue holds `ping` behind it.
-4. An untracked new js/ file turns off "new since HEAD" for every file.
-5. TS2554 / TS2349 false positives come from zero-parameter stubs (22 of game.js's 26 diagnostics).
-6. Compact output keeps the head and tail, hiding rows behind a correct-looking paging footer, and never names `output_read`.
-7. Hover ignores the `//` comment blocks this codebase uses for docs.
-8. Multi-line destructures of `G`, three-part names (`PhysicsConsts.DirtyAir.isLevel`), and a `--path` that matches nothing.
-9. Did-you-mean for members and globals, and a hint when a name exists only in tools/ or tests/.
+**Open list (ranked by agent value): all fixed in #5986, pinned by `tests/unit/lsp-stress-fixes.test.mjs`**
+1. Re-export chains (B13): `refs TrackSpline.curvature` gave 16 of 68 sites, while `refs Tracks.curvature` gave 67. Fixed (6916cf28): both answer the same set.
+2. Duplicated globals (`Damage`, `GameAudio`, a real module beside its `session-stub.js` placeholder) dropped the module's own calls, and PitLane members resolved to `session-stub.js`. Fixed: the member closure runs for repeated `var X` IIFEs, real modules sort before `*stub*.js`, and the text path follows shorthand exports. `refs Damage.apply` 3 → 7 (`callers` 4, equal); `def PitLane.zoneOf` now names `pit-geom.js:275` first.
+3. A hung tsc was never reset (each call waited out the 30 s timeout), and one serial queue held `ping` behind it. Fixed: a timeout kills and forgets the server, and only `tools/call` waits in the queue.
+4. An untracked new js/ file turned off "new since HEAD" for every file. Fixed: an added file (untracked or staged) is blanked in the HEAD baseline; a deleted or moved one still skips the subtraction.
+5. TS2554 / TS2349 false positives came from zero-parameter stubs (22 of game.js's 26 diagnostics). Fixed for TS2554: a row whose callee resolves to a trivial zero-parameter placeholder (`() => {}`, a literal, any zero-parameter member of a `*stub*.js`) is hidden and counted. game.js: 26 → 9, 17 hidden. The 5 kept TS2554 rows are real extra arguments (`startRaceBody(current)`, `MenuQuitTail.afterOverlay(forgetGp)` ×2, `uiExperience.trackCamera(dt)`, `SeasonCal.qualiNext(season)`). The 2 TS2349 rows stay.
+6. Compact output kept the head and tail, hid rows behind a correct-looking paging footer, and never named `output_read`. Fixed: the marker says the rows are cut from this page and names `output_read`.
+7. Hover ignored the `//` comment blocks this codebase uses for docs. Fixed: with no JSDoc, hover shows the contiguous `//` block above the declaration and a trailing `// …`.
+8. Multi-line destructures of `G`, three-part names (`PhysicsConsts.DirtyAir.isLevel`), and a `--path` that matches nothing. Fixed: any `G` identifier (the `create(G)` parameter) is the façade head (`refs G.buildSelect` gains js/race/race-settings.js), and a path that names nothing is refused. Three-part names already resolved at 6916cf28.
+9. Did-you-mean for members and globals, and a hint when a name exists only in tools/ or tests/. Fixed: edit distance over js/ names, first letter's case kept, and a `git grep` of tools/ and tests/ for a name js/ never declares.
 
 **Game code the round found (low severity):** extra arguments silently ignored at:
 - `js/physics/wall-clamp.js:194`: `AiDrive.wallAiScrub(!!track.street)` takes no parameter

@@ -129,6 +129,25 @@ const sourceLanguage = file => /\.(?:[cm]?js|[cm]?ts)$/.test(file);
 const objectName = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed ? `${objectName(n.object)}.${objectName(n.property)}` : "";
 const iife = n => n?.type === "CallExpression" && ["FunctionExpression", "ArrowFunctionExpression"].includes(n.callee?.type) ? n.callee : null;
 
+// B9 (2026-11-20): a typo (`Career.inCarer`, `Carer`) ended at "not found" with no way forward. Near names by edit
+// distance (1 edit under 6 characters, else 2), with the first letter's case kept.
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+export function nearNames(name, pool, max = 3) {
+  const limit = name.length >= 6 ? 2 : 1;
+  const upper = ch => ch !== ch.toLowerCase();   // `Carer` means a global: `care` / `career` locals are noise
+  return [...new Set(pool)].filter(c => c !== name && upper(c[0]) === upper(name[0])).map(c => [c, editDistance(name, c)]).filter(([, d]) => d <= limit)
+    .sort((x, y) => x[1] - y[1] || x[0].localeCompare(y[0])).slice(0, max).map(([c]) => c);
+}
+
 function scopePath(value) {
   if (value === undefined) return null;
   if (path.isAbsolute(value) || /^[\\/]/.test(value) || /^[A-Za-z]:/.test(value)) throw Error("path must be repo-relative");
@@ -423,7 +442,14 @@ export class Lsp {
     return new Promise((resolve, reject) => {
       if (!this.proc) return reject(Error("tsc --lsp is not running"));
       const id = ++this.seq;
-      const t = setTimeout(() => { this.pending.delete(id); reject(Error(`${method} timed out after ${this.timeout} ms`)); }, this.timeout);
+      // A tsc that misses one request is hung (B3, 2026-11-20: every later call waited out the same 30 s). Kill it,
+      // so the next call starts a fresh server instead of queueing behind the stuck one.
+      const proc = this.proc;
+      const t = setTimeout(() => {
+        this.pending.delete(id);
+        if (this.proc === proc) { this.kill(); this.reset(); }
+        reject(Error(`${method} timed out after ${this.timeout} ms; tsc --lsp was restarted, so retry the call`));
+      }, this.timeout);
       this.pending.set(id, m => { clearTimeout(t); m.error ? reject(Error(m.error.message)) : resolve(m.result); });
       try { this.send({ jsonrpc: "2.0", id, method, params }); } catch (e) { clearTimeout(t); this.pending.delete(id); reject(e); }
     });
@@ -865,6 +891,7 @@ export class Lsp {
     if (!/\.(c|m)?js$/.test(f)) throw Error(`lsp_diagnostics checks JavaScript (.js/.mjs/.cjs); ${f} is not one`);
     const diagnosticProc = this.proc, generation = this.generation;
     let failed = false;
+    this.stubHidden = 0;
     const ambient = fs.existsSync(path.join(this.root, "types")) ? fs.readdirSync(path.join(this.root, "types")).filter(x => x.endsWith(".d.ts")).map(x => fs.readFileSync(path.join(this.root, "types", x), "utf8")).join("\n") : "";
     const check = async text => {
       const v = this.ensureOpen(f) + 1, lines = text.split("\n");
@@ -879,17 +906,19 @@ export class Lsp {
         if (d.code === 2451 && name && new RegExp(`declare\\s+(const|let|var|function)\\s+${name}\\b`).test(ambient)) return false;   // the .d.ts contract re-declares it
         return true;
       }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: `TS${d.code}`, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+      const kept = await this.withoutStubArity(f, text, ts);
       // APX rows add what the checker cannot see; one the checker already flags at that spot (TS2551) is noise.
-      const at = new Set(ts.map(d => `${d.line0}:${d.col0}`));
-      return ts.concat(this.memberDiagnostics(text).filter(d => !at.has(`${d.line0}:${d.col0}`)));
+      const at = new Set(kept.map(d => `${d.line0}:${d.col0}`));
+      return kept.concat(this.memberDiagnostics(text).filter(d => !at.has(`${d.line0}:${d.col0}`)));
     };
     try {
       const now = await check(fs.readFileSync(path.join(this.root, f), "utf8"));
+      const hiddenNow = this.stubHidden;   // the HEAD check below counts its own; report the working tree's
       let head = null;
       try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch {  }
       const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  ${d.code} ${d.msg}`;
-      if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
-      let dependenciesChanged = true, changedOthers = [];
+      if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}${this.stubNote(hiddenNow)}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      let dependenciesChanged = true, changedOthers = [], added = new Set();
       try {
         // --no-renames reports both ends as ordinary paths, including a
         // dependency moved out of src/. Unlike status -z, no second record
@@ -906,21 +935,25 @@ export class Lsp {
         // Other edited JavaScript sources still allow one: the per-file overlay says which
         // diagnostics this file's own edits added, and names the other files.
         changedOthers = changed.filter(other => other && other !== f && /\.(?:[cm]?js)$/.test(other) && other.startsWith(`${this.src}/`));
-        // Only MODIFIED sources can be put back to HEAD in the overlay; an added, deleted or moved one cannot.
-        const tracked = new Set(gitPaths(["ls-files", "-z", "--", this.src]));
-        const overlayable = changedOthers.length <= 40 && changedOthers.every(other => tracked.has(other) && fs.existsSync(path.join(this.root, other)));
+        // A MODIFIED source is put back to its HEAD text in the overlay, and an ADDED one (untracked or staged, absent at
+        // HEAD) to an empty text, which declares nothing, as at HEAD. A deleted or moved one cannot be put back: tsc no
+        // longer has it open. B4, 2026-11-20: one untracked js/ file switched the subtraction off for every file.
+        const atHead = new Set(gitPaths(["ls-tree", "-r", "--name-only", "-z", "HEAD", "--", this.src]));
+        changedOthers = changedOthers.filter(other => atHead.has(other) || fs.existsSync(path.join(this.root, other)));
+        const overlayable = changedOthers.length <= 40 && changedOthers.every(other => fs.existsSync(path.join(this.root, other)));
+        added = new Set(changedOthers.filter(other => !atHead.has(other)));
         const baselineChanged = externalConfig || (changedOthers.length && !overlayable) || changed.some(other => other !== f && (
           (/\.ts$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/"))) ||
           configs.has(path.resolve(this.root, other))
         ));
         dependenciesChanged = baselineChanged ? true : changedOthers.length ? "sources" : false;
       } catch { /* no trustworthy baseline */ }
-      if (dependenciesChanged === true) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, package config or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      if (dependenciesChanged === true) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, package config or declaration dependencies differ from HEAD${this.stubNote(hiddenNow)}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
       // Edited sibling sources: put each back to its HEAD text for the baseline, so a dependency's edit
       // (a new required parameter) still shows as new here, and this file's own edits are not hidden.
       const restored = [];
       if (dependenciesChanged === "sources") for (const other of changedOthers) {
-        const old = execFileSync("git", ["show", `HEAD:${other}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString();
+        const old = added.has(other) ? "" : execFileSync("git", ["show", `HEAD:${other}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString();
         const v = this.ensureOpen(other) + 1;
         this.open.set(other, v); restored.push(other);
         this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(other), version: v }, contentChanges: [{ text: old }] });
@@ -938,7 +971,7 @@ export class Lsp {
       for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
       const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
       const others = restored.length ? `; baseline with ${restored.length} other edited file${restored.length === 1 ? "" : "s"} at HEAD (${restored.slice(0, 4).join(", ")}${restored.length > 4 ? ", …" : ""})` : "";
-      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden${others}; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax + missing module/instance members)\n${fresh.map(fmt).join("\n")}`.trim();
+      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden${others}${this.stubNote(hiddenNow)}; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax + missing module/instance members)\n${fresh.map(fmt).join("\n")}`.trim();
     } catch (error) { failed = true; throw error; }
     finally {
       // Never close an old overlay in a replacement server or mask its failure.
@@ -949,6 +982,57 @@ export class Lsp {
       }
     }
   }
+  // B5 (2026-11-20): 22 of game.js's 26 diagnostics were TS2554 "Expected 0 arguments" against a placeholder the
+  // checker typed first (`reportLap: () => {}`, a session-stub.js `create() {}`), never the module that replaces it.
+  // A row whose callee resolves to such a zero-parameter stub is hidden and counted. `text` is the file WITHOUT the
+  // `// @ts-check` line, which the open document has, so tsc positions are one line lower.
+  async withoutStubArity(f, text, rows) {
+    const arity = rows.filter(d => d.code === "TS2554" && /^Expected 0 arguments/.test(d.msg));
+    if (!arity.length) return rows;
+    let ast;
+    try { ast = parse(text, { ecmaVersion: "latest", sourceType: "script", loc: true }); } catch { return rows; }
+    const calls = [];
+    visit(ast, n => { if (n.type === "CallExpression" || n.type === "NewExpression") calls.push(n); });
+    const inside = (n, d) => (n.loc.start.line - 1 < d.line0 || (n.loc.start.line - 1 === d.line0 && n.loc.start.column <= d.col0)) &&
+      (n.loc.end.line - 1 > d.line0 || (n.loc.end.line - 1 === d.line0 && n.loc.end.column >= d.col0));
+    // A placeholder: no parameters and a trivial body (empty, or a literal). `function qualiNext() { return quali(); }`
+    // is real code, and an argument passed to it is a finding, not noise.
+    const LIT = String.raw`(?:false|true|null|undefined|0|""|''|\[\]|\{\s*\})`;
+    const STUB = new RegExp(String.raw`^\s*(?:async\s+)?[\w$]+\s*(?::\s*(?:async\s*)?(?:\(\s*\)\s*=>\s*(?:\{\s*(?:return\s+${LIT}\s*;?\s*)?\}|${LIT})|function\s*\(\s*\)\s*\{\s*(?:return\s+${LIT}\s*;?\s*)?\})|\(\s*\)\s*\{\s*(?:return\s+${LIT}\s*;?\s*)?\})\s*(?:[,;}]|$)`);
+    const hide = new Set();
+    for (const d of arity) {
+      // The innermost call whose arguments hold the reported position names the callee.
+      const call = calls.filter(c => c.arguments.some(a => inside(a, d))).sort((x, y) => (y.loc.start.line - x.loc.start.line) || (y.loc.start.column - x.loc.start.column))[0];
+      const callee = call && (call.callee.type === "MemberExpression" && !call.callee.computed ? call.callee.property : call.callee.type === "Identifier" ? call.callee : null);
+      if (!callee) continue;
+      let defs;
+      try { defs = await this.rawRequest("textDocument/definition", { textDocument: { uri: this.uriOf(f) }, position: { line: callee.loc.start.line, character: callee.loc.start.column } }); } catch { continue; }
+      const stub = (Array.isArray(defs) ? defs : defs ? [defs] : []).some(loc => {
+        const uri = loc.targetUri || loc.uri, r = loc.targetSelectionRange || loc.range;
+        let rel, lineText;
+        try { rel = this.rel(uri); } catch { return false; }
+        if (rel === f) lineText = text.split("\n")[r.start.line - 1];
+        else try { lineText = this.textOf(rel).lines[r.start.line]; } catch { return false; }
+        if (lineText == null) return false;
+        const at = lineText.slice(r.start.character);
+        // A *stub*.js file (js/race/session-stub.js) is a placeholder by design: any zero-parameter member there is one.
+        return STUB.test(at) || (/(?:^|\/)[\w.-]*stub[\w.-]*\.js$/.test(rel) && /^\s*(?:async\s+)?[\w$]+\s*(?::\s*(?:async\s*)?(?:function\s*)?\(\s*\)|\(\s*\))/.test(at));
+      });
+      if (stub) hide.add(d);
+    }
+    this.stubHidden = (this.stubHidden || 0) + hide.size;
+    return rows.filter(d => !hide.has(d));
+  }
+  lineComments(file, line0, max = 12) {
+    let lines;
+    try { lines = this.textOf(file).lines; } catch { return ""; }
+    const out = [];
+    for (let i = line0 - 1; i >= 0 && out.length < max && /^\s*\/\/(?!\s*(?:eslint|@ts-|#region|#endregion))/.test(lines[i]); i--) out.unshift(lines[i].trim().replace(/^\/\/\s?/, ""));
+    const trailing = /\/\/\s?(.+)$/.exec((lines[line0] || "").replace(/(["'`])(?:\\.|(?!\1).)*\1/g, ""))?.[1];
+    if (trailing) out.push(trailing.trim());
+    return out.join("\n").trim();
+  }
+  stubNote(n) { return n ? `; ${n} TS2554 against a zero-parameter stub hidden` : ""; }
   // Counted from the END of a call, so a slow first query (project load) is never cut off.
   armIdle() {
     clearTimeout(this.idle);
@@ -1004,7 +1088,7 @@ export class Lsp {
         const amb = this.ambientDecl(name);
         if (amb) return { cands: [amb], parts, top: [amb] };
         const near = (await this.symbols(name)).filter(s => s.name.toLowerCase() === name.toLowerCase() && !s.containerName && [5, 12, 13, 14].includes(s.kind)).slice(0, 3);
-        throw Error(`symbol not found: ${name}${near.length ? `; did you mean ${near.map(s => `${s.name} (${this.rel(s.location.uri)}:${s.location.range.start.line + 1})`).join(", ")}?` : " (try lsp_symbols for a prefix)"}`);
+        throw Error(`symbol not found: ${name}${near.length ? `; did you mean ${near.map(s => `${s.name} (${this.rel(s.location.uri)}:${s.location.range.start.line + 1})`).join(", ")}?` : ` (try lsp_symbols for a prefix)${this.didYouMean(name, this.globalNames()) || this.elsewhere(name)}`}`);
       }
       // tsgo lists `window.X = X` (a self re-export of the script declaration) as a second top-level symbol: one
       // module read as "2 separate top-level declarations" and its outline came back empty (ApexGpuCapture).
@@ -1166,6 +1250,28 @@ export class Lsp {
     if (declarations.length < 2 || !declarations.some(d => d.iife)) return all ? [] : null;
     return all ? declarations : declarations[0];
   }
+  // Did-you-mean pools, from the js/ text the server already caches.
+  memberNamesOf(h) {
+    const re = new RegExp(`(?<![\\w$.])${h.replace(/[.$]/g, "\\$&")}\\.([A-Za-z_$][\\w$]*)`, "g"), out = new Set();
+    for (const f of this.mtimes.keys()) for (const m of this.textOf(f).text.matchAll(re)) out.add(m[1]);
+    return out;
+  }
+  globalNames() {
+    const out = new Set();
+    for (const f of this.mtimes.keys()) for (const m of this.textOf(f).text.matchAll(/^\s*(?:(?:const|let|var|(?:async\s+)?function\*?|class)\s+([A-Za-z_$][\w$]*)|(?:window|globalThis)\.([A-Za-z_$][\w$]*)\s*=)/gm)) out.add(m[1] || m[2]);
+    return out;
+  }
+  // A name the js/ project never declares may live in tools/ or tests/, outside what the checker loads.
+  elsewhere(name) {
+    try {
+      const hits = execFileSync("git", ["grep", "-l", "-w", "-I", "-e", name, "--", "tools", "tests"], { cwd: this.root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 }).split("\n").filter(Boolean);
+      return hits.length ? `; ${name} appears outside ${this.src}/ in ${hits.slice(0, 3).join(", ")}${hits.length > 3 ? `, +${hits.length - 3}` : ""} (apex-lsp covers ${this.src}/ only: grep those)` : "";
+    } catch { return ""; }
+  }
+  didYouMean(name, pool) {
+    const near = nearNames(name, pool);
+    return near.length ? `; did you mean ${near.join(" / ")}?` : "";
+  }
   async textFallback(parts, method, head, extra = {}) {
     const [h, member] = [parts.slice(0, -1).join("."), parts.at(-1)];
     const d = this.windowDecl(h) || this.repeatedIifeDecl(h);
@@ -1174,9 +1280,9 @@ export class Lsp {
       // hit is not the one the caller means. Say so, and point at the position form that names the right one.
       const local = /^[a-z_]/.test(h) && !this.windowDecl(h);
       const used = [...this.mtimes.keys()].some(f => this.textOf(f).text.includes(`${h}.${member}`));
-      throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; ${local ? `${h} looks like a local, and the symbol search picked the first file declaring one; ${used ? "" : `no ${h}.${member} text in ${this.src}/; `}ask by position instead (lsp_definition file+line of a ${h}.${member} use, or of ${member}'s declaration), or ` : ""}try lsp_hover ${h} or lsp_symbols ${member}`);
+      throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; ${local ? `${h} looks like a local, and the symbol search picked the first file declaring one; ${used ? "" : `no ${h}.${member} text in ${this.src}/; `}ask by position instead (lsp_definition file+line of a ${h}.${member} use, or of ${member}'s declaration), or ` : ""}try lsp_hover ${h} or lsp_symbols ${member}${this.didYouMean(member, this.memberNamesOf(h)).replace(/did you mean /, `did you mean ${h}.`).replace(/ \/ /g, ` / ${h}.`)}`);
     }
-    if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
+    if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares${this.didYouMean(h, this.globalNames()) || this.elsewhere(h)}`);
     // Read the actual assignment/initializer and its exported object. A later
     // object or an internal helper is never evidence of a member on this owner.
     const defs = []; let uncertain = false;
@@ -1220,6 +1326,16 @@ export class Lsp {
       }
     }
     if (!defs.length) throw Error(`${d.kind === "window" ? `window.${h}` : h} (${d.file}:${d.line0 + 1}) has no member ${member}`);
+    // B2 (2026-11-20): a placeholder global (js/race/session-stub.js `var PitLane = { zoneOf: () => null }`) came first
+    // and was reported as THE declaration, and the real module's shorthand export was never followed to its function
+    // (`PitLane.zoneOf` stopped at the stub; the position query reached PitGeom.zoneOf). Real modules first, then hop.
+    const stubFile = uri => /(?:^|\/)[\w.-]*stub[\w.-]*\.js$/.test(this.rel(uri));
+    defs.sort((x, y) => stubFile(x.uri) - stubFile(y.uri));
+    if (method === "textDocument/definition") {
+      const before = defs.length;
+      await this.followExports(defs);
+      for (const x of defs.slice(before)) if (x.targetUri && !x.uri) { x.uri = x.targetUri; x.range = x.targetSelectionRange || x.targetRange; }
+    }
     const qualifications = [];
     if (owners.length > 1 || defs.length > 1) qualifications.push("multiple assignments/member contributions; candidates shown; runtime load order may determine the winner");
     if (uncertain) qualifications.push("a spread or dynamic source participates in overwrite order; candidates shown in source order");
@@ -1418,7 +1534,9 @@ export class Lsp {
           n.id.loc.start.line - 1 !== (owner.idLine0 ?? owner.line0) || n.id.loc.start.column !== (owner.idCol0 ?? n.id.loc.start.column)) return;
         lexicalOwner = this.lexicalRefs(f).get(n.id.range[0]) || null;
       });
-      const validHead = n => ["cjs", "script"].includes(fallbackOwner?.kind)
+      // The G façade is a `create(G)` PARAMETER in every module, never a global: `const {\n buildSelect, … } = G` in
+      // js/race/race-settings.js was dropped from refs and callers G.buildSelect (B8, 2026-11-20).
+      const validHead = n => this.facadeOf(head) ? n?.type === "Identifier" && n.name === head : ["cjs", "script"].includes(fallbackOwner?.kind)
         ? owner
           ? !!lexicalOwner && n?.type === "Identifier" && this.lexicalRefs(f).get(n.range[0]) === lexicalOwner
           : this.isGlobalHead(f, n, head)
@@ -1548,7 +1666,9 @@ export class Lsp {
   async locRows(locs, { limit = MAX_ROWS, offset = 0, declFirst = false, where = false, concise = false, render = true } = {}) {
     const list = (Array.isArray(locs) ? locs : locs ? [locs] : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l);
     // A definition through an IIFE's `return { …, name, … }` is the export, not the body: list the declaration first.
-    if (declFirst) list.sort((a, b) => this.rank(a) - this.rank(b));
+    // Within a tag, a placeholder (a *stub*.js file) after the real module: the first [def] names the declaration (B2).
+    const stub = l => /(?:^|\/)[\w.-]*stub[\w.-]*\.js$/.test(this.rel(l.uri)) ? 1 : 0;
+    if (declFirst) list.sort((a, b) => this.rank(a) - this.rank(b) || stub(a) - stub(b));
     else list.sort((a, b) => a.uri.localeCompare(b.uri) || a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character);
     const page = render ? list.slice(offset, offset + limit) : [];
     // Pipeline enclosing-function lookups: outlineOf caches per file, but the
@@ -1619,6 +1739,8 @@ export async function callTool(lsp, name, a = {}) {
     if (a.file && a.line == null && !["lsp_diagnostics", "lsp_outline"].includes(name)) throw Error("file needs line");
     if (name === "lsp_outline" && !a.file === !a.symbol) throw Error("lsp_outline takes symbol or file (one of them)");
     const scope = scopePath(a.path);
+    // B8: a mistyped path (`js/phyics`) filtered every row away and answered "0 references", which reads as dead code.
+    if (scope && !fs.existsSync(path.join(lsp.root, scope))) throw Error(`path matches nothing: no file or directory ${scope} in the workspace`);
     const offset = a.offset || 0, limit = a.limit || MAX_ROWS;
     const more = (total, shown) => total > offset + shown ? `\n… ${total - offset - shown} more (offset: ${offset + shown}${a.files === undefined && name === "lsp_references" ? ", or files: true for per-file counts" : ""})` : "";
     let text;
@@ -1646,17 +1768,24 @@ export async function callTool(lsp, name, a = {}) {
       let { p, result, note } = await lsp.at(a, "textDocument/hover");
       const bodyOf = r => { const c = r?.contents; return typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x.value || x).join("\n") : c?.value; };
       const docless = b => !b || !b.replace(/```[\s\S]*?```/g, "").trim();
-      let body = bodyOf(result);
+      let body = bodyOf(result), declAt = p && lsp.tag(p.file, p.line0, p.col0) === "def" ? { file: p.file, line0: p.line0 } : null;
       // A use site (or the export shorthand it resolves to) carries no JSDoc: one hop to the [def] and hover there.
       if (p && docless(body)) {
         const defs = [].concat((await lsp.request("textDocument/definition", { textDocument: { uri: lsp.uriOf(p.file) }, position: { line: p.line0, character: p.col0 } }).catch(() => null)) || []);
         await lsp.followExports(defs);
         const d = defs.map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l).find(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "def");
         if (d) {
+          declAt = { file: lsp.rel(d.uri), line0: d.range.start.line };
           lsp.ensureOpen(lsp.rel(d.uri));
           const there = bodyOf(await lsp.request("textDocument/hover", { textDocument: { uri: d.uri }, position: d.range.start }).catch(() => null));
           if (!docless(there)) { body = there; note = [note, `docs from ${lsp.rel(d.uri)}:${d.range.start.line + 1}`].filter(Boolean).join("; "); }
         }
+      }
+      // B7 (2026-11-20): this codebase documents with `//` blocks, which tsc's hover never shows. With no JSDoc, read the
+      // contiguous `//` lines right above the declaration (and a trailing `// …` on it).
+      if (declAt && docless(body)) {
+        const comments = lsp.lineComments(declAt.file, declAt.line0);
+        if (comments) { body = `${body ? `${body}\n` : ""}${comments}`; note = [note, `// comments at ${declAt.file}:${declAt.line0 + 1}`].filter(Boolean).join("; "); }
       }
       text = `${body || "(no type information)"}${p ? `\nat ${lsp.row(p.file, p.line0, p.col0)}` : ""}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
     } else {
@@ -1747,7 +1876,9 @@ export async function callTool(lsp, name, a = {}) {
         let resolved = result;
         // The closure runs over the WHOLE answer, then the scope filters it: a member reached only through another
         // module's re-export still counts inside the scope.
-        if (!isDef && Array.isArray(resolved) && !(at.note && /text match/.test(at.note))) {
+        // A repeated `var X` IIFE global (a real module beside its session-stub.js placeholder) is a text match on the
+        // head only: its def rows are real code, and their own-file calls were dropped without the closure (B2).
+        if (!isDef && Array.isArray(resolved) && !(at.note && /text match/.test(at.note) && !/repeated top-level var/.test(at.note))) {
           const more = await lsp.memberClosure(resolved, { seed: a.symbol && p ? p : null, includeDeclaration: a.includeDeclaration !== false });
           if (more.length) resolved = [...resolved, ...more];
         }
@@ -1846,8 +1977,11 @@ export async function serve() {
     if (!line.trim()) continue;
     let msg;
     try { msg = JSON.parse(line); } catch { process.stdout.write(JSON.stringify(rpcError(null, -32700, "Invalid JSON")) + "\n"); continue; }
-    chain = chain.then(() => handleRpc(lsp, msg)).then(r => { if (r) process.stdout.write(JSON.stringify(staleNote(r)) + "\n"); })
-      .catch(e => process.stderr.write(`apex-lsp: ${e.message}\n`));
+    const write = r => { if (r) process.stdout.write(JSON.stringify(staleNote(r)) + "\n"); };
+    const fail = e => process.stderr.write(`apex-lsp: ${e.message}\n`);
+    // Only tools/call talks to tsc; ping, initialize and tools/list never wait behind a slow query (B3).
+    if (msg?.method !== "tools/call") { handleRpc(lsp, msg).then(write).catch(fail); continue; }
+    chain = chain.then(() => handleRpc(lsp, msg)).then(write).catch(fail);
   }
   await chain; lsp.stop();
 }

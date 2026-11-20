@@ -1,14 +1,16 @@
 // apex-lsp fixes from the 2026-11-20 stress test (four subagents over js/, docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md):
 // an argument is a use (not an export shorthand), a numeric literal declares, refs follow destructures like callers,
 // a symbol query's callers include the declaring file's own calls, a file-wrapping IIFE is no caller frame, a
-// window.X = X self-alias is not a second declaration, and a stale server says so.
+// window.X = X self-alias is not a second declaration, and a stale server says so. Round 3 (B2-B9): a hung tsc
+// restarts, an added file keeps the HEAD baseline, stub arity is hidden, hover reads // blocks, G destructures count,
+// an empty path is refused, typos get a did-you-mean, and a stub global never hides its real module.
 import "../helpers/git-fixture-env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Lsp, callTool, classify, staleNote } from "../../tools/mcp/lsp-mcp.mjs";
+import { Lsp, callTool, classify, nearNames, staleNote } from "../../tools/mcp/lsp-mcp.mjs";
 
 test("classify: a call argument is a use, a numeric literal declares, a member read aliases", () => {
   const tag = (line, word) => classify(line, line.indexOf(word));
@@ -113,4 +115,229 @@ globalThis.keep2 = { edge };
   assert.deepEqual(callersNext.slice(1), callersHome.slice(1), callersNext.join("\n"));
   const scoped = await q("lsp_callers", { symbol: "Tracks.curv", path: "src/tracks.js" });
   assert.equal(scoped[1], "src/tracks.js:4  Tracks › bend (via curv)  ×1", scoped.join("\n"));
+}));
+
+// B3: a fake tsc that answers initialize, then never answers anything else (a hung server).
+const HUNG_TSC = `#!/usr/bin/env node
+let buf = "";
+process.stdin.on("data", d => {
+  buf += d;
+  for (let h; (h = buf.indexOf("\\r\\n\\r\\n")) >= 0;) {
+    const len = +/Content-Length: (\\d+)/i.exec(buf.slice(0, h))[1];
+    if (buf.length < h + 4 + len) return;
+    const m = JSON.parse(buf.slice(h + 4, h + 4 + len)); buf = buf.slice(h + 4 + len);
+    if (m.method === "initialize") { const s = JSON.stringify({ jsonrpc: "2.0", id: m.id, result: { capabilities: {} } }); process.stdout.write("Content-Length: " + Buffer.byteLength(s) + "\\r\\n\\r\\n" + s); }
+  }
+});
+`;
+function hungFixture() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-hung-"));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(path.join(dir, "src/a.js"), "const Alpha = { ping() { return 1; } };\n");
+  fs.writeFileSync(path.join(dir, "jsconfig.json"), "{}");
+  fs.writeFileSync(path.join(dir, "fake-tsc"), HUNG_TSC, { mode: 0o755 });
+  return dir;
+}
+
+test("a timed-out request restarts tsc instead of leaving every later call behind the hung one (B3)", { timeout: 30000 }, async () => {
+  const dir = hungFixture();
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", cmd: path.join(dir, "fake-tsc"), timeout: 400, idleMs: 0 });
+  try {
+    await lsp.start();
+    const hung = lsp.proc;
+    await assert.rejects(lsp.request("textDocument/hover", { textDocument: { uri: lsp.uriOf("src/a.js") }, position: { line: 0, character: 6 } }),
+      /timed out after 400 ms; tsc --lsp was restarted/);
+    assert.equal(lsp.proc, null, "the hung server is forgotten");
+    assert.ok(hung.killed || hung.exitCode !== null || hung.signalCode !== null, "and killed");
+    await lsp.start();
+    assert.notEqual(lsp.proc, hung, "the next call gets a fresh server");
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("serve: ping answers while a tools/call waits on a hung tsc (B3)", { timeout: 30000 }, async () => {
+  const { spawn } = await import("node:child_process");
+  const dir = hungFixture();
+  const srv = spawn(process.execPath, [path.resolve("tools/mcp/lsp-mcp.mjs"), "serve"], { env: { ...process.env, APEX_LSP_TSC: path.join(dir, "fake-tsc") }, stdio: ["pipe", "pipe", "ignore"] });
+  try {
+    const seen = [];
+    const got = new Promise(resolve => {
+      let buf = "";
+      srv.stdout.on("data", d => { buf += d; for (let i; (i = buf.indexOf("\n")) >= 0; buf = buf.slice(i + 1)) { seen.push(JSON.parse(buf.slice(0, i)).id); if (seen.includes(2)) resolve(); } });
+    });
+    srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "lsp_hover", arguments: { symbol: "Alpha.ping" } } }) + "\n");
+    srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "ping" }) + "\n");
+    await got;
+    assert.deepEqual(seen, [2], "ping came back first, before the tools/call that waits on tsc");
+  } finally { srv.kill(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an untracked or staged new js file keeps the HEAD subtraction for other files (B4)", { timeout: 60000 }, async () => {
+  const { execFileSync } = await import("node:child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-b4-"));
+  const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "ignore" });
+  w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
+  w("src/a.js", "const Alpha = { ping() { return 1; } };\n");
+  w("src/b.js", "const old = Alpha.ping(1);\n");
+  git("init", "-q"); git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const diag = async () => { const r = await callTool(lsp, "lsp_diagnostics", { file: "src/b.js" }); assert.equal(r.isError, false, r.content[0].text); return r.content[0].text; };
+  try {
+    w("src/b.js", "const old = Alpha.ping(1);\nconst fresh = Alpha.ping(2);\n");
+    w("src/new.js", "const Added = { yes: 1 };\n");
+    const untracked = await diag();
+    const [head, ...rows] = untracked.split("\n");
+    assert.equal(head.split("; all:")[0], "1 new since HEAD in src/b.js (1 pre-existing hidden; baseline with 1 other edited file at HEAD (src/new.js)", untracked);
+    assert.deepEqual(rows, ["src/b.js:2:26  TS2554 Expected 0 arguments, but got 1."], untracked);
+    git("add", "src/new.js");
+    assert.equal((await diag()).split(" (")[0], "1 new since HEAD in src/b.js", "a staged new file is absent at HEAD too");
+    // A deleted dependency still cannot be put back: no trustworthy baseline.
+    fs.unlinkSync(path.join(dir, "src/a.js"));
+    assert.equal((await diag()).split(":")[0], "2 high-signal diagnostics in src/b.js (HEAD subtraction skipped");
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("nearNames: one edit for short names, two from six characters, nearest first (B9)", () => {
+  assert.deepEqual(nearNames("inCarer", ["inCareer", "inCar", "career", "unrelated"]), ["inCareer", "inCar"]);
+  assert.deepEqual(nearNames("Carr", ["Car", "Career", "Cart"]), ["Car", "Cart"]);
+  assert.deepEqual(nearNames("x", ["y", "xyz"]), ["y"]);
+  assert.deepEqual(nearNames("Zzqx", ["GameHud", "Tracks"]), []);
+});
+
+test("a typo gets a did-you-mean; a name only tools/ has says so (B9)", { timeout: 60000 }, () => withFixture({
+  "src/career.js": `"use strict";
+const Career = (function () {
+  function inCareer() { return true; }
+  return { inCareer };
+})();
+if (typeof window !== "undefined") window.Career = Career;
+`,
+  "src/use.js": `"use strict";
+function lap() { return Career.inCareer(); }
+globalThis.keep = { lap };
+`,
+}, async ({ q, dir }) => {
+  const [member] = await q("lsp_definition", { symbol: "Career.inCarer" }, true);
+  assert.equal(member, "Career (src/career.js:2) has no member inCarer the checker can see; try lsp_hover Career or lsp_symbols inCarer; did you mean Career.inCareer?");
+  const [head] = await q("lsp_definition", { symbol: "Carer.inCareer" }, true);
+  assert.equal(head, "symbol not found: Carer is not a global the checker or a window.Carer assignment declares; did you mean Career?");
+  const [bare] = await q("lsp_definition", { symbol: "inCarer" }, true);
+  assert.equal(bare, "symbol not found: inCarer (try lsp_symbols for a prefix); did you mean inCareer?");
+  // A name declared only under the fixture's tools dir (outside the checked src/) points there, once the tree is a git repo.
+  const { execFileSync } = await import("node:child_process");
+  fs.mkdirSync(path.join(dir, "tools"));
+  fs.writeFileSync(path.join(dir, "tools", "gate.mjs"), "export function readyGateRows() { return []; }\n");
+  execFileSync("git", ["init", "-q"], { cwd: dir }); execFileSync("git", ["add", "."], { cwd: dir });
+  const [outside] = await q("lsp_definition", { symbol: "readyGateRows" }, true);
+  const fixtureFile = ["tools", "gate.mjs"].join("/");   // exists only in the fixture, not in the repo
+  assert.equal(outside, `symbol not found: readyGateRows (try lsp_symbols for a prefix); readyGateRows appears outside src/ in ${fixtureFile} (apex-lsp covers src/ only: grep those)`);
+}));
+
+test("diagnostics hide TS2554 against a zero-parameter stub, keep it against real code (B5)", { timeout: 60000 }, () => withFixture({
+  "src/main.js": `"use strict";
+function compute() { return 2; }
+function real() { return compute(); }
+let net = { report: () => {}, owns: () => false };
+function lap() {
+  net.report(1);
+  net.owns(2, 3);
+  real(4);
+  Lights.create(5);
+}
+globalThis.keep = { lap };
+`,
+  "src/session-stub.js": `"use strict";
+var Lights = {
+  create: () => ({ update: function () {}, countCredit: () => 0 }),
+};
+`,
+}, async ({ q }) => {
+  const rows = await q("lsp_diagnostics", { file: "src/main.js", all: true });
+  assert.equal(rows[0], "1 high-signal diagnostic in src/main.js (not tracked at HEAD; 3 TS2554 against a zero-parameter stub hidden; per-file @ts-check)", rows.join("\n"));
+  assert.deepEqual(rows.slice(1).map(r => r.replace(/\s+TS2554.*/, "")), ["src/main.js:8:8"], rows.join("\n"));
+}));
+
+test("hover reads the // comment block above a declaration that has no JSDoc (B7)", { timeout: 60000 }, () => withFixture({
+  "src/mod.js": `"use strict";
+const Mod = (function () {
+  // eslint-disable-next-line no-unused-vars
+  // Hot path: read the baked table,
+  // never recompute it.
+  function curv(t) { return t; }   // metres⁻¹
+  function bare() { return 1; }
+  return { curv, bare };
+})();
+`,
+  "src/use.js": `"use strict";
+function lap() { return Mod.curv(1) + Mod.bare(); }
+globalThis.keep = { lap };
+`,
+}, async ({ q }) => {
+  const doc = (await q("lsp_hover", { symbol: "Mod.curv" })).join("\n");
+  const lines = doc.split("\n");
+  assert.deepEqual(lines.slice(lines.indexOf("Hot path: read the baked table,"), lines.indexOf("metres⁻¹") + 1), ["Hot path: read the baked table,", "never recompute it.", "metres⁻¹"], doc);
+  assert.doesNotMatch(doc, /eslint/);
+  assert.equal(lines.at(-1), "(// comments at src/mod.js:6)", doc);
+  const none = (await q("lsp_hover", { symbol: "Mod.bare" })).join("\n");
+  assert.doesNotMatch(none, /\/\/ comments at/, none);
+}));
+
+test("a global beside its session-stub.js placeholder: real module first, own-file calls kept, exports followed (B2)", { timeout: 60000 }, () => withFixture({
+  "src/geom.js": `"use strict";
+var Geom = (function () {
+  function zoneOf(t) { return t; }
+  return { zoneOf };
+})();
+`,
+  "src/dmg.js": `"use strict";
+var Dmg = (function () {
+  const { zoneOf } = Geom;
+  function apply(r) { return r + 1; }
+  function hit(r) { return apply(r) + apply(zoneOf(r)); }
+  return { apply, hit, zoneOf };
+})();
+`,
+  "src/session-stub.js": `"use strict";
+var Dmg = {
+  apply: () => 0, hit: () => 0, zoneOf: () => null,
+};
+`,
+  "src/use.js": `"use strict";
+function lap() { return Dmg.apply(1); }
+globalThis.keep = { lap };
+`,
+}, async ({ q }) => {
+  const refs = await q("lsp_references", { symbol: "Dmg.apply", files: true });
+  assert.deepEqual(refs.slice(1), ["src/dmg.js 4", "src/session-stub.js 1", "src/use.js 1"], refs.join("\n"));
+  const callers = await q("lsp_callers", { symbol: "Dmg.apply", files: true });
+  assert.deepEqual(callers.slice(1), ["src/dmg.js 2 uses in 1 function", "src/use.js 1 use in 1 function"], callers.join("\n"));
+  const def = await q("lsp_definition", { symbol: "Dmg.zoneOf" });
+  assert.equal(def[1], "src/geom.js:3:12  [def] function zoneOf(t) { return t; }", def.join("\n"));
+  assert.equal(/declared at ([^;]+);/.exec(def[0])?.[1], "src/geom.js:3:12", def[0]);
+}, { anchor: "src/dmg.js" }));
+
+test("a multi-line destructure of the create(G) parameter counts for G.member refs and callers (B8)", { timeout: 60000 }, () => withFixture({
+  "src/settings.js": `"use strict";
+const Settings = (function () {
+  function create(G) {
+    const {
+      store,
+      buildSelect, openGarage,
+    } = G;
+    function wire() { buildSelect(); openGarage("select"); return store; }
+    return { wire };
+  }
+  return { create };
+})();
+`,
+  "src/flow.js": `"use strict";
+function boot(G) { G.buildSelect(); }
+globalThis.keep = { boot };
+`,
+  "types/game-ctx.d.ts": "interface GameCtx {\n  buildSelect(): void;\n  openGarage(from: string): void;\n  store: unknown;\n}\n",
+}, async ({ q }) => {
+  const refs = await q("lsp_references", { symbol: "G.buildSelect", files: true });
+  assert.deepEqual(refs.slice(1).sort(), ["src/flow.js 1", "src/settings.js 2", "types/game-ctx.d.ts 1"], refs.join("\n"));
+  const callers = await q("lsp_callers", { symbol: "G.openGarage", files: true });
+  assert.deepEqual(callers.slice(1), ["src/settings.js 1 use in 1 function"], callers.join("\n"));
 }));
