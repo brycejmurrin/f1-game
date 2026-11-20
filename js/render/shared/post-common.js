@@ -14,7 +14,12 @@ const PostCommon = (function () {
   // grime blobs + dust specks + wipe streaks, LCG-seeded so every load and every
   // backend gets the same lens. Returns the canvas (256x256) or null when there
   // is no document / 2D context (the caller keeps its black 1x1 fallback).
+  // One dirt canvas for the process: LCG seed is fixed, so every backend and
+  // every post-chain rebuild gets the same lens. Rebuilding 256² + noise on
+  // each GLX/TLX/WGX init was pure cold-start churn on software GL.
+  let _dirtCanvas = null;
   function makeDirtCanvas() {
+    if (_dirtCanvas) return _dirtCanvas;
     if (typeof document === "undefined" || !document.createElement) return null;
     const S = 256;
     const cv = document.createElement("canvas");
@@ -65,6 +70,7 @@ const PostCommon = (function () {
       c2.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
       c2.stroke();
     }
+    _dirtCanvas = cv;
     return cv;
   }
 
