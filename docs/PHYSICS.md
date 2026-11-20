@@ -266,7 +266,11 @@ per circuit and the standard ECU refuses to rotate the wings outside one, so
 `AeroZones.create(G).build()` (`js/physics/aero-zones.js`, wired into game.js as
 `aeroZ`) scans each built track for contiguous runs under `X_ZONE_K`
 and keeps those longer than `X_STRAIGHT_T × X_ZONE_VREF` (210 m — the rule's
-three seconds at racing speed). Zones are measured against a FIXED reference
+three seconds at racing speed). On a circuit with an FIA turn-pair table
+(`AERO_ZONE_TURNS`) a zone is instead every such run between the two apexes
+MERGED into one span, so it also covers the curved gaps between them: the
+`X_ZONE_K` bound holds for each run, not for the whole zone (Albert Park
+T8–T9: a bend of r ≈ 92 m inside the zone, #5783 K1). Zones are measured against a FIXED reference
 speed, never the car's, because they are a property of the circuit and the
 OVERALL SPEED slider must not redraw them. A circuit whose longest straight
 misses the minimum gets **no zones and no active aero** — that is MONACO, and
@@ -508,7 +512,7 @@ field, not the gap to the player.
 | mode | behaviour |
 |---|---|
 | `scripted` (default) | No live boost from how far the player is ahead. Fair racing driven by car/driver data — Pure / Black Rock race-scripted intent ([Pure Advantage](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai), [GI: rubber banding](https://www.gamesindustry.biz/rubber-banding-is-not-fair-and-not-fun-black-rock)). |
-| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead (and not a lap clear), AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and once lapped. Melder / Game AI Pro ch.42. |
+| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead by less than half a lap, AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and at half a lap or more behind (`gap < total * 0.5`; not only once lapped). Melder / Game AI Pro ch.42. |
 
 `DIFF.band` magnitudes stay frozen; catch-up reuses them. AI-only benches
 (`ai-pace` / `ai-field` / `ai-line`) have no human, so the band never fires
@@ -852,6 +856,18 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   | easy   | 3.5   | 0.020 → 0.040 (median, n=15)     | ~1.8 → ~3.6 |
   | normal | 1.8   | 0.020 → 0.040 (median, n=5)      | ~1.7 → ~3.3 |
   | hard   | 1.0   | 0.020 → 0.020 (byte-identical run) | ~1.6 → ~1.6 (unchanged) |
+
+  **Re-measured 2026-11-18 (#5783 JD1): the rates in this table are stale.**
+  `node tools/check/ai-field.mjs --diff hard --seconds 240 --runs 2` (Monza, 21
+  AI cars, wear off) prints `0.159 [0.099–0.218] per car per 100 s` at HARD,
+  about 8× the 0.020 above; a full 22-car 3-lap Monza race with lap 1 excluded
+  gave 0.103 (hard) and 0.177 (normal). So "under one mistake for the whole
+  field" no longer describes any level: expect roughly 8–15 rolled mistakes a
+  3-lap race at HARD on Monza, more where there are more braking zones (the
+  roll is per braking zone: Monaco 33 with lap 1 included). The ladder's order
+  (easy ≥ normal ≥ hard) still holds. A rolled mistake cost the car 0–0.12 s on
+  that lap in those runs, so the player does not see one. Which commit moved
+  the rate was not traced.
 
   At n=5 the "mistakes" count per run is a small integer (0–4), so the MEDIAN
   is too coarse to resolve a shift reliably at that sample: EASY at 5 runs
