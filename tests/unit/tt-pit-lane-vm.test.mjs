@@ -128,7 +128,7 @@ test("TT entries key the drive-out exterior on the TT session: picker → SESSIO
     const tick = async (n = 50) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
     const key = () => { const e = pre.state().exterior; return [e.trackId, e.weather, e.tod].join("/"); };
     const stale = () => { G.raceWeather = "rain"; G.raceTimeOfDay = "night"; pre.prewarmExterior(); };
-    const ttPick = () => { G.flow = "gp"; G.timeTrial = true; G.session = "race"; };
+    const ttPick = () => { G.flow = "gp"; G.timeTrial = true; G.session = "tt"; };   // title-flow.js openTimeTrial
 
     // Picker → SESSION SETUP: the picker pre-keys on the leftover chips; RACE SETTINGS resets the TT draft and re-keys.
     ttPick(); stale(); await tick();

@@ -18,8 +18,8 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
-// js/input/steer-tuning.js: paceFromSlider(v) = 1.06^(v - 14); slider 1 / 11 (calibration) / 17 (default) / 19.
-const PACE_MIN = Math.pow(1.06, -13), PACE_CALIBRATION = Math.pow(1.06, -3), PACE_DEF = Math.pow(1.06, 3), PACE_MAX = Math.pow(1.06, 5);
+// js/input/steer-tuning.js: paceFromSlider(v) = 1.06^(v - 14); slider 1 / 11 (calibration and default) / 19.
+const PACE_MIN = Math.pow(1.06, -13), PACE_CALIBRATION = Math.pow(1.06, -3), PACE_DEF = PACE_CALIBRATION, PACE_MAX = Math.pow(1.06, 5);
 
 function impacts(pace, cars) {
   const fx = [];

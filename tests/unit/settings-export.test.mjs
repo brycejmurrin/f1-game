@@ -439,7 +439,7 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.equal(all.mode, "all");
   const n = Object.values(all.settings).reduce((a, g) => a + Object.keys(g).length, 0);
   assert.equal(n, SettingsExport.SPEC.length, "every allowlisted key appears once");
-  assert.equal(all.settings.steering.pace, 17);
+  assert.equal(all.settings.steering.pace, 11);
   assert.equal(all.settings.display.gfxPreset, null, "unset per-device default: the loading device keeps its own");
   assert.equal(all.settings.audio.sndTune.gain, 1, "an object default is spelled out");
   assert.deepEqual(all.changed, []);
@@ -479,7 +479,7 @@ test("a changed key carries its value, the default it replaced and the source th
   assert.equal(f.settings.audio.volMusic, 0.8);
   assert.equal(f.defaults.audio.volMusic, 0.7, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
-  assert.equal(f.defaults.steering.pace, 17);
+  assert.equal(f.defaults.steering.pace, 11);
   // The halo SHIPS faired; "0" is what counts as a change now.
   assert.equal(f.settings.camera.cockpitHalo, "0", "a raw-lane value stays the string the panel wrote");
   assert.equal(f.defaults.camera.cockpitHalo, "fairing");

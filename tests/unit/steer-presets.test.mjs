@@ -190,23 +190,23 @@ test("steering sliders and labels show their fresh-store values in the HTML shel
   }
 });
 
-test("overall speed is rebased at notch 17 without changing any notch's physical pace", () => {
+test("overall speed defaults to notch 11 (84% of reference) and reads each notch's physical pace", () => {
   const fresh = bootTuning();
-  assert.deepEqual([fresh.$("pm-pace").value, fresh.$("pm-pace-v").textContent, fresh.G.PACE], [17, "100%", Math.pow(1.06, 3)]);
+  assert.deepEqual([fresh.$("pm-pace").value, fresh.$("pm-pace-v").textContent, fresh.G.PACE], [11, "84%", Math.pow(1.06, -3)]);
   const shell = readFileSync(join(ROOT, "index.html"), "utf8");
-  assert.match(shell, /<input id="pm-pace"[^>]* min="1" max="19"[^>]* aria-valuetext="100%"/);
-  assert.equal(fresh.$("pm-pace").getAttribute("aria-valuetext"), "100%");
+  assert.match(shell, /<input id="pm-pace"[^>]* min="1" max="19"[^>]* aria-valuetext="84%"/);
+  assert.equal(fresh.$("pm-pace").getAttribute("aria-valuetext"), "84%");
   assert.equal(fresh.disk.pace, undefined, "a new default doesn't write a stored choice");
   for (let notch = 1; notch <= 19; notch++) {
     fresh.move("pm-pace", notch);
     assert.equal(fresh.disk.pace, notch);
     assert.equal(fresh.G.PACE, Math.pow(1.06, notch - 14));
-    assert.equal(fresh.$("pm-pace-v").textContent, Math.round(Math.pow(1.06, notch - 17) * 100) + "%");
+    assert.equal(fresh.$("pm-pace-v").textContent, Math.round(Math.pow(1.06, notch - 14) * 100) + "%");
     assert.equal(fresh.$("pm-pace").getAttribute("aria-valuetext"), fresh.$("pm-pace-v").textContent);
   }
   const saved = bootTuning({}, { steerSchema: 5, pace: 11 });
-  assert.deepEqual([saved.disk.pace, saved.$("pm-pace-v").textContent, saved.G.PACE], [11, "70%", Math.pow(1.06, -3)]);
-  assert.equal(saved.$("pm-pace").getAttribute("aria-valuetext"), "70%");
+  assert.deepEqual([saved.disk.pace, saved.$("pm-pace-v").textContent, saved.G.PACE], [11, "84%", Math.pow(1.06, -3)]);
+  assert.equal(saved.$("pm-pace").getAttribute("aria-valuetext"), "84%");
 });
 
 test("adaptive buttons use strength 6 on fresh settings and Standard, preserving a saved strength", () => {

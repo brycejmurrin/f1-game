@@ -238,7 +238,7 @@ test.describe("steering-store schema migration", () => {
 
     expect((await readStore(page, ["pace"])).pace).toBeNull();
     const t = await tuning(page);
-    expect(t.pace).toBeCloseTo(Math.pow(1.06, 17 - 14), 6);
+    expect(t.pace).toBeCloseTo(Math.pow(1.06, 11 - 14), 6);
   });
 
   test("a store already at v3 keeps its RACE PACE notch — the regrid cannot run twice", async ({ page }) => {

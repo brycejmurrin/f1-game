@@ -338,8 +338,8 @@ const SPEC = [
   { k: "gripSteer", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF; own-state cap via js/physics/grip-steer.js)" },
   { k: "audioCues", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (js/audio/driving-cues.js; 1 = OFF)" },
   { k: "drivingHelp", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF)" },
-  { k: "pace", lane: "json", group: "steering", def: 17, src: "js/input/steer-tuning.js PACE_DEF",
-    subsystem: "GROUND-SPEED SCALE for every car: engine uses 1.06^(v-14); the slider displays 100% at notch 17" },
+  { k: "pace", lane: "json", group: "steering", def: 11, src: "js/input/steer-tuning.js PACE_DEF",
+    subsystem: "GROUND-SPEED SCALE for every car: 1.06^(v-14), so notch 11 is 84% of reference and notch 7 is 67% — a 21% slower game" },
   { k: "raceLine", lane: "json", group: "steering", def: 0, src: "js/input/steer-tuning.js" },
   { k: "steerSchema", lane: "json", group: "steering", def: 1, info: true, src: "js/input/steer-tuning.js STEER_SCHEMA (migration version — boot writes the current one, so never a change)" },
   // CONTROLS (js/input/input.js tables, js/ui/key-binds.js)
