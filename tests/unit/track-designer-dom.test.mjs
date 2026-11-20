@@ -3228,6 +3228,58 @@ test("SHARE copies the newer circuit when its encode finishes first", async () =
   b.D.close();
 });
 
+for (const action of ["share", "shareCard"]) {
+  test(`${action} from a replaced circuit leaves the imported design and its controls alone`, async () => {
+    const b = bootScreen(); openGreen(b);
+    const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+    let finish, copies = 0, saves = 0;
+    b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+    b.ctx.ApexClipboard = { write: async () => { copies++; return false; } };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    recordingCanvas(b, [], []);
+    const pending = b.D[action]();
+    assert.equal(await b.D.loadFrom(incoming), true);
+    assert.equal(b.D.state().design.name, "IMPORTED");
+    const field = b.root.querySelector('[aria-label="Share code or link"]'), value = field.value;
+    const focus = b.dom.document.activeElement, status = msgText(b);
+    finish("old-code");
+    assert.equal(await pending, action === "share" ? null : false);
+    assert.equal(copies, 0); assert.equal(saves, 0);
+    assert.equal(field.value, value); assert.equal(msgText(b), status);
+    assert.ok(b.dom.document.activeElement === focus);
+    assert.notEqual(b.D.state().lastCode, "old-code");
+    b.D.close();
+  });
+}
+
+test("undoing a document replacement withdraws the replaced circuit's pending SHARE", async () => {
+  const b = bootScreen(); openGreen(b);
+  const original = b.D.state().design.name;
+  const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+  assert.equal(await b.D.loadFrom(incoming), true);
+  let finish, copied = false;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async () => { copied = true; return true; } };
+  const pending = b.D.share();
+  assert.equal(b.D.undo(), true); assert.equal(b.D.state().design.name, original);
+  finish("imported-code");
+  assert.equal(await pending, null); assert.equal(copied, false);
+  b.D.close();
+});
+
+test("a refused import leaves the pending SHARE on its original circuit", async () => {
+  const b = bootScreen(); openGreen(b);
+  const copied = []; let finish;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async url => { copied.push(url); return true; } };
+  const pending = b.D.share();
+  assert.equal(await b.D.loadFrom("invalid"), false);
+  finish("original");
+  assert.equal(await pending, b.CD.shareUrl("original"));
+  assert.deepEqual(copied, [b.CD.shareUrl("original")]);
+  b.D.close();
+});
+
 test("SHARE waits for an in-flight clipboard write and suppresses its fallback after reopening", async () => {
   const b = bootScreen(); openGreen(b);
   vm.runInContext(read("js/core/clipboard.js"), b.ctx, { filename: absSrc("js/core/clipboard.js") });

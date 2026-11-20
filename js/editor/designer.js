@@ -473,7 +473,7 @@ const TrackDesigner = (function () {
     if (was && next.lin === was.lin) {
       next.name = was.name;
       for (const k of ["id", "originId", "country"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
-    }
+    } else invalidateShares();
     design = next; sel = -1; span = -1; nudge = null;
   }
   function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
@@ -638,6 +638,7 @@ const TrackDesigner = (function () {
     ++replacementGeneration;
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
+    invalidateShares();
     design = copy(item);
     design.lin = ++lineage;
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
@@ -1201,7 +1202,12 @@ const TrackDesigner = (function () {
 
   // ── share out / in ────────────────────────────────────────────────────────
   let lastCode = null;
-  let codeGeneration = 0, shareGeneration = 0, visit = 0;
+  let codeGeneration = 0, shareGeneration = 0, shareSession = 0;
+  // Replacing the loaded document or changing visits withdraws every pending
+  // share. Edits within one document keep the snapshot chosen at the click.
+  function invalidateShares() {
+    ++codeGeneration; ++shareGeneration; ++shareSession;
+  }
   let clipboardWrite = Promise.resolve(false);
   /** The APXT1 code for the current design (null when it does not sanitise). */
   async function encodeShareItem(item) {
@@ -1604,7 +1610,7 @@ const TrackDesigner = (function () {
     if (first) first.focus();
   }
   function open(opts) {
-    ++shareGeneration; ++codeGeneration; ++visit;
+    invalidateShares();
     ++replacementGeneration;
     if (!built && !init()) return false;
     // A share link opened while the screen is up (hashchange) must not make
@@ -1647,7 +1653,7 @@ const TrackDesigner = (function () {
   }
   function close() {
     if (!root || !openFlag) return;
-    ++shareGeneration; ++codeGeneration; ++visit;
+    invalidateShares();
     ++replacementGeneration;   // pending single-circuit reads/decodes no longer own this visit
     saveDraft();
     cancelLibraryImport(false);
@@ -2344,14 +2350,14 @@ const TrackDesigner = (function () {
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
   async function cardCanvas() {
-    const started = visit;
+    const started = shareSession;
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok || !verdict.tr) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     // The encoder yields to compression; editing can continue meanwhile. One
     // snapshot owns the link, drawing, filename AND native share-sheet title.
     const item = copy(design), preview = verdict;
     const code = await encodeShareItem(item);
-    if (started !== visit) return null;
+    if (started !== shareSession) return null;
     if (!code) { message("This design cannot be encoded", true); return null; }
     const url = TrackCodec.shareUrl(code), tr = preview.tr, st = preview.stats || {}, COL = DesignerCanvas.COL;
     const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
@@ -2379,43 +2385,43 @@ const TrackDesigner = (function () {
    *  sheet (AbortError) is the player's choice — no fallback, no message.
    *  Re-entry while a draw/share is in flight is refused (double-click used to
    *  fire two downloads). */
-  let busyCardVisit = null;
+  let busyCardSession = null;
   async function shareCard() {
-    const started = visit;
-    if (busyCardVisit === started) return false;
-    busyCardVisit = started;
+    const started = shareSession;
+    if (busyCardSession === started) return false;
+    busyCardSession = started;
     try {
       const card = await cardCanvas();
-      if (!card || started !== visit) return false;
+      if (!card || started !== shareSession) return false;
       let blob = null;
       try { blob = await blobOf(card.canvas); } catch (e) {
-        if (started === visit) message("Could not draw the card: " + (e && e.message || e), true);
+        if (started === shareSession) message("Could not draw the card: " + (e && e.message || e), true);
         return false;
       }
-      if (started !== visit) return false;
+      if (started !== shareSession) return false;
       const nav = typeof navigator !== "undefined" ? navigator : null;
       const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
       if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
         try {
           await nav.share({ files: [file], title: card.title, text: card.url });
-          if (started !== visit) return false;
+          if (started !== shareSession) return false;
           message("Card shared"); Log.info("track", "designer card shared");
           return true;
         } catch (e) {
-          if (started !== visit || (e && e.name === "AbortError")) return false;
+          if (started !== shareSession || (e && e.name === "AbortError")) return false;
           Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
         }
       }
       try {
         await saveFile(blob, card.name);
-        if (started !== visit) return false;
+        if (started !== shareSession) return false;
         message("Card saved as " + card.name);
         return true;
       } catch (e) {
-        if (started === visit) message("Could not save the card: " + (e && e.message || e), true);
+        if (started === shareSession) message("Could not save the card: " + (e && e.message || e), true);
         return false;
       }
-    } finally { if (busyCardVisit === started) busyCardVisit = null; }
+    } finally { if (busyCardSession === started) busyCardSession = null; }
   }
   /** Arc s (m) of the preview build's node nearest control point i, or -1. */
   function builtS(i) {
