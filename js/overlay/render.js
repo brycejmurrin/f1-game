@@ -2,7 +2,7 @@
 const OverlayRender = (function () {
   "use strict";
 
-  const MAX_ROWS = 20;
+  const MAX_ROWS = 22;
   const FLASH_MS = 1200;
 
   function options(search) {
