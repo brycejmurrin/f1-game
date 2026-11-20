@@ -1,0 +1,2 @@
+Fixed: Two slow first loads on a bad connection (the three.js download taking longer than 15 s) no longer move the game to the WebGL2 renderer for good; only a real hang or crash counts, and a renderer retired by crashes gets one more try on the next release (#5942).
+Fixed: Playing the Daily Challenge with the phone's clock set back or far ahead no longer deletes real days from the Daily history (#5943).

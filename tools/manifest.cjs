@@ -1357,6 +1357,16 @@ const LAZY_UI_PRESETS = [
 ];
 const LAZY_UI_PRESETS_EDGES = [];
 
+// SAVES & DATA body (#4748, ~50 KB): SettingsExportBody — collect / apply for the SETTINGS, GARAGE
+// and CAREER files, ttlb, and the SETTINGS › FILES / GARAGE FILE / CAREER FILE UI. The FULL
+// js/ui/settings-export.js keeps FORMAT, SPEC (SaveSchemaRegistry ingests it at eval) and the
+// garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
+// it at idle, at the garage door, with the agent surface and with the career screen.
+const LAZY_SAVES_DATA = [
+  "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
+];
+const LAZY_SAVES_DATA_EDGES = [];
+
 // RESULTS / TT / STANDINGS / CHAMPION DOM builders + the share-card stack (~92 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
 // ensureResultsSheet so buildResults stays synchronous at the flag. The SHARE
@@ -1857,7 +1867,7 @@ module.exports = {
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
-  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES,
+  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,

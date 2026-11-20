@@ -284,6 +284,26 @@ test("the script cache round-trips through localStorage and rejects a stale shap
   assert.equal(D.cached(11377), null);
 });
 
+// Hunt #5694 B3: a complete script assembled right after the flag never
+// expired, so post-race penalties and DSQs never reached HIGHLIGHTS.
+test("a complete script fetched within a day of the race is provisional; one fetched later is final", () => {
+  const store = new Map();
+  const localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) };
+  const { D, findTeam } = load({ localStorage });
+  const s = host(D.build(rawBaku(), findTeam, TRACKS));
+  const H = 3600 * 1000, now = Date.now();
+  const put = (fetchedAt, dateStart) => store.set(D.CACHE_KEY + "11377",
+    JSON.stringify({ ...s, fetchedAt: new Date(fetchedAt).toISOString(), dateStart: new Date(dateStart).toISOString() }));
+  put(now - 2 * H, now - 3 * H);   // fetched 1 h after the start, 2 h ago
+  assert.equal(D.cached(11377), null, "a provisional script past its 30 min is refetched");
+  put(now - 10 * 60 * 1000, now - 3 * H);   // fetched 10 min ago, still provisional
+  assert.equal(host(D.cached(11377)).laps, 51, "a provisional script is reused for 30 min");
+  put(now - 30 * 24 * H, now - 32 * 24 * H);   // fetched two days after the race
+  assert.equal(host(D.cached(11377)).laps, 51, "a script fetched a day or more after the start is final");
+  store.set(D.CACHE_KEY + "11377", JSON.stringify({ ...s, fetchedAt: undefined }));
+  assert.equal(host(D.cached(11377)).laps, 51, "an older cache without dates is final, not refetched forever");
+});
+
 // One script per watched session (~45 KB) with no eviction filled the 5 MB origin
 // quota after ~115 sessions and starved every save: the cache keeps the newest
 // CACHE_MAX, most recently used first, and prunes any written before the index.
@@ -347,16 +367,17 @@ function pendingWatchHarness() {
   return { tab, requests, launches, script, flush, reopen: () => { opened = true; } };
 }
 
-async function launchRecoveryHarness(failPositions = false) {
+async function launchRecoveryHarness(failPositions = false, pendingPositions = false) {
   const store = new Map(), launches = [], order = [];
-  let opened = true, result = false, requests = 0;
+  let opened = true, result = false, requests = 0, cancels = 0;
   const { D, findTeam } = load({ Tracks: { LIST: TRACKS },
     localStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
     F1API: { locationData: () => {
       requests++;
       if (failPositions) return Promise.reject(new Error("offline"));
+      if (pendingPositions) return new Promise(() => {});
       return Promise.resolve(positionRows(script));
-    }, cancelAll() {} },
+    }, cancelAll() { cancels++; } },
     RealRace: { replay: () => null, launch: (script, opts) => {
       order.push("launch"); launches.push({ script, opts, opened });
       if (result instanceof Error) throw result;
@@ -377,8 +398,31 @@ async function launchRecoveryHarness(failPositions = false) {
   const status = nodes(tree).find((n) => n.role === "status");
   assert.ok(status, "the real replay status is rendered");
   return { tab, script, launches, order, status, flush, nodes: nodes(tree),
-    opened: () => opened, requests: () => requests, result: (v) => { result = v; } };
+    opened: () => opened, requests: () => requests, cancels: () => cancels, result: (v) => { result = v; } };
 }
+
+test("hunt #5694 B6: a refused WATCH launch leaves JUMP IN's picked lap alone", async () => {
+  const h = await launchRecoveryHarness();
+  h.tab.loadTraces(h.script, null, null); await h.flush();
+  assert.equal(h.tab.setStartLap(7), 7);
+  h.result(null);
+  assert.equal(h.tab.watch(h.script, null, 1, true), false, "the reel launch is refused");
+  h.result({ seat: h.script.drivers[0].code });
+  assert.equal(h.tab.jumpIn(h.script, h.script.drivers[0].code), true);
+  assert.equal(h.launches.at(-1).opts.startLap, 7, "JUMP IN still starts from the lap the player picked");
+});
+
+test("hunt #5694 B7: REFRESH THIS SESSION drops a positions download in flight", async () => {
+  const h = await launchRecoveryHarness(false, true);
+  h.tab.loadTraces(h.script, null, null); await h.flush();
+  assert.equal(h.requests(), 1, "a download is in flight");
+  const before = h.cancels();
+  const refresh = h.nodes.find((n) => n.text === "REFRESH THIS SESSION");
+  assert.ok(refresh, "the refresh control is rendered");
+  try { refresh.onclick(); } catch (e) { /* the fixture has no raw timing endpoints */ }
+  assert.equal(h.cancels(), before + 1, "the queued /location requests are cancelled");
+  assert.equal(h.nodes.find((n) => n.text === "CANCEL DOWNLOAD").hidden, true, "the download no longer reads as running");
+});
 
 test("WATCH launch failures keep cached and downloaded positions retryable in the open Hub", async (t) => {
   for (const cached of [false, true]) for (const throws of [false, true]) {

@@ -339,7 +339,7 @@ test("ghost download reflects the awaited native result and re-enables its butto
 });
 
 test("SettingsExport.download awaits the real native helper and surfaces write/share failures", async () => {
-  const src = readFileSync(join(ROOT, "js/ui/settings-export.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/ui/settings-export-body.js"), "utf8");   // the LAZY_SAVES_DATA body (#4748)
   const download = src.slice(src.indexOf("async function download("), src.indexOf("function stamp()"));
   for (const stage of ["write", "share"]) {
     const { sandbox } = loadNative({ capacitor: true });

@@ -5,6 +5,7 @@
     }
   },
   "tree": {
-    "eagerBytes": -1556
+    "eagerBytes": -1556,
+    "eagerCodeBytes": 1421
   }
 }
