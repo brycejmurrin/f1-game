@@ -248,6 +248,7 @@
     "// ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,",
     "// well under a second; must run where the helper or a call-site is edited.",
     "tests/unit/clipboard.test.mjs",
+    "tests/unit/closing-refs.test.mjs",
     "// The coach's rewind clone replaced JSON.parse(JSON.stringify()); restore()",
     "// reads back what capture() wrote, so any drift from JSON semantics is a",
     "// rewind into a state the car was never in. Tested AGAINST the round trip.",
