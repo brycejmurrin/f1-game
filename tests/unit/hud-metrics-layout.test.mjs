@@ -432,5 +432,7 @@ test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( si
   // Lower these as the remaining rules fold into plain cascade wins; never raise them.
   const lines = fs.readFileSync(path.join(root, "css/hud.css"), "utf8").split("\n");
   assert.ok(lines.filter((l) => l.includes("!important")).length <= 72, "!important lines (72 at 2026-11-20)");
-  assert.ok(lines.reduce((n, l) => n + (l.match(/:has\(/g) || []).length, 0) <= 31, ":has( sites (31 at 2026-11-20)");
+  // :has( counted in PARSED selectors (comments excluded; 6 of the file's 31 raw hits are prose).
+  const hasSites = parseCss(readCssSource("css/hud.css")).reduce((n, r) => n + r.selector.split(":has(").length - 1, 0);
+  assert.ok(hasSites <= 25, ":has( selector sites (25 at 2026-11-20)");
 });
