@@ -259,7 +259,9 @@ test("the physics reads damage ONLY through the gated ctx.damage seam", () => {
 test("VM: ON, a broken front wing lowers front grip in physState at speed; repair restores it; OFF is byte-identical", async () => {
   const { createRequire } = await import("node:module");
   const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
-  const g = await createGame({ track: "monza" });
+  // PACE notch 11 (the default before #5977): at 17 the 4 × 240-step straight-line drive reaches the first
+  // chicane (s ≈ 607 m) and books fresh damage after the repair. This test is about the repair, not the chicane.
+  const g = await createGame({ track: "monza", storage: { pace: 11 } });
   await g.race("monza", "day", "dry");
   const S = g.sandbox, P = g.G.player, A = g.apex;
   const drive = () => { A.setInput({ throttle: true }); g.step(240); return A.physState(); };
