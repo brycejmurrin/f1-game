@@ -1230,6 +1230,18 @@ export class Lsp {
     const at = hits.slice(0, 6).map(h => `${h.file}:${h.line0 + 1}`).join(", ");
     return [`0 semantic uses, but ${hits.length} text match${hits.length === 1 ? "" : "es"} of .${name} (a member on an object the checker cannot type, e.g. a factory's return; verify each): ${at}${hits.length > 6 ? ", …" : ""}`];
   }
+  // A semantic zero whose `.name` text accesses exist: those sites AS ROWS, so the header counts them. A header
+  // reading "0 references" over a note listing 11 sites (refs penaltyWhy, 2026-11-20) taught agents to grep instead.
+  zeroUseRows(a, p) {
+    // A qualified Head.member answer already ran the head-aware text fallback, which drops shadowed and unguarded
+    // heads on purpose: there, every-`.member` rows would add exactly those. Rows only for a bare name or a position.
+    if (a.symbol && a.symbol.includes(".")) return null;
+    const name = a.symbol ? a.symbol.split(".").at(-1) : /^[\w$]+/.exec((this.textLines(p.file)[p.line0] || "").slice(p.col0))?.[0];
+    const hits = this.memberTextHits(name);
+    if (!hits.length) return null;
+    const uses = hits.map(h => ({ uri: this.uriOf(h.file), range: { start: { line: h.line0, character: h.col0 }, end: { line: h.line0, character: h.col0 + name.length } } }));
+    return { uses, note: `0 semantic uses; all ${hits.length} row${hits.length === 1 ? " is a text match" : "s are text matches"} of .${name} (a member on an object the checker cannot type; verify each)` };
+  }
 
   factoryOf(file, line0, col0) {
     const ast = this.astOf(file), refs = this.lexicalRefs(file), { starts } = this.textOf(file);
@@ -1638,7 +1650,9 @@ export async function callTool(lsp, name, a = {}) {
           for (const l of fresh) { seen.add(locationKey(l)); locs.push(l); }
           if (fresh.length) notes.push(lsp.factoryNote({ ...made, uses: fresh }));
         }
-        if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
+        const zero = !locs.length && (a.symbol || p) ? lsp.zeroUseRows(a, p) : null;
+        if (zero) { locs.push(...zero.uses); notes.push(zero.note); }
+        else if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
         if (p) notes.push(...lsp.outsideNote(a, p));
         const unfiltered = locs.length;
         if (scope) {
@@ -1679,14 +1693,24 @@ export async function callTool(lsp, name, a = {}) {
           const have = new Set(list.map(key)), fresh = made.uses.filter(l => !have.has(key(l)) && (!scope || inScope(lsp.rel(l.uri), scope)));
           if (fresh.length) { resolved = [...list, ...fresh]; notes.push(lsp.factoryNote({ ...made, uses: fresh })); }
         }
+        if (!isDef && p) {
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [];
+          const uses = list.filter(l => { const u = l.targetUri || l.uri, s = (l.targetSelectionRange || l.range).start; return lsp.tag(lsp.rel(u), s.line, s.character) === "use"; });
+          const zero = !uses.length ? lsp.zeroUseRows(a, p) : null;
+          if (zero) {
+            const key = l => `${l.targetUri || l.uri}\u0000${(l.targetSelectionRange || l.range).start.line}:${(l.targetSelectionRange || l.range).start.character}`, have = new Set(list.map(key));
+            const fresh = zero.uses.filter(l => !have.has(key(l)) && (!scope || inScope(lsp.rel(l.uri), scope)));
+            if (fresh.length) { resolved = [...list, ...fresh]; notes.push(zero.note); }
+          }
+        }
         const r = await lsp.locRows(resolved, { limit, offset, declFirst: isDef, where: !isDef, concise: a.format === "concise", render: !a.files });
+        if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
         const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : !isDef && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
         const self = isDef && r.total === 1 && p && r.rows[0].startsWith(`${pos(p)} `);
         if (!r.total && a.file && p) {
           const ln = lsp.textLines(p.file)[p.line0] || "", w = /[\w$]+/.exec(ln.slice(p.col0))?.[0];
           notes.push(/^[\w$]/.test(ln[p.col0] || "") ? `nothing resolvable at ${pos(p)} ("${w}")` : `${pos(p)} is not on a name (column ${p.col0 + 1} of "${ln.trim().slice(0, 60)}"); point the column at the symbol`);
         }
-        if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
         if (!isDef && p) notes.push(...lsp.outsideNote(a, p));
         const viaAlias = r.list.filter(l => l.via).length;
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);

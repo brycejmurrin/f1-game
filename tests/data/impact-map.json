@@ -19797,6 +19797,7 @@
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ]
     },

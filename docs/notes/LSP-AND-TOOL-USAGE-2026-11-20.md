@@ -136,7 +136,7 @@ The standing 15-question `lsp-eval`: apex-lsp 8,585 chars against grep 147,416 f
 - `diag js/game.js`: 8 s cold.
 
 **Answers that mislead and drive agents back to grep:**
-- `refs penaltyWhy` (a property only ever set on untyped `c` objects) heads its output "0 references" and lists the 11 real `.penaltyWhy` sites only in a note. Follow-up: lead with the text-match count and print those rows tagged `[text]`.
+- `refs penaltyWhy` (a property only ever set on untyped `c` objects) headed its output "0 references" and listed the 11 real `.penaltyWhy` sites only in a note. **Fixed in this PR** (Bryce: "Fix all"): for a bare name or a position, a semantic zero with `.name` text accesses returns those sites as rows, and the header says they are text matches ("11 references in 3 files … all 11 rows are text matches"). Qualified `Head.member` queries keep the note, because their head-aware fallback drops shadowed heads on purpose. Pinned by `lsp-eval` (16/16) and `lsp-factory-member.test.mjs`.
 - `def GLX.makeFrustumPlanes`: members installed at run time are invisible (§2).
 
 ## 1d. When grep is the right tool (keep guidance two-sided)
@@ -157,7 +157,7 @@ Forcing LSP-first lowered success in the published harness study (§Research). S
 | Deferral | `"alwaysLoad": true` on `apex-lsp` in `.mcp.json` / `.cursor/mcp.json` (https://code.claude.com/docs/en/mcp.md#exempt-a-server-from-deferral). The cost is 8 tool schemas, ~2,670 tokens per turn (`tools/mcp/mcp-listing-cost.mjs --only=apex-lsp`). |
 | Briefs | the worker prompt, skill `steward` and the orchestrator brief name the calls |
 | Subagent card | `physics-contract-auditor` gets `lsp_references` / `lsp_callers` / `lsp_definition`, and its step 2 starts from `lsp_callers Tracks.curvature` |
-| Hook (PROTECTED, not shipped) | A proposed `lsp-hint.py` patch splits alternations and treats camelCase names inside js/ searches as symbols. Replayed on the survey: 7 of 7 examples hint, and the old quiet cases stay quiet. It is left for Bryce: a guard file, and the auto-mode classifier refused the edit on 2026-11-20 (final for that action). The patch is in the PR comments. Today the hook fires on 2 of 396 calls. |
+| Hook (PROTECTED) | `lsp-hint.py` now splits alternations and treats camelCase names inside js/ searches as symbols. Before it fired on 2 of 396 replayed calls. Replayed on the survey: 7 of 7 examples hint, and the old quiet cases stay quiet. History: the auto-mode classifier refused the first hatch edit. Bryce then granted it in this session ("Also do the lsp hint hook patch you have permission", 2026-11-20). It was applied with the Edit tool under `.claude/allow-protected`, which was removed straight after, and is byte-identical to the patch posted on the PR. |
 | AGENTS.md | the loop's edit step says to find symbols with apex-lsp, not grep |
 
 ## Research (cited by the 2026-11-20 lane; not all re-verified)
