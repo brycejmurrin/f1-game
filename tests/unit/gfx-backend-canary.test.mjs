@@ -1055,7 +1055,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // assets.js remembers the last pack's model file+md5 (a js/render write, so
     // RESET must clear it). The next visit relearns the hint from the manifest.
     "apex26.packIndex",
-    "apex26.envProbeOff", "apex26.perChunkOff",
+    "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
     "apex26.tlxWebKitGL",
@@ -4247,13 +4247,20 @@ test("a retired pick leaves a record every later boot can read, and only while W
   assert.equal(boot.bound, false);
   assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "second strike: the pick is retired");
   assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "the record names the backend and the build that retired it");
-  // A cold launch: new sessionStorage, no probe, a plain webgl2 pick.
+  // A cold launch of the SAME build: new sessionStorage, no probe, a plain webgl2 pick.
   ss = new Map();
-  boot = await rendererBootRun(ls, { ss, build: 4400 }).start();
+  boot = await rendererBootRun(ls, { ss, build: 4321 }).start();
   assert.equal(boot.bound, false);
   assert.match(ss.get("apex26.gfxFallbackWhy") || "", /^retired: three .*build 4321/,
     "diag().env.backendFallback still says why WebGL2 is drawing on the next launch");
   assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "reading the record does not spend it");
+  // #5942: a NEW build expires the record and tries the pick again, one strike already on the ledger.
+  const expiring = new Map(ls);
+  boot = await rendererBootRun(expiring, { ss: new Map(), build: 4400 }).start();
+  assert.equal(boot.bound, true, "a new build tries three again");
+  assert.equal(expiring.get("apex26.gfxBackend"), "three");
+  assert.equal(expiring.has("apex26.gfxRetired"), false);
+  assert.equal(expiring.get("apex26.gfxProbeStrikes"), "three:1");
   // Any other stored pick (a hand pick clears the record itself; an import or the bridge does not) makes it stale.
   ls.set("apex26.gfxBackend", "three");
   ss = new Map();

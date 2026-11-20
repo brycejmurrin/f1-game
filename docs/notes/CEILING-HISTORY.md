@@ -7,9 +7,42 @@
 (`SportingRegs.applyCompoundRule`), but HOW TO PLAY never said so. One `dt`/`dd` pair under PIT STOPS is the
 two nodes; `tests/unit/help-rules-facts.test.mjs` reads the figures in it from the code that enforces them.
 Fragment: `tests/data/ratchets.d/claude--port-cleanroom-46-53-5973.json`.
+## 2026-11-20 — PR #6024 (claude/ratchet-pin-absorb): pin counts get a 5-pin absorb (Bryce's "Pin slack", D-037)
+
+`(tree) assertPins` ceiling **8140** and `(tree) assertPinsAll` ceiling **10366** are unchanged; each entry gains
+`absorb: 5`, the mechanism `eagerCodeBytes` already uses. A branch's own growth of up to 5 pin-shaped asserts since its
+merge base is then the commit hook's fragment with no label, and past 5 it still needs Bryce's `ratchet-raise`. Why: with the tip
+exactly at both ceilings, #5959, #5966, #5686 and #6014 each added one pin, passed CI, and were refused by merge-gate's
+ratchets row at land (each a full CI run wasted). `ratchets.mjs --base` reads the widened absorb as a LOOSEN; this
+entry is the recorded reason that lets that one loosen pass (`historyNamesTree`), and the gate's raise row still asks
+for `ratchet-raise` on this PR.
+
+## 2026-11-20 — PR #5788 (claude/render-caster-position-only-1118): car shadow casters position-only
+
+`(tree) eagerCodeBytes` 4018312 → **4018390** (+78, stripped code bytes; inside the 5,000 B absorb).
+Deliberate raise of the exact boot-wall ceiling; it still needs Bryce's `ratchet-raise` label on the PR.
+The growth is this PR's eager `js/car/car-draw.js` and `js/car/car3d.js`. The code is the `_casterOnly`
+flag on the two depth-only builds (the team caster and the first-person caster), which lets TLX allocate
+position + index alone (about 8 to 10 MB of `carSh` geometry saved per race). The earlier `eagerBytes`
++224 raise (2026-11-19) lapsed when the tip moved to `eagerCodeBytes`.
+Fragment: `tests/data/ratchets.d/claude--render-caster-position-only-1118.json`.
 
 ## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
 
+## 2026-11-20 — PR #5953 (claude/batch-5896-5878-5877): share-link undo, repair stop, season points; absorbs #5954 records and drills (#5896, #5878, #5877, #5895, #5888)
+
+`(tree) eagerBytes` 7,972,011 → **7,974,059** (+2,048 B), measured exact on the merge with tip
+`fb12c549`. Deliberate raise; Bryce decided the fixes (`decision: A` on #5896, `decision: A` on
+#5878, `decision: B` on #5877, 2026-11-20 ~06:36Z) and the orchestrator chose the raise over pruning
+unrelated comments (06:56Z); the tree-wide ceiling still needs his `ratchet-raise` label on the PR.
+The growth is the fixes' own code in three FULL (eager) files, after trimming their comments:
+`js/ui/share-code.js` +1,145 (`importValues` keeps the player's pre-link values across links),
+`js/career/season-cal.js` +925 (`seatPlayer`, the seat move) and `js/game.js` +124 (its one-line
+call in `makeCars`; also `js/game.js` codeLines/lines +1). The repair-only stop (#5878) is in the
+lazy `js/race/pit-lane.js`. #5954 (WIND OFF record class, per-circuit drill bests), folded in on the
+orchestrator's call (07:30Z), nets −146 in the eager `js/race/race-insights.js` (comments tightened);
+its own fragment is folded into this one. Fragment:
+`tests/data/ratchets.d/claude--batch-5896-5878-5877.json`.
 `(tree) eagerBytes` 8015286 → **8016541** (+1255). Deliberate raise of the exact boot-wall ceiling;
 it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's eager
 `js/track/core/def.js`, `js/ui/platform-session.js`, `js/core/lazy-bundles.js` and `js/track/build-client.js`

@@ -440,6 +440,29 @@ const DockLayout = (function () {
       if (window.visualViewport && window.visualViewport.addEventListener)
         window.visualViewport.addEventListener("resize", paint, { passive: true });
     }
+    // LEFT-HANDED flips a body class with no resize: repaint or a moved group sits off screen.
+    if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body) {
+      let mirrored = inboard("L") < 0;
+      new MutationObserver(() => {
+        const m = inboard("L") < 0;
+        if (m !== mirrored) { mirrored = m; paint(); }
+      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
+    // The offset divides by the dock's zoom, which changes at race start with no resize.
+    if (typeof ResizeObserver !== "undefined") {
+      const usedZ = { L: 0, R: 0 };
+      const ro = new ResizeObserver(() => {
+        const d = docks();
+        let changed = false;
+        for (const side of SIDES) {
+          const z = d[side] ? zoomOf(d[side]) : 0;
+          if (z !== usedZ[side]) { usedZ[side] = z; changed = true; }
+        }
+        if (changed && !drag) paint();
+      });
+      const d = docks();
+      for (const side of SIDES) if (d[side]) ro.observe(d[side]);
+    }
 
     // Re-apply when the player switches STEERING INPUT (store.set notifies
     // `{ key }` singular; bulk restore may also send `{ keys }`).

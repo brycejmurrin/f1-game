@@ -476,8 +476,10 @@ const TrackDesigner = (function () {
     }
     design = next; sel = -1; span = -1; nudge = null;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
+  // A drag in flight holds its own copy of the points: drop it first, or the
+  // release would commit that stale copy over the restored design (and wipe redo).
+  function doUndo() { if (!undo.length) return false; if (cv) cv.reset(); redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; if (cv) cv.reset(); undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -679,12 +681,68 @@ const TrackDesigner = (function () {
   }
 
   // ── save / race ───────────────────────────────────────────────────────────
-  function save(forRace) {
+  /** The saved circuit this design's SHAPE already is (the id is a hash of the shape), when saving would relabel
+   *  it: another name or country, and not the entry this design was opened from (#5947 A). Else null. */
+  function labelClash() {
+    const it = custom.get && custom.sanitize(design);
+    const mine = it && it.id !== design.originId ? custom.get(it.id) : null;
+    return mine && (mine.name !== it.name || (mine.country || "") !== (it.country || "")) ? mine : null;
+  }
+  /** Ask before a shared copy of your own circuit renames it: KEEP MINE / USE THEIRS. The house modal (a
+   *  `dialog.screen` sheet, like the share-card preview) over the designer; Escape keeps yours. Each door paints
+   *  at least 44 px at any UI SIZE (the pause menu's floor, css/dialogs.css #3274). */
+  function askLabel(mine, done) {
+    const dlg = el("dialog", "screen dim");
+    dlg.id = "td-label-ask";
+    dlg.setAttribute("aria-labelledby", "td-label-ask-title");
+    dlg.setAttribute("data-esc-close", "td-label-keep");
+    const sheet = el("div", "sheet"); sheet.style.setProperty("--sheet-w", "460px");
+    const head = el("div", "sheet-head"), title = el("h2", "", "SAME CIRCUIT");
+    title.id = "td-label-ask-title"; head.appendChild(title);
+    const body = el("div", "sheet-body pane");
+    body.appendChild(el("p", "", "You already have this circuit as " + mine.name + "."));
+    const foot = el("div", "sheet-foot");
+    const finish = (keep) => {
+      if (dlg.open && typeof dlg.close === "function") dlg.close();
+      dlg.remove();
+      done(keep);
+    };
+    const door = (id, label, cls, keep) => {
+      const b = btn(label, cls, () => finish(keep)); b.id = id;
+      b.style.minHeight = b.style.minWidth = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
+      foot.appendChild(b);
+      return b;
+    };
+    const keepBtn = door("td-label-keep", "KEEP MINE", "bigbtn", true);
+    door("td-label-theirs", "USE THEIRS", "bigbtn alt", false);
+    sheet.append(head, body, foot);
+    dlg.appendChild(sheet);
+    dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); finish(true); });
+    document.body.appendChild(dlg);
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+    keepBtn.focus();
+    return dlg;
+  }
+  function save(forRace, after, asked) {
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before " + (forRace ? "racing" : "saving"), true); return { ok: false, reason: "red" }; }
     design.turns = verdict.turns.slice();
     design.lengthM = Math.round(verdict.tr.total);
     design.name = CustomTracks.sanitizeName(ui.name ? ui.name.value : design.name);
+    const mine = asked ? null : labelClash();
+    if (mine) {
+      askLabel(mine, (keep) => {
+        if (keep) {
+          design.name = mine.name;
+          if (mine.country) design.country = mine.country; else delete design.country;
+          if (ui.name) ui.name.value = design.name;
+          if (ui.country) ui.country.value = design.country || "";
+        }
+        const r = save(forRace, null, true);
+        if (r.ok && after) after(r);
+      });
+      return { ok: false, reason: "ask" };
+    }
     const r = custom.upsert(design, { replace: design.originId });
     if (!r.ok) {
       // A race runs a SAVED circuit, so a full library blocks racing a new design too.
@@ -703,7 +761,7 @@ const TrackDesigner = (function () {
     return r;
   }
   function race(mode) {
-    const r = save(true);
+    const r = save(true, (saved) => raceId(saved.id, mode));
     if (!r.ok) return false;
     return raceId(r.id, mode);
   }
@@ -2452,7 +2510,7 @@ const TrackDesigner = (function () {
   async function testHere(i) {
     const at = Number.isInteger(i) ? i : sel;
     if (!design || !(at >= 0 && at < design.pts.length)) { message("Select a point to test drive from", true); return false; }
-    const r = save(true);
+    const r = save(true, () => testHere(at));   // after a KEEP MINE / USE THEIRS answer, drive from the same point
     if (!r.ok) return false;
     const idx = custom.select(r.id);
     if (idx < 0) { message("That circuit is not in the list any more", true); return false; }

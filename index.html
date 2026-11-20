@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-fdjnL+DyHyVypDKJ+raB4EBUJYLzTtT3memEypclyqg=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -2469,7 +2469,12 @@
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.477 12.89l1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526 M18 8a6 6 0 1 0-12 0a6 6 0 1 0 12 0z"/></svg>STANDINGS</button>
     <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
     <button id="mb-phonepad" class="bigbtn alt minibtn" hidden aria-label="Use as controller: this phone steers a game on another screen"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>USE AS CONTROLLER</button>
-    <script>if(matchMedia("(pointer: coarse)").matches)document.getElementById("mb-phonepad").hidden=false</script>
+    <!-- The OTHER end of the same feature, for the screen you play on: a fine pointer
+         (a desktop) is the game a phone steers, so it gets PHONE CONTROLLER, which opens
+         Settings › CONTROLS and starts the pairing there (js/ui/platform-session.js).
+         Exactly one of the two shows, from the first frame (the script below). -->
+    <button id="mb-steerphone" class="bigbtn alt minibtn" type="button" hidden aria-label="Phone controller: steer this game with a phone">PHONE CONTROLLER</button>
+    <script>if(matchMedia("(pointer: coarse)").matches)document.getElementById("mb-phonepad").hidden=false;else document.getElementById("mb-steerphone").hidden=false</script>
     <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3 M12 17h.01"/></svg>HOW TO PLAY</button>
     <button id="mb-saves" type="button" class="bigbtn alt minibtn">SAVES &amp; DATA</button>
     </div>
@@ -2818,7 +2823,7 @@
 </dialog>
 
 <!-- track detail fullscreen overlay -->
-<!-- A REAL <dialog>, not a div with role="dialog" aria-modal="true". The
+<!-- A REAL dialog element, not a div with role="dialog" aria-modal="true". The
      hand-written version told assistive tech the page behind was inert while
      Tab walked straight out into #select — the worst combination. showModal()
      supplies that semantics for real, so the ARIA attributes are gone: the
@@ -4061,7 +4066,6 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/hud-inputs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-groups.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-arrange.js?v=dev"></script>
