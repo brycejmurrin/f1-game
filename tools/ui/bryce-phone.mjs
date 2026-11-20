@@ -20,7 +20,7 @@ import { brycePhone, openBrycePhone, readBackInPage, mismatches } from "../lib/b
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const USAGE = `usage: node tools/ui/bryce-phone.mjs [--window standalone|safari|w844] [--dpr N] [--ui-scale P] [--profile live|legacy] [--no-profile] [--json]
        node tools/ui/bryce-phone.mjs --measure [--url /path] [--eval "<js expression>"] [--shot out.png] [--wait ms] [same preset flags]
-  The owner's iPhone as one emulation recipe (tools/lib/bryce-phone.mjs): 852x393, DPR 3, env() insets 59/0/59/21, his live settings export (UI SIZE 61 %).
+  The owner's iPhone as one emulation recipe (tools/lib/bryce-phone.mjs): 852x393, DPR 3, env() insets 59/0/59/21, his live settings export (the 2026-11-10 file: UI SIZE 70 %, BUTTON SIZE 143.25 %).
   --measure boots the working tree on it (one browser; parent session only) and prints what the page reports; exit 1 on a mismatch.`;
 export const KNOWN = ["--window", "--dpr", "--ui-scale", "--profile", "--no-profile", "--json", "--measure", "--url", "--eval", "--shot", "--wait"];
 

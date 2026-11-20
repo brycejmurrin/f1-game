@@ -176,6 +176,8 @@ const DailyChallenge = (function () {
       return { model: ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link }), name: "daily-" + p.day, text: shareText(medal) };
     }
     async function shareCard(medal) {
+      // ShareCard rides LAZY_RESULTS_SHEET (off the boot wall): load it before the first card.
+      if (typeof ShareCard === "undefined" && typeof GameResults !== "undefined" && GameResults.ensureLoaded) await GameResults.ensureLoaded();
       if (typeof ShareCard === "undefined") throw new Error("Share cards are unavailable");
       const c = card(medal), blob = await ShareCard.render(c.model, "portrait");
       return ShareCard.deliver(blob, "apex26-" + c.name + ".png", { title: "APEX 26 DAILY", text: c.text, url: c.model.link });

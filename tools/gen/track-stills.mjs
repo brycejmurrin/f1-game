@@ -32,6 +32,7 @@ import { resolve } from "node:path";
 import sharp from "sharp";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { screenshotPresentedCanvas } from "../shot/probe-page.mjs";
+import { loadAllModels } from "../shot/capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT_DIR = resolve(ROOT, "assets", "stills");
@@ -153,9 +154,7 @@ try {
   // the __apex wait below is the real readiness signal.
   await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: WAIT_MS });
   await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
-  await page.evaluate(async () => {
-    if (typeof Assets !== "undefined" && Assets.loadModels) { try { await Assets.loadModels(); } catch (_) { /* procedural look */ } }
-  });
+  await loadAllModels(page);
   const failed = [];
   for (const id of circuits) {
     const t0 = Date.now();

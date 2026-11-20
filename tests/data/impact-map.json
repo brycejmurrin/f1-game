@@ -1671,6 +1671,9 @@
       ]
     },
     "js/camera/extra-rigs.js": {
+      "localBattles": [
+        "tests/unit/extra-rigs.test.mjs"
+      ],
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
       ],
@@ -1727,6 +1730,7 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "read": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
@@ -10200,6 +10204,9 @@
       ]
     },
     "js/lighting/frame-lights.js": {
+      "_hshOf": [
+        "tests/unit/frame-lights-release.test.mjs"
+      ],
       "appendCarTailLights": [
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/frame-lights-release.test.mjs",
@@ -10339,6 +10346,7 @@
       "*": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/deploy-ratchet-fragments.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-presets-extreme-knobs.test.mjs",
@@ -13434,6 +13442,7 @@
         "tests/unit/daily-challenge.test.mjs"
       ],
       "shareCard": [
+        "tests/unit/daily-challenge.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "shareResult": [
@@ -14076,11 +14085,13 @@
     },
     "js/race/quali-model.js": {
       "begin": [
+        "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ],
@@ -14096,6 +14107,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/flying-start.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -14103,6 +14115,7 @@
         "tests/unit/source-pin-hygiene.test.mjs"
       ],
       "medalFor": [
+        "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "order": [
@@ -14122,6 +14135,7 @@
         "tests/unit/quali-persist.test.mjs"
       ],
       "rows": [
+        "tests/unit/generated-docs.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
       ],
@@ -16058,6 +16072,9 @@
       "keepNearest": [
         "tests/unit/godray-keep-nearest.test.mjs"
       ],
+      "makeDirtCanvas": [
+        "tests/unit/godray-keep-nearest.test.mjs"
+      ],
       "roadReflection": [
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
@@ -17615,6 +17632,8 @@
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/share-card-data.test.mjs"
       ]
     },
@@ -17622,6 +17641,10 @@
       "layout": [
         "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/share/share-card.js": {
@@ -17644,6 +17667,8 @@
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
     },
@@ -20068,6 +20093,7 @@
       ],
       "*": [
         "tests/specs/menu-survey.spec.js",
+        "tests/specs/touch-pedals.spec.js",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
@@ -20151,7 +20177,6 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
-        "tests/specs/real-profile-dock.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",

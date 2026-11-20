@@ -259,6 +259,7 @@ export const AT_REF = {
   subFloorFontSize: (ref) => subFloorFontSizeReport(sheetsAt(ref)).length,
   eagerScripts: (ref) => wallAt(ref).scripts,
   eagerBytes: (ref) => wallAt(ref).bytes,
+  eagerCodeBytes: (ref) => wallAt(ref).codeBytes,
 };
 
 /** Sheets that space themselves entirely in raw px and read neither --pad nor
