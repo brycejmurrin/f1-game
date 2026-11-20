@@ -42,7 +42,8 @@
 //             passes. A package.json diff that is ONLY the generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
 //             deltas, compared head vs merge base; a lowered, unchanged or new ceiling is no raise) needs the
-//             `ratchet-raise` label, last added by Bryce in person and newer than the last push touching a ratchet file.
+//             `ratchet-raise` label, last added by Bryce in person or by an agent through the Claude app (D-041; his
+//             own removal vetoes agent re-adds), and newer than the last push touching a ratchet file.
 //             Per-file ceilings (`files`, the commit hook's --auto-raise) are not this row's. Bryce's pick, 2026-11-11
 //             ~09:10Z: "Build the check (Recommended)" (#5405 option b; .claude/rules/game-code.md).
 //   gen       clean merge onto the current base tip; `gen:check` passes and the scenery catalog builds there
@@ -226,6 +227,18 @@ export function baseVerdict(tip, labels, events = null, owner = OWNER, proof = n
  *  Claude app, byAgent) or null (anything else: another app, another login, no app field). Pure. */
 export const configLabelKind = (e, owner = OWNER) => (e?.event !== "labeled" ? null : byOwner(e, owner) ? "owner" : byAgent(e, owner) ? "agent" : null);
 
+/** The owner's own newest `unlabeled` of `label`, when no own `labeled` came after it (walked oldest first, like
+ *  hold): it vetoes every agent re-add until his own click (#5455). → the event, or null. Pure. */
+export function ownerVeto(events, label, owner = OWNER) {
+  const at = (e) => Date.parse(e?.created_at || "") || 0;
+  let veto = null;
+  for (const e of labelEvents(events, label).map((e, i) => ({ e, i })).sort((x, y) => at(x.e) - at(y.e) || x.i - y.i).map((x) => x.e)) {
+    if (!byOwner(e, owner)) continue;
+    veto = e.event === "unlabeled" ? e : null;
+  }
+  return veto;
+}
+
 /** config: a diff touching a CONFIG_PATH needs `config-ok`, and its newest label event must be a `labeled` one that
  *  counts. The owner's own click covers any diff. An agent's (configLabelKind "agent") covers a diff of ROUTINE config
  *  paths only: one PROTECTED path in the diff needs the owner's click for the whole row; and an owner's own `unlabeled`
@@ -248,13 +261,7 @@ export function configVerdict(files, labels, events = null, owner = OWNER, push 
   }
   if (kind === "agent") {
     if (prot.length) return row(false, `needs ${CONFIG_LABEL} from ${owner} himself: an agent's label (${describeActor(last)}) covers routine config paths only, and the diff edits protected path(s) ${list(prot)}`);
-    // An owner's own removal vetoes agent re-adds until he adds it himself (walked oldest first, like hold).
-    const at = (e) => Date.parse(e?.created_at || "") || 0;
-    let veto = null;
-    for (const e of labelEvents(events, CONFIG_LABEL).map((e, i) => ({ e, i })).sort((x, y) => at(x.e) - at(y.e) || x.i - y.i).map((x) => x.e)) {
-      if (!byOwner(e, owner)) continue;
-      veto = e.event === "unlabeled" ? e : null;
-    }
+    const veto = ownerVeto(events, CONFIG_LABEL, owner);
     if (veto) return row(false, `needs ${CONFIG_LABEL} from ${owner}: he removed it himself at ${veto.created_at || "?"}, so an agent's re-add does not count until his own (the diff edits ${shown})`);
   }
   const by = kind === "owner" ? `${CONFIG_LABEL} by owner (${owner}` : `${CONFIG_LABEL} by agent (${AGENT_APP_SLUG} app), routine paths only (${describeActor(last)}`;
@@ -387,8 +394,9 @@ export function treeRaises(before, after) {
 }
 
 /**
- * raise: no tree-wide ceiling rises, or Bryce's own newest `ratchet-raise` covers the head (`push` from
- * configPushState over the ratchet files). An agent's label never counts. Pure.
+ * raise: no tree-wide ceiling rises, or the newest `ratchet-raise` covers the head (`push` from configPushState over
+ * the ratchet files). Bryce's own click counts, and so does an agent's (configLabelKind "agent", D-041: Bryce
+ * 2026-11-20 "Routine both"), except that his own `unlabeled` vetoes agent re-adds until his own `labeled`. Pure.
  */
 export function raiseVerdict(raises, labels, events = null, owner = OWNER, push = null) {
   if (!raises?.length) return row(true, "no tree-wide ratchet ceiling rises or is removed in the diff (per-file ceilings are the commit hook's --auto-raise, not this row's)");
@@ -396,8 +404,17 @@ export function raiseVerdict(raises, labels, events = null, owner = OWNER, push 
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
   const last = newestLabelEvent(events, RAISE_LABEL);
   if (!names.includes(RAISE_LABEL)) return row(false, `needs ${RAISE_LABEL} from ${owner}: the diff raises a tree-wide ceiling (${shown}) — lower the count instead, or ask him`);
-  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
-    return row(false, `needs ${RAISE_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (raises ${shown})`);
+  const kind = configLabelKind(last, owner);
+  if (!kind) {
+    return row(false, `needs ${RAISE_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click, or an agent's (${AGENT_APP_SLUG} app), counts (raises ${shown})`);
+  }
+  if (kind === "agent") {
+    const veto = ownerVeto(events, RAISE_LABEL, owner);
+    if (veto) return row(false, `needs ${RAISE_LABEL} from ${owner}: he removed it himself at ${veto.created_at || "?"}, so an agent's re-add does not count until his own (raises ${shown})`);
+    const by = `agent (${describeActor(last)})`;
+    if (push?.state === "after") return row(false, `needs a fresh ${RAISE_LABEL}: ${push.evidence} after the label by ${by} at ${last.created_at || "?"} (remove and re-add it)`);
+    if (push?.state === "unknown") return { ...row(false, `${RAISE_LABEL} by ${by} found, head push not resolved yet: ${push.evidence}`), pending: true };
+    return row(true, `${RAISE_LABEL} added by ${by} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
   }
   if (push?.state === "after") return row(false, `needs a fresh ${RAISE_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
   if (push?.state === "unknown") return { ...row(false, `${RAISE_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
@@ -435,7 +452,7 @@ export function raiseRow({ pr, head, headRef, base, changed, labels, events, own
   if (now.error) return { error: now.error };
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
-  let push = raises.length && last?.event === "labeled" && byOwner(last, owner)
+  let push = raises.length && configLabelKind(last, owner)
     ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file" }) : null;
   if (push?.state === "after" && push.from) {
     const then = prRaisesAt(push.from, base, request);
