@@ -165,3 +165,31 @@ test("fxSet clamps to the knob range, rounds to a notch, and rejects non-numbers
   assert.equal(CC.fxSet(s, "nope", 3), false, "unknown id is refused");
   assert.equal(s._disk.has("nope"), false);
 });
+
+// #5990 (Bryce, 2026-11-20): MOTION BLUR drives the existing radial speed blur,
+// default OFF; SPEED LINES has no effect on any backend, so it is hidden.
+test("MOTION BLUR defaults OFF and maps a saved notch onto the SPEED BLUR scale", () => {
+  const CC = load();
+  const s = rawStore();
+  assert.equal(CC.FX_DEFS.find((d) => d.id === "motionBlur").def, 1, "default notch is OFF: the shipped look is unchanged");
+  assert.equal(CC.blurAmount(s), 0, "unset key → no blur");
+  s.set("motionBlur", 5); s.rev = 1;
+  assert.equal(CC.blurAmount(s), 1, "a saved notch 5 is kept and reads as amount 1");
+  s.set("motionBlur", 10); s.rev = 2;
+  assert.equal(CC.blurAmount(s), 2.25);
+  const knob = /id: "speedBlur"[^}]*max: ([\d.]+)/.exec(fs.readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"));
+  assert.ok(knob && CC.blurAmount(s) <= Number(knob[1]), "notch 10 stays inside the SPEED BLUR knob's range");
+  s.set("motionBlur", 1); s.rev = 3;
+  assert.equal(CC.blurAmount(s), 0, "notch 1 is off");
+  s.set("motionBlur", 7);
+  assert.equal(CC.blurAmount(s), 0, "memoised until the store's revision moves");
+});
+
+test("SPEED LINES is hidden from the camera tuner until a backend draws it; its key stays", () => {
+  const CC = load();
+  const sl = CC.FX_DEFS.find((d) => d.id === "speedLines");
+  assert.equal(sl.hidden, true);
+  assert.equal(CC.FX_DEFS.find((d) => d.id === "motionBlur").hidden, undefined);
+  const s = rawStore({ speedLines: 4 });
+  assert.equal(CC.fxGet(s, "speedLines"), 4, "a saved notch is still read (export / import round-trip)");
+});
