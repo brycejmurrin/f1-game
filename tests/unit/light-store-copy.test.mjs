@@ -359,7 +359,7 @@ test("a no-op set of a rebuild or reinitRain knob does not invalidate again", ()
   assert.equal(h.state.rainInits, 1, "same rainCount again does not re-seed");
 });
 
-test("tuned() counts the condition's overrides and reset() clears them (and the global layer)", () => {
+test("tuned() counts the condition's overrides and reset() clears them (the global layer stays, #5990)", () => {
   const h = loadStore({ saved: { lampLevel: 0.9 } });          // player "*" layer
   assert.equal(h.store.tuned(), 0, "the global layer is not this condition's edit");
   h.store.set("keyMul", 1.5); h.store.set("ssrWetMul", 1.4);
@@ -368,7 +368,8 @@ test("tuned() counts the condition's overrides and reset() clears them (and the 
   assert.equal(h.store.tuned(), 2);
   h.store.reset();
   assert.equal(h.store.tuned(), 0);
-  assert.equal("bahrain|dusk|wet" in h.store.profiles, false);
-  assert.equal("*" in h.store.profiles, false, "reset also clears the player global layer");
+  assert.deepEqual(Object.keys(h.store.profiles["bahrain|dusk|wet"] || {}).filter((id) => id !== "lampLevel"), [],
+    "the condition's edits are gone (a lampLevel left there is the shipped value, masking the global layer)");
+  assert.deepEqual({ ...h.store.profiles["*"] }, { lampLevel: 0.9 }, "reset keeps the player global layer for the other conditions");
   assert.equal(h.store.profiles["monza|dusk|wet"].keyMul, 0.4, "another condition's edit survives");
 });

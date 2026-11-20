@@ -302,6 +302,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
       mirrorDeferred: false, mirrorLazy: null };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "", _deviceLost = false;
     ${tslice("      // B-F3.1 (perf hunt 4) — THE MIRROR WARM, DEFERRED", "      // forWarm: the warm compiles the scene into mirRT next")}
+    let _mirReady = false;
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
     ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
@@ -320,7 +321,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
     }
     return { mirrorBegin, present, request: () => { _warmRequested = true; _warmAttempts = 0; }, pending: () => _warmPending,
       warming: () => !!_warmPending, stages: _warmStages, mirRT: () => mirRT, mirUsed: () => _mirUsed,
-      owed: () => _mirWarmOwed, lazyOn: _mirWarmLazy };`);
+      owed: () => _mirWarmOwed, lazyOn: _mirWarmLazy, swapPost: next => { post = next; } };`);
   const R = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },
     globalThis.Log, soft, GameStore);
   // Every compileAsync and render, with the target it ran against.
@@ -333,7 +334,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
   const entry = async () => { R.request(); R.present(OPTS); await R.pending(); };
   const mirrorCompiles = () => compiles.filter((tg) => tg && tg === R.mirRT()).length;
   const mirrorDraws = () => draws.filter((d) => d.size && d.size[0] === 4 && d.size[1] === 4).length;
-  return { renderer, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws, fg };
+  return { renderer, post, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws, fg };
 }
 
 // Pass root: three's projectObject visits every child of castScene, hidden or not, so each pass must hand it only
@@ -408,6 +409,28 @@ test("B-F3.1: the first mirrorBegin refuses, present() runs the mirror stage alo
   assert.equal(h.R.owed(), false);
   assert.equal(h.R.mirrorBegin(), true, "the next demand draws, its programs compiled");
   assert.equal(h.R.present(h.OPTS), true, "and nothing more is warmed");
+});
+
+test("deferred mirror warm survives a missing post chain and supports its return", async (t) => {
+  const h = await mirrorWarmRig(t);
+  await h.entry();
+  assert.equal(h.R.owed(), true);
+  h.R.swapPost(null);
+  assert.equal(h.R.mirrorBegin(), false, "mirror demand starts the owed world warm");
+  assert.equal(h.R.present(h.OPTS), false);
+  await h.R.pending();
+  assert.equal(h.R.stages.mirrorLazy.ok, true, "mirror world warms without a post composite");
+  assert.equal(h.mirrorCompiles(), 1);
+  assert.equal(h.R.mirRT().textures.length, 1);
+  assert.equal(h.R.mirrorBegin(), true);
+
+  h.R.swapPost(h.post);
+  await h.entry();
+  assert.equal(h.R.mirrorBegin(), false);
+  assert.equal(h.R.present(h.OPTS), false);
+  await h.R.pending();
+  assert.equal(h.R.stages.mirrorLazy.ok, true, "the restored chain can warm its composite");
+  assert.equal(h.R.mirrorBegin(), true);
 });
 
 test("B-F3.1: the default (unset), apex26.tlxMirWarmLazy=0, an explicit ON, a PiP ON warm eagerly; OFF and a software GPU owe nothing (today)", async (t) => {

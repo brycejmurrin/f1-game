@@ -35,7 +35,8 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 `gh api repos/<owner>/<repo>/commits/<sha>/statuses` (the newest `context: gate`; its description and the linked
 run's summary name the failing merge-gate row). On the current head with `open=ok ci=ok`, a sync cures the merge
 rows: `retest=FAIL` alone makes `needs-sync` answer `retest-refused` (#5554), `gen=FAIL` or `ratchets=FAIL`
-`gate-refused` (#5832); `sync-pr` runs for both.
+`gate-refused` (#5832); `sync-pr` runs for both. A draft has no `gate` status: `needs-sync` runs the same merge rows
+locally and answers `tip-crossed` when one fails.
 
 ## "Live" is an ancestry test
 

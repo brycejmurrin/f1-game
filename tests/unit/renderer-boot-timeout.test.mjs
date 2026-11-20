@@ -19,7 +19,7 @@ const settle = () => new Promise((r) => setImmediate(r));
 
 const gfxSeam = vm.runInNewContext(readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8") + ";Gfx");
 function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false, requestAdapter,
-  ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map(), onReload } = {}) {
+  ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map(), onReload, build } = {}) {
   const timers = [], warns = [], calls = [];
   const ctx = vm.createContext({
     console, Promise,
@@ -40,6 +40,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
   });
   ctx.window = ctx;
+  if (build) ctx.__APEX_BUILD = build;
   ctx.dispatchEvent = () => true;
   vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
   const rb = vm.runInContext("RendererBoot", ctx).create({
@@ -467,4 +468,58 @@ test("an explicit THREE pick whose early adapter hangs or rejects hands null aft
   const bad = boot({ stored: "three", requestAdapter: () => Promise.reject(new Error("refused")), gfxCreate: async (_c, opts) => { seen2 = opts.adapter; return { api: "three" }; } });
   assert.equal((await bad.rb.start()).bound, true);
   assert.equal(seen2, null, "a rejected early adapter rides as null");
+});
+
+// #5942: BOOT_STEP_MS wraps Gfx.create(), and TLX's create() includes the ~1.16 MB three island import.
+// Two slow first loads on cellular struck the canary twice and retired three for good. A create() that
+// times out while the owner says the vendor import is still downloading is a network stall: no strike.
+function stalledImport(ls) {
+  return boot({ ownerProtocol: true, ls, gfxCreate: (_, opts) => { opts.initOwner.importing_(true); return new Promise(() => {}); } });
+}
+test("#5942: two create() timeouts during the three import, then a good boot: three is not retired", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]);
+  for (let i = 0; i < 2; i++) {
+    const h = stalledImport(ls);
+    const started = h.rb.start(); await settle(); h.fire(BOOT_STEP_MS);
+    const r = await started;
+    assert.equal(r.bound, false, "this boot falls through to GLX");
+    assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a download stall disarms the canary: no strike");
+    assert.ok(h.warns.some((m) => /three module download gave no answer/.test(m)), "the reason names the download");
+  }
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick survives");
+  assert.equal(ls.has("apex26.gfxRetired"), false);
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "no strike was recorded");
+  let tried = 0;
+  const good = boot({ ls, gfxCreate: async () => { tried++; return { api: "three" }; } });
+  const r = await good.rb.start();
+  assert.equal(tried, 1, "the next boot still tries three");
+  assert.equal(r.bound, true);
+});
+
+test("#5942: a create() that hangs AFTER the import still strikes (real-hang protection intact)", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]);
+  // hang (armed) → strike 1, GLX this boot → hang again (armed) → strike 2 retires.
+  for (let i = 0; i < 4; i++) {
+    const h = boot({ ownerProtocol: true, ls, gfxCreate: (_, opts) => {
+      opts.initOwner.importing_(true); opts.initOwner.importing_(false); return new Promise(() => {}); } });
+    const started = h.rb.start(); await settle(); h.fire(BOOT_STEP_MS); await started;
+  }
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "two armed boots retire a device that hangs in init");
+  assert.match(ls.get("apex26.gfxRetired") || "", /^three:/);
+});
+
+test("#5942: a retirement expires on a new build with one strike left; the same build keeps it", async () => {
+  const retiredLs = () => new Map([["apex26.gfxBackend", "webgl2"], ["apex26.gfxRetired", "three:1700"]]);
+  let tried = 0;
+  const create = async () => { tried++; return { api: "three" }; };
+  const same = boot({ ls: retiredLs(), build: 1700, gfxCreate: create });
+  assert.equal((await same.rb.start()).bound, false, "same build: still retired");
+  assert.equal(tried, 0);
+  assert.equal(same.ls.get("apex26.gfxRetired"), "three:1700");
+  const next = boot({ ls: retiredLs(), build: 1701, gfxCreate: create });
+  assert.equal((await next.rb.start()).bound, true, "a new build tries three again");
+  assert.equal(tried, 1);
+  assert.equal(next.ls.get("apex26.gfxBackend"), "three");
+  assert.equal(next.ls.has("apex26.gfxRetired"), false);
+  assert.equal(next.ls.get("apex26.gfxProbeStrikes"), "three:1", "one strike left: a backend that still dies re-retires on its first kill");
 });

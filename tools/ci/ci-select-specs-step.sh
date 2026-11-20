@@ -46,7 +46,8 @@ else
   echo "timings: bot/spec-timings unavailable; committed record only"
 fi
 node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt \
-  ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} --json > sel.json \
+  ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} \
+  ${OVER_BUDGET_SHARDS:+--over-budget-shards "$OVER_BUDGET_SHARDS"} --json > sel.json \
   || fail "selector failed"
 node -e '
   const r = require("./sel.json");

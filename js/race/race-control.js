@@ -16,7 +16,11 @@ const RaceControl = (function () {
   // player's finish OR retirement (`since`) — a DNF no longer ends the race for
   // everyone, so season/career points use the real classification — then endRace
   // classifies as before (RaceControl.shortRun when no car ever took the flag).
-  // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
+  // NET (`post.net`, #5989 A1): the same POST_FINISH_CAP s, counted from the
+  // FIRST human's finish (`post.first`); a friend still on track is then
+  // classified by laps done instead of holding the finished screen to the
+  // 360 s/lap hard cap.
+  // TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
   const POST_FINISH_CAP = 75;
   function finishPending(cars, raceT, lapsTarget, raceT0) {
     if (raceT - (raceT0 > 0 ? raceT0 : 0) > 360 * lapsTarget) return false;
@@ -30,13 +34,14 @@ const RaceControl = (function () {
   }
   function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
     const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false;
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, humanFinished = false;
     for (const c of cars || []) {
       if (!c) continue;
       if (c.finished) anyFinished = true;
       else if (!c.retired) running = true;
       if (!c.human && !c._nHuman) continue;
       anyHuman = true;
+      if (c.finished && !c.retired) humanFinished = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
     // A time penalty is served on the CLOCK (classification sorts finishers by
@@ -49,6 +54,8 @@ const RaceControl = (function () {
     if (finishPending(cars, raceT, lapsTarget, raceT0)) return 0;
     if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
     if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
+    if (post && post.net) { if (!humanFinished) post.first = -1; else if (!(post.first >= 0)) post.first = raceT; }
+    if (humanFinished && !allHumansDone && post && post.net) return raceT - post.first < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (ran > 360 * lapsTarget) return 0.1;
@@ -228,6 +235,7 @@ const RaceControl = (function () {
   const RED_STOP = 8;      // s for the field to come to a halt once red is shown
   const RED_HOLD = 6;      // s the flag holds before the restart is called
   const MIN_HOLD = 6;      // s a caution holds once raised (anti-flicker)
+  const SC_HOLD = 45;      // s an SC holds: debris despawns in 4 s, so 6 s never let the field bunch (#5893)
   const YELLOW_MAX = 30;   // s hard cap on a local yellow
   const SC_MAX = 90;       // s hard cap on VSC/SC — bounded, ~a lap or two
   const CAP_REARM_HOLD = 45;  // s of green after a cap-forced drop before the
@@ -523,7 +531,7 @@ const RaceControl = (function () {
         stopOwned = fromStop;
         flag(prev, desired);
       } else if (desired < caution.level) {
-        if (caution.sinceT >= MIN_HOLD) {
+        if (caution.sinceT >= (caution.level === 3 ? SC_HOLD : MIN_HOLD)) {
           const prev = caution.level;
           caution.level = desired;
           if (desired !== 1) caution.sector = -1;

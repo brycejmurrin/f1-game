@@ -2067,14 +2067,11 @@ const LiveryTex = (function () {
     // the sidepod line. Sharing the flank with the mark is what the real cover
     // does; hiding behind the rear tyre to avoid it is not.
     const sideFrom = spineLogo === "wrap" ? Math.round((sunReach(0) + 0.02) * 1000) / 1000 : 0;
-    // …and a band may run to the tail of the flank, but CONTENT may not: a
-    // stripe's aft end disappearing behind the wheel is a stripe, a sponsor
-    // name's aft end disappearing behind the wheel is half a word. `su` is the
-    // band axis, `sc` the content axis, and they differ only where a crown has
-    // taken the front — every other team's lettering is where it always was.
+    // …a band may run to the flank's tail, CONTENT stops at FLANK_SEEN on every
+    // crown: a name behind the wheel is half a word (#5712). `su` band, `sc` content.
     const sideTo = sideFrom ? FLANK_SEEN : 1;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
-    const sc = (F, u) => F.fx(sideFrom + u * (sideTo - sideFrom));
+    const sc = (F, u) => F.fx(Math.min(FLANK_SEEN, sideFrom + u * (sideTo - sideFrom)));
     const sbox = (F, u0, u1, v0, v1) => {
       const xa = sc(F, u0), xb = sc(F, u1);
       return { x: Math.min(xa, xb), y: F.R.y + v0 * F.R.h, w: Math.abs(xb - xa), h: (v1 - v0) * F.R.h };
@@ -2181,7 +2178,7 @@ const LiveryTex = (function () {
       // BULL.top freed above the animal's back. Under a saddle it STAYS on the
       // saddle panel (aft of ~u 0.50 leaves the rake onto bare cover).
       eachFlank((F) => {
-        let box = sbox(F, 0.06, 0.94, 0.12, 0.48);
+        let box = sbox(F, 0.04, 0.60, 0.12, 0.48);
         if (sideFrom) box = sbox(F, 0.02, 0.98, 0.03, 0.30);
         else if (spineLogo === "saddle") box = sbox(F, 0.04, 0.50, 0.12, 0.48);
         const ink = sideFrom ? inkMark : inkFlank;
@@ -2217,10 +2214,11 @@ const LiveryTex = (function () {
             { align: "center", pad: 4, halo: flankHalo(inkFlank) });
           return;
         }
-        drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.14, 0.50), inkFlank,
-          { align: "center", pad: 8, halo: flankHalo(inkFlank) });
-        drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.16, 0.46), inkFlank,
+        // Stacked inside the seen strip (#5712).
+        drawWordmark(ctx, names[0] || "", sbox(F, 0.04, 0.60, 0.10, 0.32), inkFlank,
           { align: "center", pad: 6, halo: flankHalo(inkFlank) });
+        drawWordmark(ctx, names[1] || "", sbox(F, 0.10, 0.54, 0.34, 0.52), inkFlank,
+          { align: "center", pad: 4, halo: flankHalo(inkFlank) });
       });
     } else if (spineSide === "title") {
       // Title sponsor ON a contrasting board — distinct from bare wordmark / PLATE.
@@ -2590,13 +2588,14 @@ const LiveryTex = (function () {
   // repainted the paint + crest lockup: 370-450 ms of a phone-throttled pick (CPU x4,
   // B·H13 2026-10-21). A card's pixels depend only on (team, livery fields, size), so
   // the first paint lands in an offscreen canvas and later ones blit it. Cached only
-  // once web fonts are in (a lockup painted in the fallback face must not stick);
+  // once its NUM_FONTS faces are in (not fonts.status: any page font load flips it, #5983);
   // a logo install or removal (markChanged) drops every card.
   const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0, reused: 0 };
+  let _fIn = false;
+  const fontsOk = () => _fIn || (_fIn = typeof document !== "undefined" && (!document.fonts || Object.values(NUM_FONTS).every((r) => document.fonts.check(r.font(9)))));
   markReady.push(() => { _swatchCache.clear(); _cardCanvas.clear(); });
   function paintSwatch(ctx, teamId, liv, w, h) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
-    if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
+    if (!fontsOk() || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = _swatchCache.get(key);
     if (!c) {
@@ -2609,15 +2608,15 @@ const LiveryTex = (function () {
     }
     ctx.drawImage(c, 0, 0); _swatchStats.blits++;
   }
-  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick still made 113 new canvases, each with
+  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick made 113 new canvases, each
   // a getContext and a drawImage: ~74 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21).
   // swatchCanvas hands back the painted canvas a card used last build, for the new card to adopt
   // (appendChild moves it out of the discarded sheet). `build` names the sheet build: a second card
   // with the same look in one build gets a fresh canvas instead of stealing the first one's.
-  // Kept only once fonts are in, and dropped with the swatch cache on markChanged.
+  // Kept only once fonts are in; dropped with the swatch cache on markChanged.
   const _cardCanvas = new Map();
   function swatchCanvas(teamId, liv, w, h, build) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    const fontsIn = fontsOk();
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = fontsIn ? _cardCanvas.get(key) : null;
     if (c && c.__swatchBuild !== build) {

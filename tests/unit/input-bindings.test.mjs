@@ -164,6 +164,15 @@ test("key and pad maps round-trip; malformed / old-shape entries degrade safely"
   assert.deepEqual(plain(padBad.camera), [null, null]);
 });
 
+test("blank controller slots do not claim button zero on import or rebind", () => {
+  const { B } = boot();
+  const saved = B.setPadMap({ camera: ["  ", "19"] });
+  assert.deepEqual(plain(saved.camera), [null, 19]);
+  assert.deepEqual(plain(saved.throttle), [7, 0]);
+  assert.equal(B.setPadBinding("camera", 0, "").ok, false);
+  assert.deepEqual(plain(B.getPadMap()), plain(saved));
+});
+
 test("setPadMap notifies so a loaded custom map cannot leave a held pedal latched", () => {
   const { B, counts } = boot();
   const before = counts.pad;

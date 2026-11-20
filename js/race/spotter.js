@@ -146,7 +146,7 @@ var Spotter = (() => {
             if (!valid) rollback();
             validated = !!valid;
             return validated; } });
-        if (spokeOk && typeof Captions !== "undefined" && Captions.onSpotter) Captions.onSpotter(KEYS[key], key);
+        if (spokeOk && typeof Captions !== "undefined" && Captions.onSpotter) Captions.onSpotter(KEYS[key], key, true);
         return spokeOk;
       };
       const key = step(st, occupied, dt, speak);

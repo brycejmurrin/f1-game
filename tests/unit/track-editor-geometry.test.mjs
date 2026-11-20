@@ -492,3 +492,23 @@ test("validate: 201 control points read 'Too many points', not the ±10 km 'boun
   assert.equal(v.ok, false);
   assert.ok(V.check(design({ pts: [[0, 0], [20000, 0], [0, 20000], [-9000, 0], [0, -9000], [900, 900], [-900, 900], [900, -900]] })).issues.some((i) => i.code === "bounds"), "a real off-map point still says bounds");
 });
+
+test("inserting a SHAPE stamp into a green RANDOMISE loop does not tie a knot in it (clean-room 63)", () => {
+  const { ST, TR, V } = bootEditor();
+  const tangled = {};
+  for (const kind of ["straight", "corner", "chicane", "sbend"]) {
+    let n = 0, bad = 0;
+    for (let seed = 1; n < 8 && seed < 60; seed++) {
+      const g = TR.generateValid(seed), pts = g && g.pts;
+      if (!pts || V.check(design({ seed, pts })).red) continue;
+      n++;
+      const i = Math.floor(pts.length / 3), r = ST.splice(pts, i, i, kind, {});
+      assert.ok(r.ok, kind + " inserts on seed " + seed);
+      if (V.check(design({ seed, pts: r.pts })).issues.some((x) => x.level === "red" && (x.code === "crossing" || x.code === "clearance"))) bad++;
+    }
+    assert.equal(n, 8, kind + ": eight green loops");
+    tangled[kind] = bad;
+  }
+  // Before the fix every insert rejoined behind the stamp's end: 8/8 knotted for every kind.
+  assert.ok(Object.values(tangled).every((v) => v <= 1), "inserts left crossing/clearance red: " + JSON.stringify(tangled));
+});

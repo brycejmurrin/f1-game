@@ -176,11 +176,17 @@ test("no-op without #drag-anchor or outside TOUCH steer mode", () => {
   assert.ok(!classOn.has("on"));
 });
 
-test("follows the touch that is actually steering (last press wins)", () => {
+// Clean-room fix 61: a finger takes the steering once it drags past the dead
+// zone, not on press, so a resting second finger cannot steal it.
+test("follows the touch that is actually steering (last drag wins, a resting press does not)", () => {
   const { Input, onCanvas, dragEl } = boot();
   Input.setSteerMode("touch");
   onCanvas("touchstart", { changedTouches: [{ identifier: 10, clientX: 80, clientY: 120 }] });
   onCanvas("touchstart", { changedTouches: [{ identifier: 11, clientX: 520, clientY: 640 }] });
+  assert.equal(dragEl.style.left, "80px", "a fresh press does not take the steering");
+  onCanvas("touchmove", { changedTouches: [{ identifier: 11, clientX: 522, clientY: 640 }] });
+  assert.equal(dragEl.style.left, "80px", "jitter inside the dead zone does not take it either");
+  onCanvas("touchmove", { changedTouches: [{ identifier: 11, clientX: 540, clientY: 640 }] });
   assert.equal(dragEl.style.left, "520px");
   assert.equal(dragEl.style.top, "640px");
   onCanvas("touchend", { changedTouches: [{ identifier: 11, clientX: 520, clientY: 640 }] });

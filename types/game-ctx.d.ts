@@ -322,6 +322,8 @@ interface PitSession {
   info(c?: CarState): Record<string, unknown> | null;
   setNext(c: CarState, record: unknown): void;
   estimate(c: CarState): { lossS: number; gapS: number | null } | null;
+  /** The lane's net cost in seconds at racing speed (the STRATEGY row's figure). */
+  lossS(): number;
   choices(c: CarState): Array<{ id: string; code: string }>;
   selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;
@@ -416,6 +418,8 @@ interface GameCtx {
   raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
   readonly pits: PitSession;
+  /** Game-feel state (screen shake, hit-stop, camera roll); __apex reads it, never writes. */
+  readonly feel: { shake: number; camRoll: number; hitStop: number; startHold: number; restartPending: boolean };
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
   /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
@@ -786,8 +790,8 @@ interface GameCtx {
   raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
   /** A championship's grid with qualifying off: "champ" (standings, FIA 2026 SR B2.5.4(a)) | "tier" | "revchamp" | "random". */
   champGrid: "champ" | "tier" | "revchamp" | "random";
-  /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
-  readonly referencePole: () => number;
+  /** The modelled pole (Quali.referencePole): at QUALI_TRIM, the lap pit loss and the replay scale use; "medal": the calibrated time-trial / daily medal target. */
+  readonly referencePole: (kind?: "medal") => number;
   /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
   readonly redFlagRestart: () => boolean;
   /** The day's time-trial plan (js/race/daily-challenge.js). */
@@ -939,6 +943,7 @@ declare const DockLayout: GameModuleFactory;
 declare const HudArrange: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
+declare const SettingsExportBody: GameModuleFactory;
 
 declare const SessionRecords: GameModuleFactory;
 declare const DrivingCoach: GameModuleFactory;

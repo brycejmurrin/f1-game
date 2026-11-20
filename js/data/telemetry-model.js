@@ -87,13 +87,15 @@ const DataTelemetryModel = (function () {
     const lanes = [];
     for (const lane of [primary, compare]) {
       const car = lane.car || [], cum = lane.cum || cumDist(car);
-      if (car.length < 2 || !isFinite(cum.d[0]) || !isFinite(cum.d[cum.d.length - 1]) || cum.d[0] > from || cum.d[cum.d.length - 1] < to) return unavailable("Both lanes must cover the whole interval.");
+      if (car.length < 2 || !isFinite(cum.d[0]) || cum.d[0] > from || cum.d[cum.d.length - 1] < to) return unavailable("Both lanes must cover the whole interval.");
       const start = timeAtDist(cum, from), end = timeAtDist(cum, to);
+      if (!isFinite(start) || !isFinite(end)) return unavailable("Both lanes must cover the whole interval.");
       for (let i = 0; i < car.length; i++) {
         const c = car[i];
-        if (i && (!(car[i].t > car[i - 1].t) || !(cum.d[i] > cum.d[i - 1]))) return unavailable("Distance must increase through both lanes.");
+        const overlaps = i > 0 && car[i - 1].t < end && c.t > start;
+        if (overlaps && (!(c.t > car[i - 1].t) || !(cum.d[i] > cum.d[i - 1]))) return unavailable("Distance must increase through both lanes.");
         if (c.t >= start && c.t <= end && [c.speed, c.brake, c.throttle].some((v) => typeof v !== "number" || !isFinite(v))) return unavailable("Unavailable: missing telemetry channels.");
-        if (i && car[i - 1].t <= end && c.t >= start && c.t - car[i - 1].t > 1.5) return unavailable("Unavailable: telemetry gap inside the interval.");
+        if (overlaps && c.t - car[i - 1].t > 1.5) return unavailable("Unavailable: telemetry gap inside the interval.");
       }
       let brakeArmed = false, throttleArmed = false, brakeHits = 0, throttleHits = 0, previousSample = null;
       let brakeCandidate = null, throttleCandidate = null;
@@ -153,6 +155,8 @@ const DataTelemetryModel = (function () {
     return car[lo].t + f * (car[hi].t - car[lo].t);
   }
 
+  // Loaded GPS traces are immutable; the map and its animated dots share the cadence threshold.
+  const gapLimits = new WeakMap();
   function locAt(view, tel, t) {
     const own = !!(tel.loc && tel.loc.length);
     const loc = own ? tel.loc : (view.primary.loc || []);
@@ -161,6 +165,7 @@ const DataTelemetryModel = (function () {
       const ownMax = (tel.car && tel.car.length) ? tel.car[tel.car.length - 1].t : 0;
       const f = clamp(t / (ownMax || view.tMax || 1), 0, 1) * (loc.length - 1);
       const i = Math.floor(f);
+      if (f > i && isGap(loc, i + 1, gapLimitMs(loc))) return null;
       return lerpLoc(loc[i], loc[i + 1], f - i);
     }
     const target = dateAtT(tel.car, t);
@@ -173,6 +178,8 @@ const DataTelemetryModel = (function () {
       const mid = (lo + hi) >> 1;
       if (+loc[mid].date <= target) lo = mid; else hi = mid;
     }
+    if (target === +loc[lo].date) return loc[lo];
+    if (isGap(loc, hi, gapLimitMs(loc))) return null;
     const span = +loc[hi].date - +loc[lo].date;
     let f = span > 0 ? (target - +loc[lo].date) / span : 0;
     // WHERE BETWEEN THE TWO FIXES? The fixes themselves are ground truth — the
@@ -222,14 +229,16 @@ const DataTelemetryModel = (function () {
   }
   function gapLimitMs(loc) {
     if (!loc || loc.length < 8) return Infinity;
+    if (gapLimits.has(loc)) return gapLimits.get(loc);
     const dts = [];
     for (let i = 1; i < loc.length; i++) {
       const dt = loc[i].date - loc[i - 1].date;
       if (isFinite(dt) && dt > 0) dts.push(dt);
     }
-    if (dts.length < 4) return Infinity;
     dts.sort(function (a, b) { return a - b; });
-    return Math.max(quantile(dts, 0.5) * 8, 1500);   // 8x the median cadence, min 1.5 s
+    const limit = dts.length < 4 ? Infinity : Math.max(quantile(dts, 0.5) * 8, 1500);
+    gapLimits.set(loc, limit);
+    return limit;   // 8x the median cadence, min 1.5 s
   }
   function isGap(loc, i, limit) {
     if (!isFinite(limit)) return false;

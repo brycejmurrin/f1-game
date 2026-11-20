@@ -153,11 +153,11 @@ const HudStrategy = (function () {
     const a = i > 0 ? ranked[i - 1] : null;
     const behind = i >= 0 && i < ranked.length - 1 ? ranked[i + 1] : null;
     const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
-    const total = G.track ? G.track.total : 0;
+    const total = G.track ? G.track.total : 0, gc = typeof HudReadouts !== "undefined" && HudReadouts.gaps;   // the chips' time-at-a-line clock (#5678)
     ctx.hasRival = !!a && !a.retired;
     if (ctx.hasRival) {
       const dist = (a.prog || 0) - (player.prog || 0);
-      ctx.gapS = dist / vFloor;
+      ctx.gapS = gc ? gc.gapOr(a, player, dist / vFloor) : dist / vFloor;
       ctx.rivalLapped = total > 0 && dist >= total;   // a lap or more up the road: not a fight for this place
       ctx.rivalInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(a);
       ctx.rivalWear = tyres.spent(a);
@@ -178,7 +178,7 @@ const HudStrategy = (function () {
     bctx.lapsToStop = pl && Number.isFinite(pl.lapsToStop) ? pl.lapsToStop : null;
     if (bctx.hasBehind) {
       const backDist = (player.prog || 0) - (behind.prog || 0);
-      bctx.gapS = backDist / vFloor;
+      bctx.gapS = gc ? gc.gapOr(player, behind, backDist / vFloor) : backDist / vFloor;
       bctx.behindInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(behind);
       bctx.behindWear = tyres.spent(behind);
       bctx.behindLap = behind.lap || 0;

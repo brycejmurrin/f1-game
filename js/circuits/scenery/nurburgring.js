@@ -350,7 +350,9 @@
       for (const [s0, s1] of [[0.80, 0.816], [0.860, 0.90]]) guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
       for (const [s0, s1] of [[0.80, 0.844], [0.872, 0.90]]) guardrail(s0, s1, 1, 7, [0.80, 0.81, 0.83]);
       guardrail(0.955, 0.045, 1, 4.0, [0.85, 0.85, 0.88]);
-      fence(0.96, 0.04, -1, 9, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 9: no wall in front, so a car's side reached 10.1 m (the 9 m run-off + its
+      // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
+      fence(0.96, 0.04, -1, 10.3, 4, [0.74, 0.76, 0.80]);
       fence(0.10, 0.19, 1, 9, 4, [0.74, 0.76, 0.80]);
       fence(0.585, 0.635, 1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.25, 0.37, 0.46, 0.57, 0.72, 0.82]) {
