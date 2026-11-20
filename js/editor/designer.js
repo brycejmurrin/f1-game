@@ -476,8 +476,10 @@ const TrackDesigner = (function () {
     }
     design = next; sel = -1; span = -1; nudge = null;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
+  // A drag in flight holds its own copy of the points: drop it first, or the
+  // release would commit that stale copy over the restored design (and wipe redo).
+  function doUndo() { if (!undo.length) return false; if (cv) cv.reset(); redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; if (cv) cv.reset(); undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
