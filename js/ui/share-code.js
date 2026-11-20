@@ -308,13 +308,15 @@ const ShareCode = (function () {
     }
     if (decoded.kind === "lap") {
       // Stage only: today's Daily, else free play; never a past day (record() resets the streak).
-      if (decoded.day && decoded.day === h.today) { if (typeof h.openDaily === "function") h.openDaily(decoded); }
+      if (decoded.day && decoded.day === h.today) { if (typeof h.openDaily === "function") h.openDaily(decoded, { kind: "daily", day: h.today, mode: "standard" }); }
       else if (typeof h.openTrack === "function") h.openTrack(decoded);
       return { ok: true, kind: "lap", track: decoded.track, day: decoded.day || null, time: decoded.time || null };
     }
     if (decoded.kind === "daily") {
-      if (typeof h.openDaily === "function") h.openDaily(decoded);
-      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track, expired: !!(h.today && decoded.day !== h.today) };
+      const expired = !!(h.today && decoded.day !== h.today);
+      const mode = !expired && decoded.class === "open" ? "open" : "standard";
+      if (typeof h.openDaily === "function") h.openDaily(decoded, { kind: "daily", day: h.today || decoded.day, mode });
+      return { ...decoded, expired };
     }
     return CORRUPT;
   }
@@ -417,8 +419,8 @@ const ShareCode = (function () {
       }
     } catch (_) { /* guest apply still works */ }
     const notify = opts && opts.notify;
-    // A refused apply (livery cap) reports the refusal, not "loaded".
-    const shown = applied && applied.ok === false && applied.reason ? applied : result;
+    // Applying adds outcomes such as expiry or a refused write to the decoded payload.
+    const shown = applied || result;
     if (typeof notify === "function") notify(messageFor(shown), shown, applied);
     return result;
   }

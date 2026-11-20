@@ -3047,7 +3047,7 @@ const G = {
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
-  openDailyPicker: () => openTimeTrial(true),
+  openTimeTrialPicker: (request) => openTimeTrial(request.kind === "daily", request),
   closeSettings: () => closeSettings(),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },

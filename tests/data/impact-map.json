@@ -13481,6 +13481,9 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
+      "today": [
+        "tests/unit/daily-challenge.test.mjs"
+      ],
       "*": [
         "tests/unit/start-race-latch.test.mjs"
       ]
@@ -20290,6 +20293,7 @@
     "js/ui/share-code.js": {
       "apply": [
         "tests/unit/game-state-audit-vm.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "consumeHash": [
@@ -20301,17 +20305,21 @@
       ],
       "decode": [
         "tests/unit/ghost-share.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "encode": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/ghost-share.test.mjs",
-        "tests/unit/share-code.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/share-code.test.mjs",
+        "tests/unit/title-flow.test.mjs"
       ],
       "lastSession": [
         "tests/unit/share-code.test.mjs"
       ],
       "messageFor": [
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "recordSession": [
@@ -20383,7 +20391,8 @@
     "js/ui/title-flow.js": {
       "consumeGhostHash": [
         "tests/unit/ghost-share.test.mjs",
-        "tests/unit/source-pin-hygiene.test.mjs"
+        "tests/unit/source-pin-hygiene.test.mjs",
+        "tests/unit/title-flow.test.mjs"
       ],
       "create": [
         "tests/unit/ghost-share.test.mjs",

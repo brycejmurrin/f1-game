@@ -763,7 +763,7 @@ function trackFilterBar() {
     b.appendChild(extra);
     b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
     b.setAttribute("aria-pressed", selected ? "true" : "false");
-    b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
+    b.title = "Today's challenge (" + p.day + ", local date): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => {
       e.stopPropagation();
       G.daily.select();

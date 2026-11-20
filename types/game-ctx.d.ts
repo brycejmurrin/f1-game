@@ -382,7 +382,7 @@ interface GameCtx {
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
-  readonly openDailyPicker: () => void;
+  readonly openTimeTrialPicker: (request: { kind: "daily"; day?: string; mode?: "standard" | "open" } | { kind: "lap"; track: string }) => void;
   readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;

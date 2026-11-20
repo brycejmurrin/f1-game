@@ -311,7 +311,7 @@ test("continueHint never offers yesterday's daily", () => {
   assert.equal(none, null, "no streak and no last session: no CONTINUE card");
   const live = h.ShareCode.continueHint({ store: h.store, daily: daily(2) });
   assert.equal(live.kind, "daily");
-  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what openDailyPicker() opens");
+  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what the title stages");
   assert.doesNotMatch(live.sub, /YESTERDAY/);
 });
 
@@ -651,15 +651,6 @@ test("consuming a lap link stages only: never startRace or gridUp, and a past da
     assert.deepEqual(calls, [expectDaily ? "daily.select" : "track:spa"], day);
     assert.equal(location.hash, "", "the fragment is consumed");
   }
-});
-
-test("title-flow's lap staging hook never starts a race or re-selects a past Daily", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
-  const hook = src.slice(src.indexOf("openTrack: (decoded) =>"), src.indexOf("}),", src.indexOf("openTrack: (decoded) =>")));
-  assert.ok(hook.length > 40, "openTrack hook present");
-  assert.doesNotMatch(hook, /startRace|gridUp|daily\.select/);
-  assert.match(hook, /G\.daily\.stop\(\)/);
-  assert.match(src, /today:\s*DailyChallenge\.dayKey\(\)/);
 });
 
 // #5879: a career's sheet lives under careerSetup.<flavour>.<slot>.<team>; the restore filter skipped it, so UNDO

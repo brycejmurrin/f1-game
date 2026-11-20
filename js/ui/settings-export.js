@@ -1235,6 +1235,15 @@ function create(G) {
         shareStatus.textContent = ShareCode.messageFor(decoded);
         return;
       }
+      const opensTrial = decoded.kind === "lap" || decoded.kind === "daily";
+      if (opensTrial && G.paused) {
+        shareStatus.textContent = "Return to the main menu before opening a shared time trial.";
+        return;
+      }
+      const openPicker = request => {
+        if (G.closeSettings) G.closeSettings();
+        G.openTimeTrialPicker(request);
+      };
       const applied = ShareCode.apply(decoded, {
         store: G.store,
         startRace: () => { started.n++; },
@@ -1243,9 +1252,12 @@ function create(G) {
           if (ti >= 0) G.teamIdx = ti;
         },
         openGarage: (from) => { if (G.openGarage) { if (G.closeSettings) G.closeSettings(); G.openGarage(from || "share"); } },
-        openDaily: () => { if (G.openDailyPicker) { if (G.closeSettings) G.closeSettings(); G.openDailyPicker(); } },
+        today: G.daily && G.daily.dayKey(),
+        openDaily: (_decoded, staged) => openPicker(staged),
+        openTrack: openPicker,
       });
       shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
+      if (opensTrial && applied.ok && G.announce) G.announce(shareStatus.textContent, 3, "info");
     };
 
     const nav = document.createElement("div");
