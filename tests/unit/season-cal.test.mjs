@@ -1251,6 +1251,49 @@ test("netPts is bounded by the stored per-round row, not by season.round (bug-hu
   assert.equal(S.netPts(short, "d0"), 3);
 });
 
+// ── #5877 (decision B): the player's points follow the player ───────────────────
+// Points are keyed by seat (teamId:driverIndex) and the team setting is shared with
+// single races, so a team change left the player's points on the old seat for the AI
+// now in it. game.js's grid build calls seatPlayer(season, player.driverId) in a season.
+function seatField(ids, player) {
+  return ids.map((id) => ({ driverId: id, code: id === player ? "YOU" : id.toUpperCase().slice(0, 3),
+    team: { id: id.split(":")[0] }, finished: true, retired: false, isPlayer: id === player }));
+}
+
+test("a team change moves the player's points to the new seat; the displaced AI keeps its own", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.blank();
+  assert.equal(S.seatPlayer(season, "redbull:0"), false, "the first grid adopts the seat");
+  S.award(season, seatField(["haas:0", "redbull:0", "ferrari:0"], "redbull:0"));   // P2 for the player, 18
+  const mine = season.pts["redbull:0"], theirs = season.pts["haas:0"];
+  assert.ok(mine > 0 && theirs > 0);
+  assert.equal(S.seatPlayer(season, "haas:0"), true, "switching to Haas moves the tally");
+  assert.equal(season.pts["haas:0"], mine, "the player's points are on the seat they now drive");
+  assert.equal(season.pts["redbull:0"], undefined, "the AI back in the Red Bull has none of them");
+  assert.equal(season.pts["haas:0:parked"], theirs, "the Haas driver the player displaced keeps theirs");
+  assert.equal(season.driverCodes["haas:0"], "YOU");
+  assert.equal(season.driverCodes["haas:0:parked"], "HAA");
+  assert.equal(JSON.stringify(season.finishes["haas:0"]), "[null,1]", "the P2 countback moved too");
+  assert.equal(S.seatPlayer(season, "redbull:0"), true, "and back again");
+  assert.equal(season.pts["redbull:0"], mine);
+  assert.equal(season.pts["haas:0"], theirs, "the Haas driver is back in the Haas with their points");
+  assert.equal(season.pts["haas:0:parked"], undefined);
+  assert.equal(season.you, "redbull:0");
+});
+
+test("a save from before #5877 (no `you`) adopts the current seat without moving a point", () => {
+  const { S } = load({ season: { round: 1, pts: { "redbull:0": 18, "haas:0": 25 }, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {} } });
+  S.engage("season");
+  const season = S.load();
+  assert.equal(season.you, undefined);
+  assert.equal(S.seatPlayer(season, "redbull:0"), false);
+  assert.deepEqual({ ...season.pts }, { "redbull:0": 18, "haas:0": 25 }, "nothing reset, nothing moved");
+  assert.equal(season.you, "redbull:0");
+  const again = S.resume(JSON.parse(JSON.stringify(season)));
+  assert.equal(again.you, "redbull:0", "the seat survives a save round trip");
+});
+
 test("hunt #5694 B1: sprintIds is a set over the calendar — order, stale ids and mode do not change the setup", () => {
   const { S, tracks } = load();
   const ids = tracks.SEASON.map((t) => t.id);

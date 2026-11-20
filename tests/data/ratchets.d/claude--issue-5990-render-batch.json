@@ -1,0 +1,13 @@
+{
+  "files": {
+    "js/game.js": {
+      "lines": -1
+    },
+    "js/render/glx/glx.js": {
+      "lines": -4
+    }
+  },
+  "tree": {
+    "eagerCodeBytes": 1200
+  }
+}

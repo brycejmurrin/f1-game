@@ -48,6 +48,10 @@
     "#hud-gearbox",
     "#hud-speed"
    ],
+   "//movesTop": "the top band's widget: HUD SIZE's two bands each paint min(slider, own cap); ui-scale.spec.js checks both (#5478)",
+   "movesTop": [
+    "#hud-box-pos"
+   ],
    "still": [
     "#btn-steer-left",
     "#btn-throttle",
@@ -67,9 +71,11 @@
    "moves": [
     "#btn-steer-left"
    ],
+   "//still": "#5256 D: BUTTON SIZE resizes neither band; the gear row's size is kept (apex26.hudBotKeep) and the tower's cap no longer reads the dock",
    "still": [
     "#hud-gearbox",
-    "#hud-speed"
+    "#hud-speed",
+    "#hud-box-pos"
    ]
   },
   {

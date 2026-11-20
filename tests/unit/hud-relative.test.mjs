@@ -618,3 +618,30 @@ test("REL off (the default): refit touches no DOM, and the key still sees the cl
   R.refit();
   assert.ok(lookups > before, "and the first tick after turning it on fits");
 });
+
+test("a home that starts inside the steer arrows goes to the allocator, not past the pad (#5256 D, HUD / BUTTON 150 %)", () => {
+  // 844x390 cockpit: the taller D top band puts REL's home at y 250, inside STEER RIGHT (175-283, y 237-345). The slide
+  // parked it at x 291 in INPUTS' column; HudLayout.clearReadouts lifts it above the pad instead. No allocator: it slides.
+  const run = (withAllocator) => {
+    const mk = () => ({ hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { this[k] = v; }, removeProperty(k) { delete this[k]; } },
+      setAttribute(k, v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
+      hasAttribute(k) { return k in this.attrs; }, appendChild(c) { this.children.push(c); return c; } });
+    const root = mk();
+    root.currentCSSZoom = 1; root.clientHeight = 78; root.scrollHeight = 78;
+    root.getBoundingClientRect = () => {
+      const left = 57 + (parseFloat(root.style.left) || 0);
+      return { left, right: left + 187, top: 250, bottom: 328, width: 187, height: 78 };
+    };
+    const steer = (l) => { const e = mk(); e.hidden = false; e.getBoundingClientRect = () => ({ left: l, right: l + 108, top: 237, bottom: 345, width: 108, height: 108 }); return e; };
+    const els = { "hud-rel": root, "btn-steer-left": steer(59), "btn-steer-right": steer(175) };
+    const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+    let clears = 0;
+    const R = load({ document: doc, HudElements: { isOn: () => true }, ...(withAllocator ? { HudLayout: { clearReadouts() { clears++; } } } : {}) });
+    const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+    R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 }), car("B1", 900, 3, { rank: 3 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+    return { left: root.style.left || "", clears };
+  };
+  assert.deepEqual(run(true), { left: "", clears: 1 });
+  assert.equal(run(false).left, "291.0px");
+});

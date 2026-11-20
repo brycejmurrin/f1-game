@@ -56,6 +56,7 @@ var VoicePack = (() => {
   // A composed line may run this far past the card's budget — never more than
   // RadioVoice.LEAD_RESERVE_S, or the card hides under the last syllable.
   const SLACK_S = 0.2;
+  const STALL_MS = 15000;        // a pack fetch with no progress (response, chunk, hash) for this long fails (#5886)
   const RETRY_MS = 30000;        // a failed fetch (offline, 404) is tried again after this
   const WATCHDOG_MS = 4000;      // stall limit for each cached clip decode
 
@@ -193,13 +194,36 @@ var VoicePack = (() => {
       if (raceLoad && isAnnouncerPack(id)) { deferred.add(id); return v.state; }
       v.state = "loading";
       const controller = typeof AbortController === "function" ? new AbortController() : null;
-      let timer;
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => { reject(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) { /* abort is best effort */ } } }, 15000);
-      });
+      // #5886: a STALL timer, not a deadline. One 15 s race over manifest + 4 MB binary + hash failed every pack below
+      // ~2 Mbps (and re-fetched it each RETRY_MS). Each response, streamed chunk and step re-arms STALL_MS; a link
+      // that goes quiet still fails, a slow one that keeps delivering loads.
+      let timer, fail;
+      const timeout = new Promise((_, reject) => { fail = reject; });
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { fail(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) { /* abort is best effort */ } } }, STALL_MS);
+      };
+      arm();
+      const stream = async (r) => {
+        const rd = r.body.getReader(), parts = [];
+        let n = 0;
+        for (;;) {
+          const { done, value } = await rd.read();
+          if (done) break;
+          arm(); parts.push(value); n += value.byteLength;
+        }
+        const out = new Uint8Array(n);
+        n = 0;
+        for (const c of parts) { out.set(c, n); n += c.byteLength; }
+        return out.buffer;
+      };
       const get = (f, t) => {
         try { return Promise.resolve(fetch(base + f, controller ? { signal: controller.signal } : undefined))
-          .then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); }); }
+          .then((r) => {
+            if (!r.ok) throw new Error(f + " " + r.status);
+            arm();
+            return t === "arrayBuffer" && r.body && typeof r.body.getReader === "function" ? stream(r) : r[t]();
+          }); }
         catch (e) { return Promise.reject(e); }
       };
       // These mutable URLs can come from different deploys: the worker may
@@ -207,6 +231,7 @@ var VoicePack = (() => {
       // Require the manifest's digest even for legacy caches; a missing voice
       // stays written instead of playing unrelated bytes at the new offsets.
       const verify = async (bin, meta) => {
+        arm();   // the hash gets its own window
         if (!meta || !/^[0-9a-f]{64}$/.test(meta.sha256) || !bin || meta.bytes !== bin.byteLength || !bin.byteLength) throw new Error("voice binary integrity metadata missing or invalid");
         if (typeof crypto === "undefined" || !crypto.subtle) throw new Error("voice binary integrity verification unavailable");
         const digest = await crypto.subtle.digest("SHA-256", bin);

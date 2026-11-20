@@ -608,7 +608,7 @@ test("circuit search: a divider survives only while ITS run of tiles does", () =
   // finds Spain) drew vertical labels between empty runs. The real function,
   // run against a stand-in list.
   const src = fs.readFileSync(path.join(ROOT, "js/ui/select-screen.js"), "utf8");
-  const fn = /function applyTrackSearch\(value\) \{[\s\S]*?\n\}\n/.exec(src);
+  const fn = /function applyTrackSearch\(value(?:, pick)?\) \{[\s\S]*?\n\}\n/.exec(src);
   assert.ok(fn, "applyTrackSearch is in select-screen.js");
   const mk = (kind, group, search) => {
     const classes = new Set([kind]);

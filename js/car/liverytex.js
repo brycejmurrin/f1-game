@@ -2588,13 +2588,14 @@ const LiveryTex = (function () {
   // repainted the paint + crest lockup: 370-450 ms of a phone-throttled pick (CPU x4,
   // B·H13 2026-10-21). A card's pixels depend only on (team, livery fields, size), so
   // the first paint lands in an offscreen canvas and later ones blit it. Cached only
-  // once web fonts are in (a lockup painted in the fallback face must not stick);
+  // once its NUM_FONTS faces are in (not fonts.status: any page font load flips it, #5983);
   // a logo install or removal (markChanged) drops every card.
   const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0, reused: 0 };
+  let _fIn = false;
+  const fontsOk = () => _fIn || (_fIn = typeof document !== "undefined" && (!document.fonts || Object.values(NUM_FONTS).every((r) => document.fonts.check(r.font(9)))));
   markReady.push(() => { _swatchCache.clear(); _cardCanvas.clear(); });
   function paintSwatch(ctx, teamId, liv, w, h) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
-    if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
+    if (!fontsOk() || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = _swatchCache.get(key);
     if (!c) {
@@ -2607,15 +2608,15 @@ const LiveryTex = (function () {
     }
     ctx.drawImage(c, 0, 0); _swatchStats.blits++;
   }
-  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick still made 113 new canvases, each with
+  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick made 113 new canvases, each
   // a getContext and a drawImage: ~74 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21).
   // swatchCanvas hands back the painted canvas a card used last build, for the new card to adopt
   // (appendChild moves it out of the discarded sheet). `build` names the sheet build: a second card
   // with the same look in one build gets a fresh canvas instead of stealing the first one's.
-  // Kept only once fonts are in, and dropped with the swatch cache on markChanged.
+  // Kept only once fonts are in; dropped with the swatch cache on markChanged.
   const _cardCanvas = new Map();
   function swatchCanvas(teamId, liv, w, h, build) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    const fontsIn = fontsOk();
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = fontsIn ? _cardCanvas.get(key) : null;
     if (c && c.__swatchBuild !== build) {

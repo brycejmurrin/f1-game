@@ -27,16 +27,18 @@ name: Ratchets fold
 # The PR opens with LAND_TOKEN (the token land.yml uses for its PR operations), so
 # its own `pull_request` run starts; without LAND_TOKEN the job dispatches ci.yml on
 # the per-run fold branch instead (`actions: write`; .github/actions/open-bot-pr).
-# Schedules fire late (the measured lag is 3-7 h; "The schedule event can be
+# Schedules fire late (the measured lag is 6.6-9.9 h, median 8.5 h, 2026-11-20; "The schedule event can be
 # delayed during periods of high loads", https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
-# so the minute is off the hour and nothing depends on the exact time.
+# so the minute is off the hour and nothing depends on the exact time. 17:17 UTC
+# (was 06:17, which started at 13-16 UTC, the busy hours) lands the start at
+# 00-03 UTC, the queue's quiet window (docs/notes/CI-CRON-DELAY-2026-11-20.md).
 #
 # Syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
 # (on.schedule cron is UTC, runs from the default branch; permissions per job).
 
 on:
   schedule:
-    - cron: "17 6 * * *"   # daily 06:17 UTC
+    - cron: "17 17 * * *"   # daily 17:17 UTC
   workflow_dispatch:
     inputs:
       min_fragments:

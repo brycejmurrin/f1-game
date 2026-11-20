@@ -313,6 +313,9 @@ const TrackModels = (function () {
       }
       appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required, vertices, kind });
+      // The emitted box, for a later placer that must yield to it (the
+      // pit-straight crowd, build-props.js): modelGroup claims no mass.
+      if (actual && ctx.onEmitted) ctx.onEmitted(id, actual);
       return true;
     }
 

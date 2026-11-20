@@ -3384,3 +3384,93 @@ test("re-seating the foot on a short-landscape resize keeps focus on the control
   assert.equal(b.root.dataset.foot, "in");
   assert.ok(document.activeElement === draw, "focus outside the foot is left alone");
 });
+
+// #5947 A: a circuit's id is a hash of its SHAPE, so saving a friend's shared copy of your own layout used to
+// replace your name and country without a word. SAVE now asks first: KEEP MINE / USE THEIRS.
+test("saving a shared copy of a circuit you already have asks first: KEEP MINE / USE THEIRS (#5947)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  b.D.setName("MY RING");
+  const mine = b.D.save();
+  assert.equal(mine.ok, true);
+  const shared = Object.assign(b.C.sanitize(b.D.state().design), { name: "THEIR NAME", country: "Italy" });
+  const ask = () => b.dom.document.body.children.find((n) => n.id === "td-label-ask");
+
+  b.D.open({ design: shared, shared: true }); b.D.preview();
+  const asked = b.D.save();
+  assert.deepEqual([asked.ok, asked.reason], [false, "ask"], "the save waits for the answer");
+  assert.equal(b.C.get(mine.id).name, "MY RING", "nothing is written before the answer");
+  const dlg = ask();
+  assert.ok(dlg, "the house modal opens over the designer");
+  assert.equal(dlg.tagName.toLowerCase(), "dialog");
+  assert.equal(dlg.className, "screen dim", "the house .screen sheet");
+  assert.equal(dlg.querySelector(".sheet-body").children[0].textContent, "You already have this circuit as MY RING.");
+  const keep = dlg.querySelector("#td-label-keep"), theirs = dlg.querySelector("#td-label-theirs");
+  assert.equal(keep.textContent, "KEEP MINE"); assert.equal(theirs.textContent, "USE THEIRS");
+  const floor = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
+  for (const d of [keep, theirs]) assert.deepEqual([d.style.minHeight, d.style.minWidth], [floor, floor], "a 44 px painted tap floor");
+  assert.equal(b.dom.document.activeElement, keep, "focus lands on the safe answer");
+  keep.click();
+  assert.equal(ask(), undefined, "the modal closes");
+  assert.equal(b.C.get(mine.id).name, "MY RING", "KEEP MINE keeps your name…");
+  assert.equal(b.C.get(mine.id).country || "", "", "…and your country");
+  assert.equal(b.D.state().design.name, "MY RING", "the designer shows the kept name");
+
+  b.D.open({ design: shared, shared: true }); b.D.preview();
+  assert.equal(b.D.save().reason, "ask");
+  ask().querySelector("#td-label-theirs").click();
+  assert.equal(b.C.get(mine.id).name, "THEIR NAME", "USE THEIRS takes their name…");
+  assert.equal(b.C.get(mine.id).country, "Italy", "…and their country");
+  assert.equal(b.C.list().length, 1, "still one circuit either way");
+
+  // Your own circuit re-saved under a new name (opened from the library) is a rename, not a clash.
+  b.D.open({ design: b.C.get(mine.id), originId: mine.id }); b.D.preview();
+  b.D.setName("RENAMED");
+  assert.equal(b.D.save().ok, true);
+  assert.equal(ask(), undefined);
+  assert.equal(b.C.get(mine.id).name, "RENAMED");
+});
+
+test("UNDO during a point drag keeps the undo: the release does not re-commit the stale drag copy (clean-room 66)", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  assert.ok(b.D.deletePoint(5), "a point deleted");
+  const d1 = plain(b.D.state().design), u1 = b.D.state().undo;
+  assert.equal(d1.pts.length, d0.pts.length - 1);
+  // Point 10 on screen, through fit()'s view (the loop's box × 0.82 in 640 × 400).
+  const xs = d1.pts.map((p) => p[0]), zs = d1.pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const sc = Math.min(640 / Math.max(60, x1 - x0), 400 / Math.max(60, z1 - z0)) * 0.82;
+  const at = { clientX: (d1.pts[10][0] - (x0 + x1) / 2) * sc + 320, clientY: (d1.pts[10][1] - (z0 + z1) / 2) * sc + 200, pointerId: 4, pointerType: "mouse" };
+  const canvas = b.root.querySelector("canvas");
+  b.D.setTool("select");
+  b.dom.dispatch(canvas, Object.assign({ type: "pointerdown" }, at));
+  b.dom.dispatch(canvas, Object.assign({ type: "pointermove" }, at, { clientX: at.clientX + 30, clientY: at.clientY + 20 }));
+  assert.ok(b.D.undo(), "UNDO mid-drag");
+  b.dom.dispatch(canvas, Object.assign({ type: "pointerup" }, at, { clientX: at.clientX + 30, clientY: at.clientY + 20 }));
+  const s = b.D.state();
+  assert.equal(s.design.pts.length, d0.pts.length, "the deleted point is back after the release");
+  assert.deepEqual(plain(s.design.pts), d0.pts, "the undone design stands: the drag copy was dropped");
+  assert.equal(s.undo, u1 - 1, "the release pushed no new undo step");
+  assert.equal(s.redo, 1, "redo survives the release");
+});
+
+test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const find = (el) => { if (el.dataset && el.dataset.role === "checks-summary") return el; for (const c of el.children || []) { const r = find(c); if (r) return r; } return null; };
+  const checks = find(b.root);
+  assert.ok(checks, "the CHECKS summary chip");
+  const V = b.ctx.TrackValidate;
+  const as = (red, amber) => { b.ctx.TrackValidate = Object.assign({}, V, { check: (d) => Object.assign({}, V.check(d), { red, amber }) }); b.D.preview(); };
+  try {
+    as(0, 1);
+    assert.equal(checks.textContent, "CHECKS · 1 WARNING");
+    assert.equal(checks.getAttribute("aria-label"), "Review design checks: 0 errors, 1 warning");
+    as(1, 2);
+    assert.equal(checks.textContent, "CHECKS · 1 TO FIX");
+    assert.equal(checks.getAttribute("aria-label"), "Review design checks: 1 error, 2 warnings");
+    as(0, 3);
+    assert.equal(checks.textContent, "CHECKS · 3 WARNINGS");
+  } finally { b.ctx.TrackValidate = V; }
+});
