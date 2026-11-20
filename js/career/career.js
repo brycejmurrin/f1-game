@@ -1370,7 +1370,7 @@ function rollover() {
   replace(career, original);
   career.season = seasonRef;
   replace(seasonRef, restoredSeason);
-  careerConflict = true;
+  if (reason === "conflict" || (careerRevision != null && currentRevision() !== careerRevision)) careerConflict = true;
   lastSave = { ok: false, durable: false, reason };
   return null;
 }
