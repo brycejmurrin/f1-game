@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules as parseCss, decl } from "../helpers/css-rules.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -408,4 +409,21 @@ test("F-13 slice 5: the MAP and GAPS toggles hide in plain display:none", () => 
     assert.ok(h, sel + " still hides");
     assert.doesNotMatch(h.body, /!important/, sel + " needs no !important");
   }
+});
+
+test("F-17: the LIMITS chip's drop is ONE token, read by the CSS sites and the fit's dock-reach test", () => {
+  const rules = parseCss(readCssSource("css/hud.css"));
+  assert.equal(decl(rules, ":root", "--limits-drop"), "15px", "the token");
+  const tops = rules.map((r) => r.decls.get("top") || "");
+  assert.equal(tops.filter((t) => t.includes("+ var(--limits-drop)")).length, 5, "LIMITS, its broadcast lift, DAMAGE, REL and the v4 chip");
+  assert.equal(tops.filter((t) => t.includes("4.8em) + 15px") || t.includes("4.8em + 15px")).length, 0, "no literal drop is left");
+  // The fit reads it with the other computed root vars (VM: a stylesheet that says 21px is what CHIP_DROP gets).
+  const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8"), at = hud.indexOf("function syncComputedRootVars()");
+  const fn = hud.slice(at, hud.indexOf("\n}\n", at) + 3);
+  const ctx = { _cssRootKey: "", _cssScale: 1, _cssMult: 1, _cssDrop: 15, vpW: () => 844, vpH: () => 390,
+    document: { documentElement: { style: { getPropertyValue: () => "" } }, body: { className: "" } },
+    getComputedStyle: () => ({ getPropertyValue: (p) => (p === "--limits-drop" ? " 21px" : "") }) };
+  vm.createContext(ctx);
+  vm.runInContext(fn + "\nsyncComputedRootVars();", ctx, { filename: absSrc("js/ui/hud.js") });
+  assert.equal(ctx._cssDrop, 21);
 });

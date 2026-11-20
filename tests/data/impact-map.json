@@ -19168,6 +19168,9 @@
       "resolveMetricsLayout": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
+      "syncComputedRootVars": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
       "syncHudCamClasses": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
