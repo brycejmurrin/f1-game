@@ -131,6 +131,8 @@ const DataStandings = (function () {
         const wrap = el("div", "dh-tabbody dh-standings");
         wrap.appendChild(driverRows(t.drivers, tag));
         wrap.appendChild(constructorRows(t.cons, t.drivers, tag));
+        // Last season's final table stands in until the opener: re-ask soon (hunt #5694 B5).
+        if (t.year != null) wrap.nextFlipAt = Date.now() + 30 * 60 * 1000;
         return wrap;
       });
     }
