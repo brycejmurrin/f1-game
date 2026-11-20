@@ -1425,7 +1425,7 @@ test('closed phone sessions ignore late packets and open callbacks', () => {
 
 test('a phone connecting before hostRoom returns still closes the late room without losing the link', async () => {
   let resolve, callbacks, stopped = 0;
-  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}});
+  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}, freshMs: -1});   // outside the fresh window: the ALLOW path
   await settle(); await callbacks.onJoiner(null,'ANSWER');
   assert.equal(h.ctl.state().phase,'confirming','the channel is up, the phone waits for ALLOW');
   await settle();
@@ -2217,8 +2217,10 @@ function handConfirm() {
 const PEER_A = "a".repeat(32), PEER_B = "b".repeat(32);
 
 test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT closes it; cancel dismisses the ask (W26 row 11a)", async () => {
+  // STALE: freshMs -1 puts every code outside decision B's fresh-code window, so the gate asks.
+  const STALE = { freshMs: -1 };
   const c = handConfirm();
-  const h = hostHarness({ confirm: c.confirm });
+  const h = hostHarness({ confirm: c.confirm, ...STALE });
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
   assert.equal(h.ctl.state().phase, "confirming");
   assert.equal(c.asks.length, 1); assert.equal(h.ui.linkedN, 0, "not linked before the player says so");
@@ -2239,7 +2241,7 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   h.ctl.cancel();
 
   const r = handConfirm();
-  const no = hostHarness({ confirm: r.confirm });
+  const no = hostHarness({ confirm: r.confirm, ...STALE });
   await settle(); await no.room.onJoiner(null, "ANSWER"); await settle();
   r.asks[0].answer(false); await settle();
   assert.equal(no.ctl.state().phase, "lost"); assert.equal(no.ui.lostN, 1);
@@ -2248,12 +2250,12 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   assert.equal(no.ui.linkedN, 0);
 
   const d = handConfirm();
-  const gone = hostHarness({ confirm: d.confirm });
+  const gone = hostHarness({ confirm: d.confirm, ...STALE });
   await settle(); await gone.room.onJoiner(null, "ANSWER"); await settle();
   gone.ctl.cancel();
   assert.equal(d.asks[0].dismissed, 1, "STOP PAIRING takes the ALLOW card down");
   const e = handConfirm();
-  const drop = hostHarness({ confirm: e.confirm });
+  const drop = hostHarness({ confirm: e.confirm, ...STALE });
   await settle(); await drop.room.onJoiner(null, "ANSWER"); await settle();
   drop.padEnd.close(); await settle();
   assert.equal(e.asks[0].dismissed, 1, "a phone that leaves while asked takes the card with it");
@@ -2268,21 +2270,20 @@ test("host(): a re-link from the ALLOWed phone is let back in; another peer on t
   const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
   const h = hostHarness({ rtc, confirm: c.confirm });
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
-  assert.equal(c.asks.length, 1);
-  c.asks[0].answer(true); await settle();
-  hello(pairs[0], PEER_A);   // the phone names itself after ALLOW: still bound to this link
+  assert.equal(c.asks.length, 0, "decision B: the first phone on the code this screen just minted is not asked");
+  hello(pairs[0], PEER_A);   // the phone names itself after it was admitted: still bound to this link
   assert.equal(h.ctl.state().phase, "linked");
   drop(pairs[0]); await settle();
   assert.equal(h.ctl.state().phase, "waiting", "the same code is hosted again");
   await h.room.onJoiner(null, "ANSWER-2"); await settle();
   assert.equal(h.ctl.state().phase, "connecting", "the re-link waits for the phone to name itself");
   hello(pairs[1], PEER_A); await settle();
-  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 1, "the same phone is not asked twice");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 0, "the same phone's re-link is not asked");
   drop(pairs[1]); await settle();
   await h.room.onJoiner(null, "ANSWER-3"); await settle();
   hello(pairs[2], PEER_B); await settle();
-  assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked");
-  assert.equal(c.asks.length, 2);
+  assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked, fresh or not");
+  assert.equal(c.asks.length, 1);
   h.clock.t = 100;
   pairs[2][0].send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
   pairs[2][1].pump(20);
@@ -2436,7 +2437,7 @@ test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH tran
 test("#5739 row 3: host() tells the shell the ALLOW card is coming BEFORE it covers the screen", async () => {
   const c = handConfirm();
   const order = [];
-  const h = hostHarness({ confirm: (t) => { order.push("confirm"); return c.confirm(t); } });
+  const h = hostHarness({ confirm: (t) => { order.push("confirm"); return c.confirm(t); }, freshMs: -1 });   // a code outside the fresh window asks
   h.ui.asking = () => order.push("asking");
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
   assert.equal(h.ctl.state().phase, "confirming");
@@ -2673,4 +2674,31 @@ test("PlatformSession: the desktop's title door PHONE CONTROLLER opens Settings 
   assert.equal(hosts.length, 1, "a second click shows the running pairing, it does not restart it");
   assert.equal(hosts[0].cancelled, 0);
 
+});
+
+test("host(): decision B — the first phone on a code this screen just minted steers with no ALLOW; an old code still asks", async () => {
+  const clock = { t: 1_000_000 };
+  const c = handConfirm();
+  const h = hostHarness({ confirm: c.confirm, now: () => clock.t });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "no ALLOW card for the pairing the player just started");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
+  h.clock.t = 100;
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  h.hostEnd.pump(50);
+  assert.ok(h.Input.remoteActive() && h.Input.throttle(), "its inputs are accepted at once");
+  await h.room.onJoiner(null, "SECOND-ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "a second answer to the same code is ignored outright (one phone per room), never admitted");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1, "the first phone keeps the link");
+  h.ctl.cancel();
+
+  const clock2 = { t: 1_000_000 };
+  const o = handConfirm();
+  const old = hostHarness({ confirm: o.confirm, now: () => clock2.t });
+  await settle();
+  clock2.t += 5 * 60000 + 1;   // the code was shown more than five minutes ago
+  await old.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(old.ctl.state().phase, "confirming", "a code past the fresh window is asked");
+  assert.equal(o.asks.length, 1);
+  old.ctl.cancel();
 });

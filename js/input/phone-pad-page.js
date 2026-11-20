@@ -628,7 +628,7 @@ const PhonePadPage = (function () {
             if (gen !== bindGen) return;
             listen.stopped = true;   // the link is up: no later offer is answered
             opened = true; clearConnectDeadline();
-            say("Connected — tap ALLOW on the game's screen to start.");
+            say("Connected — waiting for the game… If it asks, tap ALLOW on its screen.");
             if (dom.body && !surfaced) dom.body.classList.add("awaiting");
             if (opts.onOpen) opts.onOpen();
           },
