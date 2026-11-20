@@ -535,7 +535,7 @@ test("a save after the device clock goes backward is committed and remains the n
   assert.equal(idb.rows.size, 6);
   assert.equal(idb.rows.has("old-0"), false);
   assert.equal((await b.api.album())[0].title, "After clock adjustment");
-  assert.match(b.dom.byId("ps-message").textContent, /Saved to My Photos/);
+  assert.equal(b.dom.byId("ps-message").textContent, "Saved to My Photos on this device.");
 });
 test("save remains busy and unannounced until the write transaction commits", async () => {
   const idb = photoDb(seededPhotos(6)), b = boot({ indexedDB: idb });
