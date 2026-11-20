@@ -223,10 +223,12 @@ const VisorOptics = (function () {
     return _knobs;
   }
 
+  let _source = null;
+  function setSource(fn) { _source = typeof fn === "function" ? fn : null; }
   function readScene() {
-    try {
-      if (typeof G !== "undefined" && G && G.frame) return sceneFromG(G);
-    } catch (_) {  }
+    if (_source) {
+      try { const s = _source(); if (s) return s; } catch (_) { return null; }
+    }
     const A = typeof window !== "undefined" ? window.__apex : null;
     if (!A) return null;
     try {
@@ -600,6 +602,6 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG, setSource };
 })();
 Object.freeze(VisorOptics);

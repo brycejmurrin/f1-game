@@ -2029,6 +2029,7 @@ const G = {
 };
 
 ltStore = LightStore.create(G);
+if (typeof VisorOptics !== "undefined" && VisorOptics.setSource) VisorOptics.setSource(() => G.frame ? VisorOptics.sceneFromG(G) : null);
 raceCtl = RaceControl.create(G);
 wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 tyres = TyreModel.create(G);
