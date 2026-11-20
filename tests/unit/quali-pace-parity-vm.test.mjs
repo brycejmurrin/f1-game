@@ -75,8 +75,8 @@ test("a stored time-trial medal is not recomputed when the pole model changes", 
     G.daily.stop(); G.timeTrial = true; G.raceWeather = "dry";
     await G.startRace(); g.apex.go(); g.apex.headless(true);
     const R = G.records, Ghost = vm.runInContext("Ghost", g.ctx);
-    const pole = G.referencePole();
-    assert.ok(pole > 0, "a reference pole");
+    const pole = G.referencePole("medal");
+    assert.ok(pole > 0, "a medal pole");
     const lap = (t) => { Ghost.startLap(); for (let i = 0; i < 12; i++) Ghost.record(i * t / 12, i * 100, 0); };
     lap(pole * 0.999);
     assert.equal(R.finish(pole * 0.999, [], pole), true);

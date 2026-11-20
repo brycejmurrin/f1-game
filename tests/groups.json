@@ -220,6 +220,7 @@
     "tests/unit/ci-guard-tools.test.mjs",
     "tests/unit/ci-pages-train.test.mjs",
     "tests/unit/ci-pr-base.test.mjs",
+    "tests/unit/ci-runner-variable.test.mjs",
     "tests/unit/ci-ship-filter-geometry.test.mjs",
     "tests/unit/ci-ship-smoke-renderer.test.mjs",
     "tests/unit/ci-verdict.test.mjs",

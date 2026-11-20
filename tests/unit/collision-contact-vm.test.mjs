@@ -728,3 +728,93 @@ test("an AI striker into a parked player: the AI pays the whole share, the playe
   assert.ok(maxHuman < 10, `the parked player was launched to ${maxHuman.toFixed(1)} m/s`);
   assert.ok(Number.isFinite(c.speed) && Number.isFinite(p.speed), "non-finite speed after the strike");
 });
+
+// #5894 (clean-room audit A15): the human punt cap was applied per relaxation PASS, and
+// resolveCollisions runs four, so an AI rear-ending the player at 50 vs 20 m/s gave
+// +4.79 m/s against the 2.93 m/s cap. The cap now holds over the whole step.
+test("an AI rear-end punts the player no further than the cap over all four passes", () => {
+  const ctx = vm.createContext({ Math, Number, Object, WeakMap, Log: { info() {}, enabled: () => false },
+    Tracks: { wallAt: () => 100 }, IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false } });
+  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+    vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
+  const p = { id: "p", prog: 104.6, s: 104.6, speed: 20, x: 0, human: true, yawVis: 0 };
+  const ai = { id: "ai", prog: 100, s: 100, speed: 50, x: 0, human: false };
+  const G = { track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+    wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
+  const solver = vm.runInContext("Collide", ctx).create(G, () => {});
+  solver.resolveCollisions([], DT);   // binds track / netPlay for pairContact
+  const ct = solver.pairContact(ai, p);
+  assert.ok(ct && !ct.oriented && !ct.sideContact, "the scenario must take the straight rear-end path");
+  const A = vm.runInContext("AiDrive", ctx);
+  const cap = ct.iB * (1 + A.bumpRestitution(30)) * A.humanPuntCap() / ct.iSum;   // the designed one-shove ceiling
+  solver.resolveCollisions([ai, p], DT);
+  const gain = p.speed - 20;
+  assert.ok(gain > 0, "the player was punted");
+  assert.ok(gain <= cap + 1e-9, `player gained ${gain.toFixed(2)} m/s in one step, cap ${cap.toFixed(2)}`);
+  ai.speed = 50; p.speed = 20; ai.s = ai.prog = 100; p.s = p.prog = 104.6;
+  G.raceT += DT; solver.resolveCollisions([ai, p], DT);
+  assert.ok(p.speed - 20 <= cap + 1e-9, "the next step gets its own cap, no more");
+});
+
+// Clean-room fix 34: the cap above lived only on the straight rear-end path. A human yawed past
+// ~20° takes the ORIENTED path, which applied the full impulse: +17.8 m/s in one step for a yawed
+// player rear-ended at 70 m/s (measured on the pre-fix module). It now shares the per-step budget.
+function miniSolver(G, cg) {
+  const ctx = vm.createContext({ Math, Number, Object, WeakMap, Log: { info() {}, enabled: () => false },
+    Tracks: { wallAt: () => 100, postLimits() {} }, IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false } });
+  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js"].concat(cg ? [] : ["js/physics/contact-geometry.js"]))
+    vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
+  if (cg) ctx.ContactGeometry = cg(ctx);
+  vm.runInContext(readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8"), ctx, { filename: absSrc("js/physics/collide.js") });
+  return { ctx, solver: vm.runInContext("Collide", ctx).create(G, () => {}) };
+}
+const miniG = (p) => ({ track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+  wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) });
+
+test("clean-room 34: a YAWED player rear-ended by an AI is punted no further than the cap", () => {
+  let worst = 0, oriented = 0, cap = 0;
+  for (const yaw of [0.4, 0.7, 1.0]) for (const dx of [-1, 0, 1]) for (const vA of [40, 70]) {
+    const p = { id: "p", prog: 104, s: 104, speed: 20, x: dx, human: true, yawVis: yaw, vLat: 0, yawRateCur: 0 };
+    const ai = { id: "ai", prog: 100, s: 100, speed: vA, x: 0, human: false, yawVis: 0 };
+    const { ctx, solver } = miniSolver(miniG(p));
+    solver.resolveCollisions([], DT);
+    const ct = solver.pairContact(ai, p);
+    if (!ct || !ct.oriented) continue;
+    oriented++;
+    const A = vm.runInContext("AiDrive", ctx), inv = A.humanInvMass(false);
+    cap = Math.max(cap, inv * 1.1 * A.humanPuntCap() / (inv + 1));
+    const v0 = Math.hypot(p.speed, p.vLat);
+    solver.resolveCollisions([ai, p], DT);
+    worst = Math.max(worst, Math.hypot(p.speed, p.vLat) - v0);
+  }
+  assert.ok(oriented >= 6, `the yawed scenarios must take the oriented path (${oriented})`);
+  assert.ok(worst <= cap + 1e-6, `a yawed player gained ${worst.toFixed(2)} m/s in one step, cap ${cap.toFixed(2)}`);
+});
+
+// Clean-room fix 35: the post-contact wall clamp called wallLimits without the car's pre-shove
+// pose, so a push just past the pit wall face read as "in the pit lane" and snapped the car
+// there (an AI then drove the lane at 155 km/h with no pit state; 4 of 7 staged Bahrain setups).
+test("clean-room 35: the post-contact wall clamp classifies each car from its pre-shove pose", () => {
+  const seen = [];
+  const p = { id: "p", prog: 100, s: 100, speed: 30, x: 0.4, human: true, yawVis: 0, vLat: 0, yawRateCur: 0 };
+  const ai = { id: "ai", prog: 101, s: 101, speed: 30, x: 1.6, human: false, yawVis: 0 };
+  const { solver } = miniSolver(miniG(p), (ctx) => {
+    vm.runInContext(readFileSync(join(ROOT_C, "js/physics/contact-geometry.js"), "utf8").replace(/^const ContactGeometry\b/m, "var ContactGeometry"), ctx, { filename: absSrc("js/physics/contact-geometry.js") });
+    const real = ctx.ContactGeometry;
+    return Object.assign({}, real, { wallLimits(track, s, x, out, post, prev) {
+      seen.push(prev ? { s: prev.s, x: prev.x } : null); return real.wallLimits(track, s, x, out, post, prev); } });
+  });
+  const pre = { p: { s: p.s, x: p.x }, ai: { s: ai.s, x: ai.x } };
+  solver.resolveCollisions([ai, p], DT);
+  assert.ok(p.x !== pre.p.x || ai.x !== pre.ai.x, "the pair was shoved apart");
+  assert.equal(seen.length, 2, "one clamp per car");
+  assert.ok(seen.every(Boolean), "every clamp got the pre-shove pose");
+  assert.deepEqual(seen.map((v) => v.x).sort(), [pre.ai.x, pre.p.x].sort(), "the pose from BEFORE the contact, not after");
+});
+
+test("clean-room 39: parkedAhead never reports a car as its own hazard", () => {
+  const { ctx } = miniSolver(miniG(null));
+  const C = vm.runInContext("Collide", ctx), me = { s: 100, x: 0 }, other = { s: 150, x: 1 };
+  assert.equal(C.parkedAhead(me, [me], 6000, 200), null, "a stopped AI is on the list it reads");
+  assert.equal(C.parkedAhead(me, [me, other], 6000, 200), other);
+});

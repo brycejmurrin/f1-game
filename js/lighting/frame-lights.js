@@ -151,7 +151,7 @@ const _lightScaleBuf = [];
 // _allLightsGen is the change signal for consumers that cache by identity
 // (WGX's trackLightSBO upload) — it moves when the VALUES move.
 const _allLightsBuf = [];
-let _allLightsGen = 0;
+let _allLightsGen = 0, _allLightsStaticGen = 0;
 // frame.lampSetGen: moves when the lamp SET or its SCALE moves (a new source
 // array, a length change, a new time-of-day / LAMP LEVEL scale) and never for
 // flicker or warm-up. game.js's env-probe hold latches on it: latched on
@@ -365,6 +365,8 @@ function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
+  if (fresh) _allLightsStaticGen++;
+  frame.allLightsStaticGen = _allLightsStaticGen;
   // DIRTY-ONLY (R2-2, #3104): the steady factor (flicker 0 and warm-up done; 52 preset
   // rows ship lampFlicker 0) is a constant, so the same source and scale
   // mean nothing moved: skip the whole-set re-tint outright, not every 50 ms.

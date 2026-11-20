@@ -266,6 +266,18 @@
   max-width: none;
   margin: 0;
 }
+/* Short landscape (any wide shape, not only the compact title): a narrow
+   banner parked bottom-left under the brand column. Here, not in a
+   route-loaded sheet: the banner auto-dismisses within seconds of boot. No
+   height cap: the message wraps to its own height at every UI SIZE. */
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
+  body[data-shape="wide"] #ios-install:not([hidden]) {
+    right: auto; left: var(--safe-l); bottom: var(--safe-b); margin: 0;
+    width: min(18rem, calc(42% - var(--safe-l) - var(--gap))); max-width: none;
+    padding: calc(var(--gap) * 0.45) calc(var(--gap) * 0.6);
+    font-size: calc(var(--fs-micro) * 0.85); line-height: 1.25;
+  }
+}
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
 /* THE DISMISS X IS A TAP TARGET: 20px glyph + 4/8 padding was a ~27px box,
    under the --tap floor every other touch control meets. Grow the box, keep

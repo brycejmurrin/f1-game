@@ -42,15 +42,11 @@ const Ghost = (function () {
     return Math.round(v * m) / m;
   }
 
-  // Parsed once and kept: setTrack() runs on EVERY loadTrack (each menu-flyby
-  // build), and re-parsing the whole store to read one entry was a ~40 KB
-  // JSON.parse per circuit browse. Only a plain object is accepted —
-  // `JSON.parse(raw) || {}` let "5", "true" and "[]" through, and every later
-  // `store[id] = snap` then threw for the rest of the session. The `{}`
-  // fallback is memoised too, so a corrupt key costs one parse.
+  // Browsing circuits reuses the parsed store. Storage notifications replace it.
   let storeCache = null;
   let accessClock = Date.now();
   let repairQueued = false;
+  let needsBudgetCheck = true;
   const pending = new Map();
   function loadStore() {
     if (storeCache) return storeCache;
@@ -63,15 +59,14 @@ const Ghost = (function () {
       if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
     storeCache = parsed;
+    needsBudgetCheck = true;
     return storeCache;
   }
   function touch(g) {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
   }
-  // ONE encoder, not one per call. trimStore() asks for a byte length after
-  // every eviction, so a fresh TextEncoder per question allocated one per
-  // iteration on top of encoding the whole store again.
+  // Reuse the encoder across store budget checks and evictions.
   let _enc = null;
   function byteLength(json) {
     if (typeof TextEncoder === "function") {
@@ -106,14 +101,7 @@ const Ghost = (function () {
       const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
       return at - bt;
     });
-    // O(n) rather than O(n^2). Re-serialising the WHOLE store after each
-    // eviction meant encoding up to MAX_STORE_BYTES (512 KB) once per entry
-    // dropped, on a path that already runs on the lap-line frame's idle
-    // callback. A JSON object's length is its entries plus their separators,
-    // so an entry's own contribution is exactly computable and can simply be
-    // subtracted; the loop then costs one stringify per entry it measures
-    // instead of one per entry it drops, and the exact length is recomputed
-    // once at the end so nothing downstream reads an estimate.
+    // Deduct each evicted entry’s serialized size, then verify the final serialized store.
     let size = byteLength(json);
     while (oldest.length > 1 && size > MAX_STORE_BYTES) {
       const id = oldest.shift();
@@ -136,11 +124,12 @@ const Ghost = (function () {
     return { changed };
   }
   function queueRepair() {
-    if (repairQueued) return;
+    if (!needsBudgetCheck || repairQueued) return;
     repairQueued = true;
     const run = () => {
       repairQueued = false;
       if (!storeCache) return;
+      needsBudgetCheck = false;
       const repaired = trimStore(storeCache);
       if (!repaired.changed) return;
       const result = GameStore.store.write(STORE_KEY, storeCache);
@@ -177,13 +166,17 @@ const Ghost = (function () {
       if (winner) fresh[id] = winner;
     }
     storeCache = fresh;
+    needsBudgetCheck = true;
     const current = storageId == null ? null : fresh[storageId];
     best = valid(current) ? current : null;
+    if (best) touch(best);
+    queueRepair();
   }
   if (typeof GameStore.store.subscribe === "function") GameStore.store.subscribe(onStoreChange);
   function saveStore(store) {
     storeCache = store;
     trimStore(store);
+    needsBudgetCheck = false;
     const result = GameStore.store.write(STORE_KEY, store);
     return result;
   }
@@ -259,9 +252,7 @@ const Ghost = (function () {
     rec.x.push(round(x, 2));
   }
 
-  // The store write is deferred: loadStore/saveStore parse and stringify EVERY
-  // circuit's ghost (~40 KB each) and finishLap runs inside updateCar on the
-  // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
+  // Defer trimming and writing the shared circuit store off the lap-line frame.
   function scheduleSave(id, snap) {
     touch(snap);
     pending.set(id, snap);
