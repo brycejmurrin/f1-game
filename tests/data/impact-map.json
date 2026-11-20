@@ -3951,6 +3951,9 @@
       ]
     },
     "js/career/ai-dev.js": {
+      "atrScale": [
+        "tests/unit/career-ai-dev.test.mjs"
+      ],
       "developWinter": [
         "tests/unit/career-ai-dev.test.mjs"
       ],
@@ -5481,6 +5484,7 @@
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/data-hub-slow.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/gfx-debug-overlay.test.mjs",
@@ -5506,6 +5510,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureDataHub": [
+        "tests/unit/data-hub-slow.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -5933,6 +5938,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/data-hub-slow.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
@@ -6133,6 +6139,9 @@
       "fromTier": [
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs"
+      ],
+      "ladderPace": [
+        "tests/unit/career-ai-dev.test.mjs"
       ],
       "overall": [
         "tests/unit/career-hire-rating.test.mjs",
@@ -12022,6 +12031,10 @@
       "adaptLane": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "aeroGrip": [
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/mechanics-coherence.test.mjs"
+      ],
       "aiRescueDelay": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -15204,6 +15217,9 @@
       "_sameList": [
         "tests/unit/chunked-index-ranges.test.mjs"
       ],
+      "_shadowAllIdx": [
+        "tests/unit/glx-lamp-shadow-slot.test.mjs"
+      ],
       "castShadowChunked": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -15680,6 +15696,9 @@
       ]
     },
     "js/render/shared/assets.js": {
+      "_discardLoad": [
+        "tests/unit/assets-pack.test.mjs"
+      ],
       "_ensureScratchGl": [
         "tests/unit/assets-scratch-gl-fallback.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
@@ -16131,6 +16150,9 @@
       ]
     },
     "js/render/three/tlx-chunked.js": {
+      "_zeros": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "build": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -16176,6 +16198,7 @@
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-half-webgpu-guard.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "prepareChunks": [
@@ -16363,6 +16386,9 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "copyRows16": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "flushDropped": [
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
@@ -16382,6 +16408,12 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "lampStaticBegin": [
+        "tests/unit/tlx-fail-scope.test.mjs"
+      ],
+      "lampStaticEnd": [
+        "tests/unit/tlx-fail-scope.test.mjs"
       ],
       "prime": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -16488,6 +16520,7 @@
       ],
       "_kidsBegin": [
         "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "_mirMrtArm": [
@@ -16520,6 +16553,9 @@
       "_resolveWarmWhere": [
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "_restoreEnvFrame": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -16531,6 +16567,9 @@
       ],
       "_ssrMrtNode": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "_startSoftBlitRead": [
+        "tests/unit/tlx-round2.test.mjs"
       ],
       "_tagSwap": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -16548,6 +16587,7 @@
       "acquireMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "applyResize": [
@@ -16663,6 +16703,9 @@
       "fallbackMat": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "fill2dLayer": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "flushDropLater": [
         "tests/unit/render-final-contracts.test.mjs"
       ],
@@ -16685,6 +16728,9 @@
       ],
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
+      ],
+      "installMappedShim": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
       ],
       "isNullMirrorError": [
         "tests/unit/tlx-r187-contracts.test.mjs"
@@ -16801,7 +16847,8 @@
       ],
       "readbackTextureLayers": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs"
       ],
       "recordGfxBudgetExhausted": [
         "tests/unit/ctx-lost-notice.test.mjs",
@@ -16867,7 +16914,8 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "softContent": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs"
       ],
       "softGpu": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -16975,11 +17023,13 @@
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "setSsrMrt": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "updateFrame": [
         "tests/unit/tlx-closures-4674.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
@@ -17195,6 +17245,12 @@
       ]
     },
     "js/render/webgpu/wgx-shadow.js": {
+      "_flushShadowModelUBO": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
+      ],
+      "_frameSubmitList": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
+      ],
       "carShadowBegin": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -17227,9 +17283,6 @@
       ],
       "shadowEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "*": [
-        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/webgpu/wgx.js": {
@@ -17809,6 +17862,9 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/scene-live.test.mjs"
+      ],
+      "window": [
+        "tests/unit/pit-lane.test.mjs"
       ],
       "*": [
         "tests/unit/help-rules-facts.test.mjs",

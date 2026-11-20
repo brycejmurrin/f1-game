@@ -1,6 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
+
+`(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
+explained them were the bytes over the tip, so they were cut and the fragment records the
+lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
+inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
+
 ## 2026-11-19 — PR #5738 (claude/appearance-shapes-4529): PORTRAIT & LANDSCAPE, garage PANEL HEIGHT
 
 `(tree) eagerBytes` 8,015,949 → **8,018,824** (+2,875 B). Deliberate raise past the absorb; the

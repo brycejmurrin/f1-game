@@ -1473,10 +1473,10 @@ function makeCars() {
     const worksParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const aiSetup = Career.inCareer() && Career.aiSetup && Career.aiSetup(team);
     const factoryParts = aiSetup ? Parts.resolveSetup(aiSetup, team) : worksParts;
-    // Aero and ERS already feed dedicated channels below. Credit only the other
-    // catalog gains against the current legal works build, without tdev or RNG.
-    const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
-      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
+    // Aero and ERS feed dedicated channels below. Credit the other catalog gains against the legal
+    // works build, without tdev or RNG, clamped to the tier ladder like the hire (#5760: was +7–16 %).
+    const catalogPace = aiSetup ? DriverRatings.ladderPace(buildPace(Parts.resolveSetup({ ...factoryParts.setup,
+      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts), team.tier, TIER_V) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // The hire, like catalogPace: aero/ERS reset (aeroLoad/ersDeploy below carry them), against the team's own
     // factory build (all-stock for the custom team, which has no works build), clamped to the tier ladder (#5035).
@@ -8628,7 +8628,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-    if (state === "count" && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // the rear grid's atlases and casters, one budget a frame under the lights (no sim: the sim is above); typeof: tickBody runs in VM slices without CarDraw (results-cam.test)
+    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // rear grid atlases + casters, a budget a frame under the lights or after a green that skips them (go, goRolling; #5830); no CarDraw: results-cam.test
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
@@ -8757,7 +8757,7 @@ $("standings-close").onclick = () => { $("standings").hidden = true; };
 // A refused or offline bundle says so: the tap sound already played, a silent door reads as broken.
 const openDataHub = (tab) => {
   const visit = titleVisit;
-  return ensureDataHub().then((ok) => {
+  return ensureDataHub({ onSlow: () => { if (state === "menu" && visit === titleVisit) announce("STILL LOADING…", 4, "info"); } }).then((ok) => {
     if (state !== "menu" || visit !== titleVisit) return;
     if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
   });
