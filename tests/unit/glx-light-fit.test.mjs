@@ -4,7 +4,8 @@
 // GPUs report MAX_FRAGMENT_UNIFORM_VECTORS between the GLES 3.0 floor (224) and
 // 261, so the lit program failed to link and the fallback showed "graphics
 // unavailable". GLX.init now sizes MAX_LIGHTS with LightBudget.fitSlots. This
-// pins the selection against a faked limit and recounts the shader's rows from
+// pins the selection against a faked limit, boots the real GLX (glx-mock) to
+// see the count it links and publishes, and recounts the shader's rows from
 // its source, so a new uniform cannot silently push the block past LIT_FS_ROWS.
 // Pure: the real modules in a vm. A unit test of a renderer is not evidence that it
 // links on a device (SwiftShader reports more rows); it pins the arithmetic.
@@ -15,6 +16,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -77,8 +79,28 @@ test("fitSlots keeps 48 when the limit fits, and fits the block under low limits
 });
 
 test("GLX.init links the lit program at the fitted count and publishes it", () => {
-  // One source pin: init cannot run without a GPU.
-  assert.match(glx, /litSlots = LightBudget\.fitSlots\(rows, LIT_FS_ROWS, 4\)[\s\S]{0,400}litProg = link\(LIT_VS, litFsFor\(litSlots\)\)[\s\S]{0,1200}LightBudget\.setSlots\(litSlots\)/);
+  // Boot the real GLX against the recording mock with a faked fragment-uniform
+  // limit, then read what it compiled and what it published.
+  const litCounts = (h) => h.calls.filter((c) => c[0] === "shaderSource" && /const int MAX_LIGHTS = \d+;/.test(c[1][1]))
+    .map((c) => Number(/const int MAX_LIGHTS = (\d+);/.exec(c[1][1])[1]));
+  const slots = (h) => [h.GLX.maxLights(), vm.runInContext("LightBudget.slots()", h.sandbox)];
+  const LB = loadBudget();
+
+  const floor = bootGlx({ params: { MAX_FRAGMENT_UNIFORM_VECTORS: 224 } });
+  const n224 = LB.fitSlots(224, LIT_FS_ROWS, 4);
+  assert.ok(n224 < 48, `224 rows must cut the loop (got ${n224})`);
+  assert.deepEqual(litCounts(floor), [n224], "the lit FS compiles once, at the fitted count");
+  assert.deepEqual(slots(floor), [n224, n224], "GLX.maxLights and LightBudget.slots publish the fitted count");
+
+  const roomy = bootGlx({ params: { MAX_FRAGMENT_UNIFORM_VECTORS: 1024 } });
+  assert.deepEqual(litCounts(roomy), [48]);
+  assert.deepEqual(slots(roomy), [48, 48]);
+
+  // A driver that packs worse than the count refuses the fitted program: one relink at LITE.
+  const strict = bootGlx({ params: { MAX_FRAGMENT_UNIFORM_VECTORS: 224 }, rejectSource: new RegExp(`const int MAX_LIGHTS = ${n224};`) });
+  assert.deepEqual(litCounts(strict), [n224, LB.LITE], "one retry, at LightBudget.LITE");
+  assert.deepEqual(slots(strict), [LB.LITE, LB.LITE]);
+
   // litFsFor's rewrite (the same replace) must reach the loop bound and change nothing else.
   const src = litFs(), fit = src.replace(/const int MAX_LIGHTS = \d+;/, "const int MAX_LIGHTS = 31;");
   assert.notEqual(fit, src, "the shader no longer spells `const int MAX_LIGHTS = N;` — litFsFor rewrites nothing");

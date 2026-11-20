@@ -16013,7 +16013,8 @@
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "slots": [
-        "tests/unit/all-lights-fill.test.mjs"
+        "tests/unit/all-lights-fill.test.mjs",
+        "tests/unit/glx-light-fit.test.mjs"
       ],
       "*": [
         "tests/unit/always-lamp-floor.test.mjs",
