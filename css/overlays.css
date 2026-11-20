@@ -1698,10 +1698,6 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
    edges: its containing block is the list, so it cannot leave it to cover the
    story podium above, and it shows at open without results-sheet.js scrolling
    the sheet away from the winner. An open stint fold drops it back into flow. */
-/* #5603 GEOMETRY IS INSTANT UNDER MOTION: REDUCED. Its 0.01ms on the initial `transition-property: all`
-   (css/responsive.css) replays the previous box for a frame: when the sheet turned compact at open, YOU kept its old
-   margin-top and painted on P1 (852x393: YOU at y 313 on the list top, 44 px over P1). Paint keeps its 0.01ms. */
-:root[data-motion="reduce"] #results :is(*, *::before, *::after) { transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow; }
 #results-table .res-row.you { position: relative; }
 #results-table [data-results-part="ranking"] > .res-row.you { position: sticky; top: 0; bottom: 0; }
 #results-table .res-row.you:has([data-stint-details][open]) { position: relative; }

@@ -257,7 +257,7 @@ test("nextAction: the land step is the MCP issue_write recipe, never a gh label 
 test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label call, a refusal prints neither; nothing is flipped itself", async () => {
   const { main: ship, nextCalls } = await import("../../tools/ci/ship-pr.mjs");
   const out = [], seen = [];
-  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l) }), out.join("\n")]; };
+  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l), closing: () => ({ ok: true, lines: [] }) }), out.join("\n")]; };
   let [rc, text] = go(["--pr", "7"], 0);
   assert.equal(rc, 0);
   assert.deepEqual(seen.at(-1), ["--pr", "7"]);

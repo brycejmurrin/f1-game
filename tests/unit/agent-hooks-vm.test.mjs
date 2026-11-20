@@ -10,6 +10,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -282,6 +283,28 @@ test("a stepped race switch under go() keeps the loop alive and step() safe whil
     gt(h.G.player.s - s0, 10, "the loop still drives the car after the switch");
     assert.equal(LH.state().frames - frames0, 60, "every frame finished clean");
     assert.equal(LH.state().faults, f0);
+  } finally { h.close(); }
+});
+
+/* go() skips the lights, and so does goRolling (a real-race jump-in). Race entry defers each rear-grid car's atlas
+ * upload and shadow caster to drainDeferredCarWarm, which tickBody ran only in state "count": after a green that
+ * skipped the count the pieces stayed queued and each built on its first draw, mid-lap (a 140-250 ms Car3D.build
+ * when a deferred rival entered caster range). perf-idle-pipeline-churn read that as a bind group + object buffer
+ * in an idle window (#5830: `[car] build haas` / `build ferrari` inside the counted stretch). The race frames
+ * drain it now, a budget a frame. Own handle: it reorders the grid. */
+test("a green that skipped the lights still drains the rear grid's deferred car warm (#5830)", async () => {
+  const h = await createGame({ track: "monza" });
+  try {
+    const cd = vm.runInContext("CarDraw.instance()", h.ctx);
+    const me = h.G.cars.find((c) => c.isPlayer);
+    let k = 2; for (const c of h.G.cars) c.gridPos = c === me ? 1 : k++;   // pole: every rival but P2 is rear grid
+    assert.equal(await cd.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true, "race entry's stepped warm");
+    gt(cd.drainDeferredCarWarm(1e-9), 0, "the warm queued rear-grid pieces for the lights (one taken here)");
+    h.apex.go();
+    assert.equal(h.G.state, "race", "go(): green with no countdown");
+    let now = h.sandbox.performance.now();
+    for (let i = 0; i < 10; i++) { now += 16.7; h.pumpFrame(now); }
+    assert.equal(cd.drainDeferredCarWarm(1e-9), 0, "race frames drained what the skipped lights owed");
   } finally { h.close(); }
 });
 

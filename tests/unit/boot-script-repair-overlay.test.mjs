@@ -19,11 +19,12 @@ const faultScenario = actions => ({ version: 1, id: 'lazy-preview', goal: 'Leave
 function faultRig() {
   const context = new EventEmitter(), timers = new Map(), calls = [];
   let handler, sequence = 0;
-  context.route = async (_, h) => { handler = h; };
+  const routes = [];
+  context.route = async (url, h) => { routes.push(url); handler = h; };
   context.unroute = async (_, h) => { assert.equal(h, handler); calls.push('unroute'); };
   const clock = { setTimer(fn) { const id = ++sequence; timers.set(id, fn); return id; }, clearTimer(id) { timers.delete(id); } };
   let request, pending;
-  return { context, calls, clock, timers,
+  return { context, calls, clock, timers, routes,
     session: { context, page: { url: () => 'http://localhost/' } },
     start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false, resourceType = 'script', hang = false } = {}) {
       request = { url: () => origin + pathname + '?v=dev', resourceType: () => resourceType };
@@ -126,6 +127,24 @@ test('fault fixture routing composes, requires an actual terminal transfer and d
   g.context.unroute = async () => { throw Error('unroute failed'); };
   await assert.rejects(held.close(), error => error.message === 'unroute failed');
   await g.drain(); assert.deepEqual(g.calls, ['reject']);
+});
+
+test('fault schedule unroute leaves a non-matching route so it is not the last interception', async () => {
+  const f = faultRig();
+  const s = await installFaultSchedule(f.context, 'http://localhost', f.clock);
+  assert.equal(f.routes.length, 2);
+  assert.equal(typeof f.routes[0], 'function');
+  assert.equal(f.routes[0](new URL('http://localhost/js/circuits/monaco.js')), false);
+  assert.equal(f.routes[1], '**/*');
+  s.hold(faultHold());
+  void f.start();
+  await s.wait('circuit');
+  const release = s.release('circuit', 'continue');
+  f.finish();
+  await release;
+  await s.close();
+  assert.deepEqual(f.calls, ['continue', 'unroute']);
+  assert.equal(f.routes.length, 2);
 });
 
 test('warming fetches and XHRs of the held pathname do not consume a lazy script hold', async () => {

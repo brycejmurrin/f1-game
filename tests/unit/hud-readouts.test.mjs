@@ -465,6 +465,14 @@ test("hud.js: POS is session-aware — TT, Q in qualifying, PRAC in practice, ra
   assert.equal(els.pos.textContent, "TT");
 });
 
+test("hud.js: POS in the countdown is the grid slot, not '-/N' (#5883)", () => {
+  const { els, player, tick } = boot();
+  player.rank = 0; player.gridPos = 2; tick();   // rank is only computed once the race is green
+  assert.equal(els.pos.textContent, "2/2");
+  player.gridPos = undefined; tick();
+  assert.equal(els.pos.textContent, "-/2", "no rank and no grid slot still reads '-'");
+});
+
 test("hud.js: the gap chips carry no sign — the arrow is the direction, as RELATIVE agrees", () => {
   const { els, rival, player, tick } = boot();
   rival.prog = player.prog + 100; tick();

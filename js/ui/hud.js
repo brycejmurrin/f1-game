@@ -1498,11 +1498,11 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
   // The steer cap rides WITH the shared one (set()'s test): absent together, else explicit (never a fall-back
-  // to --hud-z-dock). A changed steer zoom refits once so TYRES / LIMITS read the new dock top.
+  // to --hud-z-dock). New PAINTED zoom (min()-ed) refits TYRES/LIMITS once.
   const wantDock = Math.max(btnFloor, btnScale), zSteer = Math.round(Math.min(wantDock, Math.max(DOCK_MIN_Z, capDockS)) * 1000) / 1000;
   if (capDock < wantDock) root.style.setProperty("--hud-z-dock-l", String(zSteer));
   else root.style.removeProperty("--hud-z-dock-l");
-  if (Math.abs(zSteer - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
+  if (Math.abs(Math.min(zSteer, wantDock) - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
@@ -1841,15 +1841,15 @@ function updateHud(force, dtMs) {
   syncAlong();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
-  // contains it (see the ranked build in game.js).
+  // contains it (game.js ranked build).
   // POS IS A RACE READOUT. In qualifying `cars` is the player alone (game.js
   // trims the field to one flying lap, and the model grids the rest only when
   // it ends), so it read "1/1"; in PRACTICE the rank is road order with
   // nothing at stake. Both say what the session is instead, like TT.
   const sess = sessionOf(timeTrial);
   hText(els.pos, sess === "tt" ? "TT" : player.retired ? "DNF" : sess === "quali" ? "Q"
-    : sess === "practice" ? "PRAC" : (player.rank || "-") + "/" + cars.length);
-  // Position change: acknowledge an overtake (either way) for ~0.6 s.
+    : sess === "practice" ? "PRAC" : (player.rank || player.gridPos || "-") + "/" + cars.length);
+  // Countdown: the grid slot. Overtake flash ~0.6 s.
   const rank = sess !== "race" || player.retired ? 0 : (player.rank || 0);
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
@@ -1955,7 +1955,7 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active()));
+    if (els.workBtn) { hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active())); hText(els.workBtn, G.timeTrial ? "END TIME TRIAL" : "WORK ON CAR"); }   // #5789
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.

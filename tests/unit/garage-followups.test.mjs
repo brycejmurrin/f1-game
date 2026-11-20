@@ -570,3 +570,30 @@ test("NOSE TIP wears the NOSE CAP colour when the livery sets one, else the acce
   assert.deepEqual(paintStations({ c1 }).fills.noseTip, [0.9, 0.1, 0.1]);
   assert.equal(paintStations({ c1, nose, decalNoseTip: "off" }).fills.noseTip, undefined);
 });
+
+// #5879: attempt() writes the trial tune into the saved setup; a reload mid-comparison used to keep it for good.
+function reloadable(saved) {
+  const dom = makeDom(), timers = [];
+  const store = { get: (k,d) => saved.has(k) ? structuredClone(saved.get(k)) : d, set(k,v) { saved.set(k, structuredClone(v)); return true; }, keyRevision: () => 0 };
+  const ctx = vm.createContext({ document: dom.document, GameStore:{store}, PhysicsConsts:{BB_REF:.56}, setTimeout: fn => timers.push(fn) });
+  for (const file of ['setup-tune','setup-presets','setup-trials']) vm.runInContext(read('js/garage/'+file+'.js'),ctx,{filename:absSrc('js/garage/'+file+'.js')});
+  timers.splice(0).forEach(fn => fn());
+  return { store, S: vm.runInContext('SetupTune',ctx), T: vm.runInContext('SetupTrials',ctx) };
+}
+test('a reload mid-comparison restores the tuned setup, keeps a later hand edit, and cancel clears the record',()=>{
+  for (const edited of [false, true]) {
+    const saved = new Map(); let h = reloadable(saved); const works = plain(h.S.get('haas'));
+    h.S.set('haas', {...works, arbF: works.arbF + 2}); const tuned = plain(h.S.get('haas'));
+    h.T.create({teamId:'haas',store:h.store,baseline:works,candidate:tuned,launch:()=>new Promise(()=>{})});
+    h.T.attempt('baseline'); assert.deepEqual(plain(h.S.get('haas')), works, 'the trial wrote the baseline');
+    if (edited) h.S.set('haas', {...works, arbF: works.arbF + 4});
+    const want = plain(h.S.get('haas'));
+    h = reloadable(saved);
+    assert.deepEqual(plain(h.S.get('haas')), edited ? want : tuned, edited ? 'a later hand edit is left alone' : 'reload restores the tuned setup');
+    assert.equal(h.store.get('setupTrialRecover', null) ?? null, null, 'the recovery record is consumed');
+  }
+  const saved = new Map(), h = reloadable(saved);
+  h.T.create({teamId:'haas',store:h.store,baseline:h.S.get('haas'),candidate:h.S.get('haas'),launch:()=>new Promise(()=>{})});
+  h.T.attempt('candidate'); assert.notEqual(h.store.get('setupTrialRecover', null), null); h.T.cancel();
+  assert.equal(h.store.get('setupTrialRecover', null) ?? null, null, 'cancel clears the record');
+});

@@ -64,6 +64,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const REPO = "brycejmurrin/f1-game";
 export const WORKFLOW = "browser-group.yml";
 export const SHARD_CHOICES = [1, 2, 4, 6, 8];   // browser-group.yml's `shards` options
+/** GROUP LANES (#5848, 2026-11-19). browser-group.yml's shard job joins one of GROUP_LANES fleet-wide concurrency
+ *  groups (`browser-group-lane-<n>`, `queue: max`), so at most GROUP_LANES group shards hold runners at once across
+ *  every dispatch, and the rest wait without holding one. Measured by tools/ci/pool-share.mjs: on 11-19 nine group
+ *  runs held up to the whole 40-slot pool while land.yml's seconds-long gate jobs queued behind them; ci.yml's
+ *  selected legs already have LANES (select-specs.mjs, 24), so 24 + 8 leaves 8 slots that neither can take.
+ *  Lanes are 1..GROUP_LANES (a plan without `lane`, e.g. a hand dispatch of the default plan, falls back to its
+ *  shard number in the workflow, so 0 is never a lane). */
+export const GROUP_LANES = 8;
+/** The matrix with a lane per shard: consecutive lanes from `base`, so one run's shards never queue behind each
+ *  other and runs dispatched at different minutes start on different lanes. Pure. */
+export function withLanes(matrix, base = 0) {
+  const b = ((Math.floor(Number(base)) || 0) % GROUP_LANES + GROUP_LANES) % GROUP_LANES;
+  return (matrix || []).map((m, i) => ({ ...m, lane: ((b + i) % GROUP_LANES) + 1 }));
+}
 const say = (...a) => console.log("[remote-group]", ...a);
 
 /** Resolve workers for a group: explicit request, else GL + render-heavy heuristic. */
@@ -495,7 +509,7 @@ async function main() {
   for (const l of gate.lines) say(l);
   if (!gate.ok) return 3;
   const since = Date.now();
-  const plan = JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) });
+  const plan = JSON.stringify({ matrix: withLanes(p.matrix, Math.floor(since / 60000)), ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
     // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.

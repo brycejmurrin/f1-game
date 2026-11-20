@@ -80,7 +80,7 @@ const MULTI_GLOBAL = {
 // adds the writer (e.g. a new shader file merging into GLXShaders).
 const SHARED_GLOBALS = {
   GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
-  TLXShaders: 9,  // the three/ TSL family does the same for the deferred backend
+  TLXShaders: 10,  // the three/ TSL family does the same for the deferred backend
   // LAZY_AUDIO reinjection: stub.js then the real module (cap 2 each).
   GameAudio: 2, GameAudioSignal: 2, GameAudioSoundtrack: 2, GameAudioRadioFx: 2,
   GameAudioToneModel: 2, CarSfx: 2, ErsLayer: 2, RivalAudio: 2, VoicePack: 2,
@@ -141,7 +141,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield
   "js/car/car-draw.js": ["scheduler"], // warmCarAssetsAsync's step yield (Chrome 129+, perf hunt 4 F3.3); typeof-guarded, else setTimeout(0)
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
-  "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
+  "js/render/shared/assets.js": ["scheduler", "__APEX_BUILD"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0); the pack manifest is asked for under the shell build (`?b=`, #5629)
   "js/ui/update-check.js": ["__apexGuardOk"],   // index.html's boot version guard: set only when its version.json read succeeded (#4925)
   "js/render/renderer-boot.js": ["__APEX_BUILD"], // the canary's retirement record names the build that retired the pick (#4995)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs

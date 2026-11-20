@@ -999,8 +999,12 @@ material has no baked layer — `FLAT`, `GLASS` and `FLAG` never do).
 ### `texCensus() → {bytes, count, mb, byKind, biggest, excludes}`
 **Tracked allocation bytes** from the active backend, calculated from texture
 dimensions, layers, format and mip levels. This is not driver residency. GLX
-only; WGX and TLX declare it absent, so this
-answers `{supported:false, bytes:null}` there rather than a measured zero.
+counts its content textures; TLX (`js/render/three/tlx-mem.js`) counts every live
+texture and render target at its current size plus three's buffer bytes, and adds
+`targets`, `buffers`, `swapchainEst`, `three` (three's own figure, for comparison)
+and `estimated`. The two totals are not comparable: read each one's `excludes`.
+WGX declares it absent, so this answers `{supported:false, bytes:null}` there
+rather than a measured zero.
 
 Read it on a full grid before touching any texture resolution policy. It exists
 because the biggest texture number in the game was arithmetic until 2026-09-14:
