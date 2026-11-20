@@ -139,7 +139,7 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   for (const file of ["js/race/quali-model.js", "js/race/daily-challenge.js", "js/ui/share-code.js"]) {
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   }
-  ctx.G = { ...G, referencePole: () => 82, player: { best: 80 },
+  ctx.G = { ...G, referencePole: (k) => (k === "medal" ? 82 : NaN), player: { best: 80 },
     records: { key: () => context, prepareDaily() {}, restoreDaily() {} } };
   ctx.G.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
   const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
@@ -466,7 +466,7 @@ test("with no medal passed, the share line carries TODAY's — from today's best
   });
   seedLog(ctx); seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
-  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
+  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: (k) => (k === "medal" ? 82 : NaN) });
   d.open("2026-09-03");
   d.record(84);                                   // within 3 % of pole: silver
   assert.match(d.shareText(), / · SILVER( · |$)/);

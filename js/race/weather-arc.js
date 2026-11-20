@@ -85,7 +85,9 @@ const WeatherArc = (function () {
     function setTimeOfDay(tod) {
       if (tod === undefined) return G.raceTimeOfDay;
       const valid = ["default", "dawn", "day", "dusk", "night"];
-      G.raceTimeOfDay = valid.indexOf(tod) >= 0 ? tod : "default";
+      const next = valid.includes(tod) ? tod : "default";
+      if (next === G.raceTimeOfDay) return next;
+      G.raceTimeOfDay = next;
       G.loadTrack(G.trackIdx);
       G.applyRaceSettings();
       return G.raceTimeOfDay;

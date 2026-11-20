@@ -942,7 +942,7 @@ const WGX = (function () {
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
     let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
-    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
+    let _tlSrc = null, _tlStaticGen = -1, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
     // A VALUES-only change of the baked track set (allLightsGen: lamp flicker,
     // the warm-up ramp, a LAMPS slider) re-uploads at most this often. The
     // shipped flicker (lampFlicker 0.011-0.10, def 0.10) moves the gen EVERY
@@ -954,8 +954,7 @@ const WGX = (function () {
     const TL_VALUES_DT = 1 / 30;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1, _asGen = -1;
-    // Which source array _tlScratch's STATIC lanes were packed from.
-    let _tlFullPack = null, _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
+    let _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
     // Lamp-mask generation keys, per pass kind (0 forward/env, 1 mirror): each pass's last
@@ -3340,7 +3339,7 @@ const WGX = (function () {
       // is ONE buffer refilled in place (js/lighting/frame-lights.js), so a
       // rebuild:true edit (LAMP DENSITY, POOL RADIUS) re-orders it under the same
       // identity. A hit is therefore re-checked against the record it names (O(1));
-      // a cached miss (-1) holds only while allLightsGen stands still. GLX keys
+      // a cached miss holds across RGB-only changes until the static set changes. GLX keys
       // the same lookup on the LampChunks table (chunked.js _shadowAllIdx).
       // Never in the mirror: the forward slot names another lamp there.
       let _absShadowIdx = -1;
@@ -3350,14 +3349,15 @@ const WGX = (function () {
         const so = SHD.lampIdx * 15;
         const lx = L[so], ly = L[so + 1], lz = L[so + 2];
         const ho = _asIdx * 15;
+        const positionGen = f.allLightsStaticGen ?? f.allLightsGen;
         if (_AL === _asAL && lx === _asX && ly === _asY && lz === _asZ &&
-            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === f.allLightsGen)) {
+            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === positionGen)) {
           _absShadowIdx = _asIdx;
         } else {
           for (let p = 0; p < _AL.length; p += 15) {
             if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
           }
-          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = f.allLightsGen;
+          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = positionGen;
         }
       }
       d[140] = _absShadowIdx;
@@ -3432,24 +3432,12 @@ const WGX = (function () {
       frameRoadChunkLamps = +f.roadChunkLamps || 0;
       frameAllLightsGen = +f.allLightsGen || 0;
       frameAllLights = f.allLights || null;
-      // (Re)upload the baked track set when the (lights identity, knob) pair
-      // moves — rgb × knob applied here ONCE (per-chunk sets render raw baked
-      // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
-      // the buffer is static until the next bake. A moved pair also resets
-      // the chunkIdx segment allocator: every mesh re-appends on next draw.
-      // (frame.allLights is ONE reused buffer, so identity rarely moves: the
-      // allocator also rewinds in freeChunkedMesh when the last mesh holding a
-      // segment is freed — wgx-chunked.js — or each track build would leak.)
-      // Re-upload when the SET changes (identity/knob) or when its VALUES change
-      // (allLightsGen — flicker, warm-up, a LAMPS slider). The two are kept
-      // apart deliberately: the segment allocator below may only be reset for
-      // the former. Gen moves every frame while flicker runs, and resetting the
-      // allocator there would re-bake every chunk table every frame.
-      // The knob is deliberately NOT in this key: the loop below copies AL
-      // verbatim, so a knob move cannot change one byte here. It moves only the
-      // per-chunk TABLES, and only via capFor() — 1000 slider steps, <=17 caps.
+      // A new source or a static refill of the shared buffer must update the
+      // records and chunk segments immediately. RGB-only changes are paced.
+      // The slider only changes the table cap, never the packed lamp records.
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
-      const _tlSetMoved = _tlSrc !== frameAllLights;
+      const staticGen = +f.allLightsStaticGen || 0;
+      const _tlSetMoved = _tlSrc !== frameAllLights || _tlStaticGen !== staticGen;
       const _lbGen = f.lampBake ? f.lampBake.gen | 0 : 0;
       // Values-only: the same set and bake, only rgb moved — paced by TL_VALUES_DT
       // on the frame clock (frame.time, game.js's render clock). A clock that went
@@ -3467,7 +3455,7 @@ const WGX = (function () {
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp; keying on it alone would
         // rewrite all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
-        if (_tlFullPack !== AL || _tlLoGen !== _lbGen) {
+        if (_tlSetMoved || _tlLoGen !== _lbGen) {
           for (let i = 0; i < tn; i++) {
             const o = i * 15, b = i * 16;
             td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
@@ -3476,7 +3464,7 @@ const WGX = (function () {
             td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14];
             td[b+15] = _hasLB ? LampBake.liveOnlyAt(AL, o) : 0;
           }
-          _tlFullPack = AL; _tlLoGen = _lbGen;
+          _tlLoGen = _lbGen;
         }
         for (let i = 0; i < tn; i++) {
           const o = i * 15, b = i * 16;
@@ -3486,7 +3474,7 @@ const WGX = (function () {
         // contiguous range and the upload itself cannot shrink. Only the CPU
         // pack does — which is the half that scales with lamp count.
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
+        _tlSrc = frameAllLights; _tlStaticGen = staticGen; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
       }
       // Allocator tracks the TABLES: reset on a set or CAP change, never on a
       // colour-only gen bump (tables key on positions, which flicker leaves

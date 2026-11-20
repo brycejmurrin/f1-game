@@ -21,7 +21,10 @@ function boot() {
   const Input = vm.runInContext('Input', ctx), Profiles = vm.runInContext('ControllerProfiles', ctx);
   Input.init(el());
   const drive = (pad) => { state.pads = [pad]; (listeners.gamepadconnected || []).forEach((fn) => fn({ gamepad: pad })); clock.t += 17; Input.poll(); };
-  return { Input, Profiles, drive, storage, clock, state };
+  return { Input, Profiles, drive, storage, clock, state, disconnect(p) {
+    state.pads = state.pads.filter((device) => device !== p);
+    listeners.gamepaddisconnected.forEach((fn) => fn({ gamepad: p }));
+  } };
 }
 const pad = (id, mapping = 'standard') => ({ id, index: 0, connected: true, mapping, axes: [0, 0, 0, 0], buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })) });
 test('empty snapshots neutralize axes without replaying held actions on recovery', () => {
@@ -147,4 +150,92 @@ test('pedal initialization belongs to each connected controller and axis map', (
   assert.ok(I.brakeLevel() > .4);
   I.setPadAxisMap({ steer: 0, throttle: 1, brake: 3 }); I.poll();
   assert.equal(I.throttleLevel(), 0, 'a newly mapped axis starts uninitialized');
+});
+
+test('a reconnect in the same slot requires a release before repeating a held action', () => {
+  const { Input: I, drive, disconnect } = boot(), p = pad('wireless');
+  p.buttons[8] = { pressed: true, value: 1 };
+  drive(p);
+  assert.equal(I.consumeCameraCycle(), true);
+  disconnect(p);
+  I.poll();
+  drive(p);
+  assert.equal(I.consumeCameraCycle(), false);
+  p.buttons[8] = { pressed: false, value: 0 }; I.poll();
+  p.buttons[8] = { pressed: true, value: 1 }; I.poll();
+  assert.equal(I.consumeCameraCycle(), true);
+});
+
+test('profile replacement keeps an unclaimed legacy wheel map reserved for the wheel', () => {
+  const { Input: I, drive, storage } = boot();
+  storage.set('padAxes', { steer: 3 });
+  drive(pad('standard first'));
+  I.setControllerProfiles({ devices: [], legacyClaimed: false });
+  assert.equal(I.getPadAxisMap().steer, 0, 'the standard controller keeps its standard axis');
+  assert.equal(I.getControllerProfiles().legacyClaimed, false);
+  drive(pad('wheel later', ''));
+  assert.equal(I.getPadAxisMap().steer, 3);
+});
+
+test('polling reads each idle spare button once while still recognizing its first press', () => {
+  const { Input: I, drive, state } = boot(), active = pad('driver'), spare = pad('spare');
+  spare.index = 1;
+  let reads = 0, down = false;
+  spare.buttons[8] = { get pressed() { reads++; return down; }, value: 0 };
+  drive(active); state.pads = [active, spare]; I.poll();
+  reads = 0; I.poll();
+  assert.equal(reads, 1, 'one button snapshot per poll for an idle spare');
+  down = true; I.poll();
+  assert.equal(I.controllerProfile().id, spare.id, 'a rising button still claims the active slot');
+});
+
+test('identical pads on different slots do not share latched gas or D-pad steering', () => {
+  const { Input: I, drive, state, clock } = boot(), a = pad('Xbox'), b = pad('Xbox');
+  b.index = 1; I.setHoldMode({ throttle: 'toggle' });
+  drive(a); state.pads = [a, b];
+  I.poll();
+  a.buttons[0] = a.buttons[15] = { pressed: true, value: 1 };
+  for (let i = 0; i < 30; i++) { clock.t += 17; I.poll(); I.steer(1 / 60); }
+  assert.equal(I.throttleLevel(), 1);
+  assert.ok(I.debugState().pad.steer > .5);
+  b.buttons[8] = { pressed: true, value: 1 }; clock.t += 17; I.poll();
+  assert.equal(I.throttleLevel(), 0, 'incoming device never toggled its throttle');
+  assert.equal(I.debugState().pad.steer, 0, 'incoming pad has neutral D-pad');
+});
+
+test('an unavailable wheel pedal axis is neutral until fresh travel is observed', () => {
+  const { Input: I, drive } = boot(), wheel = pad('wheel', '');
+  I.setPadAxisMap({ steer: 0, throttle: 3 });
+  wheel.axes[3] = -1; drive(wheel);
+  wheel.axes[3] = 1; I.poll(); assert.equal(I.throttleLevel(), 1);
+  for (const invalid of [undefined, NaN]) {
+    wheel.axes[3] = invalid; I.poll(); assert.equal(I.throttleLevel(), 0);
+    wheel.axes[3] = 0; I.poll(); assert.equal(I.throttleLevel(), 0);
+    wheel.axes[3] = -1; I.poll(); wheel.axes[3] = 0; I.poll();
+    assert.ok(I.throttleLevel() > .4, 'valid centred sample after calibration is half travel');
+  }
+});
+
+test('square-gate stick diagonals stay within the radial free-look range', () => {
+  const { Input: I, drive } = boot(), p = pad('square gate');
+  p.axes[2] = 1; p.axes[3] = -1; drive(p);
+  const { x, y } = I.lookStick();
+  assert.ok(Math.abs(Math.hypot(x, y) - 1) < 1e-9);
+  assert.equal(x, -y);
+});
+
+test('a truncated snapshot preserves steering calibration and produces neutral steering', () => {
+  const { Input: I, drive } = boot(), wheel = pad('calibrated wheel', '');
+  I.setPadAxisMap({ steer: 3 });
+  drive(wheel);
+  wheel.axes[3] = .2;
+  assert.equal(I.calibratePad(), true);
+  wheel.axes.length = 2;
+  I.poll();
+  assert.equal(I.debugState().pad.steer, 0);
+  assert.equal(I.parkedPadPreview().steer, 0);
+  assert.equal(I.calibratePad(), false, 'missing axis cannot overwrite calibration');
+  assert.equal(I.padRestStore()[wheel.id], .2);
+  wheel.axes[3] = .2; I.poll();
+  assert.equal(I.debugState().pad.steer, 0, 'rest is still centred when the axis returns');
 });
