@@ -10,8 +10,7 @@
     }
   },
   "tree": {
-    "eagerBytes": -5056,
-    "eagerCodeBytes": -3720,
+    "eagerCodeBytes": -3404,
     "eagerScripts": -1
   }
 }

@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -51,6 +52,87 @@ test("gapClock: a stopped car's gap grows with the clock; a re-grid or reset sta
   assert.ok(Number.isNaN(clk.gap(front, back)), "no gap until both cross a line again");
   clk.sample(back, 100, T + 0.2, L); clk.reset();
   assert.ok(Number.isNaN(clk.gap(front, back)), "reset() forgets every car");
+});
+
+// ONE clock for every gap readout (#5678, 57460a6e redone): REL and STRATEGY read HudReadouts.gaps, the clock
+// hud.js samples. `mod` loads beside it in one context; `drive` samples every car at 50 m/s for 30 s.
+function withClock(mod, name, extra = {}) {
+  const ctx = { Math, Number, Float64Array, Map, console, ...extra };
+  vm.createContext(ctx); withI18n(ctx);
+  vm.runInContext(read("js/ui/hud-readouts.js") + "; this.HudReadouts = HudReadouts;", ctx, { filename: absSrc("js/ui/hud-readouts.js") });
+  if (mod) vm.runInContext(read(mod) + "; this." + name + " = " + name + ";", ctx, { filename: absSrc(mod) });
+  return ctx;
+}
+function drive(clk, cars, L, secs = 30) {
+  for (let T = 0; T < secs + 1e-9; T += 0.1) for (const c of cars) { clk.sample(c, c.prog, T, L); c.prog += 5; c.s = ((c.prog % L) + L) % L; }
+}
+
+test("gaps: one shared clock; a car a lap up or down is read at the same TRACK point (the laps shift)", () => {
+  const R = withClock(null).HudReadouts, L = 1000;
+  assert.equal(typeof R.gaps.gapOr, "function", "HudReadouts.gaps is the shared instance");
+  const you = { prog: 3000 }, up = { prog: 3000 + L + 29 }, down = { prog: 3000 - L - 40 };
+  drive(R.gaps, [you, up, down], L);
+  // 29 m ahead on the road at 50 m/s = 0.58 s; 40 m behind = 0.80 s, whichever lap each is on.
+  assert.ok(Math.abs(R.gaps.gap(up, you, 1) - 0.58) < 1e-9, "lap up, ahead: " + R.gaps.gap(up, you, 1));
+  assert.ok(Math.abs(R.gaps.gap(you, down, 1) - 0.8) < 1e-9, "lap down, behind: " + R.gaps.gap(you, down, 1));
+  // Without the shift the lookup is a lap off: a lap's worth of seconds or nothing, never the road gap.
+  for (const g of [R.gaps.gap(up, you), R.gaps.gap(you, down)]) assert.ok(!(Math.abs(g - 0.58) < 0.5 || Math.abs(g - 0.8) < 0.5), "unshifted: " + g);
+  assert.equal(R.gaps.gapOr(up, you, 7, 1), R.gaps.gap(up, you, 1), "gapOr passes the shift through");
+});
+
+test("RELATIVE reads the shared clock: -0.58 / +0.80 for lapped rows under braking, where distance ÷ speed reads 1.24", () => {
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk(), L = 1000;
+  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => (id === "hud-rel" ? root : null), createElement: mk };
+  const ctx = withClock("js/ui/hud-relative.js", "HudRelative", { document: doc, HudElements: { isOn: () => true } });
+  const rc = (code, prog, rank) => ({ code, prog, s: prog % L, rank, speed: 50, tyre: { code: "M" } });
+  const you = rc("YOU", 3000, 2), up = rc("LDR", 3000 + L + 29, 1), down = rc("BCK", 3000 - L - 40, 3);
+  drive(ctx.HudReadouts.gaps, [you, up, down], L);
+  you.speed = 23.4;   // braking: vFloor = max(23.4, 90 × 0.26) = 23.4, so 29 m reads 1.24 s by distance
+  const G = { cars: [you, up, down], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  ctx.HudRelative.tick(G, you);
+  const rows = root.children;
+  assert.equal(rows[1].children[1].textContent, "LDR");
+  assert.equal(rows[1].children[2].textContent, "-0.58", "a lap up, 29 m ahead: 0.58 s on the clock (distance ÷ speed: -1.24)");
+  assert.equal(rows[3].children[1].textContent, "BCK");
+  assert.equal(rows[3].children[2].textContent, "+0.80", "a lap down, 40 m behind: 0.80 s (distance ÷ speed: +1.71)");
+});
+
+test("STRATEGY reads the shared clock: undercut and cover show at a 6 s gap inside a 10 s loss, not the 12.8 s distance ÷ braking speed", () => {
+  const mk = (tag) => {
+    const el = { tag, hidden: false, style: {}, attrs: {}, children: [], textContent: "",
+      setAttribute(k, v) { el.attrs[k] = String(v); }, appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk("div"); root.hidden = true;
+  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => (id === "hud-strat" ? root : null), createElement: mk };
+  const ctx = withClock("js/ui/hud-strategy.js", "HudStrategy", { document: doc, HudElements: { isOn: () => true } });
+  const L = 5000;
+  const p = { rank: 2, prog: 1000, speed: 50, tyre: { code: "M" }, tyreWear: 0.4, lap: 12 };
+  const a = { rank: 1, prog: 1300, speed: 50, code: "VER", pitState: "none", tyreWear: 0.7 };
+  const b = { rank: 3, prog: 700, speed: 50, code: "NOR", pitState: "none", tyreWear: 0.25, lap: 12 };
+  drive(ctx.HudReadouts.gaps, [p, a, b], L);   // 300 m apart at 50 m/s: 6 s on the clock
+  p.speed = 0;   // the player brakes: 300 m ÷ max(0, 90 × 0.26) = 12.8 s
+  const G = {
+    state: "race", session: "race", cars: [a, p, b], ranked: [a, p, b], track: { total: L }, vTop: () => 90,
+    tyres: { on: () => true, spent: (c) => c.tyreWear, lapsLeft: () => 9.6 },
+    pits: { estimate: () => ({ lossS: 10 }), planInfo: () => ({ next: 14, code: "H", stops: 1, lapsToStop: 2 }), windowOf: (c) => (c === b ? "P13" : "") },
+  };
+  ctx.HudStrategy.tick(G, p);
+  const row = (k) => root.children.find((r) => r.attrs["data-k"] === k);
+  assert.equal(row("uc").hidden, false, "VER is 6 s up the road on the clock, inside the 10 s loss");
+  assert.equal(row("uc").children[1].textContent, "VER");
+  assert.equal(row("cov").hidden, false, "NOR is 6 s behind on the clock");
+  ctx.HudReadouts.gaps.reset();   // no history: the 12.8 s rough gap is outside the loss, so both cues hide
+  ctx.HudStrategy.tick(G, p);
+  assert.equal(row("uc").hidden, true, "fallback distance ÷ vFloor = 12.8 s > 10 s");
+  assert.equal(row("cov").hidden, true);
 });
 
 function layout({ W = 844, H = 390, ins = { "--sal": 47, "--sar": 47, "--sat": 0, "--sab": 21 }, arranging = false } = {}) {

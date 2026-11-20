@@ -331,24 +331,28 @@ const HudReadouts = (function () {
     }
     const at = (car, i) => { const c = cars.get(car), j = ((i % N) + N) % N; return c && c.k[j] === i ? c.at[j] : NaN; };
     /** Seconds since `front` was where `back` is now (its crossings either side, interpolated): a stopped car's gap
-     *  grows with the clock. The interval at the last shared line before `front` crosses the next; else NaN. */
-    function gap(front, back) {
+     *  grows with the clock. The interval at the last shared line before `front` crosses the next; else NaN.
+     *  `laps`: whole laps `front` is up on `back` by race distance, so a car on another lap is read at the same
+     *  TRACK point (REL's lapped rows), not a lap's worth of seconds. */
+    function gap(front, back, laps) {
       const c = cars.get(back);
       if (!c || !(step > 0)) return NaN;
-      const i = Math.floor(c.p / step), a = at(front, i), b = at(front, i + 1);
+      const i = Math.floor(c.p / step), sh = (laps | 0) * LINES, a = at(front, i + sh), b = at(front, i + sh + 1);
       const d = b >= a ? c.t - (a + (b - a) * (c.p / step - i)) : at(back, i) - a;
       return d >= 0 ? d : NaN;
     }
     /** gap(front, back), or `fallback` while there is none (distance ÷ speed until both cars cross a line). */
-    const gapOr = (front, back, fallback) => { const g = gap(front, back); return g >= 0 ? g : fallback; };
+    const gapOr = (front, back, fallback, laps) => { const g = gap(front, back, laps); return g >= 0 ? g : fallback; };
     return { sample, gap, gapOr, reset: () => cars.clear() };
   }
 
+  /** THE one race clock: hud.js samples and resets it each HUD tick; the chips, RELATIVE and STRATEGY read it. */
+  const gaps = gapClock();
   // GAP_FINE_LT stays module-local (gapDecimals only).
   /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): any pitState but "none" (lane, box, out). */
   function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
   return { inPit, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
-    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S, gapClock,
+    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S, gapClock, gaps,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };
 })();

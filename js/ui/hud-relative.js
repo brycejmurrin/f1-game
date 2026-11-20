@@ -147,7 +147,9 @@ const HudRelative = (function () {
       // profile and precision boundaries, the rest compare their source values.
       let dirty = false;
       if (i !== SELF) {
-        const raw = Math.abs(r.rel) / vFloor;
+        // Time at a line on the shared clock (#5678), the lapped car at the same track point; distance ÷ speed until both cross one.
+        const gc = typeof HudReadouts !== "undefined" && HudReadouts.gaps, fb = Math.abs(r.rel) / vFloor;
+        const raw = !gc ? fb : r.rel > 0 ? gc.gapOr(car, player, fb, r.laps) : gc.gapOr(player, car, fb, -r.laps);
         if (smWho[i] !== car || !Number.isFinite(sm[i])) { smWho[i] = car; sm[i] = raw; }
         else sm[i] += (raw - sm[i]) * EMA;
         const gap = fmtGap(sm[i], r.rel > 0, G.hudProfile);

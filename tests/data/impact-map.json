@@ -18986,6 +18986,7 @@
       ],
       "push": [
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
@@ -19019,6 +19020,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
@@ -19058,6 +19060,7 @@
         "tests/unit/hud-relative.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
@@ -19093,6 +19096,7 @@
         "tests/unit/hud-strategy.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/pit-lane.test.mjs"
       ],

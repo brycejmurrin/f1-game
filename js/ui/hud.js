@@ -423,7 +423,7 @@ function gapText(slot, gap, arrow, o, dist, vFloor) {
   const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
   if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, slot ? -n : n, gap === _gapFormShort); }
   return gap(arrow, o.code, gapSec(slot, o, _gapClk ? _gapClk.gapOr(slot ? G.player : o, slot ? o : G.player, dist / vFloor) : dist / vFloor));   // time at a line (#5678)
-} const _gapClk = _ro && _ro.gapClock ? _ro.gapClock() : null;
+} const _gapClk = _ro && _ro.gaps;   // the shared clock: REL and STRATEGY read it too
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
 const _gapFormShort = (arrow, code, t) => arrow + " " + t;
