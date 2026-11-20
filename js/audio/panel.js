@@ -43,7 +43,13 @@ var AudioPanel = (() => {
       }
       syncAudioPanel();
     }
-    els.soundbtn.onclick = () => setSound(!G.soundOn, true);
+    els.soundbtn.onclick = () => {
+      const c = GameAudio.context ? GameAudio.context() : null;
+      // A context that has not yet run (or only started in this very press) has made no sound:
+      // SOUND ON was not true yet, so this press unlocks audio instead of muting it.
+      if (G.soundOn && !(c && c.state === "running" && c.currentTime > 0.3)) { setSound(true, true); return; }
+      setSound(!G.soundOn, true);
+    };
 
     let radioOn = store.get("radioVoice", false);
     let radioVol = store.get("volRadio", 0.8);
