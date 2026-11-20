@@ -20,6 +20,7 @@ const RaceEntryProfile = (() => {
   let legs = [];
   let marks = [];
   let longTasks = [];
+  let blockMs = 0, maxBlockMs = 0;
   let lapT0 = 0;
   let winT0 = 0, winT1 = 0;
   let observer = null;
@@ -75,18 +76,14 @@ const RaceEntryProfile = (() => {
     marks.push({ n, t: +(now() - winT0).toFixed(2) });
   }
 
-  function onLongTask(list) {
+  function recordLongTasks(entries) {
     if (!armed) return;
-    for (const e of list.getEntries()) {
-      if (longTasks.length >= MAX_TASKS) break;
-      const start = +e.startTime;
+    for (const e of entries) {
+      const start = Math.max(winT0, e.startTime);
       // Only tasks that overlap this window (observer may be buffered).
-      if (start + e.duration < winT0) continue;
-      longTasks.push({
-        start: +start.toFixed(2),
-        ms: +e.duration.toFixed(2),
-        name: e.name || "unknown",
-      });
+      const ms = e.startTime + e.duration - start;
+      if (ms <= 0) continue;
+      appendTask(start, ms, e.name || "unknown");
     }
   }
 
@@ -97,7 +94,7 @@ const RaceEntryProfile = (() => {
       const types = PerformanceObserver.supportedEntryTypes;
       if (types && types.indexOf && types.indexOf("longtask") < 0) return;
       const mine = generation;
-      observer = new PerformanceObserver((list) => { if (mine === generation) onLongTask(list); });
+      observer = new PerformanceObserver((list) => { if (mine === generation) recordLongTasks(list.getEntries()); });
       observer.observe({ type: "longtask", buffered: true });
       supported = true;
     } catch (_) {
@@ -212,6 +209,7 @@ const RaceEntryProfile = (() => {
     legs = [];
     marks = [];
     longTasks = [];
+    blockMs = maxBlockMs = 0;
     sawWarming = false;
     sawReady = false;
     endAfterReady = 0;
@@ -296,6 +294,7 @@ const RaceEntryProfile = (() => {
     if (!armed) return;
     winT1 = now();
     pushMark("end");
+    if (observer && observer.takeRecords) recordLongTasks(observer.takeRecords());
     armed = false;
     disarmObserver();
   }
@@ -413,16 +412,12 @@ const RaceEntryProfile = (() => {
     return request;
   }
 
-  function blockMs() {
-    let s = 0;
-    for (const t of longTasks) s += t.ms;
-    return +s.toFixed(2);
-  }
-
-  function maxBlockMs() {
-    let m = 0;
-    for (const t of longTasks) if (t.ms > m) m = t.ms;
-    return +m.toFixed(2);
+  function appendTask(start, ms, name) {
+    blockMs += ms;
+    maxBlockMs = Math.max(maxBlockMs, ms);
+    if (longTasks.length < MAX_TASKS) {
+      longTasks.push({ start: +start.toFixed(2), ms: +ms.toFixed(2), name });
+    }
   }
 
   function snapshot() {
@@ -432,8 +427,8 @@ const RaceEntryProfile = (() => {
       legs: legs.slice(),
       marks: marks.slice(),
       longTasks: longTasks.slice(),
-      blockMs: blockMs(),
-      maxBlockMs: maxBlockMs(),
+      blockMs: +blockMs.toFixed(2),
+      maxBlockMs: +maxBlockMs.toFixed(2),
       supported,
       armed,
       windowMs: armed || marks.length ? +((armed ? now() : winT1) - winT0).toFixed(2) : 0,
@@ -455,12 +450,7 @@ const RaceEntryProfile = (() => {
     supported: () => supported,
     // Test / probe seam: inject synthetic longtasks without a real observer.
     _injectTask(ms, start, name) {
-      if (longTasks.length >= MAX_TASKS) return;
-      longTasks.push({
-        start: +(start != null ? start : now()).toFixed(2),
-        ms: +(+ms).toFixed(2),
-        name: name || "synthetic",
-      });
+      appendTask(start != null ? start : now(), +ms, name || "synthetic");
     },
   };
 })();

@@ -4859,8 +4859,8 @@ const TLX = (function () {
           _gpuLastResize = { at: performance.now(), width: rw, height: rh };
           // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
           // canvas is present-sized while post RTs stay at W×H (render).
-          // Fixed: setSize rewrites canvas.width (a drawing-buffer reallocation) — only when it differs.
-          if (!fixedNow || !renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
+          // setSize rewrites both canvas dimensions even on a logical-only upscale step.
+          if (!renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
             renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
           }
           if (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) {

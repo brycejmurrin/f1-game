@@ -6321,7 +6321,8 @@ test("TLX defers resize during compilation and applies the latest requested size
       return { width: cssW, height: cssH };
     },
   };
-  const wantSpatialUpscale = () => false, calls = [];
+  let spatialUpscale = false;
+  const wantSpatialUpscale = () => spatialUpscale, calls = [];
   const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
   } };
@@ -6343,6 +6344,30 @@ test("TLX defers resize during compilation and applies the latest requested size
   assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
   assert.equal(_softReadPending, false, "the voided old-size read must not hold the gate");
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
+
+  // With spatial upscaling the post chain owns render-scale steps and the
+  // canvas stays at presentation size on both Three backends.
+  spatialUpscale = true;
+  for (const backend of [
+    { isWebGPUBackend: true, device: { limits: { maxTextureDimension2D: 8192 } } },
+    { isWebGPUBackend: false, gl: { getParameter: () => 8192 } },
+  ]) {
+    renderer.backend = backend;
+    _layoutCanvas.clientWidth = 1100; _layoutCanvas.clientHeight = 500;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1650, 750], ["post", 1238, 563]]);
+    calls.length = 0;
+    for (const scale of [0.6, 0.7, 0.8, 0.7, 0.6, 0.5]) {
+      renderScale = scale; resize();
+    }
+    assert.deepEqual(calls, [0.6, 0.7, 0.8, 0.7, 0.6, 0.5].map(scale =>
+      ["post", Math.round(1650 * scale), Math.round(750 * scale)]));
+    _layoutCanvas.clientWidth = 1000; renderScale = 0.75;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1500, 750], ["post", 1125, 563]]);
+  }
 });
 
 function tlxTimerFixture(webgl = false) {
