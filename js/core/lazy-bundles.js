@@ -795,6 +795,8 @@ function loadAgentSurface() {
     const netOk = await ensureNet();
     // Pages and specs launch real races through RealRace directly (no hub tap).
     const realOk = await ensureRealRace();
+    // __apex.settingsFile / garageFile and the specs' SettingsExport.applySettings answer synchronously.
+    await ensureSavesData();
     const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { loaded: agentScriptsLoaded });
     // FAIL SOFT. A refused file (SRI: a stale shell's ?v= key answered with a newer
     // deploy's bytes, 2026-11-02) still lets later files evaluate, so ApexApi.create
@@ -951,6 +953,7 @@ function ensureLightPresets() {
 let garageLoad = null;
 const garageReady = () => typeof GarageData !== "undefined" && !!GarageData;
 function ensureGarageData() {
+  ensureSavesData();   // the GARAGE FILE row rides the same doors (setup-sheet reads garageRow synchronously)
   if (garageReady() || !GARAGE_FILES.length) return Promise.resolve(garageReady());
   if (garageLoad) return garageLoad;
   garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
@@ -959,6 +962,22 @@ function ensureGarageData() {
     return garageReady();
   });
   return garageLoad;
+}
+// SAVES & DATA body (LAZY_SAVES_DATA, #4748): SettingsExportBody behind the FULL SettingsExport
+// façade. Asked for with the garage tables (idle, garage door, SETTINGS, RACE!), the agent surface
+// and the career screen; a failed load is forgotten and the next ask fetches again.
+let savesLoad = null;
+const savesReady = () => typeof SettingsExport !== "undefined" && !!SettingsExport.loaded && SettingsExport.loaded();
+function ensureSavesData() {
+  const files = ApexRoster.LAZY_SAVES_DATA || [];
+  if (savesReady() || !files.length) return Promise.resolve(savesReady());
+  if (savesLoad) return savesLoad;
+  savesLoad = loadBackendScripts(files, ApexRoster.LAZY_SAVES_DATA_EDGES || [], { strict: true }).catch(() => false).then(() => {
+    savesLoad = null;
+    if (!savesReady()) Log.warn("game", "the saves-and-data bundle did not load — the next ask retries");
+    return savesReady();
+  });
+  return savesLoad;
 }
 // LAZY_RESULTS_SHEET (~54 KB): results / TT / standings / champion DOM. The
 // boot stub (results-boot.js) owns ScriptLoader memoisation; this gate is what
@@ -1098,7 +1117,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

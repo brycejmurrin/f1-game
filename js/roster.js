@@ -832,6 +832,10 @@
     "js/ui/layout-presets.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],
+    LAZY_SAVES_DATA: [
+    "js/ui/settings-export-body.js"
+  ],
+    LAZY_SAVES_DATA_EDGES: [],
     LAZY_RESULTS_SHEET: [
     "js/share/share-card-data.js",
     "js/share/share-card-layout.js",
