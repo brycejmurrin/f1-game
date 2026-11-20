@@ -138,14 +138,12 @@ window.TopModal = (function () {
     if (layer.tagName === "DIALOG") {
       if (t && t !== document.body && layer.contains(t)) return;
       const focusable = firstFocusable(layer, false) || layer;
-      try { focusable.focus({ preventScroll: true }); } catch (_) {  }
+      focusShown(focusable);
       return;
     }
     if (t && layer.contains(t)) return;
     const focusable = firstFocusable(layer, false);
-    if (focusable) {
-      try { focusable.focus({ preventScroll: true }); } catch (_) {  }
-    }
+    if (focusable) focusShown(focusable);
   }
 
   const lastFocus = new WeakMap();
@@ -153,6 +151,10 @@ window.TopModal = (function () {
   const inside = (layer, el) => !!el && el !== document.body && layer.contains(el);
   const connected = (el) => !!el && !!document.body && document.body.contains(el);
   const focusQuiet = (el) => { try { el.focus({ preventScroll: true }); } catch (_) {  } };
+  const focusShown = (el) => {
+    focusQuiet(el);
+    try { if (document.activeElement === el && el.scrollIntoView) el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {  }
+  };
 
   function landing(layer) {
     const auto = layer.querySelector("[autofocus]");
@@ -251,7 +253,7 @@ window.TopModal = (function () {
       const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
       if (!edge || document.activeElement !== edge) return;
       e.preventDefault();
-      focusQuiet(e.shiftKey ? stops[stops.length - 1] : stops[0]);
+      focusShown(e.shiftKey ? stops[stops.length - 1] : stops[0]);
     });
   }
 
