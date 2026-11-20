@@ -578,6 +578,20 @@ const TrackBuildProps = (function () {
         return [px[i] + r[0] * o, y, pz[i] + r[2] * o];
       },
     };
+    // Every emitted modelGroup box (world XZ footprint), for the pit-straight
+    // crowd's yield: a circuit's own stand is a modelGroup, which claims no
+    // barrier face or mass, so barrierClear alone never saw it (#5998).
+    const modelFoots = [];
+    modelsOpts.onEmitted = (id, box) => {
+      const b = box.basis, r = [b[0][0], b[0][2]], f = [b[2][0], b[2][2]];
+      const rl = Math.hypot(r[0], r[1]) || 1, fl = Math.hypot(f[0], f[1]) || 1;
+      modelFoots.push({ x: box.center[0], z: box.center[2], r: [r[0] / rl, r[1] / rl], f: [f[0] / fl, f[1] / fl],
+                        hr: box.size[0] / 2, hf: box.size[2] / 2 });
+    };
+    const inModelFoot = (x, z, m) => modelFoots.some((q) => {
+      const dx = x - q.x, dz = z - q.z;
+      return Math.abs(dx * q.r[0] + dz * q.r[1]) <= q.hr + m && Math.abs(dx * q.f[0] + dz * q.f[1]) <= q.hf + m;
+    });
     const models = TrackModels.create(modelsOpts);
     if (region) {
       const group = models.modelGroup, span = models.overheadSpan;
@@ -1754,7 +1768,8 @@ const TrackBuildProps = (function () {
         let hits = 0;
         if (gap > 6.55) for (const dd of [gap + 0.42, gap + 2.1, gap + 3.8, gap + 7.45]) for (const al of [-7, 0, 7]) {
           const kk = ((k + Math.round(al / ds)) % n + n) % n, o = -(hw[kk] + dd);
-          if (!barrierClear(px[kk] + track.rx[kk] * o, pz[kk] + track.rz[kk] * o, 0.6)) hits++;
+          const x = px[kk] + track.rx[kk] * o, z = pz[kk] + track.rz[kk] * o;
+          if (!barrierClear(x, z, 0.6) || inModelFoot(x, z, 0.6)) hits++;
         }
         gaps.push(hits >= 2 ? null : gap);
       }
