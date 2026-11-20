@@ -641,8 +641,7 @@ function applyTrackSearch(value, pick) {
   const empty = document.getElementById("sel-track-empty");
   if (empty) empty.hidden = rows.some((r) => !r.hidden);
   // Typing hid the active circuit (#5889): take the 1st match.
-  const on = rows.find((r) => r.classList.contains("active"));
-  if (pick && trackQuery && (!on || on.hidden)) rows.find((r) => !r.hidden)?.click();
+  if (pick && trackQuery && !rows.some((r) => r.classList.contains("active") && !r.hidden)) rows.find((r) => !r.hidden)?.click();
   ScrollFadeRefresh();
 }
 
