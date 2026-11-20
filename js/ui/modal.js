@@ -243,7 +243,7 @@ window.TopModal = (function () {
     if (layer.tagName === "DIALOG") {
       if (t && t !== document.body && layer.contains(t)) return;
       const focusable = firstFocusable(layer, false) || layer;
-      try { focusable.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+      focusShown(focusable);
       return;
     }
     if (t && layer.contains(t)) return;
@@ -252,7 +252,7 @@ window.TopModal = (function () {
       // No preventDefault: `focusin` is NOT cancelable, so the call was a
       // no-op that read as if it were suppressing the stray focus. The
       // focus() below is what actually pulls focus back into the layer.
-      try { focusable.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+      focusShown(focusable);
     }
   }
 
@@ -284,6 +284,11 @@ window.TopModal = (function () {
   const inside = (layer, el) => !!el && el !== document.body && layer.contains(el);
   const connected = (el) => !!el && !!document.body && document.body.contains(el);
   const focusQuiet = (el) => { try { el.focus({ preventScroll: true }); } catch (_) { /* detached */ } };
+  // A wrap or pull-back focus can land far off screen: scroll it in (nearest edge).
+  const focusShown = (el) => {
+    focusQuiet(el);
+    try { if (document.activeElement === el && el.scrollIntoView) el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) { /* detached */ }
+  };
 
   function landing(layer) {
     const auto = layer.querySelector("[autofocus]");
@@ -403,7 +408,7 @@ window.TopModal = (function () {
       const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
       if (!edge || document.activeElement !== edge) return;
       e.preventDefault();
-      focusQuiet(e.shiftKey ? stops[stops.length - 1] : stops[0]);
+      focusShown(e.shiftKey ? stops[stops.length - 1] : stops[0]);
     });
   }
 

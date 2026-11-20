@@ -66,7 +66,7 @@ var RecordedAnnouncer = (() => {
               onStart: () => {
                 if (!valid() || captioned) return;
                 captioned = true;
-                if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(row.text);
+                if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(row.text, true);
               },
               onEnd: () => { if (valid()) timer = setTimeout(next, 250); } });
             if (!ok) next();

@@ -47,19 +47,15 @@ const FOG_WX_DEF_BOOST = 1.5;
 // right after). tick(dt), from js/game.js's update next to wxArc.tick, walks
 // the fade and keeps the lightning's saved base (_ltBase) on the blended
 // values so a strike restores to the look in flight, not the target.
-// Until 2026-10-01 only wetness and the rain overlay ramped; cloud cover, sun
-// strength, ambient and fog stepped (the second graphics-detail survey, item 11).
-// Until 2026-10-07 cityGlow and moon stepped with the sky while LT knobs faded.
 //
-// THE KNOBS FADE TOO (2026-10-04). A stage flip changes the LightStore key
-// (track|tod|WEATHER), and LightStore.apply() used to land every LT knob of the
-// new preset in one frame: keyMul 0.115 -> 0.76, bloomMul x13, fogDensityMul x4
-// mid-race, under a sky that was fading (review-wgx-lighting item 2). Now the
+// THE KNOBS FADE TOO (2026-10-04): a stage flip changes the LightStore key
+// (track|tod|WEATHER), once a one-frame jump (keyMul 0.115 -> 0.76). The
 // blended re-apply snapshots LT on both sides and tick() walks every knob on the
 // same smoothstep, rounded to the knob's grid where the grid is whole numbers
 // (counts, toggles). Two exceptions keep a flip from costing a frame:
 //  - the lamp REBUILD knobs and bake inputs are HELD (LightStore.apply
-//    holdRebuild), so the flip never nulls track._lights or re-bakes the pools;
+//    holdRebuild), so the flip never nulls track._lights or re-bakes the pools
+//    (tick() lands them at the fade's end, heldOnly);
 //  - sunElev/sunAzim are keyed by track x tod (profiles.js keyFor), so the sun
 //    never moves with the weather and needs no slerp.
 // A knob someone else writes mid-fade (a tuner slider, __apex.lightTune) leaves
@@ -170,7 +166,7 @@ function tick(dt) {
   _wx.t += dt > 0 ? dt : 0;
   const f = Math.min(1, _wx.t / _wx.dur);
   _writeWx(f * f * (3 - 2 * f));
-  if (f >= 1) _wx = null;
+  if (f >= 1) { _wx = null; if (typeof applyLightTune === "function") applyLightTune(true, { heldOnly: true }); }
 }
 function wxBlend() { return _wx ? { t: _wx.t, dur: _wx.dur } : null; }
 

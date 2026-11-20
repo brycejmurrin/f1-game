@@ -916,6 +916,9 @@
       ],
       "syncAudioPanel": [
         "tests/unit/audio-recovery.test.mjs"
+      ],
+      "*": [
+        "tests/unit/spoken-lang-offer-vm.test.mjs"
       ]
     },
     "js/audio/race-mix-audition.js": {
@@ -1454,6 +1457,9 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "applyFx": [
+        "tests/unit/cam-comfort.test.mjs"
+      ],
+      "blurAmount": [
         "tests/unit/cam-comfort.test.mjs"
       ],
       "boot": [
@@ -6721,6 +6727,7 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "resize": [
+        "tests/unit/designer-canvas.test.mjs",
         "tests/unit/designer-profile.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -7043,6 +7050,7 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "*": [
+        "tests/unit/css-has-scope.test.mjs",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
@@ -9493,6 +9501,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -9515,7 +9524,8 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "wireHold": [
-        "tests/unit/key-binds-hunt.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs"
       ],
       "wireTap": [
         "tests/unit/key-binds-hunt.test.mjs"
@@ -9959,6 +9969,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
@@ -10203,6 +10214,7 @@
       ],
       "wxBlend": [
         "tests/unit/lighting-sun-scratch.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "*": [
@@ -10265,6 +10277,7 @@
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
         "tests/unit/generated-docs.test.mjs",
@@ -15488,6 +15501,7 @@
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/glx-light-fit.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
@@ -15544,6 +15558,7 @@
     "js/render/glx/shaders/glsl-chunks.js": {
       "*": [
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/glx-light-fit.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/shading-leaf-parity.test.mjs"
       ]
@@ -15564,6 +15579,7 @@
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/glx-light-fit.test.mjs",
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
@@ -16004,12 +16020,16 @@
       ]
     },
     "js/render/shared/light-budget.js": {
+      "fitSlots": [
+        "tests/unit/glx-light-fit.test.mjs"
+      ],
       "setSlots": [
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "slots": [
-        "tests/unit/all-lights-fill.test.mjs"
+        "tests/unit/all-lights-fill.test.mjs",
+        "tests/unit/glx-light-fit.test.mjs"
       ],
       "*": [
         "tests/unit/always-lamp-floor.test.mjs",
@@ -19729,7 +19749,8 @@
       "*": [
         "tests/unit/followup-platform.test.mjs",
         "tests/unit/install-chip-overlap.test.mjs",
-        "tests/unit/pause-key-tools.test.mjs"
+        "tests/unit/pause-key-tools.test.mjs",
+        "tests/unit/race-leave-guard-vm.test.mjs"
       ]
     },
     "js/ui/podium-beat.js": {
