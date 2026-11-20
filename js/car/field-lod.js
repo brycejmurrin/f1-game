@@ -30,12 +30,15 @@ const FieldLod = (function () {
   });
   const sq = (m) => m * m;
   let on = true;
+  let reach = 1, rk2 = 1;   // desktop ULTRA: every cut sits 2x further out
 
   // Off when the stored value is 0 / "0" / false; anything else (unset) is on.
   function init(store) {
     let v = 1;
     try { v = store && store.get ? store.get("fieldLod", 1) : 1; } catch (_) { v = 1; }
     on = !(v === 0 || v === "0" || v === false);
+    try { reach = store.get("gfxPreset", null) === "ultra" && !(typeof GLX !== "undefined" && GLX.isMobile) ? 2 : 1; } catch (_) { reach = 1; }
+    rk2 = 1 / (reach * reach);
     return on;
   }
   function setEnabled(v) { on = !!v; }
@@ -55,9 +58,9 @@ const FieldLod = (function () {
   // size; 1 for a missing or nonsensical fov (callers that do not know it).
   const REF_HALF_TAN = Math.tan(Math.PI / 6);   // tan(60° / 2)
   function lensK2(fovY) {
-    if (!(fovY > 0.01 && fovY < 3.1)) return 1;
+    if (!(fovY > 0.01 && fovY < 3.1)) return rk2;
     const k = Math.tan(fovY * 0.5) / REF_HALF_TAN;
-    return k * k;
+    return k * k * rk2;
   }
   // HYSTERESIS. A car hovering at a threshold flipped its decal on and off
   // every few frames. With `car` given, its last tier is kept on it (car._lodTier)
@@ -93,10 +96,10 @@ const FieldLod = (function () {
     return far;
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
-  function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
-  function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
-  function castsShadow(dist2) { return !on || dist2 < sq(T.SHADOW_CAST_M); }
-  function mirrorCap() { return on ? T.MIRROR_CARS : Infinity; }
+  function flapsM() { return on ? T.FLAPS_M * reach : T.LEGACY_FLAPS_M; }
+  function flame(dist2) { return !on || dist2 * rk2 < sq(T.FLAME_M); }
+  function castsShadow(dist2) { return !on || dist2 * rk2 < sq(T.SHADOW_CAST_M); }
+  function mirrorCap() { return on ? T.MIRROR_CARS * reach : Infinity; }
   // Keep the `cap` smallest of dist2s[0..n): writes keep[i] = 1/0 and returns
   // how many are kept. `force` (an index, or -1) is always kept first — the
   // PiP's subject. Allocation-free; n is the field (<= 22), cap 6.

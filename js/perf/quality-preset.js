@@ -11,8 +11,8 @@ const GfxQuality = (function () {
 // still name a measured shed; pinning look post via autoTier alone left LOW
 // slower than MEDIUM on iPhone WebGPU (BrowserStack 2026-10-21).
 // ULTRA and HIGH share tier 0 deliberately: both mean "let the governor
-// decide". They differ only in the MOBILE boot tier, which is fixed at renderer
-// init and cannot be a live knob. A separate AUTO stop would be
+// decide". They differ in BOOT-TIME detail: MSAA, and on a desktop TLX bigger
+// shadow maps, 16× anisotropy, the env probe and a 2× rival LOD reach. A separate AUTO stop would be
 // indistinguishable from ULTRA and is omitted rather than shipped as a lie.
 //
 // PHONE CAP (D·IP1, BrowserStack 2026-10-21): ULTRA on a real iPhone 15 averaged
@@ -196,13 +196,8 @@ function set(id, opts = {}) {
   const st = gstore();
   if (st) st.set("gfxPreset", curId);
   applyLive();
-  // The lighting store's conditional shipped layer (the ULTRA-night per-chunk
-  // rung) resolves through the CURRENT preset, so a flip must re-run the
-  // lighting apply to engage live
   try { if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply(); } catch (_) { /* pre-boot: the first apply() resolves it */ }
-  // MSAA is decided once when the render targets are made (GLX setup, WGX
-  // script eval): ULTRA 4×, anything else 2×/1×. Crossing that boundary on a
-  // DESKTOP therefore needs the same reload the mobile boot tier takes
+  // ULTRA's boot-time detail: crossing it on a DESKTOP needs a reload too
   try { syncPack(); } catch (_) { /* optional pack */ }
   const needsReload = syncBootTier() || (!isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
   paintGfx(needsReload ? " — RELOADING…" : "");

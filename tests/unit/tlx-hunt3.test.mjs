@@ -206,7 +206,7 @@ test("R4: the lit program built with envCube null declares no cube sampler and t
 });
 
 test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube target when opted out", () => {
-  const optAt = TLX.indexOf('_envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"');
+  const optAt = TLX.indexOf('const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = ');
   const allocAt = TLX.indexOf("envRT = new THREE.CubeRenderTarget(ENV_SIZE");
   const litAt = TLX.indexOf("lit = TLXShaders.lit(THREE, TSL, {");
   assert.ok(optAt > 0 && allocAt > 0 && litAt > 0, "needles moved — check this test, not the code");

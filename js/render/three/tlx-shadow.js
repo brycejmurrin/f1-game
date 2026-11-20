@@ -78,7 +78,7 @@
     const softwareGL = !!ctx.softwareGL;
 
     const SUN_SIZE = sunMapSize(ctx);   // 1024² saves 12 MB on every phone (GLX parity)
-    const CAR_SIZE = softwareGL ? 256 : 1024;                      // dynamic car-only map (true desktop only)
+    const CAR_SIZE = softwareGL ? 256 : (ctx.carSize || 1024);                      // dynamic car-only map (true desktop only)
     const LAMP_SIZE = softwareGL ? 256 : 512;                      // nearest-floodlight spot map (true desktop only)
 
     const S = {
@@ -216,7 +216,7 @@
     // phone, against the fixed-R phone rule at colorPcss and §2q's
     // accounting (the shadow pass is already 40.4 MB of TLX's phone
     // excess, and jetsam headroom is the phone constraint).
-    const BLOCKER_SIZE = 512;
+    const BLOCKER_SIZE = SUN_SIZE > 2048 ? 1024 : 512;
     let blockerRT = null, blockerQuad = null;
     if (sunRT && !isMobile && (isWebGPU || colorPcss)) {
       try {

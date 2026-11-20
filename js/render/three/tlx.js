@@ -288,6 +288,8 @@ const TLX = (function () {
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
+      let _ultra = false;   // desktop ULTRA detail
+      try { _ultra = !isMobile && GameStore.store.get("gfxPreset", null) === "ultra"; } catch (_) { /* HIGH */ }
 
       // PHONES GET TLX WHEN THEY PICK IT. three retains the CPU copy of every
       // geometry attribute (71.5 MB / 5,665 buffers vs GLX 17.8 MB / 253) and
@@ -1452,7 +1454,7 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : 0,
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : (_ultra && !softContent("shadow") ? 4096 : 0), carSize: _ultra ? 2048 : 0,
             isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
@@ -1545,7 +1547,7 @@ const TLX = (function () {
         _postHealth = { state: _postRebuild ? "recovering" : "degraded", attempts: _postStrikes, maxAttempts: 3,
           reason: String(reason || "Post-processing failed").replace(/\s+/g, " ").slice(0, 160) };
       }
-      const ENV_SIZE = 64;
+      const ENV_SIZE = _ultra ? 128 : 64;
       const ENV_CULL_M = 150;
       let envRT = null, envDummy = null;
       // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
@@ -1724,7 +1726,7 @@ const TLX = (function () {
       // binding out of every lit program. Pixel-identical: with the probe off
       // uEnvStr is 0, so every tap was mix(a, cube, 0) = a.
       let _envOptOut = true;
-      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = ep === "0" || (ep !== "1" && !(_ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
       if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -5226,8 +5228,8 @@ const TLX = (function () {
       // the backend object (the ~40-member seam contract)
       function materialArrayAnisotropy() {
         if (materialArrayDetail !== null) return materialArrayDetail;
-        let requested = 4;
-        try { if (localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
+        let requested = _ultra ? 16 : 4;
+        try { if (!_ultra && localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
         let cap = 1;
         try {
           const b = renderer.backend;
