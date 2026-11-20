@@ -3254,11 +3254,6 @@
       "roster": "LAZY_DATA"
     },
     {
-      "path": "js/data/flyby-overrides.js",
-      "global": "FlybyOverrides",
-      "roster": "tag"
-    },
-    {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
       "roster": "tag"
@@ -5002,6 +4997,11 @@
       "path": "js/ui/post-fx-opts.js",
       "global": "PostFxOpts",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/progress-backup.js",
+      "global": "ProgressBackup",
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/quali-sheet.js",

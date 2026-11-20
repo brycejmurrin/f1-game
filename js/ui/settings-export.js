@@ -17,14 +17,15 @@
 
    Loading any one overwrites what is stored and reloads the page, so the
    button asks twice. SETTINGS may carry time-trial leaderboards in an optional
-   `ttlb` section (merged on import, never overwriting blindly). GARAGE and
-   SETTINGS still never carry career or season saves, ghosts, replays, or anything
-   account-shaped, in either direction.
+   `ttlb` section and player progress in an optional `progress` section
+   (js/ui/progress-backup.js, #5992; both merged on import, never overwriting
+   blindly). GARAGE and SETTINGS still never carry career or season saves,
+   replays, or anything account-shaped, in either direction.
 
    SPEC below is the allowlist — every player-facing preference, tuner and
    control binding under the `apex26.` prefix, grouped the way SETTINGS is.
    Nothing else is ever read: the garage (parts, liveries, setup sheets, MY
-   TEAM), saves (career, season, ghosts, replays, daily bests), accounts
+   TEAM), saves (career, season, replays, daily bests), accounts
    and network (Spotify tokens, TURN credentials, relays) and the renderer's
    self-healing latches stay out by construction, and the unit test asserts
    that a poisoned store leaks none of them. Two lanes, like the store: `json`
@@ -546,7 +547,7 @@ function garageValue(k, v) {
 const CAREER_FORMAT = "apex26-career-v1";
 const CAREER_FLAVOURS = ["driver", "myteam"];
 const CAREER_SLOT_N = 3;
-const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), standalone season, lap records, ghosts, daily challenge, accounts";
+const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), lap records, ghosts, accounts";
 const CAREER_SLOT_RE = /^career\.(driver|myteam)\.([0-2])$/;
 function isCareerKey(k) {
   return k === "careerSlot" || CAREER_SLOT_RE.test(k);

@@ -1990,9 +1990,6 @@
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
-      "setSession": [
-        "tests/unit/flyby-shots.test.mjs"
-      ],
       "shotAt": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/loading-card.test.mjs"
@@ -6028,6 +6025,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/photo-studio.test.mjs",
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -6205,17 +6203,6 @@
       ],
       "*": [
         "tests/unit/source-integrity.test.mjs"
-      ]
-    },
-    "js/data/flyby-overrides.js": {
-      "catalog": [
-        "tests/unit/flyby-shots.test.mjs"
-      ],
-      "patches": [
-        "tests/unit/flyby-shots.test.mjs"
-      ],
-      "resolve": [
-        "tests/unit/flyby-shots.test.mjs"
       ]
     },
     "js/data/garage-defaults.js": {
@@ -8549,7 +8536,8 @@
       "*": [
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/preview-scenery-shift.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs"
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/scenery-region-warning.test.mjs"
       ]
     },
     "js/garage/exterior.js": {
@@ -19828,6 +19816,19 @@
         "tests/unit/settings-tabs.test.mjs"
       ]
     },
+    "js/ui/progress-backup.js": {
+      "apply": [
+        "tests/unit/progress-backup.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "collect": [
+        "tests/unit/progress-backup.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "ghostOk": [
+        "tests/unit/progress-backup.test.mjs"
+      ]
+    },
     "js/ui/quali-sheet.js": {
       "build": [
         "tests/unit/quali-persist.test.mjs",
@@ -20632,6 +20633,9 @@
       ],
       "repairDestinations": [
         "tests/unit/ctx-lost-menu-restore.test.mjs"
+      ],
+      "replayBootTap": [
+        "tests/unit/title-boot-tap.test.mjs"
       ],
       "*": [
         "tests/specs/boot-guard.spec.js",
