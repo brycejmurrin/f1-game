@@ -91,11 +91,13 @@ test("KeyBinds re-renders its tables at the gate, not in the DCL task (#4798)", 
 });
 
 test("SettingsExport mounts at the gate, queued after SaveHealth as at eval (#4798)", () => {
-  const src = read("js/ui/settings-export.js");
+  const src = read("js/ui/settings-export-body.js");   // the mount lives in the LAZY_SAVES_DATA body (#4748)
   assert.match(src, /readyState !== "complete"\) document\.addEventListener\("DOMContentLoaded", \(\) => \(typeof SettingsNav !== "undefined" && SettingsNav\.lazy \? SettingsNav\.lazy\(mount\) : mount\(\)\)/);
   const shell = read("index.html");
   assert.ok(shell.indexOf('src="js/ui/save-health.js') < shell.indexOf('src="js/game.js?v='),
     "SaveHealth's DCL listener registers (eval) before game.js runs SettingsExport.create, so its section stays first");
+  assert.ok(!shell.includes('src="js/ui/settings-export-body.js'),
+    "the body is LAZY_SAVES_DATA: it lands after boot, so SaveHealth's section is always mounted first");
 });
 
 // Row 1 part 3: the three DCL initialisers left after #5477 (screen-looks search

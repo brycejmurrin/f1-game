@@ -15,6 +15,7 @@ let raceWake = null;
 let raceWakePending = null;
 let raceWakeWanted = false;
 let raceWakeOnRelease = null;
+let raceWakeCoalesce = false; // a hold() that joined an in-flight request: retried once if that request rejects
 function clearReleaseListener(lock) {
   if (lock && raceWakeOnRelease) {
     try { lock.removeEventListener("release", raceWakeOnRelease); } catch (_) { /* sentinel may be dead */ }
@@ -24,11 +25,12 @@ function clearReleaseListener(lock) {
 function hold() {
   raceWakeWanted = true;
   try {
-    if (!navigator.wakeLock || raceWake || raceWakePending) return;
+    if (!navigator.wakeLock || raceWake || raceWakePending) { if (raceWakePending) raceWakeCoalesce = true; return; }
     const pending = navigator.wakeLock.request("screen");
     raceWakePending = pending;
     pending.then((lock) => {
       if (raceWakePending === pending) raceWakePending = null;
+      raceWakeCoalesce = false;
       if (!raceWakeWanted || document.hidden) {
         releaseLock(lock, "late wake-lock release failed");
         return;
@@ -51,11 +53,21 @@ function hold() {
         }, 0);
       };
       lock.addEventListener("release", raceWakeOnRelease);
-    }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
+    }).catch(() => {
+      if (raceWakePending === pending) raceWakePending = null;
+      // Only a coalesced hold retries: a lone refusal must not spin request() forever.
+      const again = raceWakeCoalesce;
+      raceWakeCoalesce = false;
+      if (again && raceWakeWanted) setTimeout(() => {
+        if (!raceWakeWanted || raceWake || raceWakePending || (typeof document !== "undefined" && document.hidden)) return;
+        hold();
+      }, 0);
+    });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }
 function drop() {
   raceWakeWanted = false;
+  raceWakeCoalesce = false;
   const held = raceWake;
   raceWake = null;
   if (held) {

@@ -747,6 +747,44 @@ test("a cache-bust navigation never falls back to the generic cached shell", asy
 });
 
 // A SPENT ?b= (no newer than the cached shell) is an ordinary query navigation.
+// THE SHELL RACE IS 1 s ONLY WHERE A CACHED SHELL CAN ANSWER. A plain navigation with a cached shell stops waiting
+// for a silent host at SHELL_RACE_MS; with no cached shell, and for the `?b=` bust and version.json, the waits are
+// the ones above. The harness fires only the 1000 ms timer at once, so a branch that still needed 3 s would take 3 s.
+const SHELL_RACE_MS = Number(/const SHELL_RACE_MS = (\d+);/.exec(SW_SOURCE)?.[1]);
+const lateShell = (ms, body) => () => new Promise((resolve) => setTimeout(() => resolve(new Response(body, { status: 200 })), ms));
+test("a plain navigation with a cached shell stops waiting for the network at SHELL_RACE_MS", async () => {
+  assert.equal(SHELL_RACE_MS, 1000);
+  const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true }, fetchImpl: () => new Promise(() => {}) });
+  harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })]]));
+  const t0 = Date.now();
+  const res = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await res.text(), "precached shell");
+  assert.ok(Date.now() - t0 < 1500, "answered at the shell race, not the 3 s navigation race");
+});
+test("a network that answers inside the shell race still wins over the cached shell", async () => {
+  const harness = createHarness({ navigator: { onLine: true }, fetchImpl: lateShell(30, "network shell") });
+  harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })]]));
+  const res = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await res.text(), "network shell");
+});
+test("with no cached shell the navigation keeps waiting past the shell race for the network", async () => {
+  const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true }, fetchImpl: lateShell(150, "first shell") });
+  const res = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await res.text(), "first shell", "the first launch has nothing cached: the late network answer is the page");
+});
+test("the shell race does not apply to a ?b= bust or to version.json", async () => {
+  const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true },
+    fetchImpl: (req) => lateShell(150, /version\.json/.test(req.url || req) ? '{"build":400}' : "new shell")() });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+    [`${ORIGIN}/version.json`, new Response('{"build":1}', { status: 200 })],
+  ]));
+  const bust = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` }).responsePromise;
+  assert.equal(await bust.text(), "new shell", "a bust never takes the stale shell early");
+  const version = await harness.fetchEvent({ method: "GET", mode: "cors", url: `${ORIGIN}/version.json?_=1` }).responsePromise;
+  assert.equal(await version.text(), '{"build":400}', "version.json still waits for the true latest build");
+});
+
 // Every update reload (boot guard, UPDATE READY) lands on `?b=<build>`; a tab
 // restored or bookmarked there was failed outright offline and on a slow link
 // — the browser's error page instead of the precached shell, forever.

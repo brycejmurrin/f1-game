@@ -38,6 +38,7 @@ import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captu
   captureExtension, applyCaptureProfile } from "./capture-options.mjs";
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
 import { parseFlags } from "../lib/cli-args.mjs";
+import { loadAllModels } from "./capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const options = parseCaptureOptions(process.argv.slice(2));
@@ -266,7 +267,7 @@ async function handle(op) {
     await page.evaluate(() => window.__apex.agentHelp());
     await applyCaptureProfile(page, options);
     // Models resident BEFORE the build, so scenery's bakedModel() emits (shot.mjs).
-    await page.evaluate(async () => { try { if (typeof Assets !== "undefined" && Assets.loadModels) await Assets.loadModels(); } catch (_) { /* procedural look */ } });
+    await loadAllModels(page);
     const buildMs = await buildTrack(id);
     await page.evaluate(() => window.__apex.headless(true));
     send({ ready: true, track, out: outDir, bootMs: Date.now() - started, buildMs, profile: options.profile, diagnostics });
