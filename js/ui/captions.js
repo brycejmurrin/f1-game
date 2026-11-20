@@ -86,7 +86,7 @@ const Captions = (function () {
   // SPOKEN ONLY (#5946): only a line the source voiced (`heard`), never with SOUND off or VOICE VOLUME 0.
   function captioned(heard) {
     const s = store();
-    return mode === "on" || (mode === "spoken" && heard === true && (!s || (s.get("sound", true) !== false && +s.get("volRadio", 0.8) > 0)));
+    return mode === "on" || (mode === "spoken" && heard === true && (!s || (s.get("sound", false) !== false && +s.get("volRadio", 0.8) > 0)));
   }
 
   function spotterSide(key) {
