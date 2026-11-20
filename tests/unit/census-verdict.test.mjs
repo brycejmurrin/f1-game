@@ -22,7 +22,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
-import { capOverride, verdict, legReport, readArtifacts, main, LEGS } from "../../tools/gfx/census-verdict.mjs";
+import { capOverride, verdict, legReport, readArtifacts, main, LEGS, lsDetail, tierGate } from "../../tools/gfx/census-verdict.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOL = path.join(ROOT, "tools/gfx/census-verdict.mjs");
@@ -347,4 +347,79 @@ test("the plan gate: the nightly skips an unchanged renderer, an inherited push 
     assert.equal(push(F, M), "false", "a request that arrived by merge was measured where it was made");
     assert.equal(push(F, M, "claude/f1-game-project-26h3ng"), "true", "the deploy branch always runs");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- THE DESKTOP TIERS (docs/notes/TIER-CENSUS-TEST-2026-11-20.md) -------------------------------------------------
+// gfx.tiers is GfxDebug.tiers() (js/perf/gfx-debug-overlay.js): per GfxQuality feature, need / on / ran (null + why
+// where the path has no signal). FEATURES here is the real table, read from js/perf/quality-preset.js.
+const FEATURES = (() => {
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  const body = src.match(/const FEATURES = Object\.freeze\(\{([\s\S]*?)\}\);/)[1].replace(/\/\/.*$/gm, "");
+  return Object.fromEntries([...body.matchAll(/(\w+):\s*(\d)/g)].map((m) => [m[1], +m[2]]));
+})();
+const SHED = ["lightsHi", "raysHi", "ssaoHi", "gtao", "ssrHi", "superSample", "ssgi"];
+const tierRec = (detail, ran = () => true, { shed = 0, cinema = false } = {}) => ({ detail, shed, cinema, shedOrder: SHED,
+  features: Object.fromEntries(Object.entries(FEATURES).map(([n, need]) => {
+    const on = need <= detail + (cinema && detail >= 2 ? 1 : 0) && !(SHED.indexOf(n) >= SHED.length - shed);
+    const r = on ? ran(n) : false;
+    return [n, r === null ? { need, on, ran: null, why: "no signal on this path" } : { need, on, ran: r }];
+  })) });
+const tierLeg = (rec, tod = "day", be = {}) => tlx({ tiers: rec, backendState: { ...tlx().gfx.backendState, ...be } }, { timeOfDay: tod });
+const tierRun = (rec, ls, o = {}) => verdict({ image: "macos-latest", census: HW, legs: healthy({ webgpu: tierLeg(rec, o.tod, o.be) }), level: lsDetail(ls), ...o.v });
+
+test("lsDetail: apex26.gfxDetail=1|2 in the dispatch ls, the last one wins, anything else is 0", () => {
+  assert.equal(lsDetail(""), 0);
+  assert.equal(lsDetail("apex26.gfxDetail=2"), 2);
+  assert.equal(lsDetail("apex26.a=1 apex26.gfxDetail=1"), 1);
+  assert.equal(lsDetail("apex26.gfxDetail=2 apex26.gfxDetail=0"), 0);
+  assert.equal(lsDetail("apex26.gfxDetail=3"), 0);
+});
+
+test("tiers: detail 2 with every feature ran passes, one GATED row per expected feature; night-only lamps skip by day", () => {
+  const { rows, bad } = tierRun(tierRec(2, (n) => n !== "lampShadows"), "apex26.gfxDetail=2");
+  assert.deepEqual(bad, [], rows.join("\n"));
+  assert.ok(rows.some((r) => /tiers: detail=2 \(asked 2\) shed=0\/7 cinema=0 tod=day {2}GATED$/.test(r)), rows.join("\n"));
+  for (const n of Object.keys(FEATURES).filter((k) => FEATURES[k] <= 2)) {
+    assert.equal(rows.filter((r) => new RegExp(`^\\s+${n}\\s+need=`).test(r)).length, 1, n);
+  }
+  assert.ok(rows.some((r) => /lampShadows\s+need=2 on=1 ran=0 {2}skipped — needs a night build/.test(r)));
+  assert.ok(rows.some((r) => /above this level: dof motionBlur ss2x/.test(r)), "CINEMA features are not expected outside CINEMA");
+});
+
+test("tiers: a feature on at the level that did not run FAILS naming it; lamps that did not run at night fail too", () => {
+  const off = tierRun(tierRec(2, (n) => n !== "csm" && n !== "lampShadows"), "apex26.gfxDetail=2");
+  assert.deepEqual(off.bad, ["webgpu: tiers: csm is on at detail 2 but did NOT run — its build fell back silently"]);
+  assert.ok(off.rows.some((r) => /csm\s+need=2 on=1 ran=0 {2}DID NOT RUN — silent fallback/.test(r)));
+  const night = tierRun(tierRec(2, (n) => n !== "lampShadows"), "apex26.gfxDetail=2", { tod: "night" });
+  assert.deepEqual(night.bad, ["webgpu: tiers: lampShadows is on at detail 2 but did NOT run — its build fell back silently"]);
+  // A feature with no signal on this path is information: never a pass by assumption, never a fail.
+  const nul = tierRun(tierRec(2, (n) => (n === "crowd3d" ? null : n !== "lampShadows")), "apex26.gfxDetail=2");
+  assert.deepEqual(nul.bad, []);
+  assert.ok(nul.rows.some((r) => /crowd3d\s+need=2 on=1 ran=- {2}no signal — no signal on this path/.test(r)));
+});
+
+test("tiers: the level not applied, a gate that answers off, or no record at all fail on hardware; shed extras are excused", () => {
+  assert.match(tierRun(tierRec(0), "apex26.gfxDetail=2").bad.join("\n"), /asked .* but GfxQuality\.detail\(\) reports 0 — the level never applied/);
+  const gateOff = tierRec(2, (n) => n !== "lampShadows");
+  gateOff.features.traa.on = false;
+  assert.deepEqual(tierRun(gateOff, "apex26.gfxDetail=2").bad, ["webgpu: tiers: traa is off at detail 2 although the level turns it on (feature() answered false)"]);
+  assert.match(tierRun(null, "apex26.gfxDetail=1").bad.join("\n"), /detail 1 was asked but NO tiers record came back/);
+  const shed = tierRun(tierRec(2, (n) => n !== "lampShadows", { shed: 2 }), "apex26.gfxDetail=2");
+  assert.deepEqual(shed.bad, []);
+  assert.ok(shed.rows.some((r) => /shed by the governor: superSample ssgi/.test(r)));
+});
+
+test("tiers: informational (no fail) on a software adapter, a lite GPU or three's WebGL2 backend; detail 0 runs unchanged", () => {
+  const broken = tierRec(2, () => false);
+  for (const [o, why] of [[{ v: { census: SW } }, /census found no hardware adapter/], [{ be: { liteGpu: true } }, /liteGpu/], [{ be: { api: "webgl2" } }, /api=webgl2/]]) {
+    const { rows } = tierRun(broken, "apex26.gfxDetail=2", o);
+    assert.deepEqual(tierGate(tierLeg(broken, "day", o.be), { hardware: !o.v, level: 2 }).bad, [], JSON.stringify(o));
+    assert.ok(rows.some((x) => /tiers: .*informational: /.test(x) && why.test(x)), rows.join("\n"));
+  }
+  // Detail 0: no tiers rows at all, the verdict is exactly today's, record or not.
+  const zero = tierRun(broken, "");
+  assert.deepEqual(zero.bad, []);
+  assert.deepEqual(zero.rows.filter((r) => /tiers:/.test(r)), []);
+  assert.equal(zero.rows.length, run().rows.length);
+  assert.deepEqual(tierGate(tierLeg(broken), { hardware: true, level: 0 }), { rows: [], bad: [] });
 });

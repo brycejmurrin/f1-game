@@ -2673,7 +2673,7 @@ const LiveryTex = (function () {
   // what ink separates it" decision buildAtlas makes for the car.
   // CREST_DISC stays internal: crestKeepsPlate / markPalette / crestExtent and
   // LiveryCrests.create consume it; nothing outside this file reads LiveryTex.CREST_DISC.
-  return { SIZE, SIZE_H, atlasDiv, liveryHi, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  return { SIZE, SIZE_H, atlasDiv, liveryHi, liveryHiUsed: () => _livHi, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchCanvas, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,

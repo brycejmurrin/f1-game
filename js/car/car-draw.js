@@ -2350,6 +2350,7 @@ const CarDraw = (function () {
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },
       get menuCarAssets() { return _menuCarPrep; },
+      get carDetailUsed() { return _det; },   // GfxDebug.tiers(): the detail the first car build used (null before one)
     });
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.

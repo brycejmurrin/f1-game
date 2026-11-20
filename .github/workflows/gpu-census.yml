@@ -118,6 +118,16 @@ on:
         type: string
         required: false
         default: "0"
+      # Appended LAST (the 12th of GitHub's 25 dispatch inputs). The desktop detail level the game checks boot at:
+      # the plan job appends apex26.gfxDetail=<n> to `ls` (after the dispatcher's own tokens, so it wins), and the
+      # Verdict then holds the TLX WebGPU leg to tools/gfx/census-verdict.mjs tierGate: every feature that level
+      # turns on must report it RAN (docs/notes/TIER-CENSUS-TEST-2026-11-20.md). 0 = today's census exactly.
+      detail:
+        description: "Desktop graphics detail for ALL game checks: 0 (HIGH, as before), 1 (ULTRA) or 2 (EXTREME). 1 and 2 add the tiers rows to the Verdict and fail a feature that silently fell back"
+        type: choice
+        options: ["0", "1", "2"]
+        required: false
+        default: "0"
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -257,6 +267,7 @@ jobs:
           INPUT_MEM_CYCLES: ${{ inputs.mem_cycles || '0' }}
           INPUT_CAM: ${{ inputs.cam || 'helmet' }}
           INPUT_ENTRY: ${{ inputs.entry || 'api' }}
+          INPUT_DETAIL: ${{ inputs.detail || '0' }}
         run: |
           node - <<'JS'
           const fs = require("node:fs");
@@ -284,6 +295,8 @@ jobs:
           if (!["helmet", "chase", "chase>cockpit"].includes(cam)) bad.push(`cam "${cam}" is not helmet|chase|chase>cockpit`);
           const entry = pick("entry", "INPUT_ENTRY", "api");
           if (!["api", "menu", "menu-full"].includes(entry)) bad.push(`entry "${entry}" is not api|menu|menu-full`);
+          const detail = pick("detail", "INPUT_DETAIL", "0");
+          if (!["0", "1", "2"].includes(detail)) bad.push(`detail "${detail}" is not 0|1|2`);
           for (const b of bad) console.log(`::error title=gpu-census input::${b.replace(/[\r\n%]/g, " ")}`);
           if (bad.length) process.exit(1);
           console.log(`census inputs ok: track=${tracks.join(",")}`);
@@ -306,7 +319,12 @@ jobs:
           picked = [i.strip() for i in raw.split(",") if i.strip() in allow]
           print("images=" + json.dumps(picked or ["macos-latest"]))
           print("track=" + one(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
-          print("ls=" + one(req.get("ls") or os.environ.get("INPUT_LS") or ""))
+          # The desktop detail level rides `ls` (apex26.gfxDetail, read by js/perf/quality-preset.js detail()), LAST so
+          # it wins over a token the dispatcher typed; every game check and the Verdict (CENSUS_LS) then see it.
+          lsv = one(req.get("ls") or os.environ.get("INPUT_LS") or "")
+          dt = str(req.get("detail") or os.environ.get("INPUT_DETAIL") or "0").strip()
+          if dt in ("1", "2"): lsv = (lsv + " apex26.gfxDetail=" + dt).strip()
+          print("ls=" + lsv)
           # The HOUR the in-run A/B pins: 12 (noon, no lamps) measures the
           # PLAIN draw branch, 2 (night) the per-chunk lamp branch (census 146).
           try: ck = int(req.get("clock", os.environ.get("INPUT_CLOCK") or 12))
@@ -374,6 +392,7 @@ jobs:
           INPUT_MEM_CYCLES: ${{ inputs.mem_cycles || '0' }}
           INPUT_CAM: ${{ inputs.cam || 'helmet' }}
           INPUT_ENTRY: ${{ inputs.entry || 'api' }}
+          INPUT_DETAIL: ${{ inputs.detail || '0' }}
 
   census:
     needs: plan

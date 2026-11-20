@@ -3320,7 +3320,7 @@
     return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake,
              decalLight: { shadow: decalShadow, pool: decalPool },
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
-             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL } };
+             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN };
   }
 
   // The plain-JS twin of matDetail's weight maths (mdHexGrid / mdBiW / mdVarScale above), for node tests only:
