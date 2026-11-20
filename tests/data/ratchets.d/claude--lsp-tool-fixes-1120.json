@@ -1,5 +1,11 @@
 {
+  "files": {
+    "js/game.js": {
+      "codeLines": 1,
+      "lines": 1
+    }
+  },
   "tree": {
-    "eagerBytes": 2027
+    "eagerBytes": 2631
   }
 }

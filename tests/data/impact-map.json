@@ -7511,6 +7511,9 @@
       ]
     },
     "js/fx/visor-optics.js": {
+      "bind": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "blendMode": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -7536,7 +7539,6 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "sceneFromG": [
-        "tests/unit/global-registry.test.mjs",
         "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
@@ -11730,6 +11732,9 @@
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "bindGame": [
+        "tests/unit/race-entry-cover.test.mjs"
+      ],
       "clearMenuEntrySession": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
@@ -11788,6 +11793,9 @@
       ],
       "stagesFromSnapshot": [
         "tests/unit/race-entry-profile.test.mjs"
+      ],
+      "stallHandoffCover": [
+        "tests/unit/race-entry-cover.test.mjs"
       ],
       "tickFrame": [
         "tests/unit/race-entry-profile.test.mjs"

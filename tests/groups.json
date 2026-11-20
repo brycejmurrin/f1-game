@@ -905,6 +905,7 @@
     "// RaceCeremony SM (js/race/ceremony.js): eligibility, seek/skip, data-ceremony-phase (#4067). ~0.05 s.",
     "tests/unit/race-ceremony.test.mjs",
     "tests/unit/race-control.test.mjs",
+    "tests/unit/race-entry-cover.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
     "tests/unit/race-insights.test.mjs",
     "tests/unit/race-radio.test.mjs",

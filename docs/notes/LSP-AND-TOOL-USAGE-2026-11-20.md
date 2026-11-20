@@ -97,6 +97,8 @@ Known limit left: `GLX` gets its members at run time through `Object.definePrope
 ## 3. Bugs the tool surfaced in js/
 
 Sweep: `lsp_diagnostics all` over 616 files took 46 s and produced 404 rows. Most are WebGPU and XR globals missing from `lib` (GPUBufferUsage …, 242 rows) and stub-typed callbacks (TS2349 / TS2554). Real defects, filed:
+Both are fixed in this PR (Bryce, 2026-11-20: "Or implement fixes yourself", then "Fix all in same pr"): game.js hands `G` to `VisorOptics.bind(G)` and getters to `RaceEntryProfile.bindGame(...)`, in one line.
+
 - **#5964** (area:render): `js/fx/visor-optics.js:319` reads `typeof G`, but `G` is a function-scoped `const` inside game.js's IIFE (eslint-scope: function scope; game.js has 0 global variables). On a build without `__apex` the visor reads no scene. Triage #5901 had marked audit A27 STALE on the strength of this read.
 - **#5965** (area:perf): the same mechanism turns off three branches of `RaceEntryProfile.stallHandoffCover` (`js/perf/race-entry-profile.js:263-273`: countdown, loading phases, soft-raster intro).
 
@@ -114,7 +116,7 @@ What each card can do:
 |---|---|---|
 | Explore, code-hunter, finding-verifier | yes (7 tools; Explore lacks diagnostics) | yes |
 | worker | `*` (all) | yes |
-| physics-contract-auditor (its step 2 is a references hunt for `Tracks.curvature`) | **no → added in PR B** | **step 2 now starts from `lsp_callers`** |
+| physics-contract-auditor (its step 2 is a references hunt for `Tracks.curvature`) | **no → added (this PR)** | **step 2 now starts from `lsp_callers`** |
 | ci-red-triage, deploy-research, prior-art-scout, surface-reviewer, track-surveyor, verify-agent | no (logs, web, docs or circuit data: grep is right) | — |
 
 ## 1c. Waste, with numbers
@@ -148,14 +150,14 @@ Use grep, not apex-lsp, for:
 
 Forcing LSP-first lowered success in the published harness study (§Research). So the guidance names the tool at the moment of a symbol lookup (`alwaysLoad`, briefs, hook) and never blocks grep.
 
-## 4. Fixes to steering (PR B)
+## 4. Fixes to steering (same PR)
 
 | Lever | Change |
 |---|---|
 | Deferral | `"alwaysLoad": true` on `apex-lsp` in `.mcp.json` / `.cursor/mcp.json` (https://code.claude.com/docs/en/mcp.md#exempt-a-server-from-deferral). The cost is 8 tool schemas, ~2,670 tokens per turn (`tools/mcp/mcp-listing-cost.mjs --only=apex-lsp`). |
 | Briefs | the worker prompt, skill `steward` and the orchestrator brief name the calls |
 | Subagent card | `physics-contract-auditor` gets `lsp_references` / `lsp_callers` / `lsp_definition`, and its step 2 starts from `lsp_callers Tracks.curvature` |
-| Hook (PROTECTED, not shipped) | A proposed `lsp-hint.py` patch splits alternations and treats camelCase names inside js/ searches as symbols. Replayed on the survey: 7 of 7 examples hint, and the old quiet cases stay quiet. It is left for Bryce (a guard file; the patch is attached to PR B). Today the hook fires on 2 of 396 calls. |
+| Hook (PROTECTED, not shipped) | A proposed `lsp-hint.py` patch splits alternations and treats camelCase names inside js/ searches as symbols. Replayed on the survey: 7 of 7 examples hint, and the old quiet cases stay quiet. It is left for Bryce: a guard file, and the auto-mode classifier refused the edit on 2026-11-20 (final for that action). The patch is in the PR comments. Today the hook fires on 2 of 396 calls. |
 | AGENTS.md | the loop's edit step says to find symbols with apex-lsp, not grep |
 
 ## Research (cited by the 2026-11-20 lane; not all re-verified)
