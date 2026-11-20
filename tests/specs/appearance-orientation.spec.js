@@ -136,6 +136,7 @@ for (const touch of [false, true]) {
       await activate(page.getByRole("button", { name: "Open Career", exact: true }));
       await activate(entry);
       const region = page.locator("#screen-arranger").getByLabel("Region");
+      expect(await page.locator("#screen-arranger").evaluate(el => el.parentElement === document.body), "the layout editor is a <body> child (css-has-scope)").toBe(true);
       await region.selectOption("navigation");
       const initial = await layout();
       const panel = page.locator("#screen-arranger .arrange-tools");

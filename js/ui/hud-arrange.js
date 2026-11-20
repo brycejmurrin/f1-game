@@ -562,29 +562,9 @@ const HudArrange = (() => {
       }
     }
 
-    /* ---- the pause-card button, beside REPOSITION TOUCH CONTROLS ---- */
-    (function ensureControls() {
-      if ($("pm-hud-arrange")) return;
-      const hudHost = $("pm-hud-details");
-      const anchor = hudHost ? $("pm-hud-details-sum") : ($("pm-dock-reset") || $("pm-dock-reposition-help") || $("pm-mirror"));
-      const host = anchor && anchor.parentNode;
-      if (!host) return;
-      const btn = document.createElement("button");
-      btn.id = "pm-hud-arrange";
-      btn.type = "button";
-      btn.setAttribute("aria-pressed", "false");
-      btn.textContent = "ARRANGE HUD";
-      const tip = document.createElement("p");
-      tip.className = "adv-help";
-      tip.id = "pm-hud-arrange-help";
-      tip.textContent = "Choose a readout to show, hide, move or resize. AUTO follows the camera and HUD style. Drag to move; pinch or use − / + to size. Red outlines mark overlaps. Positions are saved per HUD STYLE and camera set.";
-      btn.onclick = () => setEditing(!editing);
-      host.insertBefore(btn, anchor.nextSibling);
-      host.insertBefore(tip, btn.nextSibling);
-    })();
-
-    /* The hidden toolbar exists from boot: it is a UiLayers layer whose data-esc-close
-       (hud-arrange-done) must name a real button before the first edit. */
+    /* The pause-card button is DockLayout.arrangeDoor's (eager): its first tap loads this file and calls
+       create(G), so the toolbar (a UiLayers layer whose data-esc-close names hud-arrange-cancel) exists
+       before the first edit. */
     ensureBar();
 
     /* ---- pointers ---- */

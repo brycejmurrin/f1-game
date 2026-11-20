@@ -310,6 +310,8 @@ const DockLayout = (function () {
       host.insertBefore(tip, btn.nextSibling);
       host.insertBefore(reset, tip.nextSibling);
     })();
+    // ARRANGE HUD goes under them (or in the HUD details fold); its editor is lazy (arrangeDoor).
+    arrangeDoor(G, () => HudArrange.create(G));
 
     // BUTTON SHAPE row, injected under BUTTON OPACITY (the shell's node count is
     // at its ceiling, so new SETTINGS chrome is built here, like REPOSITION).
@@ -461,8 +463,48 @@ const DockLayout = (function () {
     };
   }
 
+  /** ARRANGE HUD's pause-card door (create() opens it). js/ui/hud-arrange.js is LAZY_UI_PRESETS: the first
+   *  tap loads it alone, calls make() (HudArrange.create(G)) once and opens the editor; a failed load logs and
+   *  the next tap retries. */
+  function arrangeDoor(G, make) {
+    const { $ } = G;
+    if (typeof document === "undefined" || $("pm-hud-arrange")) return null;
+    const hudHost = $("pm-hud-details");
+    const anchor = hudHost ? $("pm-hud-details-sum") : ($("pm-dock-reset") || $("pm-dock-reposition-help") || $("pm-mirror"));
+    const host = anchor && anchor.parentNode;
+    if (!host) return null;
+    const btn = document.createElement("button");
+    btn.id = "pm-hud-arrange";
+    btn.type = "button";
+    btn.setAttribute("aria-pressed", "false");
+    btn.textContent = "ARRANGE HUD";
+    const tip = document.createElement("p");
+    tip.className = "adv-help";
+    tip.id = "pm-hud-arrange-help";
+    tip.textContent = "Choose a readout to show, hide, move or resize. AUTO follows the camera and HUD style. Drag to move; pinch or use − / + to size. Red outlines mark overlaps. Positions are saved per HUD STYLE and camera set.";
+    let editor = null, load = null;
+    const ready = () => typeof HudArrange !== "undefined" ? Promise.resolve(true)
+      : typeof ScriptLoader === "undefined" ? Promise.resolve(false)
+      : ScriptLoader.create().load(["js/ui/hud-arrange.js"], [], { strict: true });
+    btn.onclick = () => {
+      if (editor) { editor.setEditing(!editor.isEditing()); return; }
+      if (load) return;
+      btn.setAttribute("aria-busy", "true");
+      load = ready().catch(() => false).then((ok) => {
+        load = null;
+        btn.removeAttribute("aria-busy");
+        editor = ok && typeof HudArrange !== "undefined" ? make() : null;
+        if (editor) editor.setEditing(true);
+        else Log.warn("ui", "the ARRANGE HUD editor did not load — the next tap retries");
+      });
+    };
+    host.insertBefore(btn, anchor.nextSibling);
+    host.insertBefore(tip, btn.nextSibling);
+    return btn;
+  }
+
   return Object.freeze({
-    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES,
+    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, arrangeDoor,
     clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create, shapeOf, applyShape, sizeStep,
   });
 })();

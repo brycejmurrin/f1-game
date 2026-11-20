@@ -1616,6 +1616,7 @@
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/input-clock-rotate.test.mjs",
@@ -1634,6 +1635,7 @@
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
@@ -4851,7 +4853,7 @@
     {
       "path": "js/ui/hud-arrange.js",
       "global": "HudArrange",
-      "roster": "tag"
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/hud-damage.js",
@@ -5067,6 +5069,11 @@
       "path": "js/ui/setting-row.js",
       "global": "SettingRow",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/settings-export-body.js",
+      "global": "SettingsExportBody",
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/settings-export.js",

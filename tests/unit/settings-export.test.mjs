@@ -97,6 +97,7 @@ function boot(opts = {}) {
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });
   vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -1449,7 +1450,7 @@ test("career round-trip: export then import restores the slot through migrateCar
 });
 
 test("careerRow injects file controls without a static shell id in index.html", () => {
-  const src = read("js/ui/settings-export.js");
+  const src = read("js/ui/settings-export-body.js");   // the row lives in the LAZY_SAVES_DATA body (#4748)
   assert.match(src, /cr-career-save/);
   assert.match(src, /cr-career-load/);
   assert.equal(/id="cr-career-file"/.test(read("index.html")), false,

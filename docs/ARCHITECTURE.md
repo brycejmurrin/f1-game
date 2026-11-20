@@ -247,7 +247,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `setting-deps.js` | `SettingDeps` | tag | SettingDeps — the ONE place a setting greys out because another setting makes it do nothing (tilt sliders under TOUCH steering, engine-layer levels with the… |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
-| `settings-export.js` | `SettingsExport` | tag | Settings backup storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. |
+| `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | Per-scheme touch-dock offsets. |
@@ -265,7 +265,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
 | `hud-inputs.js` | `HudInputs` | tag | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `hud-layout.js` | `HudLayout` | tag | Race HUD storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. |
-| `hud-arrange.js` | `HudArrange` | tag | Live race HUD arrangement. |
 | `title-layout.js` | `TitleLayout` | tag | Title layout owns viewport offsets, fit, and separate wide/tall v2 snapshots. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | Per-screen appearance settings and preview. |
@@ -294,8 +293,10 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
+| `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `settings-export-body.js` | `SettingsExportBody` | LAZY_SAVES_DATA | SAVES & DATA body (SettingsExportBody, LAZY_SAVES_DATA, #4748): collect / apply for the SETTINGS, GARAGE and CAREER files, the optional time-trial ttlb… |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
 | `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |

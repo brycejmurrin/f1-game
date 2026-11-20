@@ -416,7 +416,6 @@ const FULL = [
   "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
-  "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
@@ -920,7 +919,6 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
-  ["js/ui/hud-arrange.js", "js/game.js"], // game.js calls HudArrange.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -1353,10 +1351,21 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 // is FULL and read at call time, so it has no edges and no boot stub.
 const LAZY_UI_PRESETS = [
   "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+  "js/ui/hud-arrange.js",    // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it alone on the first pause-card tap
   "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js", // LayoutPresets
 ];
 const LAZY_UI_PRESETS_EDGES = [["js/ui/screen-regions.js", "js/ui/screen-placement.js"]];
+
+// SAVES & DATA body (#4748, ~50 KB): SettingsExportBody — collect / apply for the SETTINGS, GARAGE
+// and CAREER files, ttlb, and the SETTINGS › FILES / GARAGE FILE / CAREER FILE UI. The FULL
+// js/ui/settings-export.js keeps FORMAT, SPEC (SaveSchemaRegistry ingests it at eval) and the
+// garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
+// it at idle, at the garage door, with the agent surface and with the career screen.
+const LAZY_SAVES_DATA = [
+  "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
+];
+const LAZY_SAVES_DATA_EDGES = [];
 
 // RESULTS / TT / STANDINGS / CHAMPION DOM builders + the share-card stack (~92 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
@@ -1863,7 +1872,7 @@ module.exports = {
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
-  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES,
+  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,

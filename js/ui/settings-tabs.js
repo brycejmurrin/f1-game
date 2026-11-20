@@ -106,7 +106,7 @@ const SettingsNav = (function () {
     if (presetsLoad) return presetsLoad;
     if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
-    const files = R.LAZY_UI_PRESETS.filter(file => file !== "js/ui/screen-arranger.js");
+    const files = R.LAZY_UI_PRESETS.filter(file => file !== "js/ui/screen-arranger.js" && file !== "js/ui/hud-arrange.js");
     presetsLoad = ScriptLoader.create().load(files, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
       .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
     return presetsLoad;

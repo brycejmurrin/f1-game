@@ -186,7 +186,7 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; ru
   walk("js");
   assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry.js", "js/share/share-card-chips.js", "js/ui/screen-arranger.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
   assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true, "the share-card preview is a <body> child");
-  assert.match(read("js/ui/screen-arranger.js"), /document\.body\.appendChild\(dialog\)/, "the layout editor is a <body> child");
+  // js/ui/screen-arranger.js appends its <dialog> to <body>: tests/specs/appearance-orientation.spec.js asserts it live.
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
   const bad = [];
   for (const [file, src] of CSS) for (const m of hasArgs(src)) if (/^dialog\b/.test(m[2])) bad.push(`${file}: ${m[0]}`);
