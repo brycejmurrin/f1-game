@@ -815,8 +815,11 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const ok = await ctl.connect("abc234");
   assert.deepEqual(ok, { ok: true });
   assert.deepEqual(seen, ["swap:ABC234", "accept:OFFER"], "the code is normalised, the offer answered");
-  assert.ok(ctl.state().linked && dom.body.classes.has("linked"), "the wheel shows once the channel is open");
+  assert.ok(ctl.state().linked && dom.body.classes.has("awaiting") && !dom.body.classes.has("linked"),
+    "the channel is open, but no wheel until the game's first dash says which surface it wants");
   const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); desk.Input.steer(); };
+  frame(); frame();
+  assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the first dash shows the wheel");
   // GAS: STAMP THEN EASE, the game's own touch pedals' gesture (hold-buttons.js wireHold).
   // RE-PINNED DELIBERATELY (R3-PHONE-2): this used to assert "a thumb 2/3 down the zone is
   // 2/3 travel" — an absolute mapping that gave a thumb aimed at a ~150 px pedal's label half
@@ -2412,7 +2415,9 @@ test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH tran
     assert.equal(made[0].closed, 1, "the superseded transport is closed");
     assert.equal(ctl.state().linked, true, "the session moved to the fresh transport");
     made[1].status = "open"; made[1].handlers.open();
-    assert.ok(dom.body.classes.has("linked"), "and it opens there");
+    assert.ok(dom.body.classes.has("awaiting"), "and it opens there");
+    made[1].handlers.message(NetTransport.STATE, PhonePad.encodeHud({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: 0, caution: 0, lastLapMs: 0, state: "menu", team: "" }));
+    assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the game's first dash shows its surface");
     assert.equal(JSON.parse(made[1].sent[0]).id, PEER_A, "its hello names the page");
     assert.equal(swapOpts.token.cancelled, true, "a link that is up stops the rendezvous");
     assert.equal(await swapOpts.reply("OFFER-3"), null, "an open link keeps its offer");
@@ -2568,4 +2573,104 @@ test("#5739 row 6: a hash-only #pad= navigation into an open controller tab is r
   h.fire("hashchange");
   assert.equal(h.dom.codeIn.value, "BBBB2345", "the same link again changes nothing");
   h.ctl.cancel();
+});
+
+/* PAIRED FROM SETTINGS (Bryce, 2026-11-20): "it connects and on my phone it shows the wheel
+ * display but buttons don't work until on desktop I leave settings go to title and have to
+ * click a pop up to allow connection. Once I allow then my phone switched to menu navigation
+ * mode." Three defects, one test each: the ALLOW card was a <body> child under the modal
+ * Settings <dialog> (top layer), so it was hidden and inert until Settings closed; the phone
+ * showed its default wheel before the game had admitted it (no dash yet); and the desktop
+ * had no title door to the pairing at all. */
+test("ALLOW card opens in the TOP LAYER, over an open modal Settings, and Escape does not answer it", async () => {
+  const topLayer = [];
+  const mk = (tag) => {
+    const n = { tagName: tag.toUpperCase(), style: {}, attrs: {}, kids: [], listeners: {}, parentNode: null, textContent: "", id: "", open: false,
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      appendChild(c) { c.parentNode = this; this.kids.push(c); return c; },
+      removeChild(c) { this.kids = this.kids.filter((k) => k !== c); c.parentNode = null; },
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
+      fire(t, e) { for (const f of this.listeners[t] || []) f(e); },
+      click(e) { this.fire("click", e); } };
+    if (n.tagName === "DIALOG") {
+      n.showModal = function () { if (!this.parentNode) throw new Error("not connected"); this.open = true; topLayer.push(this); };
+      n.close = function () { this.open = false; topLayer.splice(topLayer.indexOf(this), 1); };
+    }
+    return n;
+  };
+  const doc = { body: mk("body"), createElement: mk };
+  const settings = mk("dialog"); settings.id = "pmsettings"; doc.body.appendChild(settings); settings.showModal();
+  const ask = PhonePad.askOnScreen(doc, "A phone joined with this game's room code. Let it steer this game?");
+  const box = doc.body.kids.at(-1);
+  assert.equal(box.tagName, "DIALOG", "the card is a dialog of its own");
+  assert.equal(topLayer.at(-1), box, "shown modal AFTER Settings: it is on top of it, not under it");
+  let prevented = 0; box.fire("cancel", { preventDefault() { prevented++; } });
+  assert.equal(prevented, 1, "Escape is not an answer");
+  const allow = box.kids[0].kids[2].kids[0];
+  let settled = null; ask.result.then((v) => { settled = v; });
+  allow.click({ isTrusted: true }); await settle();
+  assert.equal(settled, true);
+  assert.equal(box.open, false); assert.deepEqual(topLayer, [settings], "ALLOW takes the card out of the top layer; Settings stays");
+});
+
+test("the phone's surface follows the game's screen from the first frame it is admitted: no dead wheel, menu pad in menus, wheel in a race", async () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(21) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  const screen = { state: "menu", paused: false };
+  const dashOf = () => ({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: screen.paused ? PhonePad.DASH.paused : 0,
+    caution: 0, lastLapMs: 0, state: screen.state, team: "" });
+  let allow;
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: dashOf, doc: null,
+    admit: () => new Promise((r) => { allow = r; }) });
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+  const ctl = PhonePad.pad(dom, { now: () => clock.t, timers: fakeTimers(), deps: {
+    rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+    swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+  } });
+  try {
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); padEnd.pump(clock.t); hostEnd.pump(clock.t); };
+    for (let i = 0; i < 6; i++) frame();
+    assert.ok(dom.body.classes.has("awaiting"), "open but not admitted: the page waits");
+    assert.ok(!dom.body.classes.has("linked"), "and shows no wheel or pad the game would ignore");
+    assert.match(dom.status.textContent, /ALLOW/, "it says what to do on the game's screen");
+    allow(true); await settle();
+    frame(); frame();
+    assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "admitted: the controls appear");
+    assert.ok(dom.hud.body.classes.has("menu"), "the game is on a menu: the first surface is the MENU PAD, not the wheel");
+    screen.state = "race";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(!dom.hud.body.classes.has("menu"), "a race starts: the wheel");
+    screen.paused = true;
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "paused: the menu pad drives the pause menu");
+    screen.paused = false; screen.state = "results";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "the race ends: back to the menu pad");
+  } finally { ctl.cancel(); link.close(); }
+});
+
+test("PlatformSession: the desktop's title door PHONE CONTROLLER opens Settings › CONTROLS and starts the pairing once", async () => {
+  const elements = new Map(), hosts = [], pages = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    openSettingsPage: (p) => pages.push(p),
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h; } },
+  });
+  vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
+  vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true), openSettingsPage }).wirePhone();", context);
+  const door = G.$("mb-steerphone");
+  assert.equal(typeof door.onclick, "function", "the title door is wired");
+  door.onclick(); await settle();
+  assert.deepEqual(pages, ["controls"], "it opens the CONTROLS page");
+  assert.equal(hosts.length, 1, "and starts the pairing: the code and QR are up");
+  assert.equal(G.$("pm-phonepad").textContent, "STOP PAIRING");
+  door.onclick(); await settle();
+  assert.equal(hosts.length, 1, "a second click shows the running pairing, it does not restart it");
+  assert.equal(hosts[0].cancelled, 0);
+
 });

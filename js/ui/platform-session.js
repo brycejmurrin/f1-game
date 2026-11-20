@@ -5,7 +5,7 @@ const PlatformSession = (function () {
 function create(G, deps) {
 const { $, els, store } = G;
 const { MAX_RPM, IDLE_RPM } = PhysicsConsts;
-const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn } = deps;
+const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage } = deps;
 function paintBuild() {
 // BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
 // own, so a stale shell (or a service worker serving a cached generation) can run
@@ -211,11 +211,9 @@ if ($("pm-fullscreen")) {
 }
 
 function wirePhone() {
-// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
-// multiplayer stack the pairing rides on, then the module owns the pairing and
-// feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
-// Pairing's generic URL builder follows its page origin. Adapt outgoing links
-// here for native hosts, preserving the private code and relay in the fragment.
+// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the net stack,
+// then the module pairs and feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
+// padUrl() follows the page origin: a native host's links are rebased here, fragment kept.
 function phoneLink(url) {
   if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
   return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
@@ -234,18 +232,16 @@ newPhoneCode.onclick = () => {
   newPhoneCode.hidden = true; recoveryNote.textContent = "";
   $("pm-phonepad").onclick();
 };
-// The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
-// screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
-// it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
+// The camera before a phone linked: the phone is the wheel, so the screen shows VISOR (no wheel,
+// js/camera/vantage.js) while it drives, and goes back after unless the player cycled away.
 let phonePadCam = -1;
 const VISOR_CAM = CamModes.CAM_MODES.findIndex((c) => c.id === "visor");
 // The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
 function phonePadDash() {
   const p = G.player;
   const D = PhonePad.DASH;
-  // NO PLAYER IS A DASH TOO — the menus before a first race. The phone swaps its wheel for the
-  // MENU PAD only on a dash packet (!inRace || paused); a null here sent nothing, so a phone
-  // paired from the title stayed on the wheel's placeholder LCD with no arrows/SELECT/BACK.
+  // NO PLAYER IS A DASH TOO (menus before a first race): the phone shows its MENU PAD only on a
+  // dash packet (!inRace || paused), and a null sends nothing, so it stayed on the wheel.
   if (!p) return { gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0,
     flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, team: "" };
   const xOpen = (p.aeroX || 0) > 0.05;
@@ -288,8 +284,7 @@ $("pm-phonepad").onclick = () => {
         $("pm-phonepad-code").textContent = code || "";
         $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
         $("pm-phonepad-pair").hidden = !code;
-        // The code appears below the button: bring it into view on the sheet,
-        // or a short screen shows "scan the code" with nothing to scan.
+        // Scroll the code (below the button) into view: a short screen said "scan the code" over nothing.
         if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
       },
       linked: () => {
@@ -318,6 +313,8 @@ $("pm-phonepad").onclick = () => {
     recoveryOwner = phonePad;
   });
 };
+// Title door (desktop): CONTROLS, pairing started (a running one is only shown).
+$("mb-steerphone").onclick = () => { openSettingsPage("controls"); if (!phonePad && !phonePadLoading) $("pm-phonepad").onclick(); };
 }
 
 function wireLifecycle() {
@@ -450,6 +447,7 @@ function syncPointerKind() {
   // The phone's own door to the wheel page: a coarse pointer is the device
   // that can BE the controller, so only it gets the buttons (title + CONTROLS).
   $("mb-phonepad").hidden = !touch;
+  $("mb-steerphone").hidden = touch;
   $("pm-phonepad-go").hidden = !touch;
   if (G.state === "race" || G.state === "count") showTouchControls(true);
   refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this

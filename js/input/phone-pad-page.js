@@ -481,7 +481,7 @@ const PhonePadPage = (function () {
       if (active) active.close();
       else if (old && old.transport) { try { old.transport.close(); } catch (_) { /* already closed */ } }
       dropWake(); releaseAll();
-      if (dom.body) dom.body.classList.remove("linked");
+      if (dom.body) { dom.body.classList.remove("linked"); dom.body.classList.remove("awaiting"); }
       if (dom.connect) dom.connect.disabled = false;
     }
     // PAGEHIDE IS NOT AN UNPAIR (#5739 row 4): a linked page that goes away (navigate,
@@ -609,16 +609,27 @@ const PhonePadPage = (function () {
         say("Connecting…");
         function bind() {
         const gen = ++bindGen;
+        let surfaced = false;   // this session's first dash has painted the wheel / menu pad
         const active = PhonePad.padSession(transport, src, {
           now: opts.now || null,   // test seam: the harness's stepped clock, so both wire ends agree
           peerId,
-          onHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
+          // NO DEAD SURFACE: the game sends its dash only once it has admitted this phone
+          // (ALLOW, or a re-link of the phone it allowed), and the dash says which surface
+          // its screen wants (paintHud: body.menu). So the wheel / menu pad appear on the
+          // FIRST dash, already in the right mode; until then the page stays "awaiting".
+          onHud: (h) => {
+            lastHud = h; paintHud(dom.hud, h);
+            if (gen !== bindGen || surfaced) return;
+            surfaced = true;
+            if (dom.body) { dom.body.classList.remove("awaiting"); dom.body.classList.add("linked"); }
+            say(sensorOn || sensor ? "Connected — tilt to steer." : "Connected — pedals and buttons only.");
+          },
           onOpen: () => {
             if (gen !== bindGen) return;
             listen.stopped = true;   // the link is up: no later offer is answered
             opened = true; clearConnectDeadline();
-            say((sensorOn || sensor ? "Connected — tilt to steer." : "Connected — pedals and buttons only.") + " If the game asks, tap ALLOW on its screen.");
-            if (dom.body) dom.body.classList.add("linked");
+            say("Connected — tap ALLOW on the game's screen to start.");
+            if (dom.body && !surfaced) dom.body.classList.add("awaiting");
             if (opts.onOpen) opts.onOpen();
           },
           onHealth: (h) => {
@@ -634,7 +645,7 @@ const PhonePadPage = (function () {
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
             dropWake(); releaseAll();
-            if (dom.body) dom.body.classList.remove("linked");
+            if (dom.body) { dom.body.classList.remove("linked"); dom.body.classList.remove("awaiting"); }
             if (dom.connect) dom.connect.disabled = false;
             // WHICH END DIED: "peer" is the game's own goodbye (UNPAIR, its tab
             // closed); any other reason is this end's wire (rtc failed/disconnected).

@@ -8717,7 +8717,7 @@ function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.
 const platformSession = PlatformSession.create(G, {
   canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
   cancelMirrorPrep: () => mirrorPass.cancelPreparation(),
-  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn,
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
 });
 platformSession.wireFirstGesture();
 

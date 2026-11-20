@@ -231,6 +231,11 @@ const PhonePad = (function () {
   // waiting. Touch-sized (48 px buttons) and short enough for 844×390. Only a
   // TRUSTED click counts — the phone's own SELECT is a synthetic click, and
   // the link is deaf while this is up anyway. Returns { result, dismiss }.
+  // IN THE TOP LAYER: Settings and the pause menu are modal <dialog>s (js/ui/modal.js
+  // showModal()), so a card appended to <body> sat UNDER them, inert, until they
+  // closed: a phone paired from Settings › CONTROLS stayed dead until the player went
+  // back to the title. The card is its own <dialog>, shown modal, so it opens over
+  // whatever screen is up. Escape does not answer it (only the two buttons do).
   function askOnScreen(doc, text) {
     if (!doc || !doc.body || typeof doc.createElement !== "function") return { result: Promise.resolve(false), dismiss() {} };
     let settle = null, done = false;
@@ -241,9 +246,9 @@ const PhonePad = (function () {
       if (txt != null) n.textContent = txt;
       return n;
     };
-    const box = mk("div", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
+    const box = mk("dialog", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
       display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", boxSizing: "border-box",
-      background: "rgba(0,0,0,0.6)" });
+      background: "rgba(0,0,0,0.6)", margin: "0", border: "0", width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", color: "inherit" });
     box.id = "phonepad-confirm";
     box.setAttribute("role", "alertdialog");
     box.setAttribute("aria-modal", "true");
@@ -258,6 +263,7 @@ const PhonePad = (function () {
     const finish = (ok) => {
       if (done) return;
       done = true;
+      try { if (typeof box.close === "function" && box.open) box.close(); } catch (e) { /* not in the top layer */ }
       try { if (box.parentNode) box.parentNode.removeChild(box); } catch (e) { /* already gone */ }
       settle(ok === true);
     };
@@ -274,7 +280,9 @@ const PhonePad = (function () {
     row.appendChild(button("REJECT", false, "#8a1c1c"));
     card.appendChild(h); card.appendChild(p); card.appendChild(row);
     box.appendChild(card);
+    box.addEventListener("cancel", (e) => { if (e && e.preventDefault) e.preventDefault(); });
     doc.body.appendChild(box);
+    try { if (typeof box.showModal === "function") box.showModal(); } catch (e) { /* not connected: the fixed card still covers */ }
     return { result, dismiss: () => finish(false) };
   }
 
