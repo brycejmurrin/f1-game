@@ -626,23 +626,23 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
 }, true);
 
-function applyTrackSearch(value) {
+function applyTrackSearch(value, pick) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
-  for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
-  // A divider shows while ITS run of tiles, not its group, has a match ("spa" finds Spain).
+  for (const r of rows) r.hidden = !!trackQuery && !r.dataset.search.includes(trackQuery);
+  // A divider shows while ITS run (not group) has a match ("spa" finds Spain).
   for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
     let live = false;
-    for (let el = head.nextElementSibling; el && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
-      if (el.classList.contains("track-row") && !el.hidden) { live = true; break; }
+    for (let el = head.nextElementSibling; el && !live && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
+      live = el.classList.contains("track-row") && !el.hidden;
     }
     head.hidden = !live;
   }
   const empty = document.getElementById("sel-track-empty");
-  if (empty) empty.hidden = rows.some((row) => !row.hidden);
-  // A hidden active circuit still raced (#5889): take the first match.
+  if (empty) empty.hidden = rows.some((r) => !r.hidden);
+  // Typing hid the active circuit (#5889): take the 1st match.
   const on = rows.find((r) => r.classList.contains("active"));
-  if (trackQuery && (!on || on.hidden)) rows.find((r) => !r.hidden)?.click();
+  if (pick && trackQuery && (!on || on.hidden)) rows.find((r) => !r.hidden)?.click();
   ScrollFadeRefresh();
 }
 
@@ -767,6 +767,7 @@ function trackFilterBar() {
     b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => {
       e.stopPropagation();
+      trackQuery = "";
       G.daily.select();
       leavePracticePick();
       setTrackFilter("all", false, true);
@@ -784,7 +785,7 @@ function trackFilterBar() {
   search.placeholder = "Search circuit";
   search.setAttribute("aria-label", "Search circuits");
   search.autocomplete = "off";
-  search.oninput = () => applyTrackSearch(search.value);
+  search.oninput = () => applyTrackSearch(search.value, true);
   bar.appendChild(search);
   return bar;
 }

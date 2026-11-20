@@ -20052,7 +20052,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "value": [
-        "tests/specs/career-season.spec.js"
+        "tests/specs/career-season.spec.js",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "wire": [
         "tests/unit/async-lifecycle.test.mjs",
