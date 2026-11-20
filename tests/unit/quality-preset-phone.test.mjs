@@ -219,5 +219,9 @@ test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and t
   assert.equal(ex.feature("csm"), true, "an extra outside SHED_ORDER never sheds");
   for (const name of ex.SHED_ORDER) assert.ok(ex.FEATURES[name], `${name} is a feature`);
   assert.equal(boot("high", false, { "apex26.gfxx.csm": "1" }).feature("csm"), true);
+  assert.equal(boot("high", false, { "apex26.gfxDetail": "2" }).detail(), 2, "the numeric override forces the level on a desktop");
+  assert.equal(boot("extreme", false, { "apex26.gfxDetail": "0" }).detail(), 0);
+  assert.equal(boot("high", true, { "apex26.gfxDetail": "2" }).detail(), 0, "never on a phone");
+  assert.equal(boot("ultra", false, { "apex26.gfxDetail": "9" }).detail(), 1, "an unknown value is ignored");
   assert.equal(boot("extreme", false, { "apex26.gfxx.csm": "0" }).feature("csm"), false);
 });

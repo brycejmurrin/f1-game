@@ -43,7 +43,7 @@ row stay lazy in `js/ui/layout-presets.js`. Fragment:
 `tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
 ## 2026-11-20 — PR #5951 (claude/trusting-clarke-01d9ui): desktop graphics tiers above ULTRA
 
-`(tree) eagerBytes` 7972011 → **8021318** (+49307). Deliberate raise past the absorb, asked for
+`(tree) eagerBytes` 7972011 → **8021786** (+49775). Deliberate raise past the absorb, asked for
 by Bryce in chat (2026-11-20: "Increase budget or remove comments"); the tree-wide ceiling still
 needs his own `ratchet-raise` label on the PR. The new render, mesh and garage code is in lazy
 files (`tsl-aa.js`, `tsl-gi.js`, `tsl-carsurf.js`, `mesh-detail.js`, `track/scenery/detail.js`,

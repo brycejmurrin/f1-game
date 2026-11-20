@@ -46,7 +46,12 @@ function detail() {
   let d = 0;
   try {
     const st = gstore();
-    if (st && !(typeof GLX !== "undefined" && GLX.isMobile)) d = DETAIL[st.get("gfxPreset", null)] || 0;
+    if (st && !(typeof GLX !== "undefined" && GLX.isMobile)) {
+      d = DETAIL[st.get("gfxPreset", null)] || 0;
+      // A/B and the GPU census (its `ls` input takes no quoted value): apex26.gfxDetail = 0 / 1 / 2 forces the level.
+      const o = st.raw("apex26.gfxDetail");
+      if (o === "0" || o === "1" || o === "2") d = +o;
+    }
   } catch (_) { d = 0; }
   return (_detail = d);
 }
@@ -62,6 +67,8 @@ function feature(name) {
 // The governor's upper ladder: n extras shed (0..SHED_ORDER.length), last in SHED_ORDER first.
 function setShed(n) { _shed = Math.max(0, Math.min(SHED_ORDER.length, n | 0)); return _shed; }
 function setCinema(on) { _cinema = !!on; return _cinema; }
+// A/B from the console: GfxQuality.forceDetail(2) then reload; forceDetail(null) clears it.
+function forceDetail(n) { const st = gstore(); if (st) st.rawSet("apex26.gfxDetail", n == null ? "" : String(n | 0)); return n; }
 const PHONE_MAX_ID = "high";
 const PHONE_ULTRA_NOTE = " — NOT ON PHONES";
 const PHONE_CAP_TITLE = "ULTRA is capped on phones (BrowserStack 2026-10-21: ~24 fps avg on iPhone 15). HIGH is the phone ceiling.";
@@ -314,7 +321,7 @@ if (typeof document !== "undefined") {
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
-  detail, feature, setShed, setCinema, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
+  detail, feature, setShed, setCinema, forceDetail, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();
 Object.freeze(GfxQuality);
