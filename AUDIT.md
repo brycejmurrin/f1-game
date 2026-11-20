@@ -599,3 +599,18 @@ overlay left up → dismissed.
   validation (A17); voice language options (A18); load weight and unreferenced assets (17, 18).
 - **Small and safe but left for lack of time:** the results-announcement observer (A31), the text and unit
   inconsistencies (A19), the two remaining broadcast-graphics defects (15), and the iOS banner (A9).
+
+## Corrections to my own fixes (found by an independent review of the fix commits)
+
+- **Fix 23 regression — TODAY'S CHALLENGE did nothing with a search typed.** The search auto-select also ran
+  on every list rebuild, so in time trial with "monza" typed, pressing the daily chip selected the daily
+  circuit, hid it, clicked the first visible match and thereby stopped the daily. The auto-select now runs
+  only from the search input and the daily chip clears the query. Verified: chip not pressed with MONZA
+  still selected → "DAILY STANDARD · SINGAPORE", pressed, Singapore selected; the original fix still works.
+- **Fix 19 regression — relative tower gaps for cars on another lap.** The tower picks cars by on-track
+  distance but the timed lookup used raw race distance, so on circuits shorter than about 5.1 km a car a
+  lap up or down showed about a lap time (a car 29 m ahead read "-99.4"). The lookup is now shifted by the
+  lap difference. Verified in a seeded 12-lap Monaco race with the player lapped: rows wrong by more than
+  2 s, 1044 of 1796 → 0. The relative tower is off by default and on in the broadcast HUD profile.
+
+The same review read the other fix commits and found them sound; details are in its report.
