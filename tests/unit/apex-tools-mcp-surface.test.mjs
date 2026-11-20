@@ -545,18 +545,26 @@ test("garage stdin EPIPE on a dying child is logged, not an unhandled 'error'", 
   const { EventEmitter } = await import("node:events");
   const { PassThrough } = await import("node:stream");
   const { garageOpen, garageClose, releaseLock } = await import("../../tools/mcp/apex-tools-mcp.mjs");
-  const psBefore = process.env.APEX_MCP_PS;
+  // Hermetic occupancy (#5787): its own lock file and test-bg registry, so a parallel file holding the shared
+  // scratch/apex-browser.lock (the contract and occupancy suites write it with their live pid) cannot refuse the open.
+  const envKeys = ["APEX_MCP_PS", "APEX_BROWSER_LOCK", "APEX_TEST_BG_STATE"];
+  const envBefore = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "apex-mcp-garage-epipe-"));
   process.env.APEX_MCP_PS = "";
+  process.env.APEX_BROWSER_LOCK = path.join(dir, "apex-browser.lock");
+  process.env.APEX_TEST_BG_STATE = path.join(dir, "test-bg.json");
   const child = new EventEmitter();
   child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
   child.pid = process.pid; child.kill = () => true;
   try {
     const r = await garageOpen({}, { spawnChild: () => { setImmediate(() => child.stdout.write('{"ready":true}\n')); return child; } });
-    assert.equal(JSON.parse(r.content[0].text).ok, true);
+    assert.equal(JSON.parse(r.content[0].text).ok, true, r.content[0].text);
+    assert.equal(fs.existsSync(process.env.APEX_BROWSER_LOCK), true, "the open took this test's own lock");
     assert.doesNotThrow(() => child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })));
   } finally {
     garageClose("fixture teardown"); child.emit("exit", 0); releaseLock();
-    if (psBefore === undefined) delete process.env.APEX_MCP_PS; else process.env.APEX_MCP_PS = psBefore;
+    for (const k of envKeys) { if (envBefore[k] === undefined) delete process.env[k]; else process.env[k] = envBefore[k]; }
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

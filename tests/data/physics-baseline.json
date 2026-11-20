@@ -504,7 +504,7 @@
       0,
       1,
       5764.21,
-      -2.42,
+      -2.419,
       3
     ],
     [
@@ -519,7 +519,7 @@
       0,
       1,
       5765.22,
-      -1.413,
+      -1.412,
       4.93
     ],
     [
@@ -535,7 +535,7 @@
       1,
       5766.71,
       -0.908,
-      6.83
+      6.82
     ],
     [
       317.2555,
@@ -549,7 +549,7 @@
       0,
       1,
       5768.66,
-      -0.616,
+      -0.615,
       8.68
     ],
     [
@@ -580,7 +580,7 @@
       1,
       5773.93,
       -0.375,
-      12.27
+      12.26
     ]
   ],
   "wet right-hand corner": [
@@ -658,9 +658,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "c85caea5b3a8695af381d0e8c2c750553e27291b",
-    "reason": "#5330 AI pace calibration (PR #5686, decision A 2026-11-18): the AI car's launch moves (aero grip bound and paceTrim); only 'ai car launch' should change",
-    "at": "2026-11-18T10:04:10.283Z",
-    "hash": "36fe28f6cf5b7e8daa825e79a9b495c1dd9e299fa10f1491dca03303ea69db8a"
+    "sha": "7fe2fcb05a81511654561214b7d7812b33070fdf",
+    "reason": "#5791 decision B: AI X-mode reads the neutral wing, AI_WING_GRIP 0.055 (AI car only; ai car launch ai.x -2.917 -> -2.919)",
+    "at": "2026-11-19T09:50:13.004Z",
+    "hash": "b7efea43c72fbc90383fc141653abf4281b10b0b910a5e13de7dbde58fdfc5da"
   }
 }

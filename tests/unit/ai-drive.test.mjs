@@ -806,21 +806,14 @@ test("factory wing and hold change the AI corner limit; midpoint stays put", () 
   assert.equal(A.brakeTarget({ ...base, team: holdTeam }), midLim);
 });
 
-test("AI pace calibration terms (#5330): the wing's drag, the scripted trim, bounded ERS, the clear-road line", () => {
-  // Drag is the X-mode gain inverted, normalised at mid load; the constants mirror PhysicsConsts.
-  assert.equal(A.X_GAIN_LO, 0.055);
-  assert.equal(A.X_GAIN_HI, 0.155);
-  assert.equal(A.aeroDragMul(0.5), 1);
-  assert.equal(A.aeroDragMul(undefined), 1);
-  assert.equal(A.aeroDragMul(1), 1.105 / 1.155);
-  assert.equal(A.aeroDragMul(0), 1.105 / 1.055);
-  assert.equal(A.aeroDragMul(2), A.aeroDragMul(1), "clamped to the wing range");
-  assert.equal(A.AERO_LOAD_GRIP, 0.05);
-  assert.equal(A.lateralScale(0, 1, 1, 1, 72), 1.025);
-  assert.equal(A.lateralScale(0, 0, 1, 1, 72), 0.975);
+test("AI pace calibration terms (#5330): the scripted trim, bounded ERS, the clear-road line", () => {
+  assert.equal(A.aeroDragMul, undefined, "#5791 neutralised the AI wing trade; no drag term on top");
+  assert.equal(A.AERO_GRIP_K, 0.055);
+  assert.equal(A.lateralScale(0, 1, 1, 1, 72), 1.0275);
+  assert.equal(A.lateralScale(0, 0, 1, 1, 72), 0.9725);
   // Scripted trim: 1 at the mid-field reference, PACE_GAIN x the relative scripted pace either side.
   assert.equal(A.PACE_GAIN, 2.5);
-  assert.equal(A.PACE_REF, 0.9302);
+  assert.equal(A.PACE_REF, 0.9332);
   assert.equal(A.paceTrim(A.PACE_REF), 1);
   assert.equal(A.paceTrim(A.PACE_REF * 1.01), 1 + 2.5 * (A.PACE_REF * 1.01 / A.PACE_REF - 1));
   assert.equal(A.paceTrim(0), 1);
@@ -1906,7 +1899,7 @@ test("RaceControl.holdCap finds the car by its rank slot, with a scan fallback (
 function brakeTargetOracle(samples, ctx) {
   const skill = ctx.traits.skill, diffC = ctx.diffCorner || 1, brake = ctx.brake || 22, grip = ctx.grip || 1;
   const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
-  const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * A.AERO_LOAD_GRIP);
+  const latMax = (ctx.latMax || 22) * A.aeroGrip(load);
   const scrub = 2 * brake * 0.85;
   const pace = ctx.pace === undefined ? 1 : ctx.pace, vmax = ctx.vmax === undefined ? 72 : ctx.vmax;
   let vLimSq = Infinity;
@@ -2081,4 +2074,17 @@ test("wantBoost: ERS deploy bias (#1566) moves only the 'rich' threshold, symmet
   assert.equal(A.wantBoost(ctx(-1, 0.58)), false, "a hoarder keeps 0.58");
   assert.equal(A.wantBoost(ctx(0, 0.56)), A.wantBoost({ ...ctx(0, 0.56), traits: { ...ctx(0, 0.56).traits, ersBias: undefined } }), "absent = neutral");
   assert.equal(A.traits({}).ersBias, 0);
+});
+
+// #5791 decision B: the wing's share of AI cornering grip is one number, owned by PhysicsConsts.
+test("AI wing grip: AiDrive.aeroGrip spans PhysicsConsts.AI_WING_GRIP about the neutral wing", () => {
+  const ctx = vm.createContext({ window: {} });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
+  const K = ctx.window.PhysicsConsts.AI_WING_GRIP;
+  assert.equal(A.aeroGrip(0.5), 1, "the neutral wing is the identity");
+  assert.equal(A.aeroGrip(undefined), 1, "no wing on the car reads the neutral wing");
+  assert.equal(A.aeroGrip(1), 1 + 0.5 * K, "wing 1 gains half the share: ai-drive.js's AERO_GRIP_K is consts.js's AI_WING_GRIP");
+  assert.equal(A.aeroGrip(0), 1 - 0.5 * K, "wing 0 loses the other half");
+  assert.equal(A.lateralScale(0, 1, 1, 1, 72, 1), A.aeroGrip(1), "lateralScale reads it");
+  assert.equal(A.lateralScales(0, 0, 1, 1, 72, 1, {}).lat, A.aeroGrip(0), "lateralScales reads it");
 });

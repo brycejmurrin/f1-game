@@ -36,6 +36,14 @@
 
   // Sun map edge: phone 1024, software GL 512, desktop 2048. ctx.sunSize > 0 overrides it
   // (TLX's B8 lab tier, ?lab=tlxLite on three's WebGL2 leg of a phone, passes 512).
+  // n mat4 rows src -> dst: one native typed-array copy per batch instead of n*16 element stores on every sun
+  // rebuild (the phone's only shadow pass; hunt 2026-11-18 (2) row 6). A plain-array source keeps the loop.
+  function copyRows16(dst, src, n) {
+    const len = n * 16;
+    if (len <= 0) return;
+    if (ArrayBuffer.isView(src)) dst.set(src.length === len ? src : src.subarray(0, len));
+    else for (let i = 0; i < len; i++) dst[i] = src[i];
+  }
   function sunMapSize(ctx) {
     if (ctx.sunSize > 0) return ctx.sunSize | 0;
     return ctx.isMobile ? 1024 : (ctx.softwareGL ? 512 : 2048);   // the pre-B8 rule, exactly
@@ -462,17 +470,13 @@
       batch._shCasterArr = dst;
       const src = culled && batch.packMatrices ? batch.packMatrices : batch.srcMatrices;
       if (src === dst) { /* packed in place by the shadow cull */ } else if (src && src.length >= n * 16) {
-        for (let i = 0, o = 0; i < n; i++, o += 16) {
-          for (let k = 0; k < 16; k++) dst[o + k] = src[o + k];
-        }
+        copyRows16(dst, src, n);
       } else if (batch.imesh && batch.imesh.instanceMatrix) {
         // imesh may be camera-repacked — only safe when visible === instances.
         const isrc = batch.imesh.instanceMatrix.array;
         const copyN = (batch.visible === undefined || batch.visible >= n) ? n
           : (batch.visible | 0);
-        for (let i = 0, o = 0; i < copyN; i++, o += 16) {
-          for (let k = 0; k < 16; k++) dst[o + k] = isrc[o + k];
-        }
+        copyRows16(dst, isrc, copyN);
       } else if (batch.packMatrices) {
         const psrc = batch.packMatrices;
         for (let i = 0; i < n; i++) {
@@ -733,7 +737,10 @@
         // Disable only the pass that failed: S.enabled is the SUN flag (the sun map,
         // god-rays), and a car/lamp throw must not freeze it.
         if (target === carRT) S.carEnabled = false;
-        else if (target === lampRT || target === lampStaticRT) S.lampEnabled = false;
+        // The lamp STATIC cache is an optimisation: its failure drops the cache (the full lamp pass
+        // takes over), never the lamp shadow for the session (#5699 row 13).
+        else if (target === lampStaticRT) { lampStaticOn = false; _lampStaticValid = false; }
+        else if (target === lampRT) S.lampEnabled = false;
         else S.enabled = false;
         S.depthPassOn = false;
       } finally { renderer.autoClear = autoClear0; }

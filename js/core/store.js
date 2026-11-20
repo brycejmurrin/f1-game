@@ -211,16 +211,11 @@ const GameStore = (function () {
     keyRevision(k) {
       return this._clearRev + ":" + (this._keyRev.get(fullKey(k)) || 0);
     },
-    // THE RAW STRING LANE. The settings panels (GfxQuality, CockpitOpts,
-    // GameMetrics), the perf sentinel, BodyAttitude and the Spotify client keep
-    // bare "1"/"0" flags and ids under the same "apex26." prefix, read here
-    // rather than each inside its own `catch (_) {}`. Same storage,
-    // same prefix (accepted spelled either way, like keyRevision), but NOT the
-    // JSON cache above: a raw read hits the disk every call, so a devtools edit
-    // or another tab's write is seen at once, and the on-disk form stays the
-    // legacy bare string — no key changes, no quoting. What
-    // they gain is `broken`: a failed raw write is recorded and reported once,
-    // the same as a failed JSON write, instead of vanishing.
+    // THE RAW STRING LANE: bare "1"/"0" flags and ids (settings panels, perf
+    // sentinel, Spotify) under the same "apex26." prefix, but NOT the JSON
+    // cache: a raw read hits the disk every call, so another tab's write is
+    // seen at once, and the disk form stays the legacy bare string. A failed
+    // raw write is recorded and notified (the NOT SAVING banner) like a JSON one.
     raw(k) {
       // null means NEVER SET on this lane, and several call sites read that as
       // meaningful — so a shipped default is substituted only for a key
@@ -248,7 +243,7 @@ const GameStore = (function () {
       v = String(v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); _rawReadFail.delete(key); return true; }
-      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); return false; }
+      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); this._notifyRawFail(k, e); return false; }
     },
     rawDel(k) {
       if (!careerWriteStatus(k).ok) return false;
@@ -257,12 +252,18 @@ const GameStore = (function () {
       this.rawRev++;
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); _rawReadFail.delete(key); return true; }
-      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); return false; }
+      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); this._notifyRawFail(k, e); return false; }
     },
     subscribe(fn) {
       if (typeof fn !== "function") return () => {};
       this._listeners.add(fn);
       return () => { this._listeners.delete(fn); };
+    },
+    _notifyRawFail(k, e) {   // stop re-entry loops
+      if (this._rawFailing) return;
+      this._rawFailing = true;
+      try { this._notify({ key: k, durable: false, reason: this.broken || (e && e.name) || "Error", local: true, raw: true }); }
+      finally { this._rawFailing = false; }
     },
     _notify(change) {
       for (const fn of this._listeners) {

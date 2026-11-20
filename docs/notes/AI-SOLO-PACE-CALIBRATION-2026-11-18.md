@@ -1,14 +1,15 @@
 # AI solo-pace calibration (#5330, 2026-11-18)
 
-Summary: the AI field's solo order followed aero load, not the teams; five AI-only terms now make it follow team tier, then driver skill, at a ~3.5 % NORMAL spread with the field median held.
+Summary: the AI field's solo order followed aero load, not the teams; AI-only terms now make it follow team tier, then driver skill, at a ~4 % NORMAL spread with the field median held (re-measured 2026-11-20 on the merge with #5791).
 
 Kind: measurement · Re-measure-by: 2027-02-18
 
 Instrument: `node tools/check/ai-solo.mjs --all --laps 3 --json` (each car alone, seed 1, NORMAL, wear off; best of
-three flying laps). "Before" is the deploy tip `ab21df75`, "after" is PR #5686. `rho` is the Spearman rank
+three flying laps). "Before" is the deploy tip (`ab21df75` for the first pass, `357821a7` for the 52-circuit table
+below), "after" is PR #5686. `rho` is the Spearman rank
 correlation of solo pace against the scripted `tierV x skill` order; "tiers in order" means every tier's mean lap is
-slower than the tier above it. Code: `js/physics/ai-drive.js` (`AERO_LOAD_GRIP`, `aeroDragMul`, `aiErs`, `paceTrim`,
-`laneClear`), call sites in `js/game.js`.
+slower than the tier above it. Code: `js/physics/ai-drive.js` (`aiErs`, `paceTrim`, `laneClear`; the wing grip is #5791's `AERO_GRIP_K`), call
+sites in `js/game.js`.
 
 ## What set the order before (one car, Red Bull Ring unless named)
 
@@ -19,6 +20,24 @@ slower than the tier above it. Code: `js/physics/ai-drive.js` (`AERO_LOAD_GRIP`,
 | tierV +-2 % (top speed only) | 1.5 % RBR, 1.9 % Monza, 1.1 % Monaco |
 | neutral setups, traits kept | spread 2.44 %, rho -0.08: house-style `hold` braked the top teams early |
 | neutral setups and traits, home lanes kept | rho 0.79; lanes zeroed: rho 0.99 |
+
+## Calibration after #5791 (2026-11-20)
+
+#5791 (Bryce decision B) landed first: AI wing grip 0.16 -> 0.055 per load (`AERO_GRIP_K`) and AI X-mode reads the
+neutral wing. This PR's `aeroDragMul` (base vmax scaled so every wing reached the same X-mode top speed) assumed X-mode
+followed the wing, so on the merge it penalised big wings twice (RBR rho 0.82, Monza 0.62, tiers out of order). It is
+dropped, and `PACE_REF` re-centred 0.9302 -> 0.9332 to hold the NORMAL solo median. The wing's +-2.75 % grip is now
+free, so the field spread is a little wider than the first pass. Solo, NORMAL, seed 1, 2 laps:
+
+| | RBR spread / rho / tiers | Monza | Monaco |
+|---|---|---|---|
+| PR head 67c97789 (before #5791) | 3.49 % / 0.99 / yes | 3.55 % / 0.97 / yes | 3.20 % / 0.92 / yes |
+| tip 357821a7 | 4.63 % / -0.14 / no | 2.78 % / 0.13 / no | 4.02 % / -0.08 / no |
+| merge, aeroDragMul kept | 4.24 % / 0.82 / no | 4.59 % / 0.62 / no | 3.13 % / 0.93 / yes |
+| merge, aeroDragMul dropped, PACE_REF 0.9332 | 3.90 % / 0.91 / yes | 3.93 % / 0.93 / yes | 4.10 % / 0.80 / ties* |
+
+\* Monaco tiers 0/1 within 0.07 %, order may flip by seed. PACE_GAIN 2.0/2.25 narrowed the spread but broke Monaco's
+tiers outright. The difficulty and racecraft rows below were measured on the first pass (before #5791).
 
 ## Difficulty held (solo median, after vs before)
 
@@ -41,61 +60,64 @@ or two green laps, often in a train, and NORMAL's mistake rate gives 0-3 mistake
 traffic and mistakes, not pace. The front is now the top teams (RUS, VER, PIA, COL, HAM; before ALO, VER, HUL, STR,
 LAW). A tighter RACE spread is a racecraft question (trains, mistakes), not this calibration's.
 
-## All 52 circuits
+## All 52 circuits (after #5791, 2026-11-20)
 
-**52 circuits**, NORMAL, seed 1, best of 3 flying solo laps. Spread median 6.65 % → **3.60 %** (range 4.70–9.05 % → 2.87–4.86 %); rho median 0.19 → **0.95**; tiers in order 0/52 → **51/52**; field median lap Δ median -0.28 % (range -1.17 to 0.81 %). In 3–4 %: 40/52; under 3 %: 4; over 4 %: 8.
+**52 circuits**, NORMAL, seed 1, best of 3 flying solo laps. Spread median 3.30 % → **4.06 %** (range 1.98 %–4.63 % → 3.24 %–4.84 %); rho median 0.03 → **0.89**; tiers in order 0/52 → **48/52**; field median lap Δ median -0.46 % (range -1.33 % to 0.45 %). In 3–4 %: 24/52; under 3 %: 0; over 4 %: 28.
 
 | circuit | spread before | spread after | rho before | rho after | tiers in order b→a | median Δ | fastest before → after |
 |---|---:|---:|---:|---:|:---:|---:|---|
-| abudhabi | 6.26 % | 3.83 % | 0.33 | 0.97 | ✗→✓ | +0.52 % | ALO (astonmartin) → RUS (mercedes) |
-| albert_park | 7.16 % | 3.81 % | 0.17 | 0.92 | ✗→✓ | -0.67 % | ALO (astonmartin) → RUS (mercedes) |
-| anderstorp | 8.49 % | 3.46 % | 0.19 | 0.99 | ✗→✓ | +0.00 % | ALO (astonmartin) → RUS (mercedes) |
-| bahrain | 7.58 % | 3.70 % | 0.13 | 0.91 | ✗→✓ | -0.71 % | ALO (astonmartin) → RUS (mercedes) |
-| baku | 5.63 % | 3.93 % | 0.21 | 0.92 | ✗→✓ | -0.25 % | ALO (astonmartin) → RUS (mercedes) |
-| brands_hatch | 7.20 % | 3.63 % | 0.17 | 0.96 | ✗→✓ | -0.62 % | ALO (astonmartin) → RUS (mercedes) |
-| buddh | 6.70 % | 3.07 % | 0.21 | 0.99 | ✗→✓ | -0.59 % | ALO (astonmartin) → RUS (mercedes) |
-| buenos_aires | 7.03 % | 3.24 % | 0.18 | 1.00 | ✗→✓ | +0.13 % | ALO (astonmartin) → RUS (mercedes) |
-| catalunya | 5.85 % | 3.82 % | 0.05 | 0.98 | ✗→✓ | -1.03 % | ALO (astonmartin) → RUS (mercedes) |
-| cota | 6.35 % | 2.98 % | 0.23 | 0.97 | ✗→✓ | -0.25 % | STR (astonmartin) → RUS (mercedes) |
-| dijon | 5.70 % | 4.86 % | 0.35 | 0.85 | ✗→✓ | -0.26 % | ALO (astonmartin) → RUS (mercedes) |
-| donington | 6.85 % | 3.37 % | 0.31 | 0.98 | ✗→✓ | -0.22 % | ALO (astonmartin) → RUS (mercedes) |
-| estoril | 7.74 % | 3.31 % | 0.19 | 0.96 | ✗→✓ | -0.96 % | ALO (astonmartin) → RUS (mercedes) |
-| fuji | 5.93 % | 3.44 % | 0.17 | 0.91 | ✗→✓ | -0.61 % | ALO (astonmartin) → RUS (mercedes) |
-| hockenheim | 6.65 % | 3.77 % | 0.27 | 0.87 | ✗→✓ | -0.49 % | ALO (astonmartin) → RUS (mercedes) |
-| hungaroring | 7.28 % | 3.37 % | 0.02 | 0.98 | ✗→✓ | -0.70 % | ALO (astonmartin) → RUS (mercedes) |
-| imola | 4.70 % | 4.13 % | 0.12 | 0.83 | ✗→✓ | -0.36 % | STR (astonmartin) → RUS (mercedes) |
-| indianapolis | 5.40 % | 3.66 % | 0.20 | 0.96 | ✗→✓ | +0.04 % | STR (astonmartin) → RUS (mercedes) |
-| interlagos | 5.41 % | 3.98 % | -0.02 | 0.91 | ✗→✓ | -0.89 % | ALO (astonmartin) → RUS (mercedes) |
-| istanbul | 5.81 % | 3.86 % | 0.09 | 0.87 | ✗→✓ | -0.29 % | STR (astonmartin) → RUS (mercedes) |
-| jacarepagua | 7.32 % | 3.44 % | 0.26 | 0.99 | ✗→✓ | -0.64 % | ALO (astonmartin) → RUS (mercedes) |
-| jeddah | 4.91 % | 4.40 % | 0.23 | 0.84 | ✗→✓ | -0.54 % | STR (astonmartin) → RUS (mercedes) |
-| jerez | 7.88 % | 3.50 % | 0.08 | 0.97 | ✗→✓ | -0.88 % | ALO (astonmartin) → RUS (mercedes) |
-| korea | 7.09 % | 3.20 % | 0.18 | 0.98 | ✗→✓ | -0.87 % | ALO (astonmartin) → RUS (mercedes) |
-| kyalami | 6.55 % | 3.42 % | 0.15 | 0.93 | ✗→✓ | -0.29 % | ALO (astonmartin) → RUS (mercedes) |
-| madrid | 5.28 % | 3.54 % | 0.05 | 0.82 | ✗→✗ | -0.74 % | STR (astonmartin) → ANT (mercedes) |
-| magny_cours | 6.68 % | 3.75 % | 0.30 | 0.91 | ✗→✓ | +0.00 % | ALO (astonmartin) → RUS (mercedes) |
-| mexico | 6.27 % | 3.16 % | 0.33 | 0.93 | ✗→✓ | +0.14 % | ALO (astonmartin) → RUS (mercedes) |
-| miami | 6.20 % | 3.73 % | 0.26 | 0.95 | ✗→✓ | -0.04 % | ALO (astonmartin) → RUS (mercedes) |
-| monaco | 6.10 % | 3.19 % | 0.01 | 0.93 | ✗→✓ | +0.19 % | STR (astonmartin) → RUS (mercedes) |
-| mont_tremblant | 5.59 % | 3.79 % | 0.15 | 0.88 | ✗→✓ | +0.02 % | ALO (astonmartin) → RUS (mercedes) |
-| montreal | 7.08 % | 2.96 % | 0.28 | 0.94 | ✗→✓ | -0.05 % | ALO (astonmartin) → RUS (mercedes) |
-| monza | 7.43 % | 3.55 % | 0.29 | 0.97 | ✗→✓ | -0.28 % | ALO (astonmartin) → RUS (mercedes) |
-| mosport | 6.61 % | 4.78 % | 0.35 | 0.94 | ✗→✓ | +0.81 % | ALO (astonmartin) → RUS (mercedes) |
-| mugello | 6.77 % | 3.90 % | 0.21 | 0.98 | ✗→✓ | -0.13 % | ALO (astonmartin) → RUS (mercedes) |
-| nurburgring | 6.67 % | 3.45 % | 0.18 | 0.98 | ✗→✓ | -0.39 % | ALO (astonmartin) → RUS (mercedes) |
-| okayama | 7.17 % | 2.87 % | 0.11 | 0.99 | ✗→✓ | -0.29 % | ALO (astonmartin) → RUS (mercedes) |
-| paul_ricard | 6.18 % | 3.60 % | 0.27 | 0.99 | ✗→✓ | -0.34 % | ALO (astonmartin) → RUS (mercedes) |
-| portimao | 7.28 % | 3.23 % | 0.19 | 0.96 | ✗→✓ | -0.01 % | ALO (astonmartin) → RUS (mercedes) |
-| qatar | 7.67 % | 3.88 % | 0.13 | 0.98 | ✗→✓ | -1.17 % | ALO (astonmartin) → RUS (mercedes) |
-| redbull | 9.05 % | 3.37 % | 0.10 | 0.98 | ✗→✓ | +0.02 % | ALO (astonmartin) → RUS (mercedes) |
-| sepang | 6.87 % | 2.99 % | 0.13 | 0.96 | ✗→✓ | -1.00 % | ALO (astonmartin) → RUS (mercedes) |
-| shanghai | 6.50 % | 3.36 % | 0.10 | 0.94 | ✗→✓ | -0.83 % | STR (astonmartin) → RUS (mercedes) |
-| silverstone | 7.61 % | 3.78 % | 0.29 | 0.99 | ✗→✓ | -0.31 % | ALO (astonmartin) → RUS (mercedes) |
-| singapore | 6.00 % | 3.04 % | 0.17 | 0.98 | ✗→✓ | +0.28 % | STR (astonmartin) → RUS (mercedes) |
-| sochi | 7.33 % | 3.41 % | 0.23 | 0.88 | ✗→✓ | -0.25 % | ALO (astonmartin) → RUS (mercedes) |
-| spa | 7.37 % | 4.50 % | 0.20 | 0.94 | ✗→✓ | -0.22 % | ALO (astonmartin) → RUS (mercedes) |
-| suzuka | 5.79 % | 4.61 % | 0.30 | 0.89 | ✗→✓ | +0.10 % | ALO (astonmartin) → RUS (mercedes) |
-| vegas | 5.95 % | 4.01 % | 0.36 | 0.88 | ✗→✓ | +0.08 % | ALO (astonmartin) → RUS (mercedes) |
-| watkins_glen | 6.46 % | 4.00 % | 0.31 | 0.94 | ✗→✓ | +0.03 % | ALO (astonmartin) → RUS (mercedes) |
-| zandvoort | 6.46 % | 4.10 % | 0.19 | 0.89 | ✗→✓ | +0.18 % | ALO (astonmartin) → RUS (mercedes) |
-| zolder | 6.61 % | 3.29 % | -0.03 | 0.91 | ✗→✓ | -0.44 % | STR (astonmartin) → RUS (mercedes) |
+| abudhabi | 2.76 % | 4.48 % | 0.11 | 0.86 | ✗→✓ | +0.20 % | ALO (astonmartin) → RUS (mercedes) |
+| albert_park | 3.45 % | 3.79 % | 0.11 | 0.92 | ✗→✓ | -0.94 % | ALO (astonmartin) → RUS (mercedes) |
+| anderstorp | 4.08 % | 4.43 % | 0.01 | 0.86 | ✗→✗ | -0.19 % | ALO (astonmartin) → RUS (mercedes) |
+| bahrain | 4.25 % | 3.75 % | 0.00 | 0.89 | ✗→✓ | -0.45 % | ALO (astonmartin) → RUS (mercedes) |
+| baku | 2.62 % | 4.15 % | 0.05 | 0.91 | ✗→✓ | -0.34 % | STR (astonmartin) → RUS (mercedes) |
+| brands_hatch | 3.37 % | 4.25 % | 0.22 | 0.87 | ✗→✓ | -0.42 % | ALO (astonmartin) → RUS (mercedes) |
+| buddh | 2.76 % | 3.96 % | -0.01 | 0.86 | ✗→✓ | -1.14 % | ALO (astonmartin) → LEC (ferrari) |
+| buenos_aires | 3.63 % | 4.06 % | -0.02 | 0.84 | ✗→✓ | -0.27 % | ALO (astonmartin) → LEC (ferrari) |
+| catalunya | 2.99 % | 4.46 % | -0.31 | 0.89 | ✗→✓ | -1.33 % | ALO (astonmartin) → LEC (ferrari) |
+| cota | 3.25 % | 3.47 % | 0.04 | 0.86 | ✗→✓ | -0.42 % | STR (astonmartin) → RUS (mercedes) |
+| dijon | 2.13 % | 4.57 % | 0.26 | 0.93 | ✗→✓ | -0.28 % | ALO (astonmartin) → RUS (mercedes) |
+| donington | 3.11 % | 4.05 % | 0.18 | 0.87 | ✗→✓ | -0.68 % | ALO (astonmartin) → RUS (mercedes) |
+| estoril | 3.98 % | 4.06 % | 0.04 | 0.87 | ✗→✓ | -0.63 % | ALO (astonmartin) → LEC (ferrari) |
+| fuji | 3.29 % | 3.69 % | -0.11 | 0.89 | ✗→✓ | -0.96 % | ALO (astonmartin) → RUS (mercedes) |
+| hockenheim | 3.63 % | 3.75 % | 0.24 | 0.89 | ✗→✓ | -0.95 % | ALO (astonmartin) → RUS (mercedes) |
+| hungaroring | 3.45 % | 4.30 % | -0.28 | 0.84 | ✗→✓ | -1.26 % | ALO (astonmartin) → LEC (ferrari) |
+| imola | 3.14 % | 3.94 % | 0.06 | 0.90 | ✗→✓ | -0.08 % | STR (astonmartin) → RUS (mercedes) |
+| indianapolis | 1.98 % | 3.94 % | -0.02 | 0.90 | ✗→✓ | -0.16 % | STR (astonmartin) → RUS (mercedes) |
+| interlagos | 2.85 % | 4.11 % | -0.27 | 0.90 | ✗→✓ | -0.87 % | ALO (astonmartin) → RUS (mercedes) |
+| istanbul | 3.54 % | 4.13 % | -0.08 | 0.87 | ✗→✓ | -0.45 % | STR (astonmartin) → RUS (mercedes) |
+| jacarepagua | 2.69 % | 4.34 % | 0.03 | 0.86 | ✗→✓ | -1.14 % | ALO (astonmartin) → RUS (mercedes) |
+| jeddah | 2.57 % | 4.24 % | 0.08 | 0.92 | ✗→✓ | -0.46 % | STR (astonmartin) → RUS (mercedes) |
+| jerez | 3.93 % | 4.30 % | -0.04 | 0.86 | ✗→✓ | -0.83 % | ALO (astonmartin) → RUS (mercedes) |
+| korea | 3.50 % | 3.76 % | 0.00 | 0.87 | ✗→✓ | -0.85 % | ALO (astonmartin) → RUS (mercedes) |
+| kyalami | 3.59 % | 3.93 % | 0.01 | 0.90 | ✗→✓ | -0.95 % | STR (astonmartin) → RUS (mercedes) |
+| madrid | 3.26 % | 3.65 % | -0.05 | 0.88 | ✗→✗ | -0.69 % | STR (astonmartin) → LEC (ferrari) |
+| magny_cours | 3.76 % | 3.97 % | 0.18 | 0.87 | ✗→✓ | -0.22 % | ALO (astonmartin) → RUS (mercedes) |
+| mexico | 3.32 % | 3.67 % | 0.16 | 0.90 | ✗→✓ | -0.47 % | ALO (astonmartin) → RUS (mercedes) |
+| miami | 2.61 % | 3.89 % | 0.03 | 0.92 | ✗→✓ | -0.34 % | ALO (astonmartin) → RUS (mercedes) |
+| monaco | 4.02 % | 4.10 % | -0.07 | 0.78 | ✗→✗ | +0.14 % | STR (astonmartin) → NOR (mclaren) |
+| mont_tremblant | 2.82 % | 4.08 % | -0.03 | 0.88 | ✗→✓ | -0.03 % | ALO (astonmartin) → RUS (mercedes) |
+| montreal | 3.59 % | 3.24 % | 0.13 | 0.87 | ✗→✓ | -0.23 % | ALO (astonmartin) → PIA (mclaren) |
+| monza | 2.78 % | 3.93 % | 0.12 | 0.93 | ✗→✓ | -0.89 % | ALO (astonmartin) → RUS (mercedes) |
+| mosport | 2.34 % | 4.37 % | 0.19 | 0.93 | ✗→✓ | +0.45 % | ALO (astonmartin) → RUS (mercedes) |
+| mugello | 2.73 % | 4.72 % | -0.02 | 0.89 | ✗→✓ | -0.57 % | ALO (astonmartin) → LEC (ferrari) |
+| nurburgring | 3.12 % | 4.09 % | -0.08 | 0.89 | ✗→✓ | -0.69 % | ALO (astonmartin) → RUS (mercedes) |
+| okayama | 3.55 % | 4.19 % | -0.09 | 0.83 | ✗→✗ | -0.72 % | ALO (astonmartin) → LEC (ferrari) |
+| paul_ricard | 2.60 % | 4.12 % | 0.05 | 0.92 | ✗→✓ | -0.51 % | ALO (astonmartin) → LEC (ferrari) |
+| portimao | 3.66 % | 3.86 % | 0.06 | 0.86 | ✗→✓ | -0.07 % | ALO (astonmartin) → RUS (mercedes) |
+| qatar | 3.73 % | 4.45 % | -0.11 | 0.87 | ✗→✓ | -1.12 % | ALO (astonmartin) → RUS (mercedes) |
+| redbull | 4.63 % | 3.90 % | -0.13 | 0.91 | ✗→✓ | -0.32 % | ALO (astonmartin) → RUS (mercedes) |
+| sepang | 3.43 % | 3.66 % | -0.05 | 0.87 | ✗→✓ | -1.08 % | ALO (astonmartin) → RUS (mercedes) |
+| shanghai | 3.74 % | 3.66 % | -0.01 | 0.89 | ✗→✓ | -0.93 % | STR (astonmartin) → RUS (mercedes) |
+| silverstone | 3.03 % | 4.84 % | 0.16 | 0.85 | ✗→✓ | -0.73 % | ALO (astonmartin) → RUS (mercedes) |
+| singapore | 2.92 % | 3.79 % | -0.07 | 0.87 | ✗→✓ | -0.18 % | ALO (astonmartin) → RUS (mercedes) |
+| sochi | 4.46 % | 3.67 % | 0.30 | 0.88 | ✗→✓ | -0.42 % | ALO (astonmartin) → RUS (mercedes) |
+| spa | 3.30 % | 4.49 % | 0.12 | 0.95 | ✗→✓ | -0.67 % | ALO (astonmartin) → RUS (mercedes) |
+| suzuka | 2.36 % | 4.19 % | 0.18 | 0.91 | ✗→✓ | -0.23 % | ALO (astonmartin) → RUS (mercedes) |
+| vegas | 2.63 % | 3.85 % | 0.22 | 0.95 | ✗→✓ | -0.39 % | ALO (astonmartin) → RUS (mercedes) |
+| watkins_glen | 2.47 % | 4.26 % | 0.33 | 0.92 | ✗→✓ | -0.29 % | ALO (astonmartin) → RUS (mercedes) |
+| zandvoort | 3.54 % | 4.40 % | 0.17 | 0.91 | ✗→✓ | +0.03 % | ALO (astonmartin) → RUS (mercedes) |
+| zolder | 4.13 % | 3.95 % | -0.12 | 0.84 | ✗→✓ | -1.01 % | STR (astonmartin) → RUS (mercedes) |
+
+The four tier misses (anderstorp, madrid, monaco, okayama) are each tier 1 ahead of tier 0 by 0.03 s or less.
+The first pass (before #5791) had spread median 3.60 %, rho 0.95, tiers in order 51/52.

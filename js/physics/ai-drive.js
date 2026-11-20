@@ -522,34 +522,17 @@ const AiDrive = (function () {
   // One feasible lateral envelope for the planner and the kinematic actuator.
   // speed is in world m/s; pace removes the ground-speed scale.
   //
-  // THE SAME WINGS AS THE PLAYER. The player's grip RISES by DOWNFORCE (65 %)
-  // from 20 m/s to the top speed (game.js aeroGrip); an AI envelope that does
-  // not gives a player roughly twice the lateral grip at 60 m/s and every fast
-  // corner a free second. Aero on the PLANNER alone fails too — the actuator
-  // cannot turn at the speeds it plans (docs/notes/AI-FIELD-RESEARCH.md) — so
-  // both share one function: planner (cornerSpeed
-  // inverts this exactly) and actuator (game.js gripScale / yaw cap) read the
-  // one curve, so they rise together. The player's PLAYER_GRIP forgiveness
-  // headroom is NOT copied — the AI gets the car's aero, not the assist.
+  // THE SAME WINGS AS THE PLAYER: grip RISES by DOWNFORCE to the top speed (game.js aeroGrip), or a
+  // player has ~2x the lateral grip at 60 m/s. Planner (cornerSpeed inverts this) and actuator (game.js
+  // gripScale / yaw cap) share this one curve: aero on the planner alone outruns the actuator
+  // (docs/notes/AI-FIELD-RESEARCH.md). PLAYER_GRIP's assist headroom is NOT copied.
   const AI_DF = 0.65;   // PhysicsConsts.DOWNFORCE (not bound here: unit VMs load this file alone)
-  // `aero` scales the wing term. The heading controller's YAW budget is the
-  // exception that does not get the wings (yawScale below): it is how quickly
-  // a lane change may bend the nose, a smoothness budget rather than grip, and
-  // letting it rise with downforce took the solo-lap lateral-jerk figure in
-  // ai-racecraft-vm from 5.9 to 8.1 m/s² (cap 7.5) — twitchier lane changes on
-  // every straight for no corner speed at all.
-  // THE FACTORY WING IS A TRADE (#5330). At 0.16 grip/load and no cost, solo laps
-  // (tools/check/ai-solo.mjs) ran in aero-load order (load 1 beat 0 by 5.2 % RBR,
-  // 5.7 % Monza, 3.6 % Monaco). Now a third of the gain, and the wing costs the top
-  // speed X-mode sheds (+15.5 % big wing, +5.5 % small): base vmax = (1+gain mid)/
-  // (1+gain here), so every wing hits the same X-mode top speed (else big beat small
-  // at Monza by 1.8 %). Low drag wins Monza, high load Monaco.
-  const AERO_LOAD_GRIP = 0.05;
-  const X_GAIN_LO = 0.055, X_GAIN_HI = 0.155;   // PhysicsConsts.X_VMAX_GAIN_LO/HI (unit VMs load this file alone; pinned equal)
-  function aeroDragMul(load) {
-    const l = clamp(load != null ? load : 0.5, 0, 1);
-    return (1 + lerp(X_GAIN_LO, X_GAIN_HI, 0.5)) / (1 + lerp(X_GAIN_LO, X_GAIN_HI, l));
-  }
+  // `aero` scales the wing term. The YAW budget (yawScale) gets no wings: it is a lane-change smoothness
+  // budget, and wings took ai-racecraft-vm's solo lateral jerk from 5.9 to 8.1 m/s² (cap 7.5).
+  // THE AI WING IS NEARLY NEUTRAL (#5791): at 0.16 grip/load solo laps ran in aero-load
+  // order (tools/check/ai-solo.mjs, #5330); now AERO_GRIP_K, and AI X-mode reads the mid wing.
+  const AERO_GRIP_K = 0.055;   // PhysicsConsts.AI_WING_GRIP, unbound as AI_DF
+  function aeroGrip(load) { return 1 + ((load != null ? load : 0.5) - 0.5) * AERO_GRIP_K; }
   // AI ERS IS BOUNDED (#5330): deploy/regen cost nothing (PaceMath) and works kits
   // don't trade them (Aston 0.91/0.79, Haas 0.00/0.43); deploy 0->1 was 1.2-1.9 % of
   // a solo lap. AI maps pull to AI_ERS_SPAN round 0.5; player + hire keep their build.
@@ -557,14 +540,14 @@ const AiDrive = (function () {
   function aiErs(x) { return 0.5 + (clamp(x != null ? x : 0.5, 0, 1) - 0.5) * AI_ERS_SPAN; }
   // SCRIPTED PACE TRIM (#5330): tierV x skill reached only top speed, so the ladder
   // barely showed in corners. paceTrim scales AI vmax AND corner target by PACE_GAIN x
-  // scripted pace vs PACE_REF (0.4 % under the median 0.9339, so the NORMAL solo
-  // median holds: RBR +0.02 %, Monaco +0.19 %). Fed TIER_V[tier] x skill, not tierV:
+  // scripted pace vs PACE_REF (re-centred after #5791 so the NORMAL solo median holds,
+  // docs/notes/AI-SOLO-PACE-CALIBRATION-2026-11-18.md). Fed TIER_V[tier] x skill, not tierV:
   // career development and the legend duel keep their old weight.
-  const PACE_GAIN = 2.5, PACE_REF = 0.9302;
+  const PACE_GAIN = 2.5, PACE_REF = 0.9332;
   function paceTrim(script) { return script > 0 ? 1 + PACE_GAIN * (script / PACE_REF - 1) : 1; }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    return (1 + (load - 0.5) * AERO_LOAD_GRIP) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
+    return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
   }
   // The yaw budget keeps the OLD high-speed taper (1 - 0.28 at the top speed,
   // here as its quadratic twin) so the heading controller is exactly as calm
@@ -575,7 +558,7 @@ const AiDrive = (function () {
   const _lsOut = { yaw: 1, lat: 1 };   // pooled
   function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    const pre = (1 + (load - 0.5) * AERO_LOAD_GRIP) * Math.max(0.01, grip);
+    const pre = (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip);
     out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
     out.lat = pre * (1 + AI_DF * aero * q * q);
     return out;
@@ -606,7 +589,7 @@ const AiDrive = (function () {
     const sampleN = window ? window.n : samples.length;
     let windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
-    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_LOAD_GRIP);
+    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_GRIP_K);
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
@@ -1753,7 +1736,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, aeroDragMul, paceTrim, laneClear, slowHazard, SLOW_V_FRAC, aiErs, AERO_LOAD_GRIP, X_GAIN_LO, X_GAIN_HI, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, paceTrim, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

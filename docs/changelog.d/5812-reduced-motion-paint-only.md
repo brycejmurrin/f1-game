@@ -1,0 +1,1 @@
+Fixed: With MOTION: REDUCED (or the OS reduce-motion switch), menus and sheets no longer flash their previous layout for a frame when they re-fit; sizes and positions now change at once, while fades and colour changes stay reduced (#5812).
