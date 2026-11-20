@@ -81,6 +81,18 @@ test("braking duel aligns distance and refuses clamped or missing feed intervals
   assert.equal(model.brakingDuel(missing, b, 0, 90).available, false);
   const gap = lane(36); gap.car.splice(10, 10); gap.cum = model.cumDist(gap.car);
   assert.match(model.brakingDuel(gap, b, 0, 90).reason, /gap/);
+  for (const lastSpeed of [null, 0]) {
+    const afterZone = lane(36);
+    afterZone.car[40].speed = lastSpeed;
+    afterZone.cum = model.cumDist(afterZone.car);
+    assert.equal(model.brakingDuel(afterZone, b, 0, 90).available, true,
+      "a later stop or missing speed cannot invalidate an observed braking zone");
+  }
+  const boundaryGap = lane(36);
+  boundaryGap.car.splice(21, 10);
+  boundaryGap.cum = model.cumDist(boundaryGap.car);
+  assert.equal(model.brakingDuel(boundaryGap, b, 0, 50).available, true,
+    "an outage starting at the observed final sample is outside the zone");
   const flat = lane(36); flat.car.forEach((c) => { c.brake = 0; c.throttle = 100; });
   const absent = model.brakingDuel(flat, b, 0, 90);
   assert.equal(absent.available, true); assert.equal(absent.lanes[0].brake, null); assert.equal(absent.lanes[0].throttle, null);
@@ -221,6 +233,39 @@ function sweep(view, tel, tEnd, steps = 600) {
   }
   return { total, maxStep };
 }
+
+test("GPS dots keep measured fixes and disappear inside a map coverage gap", () => {
+  const p = driver(80);
+  p.loc = p.loc.filter((_, i) => i <= 20 || i >= 40);
+  const view = { primary: p, tMax: 80 };
+  assert.equal(T._locAt(view, p, 8), null);
+  assert.equal(T._locAt(view, p, 5.4).x, p.loc[20].x);
+  assert.equal(T._locAt(view, p, 10.8).x, p.loc[21].x);
+});
+
+test("the onboard map falls back to the full map while the cursor sits in a GPS gap", () => {
+  const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "lane" });
+  const p = driver(80);
+  p.loc = p.loc.filter((_, i) => i <= 20 || i >= 40);
+  const calls = {};
+  const inert = new Proxy({}, { get: () => () => {} });
+  const map = new Proxy({}, { get: (_, key) => () => { calls[key] = (calls[key] || 0) + 1; } });
+  const view = {
+    primary: p, compare: null, laps: [p], laneCols: [[1, 1, 1]], onboard: true, cursorT: 8,
+    visible: {}, visibleC: {}, tMax: 80, speedMax: 1, rpmMax: 1, ratio: 1,
+    cw: 320, ch: 200, mw: 320, mh: 320,
+    chart: { getContext: () => inert }, map: { getContext: () => map },
+    chartBase: { getContext: () => inert }, mapBase: { getContext: () => inert }
+  };
+  renderer.buildBases(view);
+  assert.doesNotThrow(() => renderer.paintFrame(view));
+  assert.deepEqual([calls.drawImage > 0, calls.rotate || 0], [true, 0],
+    "a gap leaves no heading to rotate by, so the unrotated map is drawn");
+  for (const k of Object.keys(calls)) delete calls[k];
+  view.cursorT = 3;
+  renderer.paintFrame(view);
+  assert.equal(calls.rotate, 1, "a measured fix keeps the heading-up onboard zoom");
+});
 
 test("the dot completes exactly one forward lap over the lap's duration", () => {
   const p = driver(80);

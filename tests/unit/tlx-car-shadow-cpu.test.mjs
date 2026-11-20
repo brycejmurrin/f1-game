@@ -92,7 +92,7 @@ function casterRig() {
     let _capture = null, _casterWarned = false, _mirGlass = 0, _mirGlassSeen = false;
     const _coOn = true, _drawMatMode = 0, vizMat = null, lit = {}, skipBatches = () => false, poolModelMat = (m) => m;
     const materialFor = () => "lit", drawEm = () => 0, drawAl = () => 1, fxFor = () => false, chunkedSys = null;
-    const _mirActive = false, _mirDead = false, mirRT = { texture: {} }, _mirRenders = 1, _mirFlip = true;
+    const _mirActive = false, _mirDead = false, mirRT = { texture: {} }, _mirRenders = 1, _mirReady = true, _mirFlip = true;
     const fx = { mirrorGlassMaterial: () => "glass", decalMaterialFor: () => "decal" }, _fxFrame = { decals: 0 };
     const _decalAppend = () => false, fxMatFor = (m) => m;
     const pushRec = (geo) => { recs.push(geo); };

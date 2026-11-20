@@ -227,7 +227,8 @@ function makeCarsBoot() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/physics/consts.js",
-    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js"]) {
+    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js",
+    "js/physics/ai-drive.js"]) {   // makeCars bounds the AI's ERS map through AiDrive.aiErs (#5330)
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   vm.runInContext(`

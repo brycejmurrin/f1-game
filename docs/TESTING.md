@@ -793,6 +793,63 @@ If a guard needs history, the job needs `fetch-depth: 0` — grep `fetch-depth` 
 shards, the sweeps jobs, `node-suites` and `select` have it); smoke is depth 1,
 so a unit file that reads history skips there.
 
+### CI runners: one repo variable per browser lane (D-RUNNER)
+
+Every job runs on GitHub-hosted `ubuntu-latest`. On this public repo that is 4 vCPU and 16 GB
+([GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)),
+inside the account's 40-concurrent-job pool. Two browser lanes can take their runner from a repository variable
+(Settings → Secrets and variables → Actions → Variables). Unset or empty, they resolve to `ubuntu-latest` exactly as
+before:
+
+| variable | job | events that read it |
+|---|---|---|
+| `APEX_BROWSER_RUNNER` | `browser-group.yml` `group` (every shard) | `workflow_dispatch` (its only trigger) |
+| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request`, the pages.yml train, schedule, dispatch |
+
+The value is ONE `runs-on` label string. Nothing else reads a variable for its runner. Land, the gate, Pages, the
+deploy, the structural guards and the fast tier stay literal `ubuntu-latest`, and so does `renderer-macos`
+(`tests/unit/ci-runner-variable.test.mjs` pins the list).
+
+**Fork code never runs there.** The repo is public and takes fork PRs. In `ci.yml`, a `pull_request` whose head
+repository is not this one, and any `pull_request_target`, falls back to `ubuntu-latest` whatever the variable says.
+`browser-group.yml` decides its runner before any step runs, so it cannot fall back. Instead, a `pr` input whose
+head is a fork fails at "Fork code never runs on a trial runner", before checkout, while `APEX_BROWSER_RUNNER` is
+set; unset the variable to test such a PR. Also set the repo's Actions option "Require approval for all external
+contributors" (Settings → Actions → General, under fork pull request workflows).
+
+**To trial a provider:** install its GitHub App on this repository only (not "All repositories"), then set
+`APEX_BROWSER_RUNNER` to the label its docs give. Start with browser-group only. Compare wall time and cost
+against the `ubuntu-latest` runs of the same groups. Widen to `APEX_CI_BROWSER_RUNNER` only if that holds.
+**Rollback:** delete the variable. The next job queued is back on `ubuntu-latest`, with no commit needed.
+
+**Ubicloud, the first trial (2026-11-20).** Labels per its
+[runner types](https://ubicloud.com/docs/github-actions-integration/runner-types) page: `ubicloud-standard-2`
+(Ubuntu 24.04, 2 vCPU, 8 GB), `ubicloud-standard-4` (4 vCPU, 16 GB), `-8`, `-16`, `-30`. One plain label is
+enough, so the variable holds that string. Its [quickstart](https://www.ubicloud.com/docs/github-actions-integration/quickstart)
+says `-2` matches *paid* GitHub runners, the 2-vCPU private-repo size. This repo's free `ubuntu-latest` is 4 vCPU and
+16 GB, so the like-for-like trial value is `ubicloud-standard-4`; `-2` is the cheaper size to try second, with the
+timeout caveat below. Ubicloud routes jobs to "premium" runners by default and falls back to standard when that fleet
+is busy. Note which one a run got, or turn premium off (Ubicloud console → GitHub Runners → Settings), so a speed
+comparison compares one machine. Its x64 images are built from the same `actions/runner-images` templates as
+GitHub's. A first run proves the image needs below: the shard's "Mesa llvmpipe + Xvfb" and Playwright Chromium setup
+steps, then its first spec's page boot. A red there is an image gap, not a test failure.
+First measurement (browser-group run 44823706583, 2026-11-20, `ubicloud-standard-2`, one run each, relayed by the
+orchestrator): the runner was picked up 21 s after dispatch. Shard wall time was `logging` 96 s against 68–95 s on
+GitHub-hosted and `boot-guard` 90 s against 51–63 s. So a 2-vCPU leg runs up to ~1.5x slower than this repo's 4-vCPU
+`ubuntu-latest`. If legs near their budget, `ubicloud-standard-4` is the fallback.
+
+**What the image must provide.** The jobs assume GitHub's Ubuntu runner image:
+- passwordless `sudo` and `apt` for `.github/actions/mesa-xvfb` (`mesa-utils libgl1-mesa-dri libegl1 libgles2
+  xvfb`, which gives llvmpipe) and for Playwright's `--with-deps` on a Chromium cache miss
+  (`.github/actions/playwright-chromium`);
+- Node 22 through `actions/setup-node` (`.github/actions/setup-apex`);
+- the Actions cache service, and `gh` on PATH (browser-group's fork check).
+
+**Budgets were measured on 4-vCPU `ubuntu-latest`.** Per-test timeouts, the selected legs' caps (select-specs
+`shardCapMin`) and `tests/data/spec-timings.json` all come from that machine. A smaller or slower machine trips
+timeouts that measure the machine (AGENTS.md rule 7), not the change. Pick a size of at least 4 vCPU, and read a
+timeout red on a trial runner against the same spec's `ubuntu-latest` history before acting on it.
+
 ### Workflow and shader lints (the `lints` job, 2026-10-18)
 
 `node tools/check/workflow-lint.mjs` runs actionlint (with shellcheck) and zizmor over `.github/workflows`;

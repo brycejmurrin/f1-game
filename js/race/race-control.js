@@ -235,6 +235,7 @@ const RaceControl = (function () {
   const RED_STOP = 8;      // s for the field to come to a halt once red is shown
   const RED_HOLD = 6;      // s the flag holds before the restart is called
   const MIN_HOLD = 6;      // s a caution holds once raised (anti-flicker)
+  const SC_HOLD = 45;      // s an SC holds: debris despawns in 4 s, so 6 s never let the field bunch (#5893)
   const YELLOW_MAX = 30;   // s hard cap on a local yellow
   const SC_MAX = 90;       // s hard cap on VSC/SC — bounded, ~a lap or two
   const CAP_REARM_HOLD = 45;  // s of green after a cap-forced drop before the
@@ -530,7 +531,7 @@ const RaceControl = (function () {
         stopOwned = fromStop;
         flag(prev, desired);
       } else if (desired < caution.level) {
-        if (caution.sinceT >= MIN_HOLD) {
+        if (caution.sinceT >= (caution.level === 3 ? SC_HOLD : MIN_HOLD)) {
           const prev = caution.level;
           caution.level = desired;
           if (desired !== 1) caution.sector = -1;

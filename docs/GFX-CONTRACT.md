@@ -43,9 +43,9 @@ Lifecycle / capability:
                              * renderScale; (re)allocate targets on change.
   setRenderScale(s)->bool    clamp 0.5..1; re-resize; true if it changed.
   getRenderScale()->number
-  setDprBoost(n)/getDprBoost()  TLX only (feature-detect): RESOLUTION MAX asks
+  setDprBoost(n)/getDprBoost()  TLX + GLX (WGX lacks it; feature-detect): RESOLUTION MAX asks
     for DPR n (3) above the tier's cap; 0 drops it (every other RESOLUTION,
-    PerfGov's budget shed). capDpr(n) (crash sentinel) still wins. #5222.
+    PerfGov's budget shed). capDpr(n) (crash sentinel, TLX) still wins. #5222.
   setSpatialUpscale(on)/getSpatialUpscale()  GLX + WGX + TLX SGSR1 spatial
     upscale (opt-in; feature-detect). See docs/research/UPSCALING-2026-09.md.
   width / height / aspect    getters (backing-store pixels).
