@@ -807,6 +807,7 @@ const HARD_EDGES = [
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as
   // js/game.js destructures the rest of them.
   ["js/physics/consts.js", "js/garage/setup-camera.js"],
+  ["js/physics/consts.js", "js/physics/ai-drive.js"],   // AiDrive reads PhysicsConsts.AI_WING_GRIP at eval
   ["js/track/core/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval

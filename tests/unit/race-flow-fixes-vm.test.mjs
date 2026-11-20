@@ -1189,3 +1189,46 @@ test("deferred QUIT completes when the corrected-time opportunity expires, retai
     assert.ok(G.raceT >= p.finishT + p.penalty);
   } finally { g.close(); }
 });
+
+// #5892 (clean-room audit A23): the stationary-retirement clock ran only under GREEN, and the
+// caution the stopped car itself raised lasts StoppedCars.STOP_RECOVER (60 s) — so the car sat
+// on the racing line for ~60 s of green after it (retired at ~120 s). The clock now runs under
+// yellow/VSC/SC too (not under a red, which holds the field on purpose).
+test("#5892 a player stopped on the racing line is retired 60 s after it stops, caution or not", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const a = g.apex, G = g.G;
+    a.caution(true);
+    a.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 4);
+    for (let i = 0; i < G.cars.length; i++) if (!G.cars[i].human) a.retire(i);   // no rival to nudge the parked car
+    a.jump(0.3, 0, 0);
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const P = G.player;
+    let t = 0, flagged = false;
+    while (t < 70 && !P.retired) { g.step(60); t++; if (a.caution().level > 0) flagged = true; }
+    assert.ok(flagged, "the stopped car raised a caution (the scenario under test)");
+    assert.ok(P.retired, `still running ${t} s after stopping (stallT ${(P.stallT || 0).toFixed(1)}), level ${a.caution().level}`);
+    assert.ok(t <= 62, `retired ${t} s after stopping, want ~60`);
+  } finally { g.close(); }
+});
+
+// Clean-room fixes 39-41: AI avoidance of a car STOPPED on track. A stopped live car was seen only
+// inside the 2.2 m lateral blocker scan (~40 m out in a corner, then lost mid-avoidance), the pass
+// side flipped as the line drifted, and the side-by-side yield could pin an AI onto it. Measured
+// here before the fix, player parked at Monaco 0.35 for 90 s: 82 hits (Silverstone 0.18: 16); after: 0 and 0.
+test("clean-room 39-41: the field passes a player stopped mid-corner without ramming it", async () => {
+  const g = await createGame({ track: "monaco" });
+  try {
+    const a = g.apex, G = g.G;
+    a.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 4);
+    a.jump(0.35, 0, 0);
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const P = G.player, h0 = P.hits | 0;
+    g.step(60 * 55);   // under the 60 s stationary retirement
+    assert.equal(P.retired, false, "the scenario keeps the car parked on the road");
+    const hits = (P.hits | 0) - h0;
+    assert.ok(hits <= 5, `the field hit the parked car ${hits} times in 55 s`);
+  } finally { g.close(); }
+});

@@ -89,7 +89,7 @@ test("#5588 B: a past wet daily's share text follows the NEW target — its stor
   const stored = new Map();
   const G = { store: { get: (k, d) => (stored.has(k) ? JSON.parse(stored.get(k)) : d), set: (k, v) => stored.set(k, JSON.stringify(v)) },
     fmtTime: (t) => t.toFixed(3), ttDistance: 4, trackIdx: -1, raceWeather: "wet", raceTimeOfDay: "default",
-    raceLaps: 3, seed: 1, flow: "gp", timeTrial: false, startRace() {}, referencePole: () => NEW_WET };
+    raceLaps: 3, seed: 1, flow: "gp", timeTrial: false, startRace() {}, referencePole: (k) => (k === "medal" ? NEW_WET : NaN) };
   const d = vm.runInContext("DailyChallenge", ctx).create(G);
   d.open("2026-09-03");
   d.record(132.0);                                     // GOLD against the old 133.74 target

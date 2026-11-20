@@ -872,7 +872,7 @@ evidence.
 Above `function _shedDprBoost() {` (#5222).
 
 ```text
-RESOLUTION MAX's DPR boost (gfx.setDprBoost, TLX only) is what a missed
+RESOLUTION MAX's DPR boost (gfx.setDprBoost, TLX and GLX) is what a missed
 frame budget or a thermal drift takes back first, ahead of the scale and
 feature rungs (a drift's 45 Hz rate cap still comes before it): one step
 down to the tier's DPR cap. Never restored by the governor: it stays off
