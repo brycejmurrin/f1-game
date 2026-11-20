@@ -321,9 +321,10 @@ function useSlot(flavour, i) {
   if (career && (f !== slotFlavour || n !== slotIdx)) save();
   slotFlavour = f;
   slotIdx = n;
-  setLive();
   calendarProtection = null;
   career = adoptCalendar(readSlot(f, n));
+  if (career || store.get(slotKey(f, n), null) != null) setLive();
+  else pointerHeld = false;
   adoptTeamIdentity();
   armRevision();
   if (career && career.flavour === "myteam" && !calendarProtection) save({ migration: true });
