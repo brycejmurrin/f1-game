@@ -320,6 +320,7 @@
     "tests/unit/data-hub-offline.test.mjs",
     "// The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).",
     "tests/unit/data-hub-picker.test.mjs",
+    "tests/unit/data-hub-slow.test.mjs",
     "// The Schedule tab's .ics export (RFC 5545): CRLF, 75-octet folding of multibyte",
     "// names, TEXT escaping, stable UIDs, sprint vs conventional sessions, date-only. ~0.1 s.",
     "tests/unit/data-ics.test.mjs",
