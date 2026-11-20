@@ -387,12 +387,23 @@ def cmd_apex_shot(argv: list[str]) -> None:
     track: a.info().track,
     models,
     modelIds: (typeof Assets !== "undefined" && Assets.models) ? Assets.models() : [],
+    // #5790: what this capture loaded beyond the player's set (a player's page loads only the ids its scenery names).
+    extraModels: (() => {{
+      if (typeof Assets === "undefined" || !Assets.models || !Assets.modelSync || !Assets.modelIds) return null;
+      const def = ((typeof Tracks !== "undefined" && Tracks.LIST) || []).find((d) => d && d.id === {json.dumps(args.track)});
+      const fn = (def && def.scenery) || (window.TrackScenery && window.TrackScenery[{json.dumps(args.track)}]);
+      if (!fn) return null;
+      const player = Assets.modelIds(String(fn));
+      return Assets.models().filter((id) => Assets.modelSync(id) && !player.includes(id));
+    }})(),
     dbgCam: !!(cs && cs.debug),
     eye: cs && cs.eye,
   }};
 }}"""
         print("→ evaluate_script (loadModels → race → orbit)")
         print(text_result(c.call("evaluate_script", {"function": js})))
+        print("  models: this prefetched the WHOLE pack; a player's page loads only its circuit's set — "
+              "extraModels above names the ones a player never gets")
         print("→ take_screenshot")
         shot_args: dict = {}
         if not args.no_file:
