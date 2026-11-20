@@ -632,6 +632,7 @@ const GLXBackend = (function () {
   }
 
   let renderScale = 1;
+  let _dprBoost = 0;
   let presentW = 0, presentH = 0;
   let spatialUpscale = false;
   try {
@@ -668,7 +669,8 @@ const GLXBackend = (function () {
       if ((changed || first) && PST) PST.createTargets();
       return;
     }
-    const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
+    const dprBase = MOBILE_TIER ? 1.5 : 2;
+    const dpr = Math.min(window.devicePixelRatio || 1, _dprBoost > dprBase ? _dprBoost : dprBase);
     const css = cssSize();
     const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
@@ -709,6 +711,14 @@ const GLXBackend = (function () {
     return true;
   }
   function getRenderScale() { return renderScale; }
+  function setDprBoost(n) {
+    const v = n > 0 ? Math.min(+n, 3) : 0;
+    if (v === _dprBoost) return false;
+    _dprBoost = v;
+    if (gl) resize();
+    return true;
+  }
+  function getDprBoost() { return _dprBoost; }
 
   function toF32(a) {
     return a instanceof Float32Array ? a : new Float32Array(a);
@@ -1944,7 +1954,7 @@ const GLXBackend = (function () {
     lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx, armed: SHD.lampArmed }),
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
-    setRenderScale, getRenderScale,
+    setRenderScale, getRenderScale, setDprBoost, getDprBoost,
     setSpatialUpscale, getSpatialUpscale,
     gpuTimer(on) {
       if (on !== undefined) {
