@@ -393,3 +393,85 @@ for (const warming of [false, true]) {
     assert.equal(disposed, 40, 'each instance buffer/render object released once');
   });
 }
+
+// #5699 row 10: a drop during a warm is queued once per mesh through a flag (it was _dropQueue.some(), O(n^2) over a
+// warm's drops); the flag clears when the queue flushes, so a later warm can queue the mesh again.
+test("warm drops queue each mesh once by flag, and the flush clears it (#5699 row 10)", () => {
+  const dropStart = TLX.indexOf('      const _dropQueue = [];');
+  const dropEnd = TLX.indexOf('      // (geometry, material, OCCURRENCE)', dropStart);
+  const h = new Function('THREE', `
+    const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
+    const _instRootOn = false, instRoot = null, _instRemove = (m) => scene.remove(m);
+    const window = {}, renderer = {};
+    let _warmPending = false, _sceneRenders = 0;
+    ${TLX.slice(dropStart, dropEnd)}
+    return { drop: dropWrapper, flush: flushDropped, queue: _dropQueue, warm: (on) => { _warmPending = on; }, scene };
+  `)(CORE);
+  const meshes = [];
+  for (let i = 0; i < 50; i++) { const m = new CORE.Mesh(new CORE.BufferGeometry(), new CORE.MeshBasicMaterial()); h.scene.add(m); meshes.push(m); }
+  let disposed = 0;
+  for (const m of meshes) m.addEventListener('dispose', () => disposed++);
+  h.warm(true);
+  for (let r = 0; r < 3; r++) for (const m of meshes) h.drop(m);
+  assert.equal(h.queue.length, 50, 'three drops of 50 meshes queue 50 entries');
+  assert.ok(meshes.every((m) => m.__tlxQueued === true));
+  assert.equal(disposed, 0, 'nothing is released while the warm holds its inputs');
+  h.warm(false); h.flush();
+  assert.equal(h.queue.length, 0);
+  assert.equal(disposed, 50, 'each queued mesh drops exactly once at the flush');
+  assert.ok(meshes.every((m) => m.__tlxQueued === false), 'the flush clears the flag');
+  h.warm(true); h.drop(meshes[0]);
+  assert.equal(h.queue.length, 1, 'a later warm can queue the mesh again');
+});
+
+// #5699 row 12: capturePixels on GL reads what the canvas holds. Under the spatial upscale without fixed targets the
+// canvas is presentW x presentH while the render size W x H is smaller, and reading W x H cropped Photo/Screenshot.
+test("GL capturePixels reads the drawing buffer's size, not the render size (#5699 row 12)", async () => {
+  const a = TLX.indexOf('        capturePixels() {'), b = TLX.indexOf('        awaitSoftPresent(timeoutMs) {', a);
+  assert.ok(a > 0 && b > a, 'capturePixels moved — update this test');
+  const mk = new Function('ownGL', 'fixed', 'W', 'H', 'presentW', 'presentH', `"use strict";
+    const renderer = {}, reads = [];
+    const fixedActive = () => fixed;
+    const readGlCapture = async (gl, w, h) => { reads.push([w, h]); return { width: w, height: h }; };
+    const _captureRT = () => null, _readLdr = null;
+    const api = { ${TLX.slice(a, b)} };
+    return { api, reads };`);
+  // renderScale 0.7 under the upscale: render 591x273, canvas 844x390.
+  const up = mk({ readPixels() {}, drawingBufferWidth: 844, drawingBufferHeight: 390 }, false, 591, 273, 844, 390);
+  assert.deepEqual(await up.api.capturePixels(), { width: 844, height: 390 });
+  // No drawing-buffer size reported (a stub GL): the old choice stands.
+  const plain = mk({ readPixels() {} }, false, 591, 273, 844, 390);
+  assert.deepEqual(await plain.api.capturePixels(), { width: 591, height: 273 });
+  const fixed = mk({ readPixels() {} }, true, 591, 273, 844, 390);
+  assert.deepEqual(await fixed.api.capturePixels(), { width: 844, height: 390 });
+});
+
+// #5699 row 15: a near-black soft-blit read is held back (a warming RT), but a scene that really is black must present:
+// the third dark read in a row is shown and notifies awaitSoftPresent instead of letting it wait out 15 s.
+test("soft blit: three dark reads in a row present and notify; a bright read presents at once (#5699 row 15)", async () => {
+  const a = TLX.indexOf('      function _startSoftBlitRead(req) {');
+  const b = TLX.indexOf('\n      }\n', a);
+  assert.ok(a > 0 && b > a, '_startSoftBlitRead moved — update this test');
+  const h = new Function(`"use strict";
+    let _softReadPending = false, _softReadSince = 0, _softReadEpoch = 0, _softShownGen = 0, _softDarkRun = 0;
+    let _softReadLastMs = 0, _softReadFails = 0, _softReadLastErr = null, _softImg = null, maxPx = 0, notes = 0, puts = 0;
+    const _displayCanvas = { width: 4, height: 2 };
+    const _displayCtx = { createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData() { puts++; } };
+    const renderer = { readRenderTargetPixelsAsync: () => Promise.resolve(new Uint8Array(32)) };
+    const _unstrideIntoSoft = () => maxPx;
+    const _softBlitNotify = () => { notes++; };
+    const _finishSoftBlitRead = () => { _softReadPending = false; };
+    ${TLX.slice(a, b + 8)}
+    return { read: (gen) => { _startSoftBlitRead({ rt: {}, w: 4, h: 2, gen, epoch: 0 }); return new Promise((r) => setTimeout(r, 0)); },
+      set: (v) => { maxPx = v; }, st: () => ({ notes, puts, shown: _softShownGen }) };`)();
+  h.set(0);
+  await h.read(1); await h.read(2);
+  assert.deepEqual(h.st(), { notes: 0, puts: 0, shown: 0 }, 'two dark reads are held back');
+  await h.read(3);
+  assert.deepEqual(h.st(), { notes: 1, puts: 1, shown: 3 }, 'the third dark read in a row presents');
+  await h.read(4);
+  assert.deepEqual(h.st(), { notes: 1, puts: 1, shown: 3 }, 'the run restarts after a present');
+  h.set(200);
+  await h.read(5);
+  assert.deepEqual(h.st(), { notes: 2, puts: 2, shown: 5 }, 'a bright read presents at once');
+});

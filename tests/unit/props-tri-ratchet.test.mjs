@@ -79,6 +79,12 @@ const require = createRequire(import.meta.url);
 // T2-T14 ({ turn: N }) add +465 (props drape on the banked edges); the T1 tyre wall moved to the
 // outside of the hairpin, the T11 terrace and the T5 gravel moved onto their corners add +540.
 // Measured, not widened.
+// 2026-11-19 (#5699 row 18, PR #5747, sync onto 8bb193ac / #5303): remeasured on the merged
+// tree with tools/track/props-tris.cjs. fuji 567976 — the W21 pin; row 18's reserve-after-land
+// is already in that count (the earlier 567046 pin was against tip f25747de, before W21).
+// cota 303352 -> 301674 and mexico 344035 -> 343891: the W21 ceilings sat above the current
+// build, so they are pinned to the measured post-strip counts. hungaroring stays 215237.
+// Measured, not widened.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
