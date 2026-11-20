@@ -914,7 +914,7 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
 test("TLX composite skips ACES and HDR grade on an 8-bit scene target", () => {
   const tsl = read("js/render/three/tsl-post.js");
   assert.match(tsl, /sceneHdr: uniform\(1\)/);
-  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?acesTonemap/);
+  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?toneMap\(/);
   assert.match(tsl, /C\.hdrGradeOn\.greaterThan\(0\.5\)\.and\(C\.sceneHdr\.greaterThan\(0\.5\)\)/);
   const post = read("js/render/three/tlx-post.js");
   assert.match(post, /P\.composite\.U\.sceneHdr\.value = _sceneHdr/);
@@ -1038,6 +1038,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
+    "apex26.tlxAgx",   // the EXTREME AgX tone-map opt-in: a RESET returns the picture to ACES (#6003)
     // The boot canary's latch. gfxProbeStrikes counts loads that died before
     // presenting a frame — one is a memory kill, two retires the pick. A RESET
     // that left a strike behind would hand the next boot a strike it did not
@@ -5566,7 +5567,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
   // can read it (eligible phone LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
-  assert.match(post, /count:\s*tagOn \? 2 : 1/,
+  assert.match(post, /count:\s*tagOn \? \(velOn \? 3 : 2\) : 1/,   // +velocity (EXTREME motion vectors, #6003): a third attachment only with the tag
     "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
     "MRTNode.setup matches attachments by texture.name");

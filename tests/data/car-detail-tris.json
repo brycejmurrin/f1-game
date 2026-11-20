@@ -21,13 +21,17 @@
     "dash": 1336
   },
   "extreme": {
-    "body": 93414,
+    "body": 98670,
     "cockpit": 28255,
     "frontWheel": 2004,
     "rearWheel": 2004,
     "flaps": 1624,
-    "player": 103054,
+    "player": 108310,
     "steeringWheel": 26942,
     "dash": 6832
+  },
+  "extremeNoMeshDetail": {
+    "body": 93414,
+    "cockpit": 28255
   }
 }

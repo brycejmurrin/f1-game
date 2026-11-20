@@ -50,6 +50,11 @@ const TrackDetail = (function () {
     }
   }
 
+  // treesHi stamps the pack's tree LOD0s (nature.js bakedTree): a model wait that reads a scenery closure's source
+  // for the ids it names (Assets.modelsReady(ms, src)) is handed these too, so the models are resident in time.
+  const TREE_MODELS = Object.freeze(["pine_lod0", "tree_lod0", "palm_lod0"]);
+  const modelHint = (features) => (features && features.treesHi ? TREE_MODELS.map((id) => ` "${id}"`).join("") : "");
+
   // ---- crowd3d: a seated spectator in the crowd-body envelope ---------------------------------------------------
   // Canonical space as nature.js crowdBank's box ([0.55, 1, 0.5] about the origin): x = r (across, `face` = the
   // direction of the track), y = u, z = t (along the row). The instance scale and colour are crowdBank's own, so
@@ -58,17 +63,24 @@ const TrackDetail = (function () {
   const SKIN = [[0.83, 0.62, 0.44], [0.57, 0.35, 0.22], [0.94, 0.77, 0.60]];
   const LEGS = [[0.16, 0.18, 0.24], [0.30, 0.27, 0.22], [0.12, 0.12, 0.13]];
   const POSES = 3;
+  // CROWD LIFE: the figure's part and facing ride the material id's fraction (FOLIAGE's sway weight is the
+  // precedent: every backend's fragment rounds the id, so the surface is FABRIC's everywhere). part 0 = legs,
+  // 1 = torso / head, 2 = arms; +0.2 when the figure faces canonical -x. TLX's crowd vertex stage decodes it
+  // (js/render/three/tsl-lit.js crowdMotionNode); GLX / WGX draw the same figures still.
+  const crowdMat = (mat, part, f) => mat + 0.02 + 0.06 * part + (f < 0 ? 0.2 : 0);
   function crowdFigure(rec, mat, pose, skin, face, night, shirt) {
     const f = face < 0 ? -1 : 1;
     const dim = night ? 0.3 : 1;
     const sk = SKIN[skin % SKIN.length].map((v) => v * dim);
     const lg = LEGS[pose % LEGS.length].map((v) => v * dim);
     const lean = pose === 2 ? 0.04 : 0;
-    rec.mat(mat);
+    rec.mat(crowdMat(mat, 0, f));
     rec.box([f * 0.10, -0.16, 0], [0.36, 0.16, 0.36], lg);               // thighs / lap
     rec.box([f * 0.26, -0.36, 0], [0.13, 0.28, 0.30], lg);               // shins
+    rec.mat(crowdMat(mat, 1, f));
     rec.box([f * (lean - 0.04), 0.10, 0], [0.22, 0.40, 0.38], shirt);    // torso
     rec.cyl([f * (lean - 0.03), 0.31, 0], 0.10, 0.19, sk, 6);            // head
+    rec.mat(crowdMat(mat, 2, f));
     for (const z of [-0.21, 0.21]) {
       if (pose === 1) rec.box([-f * 0.02, 0.36, z], [0.08, 0.30, 0.08], shirt);         // arms raised
       else if (pose === 2) rec.box([f * 0.16, -0.02, z], [0.24, 0.08, 0.09], shirt);    // forearms on knees
@@ -295,7 +307,7 @@ const TrackDetail = (function () {
     return { xz };
   }
 
-  return { NAMES, NONE, normalize, page, resolve, crowdFigure, CROWD_NEAR_M, POSES, SKIN, farTerrain, sampleXZ, batchXZ, FAR,
+  return { NAMES, NONE, normalize, page, resolve, crowdFigure, crowdMat, TREE_MODELS, modelHint, CROWD_NEAR_M, POSES, SKIN, farTerrain, sampleXZ, batchXZ, FAR,
            kerbRibbon, withKerbs, KERB_LAT, KERB_H };
 })();
 Object.freeze(TrackDetail);

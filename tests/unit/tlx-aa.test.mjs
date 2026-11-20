@@ -204,3 +204,121 @@ test("hdrOut: the hdrPeak uniform exists only on a confirmed HDR build, and that
     renderer.dispose();
   }
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Per-object motion vectors (the scene's "velocity" attachment, three's VelocityNode) and the AgX opt-in.
+// ---------------------------------------------------------------------------------------------------------------
+const view = (eye, target) => {
+  const cam = new THREE.PerspectiveCamera();
+  cam.position.set(...eye); cam.lookAt(...target); cam.updateMatrixWorld(true);
+  return Float32Array.from(cam.matrixWorldInverse.elements);
+};
+const model = (pos, yaw) => Float32Array.from(new THREE.Matrix4().makeRotationY(yaw || 0).setPosition(...pos).elements);
+const ndc = (P, V, M, p) => { const w = toNdc(M, p); return toNdc(Float32Array.from(M4(P).multiply(M4(V)).elements), w); };
+
+test("velocity: a translating object's vector is its own screen motion; the reprojection lands on last frame's spot", () => {
+  const P = persp(1.0, 2, 0.1, 1500), V = view([0, 2, 0], [0, 2, -10]);
+  const p = [0.4, 0.3, 1.2];                                   // a point on the car (local)
+  const Mprev = model([2, 0, -20]), M = model([2, 0, -21.6]);  // 1.6 m further away this frame (~350 km/h at 60 Hz)
+  const v = A.velocity(P, V, M, P, V, Mprev, p);
+  const a = ndc(P, V, M, p), b = ndc(P, V, Mprev, p);
+  assert.ok(near(v[0], a[0] - b[0], 1e-6) && near(v[1], a[1] - b[1], 1e-6), "NDC now minus NDC then");
+  assert.ok(Math.hypot(v[0], v[1]) > 1e-3, "it moved on screen");
+  const r = A.velReproject(a[0] * 0.5 + 0.5, a[1] * 0.5 + 0.5, v[0], v[1], 0, 0);
+  assert.ok(near(r[0], b[0] * 0.5 + 0.5, 1e-6) && near(r[1], b[1] * 0.5 + 0.5, 1e-6), "previous uv of the same point");
+  // The camera follows the car (both moved by the same 1.6 m): the car's pixels hold still, the world's do not.
+  const Vprev = view([0, 2, 1.6], [0, 2, -8.4]), Vnow = view([0, 2, 0], [0, 2, -10]);
+  const car = A.velocity(P, Vnow, model([2, 0, -20]), P, Vprev, model([2, 0, -18.4]), p);
+  assert.ok(Math.hypot(car[0], car[1]) < 1e-6, "a car moving with the camera has no motion vector");
+  const world = A.velocity(P, Vnow, model([2, 0, -20]), P, Vprev, model([2, 0, -20]), p);
+  assert.ok(Math.hypot(world[0], world[1]) > 1e-3, "the static world streams past");
+  // Jitter never enters the vector (unjittered projection); the reprojection removes this frame's.
+  const j = [0.004, -0.003];
+  const rj = A.velReproject(a[0] * 0.5 + 0.5 + j[0] / 2, a[1] * 0.5 + 0.5 + j[1] / 2, v[0], v[1], j[0], j[1]);
+  assert.ok(near(rj[0], r[0], 1e-9) && near(rj[1], r[1], 1e-9));
+});
+
+test("velocity: a rotating object (yaw about its own centre) and the camera-only answer agree with reproject()", () => {
+  const P = persp(1.0, 2, 0.1, 1500), V = view([0, 2, 5], [0, 1, -20]);
+  const p = [1.5, 0.2, 0];                                     // the front wing tip, 1.5 m off the yaw axis
+  const Mprev = model([0, 0, -20], 0), M = model([0, 0, -20], 0.05);   // turning in: 0.05 rad this frame
+  const v = A.velocity(P, V, M, P, V, Mprev, p);
+  const a = ndc(P, V, M, p), b = ndc(P, V, Mprev, p);
+  assert.ok(near(v[0], a[0] - b[0], 1e-6) && near(v[1], a[1] - b[1], 1e-6));
+  assert.ok(Math.abs(v[0]) > 1e-4, "a yaw moves the wing tip on screen");
+  const centre = A.velocity(P, V, M, P, V, Mprev, [0, 0, 0]);
+  assert.ok(Math.hypot(centre[0], centre[1]) < 1e-6, "the yaw axis itself does not move");
+  // A static object under a moving camera: the vector's reprojection is the depth reprojection TRAA already does.
+  const Vprev = view([0.4, 2, 6.2], [0, 1, -20]), I = model([0, 0, 0]), w = [3, 1, -25];
+  const vs = A.velocity(P, V, I, P, Vprev, I, w);
+  const cur = viewProj([0, 2, 5], [0, 1, -20], P), prev = viewProj([0.4, 2, 6.2], [0, 1, -20], P);
+  const n = toNdc(cur.vp, w);
+  const byDepth = A.reproject(cur.inv, prev.vp, n[0] * 0.5 + 0.5, n[1] * 0.5 + 0.5, n[2] * 0.5 + 0.5, 0, 0);
+  const byVel = A.velReproject(n[0] * 0.5 + 0.5, n[1] * 0.5 + 0.5, vs[0], vs[1], 0, 0);
+  assert.ok(near(byVel[0], byDepth.u, 1e-4) && near(byVel[1], byDepth.v, 1e-4), "camera reprojection, two ways");
+});
+
+test("velocity reject: a vector far from the camera's answer is a teleport or a pooled slot changing owner", () => {
+  assert.equal(A.velRejected(0.01, 0, 0.01, 0, 1920, 1080), false, "static: identical to the camera");
+  assert.equal(A.velRejected(0.05, 0, 0, 0, 1920, 1080), false, "48 px of own motion is motion");
+  assert.equal(A.velRejected(0.2, 0, 0, 0, 1920, 1080), true, "192 px in one frame is not");
+  assert.equal(A.velRejected(NaN, 0, 0, 0, 1920, 1080), true, "garbage is rejected");
+  assert.ok(near(A.objMotionPx(0.1, 0, 0, 0, 1000, 500), 50));
+  assert.equal(A.VEL_MAX_PX, 96);
+});
+
+test("AgX (the JS twin of three's agxToneMapping): black to black, white to white, monotone, the bundle's constants", () => {
+  const g = (x) => A.agx([x, x, x], 1);
+  assert.ok(g(0).every((v) => v >= 0 && v < 1e-3), "black point");
+  assert.ok(g(64).every((v) => v > 0.99 && v <= 1), "white point (the log2 range tops out at +4.03 EV)");
+  let last = -1;
+  for (let x = 0; x <= 32; x += 0.01) {
+    const y = g(x)[1];
+    assert.ok(y >= last - 1e-12, `monotone at ${x}`); last = y;
+    assert.ok(y >= 0 && y <= 1);
+  }
+  const mid = g(0.18)[1];
+  assert.ok(mid > 0.12 && mid < 0.3, `mid grey stays mid grey (${mid})`);
+  const red = A.agx([4, 0.2, 0.2], 1);
+  assert.ok(red[1] / red[0] > 0.3, "a bright saturated red desaturates towards white (its 0.05 ratio does not survive)");
+  assert.deepEqual(A.agx([0.5, 0.5, 0.5], 2), g(1), "exposure scales the input");
+  const src = fs.readFileSync(new URL("../../vendor/three-0.187.0/three.tsl.min.js", import.meta.url), "utf8");
+  for (const c of ["-12.47393", "4.026069", "15.5", "40.14", "31.96", "6.868", ".4298", ".1191", ".00232", ".856627153315983", "1.6605"])
+    assert.ok(src.includes(c), `three's AgX still carries ${c}`);
+  assert.equal(typeof THREE.TSL.agxToneMapping, "function", "tsl-post.js uses the bundle's own function");
+});
+
+for (const language of ["WGSL", "GLSL"]) test(`TRAA with the velocity attachment compiles (${language}); velocityMrt adds the output`, async () => {
+  const fake = makeFakeGL(64, 32);
+  const renderer = new THREE.WebGPURenderer({ canvas: fake.canvas, context: fake.gl, forceWebGL: true });
+  const materials = [], targets = [];
+  try {
+    await renderer.init();
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const ldr = new THREE.RenderTarget(64, 32); targets.push(ldr);
+    const vel = new THREE.RenderTarget(64, 32, { type: THREE.HalfFloatType, format: THREE.RGFormat }); targets.push(vel);
+    const mk = (extra) => A.taa(THREE, THREE.TSL, { runPass() {}, ownRT: (rt) => { targets.push(rt); return rt; },
+      trackMaterial: (m) => materials.push(m), ldrTex: ldr.texture, depthTex: new THREE.DepthTexture(64, 32), ...extra });
+    const plain = mk({}), withVel = mk({ velTex: vel.texture });
+    assert.equal(plain.state().velocity, false);
+    assert.equal(withVel.state().velocity, true);
+    const Builder = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const src = materials.filter((m) => m.name === "tlx-post-traa").map((mat) => {
+      const b = new Builder(new THREE.QuadMesh(mat), renderer);
+      b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+      return b.fragmentShader;
+    });
+    assert.equal(src.length, 2);
+    assert.ok(src[1].length > src[0].length, "the velocity resolve samples one more texture");
+    const proj = new THREE.Matrix4();
+    const node = A.velocityMrt(THREE, THREE.TSL, proj);
+    assert.ok(node && node.has("velocity") && node.has("ssrTag") && node.has("output"), "output + ssrTag + velocity");
+    assert.equal(THREE.TSL.velocity.projectionMatrix, proj, "the unjittered projection tlx.js keeps");
+    assert.equal(A.velocityMrt(THREE, {}, proj), null, "no VelocityNode in the bundle: no velocity (today's MRT)");
+    plain.dispose(); withVel.dispose();
+  } finally {
+    for (const m of materials) m.dispose();
+    for (const rt of targets) rt.dispose();
+    renderer.dispose();
+  }
+});

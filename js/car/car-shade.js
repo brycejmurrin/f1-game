@@ -130,15 +130,20 @@ const CarShade = (function () {
    *  both ends capped. `tri(out, a, b, c, col, surface)` is car3d's addTri;
    *  opts.frontCol paints the front (+Z) cap (an intake mouth), opts.surface
    *  overrides the surface id. */
+  // heroCar loft UVs (CarGeometry.loftUv): a no-op unless a hero build with the TLX car-surface program is running.
+  function loftUv(out, v0, rings) {
+    if (typeof CarGeometry !== "undefined" && CarGeometry.luvOn && CarGeometry.luvOn()) CarGeometry.loftUv(out, v0, rings);
+  }
   function loft(out, front, rear, col, tri, opts) {
     const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP, pt = (opts && opts.pt) || EXP_TOP;
     const sf = opts && opts.surface, fc = (opts && opts.frontCol) || col;
-    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt);
+    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt), v0 = out.pos.length / 3;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
       tri(out, F[i], R[i], R[j], col, sf);
       tri(out, F[i], R[j], F[j], col, sf);
     }
+    loftUv(out, v0, [F, R]);
     const cf = [front.x || 0, front.y, front.z], cr = [rear.x || 0, rear.y, rear.z];
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
@@ -206,6 +211,7 @@ const CarShade = (function () {
     // back on itself (the headrest's U) has its ends side by side.
     const d0 = sub(mid(rings[1]), mid(rings[0])), d1 = sub(mid(rings[last]), mid(rings[last - 1]));
     const flip = dot(newell(rings[0]), d0) > 0;   // the rings wind the other way round the loft
+    const v0 = out.pos.length / 3;
     for (let r = 0; r < last; r++) {
       const F = rings[r], R = rings[r + 1];
       for (let i = 0; i < n; i++) {
@@ -214,6 +220,7 @@ const CarShade = (function () {
         else { face(out, F[i], R[i], R[j], c, tri, sf); face(out, F[i], R[j], F[j], c, tri, sf); }
       }
     }
+    if (o.luv) loftUv(out, v0, rings);   // o.luv: a body loft (coverLoft) records heroCar loft UVs, sides only
     if (o.caps === false) return;
     const cap = (ring, c, d) => {   // the cap faces along d
       const keep = dot(newell(ring), d) > 0;
@@ -402,7 +409,9 @@ const CarShade = (function () {
     const rBot = Math.max(0.02, Math.min(0.07, lightLo - r.bottom - 0.01));
     const rTop = Math.max(0.015, Math.min(0.04, r.top - lightHi - 0.01));
     const fr = fracs(q(X1, 0), [0.10, 0.07, rTop, rBot]), CT = 0.018;
-    skin(out, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
+    // heroCar: the plate's two rims rounded 4 mm in two segments (CarGeometry.heroBevel; today's plate otherwise).
+    const plate = (o) => skin(o, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
+    if (typeof CarGeometry !== "undefined" && CarGeometry.heroBevel) CarGeometry.heroBevel(out, 0.004, 2, plate); else plate(out);
     // The crown straddles the top edge as the flat strip did (y top +- 9 mm), its
     // ends inset half its thickness so they finish flush with the plate's edges.
     pipe(out, rquad(q((X0 + X1) / 2, CT / 2), fr, seg).slice(seg + 1, 3 * (seg + 1)), crownCol, tri, crownSurf,
@@ -495,7 +504,7 @@ const CarShade = (function () {
   /** Loft closed rings front -> rear (each CCW from +Z, same count), capped:
    *  the front cap in `frontCol`, the rear in `col`. */
   function loftRings(out, rings, col, frontCol, tri) {
-    const n = rings[0].length;
+    const n = rings[0].length, v0 = out.pos.length / 3;
     for (let r = 0; r < rings.length - 1; r++) {
       const F = rings[r], R = rings[r + 1];
       for (let i = 0; i < n; i++) {
@@ -504,6 +513,7 @@ const CarShade = (function () {
         tri(out, F[i], R[j], F[j], col);
       }
     }
+    loftUv(out, v0, rings);
     const cap = (ring, c, flip) => {
       const m = [0, 0, 0];
       for (const p of ring) { m[0] += p[0] / n; m[1] += p[1] / n; m[2] += p[2] / n; }
@@ -631,7 +641,7 @@ const CarShade = (function () {
     skin(out, zs.map((z) => {
       const p = profile(anchors.coverAt(z)).pts;
       return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
-    }), col, tri);
+    }), col, tri, undefined, { luv: true });
   }
 
   /** Smooth vertex normals from the faces of an INDEXED vertex range [from, to):
@@ -713,6 +723,7 @@ const CarShade = (function () {
       const n = P.length / 3, nrm = [0, 1, 2].map((k) => N[u * 3 + k] + (N[w * 3 + k] - N[u * 3 + k]) * t), l = len(nrm) || 1;
       for (let k = 0; k < 3; k++) { P.push(at(u, w, t, k)); N.push(nrm[k] / l); C.push(body[k]); }
       M.push(M[u]);
+      if (out.luv && typeof CarGeometry !== "undefined") CarGeometry.luvLerp(out, u, w, t);
       return n;
     };
     // Triangle q (indices, winding kept) cut where g(x, y, z) changes sign, as

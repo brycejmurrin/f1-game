@@ -61,6 +61,18 @@ const SceneryNature = (function () {
     const { CROWD_DAY } = TrackSceneryData;
     // Desktop EXTREME extras (js/track/scenery/detail.js); every flag is false at detail 0.
     const DF = ctx.detailFeatures || {};
+    // treesHi's baked LOD0 (assets/pack/models/<species>_lod0): placed 1:1 in the procedural tree's spot, near the
+    // road only; beyond TREE_HI_NEAR (and wherever the pack is absent or the guard refuses) the procedural tree
+    // stands. Each LOD0 is under its species' procedural mean (docs/notes/TREE-BUDGET-2026-10-19.md: pine 36 <= 45,
+    // tree 40 <= 51, palm 80 <= 156 triangles), so near trees get the baked silhouette at no triangle cost.
+    const TREE_HI_NEAR = 40;
+    const bakedTree = (id, k, side, dist, h) => {
+      if (!DF.treesHi || dist > TREE_HI_NEAR || !ctx.bakedModel) return false;
+      out._mat = MAT.FOLIAGE;   // the model carries its own WOOD/FOLIAGE + sway; this is the soft-prop identity
+      const landed = ctx.bakedModel(id, k, side, dist, { height: h, rotY: hash(k * 4.9 + side * 2.3 + dist + 1.1) * 6.2832 });
+      out._mat = 0;
+      return landed;
+    };
 
     const _guCand = new Array(n);
     const groundUnder = (x, z) => {
@@ -230,6 +242,7 @@ const SceneryNature = (function () {
         out._mat = 0;
         if (landed) { spotTaken(a.c[0], a.c[2]); return; }
       }
+      if (bakedTree("pine_lod0", k, side, dist, h)) { spotTaken(a.c[0], a.c[2]); return; }
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
@@ -548,6 +561,7 @@ const SceneryNature = (function () {
         out._mat = 0;
         return;
       }
+      if ((crown === "round" || crown === "vase") && bakedTree("tree_lod0", k, side, dist, h)) { reserve(); return; }
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       // treesHi (EXTREME, near the road): twice the radial sections and a rounding band; the same envelope.
@@ -693,7 +707,8 @@ const SceneryNature = (function () {
       const palmRec = ctx.note("palm", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.6, h, h * 0.6], { k, side, dist, initialDist });
       const base = assembly.base;
       const hb = (base[0] - a.c[0]) * a.u[0] + (base[1] - a.c[1]) * a.u[1] + (base[2] - a.c[2]) * a.u[2];
-      for (let i = 0; i < assembly.parts.length; i++) {
+      const baked = bakedTree("palm_lod0", k, side, dist, h);
+      for (let i = 0; !baked && i < assembly.parts.length; i++) {
         const part = assembly.parts[i];
         if (i === 3) swayOn(a.c, a.u, hb - 1.2, hb + 0.8);
         if (i === 13) swayOff();

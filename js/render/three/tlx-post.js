@@ -283,9 +283,23 @@
     // the composite never fetches. The tag slot then binds its OWN 1x1 white
     // ("sealed world", the tag's background value): three merges texture nodes
     // that share a texture into one sampler (hunt-1 lesson 4).
+    // DESKTOP TIERS: the extras this chain BUILDS, decided once from GfxQuality (tsl-gi.js buildPlan; null = none,
+    // which is every phone, HIGH and below, and fixed / orient-cover targets). hiLive() says which are LIVE a frame.
+    const GIM = (window.TLXShaders && TLXShaders.gi) || null;
+    let HI = null;
+    try {
+      const plan = GIM ? GIM.buildPlan(GIM.gfxEnv({ webgpu, mobile: !!ctx.isMobile, phys, hdr })) : null;
+      if (plan && GIM.anyBuilt(plan)) HI = plan;
+    } catch (_) { HI = null; }
     const tagOn = ctx.ssrTag !== false;
+    // PER-OBJECT VELOCITY (EXTREME, native WebGPU, tsl-aa.js velocityMrt): a third scene attachment, rg16f, written
+    // by three's VelocityNode through tlx.js's scene MRT (each mesh's previous model matrix, the camera's previous
+    // view, the unjittered projection), read by TRAA, SSGI accumulation and CINEMA motion blur. Only when one of them
+    // is built; never with the tag off, on a phone, on WebGL2 or with fixed / cover targets: today's two attachments.
+    const velOn = !!(tagOn && webgpu && !phys && !ctx.isMobile && TSL.velocity && TSL.mrt
+      && (ctx.traa || (HI && (HI.ssgi || HI.motionBlur))));
     const sceneRT = ownRT(new THREE.RenderTarget(1, 1, {
-      type: hdrType, count: tagOn ? 2 : 1, depthBuffer: true, depthTexture: sceneDepthTex,
+      type: hdrType, count: tagOn ? (velOn ? 3 : 2) : 1, depthBuffer: true, depthTexture: sceneDepthTex,
       samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
@@ -308,6 +322,12 @@
       sceneRT.textures[1].generateMipmaps = false;
       sceneRT.textures[1].colorSpace = THREE.NoColorSpace;
       sceneTagTex = sceneRT.textures[1];
+    }
+    const velTex = velOn && sceneRT.textures && sceneRT.textures[2] ? sceneRT.textures[2] : null;
+    if (velTex) {
+      velTex.format = THREE.RGFormat; velTex.type = THREE.HalfFloatType; velTex.name = "velocity";
+      velTex.generateMipmaps = false; velTex.colorSpace = THREE.NoColorSpace;
+      velTex.minFilter = velTex.magFilter = THREE.NearestFilter;
     }
     // LDR target: composite output, FXAA input (always allocated — FXAA is
     // the unconditional resolve, like GLX's ldrFBO).
@@ -422,6 +442,9 @@
     // build plan is empty there); SSGI's pair is half size; DoF / motion blur ping-pong two LDR targets at post size.
     let _aoFull = false;
     let giRT = null, giBlurRT = null, giW = 1, giH = 1, cineA = null, cineB = null;
+    // SSGI accumulation (tsl-gi.js giAccPass): a half-float history pair at the GI size; alpha holds view depth.
+    let giHist = null, giHi = 0, giPrevOk = false, giFrames = 0, giResets = 0, _giN = 0;
+    const _giPrevVP = new Float32Array(16), _giEye = [0, 0, 0], _giFwd = [0, 0, 1], _giFwdNow = [0, 0, 1], _giPh = [0, 0];
     const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
     const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
@@ -435,6 +458,9 @@
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
       if (giRT) { giW = grW; giH = grH; rtSetSize(giRT, giW, giH); rtSetSize(giBlurRT, giW, giH); }
+      if (giHist && (giHist[0].width !== giW || giHist[0].height !== giH)) {   // a resize resets the accumulation
+        rtSetSize(giHist[0], giW, giH); rtSetSize(giHist[1], giW, giH); giPrevOk = false;
+      }
       if (cineA) { rtSetSize(cineA, pW, pH); rtSetSize(cineB, pW, pH); }
     }
     function layoutBloom() {
@@ -461,29 +487,37 @@
     }
 
     // the TSL pass set (tsl-post.js) — needs the REAL scene textures
-    // DESKTOP TIERS: the extras this chain BUILDS, decided once from GfxQuality (tsl-gi.js buildPlan; null = none,
-    // which is every phone, HIGH and below, and fixed / orient-cover targets). hiLive() says which are LIVE a frame.
-    const GIM = (window.TLXShaders && TLXShaders.gi) || null;
-    let HI = null;
+    // AgX (tsl-post.js toneMap): an EXTREME opt-in of its own, apex26.tlxAgx=1 read ONCE here (setAgx below writes
+    // it; the next chain build reads it). The tone-map knob stays numeric and shared with GLX; ACES is the default.
+    let agx = false;
     try {
-      const plan = GIM ? GIM.buildPlan(GIM.gfxEnv({ webgpu, mobile: !!ctx.isMobile, phys, hdr })) : null;
-      if (plan && GIM.anyBuilt(plan)) HI = plan;
-    } catch (_) { HI = null; }
-    const postCtx = (hi) => ({
+      agx = webgpu && !ctx.isMobile && !phys && typeof GfxQuality !== "undefined" && GfxQuality.detail() >= 2
+        && typeof TSL.agxToneMapping === "function" && localStorage.getItem("apex26.tlxAgx") === "1";
+    } catch (_) { agx = false; }
+    // SSGI temporal accumulation (tsl-gi.js giAccPass): wherever SSGI is built on native WebGPU.
+    const giTemporal = !!(HI && HI.ssgi && webgpu);
+    const EX0 = agx || velTex || giTemporal ? { agx, velTex, giTemporal } : null;
+    const postCtx = (hi, ex) => Object.assign({
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
       trackMaterial, vp: phys ? VP : null, hdrPeak,
       hi, ownTexture,
-    });
-    let P = null;
-    try { P = TLXShaders.post(THREE, TSL, postCtx(HI)); } catch (e) {
-      if (!HI) throw e;
-      // A desktop extra that fails to build must not cost the chain: today's pass set, nothing extra.
-      try { Log.warn("gfx", "TLX post: desktop-tier passes failed to build, using the standard set: " + (e && e.message)); } catch (_) { /* harness */ }
-      HI = null;
-      P = TLXShaders.post(THREE, TSL, postCtx(null));
+    }, ex || {});
+    // A desktop extra that fails to build must not cost the chain: first without this PR's extras (velocity, SSGI
+    // accumulation, AgX), then today's pass set with nothing extra. With neither, a throw is the chain's (as before).
+    const attempts = [];
+    if (EX0) attempts.push([HI, EX0]);
+    attempts.push([HI, null]);
+    if (HI) attempts.push([null, null]);
+    let P = null, EX = null;
+    for (let i = 0; i < attempts.length && !P; i++) {
+      try { P = TLXShaders.post(THREE, TSL, postCtx(attempts[i][0], attempts[i][1])); HI = attempts[i][0]; EX = attempts[i][1]; } catch (e) {
+        if (i === attempts.length - 1) throw e;
+        try { Log.warn("gfx", "TLX post: desktop-tier passes failed to build, falling back: " + (e && e.message)); } catch (_) { /* harness */ }
+      }
     }
+    if (!EX) agx = false;
     ownTexture(P.composite && P.composite.giOffTex);
     let _hiLive = null, _hiAge = 0;
     // feature() reads storage; a 15-present cadence keeps it off the hot path (a shed or the cinema flag lands <0.25 s late).
@@ -501,7 +535,10 @@
     // keeps FXAA: AA stays null and nothing below changes.
     if (ctx.traa && webgpu && window.TLXAA && TLXAA.taa) {
       try {
-        AA = TLXAA.taa(THREE, TSL, { runPass: (m, t) => runPass(m, t), ownRT, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex });
+        const aaCtx = { runPass: (m, t) => runPass(m, t), ownRT, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
+        // Per-object velocity first; a throw keeps the camera-only TRAA, a second throw FXAA.
+        if (velTex) { try { AA = TLXAA.taa(THREE, TSL, Object.assign({ velTex }, aaCtx)); } catch (_) { AA = null; } }
+        if (!AA) AA = TLXAA.taa(THREE, TSL, aaCtx);
       } catch (e) { AA = null; try { Log.warn("gfx", "TLX TRAA build failed, FXAA kept —", e); } catch (_) { /* harness */ } }
     }
     // The TAA runs on a frame with nothing else claiming the final pass: no ?viz=, no fixed/cover targets, no SGSR.
@@ -561,6 +598,9 @@
       if (P.composite.tex.gi) unbind(P.composite.tex.gi, P.composite.giOffTex || blackTex);
       dropRT(giRT); dropRT(giBlurRT);
       giRT = null; giBlurRT = null;
+      if (G && G.giAcc) { unbind(G.giAcc.cur, blackTex); unbind(G.giAcc.hist, blackTex); }
+      if (giHist) { dropRT(giHist[0]); dropRT(giHist[1]); giHist = null; }
+      giPrevOk = false;
     }
     let focusRT = null, _fi = 0, _focusOk = false, _focusT = 0, _prevOk = false;
     const _prevVP = new Float32Array(16);
@@ -574,7 +614,11 @@
       _focusOk = false;
     }
     function ensureGI() {
-      if (!giRT) { giRT = makeRT(1, 1, hdrType); giBlurRT = makeRT(1, 1, hdrType); layoutHalf(); }
+      if (!giRT || (P.gi && P.gi.giAcc && !giHist)) {
+        if (!giRT) { giRT = makeRT(1, 1, hdrType); giBlurRT = makeRT(1, 1, hdrType); }
+        if (P.gi && P.gi.giAcc && !giHist) giHist = [makeRT(1, 1, THREE.HalfFloatType), makeRT(1, 1, THREE.HalfFloatType)];
+        layoutHalf();
+      }
       return true;
     }
     function ensureCine() {
@@ -1104,14 +1148,36 @@
       // no history target exists in this chain, so there is no temporal accumulation.
       const GIP = P.gi;
       const haveGI = !!(HV && HV.ssgi && GIP && GIP.ssgi && P.composite.matHi && F.invProj && F.proj && !viz) && ensureGI();
+      let giOut = giRT;
       if (haveGI) {
         setPersp(GIP.ssgi.U, F.invProj, F.proj);
+        if (GIP.ssgi.U.phase) { GIM.giPhase(_giN++, _giPh); GIP.ssgi.U.phase.value.set(_giPh[0], _giPh[1]); }
         runPass(GIP.ssgi.mat, giRT);
         GIP.giH.tex.value = giRT.texture; GIP.giH.U.dir.value.set(1 / giW, 0);
         runPass(GIP.giH.mat, giBlurRT);
         GIP.giV.tex.value = giBlurRT.texture; GIP.giV.U.dir.value.set(0, 1 / giH);
         runPass(GIP.giV.mat, giRT);
-      }
+        // 0d) temporal accumulation: history <- blend(denoised GI, reprojected history); the composite reads the history.
+        // A cut / teleport (TLXAA.camCut), a resize, a frame without GI or the first frame resets to spatial-only.
+        const A = GIP.giAcc;
+        if (A && giHist && F.invVP && F.viewProj) {
+          let cut = !giPrevOk;
+          if (!cut && F.eye && window.TLXAA) { TLXAA.forwardOf(F.invVP, _giFwdNow); cut = TLXAA.camCut(_giEye, F.eye, _giFwd, _giFwdNow); }
+          A.U.invVP.value.fromArray(F.invVP);
+          A.U.prevVP.value.fromArray(giPrevOk ? _giPrevVP : F.viewProj);
+          A.U.texel.value.set(1 / giW, 1 / giH);
+          A.U.reset.value = cut ? 1 : 0;
+          A.cur.value = giRT.texture; A.hist.value = giHist[giHi].texture;
+          giOut = giHist[giHi ^ 1];
+          runPass(A.mat, giOut);
+          if (!compileJobs && !_scissorWarm) {
+            giHi ^= 1; giFrames++; if (cut) giResets++;
+            _giPrevVP.set(F.viewProj); giPrevOk = true;
+            if (F.eye) { _giEye[0] = F.eye[0]; _giEye[1] = F.eye[1]; _giEye[2] = F.eye[2]; }
+            if (window.TLXAA) TLXAA.forwardOf(F.invVP, _giFwd);
+          }
+        } else giPrevOk = false;
+      } else giPrevOk = false;
 
       // 1+2) bright pass + mip-chain bloom (js/render/glx/shaders/glsl-post.js)
       const haveBloom = bloomAmt > 0 && ensureBloom();
@@ -1282,7 +1348,7 @@
         C.giOn.value = haveGI ? 1 : 0;
         C.giStr.value = GIM.BUDGET.ssgiStr;
         C.giTexel.value.set(1 / giW, 1 / giH);
-        if (P.composite.tex.gi) P.composite.tex.gi.value = haveGI ? giRT.texture : P.composite.giOffTex;
+        if (P.composite.tex.gi) P.composite.tex.gi.value = haveGI ? giOut.texture : P.composite.giOffTex;
       }
 
       // 3/4) composite -> LDR, FXAA -> canvas (or the ?viz= bisect blit)
@@ -1591,7 +1657,11 @@
       presentedTarget: () => (viz ? _vizDest : cap8(_lastPresentRT || ldrRT)),
       // TRAA: this frame's NDC jitter for the main camera (tlx.js begin), or null while the TAA would not run.
       taaJitter: (w, h) => (taaLive() ? AA.jitter(w, h) : null),
-      taaReset: () => { if (AA) AA.reset(); },
+      taaReset: () => { if (AA) AA.reset(); giPrevOk = false; },
+      // tlx.js: write the per-object velocity MRT output (the scene target has its attachment) this chain.
+      velocityOn: () => !!velTex,
+      // AgX opt-in writer (the TLX debug surface: __tlx.post.setAgx(true), then reload). Returns this chain's state.
+      setAgx(on) { try { localStorage.setItem("apex26.tlxAgx", on ? "1" : "0"); } catch (_) { /* no storage */ } return agx; },
       // SGSR linked — tlx.js wantSpatialUpscale() requires this (fail-closed).
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       fixedOk: () => fixed && !!(P && P.sgsr && P.sgsr.mat),   // #2655: tlx.js keeps the canvas present-sized
@@ -1612,7 +1682,7 @@
       state: () => ({
         on: true,
         hdr,
-        attachments: tagOn ? 2 : 1,
+        attachments: tagOn ? (velTex ? 3 : 2) : 1,
         sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
         // Every post attachment's format (#2649 audit): what a phone readout should show on the WebGPU leg.
         formats: {
@@ -1646,6 +1716,10 @@
         hi: HI ? { built: Object.assign({}, HI), live: _hiLive ? Object.assign({}, _hiLive) : null, aoFull: _aoFull,
           ran: { aoHi: _last.aoHi, rays: _last.rays, gi: _last.gi, ssrHi: _last.ssrHi, dof: _last.dof, mblur: _last.mblur },
           held: { gi: !!giRT, cine: !!cineA, focus: !!focusRT } } : null,
+        // Motion vectors and output (EXTREME): the velocity attachment and who reads it, SSGI accumulation, AgX.
+        motion: { velocity: !!velTex, taaVel: !!(AA && AA.state().velocity),
+          mblurVel: !!(P.gi && P.gi.motionBlur && P.gi.motionBlur.velocity), agx,
+          giAcc: P.gi && P.gi.giAcc ? { frames: giFrames, resets: giResets, held: !!giHist, velocity: P.gi.giAcc.velocity } : null },
         rtResizes: _rtResizes,
         fixed: fixed ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
         // #3311 phone orientation cover (square physical; logical follows the flip).

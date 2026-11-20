@@ -828,7 +828,8 @@ function getSetupPreviewMesh() {
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
-    const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
+    // Car3D.heroCopy / garageDetail: the EXTREME (heroCar) body here, the car seen closest; an unchanged build below.
+    const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.heroCopy(_spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
       : (_spBase = { key: baseKey, hullKey, data: Car3D.build(liv.c1, liv.c2, {
         livery: liv, refinish: true, noWheels: split,
         // Same hull key = same geometry (a colour-only livery change): the last build's smoothing prep carries
@@ -838,7 +839,8 @@ function getSetupPreviewMesh() {
         num: seat && seat.num,
         helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-      }) }).data);
+        ...Car3D.garageDetail(),
+      }) }).data));
     if (split) {
       if (!departureWheels) {
         departureWheels = (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.create)

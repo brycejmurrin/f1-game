@@ -18,12 +18,14 @@ import { loadCarDetail, meshHealth } from "../helpers/car-detail-vm.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DATA = join(ROOT, "tests/data/car-detail-tris.json");
 const { Car3D, Parts, CarGeometry, Helmets } = loadCarDetail();
+// The race has the lazy MeshDetail kit by the time the cars build (heroCar bevels, the hero-mesh rival LODs).
+const MD = loadCarDetail(null, { meshDetail: true });
 const C1 = [0.7, 0.05, 0.05], C2 = [0.95, 0.8, 0.1];
 const TEAM = { id: "mclaren", engine: "Mercedes" };
 const parts = Parts.getVisualTiers({}, TEAM);
 const tris = (m) => m.idx.length / 3;
-const body = (detail, hero) => Car3D.build(C1, C2, { noWheels: true, teamId: TEAM.id, parts, num: 4, detail, hero });
-const cockpit = (detail, hero) => Car3D.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true, teamId: TEAM.id, parts, detail, hero });
+const body = (detail, hero, v = Car3D) => v.build(C1, C2, { noWheels: true, teamId: TEAM.id, parts, num: 4, detail, hero });
+const cockpit = (detail, hero, v = Car3D) => v.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true, teamId: TEAM.id, parts, detail, hero });
 const wheel = (r, detail) => { const w = Car3D.buildWheelLayers(r, null, null, null, false, null, null, null, null, null, detail); return tris(w.rotating) + tris(w.fixed); };
 const flaps = (detail) => CarGeometry.withDetail(detail, () => Car3D.aeroFlaps(2, null).reduce((n, el) => n + tris(Car3D.buildFlapGeom(el, C1)), 0));
 
@@ -38,12 +40,15 @@ function rigTris(gq) {
 // What the race draws for the player: body (no wheels) + four wheels + the flap set; rivals at most detail 1.
 function measure() {
   const rows = {}, rig0 = rigTris(null), rigX = rigTris(EXTREME_GQ);
-  for (const [name, d, hero] of [["detail0", 0, false], ["ultra", 1, false], ["extreme", 2, true]]) {
-    const r = { body: tris(body(d, hero)), cockpit: tris(cockpit(d, hero)), frontWheel: wheel(0.32, d), rearWheel: wheel(0.38, d), flaps: flaps(d) };
+  // extreme: the race path (MeshDetail loaded: the floor and endplate bevels); extremeNoMeshDetail: the same build
+  // before the lazy kit arrives (the garage on a cold boot), which is PR #5951's hero body.
+  for (const [name, d, hero, v] of [["detail0", 0, false, Car3D], ["ultra", 1, false, Car3D], ["extreme", 2, true, MD.Car3D]]) {
+    const r = { body: tris(body(d, hero, v)), cockpit: tris(cockpit(d, hero, v)), frontWheel: wheel(0.32, d), rearWheel: wheel(0.38, d), flaps: flaps(d) };
     r.player = r.body + 2 * r.frontWheel + 2 * r.rearWheel + r.flaps;
     Object.assign(r, hero ? rigX : rig0);
     rows[name] = r;
   }
+  rows.extremeNoMeshDetail = { body: tris(body(2, true)), cockpit: tris(cockpit(2, true)) };
   return rows;
 }
 if (process.argv.includes("--update")) {
@@ -72,7 +77,10 @@ test("the flat-loft detail-0 car still matches the wing-foil baseline exactly", 
 });
 
 test("triangle counts per level match the measured file and sit in the planned ranges", () => {
-  assert.deepEqual(measure(), { detail0: BASE.detail0, ultra: BASE.ultra, extreme: BASE.extreme }, REMEASURE);
+  const pinned = Object.assign({}, BASE);
+  delete pinned._note;
+  assert.deepEqual(measure(), pinned, REMEASURE);
+  assert.ok(BASE.extreme.body > BASE.extremeNoMeshDetail.body, "the bevels add the rounded rims");
   const { detail0: z, ultra: u, extreme: x } = BASE;
   for (const k of ["body", "cockpit", "frontWheel", "flaps"]) assert.ok(u[k] > z[k], `${k}: ULTRA ${u[k]} not above detail 0 ${z[k]}`);
   assert.ok(x.frontWheel > u.frontWheel, "EXTREME tyres (64) are finer than ULTRA's (48)");
@@ -83,14 +91,15 @@ test("triangle counts per level match the measured file and sit in the planned r
 
 test("every level is a healthy mesh inside the detail-0 box (1 cm)", () => {
   const ref = meshHealth(body(0, false));
-  for (const [d, hero] of [[1, false], [2, false], [2, true]]) {
-    for (const m of [body(d, hero), cockpit(d, hero)]) {
+  for (const [d, hero, v] of [[1, false], [2, false], [2, true], [2, true, MD.Car3D]]) {
+    const tag = `detail ${d}${hero ? " hero" : ""}${v ? " +MeshDetail" : ""}`;
+    for (const m of [body(d, hero, v), cockpit(d, hero, v)]) {
       const h = meshHealth(m);
-      assert.deepEqual(h.bad, [], `detail ${d}${hero ? " hero" : ""}: ${h.bad.join("; ")}`);
-      assert.ok(h.degenerate <= ref.degenerate, `detail ${d}${hero ? " hero" : ""}: ${h.degenerate} zero-area triangles (detail 0 has ${ref.degenerate})`);
+      assert.deepEqual(h.bad, [], `${tag}: ${h.bad.join("; ")}`);
+      assert.ok(h.degenerate <= ref.degenerate, `${tag}: ${h.degenerate} zero-area triangles (detail 0 has ${ref.degenerate})`);
     }
-    const box = meshHealth(body(d, hero)).box;
-    box.forEach((v, i) => assert.ok(Math.abs(v - ref.box[i]) <= 0.01, `detail ${d}${hero ? " hero" : ""} box[${i}] ${v} vs ${ref.box[i]}`));
+    const box = meshHealth(body(d, hero, v)).box;
+    box.forEach((x, i) => assert.ok(Math.abs(x - ref.box[i]) <= 0.01, `${tag} box[${i}] ${x} vs ${ref.box[i]}`));
   }
   for (const d of [1, 2]) for (const r of [0.32, 0.38]) {
     const w = Car3D.buildWheelLayers(r, null, null, null, false, null, null, null, null, null, d);
@@ -273,4 +282,44 @@ test("liveryHi: a desktop rival atlas uploads at 1024x1280; phones and the playe
   assert.equal(LiveryTex.atlasDiv(true, false, false, true), 2, "player preview unchanged");
   assert.equal(LiveryTex.atlasDiv(true, false, true, true), 1);
   assert.equal(LiveryTex.liveryHi(), false, "no GfxQuality in node: off");
+});
+
+test("loft UVs: the hero body's lofts carry (station, section arc, -1) on trk; nothing else moves", () => {
+  const opt = (o) => Object.assign({ noWheels: true, teamId: TEAM.id, parts, num: 4 }, o);
+  const plain = Car3D.build(C1, C2, opt({ detail: 2, hero: true }));
+  const uv = Car3D.build(C1, C2, opt({ detail: 2, hero: true, loftUv: true }));
+  assert.equal(plain.trk, undefined, "no TLXCarSurf in node: no loft UVs unless asked");
+  assert.equal(tris(uv), tris(plain), "loft UVs add no triangle");
+  for (const k of ["luv"]) assert.equal(uv[k], undefined, k + " handed on as trk");
+  assert.equal(uv.trk.length, uv.pos.length);
+  assert.ok(uv.trk.every(Number.isFinite), "loft UVs finite");
+  const box = meshHealth(plain).box;
+  let on = 0;
+  for (let i = 0; i < uv.trk.length; i += 3) {
+    const [s, t, f] = [uv.trk[i], uv.trk[i + 1], uv.trk[i + 2]];
+    assert.ok(f === 0 ? s === 0 && t === 0 : f === -1, `vertex ${i / 3}: flag ${f}`);
+    if (f !== -1) continue;
+    on++;
+    assert.ok(s >= box[2] - 0.5 && s <= box[5] + 0.5 && Math.abs(t) < 2, `vertex ${i / 3}: s ${s} t ${t}`);
+  }
+  assert.ok(on > 0.05 * uv.pos.length / 3, `only ${on} loft vertices`);
+  // a triangle is wholly on a loft or wholly off it (no edge lerps a coordinate into a non-loft vertex)
+  for (let k = 0; k < uv.idx.length; k += 3) {
+    const f = [0, 1, 2].map((j) => uv.trk[uv.idx[k + j] * 3 + 2]);
+    assert.ok(f[0] === f[1] && f[1] === f[2], `triangle ${k / 3} mixes loft and non-loft corners`);
+  }
+  // below EXTREME the flag never reaches a build
+  for (const d of [0, 1]) assert.equal(Car3D.build(C1, C2, opt({ detail: d, loftUv: true })).trk, undefined, "detail " + d);
+});
+
+test("garage hero: garageDetail is {} in node; heroCopy refines a refinish build and leaves the kept one alone", () => {
+  assert.deepEqual(Object.keys(Car3D.garageDetail()), []);
+  const plainG = Car3D.build(C1, C2, { livery: {}, refinish: true, noWheels: true, teamId: TEAM.id, parts, num: 4 });
+  assert.equal(Car3D.heroCopy(plainG), plainG, "not a hero build: the same object");
+  const g = MD.Car3D.build(C1, C2, { livery: {}, refinish: true, noWheels: true, teamId: TEAM.id, parts, num: 4, detail: 2, hero: true });
+  const before = g.pos.length, copy = MD.Car3D.heroCopy(g);
+  assert.equal(g.pos.length, before, "the kept build is untouched");
+  assert.equal(tris(copy), BASE.extreme.body, "the garage car is the race's EXTREME body");
+  assert.equal(tris(MD.Car3D.heroCopy(MD.Car3D.refinish(g, {}))), BASE.extreme.body, "a finish tap too");
+  assert.deepEqual(meshHealth(copy).bad, []);
 });

@@ -2879,12 +2879,48 @@ const Car3D = (function () {
     try {
       return CarGeometry.withDetail(d, () => {
         const out = build0(color, color2, opts);
-        if (hero && !out._refinish && !out.parts && !opts.noWeld) CarGeometry.refine(out, HERO.levels, HERO.minEdge);
+        if (hero) out._hero = true;   // heroCopy's mark (refinish's copy keeps it); no renderer reads it
+        if (hero && !out._refinish && !out.parts && !opts.noWeld) { CarGeometry.refine(out, HERO.levels, HERO.minEdge); loftTrk(out); }
         return out;
-      }, hero);
+      }, hero, hero && loftUvWanted(opts));
     } catch (e) {
       Log.warn("car", "detail " + d + (hero ? " hero" : "") + " build failed, detail 0: " + (e && e.message));
       return build0(color, color2, Object.assign({}, opts, { detail: 0, hero: false }));
+    }
+  }
+  // LOFT UVS (CarGeometry.loftUv) are recorded only for the TLX car-surface program (tsl-carsurf.js reads them
+  // from the trk attribute) or when a test asks (opts.loftUv).
+  function loftUvWanted(opts) {
+    if (opts && opts.loftUv != null) return !!opts.loftUv;
+    try { return typeof TLXCarSurf !== "undefined" && !!TLXCarSurf.enabled(); } catch (_) { return false; }
+  }
+  function loftTrk(out) {
+    if (!out.luv) return out;
+    CarGeometry.luvPad(out, out.pos.length / 3);
+    if (out.luv.length === out.pos.length) out.trk = out.luv;
+    delete out.luv;
+    return out;
+  }
+  // THE GARAGE / CAR STUDIO HERO (js/garage/setup-camera.js): the turntable builds with refinish (a finish tap
+  // re-finishes the kept arrays), which a refine would scramble, so the hero pass refines a welded COPY for the
+  // upload and the kept build stays as it was. garageDetail: the opts the garage adds ({} below EXTREME, every
+  // phone, node); heroCopy hands back its argument unchanged for anything but a hero build, and on any throw.
+  function garageDetail() {
+    const d = CarGeometry.detailFor(true), hero = CarGeometry.heroOn() && d >= 2;
+    return d || hero ? { detail: d, hero } : {};
+  }
+  function heroCopy(data) {
+    if (!data || !data._hero || !data.pos || !data.idx) return data;
+    try {
+      const out = Object.assign({}, data, { pos: data.pos.slice(), nrm: data.nrm.slice(), col: data.col.slice(), mat: data.mat.slice(), idx: data.idx.slice() });
+      if (data.luv) out.luv = data.luv.slice();
+      delete out._refinish;
+      CarGeometry.weld(out);
+      CarGeometry.withDetail(2, () => CarGeometry.refine(out, HERO.levels, HERO.minEdge), true);
+      return loftTrk(out);
+    } catch (e) {
+      Log.warn("car", "garage hero copy failed, the plain build: " + (e && e.message));
+      return data;
     }
   }
   // heroCar (EXTREME player car): a pitot probe out of the nose tip and a telemetry antenna on the survival cell's
@@ -2926,7 +2962,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, HERO, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, HERO, garageDetail, heroCopy, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

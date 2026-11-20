@@ -1367,6 +1367,7 @@ const TrackBuildProps = (function () {
     if (def.street) {
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
+      const streetHi = typeof TrackModels !== "undefined" && TrackModels.propsHi(track);
       const panel = (kA, kB, col, side) => {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
@@ -1387,6 +1388,23 @@ const TrackBuildProps = (function () {
           if (Number.isFinite(g) && y - g > drop) drop = y - g;
         }
         drop = drop > 0.3 ? Math.min(drop + 0.1, 6) : 0;
+        // EXTREME props detail (TrackModels.propsHi): a W-beam armco face on a dark backing inside the same
+        // 0.4 x 1.1 m envelope (visual only: markBarrier below is unchanged). A skirted panel keeps the box.
+        if (streetHi && drop === 0) {
+          const d = -side * (rr[0] * rA[0] + rr[1] * rA[1] + rr[2] * rA[2] < 0 ? -1 : 1);   // canonical x toward the road
+          instance(`street-barrier-hi|${col.join(",")}|${d}`,
+            { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+            (rec) => {
+              const dk = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.58];
+              rec.box([-d * 0.09, 0, 0], [0.22, WH, 1], dk);                     // backing
+              TrackModels.wBeam(rec, d, -0.08, 0.84, col, d * 0.1);              // lower rail
+              TrackModels.wBeam(rec, d, 0.30, 0.84, col, d * 0.1);               // upper rail
+              rec.box([0, WH / 2 - 0.02, 0], [WT, 0.04, 1], dk);                 // cap
+              rec.box([d * 0.05, -WH / 2 + 0.1, 0], [0.1, 0.2, 1], dk);           // kick plate
+            },
+            { kind: "streetBarrier", k: kA, side });
+          return [cx, cz];
+        }
         instance(`street-barrier|${col.join(",")}`,
           { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len] },
           (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),

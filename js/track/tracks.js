@@ -356,7 +356,11 @@ const Tracks = (function () {
       delete roadGeo._visual;
       if (roadVis && !TrackModels.validateGeometry(roadVis).ok) roadVis = null;
       lap("road", "geo"); yield track; _t = _now();
-      track.roadGeo = roadGeo; buildRibbon(roadVis || roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
+      track.roadGeo = roadGeo; buildRibbon(roadVis || roadGeo, "road");
+      // A road drawn unchunked may be re-chunked later (game.js quality recovery): it chunks this, the profiled
+      // kerbs, never the flat roadGeo. Dropped with the ribbon CPU copies (dropRibbonCpuIfReady).
+      if (roadVis && track.meshes.roadChunked === undefined) track.roadDrawGeo = roadVis;
+      lap("road", "up"); yield track; _t = _now();
       const terrainGeo = yield* inner(buildTerrainSteps(track));
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       lap("terrain", "geo"); yield track; _t = _now();
@@ -425,7 +429,9 @@ const Tracks = (function () {
           // Pushed as each one lands, not assigned after the map: a throw or an
           // abandon part-way can then free the batches already on the GPU.
           const pb = track.meshes.propBatches = [];
-          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
+          // crowd: the seated figures (EXTREME crowd3d) draw with TLX's CROWD LIFE vertex stage; other backends ignore it.
+          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors,
+            String(b.model).startsWith("crowd-fig|") ? { cellSize: 72, crowd: true } : { cellSize: 72 }));
         }
         if (farFloor) _farInst = TrackDetail.batchXZ(batches);
       }
@@ -858,6 +864,7 @@ const Tracks = (function () {
     if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || (opts && opts.retainRibbonCpu) || keepGeometry) return;
     if (!track.roadGeo || !track.terrainGeo) return;
     if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
+    track.roadDrawGeo = null;   // kerbProfile's drawn road: chunked by now (or never will be)
     for (const geo of [track.roadGeo, track.terrainGeo]) {
       geo.nrm = geo.col = geo.mat = null;
       // A main-thread build's push-grown arrays carry slack; typed as the worker posts them (build-worker.js typedRibbon).

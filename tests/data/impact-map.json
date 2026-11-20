@@ -3416,7 +3416,8 @@
     },
     "js/car/field-lod.js": {
       "castsShadow": [
-        "tests/unit/field-lod.test.mjs"
+        "tests/unit/field-lod.test.mjs",
+        "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "farBody": [
         "tests/unit/field-lod.test.mjs"
@@ -3428,7 +3429,8 @@
         "tests/unit/field-lod.test.mjs"
       ],
       "init": [
-        "tests/unit/field-lod.test.mjs"
+        "tests/unit/field-lod.test.mjs",
+        "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "lensK2": [
         "tests/unit/field-lod.test.mjs"
@@ -3444,7 +3446,8 @@
       ],
       "setEnabled": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "tier": [
         "tests/unit/field-lod.test.mjs"
@@ -10282,6 +10285,7 @@
         "tests/unit/puddles.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/tlx-carsurf.test.mjs",
+        "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -16079,6 +16083,7 @@
         "tests/unit/mirror-lights.test.mjs",
         "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-carsurf.test.mjs",
+        "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -16234,7 +16239,8 @@
       "beginFrame": [
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lamp-shadow-pick.test.mjs"
+        "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -16256,7 +16262,8 @@
       ],
       "pushCaster": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/lamp-shadow-pick.test.mjs"
+        "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "reset": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -16520,6 +16527,9 @@
       ]
     },
     "js/render/three/tlx-shadow.js": {
+      "bindField": [
+        "tests/unit/tlx-csm-lampx.test.mjs"
+      ],
       "carShadowBegin": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -16554,10 +16564,19 @@
       "csmDue": [
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
+      "csmGateK": [
+        "tests/unit/tlx-csm-lampx.test.mjs"
+      ],
       "csmHalves": [
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
+      "csmJitter": [
+        "tests/unit/tlx-csm-lampx.test.mjs"
+      ],
       "csmPlanner": [
+        "tests/unit/tlx-csm-lampx.test.mjs"
+      ],
+      "csmReach2": [
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "csmSnap": [
@@ -16567,6 +16586,9 @@
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "csmWeight": [
+        "tests/unit/tlx-csm-lampx.test.mjs"
+      ],
+      "fieldCars": [
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "flushDropped": [
@@ -17027,6 +17049,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tier-record.test.mjs",
+        "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -17221,13 +17244,29 @@
       "jitterPx": [
         "tests/unit/tlx-aa.test.mjs"
       ],
+      "objMotionPx": [
+        "tests/unit/tlx-aa.test.mjs"
+      ],
       "reproject": [
         "tests/unit/tlx-aa.test.mjs"
       ],
       "resolve": [
-        "tests/unit/tlx-aa.test.mjs"
+        "tests/unit/tlx-aa.test.mjs",
+        "tests/unit/tsl-gi.test.mjs"
       ],
       "ssCeil": [
+        "tests/unit/tlx-aa.test.mjs"
+      ],
+      "velRejected": [
+        "tests/unit/tlx-aa.test.mjs"
+      ],
+      "velReproject": [
+        "tests/unit/tlx-aa.test.mjs"
+      ],
+      "velocity": [
+        "tests/unit/tlx-aa.test.mjs"
+      ],
+      "velocityMrt": [
         "tests/unit/tlx-aa.test.mjs"
       ]
     },
@@ -17279,6 +17318,7 @@
       "chunks": [
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/tlx-carsurf.test.mjs",
+        "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -17304,6 +17344,7 @@
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "decalMaterialFor": [
+        "tests/unit/tlx-csm-lampx.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
@@ -17339,6 +17380,9 @@
       "bilateralDepthW": [
         "tests/unit/tsl-gi.test.mjs"
       ],
+      "build": [
+        "tests/unit/tsl-gi.test.mjs"
+      ],
       "buildPlan": [
         "tests/unit/tsl-gi.test.mjs"
       ],
@@ -17354,10 +17398,22 @@
       "focusDistance": [
         "tests/unit/tsl-gi.test.mjs"
       ],
+      "giAccPass": [
+        "tests/unit/tsl-gi.test.mjs"
+      ],
+      "giEffectiveRays": [
+        "tests/unit/tsl-gi.test.mjs"
+      ],
+      "giPhase": [
+        "tests/unit/tsl-gi.test.mjs"
+      ],
       "gtaoFalloff": [
         "tests/unit/tsl-gi.test.mjs"
       ],
       "gtaoSliceVis": [
+        "tests/unit/tsl-gi.test.mjs"
+      ],
+      "historyBlend": [
         "tests/unit/tsl-gi.test.mjs"
       ],
       "livePlan": [
@@ -17379,6 +17435,7 @@
       ],
       "makeMaterial": [
         "tests/unit/tlx-carsurf.test.mjs",
+        "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -17390,6 +17447,9 @@
         "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
+      ],
+      "setCrowdExcite": [
+        "tests/unit/tlx-crowd-anim.test.mjs"
       ],
       "setEnvStr": [
         "tests/unit/tlx-mat-detail.test.mjs"
@@ -17409,6 +17469,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "updateFrame": [
+        "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
@@ -17432,7 +17493,8 @@
     },
     "js/render/three/tsl-post.js": {
       "post": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tsl-gi.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -17448,7 +17510,6 @@
         "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs",
-        "tests/unit/tsl-gi.test.mjs",
         "tests/unit/tsl-post-fxaa-lab.test.mjs"
       ]
     },
@@ -18359,7 +18420,8 @@
         "tests/unit/track-detail.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/tlx-crowd-anim.test.mjs"
       ]
     },
     "js/track/scenery/facade.js": {

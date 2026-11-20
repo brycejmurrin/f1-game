@@ -2204,8 +2204,9 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
-      const _fxKeys = new Map();
-      function materialFor(opts, chunked, instanced, fx) {
+      const _fxKeys = new Map(), _crKeys = new Map();
+      // crowd: the seated-figure batches' variant (tsl-lit.js CROWD LIFE), attribute-instanced only; its own key.
+      function materialFor(opts, chunked, instanced, fx, crowd) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
@@ -2213,6 +2214,7 @@ const TLX = (function () {
         const o = opts;
         let key = matKeyFor(o, chunked, instanced);
         if (fx) { let fk = _fxKeys.get(key); if (fk === undefined) _fxKeys.set(key, fk = key + "|fx"); key = fk; }   // one string per key, not one per draw
+        if (crowd) { let ck = _crKeys.get(key); if (ck === undefined) _crKeys.set(key, ck = key + "|cr"); key = ck; }
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
@@ -2236,6 +2238,7 @@ const TLX = (function () {
               const v = matCache.get(k);
               matCache.delete(k);
               if (k.endsWith("|fx")) _fxKeys.delete(k.slice(0, -3));   // its memoised fx key goes with it (#5699 row 14)
+              else if (k.endsWith("|cr")) _crKeys.delete(k.slice(0, -3));
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
               _matEvict++;
@@ -2243,7 +2246,7 @@ const TLX = (function () {
           }
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
-            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
+            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null, crowd ? { crowd: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
           if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
@@ -2555,6 +2558,7 @@ const TLX = (function () {
           packMatrices: imesh.instanceMatrix.array.subarray(0, matrices.length),
           packColors: colors && colors.length ? _instColorAttr(imesh, n).array.subarray(0, colors.length) : null,
           cells: null,
+          crowd: !!(opts && opts.crowd),   // the seated-figure batches (tracks.js, EXTREME crowd3d): CROWD LIFE
         };
         if (opts && opts.cellSize > 0 && n) {
           const cell = opts.cellSize;
@@ -2687,7 +2691,9 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        const mat = materialFor(opts, false, batch.imesh.isInstancedMesh ? true : 2);   // A2: the attribute-instanced variant
+        const ai = batch.imesh.isInstancedMesh ? true : 2;   // A2: the attribute-instanced variant
+        // CROWD LIFE reads the instance axes from iM0..3, so only the attribute path animates the figures.
+        const mat = materialFor(opts, false, ai, false, ai === 2 && batch.crowd === true);
         if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
@@ -2786,7 +2792,7 @@ const TLX = (function () {
           srcMatrices: batch.srcMatrices, srcColors: batch.srcColors,
           packMatrices: im.instanceMatrix.array.subarray(0, batch.srcMatrices.length),
           packColors: batch.srcColors && tint ? tint.array.subarray(0, batch.srcColors.length) : null,
-          cells: batch.cells,
+          cells: batch.cells, crowd: batch.crowd,
         });
       }
       function _passBatch(batch) {
@@ -2866,8 +2872,16 @@ const TLX = (function () {
       //
       // The node's contents are frame-invariant (output, a constant 1.0), so
       // building it once is not a cache — it is the correct lifetime.
-      let _ssrMrt = null;
+      let _ssrMrt = null, _ssrMrtV = null;
+      // EXTREME: a chain whose scene target carries the "velocity" attachment (tlx-post.js velocityOn) gets the same
+      // MRT plus three's VelocityNode (TLXAA.velocityMrt), also built ONCE; _velProj is the unjittered projection
+      // begin() copies before the TRAA jitter, so the vectors carry motion only. A build failure keeps the plain node.
+      const _velProj = new THREE.Matrix4();
       function _ssrMrtNode() {
+        if (post && post.velocityOn && post.velocityOn() && _ssrMrtV !== false) {
+          if (!_ssrMrtV) { try { _ssrMrtV = TLXAA.velocityMrt(THREE, TSL, _velProj) || false; } catch (_) { _ssrMrtV = false; } }
+          if (_ssrMrtV) return _ssrMrtV;
+        }
         if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
         return _ssrMrt;
       }
@@ -6439,6 +6453,7 @@ const TLX = (function () {
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
           // traa: this frame's sub-pixel jitter on the MAIN camera only (the mirror builds mirCam from frame.proj, the
           // HUD is DOM), and only on a frame the post chain will resolve (post.taaJitter answers null otherwise).
+          if (post && post.velocityOn && post.velocityOn()) _velProj.copy(camera.projectionMatrix);
           if (post && post.taaJitter && frame && frame.proj && frame.viewProj && !frame.noEnv && !_xrActive) {
             const j = post.taaJitter(W, H);
             if (j) { TLXAA.applyJitter(camera.projectionMatrix.elements, j[0], j[1]); camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert(); }

@@ -3,7 +3,8 @@
  * chain creation and which is LIVE this frame), the pure maths the shaders are built from (kernels, sample budgets,
  * GTAO's slice integral, the depth-of-field circle of confusion, the focus pull, the motion-blur velocity clamp), and
  * the TSL builders of the new passes: GTAO, a depth-aware bilateral denoise, one-bounce SSGI, the autofocus probe,
- * depth of field and camera motion blur.
+ * depth of field and camera motion blur; on native WebGPU, SSGI temporal accumulation and, with the scene's velocity
+ * attachment, per-object reprojection and motion blur.
  *
  * Nothing here runs below ULTRA, on a phone, on GLX / WGX, or with fixed / orient-cover targets: buildPlan() answers all
  * false there and tlx-post.js keeps today's exact pass set. tsl-post.js builds the variants that live inside its own
@@ -29,6 +30,10 @@
     ssrGrowth: Object.freeze([1.16, 1.075]),    // per-step growth at quality 0
     gtaoSlices: 3, gtaoSteps: 6,
     ssgiRays: 6, ssgiSteps: 8, ssgiRadius: 3.0, ssgiStr: 0.35,
+    // Temporal SSGI: fewer rays a frame (rotated per frame by giPhase), the history carries the rest. Per pixel
+    // 4 x 8 march steps + the accumulate pass's 12 taps (depth, velocity, 3x3 current, history) against today's
+    // 6 x 8 (tsl-gi.test.mjs pins the inequality).
+    ssgiRaysT: 4, giAccTaps: 12,
     dofTaps: 24, mbTaps: 12,
   });
 
@@ -106,6 +111,28 @@
     return [dx * s, dy * s];
   }
   const MB = Object.freeze({ shutter: 0.5, maxLen: 0.06, cutLen: 0.25 });
+  // SSGI TEMPORAL ACCUMULATION: last frame's GI reprojected (per-object velocity where the scene has it, else the
+  // camera through the depth), clamped to this frame's 3x3 spatial neighbourhood and blended at weight 0.9; a
+  // disoccluded / off-screen / reset pixel takes this frame's spatial-only denoise alone. depthTol as TRAA's.
+  const GI_ACC = Object.freeze({ weight: 0.9, depthTol: 0.08, skyD: 0.999999, wMax: 60000 });
+  // The shader's blend in JS: cur / hist / lo / hi are rgb triples; reject = disocclusion, off-screen or reset.
+  function historyBlend(cur, hist, lo, hi, weight, reject, out) {
+    const o = out || [0, 0, 0];
+    for (let i = 0; i < 3; i++) {
+      const h = Math.min(Math.max(hist[i], lo[i]), hi[i]);
+      o[i] = reject ? cur[i] : h * weight + cur[i] * (1 - weight);
+    }
+    return o;
+  }
+  // The per-frame ray rotation: an R2 offset (px) into the interleaved-gradient noise, so frames sample new
+  // directions the history then averages.
+  function giPhase(n, out) {
+    const o = out || [0, 0];
+    o[0] = ((n * 0.7548776662) % 1) * 64; o[1] = ((n * 0.5698402910) % 1) * 64;
+    return o;
+  }
+  // The effective sample count after k frames of history at weight w (geometric series), times the per-frame rays.
+  function giEffectiveRays(raysPerFrame, w, k) { return raysPerFrame * (1 - Math.pow(w, k)) / (1 - w); }
   const DOF = Object.freeze({ aperture: 0.55, maxPx1080: 11 });
 
   // WHICH EXTRA IS BUILT. env = { detail, need(name) -> level (GfxQuality.FEATURES), feature(name) -> bool (boot, no
@@ -279,11 +306,14 @@
     }
 
     // SSGI: one diffuse bounce from the lit HDR scene, half resolution; cosine-weighted rays marched in view space.
-    if (plan.ssgi) {
+    // ssgiPass(RAYS, key, temporal): today's pass (6 rays, no phase) or the temporal one (BUDGET.ssgiRaysT rays, the
+    // interleaved-gradient noise shifted by U.phase each frame). Same march, same soft-clip.
+    function ssgiPass(RAYS, key, temporal) {
       const giU = Object.assign(perspU(), {
         radius: uniform(BUDGET.ssgiRadius),
         thick: uniform(0.6),
       });
+      if (temporal) giU.phase = uniform(new THREE.Vector2(0, 0));
       const vp = (uv) => viewPosNdc(giU, uv, depthAt(uv).mul(2.0).sub(1.0));
       const mat = passMaterial(Fn(() => {
         const vUV = glUV();
@@ -299,9 +329,9 @@
           const up = select(abs(N.y).lessThan(0.99), vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0));
           const T = normalize(cross(N, up)).toVar();
           const B = cross(N, T).toVar();
-          const ign = ignoise(screenCoordinate.xy).toVar();
+          const ign = ignoise(temporal ? screenCoordinate.xy.add(giU.phase) : screenCoordinate.xy).toVar();
           const jit = fract(ign.mul(1.6180339).add(0.5)).toVar();
-          const RAYS = BUDGET.ssgiRays, STEPS = BUDGET.ssgiSteps;
+          const STEPS = BUDGET.ssgiSteps;
           const stepLen = giU.radius.div(STEPS).toVar();
           for (let r = 0; r < RAYS; r++) {
             const u1 = fract(ign.add((r + 0.5) / RAYS)).toVar();
@@ -328,9 +358,58 @@
           acc.assign(acc.div(dot(acc, vec3(0.299, 0.587, 0.114)).add(1.0)));   // firefly soft-clip
         });
         return vec4(acc, 1.0);
-      })(), "tlx-gi-ssgi");
-      out.ssgi = { mat, U: giU };
-      const zGI = zFrom(giU);
+      })(), key);
+      return { mat, U: giU };
+    }
+    // The accumulate pass (half res): history <- blend(this frame's denoised GI, last frame's reprojected GI). Alpha
+    // carries the view depth, the disocclusion test. velT: the scene's velocity attachment, else camera only.
+    function giAccPass(velTex) {
+      const curT = texture(own()), histT = texture(own());
+      const velT = velTex ? texture(velTex) : null;
+      const aU = {
+        invVP: uniform(new THREE.Matrix4()), prevVP: uniform(new THREE.Matrix4()),
+        texel: uniform(new THREE.Vector2(1, 1)), reset: uniform(1),
+        weight: uniform(GI_ACC.weight), depthTol: uniform(GI_ACC.depthTol),
+      };
+      const mat = passMaterial(Fn(() => {
+        const vUV = glUV();
+        const d = min(depthAt(vUV), float(GI_ACC.skyD)).toVar();
+        const wp = aU.invVP.mul(vec4(vUV.mul(2.0).sub(1.0), d.mul(2.0).sub(1.0), 1.0)).toVar();
+        const wCur = min(float(1.0).div(wp.w), float(GI_ACC.wMax));
+        const pc = aU.prevVP.mul(vec4(wp.xyz.div(wp.w), 1.0)).toVar();
+        const pUv = pc.xy.div(pc.w).mul(0.5).add(0.5).toVar();
+        if (velT) If(d.lessThan(float(GI_ACC.skyD)), () => { pUv.assign(vUV.sub(vec2(velT.sample(TL(vUV)).xy).mul(0.5))); });
+        const c = vec3(curT.sample(TL(vUV)).rgb).toVar();
+        const mn = vec3(c).toVar(), mx = vec3(c).toVar();
+        for (let y = -1; y <= 1; y++) {
+          for (let x = -1; x <= 1; x++) {
+            if (!x && !y) continue;
+            const sN = curT.sample(TL(vUV.add(vec2(x, y).mul(aU.texel)))).rgb;
+            mn.assign(min(mn, sN)); mx.assign(max(mx, sN));
+          }
+        }
+        const h = vec4(histT.sample(TL(pUv))).toVar();
+        const wPrev = min(pc.w, float(GI_ACC.wMax));
+        const rej = aU.reset.greaterThan(0.5).or(d.greaterThanEqual(float(GI_ACC.skyD)))
+          .or(pUv.x.lessThan(0.0)).or(pUv.x.greaterThan(1.0)).or(pUv.y.lessThan(0.0)).or(pUv.y.greaterThan(1.0))
+          .or(pc.w.lessThanEqual(0.0)).or(abs(h.a.sub(wPrev)).div(max(wPrev, 1e-3)).greaterThan(aU.depthTol));
+        const blended = mix(c, clamp(h.rgb, mn, mx), aU.weight);
+        return vec4(select(rej, c, blended), wCur);
+      })(), "tlx-gi-ssgi-acc");
+      return { mat, U: aU, cur: curT, hist: histT, velocity: !!velT };
+    }
+    if (plan.ssgi) {
+      // bag.giTemporal (EXTREME on native WebGPU): the temporal pass set; a build throw keeps today's spatial set.
+      let pass = null;
+      if (bag.giTemporal) {
+        try {
+          pass = ssgiPass(BUDGET.ssgiRaysT, "tlx-gi-ssgi-t", true);
+          out.giAcc = giAccPass(bag.velTex || null);
+        } catch (_) { pass = null; out.giAcc = null; }
+      }
+      if (!pass) pass = ssgiPass(BUDGET.ssgiRays, "tlx-gi-ssgi", false);
+      out.ssgi = pass;
+      const zGI = zFrom(pass.U);
       out.giH = makeBilateral("tlx-gi-ssgi-bl-h", zGI);
       out.giV = makeBilateral("tlx-gi-ssgi-bl-v", zGI);
     }
@@ -397,9 +476,12 @@
     }
 
     // Camera motion blur: depth reprojection through last frame's view-projection; car pixels (the tag) stay sharp
-    // and never smear into the world. Object motion of other cars needs a velocity target (not built here).
-    if (plan.motionBlur) {
+    // and never smear into the world. With bag.velTex (the scene's per-object velocity attachment) every drawn pixel
+    // blurs along its OWN motion instead: a rival passing the camera smears, the followed car (still relative to the
+    // camera) stays sharp; world taps still refuse car pixels. The camera answer keeps the cut test either way.
+    function mbPass(velTex) {
       const src = texture(own());
+      const velT = velTex ? texture(velTex) : null;
       const mU = {
         invVP: uniform(new THREE.Matrix4()), prevVP: uniform(new THREE.Matrix4()),
         shutter: uniform(MB.shutter), maxLen: uniform(MB.maxLen), cutLen: uniform(MB.cutLen),
@@ -414,8 +496,15 @@
         const puv = pc.xy.div(max(pc.w, 1e-4)).mul(0.5).add(0.5).toVar();
         const raw = vUV.sub(puv).toVar();
         const len = length(raw).toVar();
-        const vel = raw.mul(mU.shutter).mul(min(float(1.0), mU.maxLen.div(max(len.mul(mU.shutter), 1e-6)))).toVar();
-        If(len.greaterThan(mU.cutLen).or(pc.w.lessThanEqual(0.0)).or(isCar(vUV).greaterThan(0.5)), () => {
+        const carC = velT ? isCar(vUV).toVar() : null;
+        let mv = raw, mlen = len;
+        if (velT) {
+          const ov = vec2(raw).toVar();
+          If(d.lessThan(0.99999), () => { ov.assign(vec2(velT.sample(TL(vUV)).xy).mul(0.5)); });
+          mv = ov; mlen = length(ov).toVar();
+        }
+        const vel = mv.mul(mU.shutter).mul(min(float(1.0), mU.maxLen.div(max(mlen.mul(mU.shutter), 1e-6)))).toVar();
+        If(len.greaterThan(mU.cutLen).or(pc.w.lessThanEqual(0.0)).or(velT ? mlen.greaterThan(mU.cutLen) : isCar(vUV).greaterThan(0.5)), () => {
           vel.assign(vec2(0.0));
         });
         const c0 = vec3(src.sample(TL(vUV)).rgb).toVar();
@@ -427,14 +516,20 @@
           for (let i = 0; i < N; i++) {
             const t = float(i).add(ign).div(N).sub(0.5);
             const uv = clamp(vUV.add(vel.mul(t)), vec2(0.0), vec2(1.0)).toVar();
-            const wt = isCar(uv).oneMinus().toVar();   // a car tap would smear the car into the world
+            // A car tap would smear the car into the world; a car pixel blurs over whatever its motion crosses.
+            const wt = (velT ? max(isCar(uv).oneMinus(), carC) : isCar(uv).oneMinus()).toVar();
             acc.addAssign(vec3(src.sample(TL(uv)).rgb).mul(wt));
             wsum.addAssign(wt);
           }
         });
         return vec4(acc.div(wsum), 1.0);
-      })(), "tlx-gi-mblur");
-      out.motionBlur = { mat: mbMat, U: mU, src };
+      })(), velT ? "tlx-gi-mblur-v" : "tlx-gi-mblur");
+      return { mat: mbMat, U: mU, src, velocity: !!velT };
+    }
+    if (plan.motionBlur) {
+      let mb = null;
+      if (bag.velTex) { try { mb = mbPass(bag.velTex); } catch (_) { mb = null; } }
+      out.motionBlur = mb || mbPass(null);
     }
     return out;
   }
@@ -443,6 +538,7 @@
     NAMES, BUDGET, MB, DOF, FOCUS_MIN, FOCUS_MAX, BILATERAL_G, BILATERAL_O,
     ssaoKernel, marchReach, gtaoSliceVis, gtaoFalloff, bilateralDepthW, cocPx, dofKernel, focusDistance, focusBlend,
     mbVelocity, buildPlan, livePlan, anyBuilt, gfxEnv, gfxFeature, build,
+    GI_ACC, historyBlend, giPhase, giEffectiveRays,
   };
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { gi: Object.freeze(gi) });
 })();

@@ -586,6 +586,11 @@
       return clamp(x.mul(C.acesA.mul(x).add(C.acesB))
         .div(x.mul(C.acesC.mul(x).add(C.acesD)).add(C.acesE)), 0.0, 1.0);
     };
+    // AgX (ctx.agx: EXTREME, apex26.tlxAgx=1, read once by tlx-post.js): three's own agxToneMapping in place of the
+    // ACES fit in the composite and the mirror inset. Off (or no such export): toneMap IS acesTonemap, so the
+    // programs are today's. The ACES knobs then do nothing; exposure and white point still apply before the curve.
+    const agxFn = ctx.agx && typeof TSL.agxToneMapping === "function" ? TSL.agxToneMapping : null;
+    const toneMap = agxFn ? (x0) => agxFn(max(x0, vec3(0.0)), float(1.0)) : acesTonemap;
 
     // Reconstruct view-space position from depth (COMPOSITE ssrViewPos).
     const ssrViewPos = (uvGl) => viewPosNdc(C, uvGl, depthAt(uvGl).mul(2.0).sub(1.0));
@@ -1051,12 +1056,12 @@
         // already clamped highlights; running ACES again reads pale/washed
         // (tlx-post.js hdr probe — mirrorTone gates the same way).
         If(C.sceneHdr.greaterThan(0.5), () => {
-          if (!HDR_OUT) { c.assign(acesTonemap(c.div(C.whitePoint))); return; }
+          if (!HDR_OUT) { c.assign(toneMap(c.div(C.whitePoint))); return; }
           const xw = vec3(c.div(C.whitePoint)).toVar();
-          c.assign(acesTonemap(xw));
+          c.assign(toneMap(xw));
           // hdrOut: the curve stretched to the display's peak takes over only in the SDR curve's top (0.7..1 out):
           // shadows and mid-tones are today's pixels, highlights rise towards hdrPeak (tests/unit/tlx-aa.test.mjs).
-          const hi = acesTonemap(xw.div(C.hdrPeak)).mul(C.hdrPeak);
+          const hi = toneMap(xw.div(C.hdrPeak)).mul(C.hdrPeak);
           c.addAssign(max(hi.sub(c), vec3(0.0)).mul(smoothstep(0.7, 1.0, c)));
         });
         If(C.sceneHdr.lessThanEqual(0.5), () => {
@@ -1371,7 +1376,7 @@
       return vec3(texN.sample(vec2(mix(p.x, p.x.oneMinus(), mirrorU.flip), p.y)).rgb).toVar();
     }
     function mirrorTone(c) {
-      const t = vec3(acesTonemap(c.mul(C.exposure).div(C.whitePoint))).toVar();
+      const t = vec3(toneMap(c.mul(C.exposure).div(C.whitePoint))).toVar();
       colourGradeT(t);
       ditherT(t, vec2(screenCoordinate.xy));
       return select(mirrorU.hdr.greaterThan(0.5), t, c);
@@ -1383,6 +1388,8 @@
       passUV: () => { const suv = vec2(VP.uv(VP.view())).toVar(); return vec2(suv.x, suv.y.oneMinus()).toVar(); },
       passMaterial, depthAt, TL, sceneT, tagT, viewPosNdc, clipXYW, perspU, ssaoU, contactShadowT, ignoise,
       ownTexture: ctx.ownTexture,
+      // tlx-post.js: the scene's velocity attachment (null without it) and the SSGI temporal set (native WebGPU).
+      velTex: ctx.velTex || null, giTemporal: !!ctx.giTemporal,
     }, HI) : null;
 
     return { bright, blurAO, blurGR, blurAOH, blurAOV, blurGRH, blurGRV,

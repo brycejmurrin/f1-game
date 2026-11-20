@@ -161,7 +161,8 @@ async function build(m, job) {
   const def = Tracks.LIST[m.idx];
   if (!def || def.id !== m.id) throw new Error("worker track list differs at " + m.idx + " (" + (def && def.id) + " != " + m.id + ")");
   adoptTeam(m.team);
-  const src = scenerySrc(def);
+  // treesHi's tree models ride the same wait (TrackDetail.modelHint; "" below EXTREME).
+  const src = scenerySrc(def) + (typeof TrackDetail !== "undefined" ? TrackDetail.modelHint(m.detailFeatures) : "");
   if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady(0, src);
   if (job.cancelled) return;
   if (m.checkLive) {

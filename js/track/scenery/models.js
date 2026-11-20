@@ -873,6 +873,24 @@ const TrackModels = (function () {
     return !!(f && f.propsHi);
   }
 
-  return { create, validateGeometry, scratch, sealGeometry, drapeKit, propsHi, HI_NEAR };
+  // The hi rail profiles every propsHi owner shares (structures.js guardrail, build-props.js street panels).
+  // W-beam (canonical, unit length along t), `d` = the track-facing sign: two crests proud, the valley set
+  // back, rolled lips top and bottom (FHWA M617, ~0.31 m deep section); x0 shifts the whole section along d.
+  function wBeam(rec, d, yc, k, col, x0) {
+    const dk = [col[0] * 0.82, col[1] * 0.82, col[2] * 0.84], o = x0 || 0;
+    rec.box([o + d * 0.05, yc + 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // upper crest
+    rec.box([o + d * 0.05, yc - 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // lower crest
+    rec.box([o, yc, 0], [0.07, 0.11 * k, 1], dk);                           // valley, set back
+    for (const sg of [-1, 1])
+      rec.box([o + d * -0.01, yc + sg * 0.215 * k, 0], [0.06, 0.03 * k, 1], dk);   // rolled lips
+  }
+  // Steel C-post set behind the rail (the track face is `d`).
+  function cPost(rec, d, h, yb, col) {
+    rec.box([-d * 0.17, yb + h / 2, 0], [0.15, h, 0.06], col);              // web
+    for (const sg of [-1, 1])
+      rec.box([-d * 0.10, yb + h / 2, sg * 0.055], [0.06, h, 0.02], col);  // flanges
+  }
+
+  return { create, validateGeometry, scratch, sealGeometry, drapeKit, propsHi, HI_NEAR, wBeam, cPost };
 })();
 Object.freeze(TrackModels);

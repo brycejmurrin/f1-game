@@ -18,10 +18,11 @@ export function loadCarDetail(extra, opts) {
   const ctx = vm.createContext(Object.assign({ Math, console, Object, Array, Number, isFinite }, extra || {}));
   seedLog(ctx);
   const omit = new Set((opts && opts.omit) || []);
-  const files = FILES.concat(opts && opts.rig ? ["js/car/cockpit-rig.js"] : []);
+  // opts.meshDetail: the lazy MeshDetail kit loaded first, as a race (LAZY_TRACK_BUILD) has it by the car builds.
+  const files = (opts && opts.meshDetail ? ["js/render/shared/mesh-detail.js"] : []).concat(FILES, opts && opts.rig ? ["js/car/cockpit-rig.js"] : []);
   for (const f of files) if (!omit.has(f)) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   if (opts && opts.rig) vm.runInContext("CockpitRig.init({ createMesh: (d) => d, freeMesh() {} })", ctx);
-  return vm.runInContext("({ Car3D, Parts, Teams, CarGeometry, Helmets" + (opts && opts.rig ? ", CockpitRig" : "") + " })", ctx);
+  return vm.runInContext("({ Car3D, Parts, Teams, CarGeometry, Helmets" + (opts && opts.rig ? ", CockpitRig" : "") + (opts && opts.meshDetail ? ", MeshDetail" : "") + " })", ctx);
 }
 
 // The mesh health the suite pins: finite numbers, indices in range, zero-area triangles counted, unit normals,

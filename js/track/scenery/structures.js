@@ -26,23 +26,9 @@ const SceneryStructures = (function () {
       const s2 = norm(cross(s1, ax));
       addBox(out, [(a[0] + b2[0]) / 2, (a[1] + b2[1]) / 2, (a[2] + b2[2]) / 2], [th, L, th], col, [s1, ax, s2]);
     };
-    // W-beam profile (canonical, unit length along t), `d` = the track-facing sign (-side).
-    // Two crests proud, the valley set back, rolled lips top and bottom: the shadow lines
-    // that make a rail read as pressed steel (FHWA M617 W-beam, ~0.31 m deep section).
-    const wBeam = (rec, d, yc, k, col) => {
-      const dk = [col[0] * 0.82, col[1] * 0.82, col[2] * 0.84];
-      rec.box([d * 0.05, yc + 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // upper crest
-      rec.box([d * 0.05, yc - 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // lower crest
-      rec.box([0, yc, 0], [0.07, 0.11 * k, 1], dk);                       // valley, set back
-      for (const sg of [-1, 1])
-        rec.box([d * -0.01, yc + sg * 0.215 * k, 0], [0.06, 0.03 * k, 1], dk);   // rolled lips
-    };
-    // Steel C-post set behind the rail (the track face is `d` = -side).
-    const cPost = (rec, d, h, yb, col) => {
-      rec.box([-d * 0.17, yb + h / 2, 0], [0.15, h, 0.06], col);              // web
-      for (const sg of [-1, 1])
-        rec.box([-d * 0.10, yb + h / 2, sg * 0.055], [0.06, h, 0.02], col);  // flanges
-    };
+    // The W-beam and C-post profiles live with the propsHi gate (TrackModels.wBeam / cPost): the street
+    // panels (build-props.js) wear the same section. Read only under HI, which implies TrackModels.
+    const wBeam = (...a) => TrackModels.wBeam(...a), cPost = (...a) => TrackModels.cPost(...a);
     const RAIL_STYLES = new Set(["doubleArmco", "wArmco", "jersey", "cable", "safer"]);
 
     // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart. Passes the

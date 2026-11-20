@@ -189,7 +189,9 @@ const _sceneryLoads = new Map();
 function sceneryModels(def) {
   if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
   const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
-  return Assets.modelsReady(0, fn ? String(fn) : "");
+  let hint = "";   // treesHi's tree models (EXTREME page builds; "" below it)
+  try { if (typeof TrackDetail !== "undefined") hint = TrackDetail.modelHint(TrackDetail.page().features); } catch (_) { /* none */ }
+  return Assets.modelsReady(0, (fn ? String(fn) : "") + hint);
 }
 // One fetch of the closure, shared by every caller in flight. The loader RESOLVES
 // false on an error (offline, a CDN 404, a refused stale-build request), so the

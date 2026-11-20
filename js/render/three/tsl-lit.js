@@ -402,6 +402,7 @@
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
+      if (_crowd && frame.crowdExcite != null) setCrowdExcite(frame.crowdExcite);   // CROWD LIFE (only once a crowd material exists)
       {
         const wd = k("windDir", 35) * (Math.PI / 180);
         U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed", 1.0));
@@ -665,11 +666,19 @@
     // CSM far cascades (CSMX only): after the near map has run, a fragment it does not fully cover (w0 < 1: its
     // 0.62..0.84 fade band, past its box, or past its far plane) takes cascade 1, and cascade 2 where cascade 1 fades
     // (FADE bands, tlx-shadow.js csmWeight is the JS twin). Each cascade: the near map's world bias rescaled to its
-    // texel (csmBiasK), a fixed 4-tap PCF at 0.75 texel, no PCSS, no car map (the car map is near-only).
+    // texel (csmBiasK), a fixed 4-tap PCF at 0.75 texel, no PCSS, no car map (cascade 1 carries the far cars itself:
+    // tlx-shadow.js's car layer draws them into its depth).
+    // BAND DITHER (CSM_DJ > 0, tlx-shadow.js CSM.DITHER / csmJitter): every band's distance moves by
+    // (ign - 0.5) x 2 DJ x its width on a world-anchored DITHER_CELL grid, so the ring where one map hands to the next
+    // is broken up instead of a line; the same taps, one ignoise. 0 (apex26.tlxCsmDither=0) builds no dither node.
+    const CSM_DJ = CSMX ? +SHX.csmDither || 0 : 0;
+    const csmJit = (wp) => ignoise(floor(wp.xz.div(SHX.csmDitherCell || 0.25))).sub(0.5);
     const csmFar = !CSMX ? null : (wp, nrm, w0, sh0, res) => {
       If(w0.lessThan(1.0), () => {
         const F = SHX.csmFade || [[0.62, 0.84], [0.70, 0.92]];
-        const aDist = length(wp.sub(vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z))).toVar();
+        const aDist0 = length(wp.sub(vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z))).toVar();
+        const jit = CSM_DJ > 0 ? csmJit(wp).toVar() : null;
+        const aDistAt = (half, fade) => (jit ? aDist0.add(jit.mul(half).mul(2 * CSM_DJ * (fade[1] - fade[0]))) : aDist0);
         const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
         const slopeBias = float(U.shadowTexel).mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
         const bias0 = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).mul(U.shadowRange.div(80.0)).toVar();
@@ -681,7 +690,7 @@
           const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
           If(on.greaterThan(0.5).and(sc.z.lessThan(1.0)), () => {
             const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy).mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
-            const w = smoothstep(half.mul(fade[0]), half.mul(fade[1]), aDist).oneMinus().mul(ef.x.mul(ef.y)).toVar();
+            const w = smoothstep(half.mul(fade[0]), half.mul(fade[1]), aDistAt(half, fade)).oneMinus().mul(ef.x.mul(ef.y)).toVar();
             If(w.greaterThan(0.0), () => {
               const z = sc.z.sub(bias0.mul(biasK)).toVar();
               const T = shadowMapNode(tex);
@@ -717,7 +726,9 @@
           // Yaw-invariant fade: eye XZ + look-target Y (js/render/glx/shaders/glsl-lit.js).
           const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
           const aDist = length(wp.sub(fadeCtr)).toVar();
-          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
+          // CSM band dither (csmFar's note): the near band moves with the same noise; off = the plain distance node.
+          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84),
+            CSM_DJ > 0 ? aDist.add(csmJit(wp).mul(U.shadowRange).mul(2 * CSM_DJ * 0.22)) : aDist)
             .oneMinus().toVar();
           // Thin UV border safety feather (js/render/glx/shaders/glsl-lit.js).
           const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
@@ -2941,6 +2952,58 @@
       return p.add(off);
     })();
 
+    /* CROWD LIFE (EXTREME crowd3d; js/track/scenery/detail.js crowdFigure): a variant positionNode that only the
+     * seated-figure batches draw with (tlx.js drawInstanced, batch.crowd; the attribute-instanced path only). Every
+     * other program, and the whole world below EXTREME, keeps vertexMotionNode above byte for byte: this graph and
+     * its uniform are built on the first crowd material, never before. The figure's FABRIC vertices carry
+     * TrackDetail.crowdMat's code in the id's fraction (0.02 + 0.06 x part, + 0.2 when the figure faces canonical -x):
+     * part 0 = legs (seated, still), 1 = torso / head, 2 = arms. The motion is in the figure's canonical space and
+     * goes to the world through the instance's own axes (iM0..2, scale included), so it bobs, leans to the track and
+     * stands with the figure whatever its row. The per-figure seed is its instance origin (iM3), stable under the
+     * cull pack's reordering. A wave crest travels across the venue; `crowdExcite` (0..1, setCrowdExcite / frame)
+     * and the camera's nearness (the chase camera rides the player's car) raise the bounce and the standing share. */
+    let _crowd = null;
+    function crowdUniforms() {
+      if (_crowd) return _crowd;
+      _crowd = { excite: uniform(0.0) };
+      if (SHARED_UNIFORMS) _crowd.excite.setGroup(renderGroup);
+      return _crowd;
+    }
+    function setCrowdExcite(v) { if (_crowd) _crowd.excite.value = v > 0 ? Math.min(1, v) : 0; }
+    const crowdMotionNode = () => Fn(() => {
+      const CU = crowdUniforms();
+      const p = vec3(positionLocal).toVar();               // anchor (world: after the instance step)
+      vec3(normalLocal).toVar();                           // anchor (vertexMotionNode's rule)
+      const matA = attribute("mat", "float");
+      const mid = floor(matA.add(0.5)).toVar();
+      const mfr = clamp(matA.sub(mid), 0.0, 1.0).toVar();
+      const off = vec3(0.0).toVar();
+      If(mid.equal(7.0).and(mfr.greaterThan(0.01)), () => {
+        const neg = mfr.greaterThan(0.18);
+        const f = select(neg, float(-1.0), float(1.0));
+        const part = floor(mfr.sub(select(neg, float(0.2), float(0.0))).sub(0.02).div(0.06).add(0.5));
+        const upper = clamp(part, 0.0, 1.0), arm = clamp(part.sub(1.0), 0.0, 1.0);
+        const ax = attribute("iM0", "vec4").xyz, ay = attribute("iM1", "vec4").xyz, az = attribute("iM2", "vec4").xyz;
+        const o = attribute("iM3", "vec4").xyz;
+        const t = U.time;
+        const hs = fract(sin(dot(o.xz, vec2(12.9898, 78.233))).mul(43758.5453));
+        const near = float(1.0).sub(smoothstep(25.0, 110.0, length(o.sub(cameraPosition)))).mul(0.65);
+        const e = clamp(CU.excite.add(near), 0.0, 1.0);
+        // the wave: a narrow crest sweeping the venue every ~19 s; a figure stands as it passes
+        const crest = sin(o.x.mul(0.045).add(o.z.mul(0.032)).sub(t.mul(0.33)));
+        const wave = smoothstep(0.86, 0.985, crest);
+        const stand = max(wave, e.mul(smoothstep(0.55, 0.9, hs)).mul(smoothstep(0.2, 0.7, sin(t.mul(0.7).add(hs.mul(19.0))))));
+        const bob = sin(t.mul(hs.mul(0.9).add(1.2)).add(hs.mul(6.283))).mul(0.012)
+          .add(abs(sin(t.mul(hs.mul(2.0).add(6.0)).add(hs.mul(11.0)))).mul(0.045).mul(e));
+        const dy = upper.mul(bob.add(stand.mul(0.26))).add(arm.mul(stand.mul(0.22).add(e.mul(0.06).mul(sin(t.mul(9.0).add(hs.mul(5.0)))))));
+        const dx = upper.mul(f).mul(e.mul(0.05).add(sin(t.mul(0.5).add(hs.mul(13.0))).mul(0.012)));
+        const dz = upper.mul(sin(t.mul(0.8).add(hs.mul(7.0))).mul(0.02).mul(e.add(1.0)));
+        off.assign(ax.mul(dx).add(ay.mul(dy)).add(az.mul(dz)));
+      });
+      return p.add(off);
+    })();
+    let _crowdPos = null;
+
     /* material factory
      * makeMaterial(opts) -> THREE.MeshBasicNodeMaterial with the full lit
      * fragment as colorNode + outputNode. opts carries the GLX per-draw scalars
@@ -3089,8 +3152,10 @@
       // here is what made three.js cars invisible (see factory comment).
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
-      m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
-      pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : ""));
+      const crowd = !!o.crowd && !!o.instanced && !o.chunked;   // CROWD LIFE: the seated-figure batches only
+      m.positionNode = crowd ? (_crowdPos || (_crowdPos = crowdMotionNode()))
+        : (_sharedPos || (_sharedPos = vertexMotionNode()));
+      pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : "") + (crowd ? "-crowd" : ""));
       // Born on the program the pass already wants. setSsrMrt() only walks
       // materials that exist when it runs; one created mid-frame used to
       // compile the single-target key, then the MRT key on the next present.
@@ -3254,17 +3319,22 @@
      * the bodywork under it. Sun: a 4-tap box PCF on the static map with
      * sampleShadow's fade, slope bias and box compensation. Pools: the baked
      * lamp atlas at the decal's ground position, sampled at level 0 outside
-     * any branch (the WGSL uniformity rule), weighted toward up-facing marks. */
+     * any branch (the WGSL uniformity rule), weighted toward up-facing marks.
+     * CSMX: past the near box the far cascades take over exactly as in
+     * sampleShadow (csmFar on the near weight / value), so a far rival's
+     * livery darkens with its bodywork. */
     const decalShadow = !shadowOn ? null : Fn(([wpIn, nrmIn]) => {
       const wp = vec3(wpIn).toVar();
       const nrm = vec3(nrmIn).toVar();
       const res = float(1.0).toVar();
+      const csmW = CSMX ? float(0.0).toVar() : null, csmSh = CSMX ? float(1.0).toVar() : null;
       If(U.shadowStr.greaterThan(0.0), () => {
         const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
         const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
         If(sc.z.lessThan(1.0), () => {
           const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
-          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), length(wp.sub(fadeCtr)))
+          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), CSM_DJ > 0
+            ? length(wp.sub(fadeCtr)).add(csmJit(wp).mul(U.shadowRange).mul(2 * CSM_DJ * 0.22)) : length(wp.sub(fadeCtr)))
             .oneMinus().toVar();
           const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
             .mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
@@ -3280,8 +3350,10 @@
             const tap = (px, py) => sunT.sample(flipUV(sc.xy.add(vec2(px, py).mul(o)))).compare(z);
             const sh = tap(-1.0, -1.0).add(tap(1.0, -1.0)).add(tap(-1.0, 1.0)).add(tap(1.0, 1.0)).mul(0.25);
             res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
+            if (CSMX) { csmW.assign(edgeFade); csmSh.assign(sh); }
           });
         });
+        if (CSMX) csmFar(wp, nrm, csmW, csmSh, res);
       });
       return res;
     });
@@ -3317,7 +3389,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake, setCrowdExcite,
              decalLight: { shadow: decalShadow, pool: decalPool },
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
              detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN };

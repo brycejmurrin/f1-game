@@ -71,8 +71,10 @@ const CarWheels = (function () {
       const band = t && t.band || Car3D.TYRE_BAND[tiers.tyres] || Car3D.TYRE_BAND[1];
       const cal = tint.cal || (b && b.cal) || Car3D.BRAKE_CALIPER[tiers.brakes];
       const rim = tint.rim || (b && b.rim);
-      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf);
-      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf);
+      // The garage turntable's wheels at the player's desktop level (EXTREME tyres there; 0 on every phone).
+      const gd = Car3D.garageDetail ? Car3D.garageDetail().detail : 0;
+      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd);
+      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd);
       const pending = [];
       try {
         for (const data of [f.rotating, f.fixed, r.rotating, r.fixed]) pending.push(gfx.createMesh(data));

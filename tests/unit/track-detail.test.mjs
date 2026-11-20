@@ -7,6 +7,9 @@
 //  * Detail 2 builds finite geometry; its triangle totals are pinned in tests/data/track-detail-tris.json with the
 //    props-tri ratchet's band (grow > 0.5 % fails, under 99 % is stale). Re-measure:
 //      node tests/unit/track-detail.test.mjs --write
+//  * Detail 2 adds no zero-area triangle; its drawn road (with the profiled kerbs) is what a later re-chunk draws
+//    (track.roadDrawGeo), crowd3d seats figures, treesHi stamps the pack's LOD0 trees, and Monaco's street panels
+//    wear the W-beam face (propsHi). The TLX crowd vertex stage: tests/unit/tlx-crowd-anim.test.mjs.
 //  * The pieces in isolation: normalize(), the crowd figure's triangle budget, the kerb profile's peak, and the
 //    far-terrain ring's seam (on floorY within D0 and at the rim, never below it).
 import { test } from "node:test";
@@ -50,6 +53,24 @@ function totals(tr) {
   return { road: tris(cap(m.road) || cap(m.roadChunked)), props: tris(tr.propsGeo), glass: tris(cap(m.glass)), floor: tris(cap(m.floor)) };
 }
 const finite = (g) => { for (let i = 0; i < g.pos.length; i++) if (!Number.isFinite(g.pos[i])) return false; return true; };
+// Zero-area triangles (cross product under 1e-10 m^2): detail 2 may not add any.
+const degenerate = (g) => {
+  if (!g || !g.idx) return 0;
+  const p = g.pos, I = g.idx;
+  let n = 0;
+  for (let t = 0; t + 2 < I.length; t += 3) {
+    const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+    const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+    const vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+    if (Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) < 1e-10) n++;
+  }
+  return n;
+};
+// The drawn road as the harness captures it (pos / nrm / idx).
+const drawnOf = (tr) => cap(tr.meshes.road) || cap(tr.meshes.roadChunked);
+const degs = (tr) => ({ props: degenerate(tr.propsGeo), road: degenerate(drawnOf(tr)), floor: degenerate(cap(tr.meshes.floor)) });
+const modelKinds = (tr) => new Set(((tr.graph && tr.graph.nodes) || []).map((nd) => String(nd.model).split("|")[0]));
+const lod0 = (tr) => Object.entries(tr.modelInstances || {}).filter(([k]) => /_lod0$/.test(k)).reduce((o, [k, v]) => (o[k] = v.n, o), {});
 
 let _env = null;
 const env = () => (_env || (_env = require(path.join(ROOT, "tools/lib/track-build-vm.cjs")).buildContext({ compact: true })));
@@ -64,7 +85,9 @@ function measure() {
     const off = channels(build(id, { detail: 2, detailFeatures: ALL_OFF }));
     const d2 = build(id, { detail: 2 });
     out[id] = { c0, off, c2: channels(d2), t0, t2: totals(d2),
-      finite: [d2.roadGeo, d2.propsGeo, cap(d2.meshes.floor), cap(d2.meshes.road) || cap(d2.meshes.roadChunked)].every((g) => g && finite(g)) };
+      finite: [d2.roadGeo, d2.propsGeo, cap(d2.meshes.floor), drawnOf(d2)].every((g) => g && finite(g)),
+      deg0: degs(d0), deg2: degs(d2), kinds0: modelKinds(d0), kinds2: modelKinds(d2), lod0_0: lod0(d0), lod0_2: lod0(d2),
+      drawGeo0: d0.roadDrawGeo, drawGeo2: d2.roadDrawGeo && hash({ pos: d2.roadDrawGeo.pos, nrm: d2.roadDrawGeo.nrm, idx: d2.roadDrawGeo.idx }), chunked2: d2.meshes.roadChunked };
   }
   return out;
 }
@@ -96,9 +119,27 @@ if (process.argv.includes("--write")) {
           assert.ok(got[k] >= want[k] * 0.99, `${id} ${lv} ${k} stale: ${got[k]} < 99 % of ${want[k]} (re-measure with --write)`);
         }
       }
-      assert.ok(m[id].t2.props > m[id].t0.props && m[id].t2.road > m[id].t0.road);
+      assert.ok(m[id].t2.road > m[id].t0.road);
+    });
+    test(`${id}: detail 2 adds no degenerate triangle (props, drawn road, floor)`, () => {
+      for (const k of ["props", "road", "floor"]) assert.ok(m[id].deg2[k] <= m[id].deg0[k], `${k}: ${m[id].deg2[k]} > ${m[id].deg0[k]}`);
+    });
+    test(`${id}: a later re-chunk draws the profiled kerbs (roadDrawGeo), the collider keeps the flat road`, () => {
+      assert.equal(m[id].drawGeo0, undefined, "detail 0 carries no second road");
+      if (m[id].chunked2 === undefined) assert.equal(m[id].drawGeo2, m[id].c2.roadDrawn, "the unchunked drawn road is what game.js re-chunks");
+      assert.notEqual(m[id].drawGeo2, m[id].c2.road);
+    });
+    test(`${id}: crowd3d seats figures; treesHi stamps baked LOD0 trees 1:1, none at detail 0`, () => {
+      assert.ok(m[id].kinds2.has("crowd-fig") && !m[id].kinds0.has("crowd-fig"));
+      assert.deepEqual(m[id].lod0_0, {});
+      assert.ok(Object.keys(m[id].lod0_2).length > 0, JSON.stringify(m[id].lod0_2));
     });
   }
+  test("monaco: propsHi gives the street barriers the W-beam face (street-barrier-hi), none at detail 0", () => {
+    assert.ok(m.monaco.kinds2.has("street-barrier-hi") && !m.monaco.kinds0.has("street-barrier-hi"));
+    assert.ok(m.monaco.t2.props > m.monaco.t0.props);
+    assert.ok(m.monaco.lod0_2.palm_lod0 > 0, "monaco's palms near the road are the baked palm");
+  });
 }
 
 // ---- the pieces, in a bare VM ---------------------------------------------------------------------------------

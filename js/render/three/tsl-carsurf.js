@@ -12,6 +12,9 @@
  * The car body has no UVs (the livery is vertex colour; sponsors and numbers are separate decal meshes drawn over
  * the body), so the panel layout is object space in metres, not livery-UV space, and a decal covers whatever is
  * under it. The layout is generic (two section seams, one longitudinal cover seam, fastener rows), no real car's.
+ * The EXTREME hero body's lofts also carry LOFT UVS on the trk attribute (js/car/car-geometry.js loftUv): there
+ * the section seams sit on its developed station and the fastener rows on its section arc, so they follow the
+ * body; every other surface keeps the object-space layout.
  *
  * Techniques and sources (read 2026-11-20; constants are ours unless stated):
  * - Detail normals combine by SURFACE-GRADIENT addition, N' = normalize(N - (g - N(N.g))) (Mikkelsen, "Surface
@@ -122,7 +125,7 @@ const TLXCarSurf = (function () {
   // ── TSL builders. Called by tsl-lit.js inside its fragment Fn body only. ──
   function nodes(TSL, chunks) {
     const { If, float, vec2, vec3, vec4, floor, fract, dot, cross, mix, smoothstep, clamp, sqrt, abs, max, min,
-      normalize, length, select, sin, cos, sign, atan, dFdx, dFdy, fwidth, modelWorldMatrix } = TSL;
+      normalize, length, select, sin, cos, sign, atan, dFdx, dFdy, fwidth, modelWorldMatrix, attribute } = TSL;
     const hash21 = chunks && chunks.hash21;
     if (!modelWorldMatrix || !atan || !sign || !hash21) throw new Error("TLXCarSurf: TSL lacks modelWorldMatrix/atan/sign");
     const fadeN = (d, near, far) => clamp(d.sub(near).div(far - near).oneMinus(), 0.0, 1.0);
@@ -140,6 +143,10 @@ const TLXCarSurf = (function () {
       const az = normalize(modelWorldMatrix.mul(vec4(0.0, 0.0, 1.0, 0.0)).xyz).toVar();
       const an = float(0.0).toVar();      // carbon anisotropy, set by weave()
       const ao = float(1.0).toVar();      // panel-line occlusion, applied to albedo by applyAO()
+      // LOFT UVS (heroCar, js/car/car-geometry.js loftUv): the body lofts carry (developed station s, section arc
+      // t from the top, -1) in metres on the trk vec3 every plain mesh already has (zero on everything else; the
+      // road keys on trk.z > 0.5). Read once here, at the top level, with the other varyings.
+      const luv = attribute ? vec3(attribute("trk", "vec3")).toVar() : null;
       const toW = (v) => ax.mul(v.x).add(ay.mul(v.y)).add(az.mul(v.z));
       const toO = (v) => vec3(dot(v, ax), dot(v, ay), dot(v, az));
       // 3. ROUNDED-EDGE CATCH on the geometric normal (and so on N, still equal to it here).
@@ -153,7 +160,7 @@ const TLXCarSurf = (function () {
         const nb = normalize(Ngeo.add(t.mul(min(tl, c).div(tl))));
         Ngeo.assign(nb); N.assign(nb);
       });
-      return { K, px, ax, ay, az, an, ao, objP, vd, toW, toO };
+      return { K, px, ax, ay, az, an, ao, objP, vd, toW, toO, luv };
     }
 
     // Footprint fade of the existing twill (multiply its wvFade) and the anisotropy it carries.
@@ -175,11 +182,17 @@ const TLXCarSurf = (function () {
         const ax_ = abs(objP.x), sx = select(objP.x.lessThan(0.0), float(-1.0), float(1.0));
         // nearest feature: distance d and its object-space gradient g
         const d = float(1e3).toVar(), g = vec3(0.0).toVar();
+        // On a loft that carries loft UVs the seams follow the body: z is its developed station and the fastener
+        // row runs along its section arc |t|; anywhere else (and on every non-hero car) the object-space form.
+        const onLoft = cs.luv ? cs.luv.z.lessThan(-0.5) : null;
+        const zS = onLoft ? select(onLoft, cs.luv.x, objP.z) : objP.z;
+        const sObj = ax_.sub(objP.y).mul(0.70710678);
+        const sRow = onLoft ? select(onLoft, abs(cs.luv.y), sObj) : sObj;
         for (const z of P.seamZ) {   // section seams: planes z = const
-          const dz = objP.z.sub(z);
+          const dz = zS.sub(z);
           If(abs(dz).lessThan(d), () => { d.assign(abs(dz)); g.assign(vec3(0.0, 0.0, sign(dz))); });
           // fastener row behind the seam, along s = (|x| - y)/sqrt2 (top to side around the section)
-          const s = ax_.sub(objP.y).mul(0.70710678);
+          const s = sRow;
           const us = fract(s.div(P.fastStep)).sub(0.5).mul(P.fastStep), uz = dz.sub(P.fastOff);
           const rho = max(length(vec2(us, uz)), 1e-6);
           const dr = abs(rho.sub(P.fastR));

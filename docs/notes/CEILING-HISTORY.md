@@ -41,6 +41,19 @@ run at boot to see a settled rotation; on SHARED, the default, it returns at onc
 (`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
 row stay lazy in `js/ui/layout-presets.js`. Fragment:
 `tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): follow-ups to the desktop tiers, real-GPU tier gate
+
+`(tree) eagerBytes` 8021786 → **8036209** (+14423), on top of #5951's ceiling. Deliberate raise past the
+absorb, under Bryce's chat ask for the follow-up (2026-11-20: "in follow up pr fix more and implement the
+test") and his earlier "Increase budget or remove comments"; the tree-wide ceiling still needs his own
+`ratchet-raise` label on the PR. What is eager: the car follow-ups in `js/car/*` (loft UVs, bevels, garage hero
+copy, the nearest-rival 2048 livery cycle: most of the growth), the tier record in
+`js/perf/gfx-debug-overlay.js` and its three one-line accessors, the crowd flag and re-chunk kerb geometry in
+`js/track/tracks.js`, one reset key in `js/perf/renderer-picker.js`. Shadows, motion vectors, temporal SSGI,
+AgX and the crowd shader are in lazy files. Other ceilings in the fragment: `js/car/car3d.js` lines +36,
+`js/track/tracks.js` lines +7, `assertPins` +21, `assertPinsAll` +27, `vmSrcLoads` +1. Fragment:
+`tests/data/ratchets.d/claude--desktop-tiers-followup-5951.json`.
+
 ## 2026-11-20 — PR #5951 (claude/trusting-clarke-01d9ui): desktop graphics tiers above ULTRA
 
 `(tree) eagerBytes` 7972011 → **8021786** (+49775). Deliberate raise past the absorb, asked for

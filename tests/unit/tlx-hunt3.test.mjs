@@ -910,7 +910,7 @@ test("A2: tlx.js builds batches, mirror views and their materials on the attribu
   const cib = fnSource(TLX, "      function createInstancedBatch(data, matrices, colors, opts) {");
   assert.match(cib, /const cap = _aiInst \? n : /, "no UBO pad on the attribute path");
   assert.match(cib, /const imesh = _aiInst \? _aiMesh\(geo, unlitMat, n\) : new THREE\.InstancedMesh\(geo, unlitMat, cap\);/);
-  assert.match(fnSource(TLX, "      function drawInstanced(batch, opts) {"), /materialFor\(opts, false, batch\.imesh\.isInstancedMesh \? true : 2\)/);
+  assert.match(fnSource(TLX, "      function drawInstanced(batch, opts) {"), /const ai = batch\.imesh\.isInstancedMesh \? true : 2;[\s\S]*?materialFor\(opts, false, ai, false, /);
   const mir = fnSource(TLX, "      function _mirOf(batch) {");
   assert.match(mir, /k !== "instanceTint" && !_AI_ATTR\.test\(k\)/, "the mirror view takes its own stream, never the main one's");
   assert.match(mir, /: _aiMesh\(g, main\.material \|\| unlitMat, main\.instanceMatrix\.count\);/);

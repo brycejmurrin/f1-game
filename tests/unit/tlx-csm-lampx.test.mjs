@@ -6,7 +6,9 @@
  *  3. the REAL shadow-pass.js sunPass / lampPass against a stub gfx: with no gfx.shadowX the call sequence is
  *     exactly today's; with one, the cascades are cast inside their own begin/end;
  *  4. the REAL shadowSys (three r187 on the fake WebGL2): off unless ctx.extras AND the feature; sizes in S;
- *  5. the REAL lit shader: no extras = the same WGSL as a shadow system without the seam; extras add 4 maps.
+ *  5. the REAL lit shader: no extras = the same WGSL as a shadow system without the seam; extras add 4 maps
+ *     (the car decals 2: the cascades); the far car layer and the extra lamps' static caches (planner, driver,
+ *     the real shadow-pass casts and the real shadowSys counters).
  * No browser, no GPU: how the cascades and extra lamps LOOK is unverified here (a real-GPU census is). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -94,6 +96,59 @@ test("fade bands: the near map + two cascades cover continuously, then fade out 
   assert.deepEqual(Array.from(CSM.FADE[0]), [0.62, 0.84], "the mid cascade's band equals the near map's (tsl-lit.js sampleShadow)");
 });
 
+test("band dither: no noise = the plain bands; any noise keeps coverage monotone and full, shifted by <= DITHER x width", () => {
+  const h = CM.csmHalves(80, [0, 0, 0]);
+  for (let d = 0; d <= 700; d += 3.7) for (const k of [0, 1]) assert.equal(CM.csmWeight(d, h[k + 1], k), CM.csmWeight(d, h[k + 1], k, 0.5), "n 0.5 = no shift");
+  assert.equal(CM.csmJitter(240, 0), 0);
+  assert.ok(Math.abs(CM.csmJitter(240, 0, 1) - CSM.DITHER * 0.22 * 240) < 1e-9, "n 1 moves the band by DITHER x its width");
+  const slack = CSM.DITHER * 0.22;
+  for (const n of [0, 0.13, 0.5, 0.77, 0.999]) {
+    let prev = 1;
+    for (let d = 0; d <= 700; d += 1) {
+      const near = CM.csmWeight(d, h[0], 0, n), w1 = CM.csmWeight(d, h[1], 0, n), w2 = CM.csmWeight(d, h[2], 1, n);
+      const cov = near + (1 - near) * (w1 + (1 - w1) * w2);
+      assert.ok(cov <= prev + 1e-12, `n ${n}: coverage never rises (d ${d})`);
+      if (d <= (0.70 - slack) * h[2]) assert.ok(Math.abs(cov - 1) < 1e-12, `n ${n}: covered at d ${d}`);
+      if (d >= (0.92 + slack) * h[2]) assert.equal(cov, 0);
+      prev = cov;
+    }
+  }
+});
+
+test("far-car reach: the cascade box's horizontal corner bound (+ pad), never short of any box point", () => {
+  const b = new Float64Array(9);
+  CM.lightBasis([0, 1, 0], b);   // overhead sun: the box stands upright, its footprint is the ±h square
+  const span = CM.csmSpan(20, 240, [0, 0]);
+  assert.ok(Math.abs(Math.sqrt(CM.csmReach2(b, 240, span[0], span[1])) - (240 * Math.SQRT2 + CSM.CAR_PAD)) < 1e-6);
+  for (const sd of [norm([0.4, 0.8, 0.3]), norm([0.9, 0.2, -0.4]), norm([-0.1, 0.35, 0.93])]) {
+    CM.lightBasis(sd, b);
+    const r = Math.sqrt(CM.csmReach2(b, 240, span[0], span[1])) - CSM.CAR_PAD;
+    for (let s = 0; s < 400; s++) {
+      const x = Math.sin(s * 12.9898) * 240, y = Math.sin(s * 78.233) * 240;
+      const z = span[0] - 1 - (span[1] - 1) * Math.abs(Math.sin(s * 3.17));   // [back - far, back - 1] along the sun
+      const hx = x * b[0] + y * b[3] + z * b[6], hz = x * b[2] + y * b[5] + z * b[8];
+      assert.ok(Math.hypot(hx, hz) <= r + 1e-9, `sd ${sd}: box point at ${Math.hypot(hx, hz)} > ${r}`);
+    }
+  }
+});
+
+test("far-car gate: FieldLod.castsShadow(d2 x csmGateK) is the 50 m gate moved to CAR_M (200 m on ULTRA+)", () => {
+  const ctx = vm.createContext({ Math, Object, GfxQuality: { detail: () => 1 } });
+  vm.runInContext(read("js/car/field-lod.js").replace(/^const FieldLod\b/m, "var FieldLod"), ctx, { filename: absSrc("js/car/field-lod.js") });
+  const FL = ctx.FieldLod;
+  FL.init({ get: () => 1 });
+  const K = CM.csmGateK(FL.T.SHADOW_CAST_M);
+  assert.equal(K, (FL.T.SHADOW_CAST_M / CSM.CAR_M) ** 2);
+  assert.equal(FL.castsShadow(99 * 99), true, "the near gate: 100 m on ULTRA+");
+  assert.equal(FL.castsShadow(101 * 101), false);
+  assert.equal(FL.castsShadow(199 * 199 * K), true, "the cascade gate: 2 x CAR_M");
+  assert.equal(FL.castsShadow(201 * 201 * K), false);
+  assert.ok(2 * CSM.CAR_M > CSM.FADE[0][0] * CM.csmHalves(80, [0, 0, 0])[1], "reaches into cascade 1's own fade band");
+  assert.equal(CM.csmGateK(undefined), 1, "unknown gate: never wider than the near one");
+  FL.setEnabled(false);
+  assert.equal(FL.castsShadow(900 * 900 * K), true, "apex26.fieldLod=0: every rival casts, as in the near map");
+});
+
 test("cadence: c1 on even frames, c2 on frames = 1 mod 4, never on a near-map frame unless starved", () => {
   for (let f = 0; f < 64; f++) {
     assert.equal(CM.csmDue(0, 0, f, false), f % 2 === 0);
@@ -163,6 +218,64 @@ test("planner VP: a cell move shifts a fixed world point by a whole number of te
   assert.equal(log.find((r) => r[0] === "begin" && r[1] === 0)[2], 240);
 });
 
+// A planner whose io has the car layer; `copy` = whether the live map can take a copy yet.
+function carPlanner(log, opt = {}) {
+  const st = { copy: opt.copy !== false, staticOk: true };
+  const P = CM.csmPlanner({
+    M4: MC.M4, size0: 4096,
+    begin(i) { log.push("begin" + i); return true; },
+    end(i) { log.push("end" + i); st.copy = true; return true; },
+    carsOn: (i) => i < CSM.CARS,
+    staticBegin(i) { log.push("static" + i); return true; },
+    staticEnd(i) { log.push("staticEnd" + i); return st.staticOk; },
+    carsBegin(i, fresh) { log.push("copy" + i + (fresh ? "f" : "")); return st.copy; },
+    carsEnd(i) { log.push("carsEnd" + i); return true; },
+  });
+  return { P, st };
+}
+
+test("car layer: cascade 1 only; static key -> cache + copy + cars; a car-key change refreshes on c1's phase", () => {
+  const log = [], { P, st } = carPlanner(log, { copy: false });
+  let ck = 5;
+  const seen = [];
+  const I = inp({ carKey: (i, cw, r2) => { seen.push([i, r2]); return ck; }, castCars: (i) => { log.push("cars" + i); return 3; }, cast: (i) => log.push("cast" + i) });
+  I.frameNo = 0; P.pass(I);
+  // first build: the live map never rendered, so the copy declines -> today's direct pass, cars included
+  assert.deepEqual(log, ["static0", "cast0", "staticEnd0", "copy0f", "begin0", "cast0", "cars0", "end0"]);
+  assert.ok(seen.every(([i]) => i === 0), "the outer cascade never asks for cars");
+  assert.ok(seen[0][1] > 240 * 240, "the reach is the cascade box's, not the near car map's");
+  log.length = 0; I.frameNo = 1; P.pass(I);
+  assert.deepEqual(log, ["begin1", "cast1", "end1"], "cascade 2: static only, no car layer");
+  log.length = 0; I.frameNo = 2; P.pass(I);
+  assert.deepEqual(log, [], "same cars, same cells: nothing");
+  ck = 6; log.length = 0; I.frameNo = 3; P.pass(I);
+  assert.deepEqual(log, [], "a car change waits for c1's even frame");
+  I.frameNo = 4; P.pass(I);
+  assert.deepEqual(log, ["copy0", "cars0", "carsEnd0"], "car-only: copy the cached static depth, draw the cars");
+  assert.deepEqual([P.state.carBuilds[0], P.state.carDeferred[0], P.state.carCasts[0], P.state.cached[0]], [1, 1, 3, 1]);
+  // a cell move: the static map goes to the cache, then copy + cars in the same pass
+  log.length = 0; I.ctr = [130, 0, 90]; I.frameNo = 6; P.pass(I);
+  assert.deepEqual(log, ["static0", "cast0", "staticEnd0", "copy0f", "cars0", "carsEnd0"]);
+  // the copy declines on a car-only refresh: the static key is dirtied, so the next due frame rebuilds it
+  ck = 7; st.copy = false; log.length = 0; I.frameNo = 8; P.pass(I);
+  assert.deepEqual(log, ["copy0"]);
+  st.copy = true; log.length = 0; I.frameNo = 10; P.pass(I);
+  assert.deepEqual(log, ["static0", "cast0", "staticEnd0", "copy0f", "cars0", "carsEnd0"]);
+  // cars leave the cascade (key 0): one empty refresh clears them, then nothing
+  ck = 0; log.length = 0; I.frameNo = 12; P.pass(I); I.frameNo = 14; P.pass(I);
+  assert.deepEqual(log, ["copy0", "cars0", "carsEnd0"]);
+});
+
+test("car layer: no carsOn / no castCars = the static-only planner exactly", () => {
+  const a = [], b = [];
+  const Pa = planner(a), { P: Pb } = carPlanner(b);
+  for (let f = 0; f < 6; f++) {
+    Pa.pass(inp({ frameNo: f, ctr: [f * 40, 0, 0] }));
+    Pb.pass(inp({ frameNo: f, ctr: [f * 40, 0, 0] }));   // no castCars in the input: the layer stays off
+  }
+  assert.deepEqual(b, a.filter((r) => r[0] === "begin" || r[0] === "end").map((r) => r[0] + r[1]));
+});
+
 // ── the extra floodlights ──
 function lights(list) {   // [x, y, z, level, radius] -> frame.lights stride 15 (aim straight down, cone 0.5)
   const L = new Float32Array(list.length * 15);
@@ -223,6 +336,35 @@ test("lampXDriver: lamp change rebuilds now, unchanged keeps, a car-only change 
   assert.deepEqual(log, []);
 });
 
+test("lampXDriver static cache: props once per lamp into the cache, then copy + cars; a declined copy = the full pass", () => {
+  const log = [];
+  const cache = { valid: [false, false], vp: [null, null], rendered: [false, false] };
+  const D = CM.lampXDriver({ n: 2, M4: MC.M4,
+    begin: (k) => { log.push("begin" + k); return true; },
+    end: (k) => { log.push("end" + k); cache.rendered[k] = true; },
+    keep: (k) => { log.push("keep" + k); return true; },
+    staticBegin: (k, vp) => { log.push("static" + k); cache.vp[k] = Array.from(vp); return true; },
+    staticEnd: (k) => { log.push("staticEnd" + k); cache.valid[k] = true; return true; },
+    // the shadowSys rule: a valid cache drawn under exactly this VP, and a live map that has rendered once
+    carsBegin: (k, vp) => { const ok = cache.valid[k] && cache.rendered[k] && cache.vp[k].every((v, i) => v === vp[i]); log.push("copy" + k + (ok ? "" : "-no")); return ok; } });
+  let car = 1;
+  const I = { L: lights([[0, 10, 0, 5, 40], [10, 10, 0, 5, 40], [20, 10, 0, 5, 40]]), nRec: 3, tailFrom: 3, lum: null,
+    eye: [5, 2, 0], primary: 0, frameNo: 0, carKey: () => car,
+    cast: () => log.push("full"), castCars: () => log.push("cars"), castProps: () => log.push("props") };
+  D.pass(I);
+  assert.deepEqual(log.slice(0, 6), ["static0", "props", "staticEnd0", "copy0-no", "begin0", "full"], "first: the live map never rendered -> full");
+  log.length = 0; car = 2; I.frameNo = 2;   // car-only on slot 0's frame
+  D.pass(I);
+  assert.deepEqual(log.slice(0, 3), ["copy0", "cars", "end0"], "car-only: no props redraw");
+  assert.equal(log.filter((c) => c === "props").length, 0, "no props redraw");
+  assert.deepEqual([D.state.staticBuilds[0], D.state.carOnly[0], D.state.builds[0]], [1, 1, 2]);
+  // a lamp change (the slot hands over): a new static render under the new VP, then copy + cars
+  log.length = 0; I.L = lights([[0, 10, 0, 5, 40], [10, 10, 0, 5, 40], [20, 10, 0, 5, 40], [11, 10, 1, 9, 40]]); I.nRec = 4; I.tailFrom = 4;
+  D.pass(I);
+  const i1 = log.indexOf("static1");
+  assert.deepEqual(log.slice(i1, i1 + 6), ["static1", "props", "staticEnd1", "copy1", "cars", "end1"], log.join(","));
+});
+
 // ── the real shadow-pass.js, stub gfx ──
 function passRig(withX) {
   const ctx = vm.createContext({ Math, Float32Array, Float64Array, Int32Array, Array, Object, Number, Infinity, NaN });
@@ -243,7 +385,8 @@ function passRig(withX) {
     const P = ctx.TLXShaders.csmMath.csmPlanner({ M4: ctx.M4, size0: 2048, begin: (i) => { calls.push("csmBegin" + i); return true; }, end: (i) => { calls.push("csmEnd" + i); return true; } });
     const D = ctx.TLXShaders.csmMath.lampXDriver({ n: 2, M4: ctx.M4, begin: (k) => { calls.push("lampXBegin" + k); return true; },
       end: (k) => calls.push("lampXEnd" + k), keep: (k) => { calls.push("lampXKeep" + k); return true; } });
-    gfx.shadowX = { csmOn: true, lampOn: true, csmPass: (i) => P.pass(i), lampPass: (i) => D.pass(i), reset() { calls.push("xReset"); P.reset(); D.reset(); } };
+    const bind = ctx.TLXShaders.csmMath.bindField;   // what shadowSys.x does before its planner / driver
+    gfx.shadowX = { csmOn: true, lampOn: true, csmPass: (i) => P.pass(bind(i, false)), lampPass: (i) => D.pass(bind(i, true)), reset() { calls.push("xReset"); P.reset(); D.reset(); } };
   }
   const player = { team: 0, head: 0, speed: 0 };
   const G = {
@@ -281,12 +424,102 @@ test("shadow-pass: the night lamp pass maps the primary and then the two extras 
   assert.deepEqual(b.calls, ["lampShadowKeep", "lampXKeep0", "lampXKeep1"], "same lamps, same cars: every map kept");
 });
 
+test("shadow-pass far cars: cascade 1 casts gated rivals (the shared low-poly body) inside its car pass, keyed on that set", () => {
+  const ctx = vm.createContext({ Math, Float32Array, Float64Array, Int32Array, Array, Object, Number, Infinity, NaN, GfxQuality: { detail: () => 1 } });
+  ctx.window = ctx;
+  seedLog(ctx);
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+  vm.runInContext(read("js/car/field-lod.js").replace(/^const FieldLod\b/m, "var FieldLod"), ctx, { filename: absSrc("js/car/field-lod.js") });
+  ctx.FieldLod.init({ get: () => 1 });
+  // carShadow on, but no gfx.carShadowBegin: the near car map stays out of the call log
+  vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: true, moonShadow: 0, lampShadow: false, shadowStr: 1 } };
+    var PerfGov = { tier: () => 0 };`, ctx);
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
+  const calls = [], bodies = [];
+  const rec = (name) => (...a) => { calls.push(name); return true; };
+  const CMx = ctx.TLXShaders.csmMath;
+  const rendered = [false, false];
+  const P = CMx.csmPlanner({ M4: ctx.M4, size0: 2048,
+    begin: (i) => { calls.push("csmBegin" + i); return true; }, end: (i) => { calls.push("csmEnd" + i); rendered[i] = true; return true; },
+    carsOn: (i) => i === 0, staticBegin: (i) => { calls.push("static" + i); return true; }, staticEnd: (i) => { calls.push("staticEnd" + i); return true; },
+    carsBegin: (i) => { calls.push("copy" + i); return rendered[i]; }, carsEnd: (i) => { calls.push("carsEnd" + i); return true; } });
+  const gfx = { shadowBegin: rec("shadowBegin"), shadowEnd: rec("shadowEnd"), castShadowChunked: rec("castShadowChunked"),
+    castShadow: (mesh) => { calls.push("castShadow"); bodies.push(mesh.name); return true; },
+    shadowX: { csmOn: true, lampOn: false, csmPass: (i) => P.pass(CMx.bindField(i, false)), reset() { P.reset(); } } };
+  const player = { team: 0, head: 0, speed: 0 };
+  const G = { track: { propTop: 20, meshes: { terrainChunked: null, roadChunked: null, terrain: {}, road: {}, props: {} } },
+    gfx, camEye: [0, 3, -8], camTgt: [0, 0, 0], player, state: "race" };
+  const farFlags = [];
+  const sp = ctx.ShadowPass.create(G, { vStd: (v) => v, teamMesh: () => ({ name: "team" }),
+    sharedRivalBody: (far) => { farFlags.push(far); return { name: "shared" }; } });
+  const at = (x, z) => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; m[12] = x; m[14] = z; return m; };
+  const field = () => {
+    sp.beginFrame();
+    sp.pushCaster(at(0, 150), 1, { id: "a" }, false);   // 150 m: past the near gate (100 m), inside the cascade one (200 m)
+    sp.pushCaster(at(0, 260), 2, { id: "b" }, false);   // 260 m: past both gates
+    sp.pushCaster(at(0, 5), 3, player, true);           // the player's stale pooled entry: never cast from the pool
+  };
+  field();
+  const day = { sunDir: norm([0.4, 0.8, 0.3]), sunColor: [1, 1, 1] };
+  for (let f = 0; f < 3; f++) sp.sunPass(day, f, false);   // 0: the near map (c1 waits), 1: c2 static-only, 2: c1
+  assert.deepEqual(calls.slice(calls.indexOf("csmBegin1")).filter((c) => !c.startsWith("castShadowChunked")).slice(0, 4),
+    ["csmBegin1", "castShadow", "castShadow", "csmEnd1"], "cascade 2 carries no cars");
+  const c1 = calls.slice(calls.indexOf("static0"));
+  assert.deepEqual(c1.filter((c) => !c.startsWith("castShadowChunked")),
+    ["static0", "castShadow", "castShadow", "staticEnd0", "copy0", "csmBegin0", "castShadow", "castShadow", "castShadow", "csmEnd0"],
+    "first build: cache, declined copy, the direct pass with ONE far rival (terrain + road + the rival)");
+  assert.deepEqual(bodies.slice(-1), ["shared"], "the far rival is the shared body");
+  assert.deepEqual(farFlags, [false], "150 m is short of the decimated body (250 m x 2)");
+  // the rival moves: c1 refreshes on its next even frame as copy + cars
+  calls.length = 0; bodies.length = 0;
+  sp.beginFrame(); sp.pushCaster(at(3, 150), 1, { id: "a" }, false); sp.pushCaster(at(0, 260), 2, { id: "b" }, false);
+  sp.sunPass(day, 3, false);
+  assert.equal(calls.filter((c) => c === "copy0").length, 0, "odd frame: the car refresh waits");
+  sp.sunPass(day, 4, false);
+  const c2 = calls.filter((c) => c !== "castShadowChunked");
+  assert.deepEqual(c2.slice(c2.indexOf("copy0")), ["copy0", "castShadow", "carsEnd0"]);
+  assert.deepEqual(bodies, ["shared"]);
+  // the same field again: kept
+  calls.length = 0; sp.sunPass(day, 6, false);
+  assert.equal(calls.filter((c) => c === "copy0").length, 0, calls.join());
+});
+
+test("fieldCars: a lamp takes the pooled flag + 3-D reach + silhouette; a cascade its own gate + horizontal reach + shared body", () => {
+  const at = (x, y, z) => { const m = new Float64Array(16); m[0] = m[5] = m[10] = m[15] = 1; m[12] = x; m[13] = y; m[14] = z; return m; };
+  const player = {}, cast = [];
+  const f = { n: 3, eye: [0, 0, 0], player, mats: [at(10, 0, 0), at(0, 30, 0), at(1, 0, 0)], cars: [{}, {}, player], ok: [false, true, true],
+    pm: () => at(2, 0, 0), castP: () => cast.push("P"), castR: (j, far) => cast.push([j, far]) };
+  // lamp at the origin, reach 20 m: rival 0 is near but flagged off, rival 1 is 30 m UP (3-D: out), 2 is the stale player
+  assert.equal(CM.fieldCars(f, true, [0, 0, 0], 400, true, true), 1);
+  assert.deepEqual(cast, ["P"]);
+  f.ok[0] = true; cast.length = 0;
+  assert.equal(CM.fieldCars(f, false, [0, 0, 0], 400, true, true), 1);
+  assert.deepEqual(cast, [[0, null]], "the silhouette, as the one-lamp map draws it");
+  // cascade (no FieldLod in this realm: no gate): horizontal reach takes rival 1 (30 m up), flag ignored
+  f.ok[0] = false; cast.length = 0;
+  assert.equal(CM.fieldCars(f, false, [0, 0, 0], 400, false, true), 2);
+  assert.deepEqual(cast, [[0, false], [1, false]]);
+  const k1 = CM.fieldCars(f, true, [0, 0, 0], 400, false, false);
+  f.mats[1][12] += 0.1;
+  assert.equal(CM.fieldCars(f, true, [0, 0, 0], 400, false, false), k1, "under 0.25 m: the same key");
+  f.mats[1][12] += 0.3;
+  assert.notEqual(CM.fieldCars(f, true, [0, 0, 0], 400, false, false), k1);
+  f.n = 0;
+  assert.equal(CM.fieldCars(f, false, [0, 0, 0], 400, false, false), 0, "no casters: key 0");
+  // bindField: the planner's hooks read nothing while the car gates are closed
+  const inp = CM.bindField({ f: Object.assign({}, f, { n: 3 }), live: true, carsOk: false }, false);
+  assert.equal(inp.carKey(0, [0, 0, 0], 400), 0);
+  assert.equal(inp.castCars(0, [0, 0, 0], 400), 0);
+  assert.equal(CM.bindField({ cast() {} }, true).carKey, undefined, "an input without a field is left alone");
+});
+
 // ── the real shadowSys + lit shader on three r187 / fake WebGL2 ──
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 vm.runInThisContext(read("js/core/mat4.js").replace(/^const M4\b/m, "globalThis.M4"), { filename: absSrc("js/core/mat4.js") });
-for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tlx-shadow.js"])
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tlx-shadow.js", "js/render/three/tsl-fx.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 async function rig(t) {
@@ -338,6 +571,41 @@ test("shadowSys: extras need ctx.extras AND the feature AND a desktop; sizes and
   assert.equal(sys.S.enabled, true);
 });
 
+test("shadowSys caches: the cascade car layer and the extra lamps' static props run, count, and fail alone", async (t) => {
+  const renderer = await rig(t);
+  const sys = withFeatures(["csm", "lampShadows"], () => globalThis.TLXShaders.shadowSys(THREE, THREE.TSL,
+    { renderer, isMobile: false, softwareGL: false, isWarming: () => false, extras: true }));
+  let st = sys.x.state();
+  assert.equal(st.csm.carsOn, true); assert.equal(st.csm.carLayers, 1); assert.equal(st.lampX.staticOn, true);
+  assert.equal(sys.S.csm.dither, 0.15);
+  let ck = 1, casts = 0;
+  const day = { sd: norm([0.4, 0.8, 0.3]), ctr: [0, 0, 0], box: 80, far: 320, propTop: 20, frameNo: 0, sunRebuilt: false, read: true,
+    cast() {}, carKey: () => ck, castCars: () => { casts++; return 2; } };
+  for (let f = 0; f < 3; f++) { day.frameNo = f; sys.x.csmPass(day); }
+  ck = 2; day.frameNo = 4; assert.equal(sys.x.csmPass(day), 1);
+  ck = 3; day.frameNo = 6; day.ctr = [130, 0, 90]; assert.equal(sys.x.csmPass(day), 1);
+  st = sys.x.state();
+  assert.deepEqual([st.csm.carBuilds[0], st.csm.carCasts[0], st.csm.carPasses[0]], [1, 2, 2], "one car-only refresh + one cache-and-copy build");
+  assert.deepEqual(st.csm.staticBuilds, [2]);
+  assert.deepEqual(st.csm.valid, [true, true]);
+  // a throwing car pass drops the car layer, never the cascades
+  ck = 4; day.frameNo = 8; day.castCars = () => { throw new Error("car boom"); };
+  sys.x.csmPass(day);
+  st = sys.x.state();
+  assert.equal(st.csm.carsOn, false); assert.equal(st.csm.on, true); assert.equal(sys.S.enabled, true);
+  day.frameNo = 10; assert.equal(sys.x.csmPass(day), 1, "rebuilt static-only on the next due frame");
+  assert.equal(sys.x.state().csm.valid[0], true);
+  // extra lamps: lamp change = static props + (first: full); car-only = copy + cars
+  const L = lights([[0, 10, 0, 5, 40], [10, 10, 0, 5, 40], [20, 10, 0, 5, 40]]);
+  let car = 1;
+  const LI = { L, nRec: 3, tailFrom: 3, lum: null, eye: [5, 2, 0], primary: 0, frameNo: 0, carKey: () => car,
+    cast() {}, castCars() {}, castProps() {} };
+  assert.equal(sys.x.lampPass(LI), 2);
+  car = 2; LI.frameNo = 2; sys.x.lampPass(LI);
+  const s0 = sys.x.state().lampX.slots[0];
+  assert.deepEqual([s0.staticBuilds, s0.carOnly, s0.builds], [1, 1, 2]);
+});
+
 async function fragFor(renderer, shadow) {
   const lit = globalThis.TLXShaders.lit(THREE, THREE.TSL, { chunks: globalThis.TLXShaders.chunks(THREE, THREE.TSL), maxLights: 16, shadow });
   const g = new THREE.BufferGeometry();
@@ -363,4 +631,16 @@ test("lit shader: extras off compiles the seam-less program; on adds exactly the
   const fOn = await fragFor(renderer, on);
   const depth = (s) => (s.match(/texture_depth_2d/g) || []).length;
   assert.equal(depth(fOn) - depth(fOff), 4, "2 cascades + 2 lamp maps");
+  // the car decals take the cascades too (tsl-lit.js decalShadow -> csmFar): +2 depth maps, none with extras off
+  const decalFrag = (shadow) => {
+    const lit = globalThis.TLXShaders.lit(THREE, THREE.TSL, { chunks: globalThis.TLXShaders.chunks(THREE, THREE.TSL), maxLights: 16, shadow });
+    const fx = globalThis.TLXShaders.fx(THREE, THREE.TSL, { lit });
+    const g = new THREE.BufferGeometry();
+    for (const [n, k] of [["position", 3], ["normal", 3], ["uv", 2]]) g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
+    const b = new THREE.WGSLNodeBuilder(new THREE.Mesh(g, fx.decalMaterialFor(new THREE.DataTexture(new Uint8Array(4), 1, 1), 0)), renderer);
+    b.scene = new THREE.Scene(); b.camera = new THREE.PerspectiveCamera(); b.build();
+    return b.fragmentShader;
+  };
+  assert.deepEqual(lines(decalFrag(off)), lines(decalFrag(noSeam)), "a null seam changes no decal line");
+  assert.equal(depth(decalFrag(on)) - depth(decalFrag(off)), 2, "decals: the 2 cascades");
 });

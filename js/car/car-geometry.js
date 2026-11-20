@@ -8,11 +8,89 @@ const CarGeometry = (function () {
   // lines, so a level only ADDS vertices between today's ones.
   // _hero: the EXTREME player car's modelled detail (heroCar) is being built: bevelled boxes, round beams, aerofoil
   // arms, wishbone webs with thickness (below), plus the parts Car3D adds itself. Never set for a rival.
-  let _lvl = 0, _hero = false;
+  // _luv: the hero build also records LOFT UVs (loftUv below) for the TLX car-surface shader.
+  let _lvl = 0, _hero = false, _luv = false;
   const clampDetail = (d) => { d = Math.round(+d || 0); return d >= 2 ? 2 : d >= 1 ? 1 : 0; };
-  function withDetail(d, fn, hero) {
-    const prev = _lvl, ph = _hero; _lvl = clampDetail(d); _hero = !!hero;
-    try { return fn(); } finally { _lvl = prev; _hero = ph; }
+  function withDetail(d, fn, hero, luv) {
+    const prev = _lvl, ph = _hero, pl = _luv; _lvl = clampDetail(d); _hero = !!hero; _luv = !!hero && !!luv;
+    try { return fn(); } finally { _lvl = prev; _hero = ph; _luv = pl; }
+  }
+  // LOFT UVS (heroCar with the TLX carSurf program): a per-vertex body-surface coordinate in METRES, out.luv as
+  // (s, t, -1) per vertex, (0, 0, 0) where no loft wrote one. s: the DEVELOPED station, the loft's first ring z
+  // plus the signed arc length of its ring centres (z itself on a straight loft, stretched along a sloping one);
+  // t: the section arc length from the ring's top point, positive toward +x, the wrap at the bottom (a triangle
+  // across it takes the unwrapped value). Car3D.build hands it on as out.trk (the TLX lit program's spare vec3,
+  // zero-filled on every car until now; road effects key on trk.z > 0.5, so -1 reads as "a car loft").
+  // Called right after a loft emitted vertices v0.. through addTri (three unshared vertices a triangle): each
+  // triangle whose three corners are all ring points gets coordinates, any other (a cap) none.
+  const luvOn = () => _luv;
+  function luvPad(out, n) {
+    const L = out.luv;
+    if (L) while (L.length < n * 3) L.push(0);
+  }
+  function loftUv(out, v0, rings) {
+    if (!_luv || !rings || rings.length < 2) return;
+    const n = out.pos.length / 3;
+    if (!out.luv) out.luv = [];
+    luvPad(out, v0);
+    out.luv.length = v0 * 3;
+    const key = (x, y, z) => Math.round(x * 1e6) + "," + Math.round(y * 1e6) + "," + Math.round(z * 1e6);
+    const at = new Map();
+    let s = 0, pc = null;
+    for (const ring of rings) {
+      const m = ring.length, c = [0, 0, 0];
+      for (const p of ring) { c[0] += p[0] / m; c[1] += p[1] / m; c[2] += p[2] / m; }
+      s = pc ? s + Math.sign(c[2] - pc[2] || 1) * Math.hypot(c[0] - pc[0], c[1] - pc[1], c[2] - pc[2]) : c[2];
+      pc = c;
+      let top = 0;
+      for (let i = 1; i < m; i++) if (ring[i][1] > ring[top][1] + 1e-9 || (Math.abs(ring[i][1] - ring[top][1]) <= 1e-9 && Math.abs(ring[i][0]) < Math.abs(ring[top][0]))) top = i;
+      const arc = new Float64Array(m + 1);
+      for (let i = 0; i < m; i++) { const a = ring[i], b = ring[(i + 1) % m]; arc[i + 1] = arc[i] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
+      const P = arc[m] || 1, dir = ring[(top + 1) % m][0] >= ring[top][0] ? 1 : -1;
+      for (let i = 0; i < m; i++) {
+        let t = dir * (arc[i] - arc[top]);
+        t = ((t % P) + P) % P; if (t > P / 2) t -= P;
+        const k = key(ring[i][0], ring[i][1], ring[i][2]);
+        if (!at.has(k)) at.set(k, [s, t, P]);
+      }
+    }
+    const L = out.luv, Q = out.pos;
+    for (let v = v0; v < n; v += 3) {
+      const r = v + 2 < n ? [0, 1, 2].map((k) => at.get(key(Q[(v + k) * 3], Q[(v + k) * 3 + 1], Q[(v + k) * 3 + 2]))) : null;
+      if (!r || !r[0] || !r[1] || !r[2]) { for (let k = v; k < Math.min(n, v + 3); k++) L.push(0, 0, 0); continue; }
+      const lo = Math.min(r[0][1], r[1][1], r[2][1]), hi = Math.max(r[0][1], r[1][1], r[2][1]);
+      for (const e of r) L.push(e[0], hi - lo > e[2] / 2 && e[1] < 0 ? e[1] + e[2] : e[1], -1);
+    }
+  }
+  // heroCar BEVELS (MeshDetail.bevel, lazy: absent, or not a hero build, the part is emitted exactly as today): a
+  // closed part of hard edges (the rounded floor plate, the endplate plates) is emitted into its own buffer, its
+  // creases over 60 degrees rounded `width` metres wide in `segs` segments, with the wedge (face-weighted) normals
+  // MeshDetail gives the flat faces, then appended to `out`. Any throw or bad number: the unbevelled part.
+  function heroBevel(out, width, segs, emit) {
+    if (!_hero || typeof MeshDetail === "undefined" || !MeshDetail.bevel) return emit(out);
+    const part = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    emit(part);
+    let g = part;
+    try {
+      const b = MeshDetail.toGeom(MeshDetail.bevel(MeshDetail.fromGeom(part), { creases: 60, width, segments: segs }));
+      const n = b.pos.length / 3;
+      if (n && b.nrm.length === n * 3 && b.col.length === n * 3 && b.mat && b.mat.length === n
+          && b.pos.every(Number.isFinite) && b.nrm.every(Number.isFinite) && b.idx.every((v) => v < n)) g = b;
+    } catch (e) { if (typeof Log !== "undefined") Log.warn("car", "hero bevel failed, the plain part: " + (e && e.message)); }
+    const base = out.pos.length / 3;
+    for (let i = 0; i < g.pos.length; i++) { out.pos.push(g.pos[i]); out.nrm.push(g.nrm[i]); out.col.push(g.col[i]); }
+    for (let i = 0; i < g.mat.length; i++) out.mat.push(g.mat[i]);
+    for (let i = 0; i < g.idx.length; i++) out.idx.push(base + g.idx[i]);
+  }
+  // A vertex appended at t along edge u -> w (CarShade.heightZone's cut): its loft coordinate is the edge's lerp.
+  function luvLerp(out, u, w, t) {
+    const L = out.luv;
+    if (!L) return;
+    const n = out.pos.length / 3 - 1, g = (v, k) => (v * 3 + k < L.length ? L[v * 3 + k] : 0);
+    const a = [0, 1, 2].map((k) => g(u, k) + (g(w, k) - g(u, k)) * t);
+    luvPad(out, n);
+    L.length = n * 3;
+    L.push(a[0], a[1], a[2]);
   }
   // The detail a car gets: the player the boot-time level, a rival at most 1 (meshHi), 0 when meshHi is off or
   // GfxQuality is absent (node tests) or throws. heroOn: the EXTREME smoothing pass (refine below), player only.
@@ -437,42 +515,47 @@ const CarGeometry = (function () {
   // of a car's vertices are exact repeats; welding them halves the vertex count
   // with a bit-identical picture. Vertex ranges (sections, zones) do not survive,
   // so callers that read them (measure, refinish) skip it. Returns out.
-  const _f = new Float32Array(10), _u = new Uint32Array(_f.buffer);
+  // out.luv (loft UVs, hero builds only) joins the key, so the two sides of a loft's wrap never weld into one.
+  const _f = new Float32Array(13), _u = new Uint32Array(_f.buffer);
   function weld(out) {
     const n = out.pos.length / 3;
     if (!n || out.nrm.length !== n * 3 || out.col.length !== n * 3 || (out.mat && out.mat.length !== n)) return out;
+    if (out.luv) luvPad(out, n);
+    const lu = out.luv && out.luv.length === n * 3 ? out.luv : null, K = lu ? 13 : 10;
     let cap = 1; while (cap < n * 2) cap <<= 1;
-    const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * 10), remap = new Int32Array(n);
-    const pos = [], nrm = [], col = [], mat = out.mat ? [] : null;
+    const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * K), remap = new Int32Array(n);
+    const pos = [], nrm = [], col = [], mat = out.mat ? [] : null, luv = lu ? [] : null;
     let m = 0;
     for (let i = 0; i < n; i++) {
       _f[0] = out.pos[i*3]; _f[1] = out.pos[i*3+1]; _f[2] = out.pos[i*3+2];
       _f[3] = out.nrm[i*3]; _f[4] = out.nrm[i*3+1]; _f[5] = out.nrm[i*3+2];
       _f[6] = out.col[i*3]; _f[7] = out.col[i*3+1]; _f[8] = out.col[i*3+2]; _f[9] = mat ? out.mat[i] : 0;
+      if (lu) { _f[10] = lu[i*3]; _f[11] = lu[i*3+1]; _f[12] = lu[i*3+2]; }
       let h = 2166136261;
-      for (let k = 0; k < 10; k++) h = Math.imul(h ^ _u[k], 16777619);
+      for (let k = 0; k < K; k++) h = Math.imul(h ^ _u[k], 16777619);
       let slot = (h >>> 0) & (cap - 1), hit = -1;
       for (;;) {
         const j = table[slot];
         if (j < 0) break;
         let same = true;
-        for (let k = 0; k < 10; k++) if (keys[j*10+k] !== _u[k]) { same = false; break; }
+        for (let k = 0; k < K; k++) if (keys[j*K+k] !== _u[k]) { same = false; break; }
         if (same) { hit = j; break; }
         slot = (slot + 1) & (cap - 1);
       }
       if (hit < 0) {
         hit = m++; table[slot] = hit;
-        for (let k = 0; k < 10; k++) keys[hit*10+k] = _u[k];
+        for (let k = 0; k < K; k++) keys[hit*K+k] = _u[k];
         pos.push(out.pos[i*3], out.pos[i*3+1], out.pos[i*3+2]);
         nrm.push(out.nrm[i*3], out.nrm[i*3+1], out.nrm[i*3+2]);
         col.push(out.col[i*3], out.col[i*3+1], out.col[i*3+2]);
         if (mat) mat.push(out.mat[i]);
+        if (luv) luv.push(lu[i*3], lu[i*3+1], lu[i*3+2]);
       }
       remap[i] = hit;
     }
     const idx = out.idx;
     for (let t = 0; t < idx.length; t++) idx[t] = remap[idx[t]];
-    out.pos = pos; out.nrm = nrm; out.col = col; if (mat) out.mat = mat;
+    out.pos = pos; out.nrm = nrm; out.col = col; if (mat) out.mat = mat; if (luv) out.luv = luv;
     return out;
   }
 
@@ -537,6 +620,8 @@ const CarGeometry = (function () {
     const P = out.pos, N = out.nrm, C = out.col, M = out.mat, U = out.uv && out.uv.length ? out.uv : null, I = out.idx;
     const n = P.length / 3, tris = I.length / 3;
     if (!n || !tris) return out;
+    if (out.luv) luvPad(out, n);
+    const LU = out.luv && out.luv.length === n * 3 ? out.luv : null;
     const { pid, np } = positionIds(P, n);
     if (first) creaseNormals(P, N, I, pid, np);
     // per position-edge: triangle count, and whether every use carries the same normals at both ends
@@ -581,6 +666,7 @@ const CarGeometry = (function () {
       C.push((C[a*3] + C[b*3]) / 2, (C[a*3+1] + C[b*3+1]) / 2, (C[a*3+2] + C[b*3+2]) / 2);
       if (M) M.push(M[a]);
       if (U) U.push((U[a*2] + U[b*2]) / 2, (U[a*2+1] + U[b*2+1]) / 2);
+      if (LU) LU.push((LU[a*3] + LU[b*3]) / 2, (LU[a*3+1] + LU[b*3+1]) / 2, (LU[a*3+2] + LU[b*3+2]) / 2);
       mids.set(vk, m);
       return m;
     };
@@ -679,6 +765,7 @@ const CarGeometry = (function () {
   }
 
   return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
-           withDetail, level: () => _lvl, hero: () => _hero, clampDetail, detailFor, heroOn, refine, MAX_BULGE };
+           withDetail, level: () => _lvl, hero: () => _hero, clampDetail, detailFor, heroOn, refine, MAX_BULGE,
+           luvOn, loftUv, luvLerp, luvPad, heroBevel };
 })();
 Object.freeze(CarGeometry);

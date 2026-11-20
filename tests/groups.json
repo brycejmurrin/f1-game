@@ -1206,6 +1206,7 @@
     "tests/unit/tlx-carsurf.test.mjs",
     "// #4674 (#3104 F5): TslFx.updateFrame / TlxPost.present allocate no per-frame closure or fallback array (source pins + helper semantics).",
     "tests/unit/tlx-closures-4674.test.mjs",
+    "tests/unit/tlx-crowd-anim.test.mjs",
     "// GRAPHICS: EXTREME shadow extras on TLX: cascade splits / snapping / cadence, the extra-lamp pick, the real shadow-pass + shadowSys + lit shader gates.",
     "tests/unit/tlx-csm-lampx.test.mjs",
     "tests/unit/tlx-cull-shadow-pack.test.mjs",

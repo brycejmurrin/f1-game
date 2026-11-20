@@ -6,9 +6,10 @@
  *     twin of the shader), the neighbourhood clamp, the camera-cut test, the
  *     supersample ceiling and the HDR peak decision.
  *   - taa(THREE, TSL, ctx): the TEMPORAL AA controller tlx-post.js runs in place
- *     of FXAA when ctx.traa is on. Camera reprojection from the scene depth (no
- *     per-object velocity yet: a car moving with the camera is held by the
- *     neighbourhood clamp, not by its own motion vector), a half-float history
+ *     of FXAA when ctx.traa is on. Camera reprojection from the scene depth, or,
+ *     with ctx.velTex (the scene's per-object velocity attachment, VelocityNode:
+ *     each mesh's previous model matrix), each drawn pixel's own motion vector,
+ *     so a car moving with the camera keeps its history; a half-float history
  *     pair whose ALPHA carries the pixel's view depth (the disocclusion test),
  *     a 3x3 min/max clamp, a luma-weighted (Karis) blend, and a reset on a
  *     resize, a camera cut / teleport, or a frame that did not run the TAA.
@@ -103,6 +104,70 @@
     return prevFwd[0] * fwd[0] + prevFwd[1] * fwd[1] + prevFwd[2] * fwd[2] < CUT_COS;
   }
 
+  // PER-OBJECT VELOCITY (EXTREME, the "velocity" scene attachment): three's VelocityNode in JS. NDC of a local point
+  // this frame minus where the same point was last frame, through each object's own previous model matrix and the
+  // camera's previous view; projections are the UNJITTERED ones (tlx.js overrides the node's projection), so the
+  // vector carries motion only. Column-major 4x4s.
+  const _v4 = [0, 0, 0, 0], _w4 = [0, 0, 0, 0];
+  function ndcOf(P, V, M, p, out) {
+    mulV(M, p[0], p[1], p[2], 1, _v4);
+    mulV(V, _v4[0], _v4[1], _v4[2], _v4[3], _w4);
+    mulV(P, _w4[0], _w4[1], _w4[2], _w4[3], _v4);
+    out[0] = _v4[0] / _v4[3]; out[1] = _v4[1] / _v4[3];
+    return out;
+  }
+  const _n0 = [0, 0], _n1 = [0, 0];
+  function velocity(P, V, M, prevP, prevV, prevM, p, out) {
+    const o = out || [0, 0];
+    ndcOf(P, V, M, p, _n0); ndcOf(prevP, prevV, prevM, p, _n1);
+    o[0] = _n0[0] - _n1[0]; o[1] = _n0[1] - _n1[1];
+    return o;
+  }
+  // The previous GL uv a pixel's velocity sends it to: the unjittered NDC of this pixel minus the velocity.
+  function velReproject(uvx, uvy, vx, vy, jx, jy, out) {
+    const o = out || [0, 0];
+    o[0] = (uvx * 2 - 1 - jx - vx) * 0.5 + 0.5; o[1] = (uvy * 2 - 1 - jy - vy) * 0.5 + 0.5;
+    return o;
+  }
+  // How far (px) a pixel's own velocity departs from the camera-only reprojection (cx, cy: NDC, the static answer).
+  // Past VEL_MAX_PX it is a teleport or a pooled mesh slot that changed owner (tlx.js acquireMesh keys wrappers by
+  // draw order), not motion: that pixel's history is rejected.
+  const VEL_MAX_PX = 96;
+  function objMotionPx(vx, vy, cx, cy, w, h) { return Math.hypot((vx - cx) * 0.5 * w, (vy - cy) * 0.5 * h); }
+  function velRejected(vx, vy, cx, cy, w, h) { return !(objMotionPx(vx, vy, cx, cy, w, h) <= VEL_MAX_PX); }
+  // The scene MRT with the velocity output (tlx.js _ssrMrtNode on a chain whose scene target has the attachment).
+  // Targets without a "velocity" texture (mirror, env cube) skip the output: MRTNode.setup matches by name.
+  function velocityMrt(THREE, TSL, projM) {
+    if (!TSL.velocity || !TSL.mrt || !TSL.velocity.setProjectionMatrix) return null;
+    TSL.velocity.setProjectionMatrix(projM);
+    return TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1), velocity: TSL.velocity });
+  }
+
+  // AgX (opt-in, apex26.tlxAgx=1 on EXTREME; tsl-post.js uses three's own agxToneMapping): the JS twin of three
+  // r187's TSL function, for the tests. Linear sRGB in, linear sRGB out, 0..1.
+  const AGX_IN = [[0.6274, 0.0691, 0.0164], [0.3293, 0.9195, 0.088], [0.0433, 0.0113, 0.8956]];   // columns
+  const AGX_OUT = [[1.6605, -0.1246, -0.0182], [-0.5876, 1.1329, -0.1006], [-0.0728, -0.0083, 1.1187]];
+  const AGX_INSET = [[0.856627153315983, 0.137318972929847, 0.11189821299995],
+    [0.0951212405381588, 0.761241990602591, 0.0767994186031903], [0.0482516061458583, 0.101439036467562, 0.811302368396859]];
+  const AGX_OUTSET = [[1.1271005818144368, -0.1413297634984383, -0.14132976349843826],
+    [-0.11060664309660323, 1.157823702216272, -0.11060664309660294],
+    [-0.016493938717834573, -0.016493938717834257, 1.2519364065950405]];
+  const AGX_EV = [-12.47393, 4.026069];
+  const m3 = (c, v) => [0, 1, 2].map((i) => c[0][i] * v[0] + c[1][i] * v[1] + c[2][i] * v[2]);
+  const agxCurve = (x) => {
+    const x2 = x * x, x4 = x2 * x2;
+    return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+  };
+  function agx(rgb, exposure) {
+    let r = rgb.map((v) => v * (exposure == null ? 1 : exposure));
+    r = m3(AGX_INSET, m3(AGX_IN, r)).map((v) => {
+      const t = (Math.log2(Math.max(v, 1e-10)) - AGX_EV[0]) / (AGX_EV[1] - AGX_EV[0]);
+      return agxCurve(Math.min(1, Math.max(0, t)));
+    });
+    r = m3(AGX_OUTSET, r).map((v) => Math.pow(Math.max(0, v), 2.2));
+    return m3(AGX_OUT, r).map((v) => Math.min(1, Math.max(0, v)));
+  }
+
   // SUPERSAMPLE CEILING (superSample / ss2x): the highest renderScale TLX may run. superSample: 1.5 on a display
   // of DPR <= 1.25 (a retina panel is already sampled ~2x by its DPR); ss2x (CINEMA): 2. Capped by the GPU's
   // texture limit on each axis and by MAX_PX render pixels (4K x 2: the scene + tag + depth + LDR + history at
@@ -148,6 +213,9 @@
     // texture into one sampler, so each slot starts on its own texture.
     const histInit = onePx(0), outInit = onePx(1);
     const curT = texture(ctx.ldrTex), histT = texture(histInit), depthT = texture(ctx.depthTex), outT = texture(outInit);
+    // ctx.velTex (EXTREME): the scene's per-object velocity attachment. Absent: camera reprojection only (the graph
+    // below is then exactly the one without this feature).
+    const velT = ctx.velTex ? texture(ctx.velTex) : null;
     const U = {
       texel: uniform(new THREE.Vector2(1, 1)),
       invVP: uniform(new THREE.Matrix4()), prevVP: uniform(new THREE.Matrix4()),
@@ -173,6 +241,17 @@
       const world = vec4(wp.xyz.div(wp.w), 1.0);
       const pc = U.prevVP.mul(world).toVar();
       const pUvGl = pc.xy.div(pc.w).mul(0.5).add(0.5).toVar();
+      let velRej = null;
+      if (velT) {
+        // A drawn pixel (not sky) follows its own motion vector: a car moving with the camera keeps its history
+        // instead of being held by the clamp alone. A vector far from the camera's answer is not motion (velRejected).
+        const vel = vec2(velT.sample(uv).xy).toVar();
+        const nCur = uvGl.mul(2.0).sub(1.0).sub(U.jit).toVar();
+        const camV = nCur.sub(pc.xy.div(pc.w));
+        const objPx = length(vel.sub(camV).mul(0.5).div(U.texel));
+        velRej = d.lessThan(float(SKY_D)).and(objPx.greaterThan(float(VEL_MAX_PX)));
+        If(d.lessThan(float(SKY_D)), () => { pUvGl.assign(nCur.sub(vel).mul(0.5).add(0.5)); });
+      }
       const pUv = vec2(pUvGl.x, pUvGl.y.oneMinus());
       // 3x3 neighbourhood of the current (jittered) frame: min / max for the clamp.
       const c = vec3(curT.sample(uv).rgb).toVar();
@@ -188,7 +267,8 @@
       const hc = clamp(h.rgb, mn, mx);
       const off = pUv.x.lessThan(0.0).or(pUv.x.greaterThan(1.0)).or(pUv.y.lessThan(0.0)).or(pUv.y.greaterThan(1.0));
       const wPrev = min(pc.w, float(W_MAX));
-      const occl = pc.w.lessThanEqual(0.0).or(abs(h.a.sub(wPrev)).div(max(wPrev, 1e-3)).greaterThan(U.depthTol));
+      let occl = pc.w.lessThanEqual(0.0).or(abs(h.a.sub(wPrev)).div(max(wPrev, 1e-3)).greaterThan(U.depthTol));
+      if (velRej) occl = occl.or(velRej);
       // Fast motion keeps less history (less smear); a rejected pixel takes the current frame alone.
       const velPx = length(uvGl.sub(pUvGl).div(U.texel));
       const a = clamp(U.alpha.add(velPx.mul(0.01)), U.alpha, float(0.3)).toVar();
@@ -254,13 +334,14 @@
       // A frame presented without the TAA (viz, upscale, warm): the next TAA frame starts fresh.
       skipped() { lastOk = false; },
       reset() { reset = true; },
-      state: () => ({ frames, resets, size: [W, H], jitter: [_jit[0], _jit[1]], held: !!hist }),
+      state: () => ({ frames, resets, size: [W, H], jitter: [_jit[0], _jit[1]], held: !!hist, velocity: !!velT }),
       dispose() { try { histInit.dispose(); outInit.dispose(); } catch (_) { /* device dying */ } },
     };
   }
 
   window.TLXAA = Object.freeze({
     halton, jitterPx, jitterNdc, applyJitter, reproject, clampRGB, disoccluded, forwardOf, camCut, ssCeil, hdrPeak,
-    taa, PHASES, DEPTH_TOL, HDR_PEAK, SS_MAX, SS_CINE,
+    velocity, velReproject, objMotionPx, velRejected, velocityMrt, agx,
+    taa, PHASES, DEPTH_TOL, HDR_PEAK, SS_MAX, SS_CINE, VEL_MAX_PX,
   });
 })();

@@ -1,7 +1,16 @@
 {
+  "files": {
+    "js/car/car3d.js": {
+      "lines": 36
+    },
+    "js/track/tracks.js": {
+      "lines": 7
+    }
+  },
   "tree": {
-    "assertPins": 17,
-    "assertPinsAll": 20,
-    "eagerBytes": 149
+    "assertPins": 21,
+    "assertPinsAll": 27,
+    "eagerBytes": 14423,
+    "vmSrcLoads": 1
   }
 }

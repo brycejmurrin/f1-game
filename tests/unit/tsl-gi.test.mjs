@@ -154,6 +154,35 @@ test("motion blur velocity: shutter scale, max-length clamp, camera-cut reject",
   assert.deepEqual([...GI.mbVelocity(0.3, 0, shutter, maxLen, cutLen)], [0, 0], "a cut blurs nothing");
 });
 
+test("SSGI accumulation: history clamped to the spatial neighbourhood, weight 0.9, reject = spatial-only", () => {
+  const W = GI.GI_ACC.weight;
+  assert.equal(W, 0.9);
+  const lo = [0.1, 0.1, 0.1], hi = [0.3, 0.3, 0.3];
+  const b = [...GI.historyBlend([0.2, 0.2, 0.2], [0.25, 0.25, 0.25], lo, hi, W, false)];
+  assert.ok(b.every((v) => near(v, 0.25 * 0.9 + 0.2 * 0.1, 1e-12)), "inside the box: a plain 0.9 blend");
+  const ghost = GI.historyBlend([0.2, 0.2, 0.2], [2, 0, 0.2], lo, hi, W, false);
+  assert.ok(near(ghost[0], 0.3 * 0.9 + 0.02, 1e-12) && near(ghost[1], 0.1 * 0.9 + 0.02, 1e-12), "a stale bounce is clamped first");
+  assert.deepEqual([...GI.historyBlend([0.2, 0.4, 0.6], [9, 9, 9], lo, hi, W, true)], [0.2, 0.4, 0.6], "disocclusion: this frame alone");
+  // The ray budget: 4 rays a frame + the accumulate taps cost no more than today's 6 x 8 march, and a converged
+  // history holds more rays than today's single frame does.
+  const B = GI.BUDGET;
+  assert.ok(B.ssgiRaysT * B.ssgiSteps + B.giAccTaps <= B.ssgiRays * B.ssgiSteps, "per-frame cost equal or lower");
+  assert.ok(GI.giEffectiveRays(B.ssgiRaysT, W, 30) > 4 * B.ssgiRays, "accumulated rays after half a second");
+  assert.equal(GI.giEffectiveRays(B.ssgiRaysT, W, 1), B.ssgiRaysT, "a reset frame is the spatial-only frame");
+  const seen = new Set();
+  for (let n = 0; n < 32; n++) {
+    const [x, y] = GI.giPhase(n);
+    assert.ok(x >= 0 && x < 64 && y >= 0 && y < 64);
+    seen.add(x.toFixed(3) + "," + y.toFixed(3));
+  }
+  assert.equal(seen.size, 32, "every frame rotates the rays to new directions");
+  // The shader's taps, counted from its source: depth, velocity, 3x3 current (centre + 8), history.
+  const src = read("js/render/three/tsl-gi.js");
+  const acc = src.slice(src.indexOf("function giAccPass("), src.indexOf("if (plan.ssgi) {"));
+  const textual = (acc.match(/\.sample\(/g) || []).length;   // velocity, centre, the loop body once, history
+  assert.equal(textual + 7 + 1, B.giAccTaps, "the loop body runs 8 times; depthAt is the 12th tap");
+});
+
 test("build plan against the real GfxQuality: HIGH / phones / fixed targets build nothing", () => {
   for (const p of ["low", "medium", "high"]) assert.equal(GI.anyBuilt(GI.buildPlan(envFor(gfxQuality(p)))), false, p);
   assert.equal(GI.anyBuilt(GI.buildPlan(envFor(gfxQuality("extreme"), { mobile: true }))), false, "phone");
@@ -206,7 +235,8 @@ const VENDOR = "vendor/three-0.187.0/three.webgpu.min.js";
 const THREE = await import(pathToFileURL(path.join(ROOT, VENDOR)).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
-  "js/render/three/tsl-chunks.js", "js/render/three/tsl-gi.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
+  "js/render/three/tsl-chunks.js", "js/render/three/tsl-gi.js", "js/render/three/tsl-post.js", "js/render/three/tsl-aa.js",
+  "js/render/three/tlx-post.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 function withStore(ls, fn) {
@@ -288,4 +318,81 @@ test("every desktop extra builds and runs through three's node builder (GLSL gen
   assert.equal(h.P.composite.mat, h.P.composite.matBase, "today's composite program");
   for (let i = 0; i < 9; i++) h.present();
   assert.deepEqual(h.post.state().hi.held, { gi: false, cine: false, focus: false }, "shed extras free their targets");
+});
+
+test("WebGL2 (forced extras): no velocity attachment, no SSGI accumulation, no AgX: today's two attachments", async (t) => {
+  const h = await rig(t, ["ssgi", "motionBlur"]);
+  h.present();
+  const st = h.post.state();
+  assert.equal(st.attachments, 2);
+  assert.deepEqual(st.motion, { velocity: false, taaVel: false, mblurVel: false, agx: false, giAcc: null });
+  assert.equal(h.P.gi.ssgi.mat.customProgramCacheKey(), "tlx-gi-ssgi", "today's 6-ray pass");
+  assert.equal(h.P.gi.motionBlur.mat.customProgramCacheKey(), "tlx-gi-mblur");
+  assert.equal(h.post.velocityOn(), false);
+});
+
+test("velocity + SSGI accumulation + per-object motion blur graphs build and generate (GLSL)", () => {
+  const T = globalThis.TLXShaders;
+  const fg = makeFakeGL(64, 32);
+  const tex = () => new THREE.RenderTarget(64, 32).texture;
+  const base = { chunks: T.chunks(THREE, TSL), blackTex: tex(), whiteTex: tex(), sceneTex: tex(), sceneDepthTex: tex(),
+    sceneTagTex: tex(), trackMaterial: () => {}, ownTexture: () => {}, hi: { ssgi: true, motionBlur: true } };
+  const P = T.post(THREE, TSL, { ...base, velTex: tex(), giTemporal: true });
+  assert.equal(P.gi.ssgi.mat.customProgramCacheKey(), "tlx-gi-ssgi-t");
+  assert.ok(P.gi.ssgi.U.phase, "the per-frame ray rotation");
+  assert.ok(P.gi.giAcc && P.gi.giAcc.velocity && P.gi.giAcc.mat.customProgramCacheKey() === "tlx-gi-ssgi-acc");
+  assert.ok(P.gi.motionBlur.velocity && P.gi.motionBlur.mat.customProgramCacheKey() === "tlx-gi-mblur-v");
+  const camOnly = T.post(THREE, TSL, { ...base, giTemporal: true });
+  assert.equal(camOnly.gi.giAcc.velocity, false, "no attachment: camera reprojection");
+  assert.equal(camOnly.gi.motionBlur.mat.customProgramCacheKey(), "tlx-gi-mblur", "no attachment: today's motion blur");
+  const off = T.post(THREE, TSL, base);
+  assert.equal(off.gi.giAcc, undefined, "no giTemporal: no accumulation pass");
+  return (async () => {
+    const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
+    await renderer.init();
+    try {
+      for (const m of [P.gi.ssgi.mat, P.gi.giAcc.mat, P.gi.motionBlur.mat, camOnly.gi.giAcc.mat]) {
+        const b = new THREE.GLSLNodeBuilder(new THREE.QuadMesh(m), renderer);
+        b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+        assert.ok(b.fragmentShader.length > 500, `${m.customProgramCacheKey()} generated`);
+      }
+    } finally { renderer.dispose(); }
+  })();
+});
+
+test("the chain on (faked) native WebGPU: a velocity attachment, accumulation that resets on a teleport and a resize", async (t) => {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  renderer.backend.isWebGPUBackend = true;   // the decisions only: three still drives the fake WebGL2 context
+  const identity = new THREE.Matrix4().elements;
+  const shadow = { sunTex: new THREE.DepthTexture(1, 1), S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
+  const Q = gfxQuality("high"), on = new Set(["ssgi", "motionBlur"]);
+  globalThis.GfxQuality = { detail: () => 2, FEATURES: Q.FEATURES, feature: (n) => on.has(n) };
+  const T = globalThis.TLXShaders;
+  const post = withStore({ "apex26.tlxAgx": "1" }, () => T.postChain(THREE, TSL, { renderer, isMobile: false,
+    chunks: T.chunks(THREE, TSL), shadow, viz: null, ssrTag: true, traa: true, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+  t.after(() => { post.dispose(); renderer.dispose(); delete globalThis.GfxQuality; });
+  post.resize(320, 180);
+  const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity, upVS: [0, 1, 0],
+    eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], sunVS: [0, 0, -1], time: 0, cloud: 0 };
+  const opts = { ssao: 0.8, bloom: 0.5, reflect: 0.5 };
+  const tex = post.sceneTarget().textures;
+  assert.deepEqual(tex.map((x) => x.name), ["output", "ssrTag", "velocity"]);
+  assert.equal(tex[2].format, THREE.RGFormat); assert.equal(tex[2].type, THREE.HalfFloatType);
+  assert.equal(post.velocityOn(), true);
+  for (let i = 0; i < 4; i++) post.present(opts, frame);
+  let m = post.state().motion;
+  assert.equal(post.state().attachments, 3);
+  assert.deepEqual([m.velocity, m.taaVel, m.mblurVel, m.agx], [true, true, true, true]);
+  assert.deepEqual([m.giAcc.frames, m.giAcc.resets, m.giAcc.held, m.giAcc.velocity], [4, 1, true, true], "one reset: the first frame");
+  post.present(opts, { ...frame, eye: [0, 0, 50] });
+  assert.equal(post.state().motion.giAcc.resets, 2, "a teleport resets the accumulation");
+  post.present(opts, { ...frame, eye: [0, 0, 50] });
+  assert.equal(post.state().motion.giAcc.resets, 2, "a still frame after it accumulates");
+  post.resize(160, 90);
+  post.present(opts, { ...frame, eye: [0, 0, 50] });
+  assert.equal(post.state().motion.giAcc.resets, 3, "a resize resets it");
+  assert.equal(post.setAgx(false), true, "the writer reports this chain's state (the flag is read once at build)");
 });
