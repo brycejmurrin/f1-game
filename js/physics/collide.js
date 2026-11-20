@@ -198,6 +198,7 @@ const Collide = (() => {
   const CORR_EPS = 1e-3;
 
   const _lim = { r: 0, l: 0, laneMin: 0, side: 0 }, _postLim = { r: 0, l: 0, minOut: 0, side: 0 };
+  const _prevPos = { s: 0, x: 0 };
   _lim.laneMin = 0.5; _lim.laneMin = 0;
 
   function create(G, collideFx, ownsPose = () => false) {
@@ -572,7 +573,10 @@ const Collide = (() => {
       for (let i = 0; i < ranked.length; i++) {
         const c = ranked[i];
         if (ownsPose(c) || incidentSim.owns(c)) continue;
-        const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, _postLim);
+        let prev = null;
+        if (c === player) { _prevPos.s = _preColS; _prevPos.x = _preColX; prev = _prevPos; }
+        else if (!c.human && Number.isFinite(c._preColS) && Number.isFinite(c._preColX)) { _prevPos.s = c._preColS; _prevPos.x = c._preColX; prev = _prevPos; }
+        const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, _postLim, prev);
         if (c.x > lim.r) c.x = lim.r; else if (c.x < -lim.l) c.x = -lim.l;
         if (lim.laneMin > 0 && c.x * lim.side < lim.laneMin) c.x = lim.laneMin * lim.side;
         if (!c.human && (c.s !== c._preColS || c.x !== c._preColX)) {
