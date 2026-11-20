@@ -220,7 +220,7 @@ test("#5889 regression: TODAY'S CHALLENGE with a search typed still arms the dai
   assert.equal(h.G.trackIdx, 1, "the daily circuit stays selected");
   const chip = h.dom.byId("sel-daily");
   assert.equal(chip.getAttribute("aria-pressed"), "true");
-  assert.match(chip.textContent, /^DAILY STANDARD · SPA/);
+  assert.equal(chip.textContent.split(" · ").slice(0, 2).join(" · "), "DAILY STANDARD · SPA");
 });
 
 test("CLASSICS filter refreshes the hero preview when the active circuit is hidden", () => {
