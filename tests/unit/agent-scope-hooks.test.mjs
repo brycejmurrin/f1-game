@@ -390,7 +390,7 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
       ["one added and one removed", ["lane:claude", "needs-owner"], ["lane:claude", "claimed"], "deny"],
       ["two added", [...LIVE, "priority", "blocked"], LIVE, "deny"],
       ["a stale list after an Action labelled", ["lane:claude", "land"], ["lane:claude", "deploy:red"], "deny"],
-      ["config-ok added on a routine diff (D-041)", ["lane:claude", "config-ok"], ["lane:claude"], "allow", ["js/core/log.js", "tools/ci/pick-tests.mjs", ".claude/memory/MEMORY.md"]],
+      ["config-ok added on a routine diff (D-042)", ["lane:claude", "config-ok"], ["lane:claude"], "allow", ["js/core/log.js", "tools/ci/pick-tests.mjs", ".claude/memory/MEMORY.md"]],
       ["config-ok added on a PROTECTED diff", ["lane:claude", "config-ok"], ["lane:claude"], "deny", ["js/core/log.js", ".claude/hooks/lsp-hint.py"]],
       ["config-ok added, a rename FROM a protected path", ["lane:claude", "config-ok"], ["lane:claude"], "deny", ["tools/ci/pick-tests.mjs", "tools/ci/merge-gate.mjs"]],
       ["config-ok added, the PR's files unreadable (fail closed)", ["lane:claude", "config-ok"], ["lane:claude"], "exit2", [], "1"],

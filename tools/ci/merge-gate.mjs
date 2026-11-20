@@ -42,7 +42,7 @@
 //             passes. A package.json diff that is ONLY the generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
 //             deltas, compared head vs merge base; a lowered, unchanged or new ceiling is no raise) needs the
-//             `ratchet-raise` label, last added by Bryce in person or by an agent through the Claude app (D-041; his
+//             `ratchet-raise` label, last added by Bryce in person or by an agent through the Claude app (D-042; his
 //             own removal vetoes agent re-adds), and newer than the last push touching a ratchet file.
 //             Per-file ceilings (`files`, the commit hook's --auto-raise) are not this row's. Bryce's pick, 2026-11-11
 //             ~09:10Z: "Build the check (Recommended)" (#5405 option b; .claude/rules/game-code.md).
@@ -364,10 +364,12 @@ export function treeCeilingsAt(ref, request) {
   };
   const base = read("tests/data/ratchets.json");
   if (base.error) return base;
-  const tree = {};
+  const tree = {}, absorb = {};
   for (const [m, v] of Object.entries(base.json?.tree || {})) {
     const c = typeof v === "number" ? v : v?.ceiling;
     if (typeof c === "number" && Number.isFinite(c)) tree[m] = c;
+    // B+D (2026-11-20): an entry's `absorb` is growth a PR may add with no label (treeRaises below).
+    if (v && typeof v === "object" && Number.isFinite(v.absorb) && v.absorb > 0) absorb[m] = v.absorb;
   }
   const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
   if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
@@ -381,21 +383,25 @@ export function treeCeilingsAt(ref, request) {
       tree[m] += d;
     }
   }
-  return { tree };
+  return { tree, absorb };
 }
 
 /** The tree metrics whose ceiling is higher at `after` than at `before`, and those `before` carries that `after` does
  *  not: ratchets.mjs measures only the metrics ratchets.json names, so deleting one removes its ceiling, the widest
  *  raise there is (`to: null`, shown as "removed"). A metric only `after` carries is a new ceiling, no raise. Pure. */
-export function treeRaises(before, after) {
-  const b = before || {}, a = after || {};
-  return Object.keys(b).filter((m) => !Object.hasOwn(a, m) || a[m] > b[m]).sort()
+export function treeRaises(before, after, absorbBefore = {}, absorbAfter = {}) {
+  const b = before || {}, a = after || {}, ab = absorbBefore || {}, aa = absorbAfter || {};
+  // B+D (2026-11-20): growth inside the absorb the BASE granted is no raise; a wider absorb is one (`<m> absorb`).
+  const inside = (m) => Object.hasOwn(a, m) && ab[m] > 0 && a[m] - b[m] <= ab[m] && (aa[m] || 0) <= ab[m];
+  const rows = Object.keys(b).filter((m) => (!Object.hasOwn(a, m) || a[m] > b[m]) && !inside(m))
     .map((m) => ({ metric: m, from: b[m], to: Object.hasOwn(a, m) ? a[m] : null }));
+  for (const m of Object.keys(aa)) if (Object.hasOwn(b, m) && aa[m] > (ab[m] || 0)) rows.push({ metric: `${m} absorb`, from: ab[m] || 0, to: aa[m] });
+  return rows.sort((x, y) => (x.metric < y.metric ? -1 : x.metric > y.metric ? 1 : 0));
 }
 
 /**
  * raise: no tree-wide ceiling rises, or the newest `ratchet-raise` covers the head (`push` from configPushState over
- * the ratchet files). Bryce's own click counts, and so does an agent's (configLabelKind "agent", D-041: Bryce
+ * the ratchet files). Bryce's own click counts, and so does an agent's (configLabelKind "agent", D-042: Bryce
  * 2026-11-20 "Routine both"), except that his own `unlabeled` vetoes agent re-adds until his own `labeled`. Pure.
  */
 export function raiseVerdict(raises, labels, events = null, owner = OWNER, push = null) {
@@ -431,7 +437,7 @@ export function prRaisesAt(sha, base, request) {
   if (before.error) return before;
   const after = treeCeilingsAt(sha, request);
   if (after.error) return after;
-  return { raises: treeRaises(before.tree, after.tree) };
+  return { raises: treeRaises(before.tree, after.tree, before.absorb, after.absorb) };
 }
 
 /** Does `now` raise nothing beyond `then` (the raises Bryce saw when he clicked)? Every metric raised now was raised

@@ -1999,7 +1999,7 @@ test("#5407 evaluate: the retest row is local (never --trusted), waits with a pe
 /** A fixture ratchets.d fragment path no tree carries, built so the source-path lint does not read it as a reference. */
 const FRAG = (name) => ["tests", "data", "ratchets.d", `${name}.json`].join("/");
 
-test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet-raise (D-041), bound to the head; lower, unchanged and per-file pass", () => {
+test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet-raise (D-042), bound to the head; lower, unchanged and per-file pass", () => {
   assert.equal(RAISE_LABEL, "ratchet-raise");
   const b64 = (o) => ({ json: { encoding: "base64", content: Buffer.from(JSON.stringify(o)).toString("base64") } });
   const MB = "m".repeat(40);
@@ -2017,10 +2017,21 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet
     if (file === "tests/data/ratchets.d") return { json: Object.keys(side.frags).map((f) => ({ type: "file", name: f.split("/").pop(), path: f })) };
     return side.frags[file] ? b64(side.frags[file]) : { error: "HTTP 404" };
   };
-  assert.deepEqual(treeCeilingsAt(MB, ghRequest), { tree: { assertPins: 105, bareCatches: 10 } });
+  assert.deepEqual(treeCeilingsAt(MB, ghRequest), { tree: { assertPins: 105, bareCatches: 10 }, absorb: {} });
   assert.deepEqual(treeRaises({ a: 1, b: 5 }, { a: 2, b: 4, c: 9 }), [{ metric: "a", from: 1, to: 2 }], "lowered and new ceilings are no raise");
   // Deleting a tree metric removes its ceiling (ratchets.mjs measures only what ratchets.json names): a raise.
   assert.deepEqual(treeRaises({ assertPins: 8223, bareCatches: 29 }, { assertPins: 8223 }), [{ metric: "bareCatches", from: 29, to: null }]);
+  // B+D (2026-11-20, docs/notes/RATCHET-REVIEW-2026-11-20.md): growth inside the BASE's absorb needs no label; past it,
+  // or with a wider absorb, it does.
+  const ab = { eagerCodeBytes: 5000 };
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 5100 }, ab, ab), [], "inside the absorb");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 5101 }, ab, ab), [{ metric: "eagerCodeBytes", from: 100, to: 5101 }], "past the absorb");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 200 }, {}, ab),
+    [{ metric: "eagerCodeBytes", from: 100, to: 200 }, { metric: "eagerCodeBytes absorb", from: 0, to: 5000 }],
+    "an absorb the base did not grant covers nothing, and granting one is itself a raise");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 100 }, ab, { eagerCodeBytes: 9000 }), [{ metric: "eagerCodeBytes absorb", from: 5000, to: 9000 }],
+    "widening the absorb is a raise");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, {}, ab, {}), [{ metric: "eagerCodeBytes", from: 100, to: null }], "removing it is still a raise");
   assert.equal(raiseVerdict([{ metric: "bareCatches", from: 29, to: null }], [], []).evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (bareCatches 29→removed) — lower the count instead, or ask him");
   const f = fakes();
   f.files.push({ filename: FRAG("cursor--x") });
@@ -2034,7 +2045,7 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet
   let r = rowOf();
   assert.equal(r.ok, false);
   assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (assertPins 105→108) — lower the count instead, or ask him");
-  // An agent's label (through the Claude app) counts since D-041 (Bryce 2026-11-20 "Routine both"), bound to the head.
+  // An agent's label (through the Claude app) counts since D-042 (Bryce 2026-11-20 "Routine both"), bound to the head.
   f.pull.labels = [{ name: "ratchet-raise" }]; f.events.push(ev("ratchet-raise", "2026-11-03T10:00:00Z", { app: APP }));
   r = rowOf();
   assert.equal(r.ok, true, r.evidence);

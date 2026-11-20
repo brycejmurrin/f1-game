@@ -21,7 +21,7 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Settle every human step before launch (a device check, a `config-ok` the diff will need, a decision) and cite the
   comment URL, so the worker verifies it instead of waiting [10].
 - `config-ok` on a ROUTINE config path and `ratchet-raise` you add yourself, after you have read the PR's config diff
-  or its raise and the CEILING-HISTORY reason, with one comment per add naming them (D-034, D-041); never let the
+  or its raise and the CEILING-HISTORY reason, with one comment per add naming them (D-034, D-042); never let the
   PR's own worker add either. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
   `land.yml`, every host's hooks and settings) needs Bryce's own tap (#5455); `ci.yml`, `pick-tests`, `preflip-probe`
   and the other `tools/ci/` files are routine. The gate cannot tell you from the worker: this half is a rule, not a check.
