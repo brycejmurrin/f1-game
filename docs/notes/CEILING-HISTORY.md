@@ -12,6 +12,7 @@ merge base: `js/career/save-migrate.js` +874 (import range clamps), `js/physics/
 `js/physics/aero-zones.js` +264, `js/physics/consts.js` +190 and `js/physics/ai-band.js` +175
 (fix 6, the stale-text corrections). About +1379 of it is whole-line comments, which carry
 fix 6's corrected facts. Fragment: `ratchets.d/claude--gameplay-hunt-1118.json`.
+
 ## 2026-11-19 — PR #5738 (claude/appearance-shapes-4529): PORTRAIT & LANDSCAPE, garage PANEL HEIGHT
 
 `(tree) eagerBytes` 8,015,949 → **8,018,824** (+2,875 B). Deliberate raise past the absorb; the
