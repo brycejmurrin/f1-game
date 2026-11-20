@@ -870,6 +870,18 @@ export function ceilingHistoryReasoned(ref) {
   } catch { return false; }
 }
 
+/** True when CEILING-HISTORY.md gains (since `ref`) a line that names the tree metric, e.g. `(tree) assertPins`:
+ *  the recorded reason a tree entry's `absorb` may widen (D-037, Bryce's "Pin slack"). Narrower than
+ *  ceilingHistoryReasoned: the added line must name THIS metric. */
+export function historyNamesTree(ref, metric) {
+  try {
+    const out = cp.execFileSync("git", ["diff", "-U0", `${ref}`, "--", "docs/notes/CEILING-HISTORY.md"],
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const re = new RegExp(`\\(tree\\)\\s+${metric.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+    return out.split("\n").some((l) => l.startsWith("+") && !l.startsWith("+++") && re.test(l));
+  } catch { return false; }
+}
+
 /**
  * How much a sync file metric grew between `ref` and the working tree.
  * Returns null when the metric is async/tree-scoped or the file is missing at
@@ -930,7 +942,7 @@ export const EXACT_CURE = "exact ceiling (slack 0): measure against the TIP (syn
  *  `historyReasoned` are injectable for tests. Returns the exit code. */
 export function compareToBase(ref, {
   maxRaise = 40, current = load(), print = console.log, advisory = false,
-  sourceGrowthFn = sourceGrowth, historyReasoned = undefined,
+  sourceGrowthFn = sourceGrowth, historyReasoned = undefined, historyNamesFn = historyNamesTree,
 } = {}) {
   let base;
   try { base = loadAt(ref); }
@@ -975,12 +987,17 @@ export function compareToBase(ref, {
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
+      // ONE recorded escape (D-037): a TREE entry's absorb widened, with a CEILING-HISTORY line naming that metric in
+      // the same diff. The ceiling itself is unmoved and merge-gate's raise row still needs ratchet-raise. Every other
+      // loosen (slack, a per-file absorb, an absorb with no history line) stays fatal.
+      const recorded = r.what === "absorb" && r.file === "(tree)" && historyNamesFn(ref, r.metric);
       blocked++;
-      if (!advisory) fatal++;
+      if (!advisory && !recorded) fatal++;
       const msg = (r.what === "absorb"
         ? `LOOSEN ${where}: absorb ${r.base} -> ${r.now} — a wider absorb hands out room; this needs a reason in the PR`
+          + (recorded ? ` (reason recorded in ${HISTORY_REL}; the gate's raise row still needs ratchet-raise)` : r.file === "(tree)" ? ` — add a ${HISTORY_REL} line naming (tree) ${r.metric} in the same push` : "")
         : `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR`) + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
-      print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
+      print(gh ? `::${advisory || recorded ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
     } else {
       // A deleted entry for a file/metric that still exists removes a guard; one whose
       // file is gone (or a whole tree metric dropped with its tool) is a normal cleanup.

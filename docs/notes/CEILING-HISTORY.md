@@ -1,5 +1,15 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-20 — PR #6024 (claude/ratchet-pin-absorb): pin counts get a 5-pin absorb (Bryce's "Pin slack", D-037)
+
+`(tree) assertPins` ceiling **8140** and `(tree) assertPinsAll` ceiling **10366** are unchanged; each entry gains
+`absorb: 5`, the mechanism `eagerCodeBytes` already uses. A branch's own growth of up to 5 pin-shaped asserts since its
+merge base is then the commit hook's fragment with no label, and past 5 it still needs Bryce's `ratchet-raise`. Why: with the tip
+exactly at both ceilings, #5959, #5966, #5686 and #6014 each added one pin, passed CI, and were refused by merge-gate's
+ratchets row at land (each a full CI run wasted). `ratchets.mjs --base` reads the widened absorb as a LOOSEN; this
+entry is the recorded reason that lets that one loosen pass (`historyNamesTree`), and the gate's raise row still asks
+for `ratchet-raise` on this PR.
+
 ## 2026-11-20 — PR #5788 (claude/render-caster-position-only-1118): car shadow casters position-only
 
 `(tree) eagerCodeBytes` 4018312 → **4018390** (+78, stripped code bytes; inside the 5,000 B absorb).
