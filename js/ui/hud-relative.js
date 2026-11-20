@@ -107,7 +107,7 @@ const HudRelative = (function () {
       if (i !== SELF) {
         const rough = Math.abs(r.rel) / vFloor;
         const raw = typeof HudReadouts !== "undefined" && HudReadouts.gaps
-          ? (r.rel > 0 ? HudReadouts.gaps.between(car, G.player, G.raceT || 0, rough) : HudReadouts.gaps.between(G.player, car, G.raceT || 0, rough)) : rough;
+          ? (r.rel > 0 ? HudReadouts.gaps.between(car, G.player, G.raceT || 0, rough, r.laps * track.total) : HudReadouts.gaps.between(G.player, car, G.raceT || 0, rough, -r.laps * track.total)) : rough;
         if (smWho[i] !== car || !Number.isFinite(sm[i])) { smWho[i] = car; sm[i] = raw; }
         else sm[i] += (raw - sm[i]) * EMA;
         const gap = fmtGap(sm[i], r.rel > 0, G.hudProfile);

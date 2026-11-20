@@ -250,9 +250,9 @@ const HudReadouts = (function () {
       const p0 = h.p[at(lo)], p1 = h.p[at(hi)], t0 = h.t[at(lo)], t1 = h.t[at(hi)];
       return t0 + (t1 - t0) * (p - p0) / Math.max(1e-6, p1 - p0);
     }
-    function between(ahead, behind, now, fallback) {
+    function between(ahead, behind, now, fallback, shift) {
       if (!ahead || !behind || !Number.isFinite(behind.prog)) return fallback;
-      const t = timeAt(ahead, behind.prog);
+      const t = timeAt(ahead, behind.prog + (shift || 0));
       return Number.isFinite(t) && now >= t ? now - t : fallback;
     }
     return { sample, between, reset() { hist = new WeakMap(); lastT = -1; } };
