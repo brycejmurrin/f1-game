@@ -1190,7 +1190,7 @@ function saveTeamParts(teamId, parts) {
 // call through the destructured helpers.
 const customLiv = CustomLiveries.create({ store });
 const {
-  getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
+  getLiveryId, saveLiveryId, getCustomLiveries,
   getLiveries, resolveLivery, factoryLivery, wingColorOfLivery,
 } = customLiv;
 
@@ -3261,7 +3261,7 @@ const G = {
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; clampDriverIdx(); },
   // Stable helpers consumed by js/garage/setup-sheet.js.
   arrToHex, hexToArr, getTeamParts, saveTeamParts, recomputePlayerMods, getLiveryId, saveLiveryId,
-  getCustomLiveries, setCustomLiveries, getLiveries,
+  getCustomLiveries, getLiveries,
   invalidateDecalTextures: (id) => carDraw.invalidateDecalTextures(id),   // const from CarDraw.create(G) below — defer
   // Drop every procedural body/wheel GPU cache (CarDraw). Specs that hook
   // Car3D.build call this via __apex.clearCarMeshCaches so a warm sharedTest
@@ -3497,7 +3497,7 @@ const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
 const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
-const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
+const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G, customLiv);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
@@ -8647,7 +8647,7 @@ function tickBody(now) {
 
 // ---------- car setup panel ----------
 // The CAR SETUP panel UI (stat bars, tabs, options, livery creator) lives in
-// js/garage/setup-sheet.js (SetupUI.create(G) — wired after the G façade).
+// js/garage/setup-sheet.js (SetupUI.create — wired after the G façade).
 
 // ---------- UI wiring ----------
 // Select-screen UI (team/track grids, preview, circuit detail modal) lives in

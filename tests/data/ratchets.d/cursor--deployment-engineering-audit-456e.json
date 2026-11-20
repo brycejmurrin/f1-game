@@ -1,11 +1,14 @@
 {
   "files": {
+    "js/game.js": {
+      "gMembers": -1
+    },
     "js/net/lobby.js": {
       "lines": 15
     }
   },
   "tree": {
-    "eagerBytes": -6706,
+    "eagerBytes": -2214,
     "eagerScripts": -1
   }
 }

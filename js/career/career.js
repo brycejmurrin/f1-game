@@ -135,13 +135,21 @@ function identityValue(key, fallback) {
   if (!id || !Object.hasOwn(id, key)) return fallback;
   return id[key] != null || key === "customLogo" ? id[key] : fallback;
 }
-function setIdentityValue(key, value) {
+function setIdentityValues(values) {
   if (!inCareer() || career.flavour !== "myteam" || blocked() || (careerRevision != null && currentRevision() !== careerRevision) || typeof CareerTeamIdentity === "undefined") return false;
-  const cleaned = CareerTeamIdentity.value(key, value);
-  if (cleaned === undefined) return false;
-  if (!commit(() => { adoptTeamIdentity(); career.myTeamIdentity[key] = cleaned; })) return false;
+  const cleaned = {};
+  for (const [key, value] of Object.entries(values)) {
+    const field = CareerTeamIdentity.value(key, value);
+    if (field === undefined) return false;
+    // The import sanitizer can trim an oversized list. An explicit Garage save
+    // must refuse the operation instead of fitting an id the slot discarded.
+    if (Array.isArray(value) && Array.isArray(field) && value.length !== field.length) return false;
+    cleaned[key] = field;
+  }
+  if (!commit(() => { adoptTeamIdentity(); Object.assign(career.myTeamIdentity, cleaned); })) return false;
   identityChanged(); return true;
 }
+function setIdentityValue(key, value) { return setIdentityValues({ [key]: value }); }
 function data() { return career; }
 function conflicted() { return blocked(); }
 // A career EXISTS (save on disk). For "career rules apply now", use inCareer().
@@ -2038,7 +2046,7 @@ return {
   gridDrivers, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats, aiSetup,
   owned, researchCost, research, budget, upgradeBudget,
-  identityValue, setIdentityValue, onIdentityChange, identityRevision: () => identityRevision,
+  identityValue, setIdentityValue, setIdentityValues, onIdentityChange, identityRevision: () => identityRevision,
   objective, objectiveFor, objectiveLabel, objectiveMet, prizeFor, settleRound, scoreRound, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
   driverStandings, teamStandings, rollover, offers, offerPreview, acceptOffer, marketValue, offerBar,

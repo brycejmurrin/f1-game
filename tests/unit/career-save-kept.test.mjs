@@ -70,7 +70,8 @@ function boot(disk, state) {
     // state.refuse: the store refuses the career write outright, as a revision conflict does.
     return state.refuse ? { ok: false, durable: false, reason: "conflict" } : write(k, v, o);
   };
-  return { Career: vm.runInContext("Career", ctx), store, writes };
+  vm.runInContext(readFileSync(join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
+  return { Career: vm.runInContext("Career", ctx), paint: vm.runInContext("CustomLiveries.create({store: GameStore.store})", ctx), store, writes };
 }
 
 // A healthy career on disk to act on; `setup` tunes it through a durable write.
@@ -86,6 +87,26 @@ function harness(flavour, setup) {
   return Object.assign(h, { disk, state,
     reload() { const r = boot(new Map(disk), { full: false }); r.Career.load(); r.Career.engage(true); return r.Career; } });
 }
+
+test("MY TEAM edits at livery capacity commit both identity fields together or preserve both", () => {
+  const h = harness("myteam");
+  const rows = Array.from({ length: 20 }, (_, i) => ({ id: "custom_" + i, name: "paint" + i, c1: [1, 0, 0], c2: [0, 0, 1] }));
+  assert.ok(h.Career.setIdentityValue("livery.custom.custom", rows));
+  assert.ok(h.Career.setIdentityValue("livery.custom", rows[0].id));
+  const next = { ...rows[0], id: "custom_repaint", name: "Edited" };
+  const apply = oldId => h.paint.saveAndFitLivery("custom", oldId, next);
+  const check = expected => {
+    const restored = h.reload(), paints = restored.identityValue("livery.custom.custom", []);
+    assert.equal(paints.length, 20); assert.equal(restored.identityValue("livery.custom"), expected);
+    assert.equal(paints[0].id, expected); assert.equal(paints[19].id, rows[19].id);
+  };
+  assert.equal(apply(null).ok, false, "reject a new row the real identity sanitizer would truncate");
+  check(rows[0].id);
+  h.state.refuse = true; assert.equal(apply(rows[0].id).ok, false); check(rows[0].id);
+  h.state.refuse = false; const before = h.writes.length;
+  assert.equal(apply(rows[0].id).ok, true); assert.equal(h.writes.length, before + 1);
+  check(next.id);
+});
 
 const snap = (Career) => JSON.stringify(Career.data());
 // load() normalises a save (migrateCareer), so compare reload with reload.

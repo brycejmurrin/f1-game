@@ -3,3 +3,5 @@ Fixed: a reconnected controller waits for a fresh button press, and unplugging a
 Fixed: checkpoint retries and rewinds restore the field sector best alongside the driver's personal best.
 Fixed: a late Auto Soak start cannot change a replacement run's camera or stop its recording. Stopping a soak preserves a separate manual recording.
 Fixed: the phone recorder rejects malformed saved reports and applies its 80-field limit across nested renderer statistics.
+Fixed: Garage launch comparisons keep a recoverable copy of the original tune before applying a trial setup. Refused writes can be retried after storage is available again.
+Fixed: editing an already fitted custom livery preserves the original paint if the new selection cannot be saved.

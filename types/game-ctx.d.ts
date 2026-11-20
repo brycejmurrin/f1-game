@@ -605,7 +605,6 @@ interface GameCtx {
   readonly getLiveryId: (teamId: string) => string;
   readonly saveLiveryId: (teamId: string, id: string) => void;
   readonly getCustomLiveries: (teamId: string) => unknown[];
-  readonly setCustomLiveries: (teamId: string, arr: unknown[]) => void;
   readonly getLiveries: (team: TeamDef) => unknown[];
   readonly invalidateDecalTextures: (teamId: string) => void;
   /** Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds through Car3D.build. */

@@ -3371,8 +3371,10 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -3380,7 +3382,14 @@
       ],
       "getCustomLiveries": [
         "tests/unit/data-hardening-4477.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs"
+      ],
+      "getLiveryId": [
+        "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "identityValue": [
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "normalizeImported": [
         "tests/unit/livery-paint-zones.test.mjs"
@@ -3394,15 +3403,20 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
+      "saveAndFitLivery": [
+        "tests/unit/career-save-kept.test.mjs"
+      ],
       "saveLiveryId": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setCustomLiveries": [
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setIdentityValue": [
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "wingColorOf": [
@@ -4110,6 +4124,7 @@
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
@@ -4399,7 +4414,8 @@
       ],
       "identityValue": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/career-data-audio-improvements.test.mjs"
+        "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "inCareer": [
         "tests/unit/career-backup.test.mjs",
@@ -4821,6 +4837,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -6018,6 +6035,7 @@
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
