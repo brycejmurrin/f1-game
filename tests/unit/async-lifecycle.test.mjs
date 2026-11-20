@@ -588,6 +588,10 @@ test("LIVE session time copy agrees with the status badge", () => {
   assert.equal(live._sessionTimeLabel(meta, "LIVE", fmt), "Started [2026-09-18T10:00:00Z]");
   assert.equal(live._sessionTimeLabel(meta, "COMPLETED", fmt), "Started [2026-09-18T10:00:00Z]");
   assert.equal(live._sessionTimeLabel({}, "COMPLETED", fmt), "");
+  // Hunt #5694 I2: a session from another year names its year.
+  const now = Date.parse("2026-11-18T12:00:00Z");
+  assert.equal(live._sessionTimeLabel({ dateStart: "2023-11-26T13:00:00Z" }, "COMPLETED", fmt, now), "Started [2023-11-26T13:00:00Z], 2023");
+  assert.equal(live._sessionTimeLabel({ dateStart: "2026-11-01T13:00:00Z" }, "COMPLETED", fmt, now), "Started [2026-11-01T13:00:00Z]");
 });
 
 test("LIVE split panes can shrink without creating modal-wide horizontal overflow", () => {
