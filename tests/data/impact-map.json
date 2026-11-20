@@ -10340,6 +10340,7 @@
       "*": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/deploy-ratchet-fragments.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-presets-extreme-knobs.test.mjs",
@@ -20067,6 +20068,7 @@
       ],
       "*": [
         "tests/specs/menu-survey.spec.js",
+        "tests/specs/touch-pedals.spec.js",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
@@ -20150,7 +20152,6 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
-        "tests/specs/real-profile-dock.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",
