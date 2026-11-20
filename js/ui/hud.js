@@ -1866,15 +1866,15 @@ function updateHud(force, dtMs) {
   syncAlong();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
-  // contains it (see the ranked build in game.js).
+  // contains it (game.js ranked build).
   // POS IS A RACE READOUT. In qualifying `cars` is the player alone (game.js
   // trims the field to one flying lap, and the model grids the rest only when
   // it ends), so it read "1/1"; in PRACTICE the rank is road order with
   // nothing at stake. Both say what the session is instead, like TT.
   const sess = sessionOf(timeTrial);
   hText(els.pos, sess === "tt" ? "TT" : player.retired ? "DNF" : sess === "quali" ? "Q"
-    : sess === "practice" ? "PRAC" : (player.rank || "-") + "/" + cars.length);
-  // Position change: acknowledge an overtake (either way) for ~0.6 s.
+    : sess === "practice" ? "PRAC" : (player.rank || player.gridPos || "-") + "/" + cars.length);
+  // Countdown: the grid slot. Overtake flash ~0.6 s.
   const rank = sess !== "race" || player.retired ? 0 : (player.rank || 0);
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
