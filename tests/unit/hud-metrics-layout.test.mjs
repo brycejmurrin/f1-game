@@ -427,3 +427,10 @@ test("F-17: the LIMITS chip's drop is ONE token, read by the CSS sites and the f
   vm.runInContext(fn + "\nsyncComputedRootVars();", ctx, { filename: absSrc("js/ui/hud.js") });
   assert.equal(ctx._cssDrop, 21);
 });
+
+test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( site (#4448)", () => {
+  // Lower these as the remaining rules fold into plain cascade wins; never raise them.
+  const lines = fs.readFileSync(path.join(root, "css/hud.css"), "utf8").split("\n");
+  assert.ok(lines.filter((l) => l.includes("!important")).length <= 72, "!important lines (72 at 2026-11-20)");
+  assert.ok(lines.reduce((n, l) => n + (l.match(/:has\(/g) || []).length, 0) <= 31, ":has( sites (31 at 2026-11-20)");
+});
