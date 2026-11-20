@@ -1,9 +1,9 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
-## 2026-11-20 — batch PR (claude/batch-5896-5878-5877): share-link undo, repair stop, season points (#5896, #5878, #5877)
+## 2026-11-20 — PR #5953 (claude/batch-5896-5878-5877): share-link undo, repair stop, season points; absorbs #5954 records and drills (#5896, #5878, #5877, #5895, #5888)
 
-`(tree) eagerBytes` 7,968,253 → **7,970,447** (+2,194 B). Deliberate raise; Bryce decided the fixes
+`(tree) eagerBytes` 7,972,011 → **7,974,205** (+2,194 B; first measured 7,968,253 → 7,970,447 on tip `9967d457`). Deliberate raise; Bryce decided the fixes
 (`decision: A` on #5896, `decision: A` on #5878, `decision: B` on #5877, 2026-11-20 ~06:36Z) and the
 orchestrator chose the raise over pruning unrelated comments (06:56Z); the tree-wide ceiling still
 needs his `ratchet-raise` label on the PR. The growth is the fixes' own code in three FULL (eager)
@@ -11,8 +11,10 @@ files, after trimming their comments: `js/ui/share-code.js` +1,145 (`importValue
 player's pre-link values across links), `js/career/season-cal.js` +925 (`seatPlayer`, the seat
 move) and `js/game.js` +124 (its one-line call in `makeCars`, also `js/game.js` codeLines/lines
 +1). The repair-only stop (#5878) is in the lazy `js/race/pit-lane.js`. Fragment:
-`tests/data/ratchets.d/claude--batch-5896-5878-5877.json`.
-## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
+`tests/data/ratchets.d/claude--batch-5896-5878-5877.json`. #5954 (WIND OFF record class, per-circuit drill
+bests) was folded in on the orchestrator's call (07:30Z); its own lower-only fragment
+(`claude--records-setups-5895.json`, −146) was dropped by the sync, and the combined branch re-measures
+exact on the sync with tip `fb12c549`: eagerBytes 7,974,205 = ceiling, this fragment alone (+2,194).
 
 `(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.
 A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
