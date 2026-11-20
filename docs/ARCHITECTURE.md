@@ -135,6 +135,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 | `mesh-detail.js` | `MeshDetail` | LAZY_TRACK_BUILD | MeshDetail: the shared geometry-refinement kit for procedural meshes (subdivide, bevel, normals, simplify). |
+| `gfx-hi.js` | `GfxHi` | LAZY_GFX_HI | GfxHi: the desktop EXTREME / CINEMA render and perf extras (GfxQuality.detail() >= 2). |
 
 **`js/perf/`**
 
@@ -467,6 +468,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |
 | `field-lod.js` | `FieldLod` | tag | FieldLod: distance level-of-detail for the RIVAL cars, draw-side only (nothing here reads or writes physics). |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
+| `car-hero.js` | `CarHero` | LAZY_GFX_HI | CarHero: the desktop EXTREME car detail (GfxQuality feature "heroCar" and the detail-2 tessellation). |
 
 **`js/input/`**
 

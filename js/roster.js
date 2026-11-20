@@ -853,6 +853,11 @@
       "js/share/share-card.js"
     ]
   ],
+    LAZY_GFX_HI: [
+    "js/render/shared/gfx-hi.js",
+    "js/car/car-hero.js"
+  ],
+    LAZY_GFX_HI_EDGES: [],
     LAZY_TRACK_BUILD: [
     "js/render/shared/mesh-detail.js",
     "js/track/scenery/models.js",

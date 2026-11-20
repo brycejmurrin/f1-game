@@ -2427,6 +2427,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/car/car-hero.js",
+      "global": "CarHero",
+      "roster": "LAZY_GFX_HI"
+    },
+    {
       "path": "js/car/car-material-shade.js",
       "global": "CarMaterialShade",
       "roster": "tag"
@@ -4435,6 +4440,11 @@
       "path": "js/render/shared/frustum.js",
       "global": "Frustum",
       "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/gfx-hi.js",
+      "global": "GfxHi",
+      "roster": "LAZY_GFX_HI"
     },
     {
       "path": "js/render/shared/gltf.js",

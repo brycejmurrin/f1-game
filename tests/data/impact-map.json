@@ -2951,6 +2951,11 @@
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
+    "js/car/car-hero.js": {
+      "*": [
+        "tests/unit/gfx-hi-lazy.test.mjs"
+      ]
+    },
     "js/car/car-material-shade.js": {
       "*": [
         "tests/unit/car-materials.test.mjs",
@@ -11733,12 +11738,14 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "detail": [
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/tsl-gi.test.mjs"
       ],
       "feature": [
         "tests/unit/census-verdict.test.mjs",
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/tier-record.test.mjs",
@@ -11760,6 +11767,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "maxId": [
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs"
       ],
@@ -15746,6 +15754,7 @@
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/renderer-boot-island-preload.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -15771,6 +15780,7 @@
       "start": [
         "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/renderer-boot-island-preload.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -16003,6 +16013,11 @@
         "tests/unit/build-worker.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/extreme-lights-sky.test.mjs"
+      ]
+    },
+    "js/render/shared/gfx-hi.js": {
+      "*": [
+        "tests/unit/gfx-hi-lazy.test.mjs"
       ]
     },
     "js/render/shared/gltf.js": {
@@ -17998,6 +18013,7 @@
         "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",

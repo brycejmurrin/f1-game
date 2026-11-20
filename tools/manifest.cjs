@@ -1388,6 +1388,16 @@ const LAZY_RESULTS_SHEET = [
 ];
 const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/share-card.js"]];
 
+// DESKTOP DETAIL ABOVE ULTRA (EXTREME / CINEMA, docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md; Bryce's B for
+// #6003, 2026-11-20: the tier code rides a lazy bundle, not a boot-wall raise). RendererBoot.start fetches it beside
+// the backend, so it is resident before Gfx.create and the first car build, and only when GfxQuality.detail() >= 2:
+// a phone (detail 0 always) and ULTRA and below never fetch a byte. Absent, every seam keeps the ULTRA path.
+const LAZY_GFX_HI = [
+  "js/render/shared/gfx-hi.js", // GfxHi: the EXTREME render / perf extras (governor upper ladder, cascades, lamp maps, light slots)
+  "js/car/car-hero.js",         // CarHero: the EXTREME car detail (hero refine, modelled parts, bevels, loft UVs)
+];
+const LAZY_GFX_HI_EDGES = [];
+
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
 // the eval order. TRACK_VM keeps the same files for verify-track / the build
@@ -1877,6 +1887,7 @@ module.exports = {
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
   LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
+  LAZY_GFX_HI, LAZY_GFX_HI_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,

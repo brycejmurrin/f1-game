@@ -234,6 +234,7 @@ export function swOptionalFiles() {
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []),
     ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []),
+    ...(MANIFEST.LAZY_GFX_HI || []),
   ];
 }
 
@@ -266,6 +267,7 @@ function swOptionalBlock() {
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
     ["LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade", MANIFEST.LAZY_SAVES_DATA || []],
     ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
+    ["LAZY_GFX_HI — desktop EXTREME / CINEMA detail, fetched beside the backend when GfxQuality.detail() >= 2", MANIFEST.LAZY_GFX_HI || []],
     ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
     ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
@@ -311,6 +313,7 @@ function rosterSource() {
     ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
     ["LAZY_SAVES_DATA", MANIFEST.LAZY_SAVES_DATA], ["LAZY_SAVES_DATA_EDGES", MANIFEST.LAZY_SAVES_DATA_EDGES],
     ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],
+    ["LAZY_GFX_HI", MANIFEST.LAZY_GFX_HI], ["LAZY_GFX_HI_EDGES", MANIFEST.LAZY_GFX_HI_EDGES],
     ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
     ["LAZY_GARAGE_EXTERIOR", MANIFEST.LAZY_GARAGE_EXTERIOR],
     // The build Worker's importScripts list, "@circuits" expanded in page order
