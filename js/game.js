@@ -3864,7 +3864,7 @@ function retireCar(c, reason) {
 
 function checkRetirements(dt) {
   const dist = Math.max(1, lapsTarget * track.total);
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level === 0 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 3 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     if (netPlay.owns(c) || realRace.owns(c)) continue;
