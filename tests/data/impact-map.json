@@ -3951,6 +3951,9 @@
       ]
     },
     "js/career/ai-dev.js": {
+      "atrScale": [
+        "tests/unit/career-ai-dev.test.mjs"
+      ],
       "developWinter": [
         "tests/unit/career-ai-dev.test.mjs"
       ],
@@ -6133,6 +6136,9 @@
       "fromTier": [
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs"
+      ],
+      "ladderPace": [
+        "tests/unit/career-ai-dev.test.mjs"
       ],
       "overall": [
         "tests/unit/career-hire-rating.test.mjs",

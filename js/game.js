@@ -1473,10 +1473,10 @@ function makeCars() {
     const worksParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const aiSetup = Career.inCareer() && Career.aiSetup && Career.aiSetup(team);
     const factoryParts = aiSetup ? Parts.resolveSetup(aiSetup, team) : worksParts;
-    // Aero and ERS already feed dedicated channels below. Credit only the other
-    // catalog gains against the current legal works build, without tdev or RNG.
-    const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
-      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
+    // Aero and ERS feed dedicated channels below. Credit the other catalog gains against the legal
+    // works build, without tdev or RNG, clamped to the tier ladder like the hire (#5760: was +7–16 %).
+    const catalogPace = aiSetup ? DriverRatings.ladderPace(buildPace(Parts.resolveSetup({ ...factoryParts.setup,
+      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts), team.tier, TIER_V) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // The hire, like catalogPace: aero/ERS reset (aeroLoad/ersDeploy below carry them), against the team's own
     // factory build (all-stock for the custom team, which has no works build), clamped to the tier ladder (#5035).
