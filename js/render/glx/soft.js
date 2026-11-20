@@ -17,6 +17,7 @@ const GLXSoft = (function () {
     let _softPresentWaiters = [];
     let _softLastMaxPx = 0;
     let _softCaptureDue = false;
+    let _softCaptureAsked = false;   // the armed capture is an EXPLICIT one (invalidateSoftPresent({ capture: true }))
     const _frameWaiters = [];
 
     function isEnabled() { return enabled; }
@@ -83,11 +84,16 @@ const GLXSoft = (function () {
       // drawn hands it a blank 300x150 canvas. That fake shipped dead (the gate
       // threw on an unbound getElementById) until 7d21d6700 bound it, and the
       // scheduled garage-before capture went red the next day (#5380).
-      const asked = _softPresentWaiters.length > 0;
+      // An explicit capture (invalidateSoftPresent({ capture: true }): a spec that owns the camera, which cannot
+      // register a waiter) reads #game-soft next too, so it is asked. Without it, the software-GL race-intro defer
+      // (#5965 made RaceEntryProfile.stallHandoffCover's race branch live) answered it with a blank generation:
+      // image-grade-visual's black baselines on llvmpipe (Bryce's decision: A2 on #5986).
+      const asked = _softPresentWaiters.length > 0 || (_softCaptureDue && _softCaptureAsked);
       try {
         if (!asked && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
           if (_softCaptureDue) {
             _softCaptureDue = false;
+            _softCaptureAsked = false;
             softBlitNotify();
           }
           return;
@@ -134,6 +140,7 @@ const GLXSoft = (function () {
         // opaque black, and showing that hid the live canvas underneath.
         if (_displayCanvas.style.opacity !== "1") _displayCanvas.style.opacity = "1";
         _softCaptureDue = false;
+        _softCaptureAsked = false;
         softBlitNotify();
       } catch (_) { /* 2D blit failed */ }
     }
@@ -151,8 +158,11 @@ const GLXSoft = (function () {
 
     // snapCam() / park() call gfx.invalidateSoftPresent. GLX captures only on
     // demand, and awaitSoftPresent() already requires a newer generation.
-    function invalidateSoftPresent() {
+    // `{ capture: true }`: the caller reads #game-soft next, so the software-GL UI defer does not drop it; a bare
+    // call stays the passive arm that the defer drops (garage entry, #3589).
+    function invalidateSoftPresent(opts) {
       _softCaptureDue = true;
+      if (opts && opts.capture) _softCaptureAsked = true;
       const PST = deps.getPST();
       try { if (PST && PST.invalidateUniformCache) PST.invalidateUniformCache(); } catch (_) { /* harness */ }
     }
