@@ -5984,8 +5984,7 @@ function updateCarLateral(c, dt, ranked, S) {
       // Guided: the heading follows the LANE's line, not the racing line's
       // slope (tanT) — which leaned a car in the fast lane on the platform
       // barrier the whole way down the Bahrain lane (traced, aiHead +0.15).
-      if (lx !== desiredX) { desiredX = lx; tanT = 0; }
-      else if ((desiredX = ContactGeometry.pitWallAim(track, c.s, wrapS(c.s + lead), lx)) !== lx) tanT = 0;   // off the lane: aim clear of the pit walls (#5997)
+      if (lx !== desiredX) { desiredX = lx; tanT = 0; } else if ((desiredX = ContactGeometry.pitWallAim(track, c.s, wrapS(c.s + lead), lx)) !== lx) tanT = 0;   // else clear of the pit walls (#5997)
     }
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
