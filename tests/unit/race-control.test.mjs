@@ -330,16 +330,33 @@ test("a caution RAISES immediately but does not LOWER before the hold", () => {
   let hz = hazards(0, 0);
   const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
 
-  hz = hazards(10, 2);
+  hz = hazards(6, 2);
   run(rc, 0.5);
-  assert.equal(rc.info().level, 3, "raises inside half a second");
+  assert.equal(rc.info().level, 2, "raises inside half a second");
 
   hz = hazards(0, 0);
   run(rc, 3);
-  assert.equal(rc.info().level, 3, "still flying 3 s later — MIN_HOLD is 6 s");
+  assert.equal(rc.info().level, 2, "still flying 3 s later — MIN_HOLD is 6 s");
 
   run(rc, 4);
   assert.equal(rc.info().level, 0, "cleared once the hold expires");
+});
+
+test("#5893: a debris SAFETY CAR outlives its debris — it holds SC_HOLD, not the 6 s MIN_HOLD", () => {
+  // Resting shards despawn after 4 s (DebrisWorld REST_DESPAWN_S), so a pile
+  // that raised an SC was gone ~6 s later and MIN_HOLD withdrew the SC before
+  // the field could bunch behind it. Before the fix: level 0 at t = 8 s.
+  let hz = hazards(10, 2);
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  hz = hazards(0, 0);   // the shards came to rest and despawned
+  run(rc, 7);
+  assert.equal(rc.info().level, 3, "the SC is still out 8 s after it was raised");
+  run(rc, 36);
+  assert.equal(rc.info().level, 3, "and 44 s after");
+  run(rc, 2);
+  assert.equal(rc.info().level, 0, "it comes in once SC_HOLD (45 s) has run");
 });
 
 test("a stuck hazard cannot neutralise the race forever", () => {
@@ -597,7 +614,7 @@ test("OVERTAKE stays off after the Safety Car comes in until the leader next cro
   assert.equal(rc.otEnabled(), false, "disabled under the Safety Car");
 
   hz = hazards(0, 0);
-  run(rc, 7);   // past MIN_HOLD: the Safety Car comes in
+  run(rc, 46);   // past SC_HOLD: the Safety Car comes in
   assert.equal(rc.info().level, 0);
   assert.equal(rc.otEnabled(), false, "green, but the field has not crossed the Line since");
   leader.lap = 6;
@@ -1114,7 +1131,7 @@ const CONTROL_SRC = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
 const MACHINE = fnSource(CONTROL_SRC, "function createControl(port)");
 const MACHINE_GLOBALS = ["Log", "blank", "logFlag", "LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD",
   "RED_STOP", "RED_HOLD", "QUERY_EVERY", "DebrisWorld", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN",
-  "MIN_HOLD", "Storm", "TyreModel", "Number", "Math", "Array",
+  "MIN_HOLD", "SC_HOLD", "Storm", "TyreModel", "Number", "Math", "Array",
   // The stopped-car source (W34) leaves the machine only the empty debris picture.
   "NO_HAZARDS"];
 function freeNames(source) {
@@ -1183,7 +1200,7 @@ test("the actual private machine checks against its port and rejects authority e
   // Check the REAL factory body. Legacy collaborators stay declared separately;
   // noImplicitAny/strictNullChecks remain off for its existing untyped internals.
   const helpers = ["function blank()", "function logFlag(prev, next)"].map((decl) => fnSource(CONTROL_SRC, decl)).join("\n");
-  const constants = ["LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD", "RED_STOP", "RED_HOLD", "QUERY_EVERY", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN", "MIN_HOLD",
+  const constants = ["LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD", "RED_STOP", "RED_HOLD", "QUERY_EVERY", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN", "MIN_HOLD", "SC_HOLD",
     "NO_HAZARDS"];
   const ast = espree.parse(CONTROL_SRC, { ecmaVersion: 2022, range: true });
   const body = ast.body[0].declarations[0].init.callee.body.body;

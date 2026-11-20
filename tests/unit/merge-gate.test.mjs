@@ -1486,7 +1486,7 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.deepEqual([ghExpr(LAND.jobs.resolve.if, disp("true")), ghExpr(LAND.jobs.resolve.if, disp("false"))], [false, true], "a stale dispatch is not a PR re-gate");
   assert.equal(ghExpr(LAND.concurrency.group, { ...disp("true"), run_id: 4 }), "land-stale-sweep");
   assert.ok(LAND.on.schedule[0].cron);
-  const run = job.steps[0].run;
+  const run = job.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
   // The sweep reads the real clock, so the fixture times are relative to it: "now" is minute 40.
   const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
   const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
@@ -1515,6 +1515,47 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   ];
   for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
+});
+
+test("land.yml sweep also rides a green CI or Deploy finish, at most once per SWEEP_GAP_MIN, with no PR code", () => {
+  const job = LAND.jobs.sweep;
+  const wr = (conclusion) => ({ event_name: "workflow_run", event: { workflow_run: { conclusion } } });
+  assert.deepEqual([ghExpr(job.if, wr("success")), ghExpr(job.if, wr("failure")), ghExpr(job.if, wr("cancelled"))], [true, false, false],
+    "a green CI/Deploy finish runs the sweep; a red or cancelled one does not");
+  assert.deepEqual(LAND.on.workflow_run.workflows, ["CI", "Deploy to GitHub Pages"]);
+  assert.ok(LAND.on.schedule[0].cron, "the cron stays as the backstop");
+  assert.ok(!runsRepoCode(job) && !usesSecret(job), "no PR code, no secret");
+  const [rate, sweep] = job.steps;
+  assert.equal(rate.id, "rate");
+  assert.equal(ghExpr(rate.if, wr("success")), true);
+  assert.equal(ghExpr(rate.if, { event_name: "schedule" }), false, "the cron and a stale dispatch are never rate-limited");
+  assert.equal(sweep.if, "steps.rate.outputs.skip != 'true'");
+  assert.equal(rate.env.SWEEP_GAP_MIN, "20");
+  const go = (env) => {
+    const r = runStep(rate.run, { RUN_ID: "9", SWEEP_GAP_MIN: "20", ...env });
+    assert.equal(r.status, 0, r.stderr);
+    return { ...r, skip: r.out.skip };
+  };
+  const runs = (...ids) => JSON.stringify({ workflow_runs: ids.map((id) => ({ id })) });
+  const jobs = (...j) => JSON.stringify({ jobs: j });
+  const step = (status, conclusion) => [{ name: rate.name, status: "completed", conclusion: "success" }, { name: sweep.name, status, conclusion }];
+  const sw = (status, conclusion, steps) => ({ name: "sweep", status, conclusion, steps });
+  const cases = [
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "success", step("completed", "success"))) }, "true", "a sweep re-gated in the window: skip"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "true", "a sweep re-gating now: skip"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "success", step("completed", "skipped"))) }, "false",
+      "a sweep that itself skipped at the rate step also concludes success, and must not count (or every later sweep skips forever)"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("in_progress", null, step("pending", null))) }, "false", "a sweep still at its own rate check is no sweep yet"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "skipped", [])) }, "false", "a skipped sweep job is no sweep"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "resolve", status: "completed", conclusion: "success", steps: [{ name: sweep.name, status: "completed", conclusion: "success" }] }) }, "false", "another job is no sweep"],
+    [{ FAKE_RUNS: runs(9), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "false", "this run's own sweep does not count"],
+    [{ FAKE_RUNS: runs() }, "false", "no recent run: sweep"],
+    [{ FAKE_RUNS: "not json" }, "false", "unreadable history sweeps anyway"],
+  ];
+  for (const [env, want, why] of cases) assert.equal(go(env).skip, want, why);
+  const listed = go({ FAKE_RUNS: runs() }).calls.find((c) => c.includes("land.yml/runs?"));
+  const since = Date.parse(listed.split("created=>=")[1].split("&")[0]);
+  assert.ok(Math.abs(since - (Date.now() - 20 * 60000)) < 120000, `the window is the last SWEEP_GAP_MIN minutes: ${listed}`);
 });
 
 test("ci retry: a CI that went green only on a re-run after a failed job fails the row; a first-attempt pass or a re-run after a cancel passes", () => {

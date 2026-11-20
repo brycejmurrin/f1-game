@@ -72,6 +72,8 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // telemetry getter, collide.js's pre-collision speed read, and this file's
   // own tyres() hook), so undefined is a tolerated input.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  // Collide's per-step punt budget (#5894) and the stopped-car hazard (clean-room 39/40).
+  "_puntGot", "stillT", "_hzOf", "_hzSide",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
   // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
@@ -2158,7 +2160,7 @@ const api = {
       // across consecutive post-reset snapshots and names what leaked. This
       // loop runs last, so a second list or a zeroing block ahead of it is
       // dead code. Add to EPISODE_TRANSIENTS; never a second list.
-      c.lane = c.lanePref != null ? c.lanePref : 0;
+      c.lane = c.lanePref != null ? c.lanePref : 0; c.laneClr = 0;
       c._prevS = c.s;
       // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
       // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).

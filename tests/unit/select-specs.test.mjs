@@ -1945,12 +1945,12 @@ test("the CI select step leaves the tree it diffs untouched (a chmod there made 
 
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
   const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
-  assert.equal(LANES, 24);
+  assert.equal(LANES, 28);
   assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
   assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
   // One leg per probe spec: each costs a whole shard, so none pack together.
   const lanes = shards(probePlan(4), EMPTY, new Set(), LANES - 1).map((j) => [j.name, j.lane]);
-  assert.deepEqual(lanes, [["oversize-lane-probe-0", 23], ["oversize-lane-probe-1", 0],
+  assert.deepEqual(lanes, [["oversize-lane-probe-0", 27], ["oversize-lane-probe-1", 0],
     ["oversize-lane-probe-2", 1], ["oversize-lane-probe-3", 2]], "starts at the rotated lane and wraps");
 });
 

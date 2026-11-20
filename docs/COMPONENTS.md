@@ -166,7 +166,7 @@ not tabled: they move with every edit and nothing reads them.
 | `preset-` | `tuner.css` | `components.css`, `race-setup.css`, `settings-controls.css`, `settings.css` |  |
 | `q-` | `career.css` | `overlays.css` |  |
 | `race-` | `player-tools.css` | — |  |
-| `res-` | `overlays.css` | `career.css`, `data.css`, `tokens.css` | results row, reused by the championship table |
+| `res-` | `overlays.css` | `career.css`, `tokens.css` | results row, reused by the championship table |
 | `rotate-` | `overlays.css` | — |  |
 | `save-` | `save-health.css` | — |  |
 | `season-` | `race-setup.css` | `components.css`, `select.css` |  |
@@ -241,7 +241,7 @@ missing class, a file that left, or a file that joined.
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
 - `.screen` — `carsetup` + `components` + `dialog-platform` + `dialogs` + `experience` + `hud` + `overlays` + `responsive` + `screen-arranger` + `watch-transport`. The full-viewport overlay primitive.
-- `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `data` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `screen-arranger` + `select` + `settings` + `settings-controls` + `tokens`
+- `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `screen-arranger` + `select` + `settings` + `settings-controls` + `tokens`
 - `.sheet-head` — `career` + `carsetup` + `components` + `data` + `dialogs` + `editor` + `overlays` + `photo-studio` + `race-setup` + `screen-arranger` + `select` + `settings`
 - `.sheet-foot` — `appearance-studio` + `career` + `carsetup` + `components` + `dialogs` + `overlays` + `photo-studio` + `race-setup` + `select` + `settings` + `tuner`. The most-shared component class in the project.
 - `.sheet-body` — `career` + `components` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.
@@ -292,7 +292,7 @@ missing class, a file that left, or a file that joined.
 
 **Cross-SCREEN reuse — a component borrowed by a screen that does not own it:**
 
-- `.res-row` — `career` + `data` + `overlays`. Qualifying's deferred two-column override in `data.css` restates the shared results row for the phone sheet.
+- `.res-row` — `career` + `overlays`. Qualifying's roomy two-column override sits in `overlays.css` beside the shared row (it was in route-loaded `data.css`, which the quali route never loads).
 - `.res-pos` / `.res-name` / `.res-pts` — `career` + `overlays`. The championship table deliberately reuses the results-screen row so standings do not look like a different game depending on where you are; compact Career history / qualifying / standings / results wrap the shared points cell instead of ellipsizing it. **This is the one that bit us**: it is invisible from either file alone.
 - `.q-time` — `career` + `overlays`. Shared timing text; race result gaps sit on a second line inside the driver name so they remain readable on phones.
 - `.sel-label` — `career` + `carsetup` + `overlays` + `select`. The skewed red section heading.

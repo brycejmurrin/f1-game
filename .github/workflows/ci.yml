@@ -2647,7 +2647,12 @@ jobs:
     # A READY FLIP whose same-sha draft verdict is reused (#5426) runs no leg: select's reuse step proved the
     # draft's legs ran this exact plan green on this base, and the deploy tip has not moved since.
     if: ${{ needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}
-    runs-on: ubuntu-latest
+    # THE RUNNER IS A REPO VARIABLE (D-RUNNER, 2026-11-20), separate from browser-group.yml's so a trial can start there
+    # alone. Unset or empty, every leg runs on `ubuntu-latest` exactly as before. Only this repo's own code may run
+    # on it: a fork's pull_request (and any pull_request_target, which this workflow does not take today) falls
+    # back to `ubuntu-latest` whatever the variable says. Push (the pages.yml train), schedule and dispatch run this
+    # repo's refs. docs/TESTING.md §CI runners; tests/unit/ci-runner-variable.test.mjs pins it.
+    runs-on: ${{ github.event_name != 'pull_request_target' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.APEX_CI_BROWSER_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:

@@ -372,7 +372,8 @@ test("#4529: PANEL WIDTH below 100 % really shrinks; PANEL HEIGHT caps the portr
   const at = flat.indexOf(block);
   assert.notEqual(at, -1, "the portrait PANEL HEIGHT block exists");
   const body = (from, head) => { const i = flat.indexOf(head, from) + head.length; return flat.slice(i, flat.indexOf("}", i)).trim(); };
-  assert.equal(body(at, block), "max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));");
+  // ...floored at 9 taps (audit 75, #6009: a small PANEL HEIGHT left no room for the controls).
+  assert.equal(body(at, block), "max-height: max(calc(min(70vh, 100%) * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9)));");
   assert.equal(body(at, ":root[data-look-garage-pw] #carsetup #cs-inner { "), "width: calc(100% * min(var(--look-garage-pw, 1), 1)); justify-self: end;");
 });
 

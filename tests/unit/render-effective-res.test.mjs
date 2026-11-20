@@ -53,7 +53,8 @@ test("RESOLUTION MAX's boost raises TLX's cap to at most 3, never lowers it; the
 });
 
 test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsewhere", () => {
-  assert.match(read("js/render/glx/glx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, MOBILE_TIER \? 1\.5 : 2\)/);
+  // GLX: the same cap, raised only by RESOLUTION MAX's boost (setDprBoost; audit item 74).
+  assert.match(read("js/render/glx/glx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, Math\.max\(MOBILE_TIER \? 1\.5 : 2, _dprBoost\)\)/);
   assert.match(read("js/render/webgpu/wgx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, WGX_MINIMAL \? 1 : \(WGX_LITE \? 1\.5 : 2\)\)/);
   assert.match(read("docs/GFX-CONTRACT.md"), /capped 1\.5 mobile \/ 2/);   // the seam's contract doc
 });
@@ -78,8 +79,11 @@ test("each backend's resize() sizes the present buffer from the CAPPED dpr (eval
   assert.deepEqual([852, 368].map((c) => Math.round(c * tlxAt(true, 3))), [2556, 1104]);
   assert.deepEqual([852, 368].map((c) => Math.round(c * tlxAt(true))), [1278, 552]);
   const glx = resizeDpr("js/render/glx/glx.js");
-  assert.equal(evalAt(glx, { MOBILE_TIER: true }), 1.5, "GLX phone at DPR 3");
-  assert.equal(evalAt(glx, { MOBILE_TIER: false }), 2, "GLX desktop at DPR 3");
+  assert.equal(evalAt(glx, { MOBILE_TIER: true, _dprBoost: 0 }), 1.5, "GLX phone at DPR 3");
+  assert.equal(evalAt(glx, { MOBILE_TIER: false, _dprBoost: 0 }), 2, "GLX desktop at DPR 3");
+  // RESOLUTION MAX on GLX too (audit item 74: it was silently HIGH there): the device's own DPR, never above it.
+  const glxAt = (mobile, boost, dpr) => vm.runInNewContext(glx, { window: { devicePixelRatio: dpr }, MOBILE_TIER: mobile, _dprBoost: boost }, { filename: "vm-page:evaluate" });
+  assert.deepEqual([glxAt(true, 3, 3), glxAt(true, 3, 2), glxAt(false, 3, 1)], [3, 2, 1], "GLX MAX = the device's own DPR");
   const wgx = resizeDpr("js/render/webgpu/wgx.js");
   assert.equal(evalAt(wgx, { WGX_MINIMAL: false, WGX_LITE: true }), 1.5, "WGX lite at DPR 3");
   assert.equal(evalAt(wgx, { WGX_MINIMAL: false, WGX_LITE: false }), 2, "WGX full at DPR 3");

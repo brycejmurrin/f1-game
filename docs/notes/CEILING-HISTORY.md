@@ -97,6 +97,7 @@ alone. The fragment was narrowed from +3833 to +3469; nothing was raised beyond 
 `(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
 explained them were the bytes over the tip, so they were cut and the fragment records the
 lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
+inside the absorb. Fragment: `ratchets.d/cursor--hunt2-rest-5699-c7e1.json (folded)`.
 inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
 ## 2026-11-19 — PR #5679 (claude/picker-outline-centre-5656): select preview outline centred
 
@@ -119,7 +120,7 @@ run at boot to see a settled rotation; on SHARED, the default, it returns at onc
 +340 (PANEL WIDTH 60–150 and the new PANEL HEIGHT knob) and `js/ui/settings-tabs.js` +279
 (`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
 row stay lazy in `js/ui/layout-presets.js`. Fragment:
-`tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+`ratchets.d/claude--appearance-shapes-4529.json (folded)`.
 ## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
 
 `(tree) eagerBytes` 8,015,949 → **8,017,580** (+1,631 B). Deliberate raise; Bryce chose it with
@@ -129,7 +130,7 @@ measured on the sync merge with tip `734d0a2d` after trimming the PR's own comme
 each: `js/perf/quality-preset.js` +943 (`syncPack` and its pause/race `MutationObserver`, called
 from the eager `GfxQuality.set`) and `js/render/shared/assets.js` +688 (`followQuality` and the
 forced-tier `_pinned` flag). A lazy bundle (option B) was declined: both hook the eager preset
-path. Fragment: `tests/data/ratchets.d/claude--pack-tier-follows-quality-5561.json`.
+path. Fragment: `ratchets.d/claude--pack-tier-follows-quality-5561.json (folded)`.
 
 ## 2026-11-19 — PR #5793 (claude/tt-garage-pit-end): TIME TRIAL pit lane and END TIME TRIAL (#5789)
 
@@ -3897,3 +3898,18 @@ PR #5976 (with #5977 folded in). The in-context region editor raises five tree c
 `(tree) rawColorDistinct` 179 → **182** (+3). Deliberate raise past the absorb: the same three overlay colors.
 `(tree) shellNodes` 2321 → **2322** (+1). Deliberate raise past the absorb: `#title-arrange-entry`, the title screen's "Arrange this screen" button, which the shell owns so it is there before first paint.
 Fragment: `ratchets.d/cursor--screen-arrangement-f8970a.json`.
+**Raise, 2026-11-19 — `eagerBytes` +3,894, re-snapped to +3,166 on 2026-11-20, then +2,980 when #5948 and #6009 were combined in (fragment `claude--ai-pace-calibration-5330.json`).**
+Retired with `eagerBytes` (#5975): on the sync onto 322c63a3 the branch's `eagerCodeBytes` growth is +3,448, inside its 5,000 B absorb (the commit hook's fragment).
+Cause: #5686 (#5330), so AI solo pace follows team tier and then driver skill. It adds `aiErs`,
+`paceTrim`, `laneClear` and `slowHazard` to the eager `js/physics/ai-drive.js`, plus their call sites in
+`js/game.js`.
+
+Trim first, then raise:
+- The merge with tip 734d0a2d measured +6,151 B.
+- Condensing the PR's own new comments (facts kept, no code change) freed 2,257 B.
+- Only the remainder, +3,894 B, is raised.
+- The merge with tip 357821a7 (after #5791) dropped `aeroDragMul` and measured 7,971,419 B: the fragment is snapped to
+  that exact value, +3,166 B.
+
+Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed `decision: A` on #5686
+(comment 7013079936, 15:09:10Z). The raise lands under his `ratchet-raise`.

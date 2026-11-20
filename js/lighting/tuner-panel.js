@@ -346,8 +346,7 @@ $("lt-help-on").onchange = (e) => {
 };
 $("lt-reset").onclick = () => {
   // Drop this condition's LOCAL edits so it falls back to the shipped file /
-  // defaults. The shipped file is never touched; other CONDITIONS are only
-  // reached through the legacy global layer cleared with it. The sun knobs live
+  // defaults; other CONDITIONS keep the global layer. The sun knobs live
   // in the "|dry" slot whatever the weather, so the store clears them there too.
   LightStore.reset();
   persistLightTune();

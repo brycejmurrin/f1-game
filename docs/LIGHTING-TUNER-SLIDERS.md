@@ -586,7 +586,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampBake` | BAKED LAMP POOLS | 0 … 1 | 1 | — |   | game.js×5, atmosphere.js×2, glx.js×6 |
 | `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×8, frame-lights.js×2, profiles.js×3, tuner-panel.js, chunked.js×3, glx.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
-| `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | game.js, atmosphere.js×2, profiles.js, glx.js×2 |
+| `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | game.js, atmosphere.js×2, glx.js×2 |
 
 ## NIGHT GLOW & BLOOM  (10)
 
@@ -745,7 +745,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `flareStreak` | FLARE STREAK | 2 … 10 | 7 | `uFlareStreak` | ✓ | — |
 | `flareStreak2` | FLARE CORE STREAK | 0 … 1.25 | 0.5 | `uFlareStreak2` | ✓ | — |
 | `sharpen` | SHARPEN | 0 … 2.5 | 0 | `uSharpen` | ✓ | — |
-| `speedBlur` | SPEED BLUR | 0 … 3 | 0 | `uSpeedBlur` |   | game.js×3, post.js×2 |
+| `speedBlur` | SPEED BLUR | 0 … 3 | 0 | `uSpeedBlur` |   | game.js×2, post.js×2 |
 
 ### TONAL RANGE
 
