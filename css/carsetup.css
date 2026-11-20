@@ -1992,15 +1992,43 @@ body[data-ga-bars]::after { bottom: 0; }
    replaces, mode rules included (the livery editor's thinned panel is two ids
    and a pseudo-class; these are two ids and two). No attribute = shipped. */
 
-/* PANEL WIDTH — scales only the CAP. The 410px floor (what --pair-at needs to
-   keep the rail) and the car's 320 / 420 visual-px reserve are untouched, so a
-   wider panel can never take the car below what it already keeps: on a narrow
-   screen the reserve binds first and 150% simply changes nothing. */
+/* PANEL WIDTH — scales the CAP, and below 100 % the FLOOR with it. Above 100 %
+   the 410px floor (what --pair-at needs to keep the rail) and the car's
+   320 / 420 visual-px reserve are untouched, so a wider panel can never take
+   the car below what it already keeps: on a narrow screen the reserve binds
+   first and 150% simply changes nothing. Below 100 % (#4529) the floor is
+   min(410px, the scaled cap), so the panel really shrinks; under 400 own px
+   the sheet takes the stacked strip layout, the player's choice. */
 :root[data-look-garage-pw] #carsetup {
-  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 320px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, clamp(min(410px, calc(420px * var(--look-garage-pw, 1))), calc((var(--safe-w) - 320px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
 }
 :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
-  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 420px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, clamp(min(410px, calc(420px * var(--look-garage-pw, 1))), calc((var(--safe-w) - 420px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+}
+/* PANEL HEIGHT (#4529) — a cap on the sheet's height: its share of the row it
+   already fills (landscape: the safe box; portrait: the row above the camera
+   bar, and of the shipped 70vh on a tall portrait phone). In portrait the car
+   band below the sheet grows by what the sheet gives up (renderSetupPreview
+   reads #cs-inner's live rect); in landscape the panel docks short at the top.
+   #cs-body scrolls, so a short sheet shows fewer part rows, never cuts one.
+   Two ids and two more beat every shipped max-height on #cs-inner. */
+:root[data-look-garage-ph] #carsetup #cs-inner {
+  max-height: calc(100% * var(--look-garage-ph, 1));
+}
+@media (orientation: portrait) {
+  :root[data-look-garage-ph] #carsetup #cs-inner {
+    max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));
+  }
+  /* PANEL WIDTH in portrait: the sheet is full width there (min(100%) above),
+     so only a value under 100 % changes it; it hugs the PANEL SIDE edge. */
+  :root[data-look-garage-pw] #carsetup #cs-inner {
+    width: calc(100% * min(var(--look-garage-pw, 1), 1));
+    justify-self: end;
+  }
+  :root[data-look-garage-pw][data-look-garage-side="left"] #carsetup #cs-inner { justify-self: start; }
+}
+@media (orientation: portrait) and (max-height: 740px) {
+  :root[data-look-garage-ph] #carsetup #cs-inner { max-height: calc(100% * var(--look-garage-ph, 1)); }
 }
 
 /* PANEL SIDE: LEFT. The dock is `place-items` alone, so mirroring it is one
@@ -2076,10 +2104,10 @@ body[data-ga-bars]::after { bottom: 0; }
      105-130 % made the sheet NARROWER than the shipped 560px here. Scale this
      block's own cap and reserve instead (later source, same specificity). */
   :root[data-look-garage-pw] #carsetup {
-    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 640px / var(--ui-scale)), calc(560px * var(--look-garage-pw, 1))));
+    --cs-sheet-w: min(100%, clamp(min(410px, calc(560px * var(--look-garage-pw, 1))), calc(100 * var(--vwz) - 640px / var(--ui-scale)), calc(560px * var(--look-garage-pw, 1))));
   }
   :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
-    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), calc(520px * var(--look-garage-pw, 1))));
+    --cs-sheet-w: min(100%, clamp(min(410px, calc(520px * var(--look-garage-pw, 1))), calc(100 * var(--vwz) - 720px / var(--ui-scale)), calc(520px * var(--look-garage-pw, 1))));
   }
 }
 
