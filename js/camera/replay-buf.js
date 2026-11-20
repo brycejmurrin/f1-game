@@ -214,7 +214,8 @@ const ReplayBuf = (function () {
     const _a = new Float32Array(FLOATS), _b = new Float32Array(FLOATS), _o = new Float32Array(FLOATS);
     // `out` (apply's pooled snapshot) reuses its cars array and rows; the public at() passes none and gets fresh ones.
     function at(t, out) {
-      if (!count) return null;
+      // NaN survives the clamp below and would pose every car at NaN (hunt #5694 B10).
+      if (!count || !Number.isFinite(t)) return null;
       const w = windowInfo();
       const tt = Math.max(w.t0, Math.min(w.t1, t));
       let i0 = frameIndexAt(tt);
@@ -323,7 +324,10 @@ const ReplayBuf = (function () {
     function apply(t, continuous = false) {
       if (!scrubbing) return false;
       // Indexed footage belongs to the captured field, never replacement cars.
-      if (!audioOwner.valid()) { audioOwner.release(); return false; }
+      // The field was replaced mid-scrub: end the scrub (no live restore — the
+      // snapshot belongs to the old cars), or tickScrub keeps advancing the
+      // clock over a frozen field (hunt #5694 B8).
+      if (!audioOwner.valid()) { liveSnap = null; endScrub(); return false; }
       const snap = at(t, _applySnap);
       if (!snap || !G.cars) return false;
       // PLAYBACK keeps the damping except across a timeline break or the followed car's teleport (#5021).

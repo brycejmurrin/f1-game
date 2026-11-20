@@ -831,12 +831,24 @@
     "js/ui/layout-presets.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],
+    LAZY_SAVES_DATA: [
+    "js/ui/settings-export-body.js"
+  ],
+    LAZY_SAVES_DATA_EDGES: [],
     LAZY_RESULTS_SHEET: [
+    "js/share/share-card-data.js",
+    "js/share/share-card-layout.js",
+    "js/share/share-card.js",
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",
     "js/ui/quali-sheet.js"
   ],
-    LAZY_RESULTS_SHEET_EDGES: [],
+    LAZY_RESULTS_SHEET_EDGES: [
+    [
+      "js/share/share-card-layout.js",
+      "js/share/share-card.js"
+    ]
+  ],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

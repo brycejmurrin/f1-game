@@ -584,8 +584,13 @@ test.describe.parallel("Career — sponsors", () => {
     // carrying it across the rollover made every season-two window look already
     // paid — MY TEAM's whole second income stream stopped, silently, from year
     // two on, with the hub still showing the brief and its fee.
+    // Seed 5, not 7 (#5786): the sponsor briefs pay on points finishes, and
+    // qualifying option 1 puts an equal driver mid-grid. Seed 7's MY TEAM career
+    // then finishes P11-P17 and season two meets no brief (VM: 0 paid; 3 on the
+    // older model). Seed 5 still pays (VM: season one 1, season two 2), so this
+    // keeps testing the rollover ledger, not the grid.
     await boot(page);
-    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 5 }));
     await goRacing(page);
     const out = await page.evaluate(() => {
       window.__apex.careerSim(24);

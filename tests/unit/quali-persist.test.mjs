@@ -722,3 +722,122 @@ test("quali bias (#1566): a one-lap specialist is quicker on Saturday, zero-mean
   assert.ok(Math.abs(quick / flat - 0.997) < 2e-5, `at most 0.3 % of the lap (${quick} / ${flat})`);
   assert.equal(lap(30, true), lap(30, false), "the same driver simulates the same lap whichever car is the player (career.spec grid isolation)");
 });
+
+// A MODEL REFIT DOES NOT REACH INTO A WEEKEND ALREADY QUALIFIED (#5783 Q1). A career
+// save with qualifying DRIVEN and the race not yet run carries the whole sheet — the
+// player's lap and the rivals' times as they were simulated THEN. Reloaded on a build
+// whose model is quicker, it is restored as stored: the order and every time, even
+// where today's model would now put the rival ahead. A qualifying that was only
+// SIMULATED was never stored (see "simulate(0) does not persist"), so that one is
+// redrawn from today's model on reload — the same grid seed, shorter times.
+test("a mid-weekend career save keeps the qualifying it drove when the model changes; a simulated-only one is redrawn", () => {
+  const stored = [
+    { id: "p1", t: 131.2, human: true },    // the player's driven lap, pole on the old sheet
+    { id: "p2", t: 132.4, human: false },   // the rival as the OLD model timed it
+  ];
+  const a = loadQuali({ inCareer: true, season: { round: 3, qualiOrder: stored.map((r) => ({ ...r })), qualiTrack: "monza", qualiMode: "career:driver:0" } });
+  a.ctx.Career.slot = () => ({ flavour: "driver", i: 0 });
+  const today = a.q.carLap(a.G.cars[1], a.G.track, 1);
+  assert.ok(today < 131.2 * 0.9, `the precondition: today's model laps this circuit far quicker than the stored sheet (${today.toFixed(1)} s)`);
+  const rows = a.q.begin();
+  assert.deepEqual(rows.map((r) => [r.code, r.t]), [["VER", 131.2], ["HAM", 132.4]], "the stored order and times, not a re-simulation");
+  assert.deepEqual(a.G.season.qualiOrder.map((r) => r.t), [131.2, 132.4], "and the save is not rewritten");
+  assert.equal(a.q.order(a.G.cars).map((c) => c.code).join(" "), "VER HAM", "the race grids from it");
+
+  const b = loadQuali({ inCareer: true, season: { round: 3 } });
+  b.ctx.Career.slot = () => ({ flavour: "driver", i: 0 });
+  b.q.simulate(0);
+  assert.equal(b.G.season.qualiOrder, undefined, "a simulated-only sheet is not in the save");
+  const redrawn = b.q.begin();
+  assert.ok(redrawn.every((r) => Math.abs(r.t - today) < today * 0.05), "so a reload draws it from today's model: " + redrawn.map((r) => r.t.toFixed(1)).join(" "));
+});
+
+// The field's lap is QUALI_CENTRE x the circuit's generated factor x the integrated lap (#5786). A circuit the
+// calibration never measured (a TRACK DESIGNER layout, any id) takes the calendar median, never 1 and never a
+// property of Object.prototype.
+test("carLap: a calendar circuit reads its own factor, an unmeasured one the calendar median", async () => {
+  const { factors } = await import("../../tools/gen/gen-quali-calib.mjs");
+  const f = factors();
+  const { q, G } = loadQuali();
+  const c = G.cars[1];
+  const mk = (id, extra) => ({ n: 80, total: 4000, def: Object.assign({ id }, extra) });
+  const near = (a, b, m) => assert.ok(Math.abs(a / b - 1) < 1e-12, `${m}: ${a} vs ${b}`);
+  const monza = mk("monza");
+  near(q.carLap(c, monza, 1), 0.993 * +f.by.monza * q.carLap(c, monza, 1, true), "monza takes its row");
+  for (const t of [mk("d7f3a1c2", { custom: true }), mk("constructor"), mk("__proto__"), { n: 80, total: 4000 }]) {
+    const lap = q.carLap(c, t, 1);
+    near(lap, 0.993 * +f.def * q.carLap(c, t, 1, true), "an unmeasured circuit takes the default");
+    assert.ok(Number.isFinite(lap) && lap > 0);
+  }
+  G.track = mk("d7f3a1c2", { custom: true });
+  const sheet = q.preview(0).map((r) => r.t);
+  assert.ok(sheet.length === G.cars.length && sheet.every((t) => Number.isFinite(t) && t > 0), "a designer circuit's sheet is whole");
+  const raw = q.carLap(c, G.track, 1, true);
+  assert.ok(sheet.every((t) => t > raw * 0.85 && t < raw * 1.05), "and sits where a calendar circuit's would: " + sheet.map((t) => (t / raw).toFixed(3)));
+});
+
+// The wing term is the AI's (#5786): AiDrive.aeroGrip is what the driven AI's lateral grip carries. A human's
+// simulated time must not move with their own wing level (they pay for wing on track; a free wing on the sheet
+// would be a setup exploit, in VS FRIEND too), and the AI rows must not move with the human's setup.
+test("carLap: an AI car reads its wing level, a human's car its seat's wing (neutral with no Parts)", () => {
+  const { q, G, ctx } = loadQuali();
+  ctx.AiDrive = { aeroGrip: (load) => 1 + ((load != null ? load : 0.5) - 0.5) * 0.16 };
+  const me = G.cars[0], ai = G.cars[1];
+  ctx.Tracks.curvature = () => 0.02;                     // tight enough that the corner cap, not vTop, sets the lap
+  G.track = { n: 80, total: 4000, def: { id: "wing" } };
+  me.human = true;
+  const at = (c, load) => { c.aeroLoad = load; return q.carLap(c, G.track, 1); };
+  const neutral = at(me, 0.5);
+  assert.equal(at(me, 0), neutral, "minimum wing: the human's simulated lap does not move");
+  assert.equal(at(me, 1), neutral, "maximum wing: nor here");
+  delete me.aeroLoad;
+  assert.equal(q.carLap(me, G.track, 1), neutral, "no wing level at all reads neutral");
+  assert.ok(at(ai, 1) < at(ai, 0.5) && at(ai, 0.5) < at(ai, 0), "an AI car is quicker with more wing");
+  assert.equal(at(ai, 0.5), neutral, "and at the neutral wing it is the same lap (same tier and skill here)");
+  ai.aeroLoad = 0.8;
+  const sheetAt = (load) => { me.aeroLoad = load; return q.preview(0).map((r) => r.t); };
+  assert.deepEqual(sheetAt(0), sheetAt(1), "the whole sheet, AI rows included, is the same whatever the human's wing");
+  me.human = false;
+  assert.ok(at(me, 1) < neutral, "the same car driven by the AI (the calibration and the parity test) does read it");
+
+  // With Parts: the human reads the wing the AI in that seat runs (its team's factory build), never its own
+  // setup, so the sheet is the same whichever car is the player (career.spec grid isolation, #5786).
+  const works = { me: 0.9, rb: 0.1 };
+  ctx.Parts = { getFactorySetup: (t) => ({ team: t.id }), aeroLoad: (setup) => works[setup.team] };
+  for (const c of G.cars) c.aeroLoad = works[c.team.id];
+  const sheet = (humanIdx, setupWing) => {
+    G.cars.forEach((c, i) => { c.human = c.isPlayer = i === humanIdx; if (i === humanIdx) c.aeroLoad = setupWing; });
+    const rows = q.preview(0).map((r) => [r.code, r.t]);
+    G.cars.forEach((c) => { c.aeroLoad = works[c.team.id]; });
+    return rows;
+  };
+  const allAi = sheet(-1);
+  assert.ok(allAi[0][1] < allAi[1][1] - 1, "precondition: the two seats' works wings give different laps " + JSON.stringify(allAi));
+  for (const idx of [0, 1]) for (const w of [0, 1]) assert.deepEqual(sheet(idx, w), allAi, `car ${idx} as the player on wing ${w}: the all-AI sheet`);
+});
+
+// The career.spec isolation test in the REAL game (#5786): a career on the device points the shared car UI at
+// its seat, and __apex.race() keeps that seat, so the player is NOR, then BEA, then SAI. The simulated grid
+// must not move with it. Failed on ff67146a: the player's row read the neutral wing, so NOR P12 → P4 and BEA P20 → P17.
+test("a one-off GP's simulated grid is the same whichever career is on the device (game VM)", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g.apex;
+    const gridFor = async (opts) => {
+      if (opts) a.career(opts); else a.careerReset();
+      a.seed(1234);
+      await a.race("monza");
+      const rows = a.qualiSim();
+      return { codes: rows.map((r) => r.code).join(","), me: (rows.find((r) => r.isPlayer) || {}).code };
+    };
+    const none = await gridFor(null);
+    const haas = await gridFor({ teamId: "haas", seat: 1, seed: 4242 });
+    const williams = await gridFor({ teamId: "williams", seat: 0, seed: 99 });
+    assert.equal(new Set([none.me, haas.me, williams.me]).size, 3, `the precondition: three different player seats (${none.me}, ${haas.me}, ${williams.me})`);
+    assert.equal(none.codes.split(",").length, 22);
+    assert.equal(haas.codes, none.codes, "a Haas career on the device");
+    assert.equal(williams.codes, none.codes, "a Williams career on the device");
+  } finally { g.close(); }
+});
+
