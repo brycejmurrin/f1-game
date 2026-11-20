@@ -2,11 +2,16 @@
 
 Kind: investigation · Re-measure-by: 2027-01-20
 
-**Decision: E-only.** Bryce chose it through the orchestrator session at
-2026-11-20 08:49Z. The work is the checker's blind spot, the drift fixes, the test
-fakes, freezing the `_` scratch members, and `Object.seal(G)`. **There will be no
-sub-façade split.** Option A stays in this note only as a documented future option,
-for the "what would change this" triggers below.
+**Decision: E-then-A.** Bryce chose it through the orchestrator session at
+2026-11-20 08:51Z, correcting E-only from 08:49Z. E comes first:
+- the checker's blind spot (#5980);
+- the drift fixes (#5981);
+- the test fakes (#5982);
+- freezing the `_` scratch members;
+- `Object.seal(G)`.
+
+A follows on terms the owner set: one domain at a time, and only when a lane is
+already working in that area (§A follow-on).
 
 Base: `0794b7b7` (`origin/claude/f1-game-project-26h3ng`, 2026-11-20). Asked by Bryce
 2026-11-20 ~08:36Z: "investigate the g facade and how it works and how to redesign".
@@ -292,6 +297,30 @@ Steps 1-4 are about 80% of the value.
   2026-08 panel.
 - If the push-signal modules (announcer, radio, HUD cards, TV graphics) keep adding
   per-frame polling of the same state, introduce C for those signals inside A.
+
+## A follow-on (after E lands)
+
+These are the owner's terms (08:51Z):
+- Typed sub-façades go in one domain at a time.
+- A domain is carved only when a lane is already working in that area. No standalone
+  A campaign.
+- Each carve is one PR. It adds `interface Gx…` to `types/game-ctx.d.ts`, moves the
+  members under `G.<domain>`, and keeps the flat names as aliases until their last
+  reader moves.
+- The `@uses <domain>` header plus its lint lands with the first carve.
+
+First candidates, in order. The counts are the §Part 2 C2 prefix clustering, ±3.
+
+| Order | Domain | Members | Why first |
+|---|---|---:|---|
+| 1 | `cam` (camera, `dbgCam`, `photo*`, `snapGameCam`, `setCamMode`, `followCar`, `setPip`) | ≈24 | mostly camera modules plus apex; few writers (`dbgCam` is the widest, 6 modules); no physics |
+| 2 | `net` (`net*`, `peer*`, `onPeer*`, `setCarRole`, `modsFor`, `swapGridSlots`, quali-net verbs) | ≈16 | self-contained; one lane at a time works in `js/net/` |
+| 3 | `light` (lighting tune and weather: `_lt*`, `*LightTune*`, `sky*`, `_cloudBase`, `weather`, `setTimeOfDay`, `raceWeather`/`raceTimeOfDay`) | ≈23 | retires most of the `_` scratch members (C3) into their real owner |
+| later | `garage` (setup preview and parts) ≈35, `tune` (physics tunables) ≈30 (physics-characterization gate; setters become verbs), `settings` ≈23, `session`/`race` ≈33 last (widest writers: `trackIdx`, `flow`, `session`) | | |
+
+A carve is skipped, not forced, when no lane is in the area. The plain-G `track`,
+`player`, `cars`, `store`, `els`, `gfx` and `state` nouns (the 10+ fan-in set) stay flat
+in every case.
 
 ## Issues filed from this review
 
