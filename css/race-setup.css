@@ -282,7 +282,9 @@
     line-height: 1.3; padding-block: calc(var(--gap) * .25);
   }
 }
-@container sheet (min-width: 500px) {
+/* 560px, not 500: a phone sheet (366 px at zoom .7 = 523 container px) cannot fit two steppers per
+   row without clipping DEFAULT, SCRIPTED, RANDOM, MANUAL. */
+@container sheet (min-width: 560px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
   #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
