@@ -305,8 +305,13 @@ const TLX = (function () {
       }
       if (isMobile) Log.warn("gfx", "TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines");
 
-      const THREE = await import("three/webgpu"); checkInit();
-      const TSL = await import("three/tsl"); checkInit();
+      // The island download is the network's time, not the device's: flagged on the owner so a boot timeout that
+      // lands here is no crash strike (#5942). A rejected import leaves it set; create() then refuses, no timeout.
+      if (initOwner && initOwner.importing_) initOwner.importing_(true);
+      const THREE = await import("three/webgpu");
+      const TSL = await import("three/tsl");
+      if (initOwner && initOwner.importing_) initOwner.importing_(false);
+      checkInit();
 
       THREE.ColorManagement.enabled = false;
 

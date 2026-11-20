@@ -50,6 +50,7 @@ function boot({ disk: seed = {}, mobile = false, refuseAt = 0 } = {}) {
   const ctx = vm.createContext(sb);
   for (const f of ["js/input/controller-profiles.js", "js/input/steer-tuning.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SE = vm.runInContext("SettingsExport", ctx), ST = vm.runInContext("SteerTuning", ctx);
   const G = { gfx: { isMobile: mobile } };
   const plain = (v) => JSON.parse(JSON.stringify(v));

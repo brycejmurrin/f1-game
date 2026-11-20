@@ -35,6 +35,10 @@ const VOICE_CACHE = CACHE_PREFIX + "voice";
 const VOICE_KEEP_IDS = 6;
 // A navigation / version.json fetch races this before the cache answers.
 const NAV_RACE_MS = 3000;
+// A plain shell navigation that HAS a cached shell stops waiting for the network here: on a link that does not
+// answer, an installed app opened to 3 s of nothing. The shell's own version guard still reloads onto a newer build
+// when version.json comes through. With no cached shell (the first launch) the full race above still applies.
+const SHELL_RACE_MS = 1000;
 // A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
 // a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
 const BUST_WAIT_MS = 15000;
@@ -671,7 +675,12 @@ async function precacheAssetLists() {
     // LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
+    // LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade
+    "js/ui/settings-export-body.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
+    "js/share/share-card-data.js",
+    "js/share/share-card-layout.js",
+    "js/share/share-card.js",
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",
     "js/ui/quali-sheet.js",
@@ -985,7 +994,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/mesh-detail\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/mesh-detail\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport|settings-export-body)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
@@ -1340,7 +1349,18 @@ self.addEventListener("fetch", (event) => {
       const failFast = online && (isVersion || (isShellBust && !bustShell));
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
-        const res = await Promise.race([network, timeout]);
+        let res;
+        if (req.mode === "navigate" && !isShellBust && isShellDocument(url)) {
+          const early = new Promise((resolve) => setTimeout(() => resolve(undefined), SHELL_RACE_MS));
+          res = await Promise.race([network, early]);
+          if (res === undefined) {
+            const bare = new URL(url.href);
+            bare.search = ""; bare.hash = "";
+            const shell = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(bare.href)) || (await matchPreferCurrent("index.html"));
+            if (shell) return shell;
+            res = await Promise.race([network, timeout]);
+          }
+        } else res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
         if (res == null && failFast) return Response.error();
       } catch (_) {

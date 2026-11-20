@@ -663,6 +663,10 @@ const AgentView = (function () {
       }
 
       if (detail === "full") {
+        // Game feel, read-only: game.js's crash shake and hit-stop, and the
+        // camera's bank roll (rad).
+        const fl = G.feel;
+        if (fl) payload.feel = { shake: r2(fl.shake), hitStop: r2(fl.hitStop), camRoll: r2(fl.camRoll) };
         payload.session = {
           weather: G.raceWeather, timeOfDay: G.raceTimeOfDay,
           lapsTarget: G.lapsTarget, timeTrial: !!G.timeTrial,

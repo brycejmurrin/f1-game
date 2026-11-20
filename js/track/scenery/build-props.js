@@ -1767,8 +1767,8 @@ const TrackBuildProps = (function () {
     //     if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14))
     //       grandstand(K(0.12), -1, 14, 40);
     //
-    // Never async: Assets prefetches every model at boot precisely so that prop
-    // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
+    // Never async: a circuit's models are fetched BEFORE its build starts (TrackDef.scenerySource names the set,
+    // Assets.modelsReady loads it), so prop placement cannot vary with network timing (assets.js modelSync).
     // A baked mesh's axis-aligned extent in its own space, cached on the mesh:
     // Assets hands back the same object for every stamp of an id, and the pack
     // is 36 models, so this runs a few dozen times per build at most.

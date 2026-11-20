@@ -805,6 +805,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
@@ -914,6 +915,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
@@ -1037,6 +1039,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
@@ -1631,6 +1634,7 @@
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
@@ -4615,17 +4619,17 @@
     {
       "path": "js/share/share-card-data.js",
       "global": "ShareCardData",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-layout.js",
       "global": "ShareCardLayout",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card.js",
       "global": "ShareCard",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/track/build-client.js",
@@ -5081,6 +5085,11 @@
       "path": "js/ui/setting-row.js",
       "global": "SettingRow",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/settings-export-body.js",
+      "global": "SettingsExportBody",
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/settings-export.js",
