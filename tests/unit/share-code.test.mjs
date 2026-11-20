@@ -674,3 +674,16 @@ test("UNDO restores a career setup key and still skips keys outside the share-co
   assert.deepEqual(j(store.get(key)), prev);
   assert.equal(store.get("career.slot0"), "kept");
 });
+
+test("#5891: a lap-challenge link whose '~' was percent-encoded still opens", () => {
+  const { ShareCode } = harness();
+  const plain = ShareCode.decode("APXC1.l.monza~-~91234");
+  assert.equal(plain.ok, true, "the plain form is accepted");
+  for (const code of ["APXC1.l.monza%7E-%7E91234", "APXC1.l.monza%7e-%7e91234"]) {
+    const enc = ShareCode.decode(code);
+    assert.equal(enc.ok, true, code + " is accepted");
+    assert.deepEqual(j(enc), j(plain), code + " decodes like the plain form");
+  }
+  assert.equal(ShareCode.decode("https://example.test/f1-game/#share=APXC1.l.monza%7E-%7E91234").ok, true);
+  assert.equal(ShareCode.decode("APXC1.l.monza%E0%A4~-~91234").ok, false, "a malformed escape is still refused");
+});

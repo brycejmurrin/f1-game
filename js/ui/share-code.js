@@ -18,7 +18,7 @@ const ShareCode = (function () {
     setup: { magic: "APXS1", kind: "setup" },
     livery: { magic: "APXL1", kind: "livery" },
     daily: { magic: "APXD1", kind: "daily" },
-    // Share-card QR `APXC1.l.<track>~<yyyymmdd|->~<ms|->`: the link stays under 120 chars.
+    // Share-card QR `APXC1.l.<track>~<yyyymmdd|->~<ms|->`: links stay under 120 chars.
     lap: { magic: "APXC1", kind: "lap" },
   });
   const MAGIC_OF = Object.freeze(Object.fromEntries(
@@ -171,10 +171,12 @@ const ShareCode = (function () {
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLDC]1\./.test(input)) return input.replace(/\s+/g, "");
-    const match = input.match(/(?:^|[#&])share=([^&]+)/);
-    if (!match) return null;
-    try { input = decodeURIComponent(match[1]); }
+    if (!/^APX[SLDC]1\./.test(input)) {
+      const match = input.match(/(?:^|[#&])share=([^&]+)/);
+      if (!match) return null;
+      input = match[1];
+    }
+    try { input = decodeURIComponent(input); }
     catch (_) { return null; }
     return input.replace(/\s+/g, "");
   }
