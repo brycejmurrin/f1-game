@@ -575,6 +575,7 @@ const TitleLayout = (function () {
     art.setAttribute("aria-hidden", "true");
     art.hidden = true;
     for (const c of [name, adjust, cancel]) layer.insertBefore(c, done);
+    layer.setAttribute("data-esc-close", "tl-cancel");   // Escape discards; the shell names tl-done until Cancel exists
     for (const c of [readout, dock, ...moves, steps, sizeDn, sizeUp, wDn, wUp, undo, rst, resetScreen]) panel.appendChild(c);
     layer.appendChild(panel);
     layer.appendChild(handle);

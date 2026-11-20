@@ -484,7 +484,11 @@ test("editor: DONE gives the settings page back, opens the fold and focuses its 
   dom.byId("overlay").hidden = true; mutated(dom.byId("overlay"));
   assert.equal(dom.byId("pm-tl-edit").disabled, true, "disabled mid-race (#overlay hidden)");
   assert.equal(M.enter(), false);
-  assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-cancel" hidden>\s*<button id="tl-done" type="button">Apply<\/button>\s*<\/div>/);
+  // The shell's door is the static Apply until the editor builds Cancel, which then owns Escape
+  // (menu-keyboard.spec.js: every layer's data-esc-close names a real control from boot).
+  assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>\s*<button id="tl-done" type="button">Apply<\/button>\s*<\/div>/);
+  assert.equal(dom.byId("tl-editor").getAttribute("data-esc-close"), "tl-cancel", "the built editor's Escape discards");
+  assert.equal(dom.byId("tl-cancel").tagName, "BUTTON");
 });
 
 test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, sliders store and PEEK, choices wire, RESET clears", () => {

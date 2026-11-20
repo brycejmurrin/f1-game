@@ -14,8 +14,10 @@ window.UiLayers = (function () {
   const DEFS = [
     { id: "overlay", gate: false },
     // Built on demand; owns focus and driving-key gating while pieces stay draggable.
-    { id: "hud-arrange-bar" },
-    { id: "screen-arranger" },
+    // TRANSIENT: absent until their lazy editor first opens; each builder sets its own
+    // data-esc-close (tests/unit/menu-a11y-audit.test.mjs; the live door: appearance-orientation.spec.js).
+    { id: "hud-arrange-bar", transient: true },
+    { id: "screen-arranger", transient: true },
     /* The rotate blocker: an opaque z-9000 fixed div shown MID-RACE (unique
        among these layers), self-gated by CSS media queries rather than the
        hidden attribute. gate: false is load-bearing three ways — Escape must
@@ -71,6 +73,7 @@ window.UiLayers = (function () {
   ];
 
   const LAYER_IDS = DEFS.map((d) => d.id);
+  const TRANSIENT_IDS = DEFS.filter((d) => d.transient).map((d) => d.id);
 
   /* Open layers by id (0.01 ms) — a 36-id comma querySelectorAll walks the whole
      tree (3.6 ms at 5.3k nodes, uihunt4 #6) — in DOCUMENT order, which breaks
@@ -395,5 +398,5 @@ window.UiLayers = (function () {
   }
   function inRace() { return !!(raceGetter && raceGetter()); }
 
-  return { LAYER_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter, trackDialog };
+  return { LAYER_IDS, TRANSIENT_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter, trackDialog };
 })();

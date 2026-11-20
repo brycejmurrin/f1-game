@@ -12,7 +12,7 @@
   "tree": {
     "cssClasses": 5,
     "dynamicIdReads": 2,
-    "eagerCodeBytes": -2386,
+    "eagerCodeBytes": -2226,
     "eagerScripts": -1,
     "rawColor": 3,
     "rawColorDistinct": 3,
