@@ -755,6 +755,18 @@ const GameStore = (function () {
         restored.push(row.k);
       }
       mirror.authoredBytes = authoredTotal; mirror.authoredKeys = authoredCount;
+      // Re-seed keys with no row: after a lost database only rewritten keys came back.
+      if (epoch === _foreignEpoch) {
+        const mirrored = new Set(rows.map((row) => row && row.k));
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k || mirrored.has(k) || _mirrorPending.has(k) || !mirrorKey(k) || !careerWriteStatus(k).ok) continue;
+            const v = localStorage.getItem(k);
+            if (v !== null) mirrorQueue(k, v, true, { migration: true });
+          }
+        } catch (_) { /* storage unreadable */ }
+      }
       if (restored.length) {
         store.rev++;
         mirror.restored += restored.length;
