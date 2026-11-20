@@ -80,6 +80,18 @@ const CareerBackup = (function () {
       return { ok: false, reason: "fitted-not-object" };
     }
     if (data.team != null && typeof data.team !== "string") return { ok: false, reason: "team-not-string" };
+    if (data.team != null && typeof Teams !== "undefined" && Array.isArray(Teams.LIST)) {
+      const team = Teams.LIST.find((t) => t && t.id === data.team);
+      const fits = flavourIn(rowFlavour) === "myteam" ? data.team === "custom" : !!team && Teams.isReal(team);
+      if (!fits) return { ok: false, reason: "unknown-team" };
+    }
+    if (isObj(data.season) && data.season.round != null) {
+      const r = Number(data.season.round);
+      const ids = data.season.calIds;
+      const n = Math.max(Array.isArray(ids) ? ids.length : 0,
+        typeof Tracks !== "undefined" && Array.isArray(Tracks.SEASON) ? Tracks.SEASON.length : 0);
+      if (Number.isFinite(r) && n > 0 && r > n) return { ok: false, reason: "round-range" };
+    }
     if (data.year != null && (typeof data.year !== "number" || !Number.isFinite(data.year))) {
       return { ok: false, reason: "year-not-number" };
     }
