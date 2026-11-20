@@ -704,3 +704,5 @@ environment, the Chromium CDN returned a 195-byte HTML page titled "Site
 Unavailable" instead of a ZIP. The cloud browser also reported "WebGL2
 unavailable" in the actual car studio. Use the CI route for native captures in
 that situation; the static gallery preview alone cannot verify game rendering.
+
+The [arrangement baseline](notes/SCREEN-ARRANGEMENT-BASELINE.md) records the starting deployment and Career capture.
