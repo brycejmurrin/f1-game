@@ -971,6 +971,41 @@ test("a scrub shows a car's recorded pit stop: on its wheels where it was drivin
   } finally { g.close(); }
 });
 
+// Hunt #5694 B8: a field replaced mid-scrub left `scrubbing` true, so tickScrub
+// advanced the clock over a frozen field; the new cars must not get the old
+// field's live snapshot either.
+test("a field replaced mid-scrub ends the scrub without restoring the old snapshot onto the new cars", () => {
+  const R = boot();
+  const field = cars(4);
+  const G = { cars: field, netPlay: { active: () => false }, paused: true };
+  const api = R.create(G);
+  api.reset(field);
+  for (let i = 0; i < R.HZ * 3; i++) { for (const c of field) c.s += 1; api.sample(i / R.HZ, field); }
+  assert.equal(api.beginScrub(), true);
+  const fresh = cars(4, 500);
+  G.cars = fresh;
+  api.tickScrub(1);
+  assert.equal(api.isScrubbing(), false, "the scrub ended");
+  assert.deepEqual(fresh.map((c) => c.s), [500, 501, 502, 503], "the new field keeps its own poses");
+  assert.equal(api.tickScrub(1), false, "no clock advances after");
+});
+
+// Hunt #5694 B10: NaN survived the clamp and posed every car at NaN.
+test("at(NaN) and apply(NaN) are refused and leave the poses finite", () => {
+  const R = boot();
+  const field = cars(4);
+  const G = { cars: field, netPlay: { active: () => false }, paused: true };
+  const api = R.create(G);
+  api.reset(field);
+  for (let i = 0; i < R.HZ * 3; i++) { for (const c of field) c.s += 1; api.sample(i / R.HZ, field); }
+  assert.equal(api.at(NaN), null);
+  assert.equal(api.at(Infinity), null);
+  assert.equal(api.beginScrub(), true);
+  assert.equal(api.apply(NaN), false);
+  assert.ok(field.every((c) => Number.isFinite(c.s) && Number.isFinite(c.px) && Number.isFinite(c.head)), "poses stay finite");
+  assert.equal(api.endScrub(), true);
+});
+
 test("a NaN pose sample keeps the previous sample, not the origin (#4339)", () => {
   const R = boot(), field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false } });
   api.reset(field);
