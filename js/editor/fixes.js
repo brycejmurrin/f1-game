@@ -118,27 +118,34 @@ const TrackFixes = (function () {
   }
   const check = (d) => { try { return TrackValidate.check(d); } catch (_) { return null; } };
 
-  function fixStart(d, pts) {
-    if (typeof TrackRandom === "undefined") return null;
-    let cur = pts, f = 0, rot = 0;
-    for (let pass = 0; pass < 2; pass++) {
-      const ls = TrackRandom.longestStraight(cur);
-      if (!ls || !ls.dense || !ls.dense.length || !(ls.lenM > 0)) break;
-      const along = Math.min(Math.max(ls.lenM * 0.6, 240), Math.max(ls.lenM - 140, 0));
-      const p = ls.dense[(ls.start + Math.round(along / 4)) % ls.dense.length];
-      const j = S.project(cur, p[0], p[1]).i;
-      if (!(j > 0)) break;
-      const c = cum(cur);
-      f += c[j] / c[cur.length];
-      cur = S.rotate(cur, j);
-      rot += j;
-    }
-    if (cur === pts || samePts(lattice(cur), lattice(pts))) return null;
-    const out = clone(d);
-    out.pts = lattice(cur);
+  function startAt(pts, tr, j) {
+    const N = pts.length, c = cum(pts), n = tr.n, g = Math.round(c[j] / c[N] * n), win = Math.max(8, Math.round(0.08 * n));
+    let bk = g, bd = Infinity;
+    for (let o = -win; o <= win; o++) { const k = (((g + o) % n) + n) % n, dd = Math.hypot(tr.px[k] - pts[j][0], tr.pz[k] - pts[j][1]); if (dd < bd) { bd = dd; bk = k; } }
+    return bk * (tr.total / n);
+  }
+  function rotated(d, pts, j) {
+    const c = cum(pts), f = c[j] / c[pts.length], out = clone(d);
+    out.pts = lattice(S.rotate(pts, j));
     Object.assign(out, mapZones(out, (v) => v - f));
-    if (Array.isArray(out.heights) && out.heights.length === pts.length) { const k = rot % pts.length; out.heights = out.heights.slice(k).concat(out.heights.slice(0, k)); }
-    return { design: out, msg: "Moved the start to the longest straight" };
+    if (Array.isArray(out.heights) && out.heights.length === pts.length) out.heights = out.heights.slice(j).concat(out.heights.slice(0, j));
+    return out;
+  }
+  function fixStart(d, pts, built) {
+    const tr = trOf(d, built);
+    if (!tr || !tr.px || typeof TrackValidate === "undefined" || !TrackValidate.straightRun) return null;
+    const lim = LIM(), back = lim.startBackAmber || 240, fwd = lim.startFwdAmber || 240, cand = [];
+    for (let j = 1; j < pts.length; j++) {
+      const s = startAt(pts, tr, j), b = TrackValidate.straightRun(tr, s, -1, 600), f = TrackValidate.straightRun(tr, s, +1, 600);
+      if (b < (lim.startBackRed || 150) || f < (lim.startFwdRed || 70)) continue;
+      cand.push({ j, score: Math.min(b, back) / back + Math.min(f, fwd) / fwd + (b + f) / 1e5 });
+    }
+    cand.sort((a, b) => b.score - a.score);
+    for (const { j } of cand.slice(0, 6)) {
+      const out = rotated(d, pts, j), v = check(out);
+      if (v && !(v.issues || []).some((i) => i.code === "start" && i.level === "red")) return { design: out, msg: "Moved the start to the longest straight" };
+    }
+    return null;
   }
   function scaled(pts, k) {
     const c = S.centroid(pts);
@@ -282,7 +289,7 @@ const TrackFixes = (function () {
   }
 
   const REMEDY = {
-    start: (d, pts) => fixStart(d, pts),
+    start: (d, pts, it, b) => fixStart(d, pts, b),
     length: (d, pts, it, b) => fixLength(d, pts, b),
     bounds: (d, pts) => fixBounds(d, pts),
     spacing: (d, pts) => fixSpacing(d, pts),
