@@ -70,7 +70,10 @@ function boot(options = {}) {
     },
     LightStore: { reapply: () => { order.push("lt-reapply"); } },
     DrivingLine: { shown: () => true, setPhoto: () => {} },
-    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; } } },
+    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; },
+      // js/core/store.js rawSet/rawDel: false (never a throw) when the write fails.
+      rawSet: (k, v) => { try { ctx.localStorage.setItem(k, v); return true; } catch (_) { return false; } },
+      rawDel: (k) => { try { ctx.localStorage.removeItem(k); return true; } catch (_) { return false; } } } },
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
@@ -432,6 +435,15 @@ test("missing IndexedDB uses a visit-only library and localStorage quota failure
   assert.equal(b.PS.setBackground("data:image/jpeg;base64,ZmFrZQ=="), false);
   assert.equal(b.PS.setBackground("javascript:alert(1)"), false);
   assert.equal(b.api.state().busy, false);
+});
+
+test("the menu background goes through GameStore's raw lane and reads back the same text (#5023)", () => {
+  const b = boot(), img = "data:image/jpeg;base64,ZmFrZQ==";
+  assert.equal(b.PS.setBackground(img), true);
+  assert.equal(b.storage.get("apex26.photoBackground"), img, "stored bare, never JSON-quoted");
+  assert.equal(b.PS.background(), img);
+  assert.equal(b.PS.setBackground(""), true);
+  assert.equal(b.storage.has("apex26.photoBackground"), false);
 });
 
 // #2848: USE AS MENU BACKGROUND / library tiles stay inert unless Appearance Scene is My photo.

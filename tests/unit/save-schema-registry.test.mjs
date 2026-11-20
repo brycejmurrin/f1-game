@@ -126,13 +126,14 @@ function scanStoreCalls(file, ops) {
     if (n.type !== "CallExpression") return;
     const c = n.callee;
     if (!c) return;
-    let onLs = false, onStore = false;
+    let onLs = false, onStore = false, how = null;
     if (c.type === "Identifier" && wrappers.has(c.name)) {
-      if (!ops.has(wrappers.get(c.name).op)) return;
+      how = wrappers.get(c.name).op;
+      if (!ops.has(how)) return;
       onLs = true;
     } else {
       if (c.type !== "MemberExpression" || c.computed) return;
-      const how = c.property && c.property.name;
+      how = c.property && c.property.name;
       if (!ops.has(how)) return;
       const recv = storageReceiver(c.object);
       onLs = recv === "ls"; onStore = recv === "store";
@@ -153,7 +154,7 @@ function scanStoreCalls(file, ops) {
       key = alias.get(kNode.expressions[0].name);
     }
     const line = kNode.loc ? kNode.loc.start.line : 0;
-    if (key) sites.push({ file: rel, line, key, kind: onLs ? "ls" : "store" });
+    if (key) sites.push({ file: rel, line, key, kind: onLs ? "ls" : "store", op: how, value: n.arguments[1] || null });
     else if (onLs && kNode.type === "Literal") sites.push({ file: rel, line, key: String(kNode.value).replace(/^apex26\./, ""), kind: "ls" });
     // An ls key the scan cannot resolve (a non-alias identifier, a call, a concat) is a
     // dynamic write like a store one: never silently dropped (M1-17 write half).
@@ -308,4 +309,31 @@ test("the automatic UI flags (designerCoached, camComfortPref) are registered, t
   assert.ok(!exported.has("designerCoached") && !exported.has("camComfortPref"));
   // Unknown-key detection is not weakened.
   assert.throws(() => R.noteWrite("apex26.designerCoachedTypo"), /unregistered save key/);
+});
+
+/** The lane a write site implies: store.rawSet writes raw text, store.set/write JSON-encodes,
+ *  a bare localStorage.setItem is raw unless its value is a JSON.stringify(...) call. */
+function impliedLane(site) {
+  if (site.kind === "store") return site.op === "rawSet" ? "raw" : (site.op === "set" || site.op === "write") ? "json" : null;
+  if (site.op !== "setItem" || !site.value) return null;
+  const v = site.value;
+  const isStringify = v.type === "CallExpression" && v.callee && v.callee.type === "MemberExpression"
+    && v.callee.object && v.callee.object.name === "JSON" && v.callee.property && v.callee.property.name === "stringify";
+  return isStringify ? "json" : "raw";
+}
+
+test("a raw-text write site is never registered on the json lane (#5023)", () => {
+  const R = loadRegistry();
+  const bad = [];
+  for (const f of jsFiles("js")) {
+    for (const site of scanStoreWrites(f)) {
+      if (!site.key) continue;
+      const want = impliedLane(site), e = R.resolve(site.key);
+      // Only raw text registered json is a defect: a store.get JSON.parse-fails and dropCorrupt deletes
+      // the value. JSON text in a raw-lane key reads back as the same string (iosInstallSeen, packIndex).
+      if (want !== "raw" || !e || e.lane !== "json") continue;
+      bad.push(`${site.file}:${site.line} apex26.${site.key} ${site.kind}.${site.op} writes ${want}, registered ${e.lane}`);
+    }
+  }
+  assert.deepEqual(bad, [], `lane mismatch(es):\n${bad.join("\n")}`);
 });

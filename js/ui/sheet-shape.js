@@ -405,19 +405,25 @@ window.SheetShape = (function () {
      wrong element, and three menu-keyboard specs caught it.
      Screens are toggled by their `hidden` attribute, so watching that and
      classifying immediately closes the gap with no polling and no new contract
-     for the code that opens a screen. */
+     for the code that opens a screen.
+     SO IS A DEFERRED SHEET LANDING: a print→all <link> flip (the boot flipper, LazyBundles' route sheets) that arrives
+     with a screen already open changes its --compact-at without its box, so no ResizeObserver frame is owed; until one
+     came, race settings painted NORMAL (#5665 CI: 14.1 px heading against the compact 12). */
   function watchVisibility() {
     if (typeof MutationObserver !== "function") return;
     new MutationObserver((muts) => {
+      let landed = false;
       for (const m of muts) {
+        if (m.attributeName === "media") { landed = landed || m.target.media === "all"; continue; }
         if (m.attributeName !== "hidden" || m.target.hidden) continue;
         const nodes = m.target.querySelectorAll(MANAGED);
         const els = [];
         for (let i = 0; i < nodes.length; i++) els.push(nodes[i]);
         classifyAll(measureAll(els));
       }
+      if (landed) reclassify();
     }).observe(document.documentElement,
-      { attributes: true, attributeFilter: ["hidden"], subtree: true });
+      { attributes: true, attributeFilter: ["hidden", "media"], subtree: true });
   }
 
   /* UI SIZE MUST RE-MEASURE, AND THE ResizeObserver WILL NOT DO IT.

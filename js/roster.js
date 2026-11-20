@@ -39,6 +39,7 @@
       "js/render/three/tlx-shadow.js",
       "js/render/three/tlx-chunked.js",
       "js/render/three/tlx-post.js",
+      "js/render/three/tlx-mem.js",
       "js/render/three/tlx.js"
     ]
   },
@@ -273,7 +274,8 @@
     "js/race/cooldown-lap.js",
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
-    "js/race/retired-card.js"
+    "js/race/retired-card.js",
+    "js/race/driving-coach.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [
