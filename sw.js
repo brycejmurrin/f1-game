@@ -35,6 +35,10 @@ const VOICE_CACHE = CACHE_PREFIX + "voice";
 const VOICE_KEEP_IDS = 6;
 // A navigation / version.json fetch races this before the cache answers.
 const NAV_RACE_MS = 3000;
+// A plain shell navigation that HAS a cached shell stops waiting for the network here: on a link that does not
+// answer, an installed app opened to 3 s of nothing. The shell's own version guard still reloads onto a newer build
+// when version.json comes through. With no cached shell (the first launch) the full race above still applies.
+const SHELL_RACE_MS = 1000;
 // A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
 // a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
 const BUST_WAIT_MS = 15000;
@@ -1334,7 +1338,18 @@ self.addEventListener("fetch", (event) => {
       const failFast = online && (isVersion || (isShellBust && !bustShell));
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
-        const res = await Promise.race([network, timeout]);
+        let res;
+        if (req.mode === "navigate" && !isShellBust && isShellDocument(url)) {
+          const early = new Promise((resolve) => setTimeout(() => resolve(undefined), SHELL_RACE_MS));
+          res = await Promise.race([network, early]);
+          if (res === undefined) {
+            const bare = new URL(url.href);
+            bare.search = ""; bare.hash = "";
+            const shell = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(bare.href)) || (await matchPreferCurrent("index.html"));
+            if (shell) return shell;
+            res = await Promise.race([network, timeout]);
+          }
+        } else res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
         if (res == null && failFast) return Response.error();
       } catch (_) {
