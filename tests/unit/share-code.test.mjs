@@ -648,6 +648,19 @@ test("title-flow's lap staging hook never starts a race or re-selects a past Dai
   assert.match(src, /today:\s*DailyChallenge\.dayKey\(\)/);
 });
 
+// #5879: a career's sheet lives under careerSetup.<flavour>.<slot>.<team>; the restore filter skipped it, so UNDO
+// reported success and left the imported setup in place. Other keys stay outside the filter.
+test("UNDO restores a career setup key and still skips keys outside the share-code set", () => {
+  const { ShareCode, store } = harness();
+  const key = "careerSetup.driver.0.ferrari", prev = { arbF: 3, arbR: 3, rideF: 30, rideR: 45, brakeBias: 58 };
+  store.set(key, { arbF: 9, arbR: 9, rideF: 20, rideR: 60, brakeBias: 54 });
+  store.set("career.slot0", "kept");
+  store.set("shareUndo", { keys: [key, "career.slot0"], prev: { [key]: prev, "career.slot0": null }, at: 1, pending: false });
+  assert.equal(ShareCode.undo(store).ok, true);
+  assert.deepEqual(j(store.get(key)), prev);
+  assert.equal(store.get("career.slot0"), "kept");
+});
+
 test("#5891: a lap-challenge link whose '~' was percent-encoded still opens", () => {
   const { ShareCode } = harness();
   const plain = ShareCode.decode("APXC1.l.monza~-~91234");

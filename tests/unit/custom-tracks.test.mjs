@@ -669,6 +669,28 @@ test("share-link decode that finishes mid-race keeps the fragment for a later ti
   assert.deepEqual(opened, ["SAME"]);
 });
 
+// #5881: a #track= link that does not decode (truncated by a chat app, or
+// garbage) is stripped AND said aloud, not stripped in silence.
+test("a share link that fails to decode is stripped and announced", async () => {
+  for (const [hash, decoded] of [["#track=APXT1trunc", { ok: false, reason: "checksum" }], ["#track=%E0%A4%A", null]]) {
+    const b = boot(); const said = [], stripped = [], opened = [];
+    b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"], LAZY_EDITOR_EDGES: [] };
+    b.ctx.TrackDesigner = { init() {}, open: (opts) => opened.push(opts) };
+    b.ctx.TrackCodec = {
+      fromHash: (h) => { if (!decoded) throw new URIError("malformed"); return h.slice(7); },
+      decode: async () => decoded,
+      withoutTrack: () => "",
+    };
+    b.ctx.location = { hash, pathname: "/", search: "" };
+    b.ctx.history = { replaceState: (...args) => stripped.push(args) };
+    b.C.create({ announce: (msg) => { said.push(msg); } }, { load: async () => true });
+    assert.equal(await b.C.consumeTrackHash(), false, hash + ": refused");
+    assert.equal(stripped.length, 1, hash + ": the fragment is stripped");
+    assert.deepEqual(opened, [], hash + ": the designer stays shut");
+    assert.deepEqual(said, ["THAT TRACK LINK IS INCOMPLETE OR CORRUPT"], hash + ": the player is told");
+  }
+});
+
 
 test("yielded collection review cancels with zero writes and records named add/duplicate/errors", async () => {
   const { C, writes } = boot(); C.upsert(design()); const before = writes.length;
