@@ -23,7 +23,7 @@ import { specsAffectedByImpact } from "../../tools/lib/impact-map.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
-import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
+import { MEASURED, capacity, declaredTests, declaredTestsIn, honoursCircuitScope } from "../../tools/ci/select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
@@ -359,7 +359,7 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + (x.spill || []).length + x.oversize.length
     + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length
-    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length;
+    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length + x.outOfScope.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
 });
 
@@ -2304,3 +2304,43 @@ test("W31 row 12: a renderer, loop or vendor edit runs the unpinned shipped-defa
     assert.equal(got.filter((x) => x === "tests/specs/shipped-defaults.spec.js").length, 1, `${f}: ${got.length} planned`);
   }
 });
+
+// A CIRCUIT-SCOPED PLAN NEVER CARRIES A ZERO-TEST LEG (#6036). props-over-road is one test per circuit, filtered by
+// APEX_CIRCUITS, but the count billed it for all 52: a Spa-only diff split it into --shard=1/2 + 2/2 of a 1-test
+// run, and the empty 2/2 failed the selected verdict as "ran zero tests" (run 44833050900). The roster now counts
+// the scoped circuits a spec's own loop holds; a spec whose loop holds none (tracks-walls-a for a circuit in b's
+// half) goes to outOfScope instead of a leg.
+test("a roster spec that honours APEX_CIRCUITS is billed for the scoped circuits it holds", () => {
+  const por = "tests/specs/props-over-road.spec.js", tr = "tests/specs/terrain-over-road.spec.js";
+  assert.equal(honoursCircuitScope(por), true);
+  assert.equal(declaredTestsIn(por, ["spa"]), 1);
+  assert.equal(declaredTestsIn(por, ["spa", "monza"]), 2);
+  assert.ok(declaredTests(por) > 40, "unscoped it is still the whole roster");
+  const halves = ["a", "b"].map((h) => declaredTestsIn(`tests/specs/tracks-walls-${h}.spec.js`, ["spa"]));
+  assert.deepEqual(halves.slice().sort(), [0, 1], `spa sits in exactly one tracks-walls half: ${halves}`);
+  assert.equal(honoursCircuitScope(tr), false, "terrain-over-road's audit roster ignores APEX_CIRCUITS");
+  assert.equal(declaredTestsIn(tr, ["spa"]), declaredTests(tr), "so it keeps the whole-roster count");
+});
+// The oracle is NOT the counter: each roster spec's real scoped count, read from js/circuits the way its loop reads it.
+const ROSTER = fs.readdirSync(path.join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
+const half = (i) => { const n = Math.ceil(ROSTER.length / 2); return ROSTER.slice(i * n, (i + 1) * n); };
+const REAL_SCOPED = {
+  "tests/specs/props-over-road.spec.js": (ids) => ROSTER.filter((id) => ids.includes(id)).length,
+  "tests/specs/tracks-walls-a.spec.js": (ids) => half(0).filter((id) => ids.includes(id)).length,
+  "tests/specs/tracks-walls-b.spec.js": (ids) => half(1).filter((id) => ids.includes(id)).length,
+};
+for (const file of ["js/circuits/spa.js", "js/circuits/scenery/spa.js", "js/circuits/bahrain.js"]) {
+  test(`a ${file}-only diff plans no leg that runs zero tests`, () => {
+    for (const budget of [5, DEFAULT_BUDGET_MIN]) {
+      const r = select(undefined, budget, { files: [file], overflowShards: 0 });
+      assert.equal(r.circuits.length, 1, `scoped to one circuit: ${r.circuits}`);
+      for (const j of shards(r)) {
+        const specs = j.specs.split(" ");
+        const real = specs.reduce((n, f) => n + (REAL_SCOPED[f] ? REAL_SCOPED[f](r.circuits) : declaredTests(f) ?? 1), 0);
+        const pieces = j.shard ? Number(j.shard.split("/")[1]) : 1;
+        assert.ok(real >= pieces, `${j.name} (${j.specs} ${j.shard}) runs ${real} test(s) across ${pieces} piece(s)`);
+      }
+      for (const x of r.outOfScope) assert.equal(REAL_SCOPED[x.file](r.circuits), 0, `${x.file} is out of scope`);
+    }
+  });
+}

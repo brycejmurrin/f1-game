@@ -157,11 +157,20 @@ function staticNumber(node, bindings) {
 /** How many `js/circuits/*.js` defs exist — the length a `readdirSync` of that
  *  directory expands to at module load (tracks-walls, elevation-tracks, …). */
 function circuitDefCount() {
+  const ids = circuitDefIds();
+  return ids && ROSTER_SCOPE ? ids.filter((id) => ROSTER_SCOPE.has(id)).length : ids && ids.length;
+}
+function circuitDefIds() {
   try {
     return fs.readdirSync(path.join(ROOT, "js/circuits"))
-      .filter((f) => f.endsWith(".js")).length;
+      .filter((f) => f.endsWith(".js")).map((f) => f.replace(/\.js$/, "")).sort();
   } catch { return null; }
 }
+// THE ROSTER UNDER APEX_CIRCUITS (#6036). Set by declaredTestsIn() only while it counts a roster-loop spec that
+// itself honours APEX_CIRCUITS (props-over-road, tracks-walls*): the readdirSync / allCircuitIds() roster then
+// counts the scoped circuits it holds, not all 52. Billed at 52, a Spa-only diff split props-over-road into two
+// --shard pieces of a 1-test run, and the empty 2/2 failed the verdict as "ran zero tests" (run 44833050900).
+let ROSTER_SCOPE = null;
 
 /** How many circuits `auditTracks()` (tests/helpers/track-helpers.js) returns
  *  with TRACK unset — tools/manifest.cjs's CIRCUITS, the roster it reads. CI
@@ -236,9 +245,17 @@ function staticArrayLen(node, bindings) {
   if (node.type === "CallExpression" && node.callee?.type === "Identifier") {
     if (node.callee.name === "allCircuitIds") return circuitDefCount();
     if (node.callee.name === "shardIds") {
-      const base = staticArrayLen(node.arguments[0], bindings);
       const index = staticNumber(node.arguments[1], bindings);
       const of = staticNumber(node.arguments[2], bindings);
+      const arg = node.arguments[0];
+      // Scoped: slice the REAL sorted roster as tracks-walls-roster.js shardIds() does, then keep the scoped ids.
+      if (ROSTER_SCOPE && arg?.type === "CallExpression" && arg.callee?.name === "allCircuitIds") {
+        const ids = circuitDefIds();
+        if (!ids || index == null || of == null || of < 1) return null;
+        const size = Math.ceil(ids.length / of);
+        return ids.slice(index * size, (index + 1) * size).filter((id) => ROSTER_SCOPE.has(id)).length;
+      }
+      const base = staticArrayLen(arg, bindings);
       if (base == null || index == null || of == null || of < 1) return null;
       const size = Math.ceil(base / of);
       return Math.max(0, Math.min(base, (index + 1) * size) - index * size);
@@ -360,10 +377,23 @@ export const caseModuleIds = (file) => caseModules(file).map((m) => path.posix.b
  *  unmatched scope registers every module, fail closed); any other spec is unchanged. */
 export function declaredTestsIn(file, scope) {
   const mods = caseModules(file);
-  if (!mods.length) return declaredTests(file);
+  if (!mods.length) {
+    if (!scope || !scope.length || !honoursCircuitScope(file)) return declaredTests(file);
+    ROSTER_SCOPE = new Set(scope);
+    try { return declaredTests(file); } finally { ROSTER_SCOPE = null; }
+  }
   const keep = scopedCaseModules(file, scope);
   const sum = (list) => list.reduce((a, m) => a + (declaredTests(m) || 0), 0);
   return declaredTests(file) - sum(mods) + sum(keep);
+}
+
+/** Does a spec narrow its own circuit loop by APEX_CIRCUITS (directly, or through tracks-walls-roster's inScope)?
+ *  terrain-over-road's auditTracks() roster does not, so it keeps the whole-roster count. */
+export function honoursCircuitScope(file) {
+  try {
+    const src = fs.readFileSync(path.join(ROOT, file), "utf8");
+    return /process\.env\.APEX_CIRCUITS/.test(src) || /import\s*\{[^}]*\binScope\b[^}]*\}\s*from\s*["'][^"']*tracks-walls-roster/.test(src);
+  } catch { return false; }
 }
 
 /** The case modules a registry spec registers under `scope` (an id list). */
