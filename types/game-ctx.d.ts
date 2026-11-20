@@ -939,6 +939,7 @@ declare const DockLayout: GameModuleFactory;
 declare const HudArrange: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
+declare const SettingsExportBody: GameModuleFactory;
 
 declare const SessionRecords: GameModuleFactory;
 declare const DrivingCoach: GameModuleFactory;

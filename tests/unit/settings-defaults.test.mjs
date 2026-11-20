@@ -123,7 +123,7 @@ test("an unlisted key is untouched — the override is opt-in per key", () => {
 });
 
 test("settings-export reports the shipped default, so CHANGED stays true", () => {
-  const src = fs.readFileSync(new URL("../../js/ui/settings-export.js", import.meta.url), "utf8");
+  const src = fs.readFileSync(new URL("../../js/ui/settings-export-body.js", import.meta.url), "utf8");   // LAZY_SAVES_DATA (#4748)
   const fn = src.slice(src.indexOf("function defaultOf("), src.indexOf("\n}", src.indexOf("function defaultOf(")));
   assert.match(fn, /SettingsDefaults\.has\(row\.k\)/,
     "defaultOf must consult SettingsDefaults, or an export lists keys as changed that the player never touched");
