@@ -9,3 +9,4 @@ Fixed: Baku's barriers stand off the road like the other street circuits, so the
 Fixed: A career on the 2026 calendar names its rounds like season mode (Bahrain GP, Barcelona-Catalunya GP) (#5973).
 Fixed: Curated corners in a chicane no longer snap to the same apex on the track map and flyby (#5973).
 Fixed: On a phone, a race that had to lower graphics detail no longer keeps it lowered for every later race in the session (#5973).
+Fixed: HOW TO PLAY > PIT STOPS now explains the two-dry-compound rule: finishing a dry race of eight laps or more on one compound disqualifies you (#6016).
