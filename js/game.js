@@ -3555,8 +3555,10 @@ function updateCarLateral(c, dt, ranked, S) {
     if (!yieldMine && aimClose && alongO.human) yieldMine = true;
     c.sbsT = yieldMine ? (c.sbsT || 0) + dt : 0;
     if (yieldMine) {
+      const preYield = desiredX;
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO._snapX + CLEAR) : Math.min(desiredX, alongO._snapX - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
+      if (hz && !alongO.human && (c._hzSide < 0 ? desiredX > hz.x - hzClear : desiredX < hz.x + hzClear)) desiredX = preYield;
       rubClamp = alongClose;
     }
     if (pits) {
