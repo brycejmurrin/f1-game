@@ -84,7 +84,15 @@
   background: rgba(12, 12, 18, 0.92); color: var(--text);
   font-size: var(--fs-micro); line-height: 1.35;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-  pointer-events: none;
+}
+/* Wide screens: sit bottom-left, clear of the right-hand button column. Tall screens: the title
+   reserves the banner's height (measured into --ios-install-h) so no button stays hidden under it. */
+:where(body[data-shape="wide"]) #ios-install {
+  right: auto; margin: 0;
+  width: min(30rem, calc(50% - var(--safe-l) - var(--gap)));
+}
+body:not([data-shape="wide"]):has(> #ios-install:not([hidden])) #overlay {
+  padding-bottom: calc(var(--safe-b) + var(--ios-install-h, 0px) + var(--gap));
 }
 :where(body[data-shape="wide"][data-density="compact"]) #ios-install {
   right: auto;
@@ -93,7 +101,7 @@
   max-width: none;
   margin: 0;
 }
-#ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
+#ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; }
 #ios-install-x { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
 #ios-install[hidden] { display: none; }
 body.in-race #ios-install { display: none; }

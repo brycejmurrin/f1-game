@@ -73,12 +73,19 @@ if ($("pm-fullscreen")) {
     msg.textContent = NOTE;
   } else if (store.get("iosInstallSeen", false)) return;
   else if (wakeBroken && msg) msg.append(" " + NOTE);
+  const root = document.documentElement;
+  const measure = () => { if (!el.hidden) root.style.setProperty("--ios-install-h", el.offsetHeight + "px"); };
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
   const dismiss = () => {
+    if (ro) ro.disconnect();
+    root.style.removeProperty("--ios-install-h");
     el.hidden = true;
     if (!standalone) store.set("iosInstallSeen", true);
     if (wakeBroken) store.set("iosWakeNoteSeen", true);
   };
   el.hidden = false;
+  measure();
+  if (ro) ro.observe(el);
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;
   const ov = $("overlay");
