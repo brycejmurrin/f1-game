@@ -1998,7 +1998,9 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
     for (const row of CONTROL_REG.size.filter((r) => r.moves)) {
       test(`${row.id} (${row.names}): no dead travel, monotonic, the number is the painted size, nothing else moves`, async ({ page }) => {
         test.setTimeout(240_000);
-        await bootOwnerCell(page, cell);
+        // The adaptive (automatic) HUD, where the band fit caps HUD and BUTTON SIZE: explicit empty sets. A fresh
+        // phone's factory layout (hud-layout.js PHONE_STANDARD, #5977) places every piece by hand, so nothing caps there.
+        await bootOwnerCell(page, cell, { store: { hudLayout: { v: 4, standard: { other: {}, helmet: {}, cockpit: {} } } } });
         // Untouched: the stored wish is kept, the thumb sits at what paints and the row says it is the cap.
         const at = await sizeRowState(page, row.id);
         expect(await page.evaluate((k) => JSON.parse(localStorage.getItem("apex26." + k)), row.key), "the stored wish survives the clamp").toBeGreaterThanOrEqual(at.max);
