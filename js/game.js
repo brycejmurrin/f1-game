@@ -686,7 +686,7 @@ const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(buil
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 let pendingFinishQuit = false;
-const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
+const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (+ net, first)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
 const _gridIdleOpts = { soundOn: false, wet: false, step: true };
@@ -1528,8 +1528,8 @@ function makeCars() {
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
         aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, isP ? SetupTune.aero(team.id) : undefined) : Parts.aeroLoad(factoryParts.setup, team),   // the BUILD is shared, the SHEET is not: rollBalance/mods above are already isP-only, and an AI reads aeroLoad continuously (AiDrive.lateralScale), so the mate was the only car the player's rake moved
-        ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
-        ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
+        ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : AiDrive.aiErs(Parts.ersProfile(factoryParts.setup, team).deploy),
+        ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : AiDrive.aiErs(Parts.ersProfile(factoryParts.setup, team).regen),
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
@@ -1558,17 +1558,18 @@ function makeCars() {
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
         // Declared here so every car has the shape whether or not a race arms it.
         retired: false, dnf: null, dnfAt: null, dnfWhy: null,
-        offroad: false, offT: 0, cuts: 0, penalty: 0,
+        offroad: false, offT: 0, offCut: false, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
         // lanePref is the grid HOME LINE and never moves; adaptLane biases c.lane
         // around it (never accumulating into ±0.85), and every re-grid restores it.
-        lane, lanePref: lane,
+        lane, lanePref: lane, laneClr: 0,
       });
       if (typeof CarFields !== "undefined") CarFields.predeclare(cars[cars.length - 1]);   // the late-added fields as `undefined`: ONE hidden class from frame 0 (js/race/car-fields.js)
     });
   });
   player = cars.find((c) => c.isPlayer) || null;   // find() yields undefined; G.player's contract is CarState | null
+  if (player && flow === "season" && season && !netPlay.active()) SeasonCal.seatPlayer(season, player.driverId);   // #5877
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
@@ -1661,7 +1662,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
+    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref; c.laneClr = 0;   // as gridUp
     c.gear = 1; c.rpm = IDLE_RPM;   // a standing start in 2nd+ has gearLo > 0, so manual drive is zero until a downshift
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
@@ -1756,9 +1757,9 @@ function gridUp(preOrder) {
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.offCut = false; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref; c.laneClr = 0;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
     clearRacingScratch(c);
@@ -3419,7 +3420,7 @@ const G = {
   get raceQuali() { return qualiGrid(); }, set raceQuali(v) { if (!!v !== qualiGrid()) raceGrid = v ? "quali" : "tier"; },
   get raceGrid() { return raceGrid; }, set raceGrid(v) { if (GRID_RULES.indexOf(v) >= 0) raceGrid = v; },
   get champGrid() { return champGrid; }, set champGrid(v) { if (CHAMP_GRID_RULES.indexOf(v) >= 0) champGrid = v; },
-  referencePole: () => quali.referencePole(),
+  referencePole: (kind) => quali.referencePole(kind),
   redFlagRestart,
   get daily() { return daily; },
   holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
@@ -3500,7 +3501,6 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
-if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
@@ -4426,7 +4426,7 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [], parked = [], _colField = [];   // _colField: ranked + parked for resolveCollisions, refilled (was ranked.concat(parked) per step, PP-8)
+const ranked = [], parked = [], _stopped = [], stillCars = [], _colField = [];   // _colField: ranked + parked for resolveCollisions, refilled (was ranked.concat(parked) per step, PP-8)
 // Progress order, descending, by STABLE insertion: the order ranked.sort((a, b) => b.prog - a.prog) gave from the same
 // input, without the work array both V8's and JSC's Array.prototype.sort allocate per call (CPU-HUNT-2026-10-24 C1).
 function rankByProg(a) {
@@ -4446,7 +4446,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch(quit) {
-  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
+  ranked.length = 0; parked.length = 0; stillCars.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -4629,8 +4629,13 @@ function update(dt) {
   // walk: a lapped car is a lap away in ranked[] and beside you on the road.
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars); pits.stepBegin();
-  parked.length = 0;
-  for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
+  parked.length = 0; _stopped.length = 0; stillCars.length = 0;   // _stopped: crawling (AiDrive.slowHazard, #5330); stillCars: stopped 1.5 s, a hazard wherever the line goes (clean-room 39); both lists refill each step.
+  for (let i = 0; i < cars.length; i++) {
+    const o = cars[i];
+    if (o.retired) { if (o.parkedOnRoad) parked.push(o); continue; }
+    if (AiDrive.slowHazard(o, vTop())) _stopped.push(o);
+    if ((o.stillT = AiDrive.stallStep(o.stillT, o.speed, dt, state === "race" && !o.finished && !o.inPit && !o.inPitLane)) >= 1.5) stillCars.push(o);
+  }
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
@@ -4687,7 +4692,7 @@ function update(dt) {
   // off the table and the countdown stands.
   if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
   else if (resultT === 0) {
-    postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
+    postFinish.net = session === "race" && netPlay.active(); postFinish.solo = session === "race" && !postFinish.net && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
@@ -4906,7 +4911,7 @@ function updateCar(c, dt, ranked) {
 
 
   // --- speed targets ---
-  let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
+  let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : Math.min(BAND_CEIL, c.tierV * c.skill * dd.ai * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)));   // #5330 scripted trim
   // WIND (js/race/wind.js) off the car's OWN heading (an AI's: tangent less its aiHead): head/tail wind moves top speed.
   vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), vStd(Math.abs(c.speed))).vmaxMul;
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
@@ -5417,7 +5422,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       if (!directLook) AiDrive.pushLook(d, lkV, lkB, lkM);
       if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
-    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
+    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1 / c.skill, Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = driveTune.PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
@@ -5631,8 +5636,9 @@ function updateCarLongitudinal(c, dt, ranked, S) {
     const grassFloor = GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05);
     if (c.speed > grassFloor) c.speed = Math.max(grassFloor, c.speed - grassDrag * dt);
     c.offT += dt;
-    if (c.offT > 1.2) {
-      c.offT = -2;   // grace before next count
+    // ONE STRIKE PER TRIP OFF (#5945 1A): `offCut` latches the count until the car rejoins.
+    if (c.offT > 1.2 && !c.offCut) {
+      c.offT = -2; c.offCut = true;   // grace before next count
       c.cuts++;
       // A LAP WITH A COUNTED CUT IS NOT A TIMED LAP — in ANY session. A time
       // trial is a leaderboard (a lap run off-track replaced a 42 s record with
@@ -5669,15 +5675,9 @@ function updateCarLongitudinal(c, dt, ranked, S) {
         if (soundOn) GameAudio.offtrack();
       }
     }
-  } else if (c.offT !== 0) {
-    // Relax offT toward 0 during clean running — from BOTH sides. A counted cut
-    // parks it at the -2 grace sentinel; decaying only positive values (the old
-    // `else if (c.offT > 0)`) froze that -2 the whole rest of the stint, so the
-    // NEXT, separate excursion started from -2 and needed ~3.2 s off-track to
-    // count instead of 1.2 s — an unintended free pass. The continuous-excursion
-    // grace is unaffected: that path is the `if` branch above (offT += dt), not
-    // this one, which only runs while the car is back on track.
-    c.offT = c.offT > 0 ? Math.max(0, c.offT - dt) : Math.min(0, c.offT + dt);
+  } else if (c.offCut || c.offT !== 0) {
+    // Rejoined after a counted trip: the -2 grace starts here. Else relax from BOTH sides (a frozen -2 made the next trip need 3.2 s, not 1.2).
+    c.offT = c.offCut ? -2 : c.offT > 0 ? Math.max(0, c.offT - dt) : Math.min(0, c.offT + dt); c.offCut = false;
   }
 
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
@@ -5717,7 +5717,7 @@ function updateCarLateral(c, dt, ranked, S) {
     _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
     _aiLane.queueT = c.queueT || 0;
-    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt);
+    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && !chaser && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330 (not in launch/calm: lanes to T1)
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // THE LINE (TrackLine, baked at build): outside-inside-outside through every
     // corner, read a short way ahead so the lateral step's lag does not turn in
@@ -5740,12 +5740,12 @@ function updateCarLateral(c, dt, ranked, S) {
     const follow = AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold);
     const laneX = c.lane * (hw - 1.2);
     const ln = TrackLine.at(track, wrapS(c.s + lead), c.aiFam);
-    let targetX = clamp(lerp(laneX, ln.x, ln.w * follow), -(hw - 1.0), hw - 1.0);
+    let targetX = clamp(lerp(laneX, ln.x, lerp(ln.w * follow, 1, c.laneClr || 0)), -(hw - 1.0), hw - 1.0);
     // The target path's TANGENT (m/m) 4 m further on: the feed-forward heading
     // the controller below steers to, so the line is followed, not chased.
     // (`ln` is TrackLine.at's shared object — targetX is read before this call.)
     const ln2 = TrackLine.at(track, wrapS(c.s + lead + 4), c.aiFam);
-    let tanT = (clamp(lerp(laneX, ln2.x, ln2.w * follow), -(hw - 1.0), hw - 1.0) - targetX) / 4;
+    let tanT = (clamp(lerp(laneX, ln2.x, lerp(ln2.w * follow, 1, c.laneClr || 0)), -(hw - 1.0), hw - 1.0) - targetX) / 4;
     // A missed braking point runs WIDE: the target goes most of the way to the outside edge.
     if (AiDrive.mistakePhase(c.errT) === 1 && Math.abs(kA) > 0.004) targetX = lerp(targetX, Math.sign(kA) * (hw - 0.9), 0.7);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
@@ -5930,49 +5930,33 @@ function updateCarLateral(c, dt, ranked, S) {
       if (c.holdOff == null) c.holdOff = desiredX - targetX;
       desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
     } else c.holdOff = null;
-    const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;   // a car parked on the road (#2162): pass it a lane clear
+    const pk = (parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null)   // a car parked on the road (#2162): pass it a lane clear
+      || (stillCars.length ? Collide.parkedAhead(c, stillCars, track.total, AiDrive.hazardReach(c.speed)) : null);
     const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);   // a STOPPED car ahead is a hazard too (AiDrive.stoppedHazard)
     const hzClear = AiDrive.hazardClear(CLEAR);   // wider than a moving neighbour's gap: a static body does not give (#5539)
-    if (hz && Math.abs(desiredX - hz.x) < hzClear) desiredX = clamp(hz.x > 0 ? hz.x - hzClear : hz.x + hzClear, -(hw - 0.5), hw - 0.5);
-    // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
-    // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
-    // anything under 0.3 m, while the shared racing line pulls the outer car up
-    // to 2.4 m INTO the pair — so two cars on lines half a metre apart settled
-    // at |dx| 1.5-1.8 and rubbed every frame (closed form in the audit; measured
-    // as every standoff in the bench sitting at dx ≈ 1.9). The car that yields
-    // (AiDrive.sideYieldsA — behind on arc, or the outer car when level) is held
-    // a full lane off the other on the side it is already on. A hard edge gives
-    // the deadzone an error it cannot swallow.
+    if (hz !== c._hzOf) { c._hzOf = hz; c._hzSide = hz ? AiDrive.hazardSide(c.x, hz.x) : 0; }
+    if (hz && (c._hzSide < 0 ? desiredX > hz.x - hzClear : desiredX < hz.x + hzClear)) desiredX = clamp(hz.x + c._hzSide * hzClear, -(hw - 0.5), hw - 0.5);
+    // SIDE RUB AS A CONSTRAINT: a proportional `sep` under the 0.3 m deadzone let pairs settle at
+    // |dx| 1.5-1.8 and rub every frame; the yielder (AiDrive.sideYieldsA) is held a full lane off.
     let rubClamp = false;
     const alongClose = !!alongO && Math.abs(alongDx) < CLEAR;
-    // THE AIM, NOT THE CONTACT (AiDrive.aimIntrudes): is our aim point inside
-    // the other car's clear gap and on their side of where we are? Asked of a
-    // HUMAN neighbour only. Asked of every neighbour it also worked (Monza,
-    // first touches with a scripted player 5.6 -> 3.1 per 100 s), but the
-    // AI-only field paid for it: settled passes 40 -> 30 per 240 s, every seed
-    // at or under the old minimum, and the field strung out 1091 -> 1238 m —
-    // two AI cars both running the election at aim distance concede a
-    // side-by-side neither has lost yet. Between AI cars the contact-time
-    // election below stays; a human runs no election at all, which is why
-    // the aim is the right moment there (AiDrive.aimIntrudes).
+    // THE AIM, NOT THE CONTACT (AiDrive.aimIntrudes), asked of a HUMAN neighbour only: asked of AI
+    // pairs too it cost settled passes 40 -> 30 per 240 s (both concede at aim distance).
     const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO._snapX, CLEAR);
     let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, AiDrive.cornerK(c.kTurn, alongO.kTurn));   // one k for the pair (audit4 I4 F10)
-    // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
-    // AiDrive.humanYieldGrace; this end only carries the per-car timer.
-    // Are WE steering into them (aim vs where we already are), and is there
-    // still room left to concede? Both halves matter — AiDrive.humanYieldT.
+    // ELECTING THE HUMAN IS ELECTING NOBODY (AiDrive.humanYieldGrace / humanYieldT); this end keeps the timer.
     const inBand = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand();
     const intruding = inBand && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
     c.hYieldT = AiDrive.humanYieldT(c.hYieldT, !!alongO && Math.abs(alongDx) < CLEAR + 1, yieldMine, !!(alongO && alongO.human), intruding, dt, inBand);
     if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
-    // A HUMAN neighbour: an aim into their gap is conceded at once. Nobody else
-    // in the pair will, and a clear gap held at the aim point IS the clean
-    // side-by-side the grace protects — the grace stays for the contact case.
+    // A HUMAN neighbour's gap is conceded at once at the aim point; the grace stays for contact.
     if (!yieldMine && aimClose && alongO.human) yieldMine = true;
     c.sbsT = yieldMine ? (c.sbsT || 0) + dt : 0;   // read by COMMIT OR YIELD above, next frame
     if (yieldMine) {
+      const preYield = desiredX;
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO._snapX + CLEAR) : Math.min(desiredX, alongO._snapX - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
+      if (hz && !alongO.human && (c._hzSide < 0 ? desiredX > hz.x - hzClear : desiredX < hz.x + hzClear)) desiredX = preYield;   // not into the hazard (clean-room 41)
       // Only a car ALREADY inside the gap is an emergency for the controller
       // below; at aim distance the heading state bends the line in time.
       rubClamp = alongClose;
@@ -6025,7 +6009,7 @@ function updateCarLateral(c, dt, ranked, S) {
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // yaw and lateral from one q/prefix (X-mode costs the AI its wings only in .lat)
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
-      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead) and before a hazard's gap (hazardHead)
+      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax, c._hzSide);   // stop before the edge (AiDrive.edgeHead) and before a hazard's gap (hazardHead)
       const head0 = c.aiHeadV != null && vStd(Math.abs(vAbs - c.aiHeadV)) > AI_HEAD_JUMP ? 0 : c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt); c.aiHeadV = vAbs;
       gripScale = ls.lat;   // X-mode costs the AI its wings too
@@ -6553,22 +6537,16 @@ function rescuePlayer(c) {
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
   c.vLat = 0; c.yawRateCur = 0;
-  // Pace-scaled restore floor (same shape as coast()); never above vTop().
-  c.speed = Math.min(vTop(), Math.max(c.speed, 16 * Math.max(driveTune.PACE, 0.05)));
+  // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
+  c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
-  // Cues are for the driver at THIS screen — a rival being recovered elsewhere
-  // on track must not announce itself here.
-  //
-  // NO BANNER. A recovery is the most self-evident event in the game: the car
-  // is back on the road, pointing the right way, at a sane speed. The player
-  // just watched it happen, so a card saying RECOVERED spends the radio — and
-  // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
-  // obvious can delay or mask one that does not. The sound still marks it.
+  // Cues are for the driver at THIS screen (not a rival recovered elsewhere). NO BANNER: the player
+  // watched it happen, and the banner QUEUE (ANN_PRI) would let it delay one that matters. The sound marks it.
   if (c.local && soundOn) GameAudio.offtrack(); if (c === player) snapGameCam();   // a teleport is a CUT (#5020)
 }
 
@@ -6625,7 +6603,7 @@ function retireCar(c, reason) {
 // blast and a 25-lap race lose their cars at the same points of the story.
 function checkRetirements(dt) {
   const dist = Math.max(1, lapsTarget * track.total);
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level === 0 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s under green; a pause (online too) stops the clock
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
@@ -6637,7 +6615,7 @@ function checkRetirements(dt) {
 }
 
 // Results, ghosts and matching-class records share one settlement path.
-function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.referencePole()); }
+function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.referencePole("medal")); }
 
 // CEREMONY COOLDOWN: the flag is down and RaceCeremony's cooldown beat lets the human drive the finished car
 // (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
@@ -8421,9 +8399,8 @@ function render(dt) {
     _gradeOut.hi     = LT.hiHue     ? hueRotateTint(_grade.hi, LT.hiHue)         : _grade.hi;
     _grade = _gradeOut;
   }
-  // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
-  // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
-  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
+  // SPEED BLUR (the tuner knob, or the camera tuner's MOTION BLUR if larger) ramps in above ~40% of vTop().
+  const _spd = Math.max(LT.speedBlur, typeof CamComfort !== "undefined" ? CamComfort.blurAmount() : 0) * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1);
   const po = _presentOpts;
   // Bloom joins the last MEASURED shed (lookPostShed / autoTier fallback): bloomAmt
   // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
@@ -8718,7 +8695,7 @@ function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.
 const platformSession = PlatformSession.create(G, {
   canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
   cancelMirrorPrep: () => mirrorPass.cancelPreparation(),
-  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn,
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
 });
 platformSession.wireFirstGesture();
 

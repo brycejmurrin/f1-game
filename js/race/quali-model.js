@@ -51,8 +51,8 @@ const Quali = (function () {
   // Re-measure whenever the driving model changes: the absolute parity test's
   // diagnostics, or the calendar script in docs/notes/QUALI-REFIT-2026-11-18.md.
   //
-  // QUALI_TRIM and this fit now place only referencePole (the time-trial medal
-  // target: neutral wing, no circuit factor). The FIELD's lap is carLap, below.
+  // QUALI_TRIM and this fit now place only referencePole (neutral wing, no circuit
+  // factor; pit loss and the replay scale). Medals: referencePole("medal"). The FIELD's lap is carLap, below.
   // The driven field splits by the team's wing level as much as by tierV·skill
   // (Gasly and Ocon, same car tier and skill, 3.8 s apart alone at Monza; swapping
   // aeroLoad swaps their laps), so carLap reads the wing as well.
@@ -73,17 +73,17 @@ const Quali = (function () {
   // TRACK DESIGNER layout) takes CALIB_DEFAULT, the calendar median.
   // @gen-quali-calib start
   const CALIB = {
-    abudhabi: 0.9508, albert_park: 0.9488, anderstorp: 0.9649, bahrain: 0.9662, baku: 0.9653, brands_hatch: 0.9610,
-    buddh: 0.9575, buenos_aires: 0.9582, catalunya: 0.9586, cota: 0.9386, dijon: 0.9506, donington: 0.9693,
-    estoril: 0.9635, fuji: 0.9605, hockenheim: 0.9675, hungaroring: 0.9491, imola: 0.9802, indianapolis: 0.9492,
-    interlagos: 0.9533, istanbul: 0.9554, jacarepagua: 0.9558, jeddah: 0.9640, jerez: 0.9621, korea: 0.9518,
-    kyalami: 0.9563, madrid: 0.9509, magny_cours: 0.9654, mexico: 0.9510, miami: 0.9491, monaco: 0.9678,
-    mont_tremblant: 0.9709, montreal: 0.9656, monza: 0.9532, mosport: 0.9364, mugello: 0.9410, nurburgring: 0.9552,
-    okayama: 0.9651, paul_ricard: 0.9403, portimao: 0.9719, qatar: 0.9699, redbull: 0.9637, sepang: 0.9715,
-    shanghai: 0.9470, silverstone: 0.9340, singapore: 0.9629, sochi: 0.9698, spa: 0.9562, suzuka: 0.9429,
-    vegas: 0.9498, watkins_glen: 0.9689, zandvoort: 0.9611, zolder: 0.9623,
+    abudhabi: 0.9439, albert_park: 0.9307, anderstorp: 0.9503, bahrain: 0.9480, baku: 0.9564, brands_hatch: 0.9486,
+    buddh: 0.9433, buenos_aires: 0.9456, catalunya: 0.9390, cota: 0.9305, dijon: 0.9428, donington: 0.9570,
+    estoril: 0.9477, fuji: 0.9450, hockenheim: 0.9521, hungaroring: 0.9337, imola: 0.9753, indianapolis: 0.9439,
+    interlagos: 0.9412, istanbul: 0.9488, jacarepagua: 0.9387, jeddah: 0.9539, jerez: 0.9453, korea: 0.9348,
+    kyalami: 0.9463, madrid: 0.9400, magny_cours: 0.9494, mexico: 0.9418, miami: 0.9376, monaco: 0.9648,
+    mont_tremblant: 0.9631, montreal: 0.9508, monza: 0.9387, mosport: 0.9322, mugello: 0.9294, nurburgring: 0.9441,
+    okayama: 0.9527, paul_ricard: 0.9281, portimao: 0.9622, qatar: 0.9498, redbull: 0.9452, sepang: 0.9529,
+    shanghai: 0.9339, silverstone: 0.9184, singapore: 0.9540, sochi: 0.9532, spa: 0.9416, suzuka: 0.9336,
+    vegas: 0.9411, watkins_glen: 0.9565, zandvoort: 0.9510, zolder: 0.9513,
   };
-  const CALIB_DEFAULT = 0.9584;
+  const CALIB_DEFAULT = 0.9453;
   // @gen-quali-calib end
   // Where the field sits against its own clear-air race laps (tyre wear off, the lap
   // CALIB is measured on): the same driver's qualifying lap is 0.2-1.2 % quicker, all
@@ -94,7 +94,7 @@ const Quali = (function () {
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;
 
-  // Time-trial MEDALS as multiples of the reference pole (referencePole below):
+  // Time-trial MEDALS as multiples of the medal pole (referencePole("medal") below):
   // gold beats the modelled pole, silver is within 3 %, bronze within 7 %.
   const MEDALS = [["gold", 1.0], ["silver", 1.03], ["bronze", 1.07]];
   const MEDAL_RANK = { bronze: 1, silver: 2, gold: 3 };
@@ -135,7 +135,7 @@ const Quali = (function () {
       return G.seasonMode ? "season" : "gp";
     }
 
-    // `shape` (paceLap only): { pace, free, corner } — integrate at that PACE
+    // `shape` (carLap): { pace, free, corner } — integrate at that PACE
     // with the car's drag curve to `free` and corner caps scaled by `corner`.
     function lapTime(track, vCap, grip, shape) {
       const n = track.n, total = track.total;
@@ -210,17 +210,11 @@ const Quali = (function () {
 
     // The difficulty row the driven AI reads (game.js falls back to normal the same way).
     function diffRow() { return PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal; }
-    // A car's free pace (the AI's own top speed) at the current PACE.
-    function freeFor(tierV, skill) { return G.vTop() * tierV * skill * diffRow().ai; }
-    // Its corner authority, as the driven AI is charged it: the corner envelope
-    // times skill times the level's `corner` (AiDrive's ctx.diffCorner). A stub
-    // row without `corner` reads 1.
+    // Its corner authority as the driven AI is charged it: skill × the level's `corner` (ctx.diffCorner; a stub row, 1).
     function cornerFor(skill) { const dc = diffRow().corner; return skill * (dc > 0 ? dc : 1); }
-    // ...and the car's wing: AiDrive scales lateral grip by aeroGrip(aeroLoad) (js/physics/ai-drive.js), so corner
-    // speed goes with its root. A HUMAN's car (player, VS FRIEND rival) reads the SEAT's wing, the one the AI there
-    // runs: a human pays for wing in top speed and the AI does not (#5791), so a setup slider must not buy grid
-    // places, and the sheet must not depend on which seat is the player (career.spec grid isolation).
-    // Not the neutral wing: that moved the player's row as a career on the device moved the seats (#5786).
+    // ...and its wing: AiDrive scales lateral grip by aeroGrip(aeroLoad), so corner speed goes with its root. A HUMAN
+    // reads the SEAT's wing (the AI's there; a human pays for wing in top speed, #5791): no setup slider buys grid
+    // places and the sheet ignores which seat is the player (career.spec); not the neutral wing (#5786).
     function seatWing(t) { const s = t && typeof Parts !== "undefined" && (Career.inCareer() && Career.aiSetup && Career.aiSetup(t) || Parts.getFactorySetup(t)); return s ? Parts.aeroLoad(s, t) : 0.5; }
     function wingFor(c) { return typeof AiDrive !== "undefined" && AiDrive.aeroGrip ? Math.sqrt(AiDrive.aeroGrip(c.human ? seatWing(c.team) : c.aeroLoad)) : 1; }
     function calibFor(track) {
@@ -228,17 +222,12 @@ const Quali = (function () {
       return id != null && Object.prototype.hasOwnProperty.call(CALIB, id) ? CALIB[id] : CALIB_DEFAULT;
     }
 
-    // The flying lap of a car whose free pace is `free` and corner authority
-    // `corner`: integrated at the current PACE on the car's own drag curve, then
-    // QUALI_TRIM (see above).
-    function paceLap(track, free, grip, corner) {
-      const p = paceNow();
-      return QUALI_TRIM * lapTime(track, free, grip, { pace: p, free, corner: PACE_CORNER * corner });
-    }
     // `raw`: the integrated lap alone (what tools/check/quali-calibrate.mjs measures the factor against).
+    // AiDrive.paceTrim (vmax, corners) as game.js drives the AI (#5330); a human reads its seat's; tier-less (referencePole's synthetic car), 1.
     function carLap(c, track, grip, raw) {
-      const free = freeFor(c.tierV, c.skill);
-      const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * cornerFor(c.skill) * wingFor(c) });
+      const k = c.tier != null && typeof AiDrive != "undefined" && AiDrive.paceTrim ? AiDrive.paceTrim(Teams.TIER_V[c.tier] * c.skill) : 1;
+      const free = G.vTop() * Math.min(PhysicsConsts.BAND_CEIL || 1, c.tierV * c.skill * diffRow().ai * k);
+      const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * Math.min(1, cornerFor(c.skill) * k) * wingFor(c) });
       return raw ? t : QUALI_CENTRE * calibFor(track) * t;
     }
 
@@ -255,11 +244,11 @@ const Quali = (function () {
       if (typeof TyreModel === "undefined" || !Number.isFinite(w)) return G.gripMult();
       return TyreModel.weatherGrip(TyreModel.treadFor(G.raceWeather, w), w);
     }
-    function referencePole() {
-      const track = G.track;
-      if (!track || !track.n) return 0;
-      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip(), cornerFor(1));
-    }
+    function topLap(raw) { const t = G.track; return t && t.n ? carLap({ tierV: Teams.TIER_V[0], skill: 1 }, t, referenceGrip(), raw) : 0; }
+    // Neutral wing. "medal" (TT, daily, records) is calibrated: gold 1.4-1.8 % under the AI pole everywhere, not
+    // 3-7 % (decision C, audit 73); x0.9915 keeps that gap now the AI takes paceTrim (#5686, Bryce 2026-11-20 (b)).
+    // Pit loss and the replay scale keep QUALI_TRIM.
+    function referencePole(kind) { return kind === "medal" ? 0.9915 * topLap(false) : QUALI_TRIM * topLap(true); }
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).
     //
@@ -510,7 +499,7 @@ const Quali = (function () {
       return classification ? classification.map(({ car, ...row }) => row) : null;
     }
 
-    // forgetOrder / lapTime / paceLap stay create()-local — begin() and the
+    // forgetOrder / lapTime stay create()-local — begin() and the
     // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
     return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
   }

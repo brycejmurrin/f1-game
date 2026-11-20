@@ -175,6 +175,22 @@ html:has(> body > :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-ins
    block padding at a fifth of a gap, a row is ~21 own instead of ~26 —
    ~110 own over 22 cars, nothing hidden. Expected ~3.4 screens. */
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-row { padding-block: calc(var(--gap) * 0.2); }
+/* QUALIFYING, a roomy wide sheet: two grid columns once the sheet is 420 own px
+   (the compact sheet has its own 500 px pair, css/career.css) and rows a chip
+   tall, text centred. NOT the compact sheet: there the min-height doubled the
+   rows (21 -> 44 px), so 12 of 22 cars fitted at 844x390 instead of 22.
+   Here, not in route-loaded css/data.css, which the quali route never loads. */
+@container sheet (min-width: 420px) {
+  #quali .sheet:not([data-shape="tall"]) #q-table {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap);
+  }
+  #quali .sheet:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
+}
+#quali .sheet:not([data-shape="tall"]):not([data-density="compact"]) .res-row {
+  padding-block: calc(var(--gap) * 0.2);
+  min-height: max(var(--chip-h), calc(36px / var(--ui-scale)));
+  align-items: center;
+}
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-swatch { height: 1.1em; }
 /* THUMB REACH (reach round 2026-10-30): with a THUMB, the title-row bar put
    NEXT / RACE AGAIN and MENU in the top-right corner (844x390: y < 25 %), out
@@ -328,6 +344,16 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 #howtoplay-inner[data-shape="wide"] > #htp-contents > :first-child { margin-inline-start: 0; }
+/* The jump strip in the other shapes: room past the last chip so it can scroll
+   clear of the sheet edge. Its "more to pan" edge is ScrollFade's .sf-l / .sf-r
+   (js/ui/scroll-fade.js lists #htp-contents), not a static mask: a fixed mask
+   outranked those classes and stayed faded with the strip scrolled to its end. */
+#howtoplay-inner #htp-contents {
+  padding-inline-end: calc(var(--pad) + var(--chip-h));
+  scroll-padding-inline-end: calc(var(--pad) + var(--chip-h));
+}
+#howtoplay-inner[data-density="compact"] #htp-contents > :first-child,
+#howtoplay-inner[data-shape="tall"] #htp-contents > :first-child { margin-inline-start: 0; }
 #howtoplay-inner[data-shape="wide"] > .sheet-body { grid-column: 2; grid-row: 2; min-width: 0; }
 #howtoplay-inner[data-shape="wide"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
 /* Compact keeps the horizontal strip: a side rail on a short landscape sheet

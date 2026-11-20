@@ -72,6 +72,8 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // telemetry getter, collide.js's pre-collision speed read, and this file's
   // own tyres() hook), so undefined is a tolerated input.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  // Collide's per-step punt budget (#5894) and the stopped-car hazard (clean-room 39/40).
+  "_puntGot", "stillT", "_hzOf", "_hzSide",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
   // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
@@ -265,7 +267,7 @@ const api = {
     // Left alone, a wedge-then-jump sequence carries ~3 s of rescueT into the
     // new spot and fires a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
-    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
+    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0; G.player.offCut = false;
     // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
     // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
     // HUMAN car from those, so without them it stays lerp'd toward the
@@ -1199,22 +1201,12 @@ const api = {
     await Assets.load(tier ? { tier } : {});
     return Assets.state();
   },
-  // texCensus() — RESIDENT texture bytes, by kind, from the active backend.
-  //
-  // It exists because the biggest texture number in the game — ~147 MB of
-  // livery atlases, about ten times the packed world geometry — is otherwise
-  // arithmetic nothing can confirm or refute. Read it on a full grid before
-  // touching any resolution policy.
-  //
-  // `excludes` is not decoration — it names what the census does NOT count
-  // (render targets: shadow maps, post chain, env cube), so a total can never
-  // be mistaken for the whole picture. `supported:false` means the active
-  // backend has no census (WGX/TLX); that is a normal state, not an error, and
-  // it reads as such rather than as a measured zero.
+  // Resident GPU memory by kind. Each backend lists its own coverage in excludes.
+  // Unavailable instrumentation returns null totals; an available but empty census returns zero.
   texCensus: () => (gfx && gfx.texCensus
     ? gfx.texCensus()
     : { supported: false, bytes: null, count: null,
-        error: "the active backend has no texture census (GLX only)" }),
+        error: "the active backend has no texture census" }),
   matTex(v) {
     if (v !== undefined) {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
@@ -1968,7 +1960,7 @@ const api = {
     // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
     // itself somewhere it was never stuck.
     c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
-    c.wrongT = 0; c.wrongWay = false; c.offT = 0;
+    c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false;
     // rPrevHead with the rest: without it the yaw interpolator tweens from the
     // old heading and the car visibly swings into place over a frame.
     AgentView.syncRenderAnchors(c);
@@ -2158,7 +2150,7 @@ const api = {
       // across consecutive post-reset snapshots and names what leaked. This
       // loop runs last, so a second list or a zeroing block ahead of it is
       // dead code. Add to EPISODE_TRANSIENTS; never a second list.
-      c.lane = c.lanePref != null ? c.lanePref : 0;
+      c.lane = c.lanePref != null ? c.lanePref : 0; c.laneClr = 0;
       c._prevS = c.s;
       // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
       // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).

@@ -305,7 +305,8 @@ const HudLayout = (function () {
     if (el.hasAttribute("data-hl-pack")) {
       for (const p of ["translate", "margin-left", "margin-top"]) el.style.removeProperty(p);
     }
-    for (const p of ["--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) el.style.removeProperty(p);
+    // keepUser's race-time nudge is its own pass's output: it re-measures it, nothing else strips it.
+    for (const p of el.hasAttribute("data-hl-keep") ? ["max-width", "max-height"] : ["--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) el.style.removeProperty(p);
     if (el.id === "hud-rel") el.style.removeProperty("left");
     for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) el.removeAttribute(a);
   }
@@ -478,6 +479,7 @@ const HudLayout = (function () {
     // edge clamp, nudge those three left/up off any visible .touchbtn (and
     // INPUTS off SPEED & GEAR) so a placed chip cannot cover a tap target.
     clearControls(W, H);
+    keepUser(W, H);
     // Pack primary instruments first, then place secondary readouts around them.
     // Both corrections reset before measurement and never enter saved settings.
     packPhone(W, H);
@@ -767,6 +769,82 @@ const HudLayout = (function () {
     }
   }
 
+  /* A SAVED PIECE STAYS ON SCREEN AND OFF THE CONTROLS IN THE RACE (#5678). MOVE & SIZE geometry is the
+     player's own and no automatic clamp above touches it, so on Bryce's phone SECTORS grew left under
+     PAUSE once S1 had a time, DAMAGE sat on BRAKE and ran 3 px off an 844 screen, TYRES on STEER LEFT.
+     keepClear is the smallest shift that fixes it: a screen px --hud-clear-x/y (never saved; the
+     editor shows the saved spot and flags it OVERLAP) measured on the piece at its WIDEST content. */
+  /** Pure: the smallest {dx, dy} (screen px) that puts rect r inside `bounds` and off every rect in `obs`
+   *  by `air` px; the bounds shift alone when no clear spot is in reach (4 escapes at most). */
+  function keepClear(r, bounds, obs, air = EDGE) {
+    const at = (dx, dy) => ({ left: r.left + dx, right: r.right + dx, top: r.top + dy, bottom: r.bottom + dy });
+    const hit = (b) => obs.find((o) => b.left < o.right - 0.5 && o.left < b.right - 0.5 && b.top < o.bottom - 0.5 && o.top < b.bottom - 0.5);
+    const inside = (b) => !clampAxis(b.left, b.right, bounds.left, bounds.right) && !clampAxis(b.top, b.bottom, bounds.top, bounds.bottom);
+    let dx = clampAxis(r.left, r.right, bounds.left, bounds.right), dy = clampAxis(r.top, r.bottom, bounds.top, bounds.bottom);
+    for (let n = 0; n < 4; n++) {
+      const b = at(dx, dy), o = hit(b);
+      if (!o) break;
+      const go = [[o.left - air - b.right, 0], [o.right + air - b.left, 0], [0, o.top - air - b.bottom], [0, o.bottom + air - b.top]]
+        .map(([x, y]) => [dx + x, dy + y]).filter(([x, y]) => inside(at(x, y)));
+      if (!go.length) break;
+      go.sort((p, q) => (!!hit(at(p[0], p[1])) - !!hit(at(q[0], q[1]))) || (Math.abs(p[0]) + Math.abs(p[1]) - Math.abs(q[0]) - Math.abs(q[1])));
+      [dx, dy] = go[0];
+    }
+    return { dx: +dx.toFixed(1), dy: +dy.toFixed(1) };
+  }
+  // The widest content a piece paints in a race, written for one synchronous measure and put back
+  // (the text node's .data, so js/ui/hud.js hText keeps its node). SECTORS reads "--" until S1.
+  const MAX_TEXT = Object.freeze({ sectors: [".sec-val", "\u25b21:01.980"] });
+  /** The painted rect of piece `id` with its widest race content (the editor's OVERLAP check uses it too). */
+  function maxRect(id, el) {
+    const r = el.getBoundingClientRect(), m = MAX_TEXT[id];
+    if (!m || !el.querySelectorAll || !(r.width && r.height)) return r;
+    const put = [];
+    for (const n of el.querySelectorAll(m[0])) {
+      const t = n.firstChild;
+      if (t && t.nodeType === 3) { put.push([t, t.data]); t.data = m[1]; } else { put.push([n, null, n.textContent]); n.textContent = m[1]; }
+    }
+    const w = el.getBoundingClientRect();
+    for (const [n, d, txt] of put) { if (d != null) n.data = d; else n.textContent = txt; }
+    return { left: Math.min(r.left, w.left), top: Math.min(r.top, w.top), right: Math.max(r.right, w.right), bottom: Math.max(r.bottom, w.bottom) };
+  }
+  const KEEP_CTRL = ".touchbtn, .steerbtn, .shiftbtn, #btn-cam";   // + #pausebtn by id
+  /** The painted rects keepUser keeps a saved piece off (ARRANGE's Bring Into View uses the same list). */
+  function ctrlRects() {
+    const out = [], n = Array.from(doc.querySelectorAll(KEEP_CTRL));
+    if (doc.getElementById) n.push(doc.getElementById("pausebtn"));
+    for (let i = 0; i < n.length; i++) {
+      const c = n[i];
+      if (!c || c.hidden || (c.classList && c.classList.contains("touchbtn") && has("desktop"))) continue;
+      const cs = typeof getComputedStyle === "function" ? getComputedStyle(c) : null;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
+      const b = c.getBoundingClientRect();
+      if (b.width && b.height) out.push(b);
+    }
+    return out;
+  }
+  function keepUser(W = window.innerWidth, H = window.innerHeight, only) {
+    if (!doc || !doc.querySelectorAll) return;
+    const editing = !!(doc.body && doc.body.hasAttribute && doc.body.hasAttribute("data-hud-arrange"));
+    let obs = null;
+    for (const [id, , sel] of ELEMENTS) {
+      if (id === "announce") continue;   // the radio lane owns the card's --hud-clear (js/ui/hud-radio-lane.js)
+      const el = doc.querySelector(sel);
+      if (!el || !el.style || (only && el !== only)) continue;
+      if (el.hasAttribute("data-hl-keep")) { el.style.removeProperty("--hud-clear-x"); el.style.removeProperty("--hud-clear-y"); el.removeAttribute("data-hl-keep"); }
+      if (editing || !manuallyPlaced(el) || el.hidden) continue;
+      const r = maxRect(id, el), area = (r.right - r.left) * (r.bottom - r.top);
+      if (!(area > 0)) continue;
+      // PARKED is a choice: a piece saved mostly off the screen stays there (unrestricted placement, hud-layout.spec).
+      if ((Math.max(0, Math.min(r.right, W) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0))) * 2 < area) continue;
+      if (!obs) obs = ctrlRects();
+      const k = keepClear(r, screenBounds(W, H, 0), obs);   // the safe area itself: no further than needed
+      if (!k.dx && !k.dy) continue;
+      el.style.setProperty("--hud-clear-x", k.dx + "px"); el.style.setProperty("--hud-clear-y", k.dy + "px");
+      el.setAttribute("data-hl-keep", "");
+    }
+  }
+
   // Temporary screen-pixel corrections never enter the saved MOVE & SIZE layout.
   // Controls and primary instruments reserve their space before optional panels.
   const CLEAR_READOUTS = ["map", "speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
@@ -936,6 +1014,12 @@ const HudLayout = (function () {
     }
     // TYRES is a block for clearReadouts and grows up from its dock anchor (the PLAN and pit rows).
     { const t = doc.querySelector("#hud-tyre"); if (t) clearanceObserver.observe(t, { box: "border-box" }); }
+    // A saved piece that appears (DAMAGE) or grows mid-race is re-kept on its own; others cost a hasAttribute.
+    const keepObs = new ResizeObserver((es) => {
+      if (typeof window === "undefined" || !window.innerWidth) return;
+      for (const e of es) if (manuallyPlaced(e.target)) keepUser(window.innerWidth, window.innerHeight, e.target);
+    });
+    for (const [id, , sel] of ELEMENTS) { const el = id !== "announce" && doc.querySelector(sel); if (el) keepObs.observe(el, { box: "border-box" }); }
   }
 
   /** Force the rear-view on when the player places it in MOVE & SIZE.
@@ -1366,14 +1450,14 @@ const HudLayout = (function () {
   }
 
   // #4798 gate: build only
-  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); }
+  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); if (typeof Input !== "undefined") Input.onPointerKindChange(() => setTimeout(apply, 0)); }
   apply();
   _pub = true;
   if (doc) {
     const atGate = (fn) => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(fn) : fn());
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", () => init(atGate), { once: true });
     else if (doc.readyState === "complete") init();
-    else init((fn) => doc.addEventListener("DOMContentLoaded", () => atGate(fn), { once: true }));
+    else init((fn) => doc.addEventListener("DOMContentLoaded", () => { apply(); atGate(fn); }, { once: true }));
   }
 
   // Public surface: PACK_AIR + packPhoneRects for the unit packer; KEY / LIM /
@@ -1386,6 +1470,7 @@ const HudLayout = (function () {
     get, set, commit, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
+    keepClear, maxRect, keepUser, ctrlRects,
   };
 })();
 Object.freeze(HudLayout);

@@ -354,13 +354,20 @@ test("aggression raises otFireRate and shortens queue patience (fire half)", () 
   assert.ok(A.passHold(hot.traits) > A.passHold(base.traits));
 });
 
-test("optimism raises brakeTarget entry speed (late markers)", () => {
+test("optimism raises brakeTarget entry speed when attacking, and only then (#5330)", () => {
   const samples = [{ d: 50, k: 0.018, bank: 0 }];
-  const neut = A.brakeTarget({ traits: { ...mid, optimism: 0 }, samples, latMax: 22, brake: 22, grip: 1 });
-  const opt = A.brakeTarget({ traits: { ...mid, optimism: 1 }, samples, latMax: 22, brake: 22, grip: 1 });
-  const shy = A.brakeTarget({ traits: { ...mid, optimism: -1 }, samples, latMax: 22, brake: 22, grip: 1 });
-  assert.ok(opt > neut);
-  assert.ok(neut > shy);
+  // Attacking (a closing blocker inside 16 m) with no room, so the craft late-brake stays out of it.
+  const atk = { samples, latMax: 22, brake: 22, grip: 1, blocker: true, blockerGap: 8, speed: 40, blockerSpeed: 40, roomL: 0, roomR: 0 };
+  const neut = A.brakeTarget({ ...atk, traits: { ...mid, optimism: 0 } });
+  const opt = A.brakeTarget({ ...atk, traits: { ...mid, optimism: 1 } });
+  const shy = A.brakeTarget({ ...atk, traits: { ...mid, optimism: -1 } });
+  assert.equal(opt / neut, 1.012);
+  assert.equal(shy / neut, 0.988);
+  // Solo, optimism is not a pace term: team-mates on identical cars lap alike.
+  const solo = { samples, latMax: 22, brake: 22, grip: 1 };
+  const soloNeut = A.brakeTarget({ ...solo, traits: { ...mid, optimism: 0 } });
+  assert.equal(A.brakeTarget({ ...solo, traits: { ...mid, optimism: 1 } }), soloNeut);
+  assert.equal(A.brakeTarget({ ...solo, traits: { ...mid, optimism: -1 } }), soloNeut);
 });
 
 test("traits defaults style axes to neutral", () => {
@@ -794,8 +801,44 @@ test("factory wing and hold change the AI corner limit; midpoint stays put", () 
   assert.equal(A.brakeTarget({ ...base, aeroLoad: 0.5 }), midLim);
   assert.ok(A.brakeTarget({ ...base, aeroLoad: 1 }) > midLim, "ground-effect carries more");
   assert.ok(A.brakeTarget({ ...base, aeroLoad: 0 }) < midLim, "low-drag brakes earlier");
+  // #5330: house-style hold no longer costs corner speed (it grew with the top teams' stats).
   const holdTeam = { stats: { speed: 80, accel: 80, cornering: 96, braking: 94 } };
-  assert.ok(A.brakeTarget({ ...base, team: holdTeam }) < midLim, "hold cars brake earlier");
+  assert.equal(A.brakeTarget({ ...base, team: holdTeam }), midLim);
+});
+
+test("AI pace calibration terms (#5330): the scripted trim, bounded ERS, the clear-road line", () => {
+  assert.equal(A.aeroDragMul, undefined, "#5791 neutralised the AI wing trade; no drag term on top");
+  assert.equal(A.AERO_GRIP_K, 0.055);
+  assert.equal(A.lateralScale(0, 1, 1, 1, 72), 1.0275);
+  assert.equal(A.lateralScale(0, 0, 1, 1, 72), 0.9725);
+  // Scripted trim: 1 at the mid-field reference, PACE_GAIN x the relative scripted pace either side.
+  assert.equal(A.PACE_GAIN, 2.5);
+  assert.equal(A.PACE_REF, 0.9332);
+  assert.equal(A.paceTrim(A.PACE_REF), 1);
+  assert.equal(A.paceTrim(A.PACE_REF * 1.01), 1 + 2.5 * (A.PACE_REF * 1.01 / A.PACE_REF - 1));
+  assert.equal(A.paceTrim(0), 1);
+  assert.equal(A.paceTrim(NaN), 1);
+  // ERS: a factory axis pulled to within AI_ERS_SPAN of the midpoint.
+  assert.equal(A.AI_ERS_SPAN, 0.3);
+  assert.equal(A.aiErs(0), 0.35);
+  assert.equal(A.aiErs(1), 0.65);
+  assert.equal(A.aiErs(0.5), 0.5);
+  assert.equal(A.aiErs(undefined), 0.5);
+  // Clear road: the weight rises slowly toward 1 and falls fast back to 0, from either end.
+  const up = A.laneClear(0, true, 1), down = A.laneClear(1, false, 1);
+  assert.equal(up, 1 - Math.exp(-0.5));
+  assert.equal(down, 1 - (1 - Math.exp(-2.5)));
+  assert.equal(A.laneClear(undefined, false, 1), 0);
+  assert.equal(A.laneClear(1, true, 1), 1);
+  // A crawling running car (spun, stalled, a braked car reversing) holds every clear-road line off.
+  assert.equal(A.SLOW_V_FRAC, 0.25);
+  assert.equal(A.slowHazard({ speed: -5 }, 72), true, "reversing at 5 m/s is a crawl");
+  assert.equal(A.slowHazard({ speed: 17.9 }, 72), true);
+  assert.equal(A.slowHazard({ speed: 18 }, 72), false, "a quarter of top speed is racing");
+  assert.equal(A.slowHazard({ speed: 0, retired: true }, 72), false, "a retirement is the parked list's");
+  assert.equal(A.slowHazard({ speed: 0, finished: true }, 72), false);
+  assert.equal(A.slowHazard({ speed: 0, inPitLane: true }, 72), false);
+  assert.equal(A.slowHazard(null, 72), false);
 });
 
 test("ERS map and wantX: harvest banks, attack opens X", () => {
@@ -1981,7 +2024,7 @@ test("#5539: a static hazard gets a full lane, and the heading stops at its clea
   assert.equal(A.hazardHead(-0.1, 2.4, { x: 4.5 }, clear, 1.75, v, yaw), -0.1);
 });
 
-test("row 5: stallSweep counts only a LOCAL, running car on the road under green, and retires it once at 60 s", () => {
+test("row 5: stallSweep counts only a LOCAL, running car on the road while live, and retires it once at 60 s", () => {
   const mk = (o) => Object.assign({ local: true, speed: 0, retired: false, finished: false, inPit: false, inPitLane: false }, o);
   const cars = [mk({}), mk({ local: false }), mk({ inPit: true }), mk({ inPitLane: true }), mk({ finished: true }), mk({ retired: true })];
   const out = [];
@@ -1989,8 +2032,8 @@ test("row 5: stallSweep counts only a LOCAL, running car on the road under green
   assert.deepEqual(out, [0], "only the parked local car on the road is retired, once");
   for (const c of cars.slice(1)) assert.ok(!(c.stallT > 0), "a remote, pitting, pit-lane, finished or retired car counts nothing");
   const live = mk({});
-  for (let i = 0; i < 120 * 60; i++) A.stallSweep([live], 1 / 60, false, () => assert.fail("not green: never retired"));
-  assert.equal(live.stallT, 0, "a non-green race (pause, caution, grid, quali, time trial) counts nothing");
+  for (let i = 0; i < 120 * 60; i++) A.stallSweep([live], 1 / 60, false, () => assert.fail("not live: never retired"));
+  assert.equal(live.stallT, 0, "a non-live race (pause, red flag, grid, quali, time trial) counts nothing");
   const lane = mk({ stallT: 59 });
   A.stallSweep([lane], 1 / 60, true, () => {}); lane.inPitLane = true; A.stallSweep([lane], 1 / 60, true, () => {});
   assert.equal(lane.stallT, 0, "entering the pit lane resets the count");
@@ -2003,7 +2046,7 @@ test("row 5: stallStep counts stationary live seconds and resets on motion or a 
   assert.ok(t >= A.STALL_RETIRE_S, "61 s parked under green crosses the 60 s retirement");
   assert.equal(A.STALL_RETIRE_S, 60);
   assert.equal(A.stallStep(t, 15, 1 / 60, true), 0, "moving resets it");
-  assert.equal(A.stallStep(30, 0, 1 / 60, false), 0, "a caution, the pits or a finished race resets it");
+  assert.equal(A.stallStep(30, 0, 1 / 60, false), 0, "a red flag, the pits or a finished race resets it");
 });
 
 test("lateralScales / sbsLimits are bit-identical to the single-purpose functions (#4668)", () => {
@@ -2044,4 +2087,20 @@ test("AI wing grip: AiDrive.aeroGrip spans PhysicsConsts.AI_WING_GRIP about the 
   assert.equal(A.aeroGrip(0), 1 - 0.5 * K, "wing 0 loses the other half");
   assert.equal(A.lateralScale(0, 1, 1, 1, 72, 1), A.aeroGrip(1), "lateralScale reads it");
   assert.equal(A.lateralScales(0, 0, 1, 1, 72, 1, {}).lat, A.aeroGrip(0), "lateralScales reads it");
+});
+
+test("clean-room 40: hazardSide commits to the side the car is on, else the roomier side; hazardHead follows it", () => {
+  assert.equal(A.hazardSide(-3, 0.5), -1, "already 3.5 m to its -x side: pass there");
+  assert.equal(A.hazardSide(4, 0.5), 1, "already on its +x side: pass there");
+  assert.equal(A.hazardSide(0.6, 2), -1, "level with a car right of centre: the -x side has more road");
+  assert.equal(A.hazardSide(-1.5, -2), 1, "level with a car left of centre: the +x side");
+  // The committed side overrides the hazard-position default: a car committed to +x is
+  // never steered toward -x of a hazard sitting at x = +1 (the old default chose -x).
+  const v = 40, yaw = 0.3, clear = 2.8, hz = { x: 1 };
+  // Committed to +x, 4.5 m out, aiming just outside the gap (3.9 m) and turning hard toward it:
+  // the heading is capped so the car stops at the gap's +x edge (3.8 m).
+  const capped = A.hazardHead(-0.3, 4.5, hz, clear, 3.9, v, yaw, 1);
+  assert.ok(capped > -0.3 && capped < 0, `committed +x: the turn toward the hazard is capped (${capped})`);
+  assert.equal(A.hazardHead(-0.3, 4.5, hz, clear, 3.9, v, yaw), -0.3, "no side: the old hz.x > 0 rule reads it as a -x pass and caps nothing");
+  assert.equal(A.hazardHead(-0.3, 4.5, hz, clear, 3.9, v, yaw, -1), -0.3, "side -1 is that old rule");
 });

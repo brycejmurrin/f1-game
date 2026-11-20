@@ -159,6 +159,21 @@ test("every lane matches a full rewrite, across a flicker sequence and a source 
   });
 });
 
+test("static lamp generation distinguishes source replacements and length changes from colour changes", () => {
+  const fill = loadFill(), src = makeSet(3, 7), frame = {}, steady = () => [1, 1, 1];
+  fill(frame, src, 1, 1, 1, steady);
+  const buffer = frame.allLights, first = frame.allLightsStaticGen;
+  fill(frame, src, 0.5, 1, 1, steady);
+  assert.equal(frame.allLightsStaticGen, first);
+  const replacement = src.slice(); replacement[6] += 100;
+  fill(frame, replacement, 0.5, 1, 1, steady);
+  assert.equal(frame.allLights, buffer);
+  assert.equal(frame.allLightsStaticGen, first + 1);
+  replacement.length -= 15;
+  fill(frame, replacement, 0.5, 1, 1, steady);
+  assert.equal(frame.allLightsStaticGen, first + 2);
+});
+
 test("the generation counter still moves exactly when consumers need it to", () => {
   // LampChunks memoises on the lights ARRAY IDENTITY and WGX on this counter,
   // so a missed bump means a stale GPU buffer and a spurious one undoes the

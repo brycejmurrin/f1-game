@@ -1,0 +1,1 @@
+Fixed: Starting a race with the phone upright and then turning it to landscape left the touch controls oversized (BOOST 103 px instead of 90 px at BUTTON SIZE 143 %) behind the rotation pause, and for a moment after RESUME; the HUD now fits itself while the pause is still open (#5237).

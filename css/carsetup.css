@@ -2011,13 +2011,17 @@ body[data-ga-bars]::after { bottom: 0; }
    band below the sheet grows by what the sheet gives up (renderSetupPreview
    reads #cs-inner's live rect); in landscape the panel docks short at the top.
    #cs-body scrolls, so a short sheet shows fewer part rows, never cuts one.
-   Two ids and two more beat every shipped max-height on #cs-inner. */
+   Two ids and two more beat every shipped max-height on #cs-inner.
+   FLOOR: five taps (header, tab row and about two part rows): at 40 on an
+   844x390 phone the share alone was a 150 px panel with no part row showing.
+   Portrait's header carries the stat rows (about 200 px at 390x844), so its
+   floor is nine taps (a part row between the tabs and CLOSE). min(100%) keeps the floor inside the row it fills. */
 :root[data-look-garage-ph] #carsetup #cs-inner {
-  max-height: calc(100% * var(--look-garage-ph, 1));
+  max-height: max(calc(100% * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 5)));
 }
 @media (orientation: portrait) {
   :root[data-look-garage-ph] #carsetup #cs-inner {
-    max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));
+    max-height: max(calc(min(70vh, 100%) * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9)));
   }
   /* PANEL WIDTH in portrait: the sheet is full width there (min(100%) above),
      so only a value under 100 % changes it; it hugs the PANEL SIDE edge. */
@@ -2028,7 +2032,7 @@ body[data-ga-bars]::after { bottom: 0; }
   :root[data-look-garage-pw][data-look-garage-side="left"] #carsetup #cs-inner { justify-self: start; }
 }
 @media (orientation: portrait) and (max-height: 740px) {
-  :root[data-look-garage-ph] #carsetup #cs-inner { max-height: calc(100% * var(--look-garage-ph, 1)); }
+  :root[data-look-garage-ph] #carsetup #cs-inner { max-height: max(calc(100% * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9))); }
 }
 
 /* PANEL SIDE: LEFT. The dock is `place-items` alone, so mirroring it is one
