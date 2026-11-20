@@ -149,7 +149,7 @@ export const TRACK_RE = /^[a-z][a-z0-9_-]{0,39}$/;
 
 export const DEFAULT_CELL = Object.freeze({
   device: "desktop-1280", track: "monza", cam: "chase", profile: "standard", layout: "full", map: "on", gaps: "on",
-  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "high", textSize: "normal",
+  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
   hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", portrait: "race", off: Object.freeze([]),
 });
 export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer", "portrait"]);

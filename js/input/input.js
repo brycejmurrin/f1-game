@@ -1589,7 +1589,7 @@ const Input = (function () {
       _padNextProbeMs = 0;   // next poll may re-probe immediately (fast window)
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
-      padSteerAnalog = false; padLookBack = false;
+      padSteerAnalog = padLookBack = padThrottleToggle = padLookBackToggle = false;
       lookStickX = 0; lookStickY = 0;
       padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
@@ -2147,15 +2147,11 @@ const Input = (function () {
     }
     return !!(_coarseMql && _coarseMql.matches);
   }
-  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING, and until now only half the
-     app heard about it. The query above stays live, so autoThrottle/manualGears
-     were always right — but `body.desktop` was computed ONCE at boot
-     (js/game.js), and every CSS rule that gives the driving dock its tap targets
-     and its `pointer-events: auto` hangs off `body:not(.desktop)`. Undock an
-     iPad from its Magic Keyboard mid-session and the pointer goes coarse: the
-     GAS/BRAKE/BOOST buttons duly appear, inherit `pointer-events: none` from
-     #hud-dock, and do nothing — with #pm-steer and #pm-calib still hidden by
-     css/responsive.css, so there is no route back either. Subscribe instead. */
+  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING. The query stays live, but
+     `body.desktop` was computed once at boot, and the dock's tap targets and
+     `pointer-events: auto` hang off `body:not(.desktop)`: undock an iPad from
+     its keyboard and GAS/BRAKE/BOOST appear but do nothing, with #pm-steer and
+     #pm-calib still hidden (css/responsive.css). Subscribe instead. */
   function onPointerKindChange(cb) {
     touchControlsNeeded();            // make sure the MQL (and its listener) exists
     if (typeof cb === "function" && !_coarseCbs.includes(cb)) _coarseCbs.push(cb);

@@ -7677,6 +7677,7 @@
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
       "endRace": [
@@ -7986,6 +7987,7 @@
         "tests/specs/touch-pedals.spec.js",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
       "sheetRelease": [
@@ -8089,6 +8091,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
@@ -19253,6 +19256,9 @@
       "resolveMetricsLayout": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
+      "syncComputedRootVars": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
       "syncHudCamClasses": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
@@ -20185,7 +20191,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "value": [
-        "tests/specs/career-season.spec.js"
+        "tests/specs/career-season.spec.js",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "wire": [
         "tests/unit/async-lifecycle.test.mjs",

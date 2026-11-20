@@ -101,7 +101,9 @@ function fakeEl() {
   };
 }
 
-function load(stored = {}, phone = false) {
+// The second argument is true (a phone, the PHONE_STANDARD tests) or { doc, ctx, phone } (an extended fake page).
+function load(stored = {}, opts = {}) {
+  const extra = opts === true ? { phone: true } : opts || {}, phone = !!extra.phone;
   const written = Object.assign({}, stored);
   const els = {};
   const doc = {
@@ -109,9 +111,11 @@ function load(stored = {}, phone = false) {
     getElementById: () => null,
     querySelector: (sel) => (els[sel] || (els[sel] = fakeEl())),
     addEventListener() {},
+    ...extra.doc,
   };
   const ctx = {
     console,
+    ...extra.ctx,
     document: doc,
     HudElements: { phone: () => phone },
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
@@ -1745,4 +1749,23 @@ test("HUD arrangement drafts preserve sparse ownership, scope, external imports 
   written.hudLayout = original;
   H.endArrangeDraft(true, "other", "standard", moved);
   assert.equal(written.hudLayout, original, "a newer settings import wins");
+});
+
+test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMContentLoaded) and on a pointer-kind flip", () => {
+  // hud-layout applies at eval, before platform-session's syncPointerKind writes
+  // body.desktop; shippedEl reads touch() and setCam skips an unchanged set.
+  const cls = new Set(), dcl = [], kindCbs = [];
+  const { H, els } = load({}, {
+    doc: { readyState: "interactive", body: { classList: { contains: (c) => cls.has(c) }, setAttribute() {} },
+      addEventListener: (t, f) => { if (t === "DOMContentLoaded") dcl.push(f); } },
+    ctx: { setTimeout: (f) => f(), Input: { onPointerKindChange: (cb) => kindCbs.push(cb) } },
+  });
+  H.setCam("helmet");
+  assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "touch values painted at eval");
+  cls.add("desktop");                                     // initInput -> syncPointerKind, before DOMContentLoaded
+  for (const f of dcl) f();
+  assert.equal(els["#hud-gearbox"].props["--hl-x"], "-30", "DOMContentLoaded re-applies the desktop helmet");
+  cls.delete("desktop");                                  // iPad undocked: pointer goes coarse
+  for (const cb of kindCbs) cb(true);
+  assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "a pointer-kind flip re-applies the touch helmet");
 });
