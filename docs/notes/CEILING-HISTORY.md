@@ -3807,3 +3807,7 @@ const MAX_EAGER_SCRIPTS = 313;
 // 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
 const MAX_EAGER_BYTES = 8_017_936;
 ```
+
+## 2026-11-20 — contextual screen arrangement (cursor/screen-arrangement-f8970a)
+
+The editor adds one title menu door, four styling classes, and three destination lookups for routing to live screens. The standalone controls introduce three color values. Regression coverage adds three assertion pins and one VM module load. The eager JavaScript byte ceiling falls by 722 bytes. The requested increases are in `tests/data/ratchets.d/cursor--screen-arrangement-f8970a.json`.

@@ -134,6 +134,7 @@
 <link rel="stylesheet" href="css/career.css?v=dev" media="print" data-route="career career-offers career-guide career-history quali results standings">
 <link rel="stylesheet" href="css/data.css?v=dev" media="print" data-route="datahub track-detail trackdesigner results spotifypanel">
 <link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/screen-arranger.css?v=dev" media="print">
 <link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print">
 <link rel="stylesheet" href="css/career-experience.css?v=dev" media="print" data-route="career results ceremony-podium">
 <link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print" data-route="carsetup customize">
@@ -1615,7 +1616,7 @@
               <button id="pm-uitheme-next" type="button" data-step="1" aria-label="Next theme">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">DARK is the classic look. LIGHT is easier to read in bright sun. SYSTEM matches your phone.</p>
+          <p class="adv-help">DARK is the classic look. LIGHT suits bright sun. SYSTEM follows your device. ENDURANCE pairs deep green with ivory headings. DRAFTING uses crisp blue panels. Themes preserve your layout, accents and accessibility choices.</p>
           <div id="pm-menuaccent" class="set-row" role="group" aria-labelledby="pm-menuaccent-label">
             <span class="tune-label" id="pm-menuaccent-label">MENU ACCENT</span>
             <div>
@@ -2314,6 +2315,7 @@
      the title intro's start state; js/ui/title-fx.js takes it off after one
      pass (css/menus.css THE TITLE INTRO). -->
 <div id="overlay" class="grain" data-intro role="main" aria-label="Title menu">
+  <button type="button" id="title-arrange-entry" class="screen-arrange-entry">Arrange this screen</button>
   <!-- THE TITLE CAR — decorative, static, and deliberately not a renderer.
        #game is visibility:hidden on this screen, so the title costs no GL boot;
        drawing the hero in SVG keeps it that way. STATIC because WCAG SC 2.2.2
@@ -3716,8 +3718,8 @@
      title screen's pieces. Only the layer and its Escape door live here; the
      bar (piece, SIZE, WIDTH, RESET PIECE) is built by js/ui/title-layout.js,
      which adopts tl-done into it. -->
-<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>
-  <button id="tl-done" type="button">DONE</button>
+<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-cancel" hidden>
+  <button id="tl-done" type="button">Apply</button>
 </div>
 
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).

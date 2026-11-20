@@ -247,7 +247,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `setting-deps.js` | `SettingDeps` | tag | SettingDeps — the ONE place a setting greys out because another setting makes it do nothing (tilt sliders under TOUCH steering, engine-layer levels with the… |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
-| `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
+| `settings-export.js` | `SettingsExport` | tag | Settings backup storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
@@ -264,11 +264,11 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-relative.js` | `HudRelative` | tag | the opt-in RELATIVE box (iRacing-style) for GameHud. |
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
 | `hud-inputs.js` | `HudInputs` | tag | the opt-in INPUTS trace for GameHud (learning braking points). |
-| `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
-| `hud-arrange.js` | `HudArrange` | tag | HudArrange: ARRANGE HUD, the on-screen editor for MOVE & SIZE. |
-| `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
+| `hud-layout.js` | `HudLayout` | tag | Race HUD storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. |
+| `hud-arrange.js` | `HudArrange` | tag | Live race HUD arrangement. |
+| `title-layout.js` | `TitleLayout` | tag | Title layout owns viewport offsets, fit, and separate wide/tall v2 snapshots. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
-| `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
+| `screen-looks.js` | `ScreenLooks` | tag | Per-screen appearance settings and preview. |
 | `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
@@ -291,6 +291,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `condition-cue-controls.js` | `ConditionCueControls` | tag | Cue targets that account for current driving conditions: ON by default since the #2177 calibration (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md); the… |
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
+| `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
+| `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
+| `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |

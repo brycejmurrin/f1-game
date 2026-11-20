@@ -827,10 +827,18 @@
     ]
   ],
     LAZY_UI_PRESETS: [
+    "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js",
+    "js/ui/screen-arranger.js",
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js"
   ],
-    LAZY_UI_PRESETS_EDGES: [],
+    LAZY_UI_PRESETS_EDGES: [
+    [
+      "js/ui/screen-regions.js",
+      "js/ui/screen-placement.js"
+    ]
+  ],
     LAZY_RESULTS_SHEET: [
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",

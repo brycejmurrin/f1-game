@@ -622,7 +622,7 @@ export const OVERLAY_IDS = [
   // query, never `hidden` — the reset strips in-race instead), and the
   // #ios-install / #install-chip tips (not layers; ui-reset TIP_IDS).
   // tests/unit/ui-reset-tap-floor.test.mjs pins this against DEFS.
-  "freecam", "garrival", "tl-editor", "hud-arrange-bar",
+  "freecam", "garrival", "tl-editor", "hud-arrange-bar", "screen-arranger",
 ];
 
 export function listScreenIds() {

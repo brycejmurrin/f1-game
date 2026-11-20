@@ -23,7 +23,7 @@ const AppearanceOpts = (function () {
   const K_UNITS = "speedUnits";
   const K_HELP = "menuHelp";
 
-  const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"]];
+  const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"], ["endurance", "ENDURANCE"], ["drafting", "DRAFTING"]];
   // READABILITY. Text size scales the --fs-* type ladder (tokens.css) and a
   // modest --hud-text-boost so race digits grow with the menus. High contrast
   // swaps see-through plates for solid ones and brightens secondary text.

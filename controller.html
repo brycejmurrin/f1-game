@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-ythJjfRrXWl+2hj9vNtyGobV+7IBRmpEt28Izdmwnes=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-liQFBr0c/+Lv94nZQrYphGEBSuR6xgAzPSfROsjkYeg=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-ythJjfRrXWl+2hj9vNtyGobV+7IBRmpEt28Izdmwnes=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -33,7 +33,7 @@
     };
     var el = document.documentElement;
     var theme = get("uiTheme", "dark"), accent = get("menuAccent", "ember"), hex = String(get("menuAccentHex", "") || "");
-    if (/^(dark|light|system)$/.test(theme)) el.dataset.uiTheme = theme;
+    if (/^(dark|light|system|endurance|drafting)$/.test(theme)) el.dataset.uiTheme = theme;
     if (/^(ember|amber|cyan|violet|lime|team)$/.test(accent)) el.dataset.menuAccent = accent;
     else if (accent === "custom" && /^#[0-9a-f]{6}$/i.test(hex)) el.style.setProperty("--red", hex);
     var size = get("textSize", "large");
@@ -446,6 +446,7 @@
   }, { capture: true, passive: false });
 })();
 </script>
+<link rel="stylesheet" href="css/screen-arranger.css?v=dev">
 </head>
 <body>
 <section id="pair" class="grain">
@@ -677,5 +678,9 @@ window.addEventListener("DOMContentLoaded", function () {
   }
 });
 </script>
+<script defer src="js/core/store.js?v=dev"></script>
+<script defer src="js/ui/screen-regions.js?v=dev"></script>
+<script defer src="js/ui/screen-placement.js?v=dev"></script>
+<script defer src="js/ui/screen-arranger.js?v=dev"></script>
 </body>
 </html>

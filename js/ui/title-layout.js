@@ -1,48 +1,4 @@
-/* Apex 26 — TitleLayout: where the title screen's three pieces sit and how big
-   they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN ›
-   TITLE LAYOUT.
-
-   TITLE LAYOUT is a sub-fold this file builds inside the shell's TITLE SCREEN
-   fold (#pm-titlescreen), whose summary it also paints: SHIPPED while this
-   layout and js/ui/title-fx.js's TITLE INTRO / MENU WASH / TITLE ART are all
-   shipped, CUSTOM otherwise.
-
-   The three pieces are the BUTTONS (#menu-buttons), the TITLE (#menu-brand:
-   wordmark, sound toggle, small print) and the CAR DRAWING (#title-car). Each
-   moves on X and Y (percent of the screen) and scales (SIZE). The buttons also
-   take a WIDTH (AUTO for the shipped width; on a short landscape screen 20 is
-   the shipped column and 100 four fifths of the box, elsewhere a share of the screen), a
-   LAYOUT (GRID is the shipped 2x2 of play modes; STACK is one door per line;
-   ROW puts the play modes side by side) and a SIDE (SWAPPED trades the title's
-   and the buttons' columns, or their order on a tall screen).
-
-   ONE stored object, apex26.titleLayout, holding ONE LAYOUT PER SHAPE:
-   {v: 2, wide, tall} — landscape and portrait lay the title screen out so
-   differently (two columns vs three bands) that one set of offsets could not
-   suit both. A missing shape is shipped; a v1 object (one layout, no `v`, as
-   PR #519 stored it) reads as BOTH shapes. The shape is body[data-shape]
-   (index.html's boot answers first, js/ui/sheet-shape.js every later time),
-   and a rotation re-applies. Untouched it is null and NOTHING is written to
-   the page — the shipped title screen stays byte-for-byte what it was, and no
-   rule in css/responsive.css's TITLE LAYOUT block matches. Custom, the current
-   shape's layout lands as --tl-* tokens on :root plus html[data-title-layout]
-   (and data-title-side / data-title-btns for the two choices), so CSS keys off
-   attributes and reads numbers from tokens. index.html's inline boot applies
-   the FIRST answer with the same arithmetic (tests/unit/title-layout.test.mjs
-   holds the two copies equal); this file owns every later one.
-
-   PEEK: the title screen is faded out under the settings dialog, so a slider
-   would move things nobody can see. While a layout slider is held (or just
-   moved), js/ui/screen-looks.js's html[data-appearance-peek="title"] shows the
-   title screen through a near-transparent settings page.
-
-   EDIT ON TITLE SCREEN: the fold's button hides the settings page and lets
-   the player drag the three pieces where they want them (#tl-editor, a small
-   docked toolbar; html[data-tl-edit] outlines the pieces). DONE gives the
-   settings page back.
-
-   Needs GameStore at eval (HARD_EDGES). SettingRow is read when the page is
-   built, not at eval. */
+/* Title layout owns viewport offsets, fit, and separate wide/tall v2 snapshots. */
 const TitleLayout = (function () {
   "use strict";
 
@@ -119,7 +75,7 @@ const TitleLayout = (function () {
   }
   const isShape = (s) => s === "wide" || s === "tall";
   /** Both shapes, from whatever is stored. A v1 object is BOTH shapes. */
-  // A drag's or a slider's layout in flight (#4933): painted, stored once by commit() at the gesture's end.
+  // A drag's or a slider's layout in flight (#4933): painted, committed on Apply in the editor or on slider release in Settings.
   // A write by anyone else (Undo, a profile) since the draft began wins over it.
   let draft = null, draftBase = null;
   function all() {
@@ -308,7 +264,7 @@ const TitleLayout = (function () {
     const s = isShape(sh) ? sh : shape();
     const a = all();
     a[s] = normalize(v, s);
-    if (live) { draft = a; draftBase = store.get(KEY, null); } else { draft = null; save(a); }
+    if (live || ed.on) { draft = a; draftBase = store.get(KEY, null); } else { draft = null; save(a); }
     if (s === shape()) apply(a[s]);
     return a[s];
   }
@@ -321,8 +277,8 @@ const TitleLayout = (function () {
     return true;
   }
   // Leaving or backgrounding the page mid-gesture keeps what is on screen.
-  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", commit);
-  if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden") commit(); });
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", () => { if (!ed.on) commit(); });
+  if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden" && !ed.on) commit(); });
   /** A request the box cannot give is not stored (#5199): after set(l) the fit
    *  runs now, and a SIZE it is holding (--tf) or an offset it pulled back from
    *  an edge (--tf-dx / --tf-dy) is written back as the value the screen
@@ -513,7 +469,7 @@ const TitleLayout = (function () {
     body.appendChild(el("div", { className: "balanced-row" }, [
       copy, tap("pm-tl-reset-shape", "RESET THIS SHAPE", () => resetShape()), tap("pm-tl-reset", "RESET ALL", reset)]));
     const edit = el("button", { id: "pm-tl-edit", type: "button", textContent: "EDIT ON TITLE SCREEN…" });
-    edit.addEventListener("click", () => enter());
+    edit.addEventListener("click", () => enter(edit));
     body.appendChild(edit);
     body.appendChild(el("p", { className: "adv-help", textContent:
       "EDIT ON TITLE SCREEN: drag a piece to move it, drag its corner dot to size it. Keys: arrows move, + and − size, [ and ] pick a piece; Tab moves through the bar." }));
@@ -546,20 +502,6 @@ const TitleLayout = (function () {
   }
 
   // ---- EDIT ON TITLE SCREEN: drag the pieces themselves ---------------------
-  /* The settings page steps aside (as the ADVANCED VISUALS tools do) and the
-     title screen becomes the editor: a pointer drag on a piece moves it, the
-     round handle on the selected piece's corner sizes it, and #tl-editor — a
-     small docked toolbar over #overlay — carries SIZE / WIDTH steps, RESET
-     PIECE and DONE. Every change goes through set() for the CURRENT shape, so
-     the clamps, the store and the first-paint copy are the fold's.
-     THE CAR DRAWING IS pointer-events:none (it is scenery behind the doors), so
-     it gets a transparent PROXY (#tl-art) laid over its box. The proxy sits in
-     #overlay at z-index -1 — above the drawing, BELOW the buttons and title — so
-     where they overlap, the doors win the pointer.
-     A DRAG TRACKS THE POINTER: X is vw and Y is vh, but the two UI pieces are
-     zoomed (--ui-scale × their SIZE) and zoom multiplies a translate, so the
-     pixel delta is divided by that zoom. The drawing scales with `scale`, which
-     does not touch its translate. */
   const PIECES = { btns: "BUTTONS", title: "TITLE", art: "CAR DRAWING" };
   const STEP = { size: 5, width: 5 };
   let ui = null;   // the fold, once built
@@ -596,24 +538,40 @@ const TitleLayout = (function () {
       b.addEventListener("click", fn);
       return b;
     };
-    const name = mk("b", "tl-piece");
+    const name = btn("tl-piece", "", "Select next region", () => cycle(1));
+    const direction = (label, prop, sign) => btn("tl-" + label.toLowerCase(), label, label, () => nudge(prop, ed.coarse ? sign * 5 : sign));
+    const steps = btn("tl-step", "Fine", "Coarse adjustment", () => {
+      ed.coarse = !ed.coarse; steps.textContent = ed.coarse ? "Coarse" : "Fine";
+      steps.setAttribute("aria-pressed", String(ed.coarse));
+    });
+    steps.setAttribute("aria-pressed", "false");
+    const moves = [direction("Left", "x", -1), direction("Right", "x", 1), direction("Up", "y", -1), direction("Down", "y", 1)];
+    const undo = btn("tl-undo", "Undo", "Undo last change", () => {
+      const previous = ed.history.pop();
+      if (previous) { draft = previous; draftBase = store.get(KEY, null); apply(); paintEd(); }
+    });
+    const resetScreen = btn("tl-reset-screen", "Reset screen", "Restore shipped title in this orientation", () => {
+      remember(); resetShape(); paintEd();
+    });
+    const cancel = btn("tl-cancel", "Cancel", "Discard title changes", () => exit(false));
+
     name.setAttribute("aria-live", "polite");
-    const sizeDn = btn("tl-size-dn", "SIZE −", "Smaller", () => nudge("size", -STEP.size));
-    const sizeUp = btn("tl-size-up", "SIZE +", "Bigger", () => nudge("size", STEP.size));
+    const sizeDn = btn("tl-size-dn", "Scale −", "Scale down", () => nudge("size", -STEP.size));
+    const sizeUp = btn("tl-size-up", "Scale +", "Scale up", () => nudge("size", STEP.size));
     const wDn = btn("tl-width-dn", "WIDTH −", "Narrower buttons", () => nudge("width", -STEP.width));
     const wUp = btn("tl-width-up", "WIDTH +", "Wider buttons", () => nudge("width", STEP.width));
-    const rst = btn("tl-reset-piece", "RESET PIECE", "Put this piece back where it ships", resetPiece);
+    const rst = btn("tl-reset-piece", "Reset region", "Put this piece back where it ships", resetPiece);
     const handle = mk("div", "tl-handle");
     handle.setAttribute("aria-hidden", "true");
     handle.hidden = true;
     const art = mk("div", "tl-art");
     art.setAttribute("aria-hidden", "true");
     art.hidden = true;
-    for (const c of [name, sizeDn, sizeUp, wDn, wUp, rst]) layer.insertBefore(c, done);   // DONE, the shell's, ends the bar
+    for (const c of [name, ...moves, steps, sizeDn, sizeUp, wDn, wUp, undo, rst, resetScreen, cancel]) layer.insertBefore(c, done);   // DONE, the shell's, ends the bar
     layer.appendChild(handle);
     overlay.appendChild(art);
     done.addEventListener("click", exit);
-    ed.els = { layer, done, overlay, name, wDn, wUp, handle, art };
+    ed.els = { layer, done, overlay, name, undo, wDn, wUp, handle, art };
     for (const p of Object.keys(PIECES)) {
       const e = pieceEl(p);
       if (e) e.addEventListener("pointerdown", (ev) => down(ev, p, "move"));
@@ -621,7 +579,7 @@ const TitleLayout = (function () {
     handle.addEventListener("pointerdown", (ev) => down(ev, ed.sel, "size"));
     doc.addEventListener("pointermove", move);
     doc.addEventListener("pointerup", up);
-    doc.addEventListener("pointercancel", up);
+    doc.addEventListener("pointercancel", cancelDrag);
     // Capture on #overlay: while editing, a tap on a door is a drag, never a click.
     overlay.addEventListener("click", (ev) => {
       if (!ed.on) return;
@@ -629,16 +587,23 @@ const TitleLayout = (function () {
     }, true);
     // Capture on document, ahead of Input's window listener; MenuNav stands
     // aside for #tl-editor (js/ui/menu-nav.js activeLayer), and Escape is left
-    // to data-esc-close="tl-done".
+    // to the Cancel action in data-esc-close.
     doc.addEventListener("keydown", onKey, true);
-    onShape.push(() => { if (ed.on) paintEd(); });
+    onShape.push(() => { if (ed.on) { cancelDrag(); paintEd(); } });
     return ed.els;
   }
 
-  function enter() {
+  function remember() {
+    if (ed.history.length === 50) ed.history.shift();
+    ed.history.push(all());
+  }
+  function enter(invoker = doc.activeElement) {
     const E = buildEditor();
     if (!E || E.overlay.hidden || ed.on) return false;
     Log.info("ui", "TitleLayout.edit " + shape());
+    ed.invoker = invoker;
+    ed.returnSettings = !byId("pmsettings").hidden;
+    ed.history = [];
     ed.on = true;
     peek(false);
     page(false);
@@ -646,27 +611,30 @@ const TitleLayout = (function () {
     E.layer.hidden = false;
     E.art.hidden = false;
     select(ed.sel);
+    E.name.focus();
     return true;
   }
-  function exit() {
+  function exit(save = true) {
     if (!ed.on) return;
     const E = ed.els;
     finish();
     ed.on = false;
+    if (save) commit(); else { draft = null; apply(); }
     root.removeAttribute("data-tl-edit");
     E.layer.hidden = true;
     E.art.hidden = true;
     E.handle.hidden = true;
     for (const p of Object.keys(PIECES)) { const e = pieceEl(p); if (e) e.removeAttribute("data-tl-sel"); }
-    page(true);
-    if (ui) {
+    if (ed.returnSettings) page(true);
+    if (ui && ed.returnSettings) {
       const outer = byId("pm-titlescreen");
       if (outer) outer.open = true;   // the sub-fold lives inside TITLE SCREEN
       ui.fold.open = true;
       ui.paintAll();
-      // After the settings dialog's own re-show handling, which focuses its
-      // CLOSE door: DONE hands focus back to the button that opened the editor.
-      const f = () => ui.edit.focus();
+    }
+    const opener = ed.invoker;
+    if (opener && opener.focus) {
+      const f = () => opener.focus();
       if (typeof setTimeout === "function") setTimeout(f, 0); else f();
     }
   }
@@ -687,6 +655,7 @@ const TitleLayout = (function () {
    *  the width the buttons have now; under 20 % it goes back to AUTO. */
   function nudge(k, d) {
     if (!ed.on) return;
+    remember();
     const l = current(), p = l[ed.sel];
     if (k === "width") {
       if (ed.sel !== "btns") return;
@@ -703,6 +672,7 @@ const TitleLayout = (function () {
   function resetPiece() {
     if (!ed.on) return;
     const l = current();
+    remember();
     l[ed.sel] = Object.assign({}, shipped(shape())[ed.sel]);
     set(l);
     paintEd();
@@ -716,6 +686,8 @@ const TitleLayout = (function () {
     const p = current()[ed.sel];
     E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
       (ed.sel === "btns" ? " · " + (p.width ? p.width + "% WIDE" : "AUTO WIDTH") : "");
+    E.undo.disabled = !ed.history.length;
+    E.name.setAttribute("aria-label", "Select next region. " + E.name.textContent);
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";
     const car = byId("title-car"), r = car ? car.getBoundingClientRect() : null;
     if (r && r.width >= 1 && r.height >= 1) {
@@ -737,6 +709,8 @@ const TitleLayout = (function () {
   function down(e, part, mode) {
     if (!ed.on || (e.button != null && e.button !== 0)) return;
     e.preventDefault(); e.stopPropagation();
+    if (ed.drag) { cancelDrag(); return; }
+    if (e.isPrimary === false) return;
     if (part !== ed.sel) select(part);
     const t = e.currentTarget || e.target;
     try { if (t && t.setPointerCapture) t.setPointerCapture(e.pointerId); } catch (_) { /* the pointer is already gone; move events still arrive */ }
@@ -749,7 +723,7 @@ const TitleLayout = (function () {
     ed.drag = { id: e.pointerId, part, mode, x0: e.clientX, y0: e.clientY, from, c };
   }
   /* A pointermove only records the pointer; one rAF paints the latest (#4933).
-     Each frame paints and fits live; the store is written once, in finish(). */
+     Apply commits the fitted draft. */
   function move(e) {
     const d = ed.drag;
     if (!ed.on || !d || e.pointerId !== d.id) return;
@@ -764,6 +738,7 @@ const TitleLayout = (function () {
     d.raf = 0;
     const e = { clientX: d.at[0], clientY: d.at[1] };
     d.at = null;
+    if (!d.changed) { remember(); d.changed = true; }
     const l = current(), p = l[d.part], w = win();
     if (d.mode === "move") {
       const f = d.zoom || (d.zoom = zoomOf(d.part, d.from.size));   // measured once per drag
@@ -779,11 +754,17 @@ const TitleLayout = (function () {
     if (d.mode === "move") hold(hold(h, d.part, "x", true), d.part, "y", true); else hold(h, d.part, "size", true);
     paintEd();
   }
-  /** The gesture's end: paint the last position, then the one store write. */
+  /** Finish the pending frame before releasing the gesture. */
   function finish() {
     if (ed.drag) step();
     ed.drag = null;
-    commit();
+  }
+  function cancelDrag(e) {
+    if (!ed.drag || (e && e.pointerId !== ed.drag.id)) return;
+    if (ed.drag.raf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(ed.drag.raf);
+    if (ed.drag.changed) { draft = ed.history.pop(); draftBase = store.get(KEY, null); }
+    ed.drag = null;
+    apply(); paintEd();
   }
   function up(e) { if (ed.drag && e.pointerId === ed.drag.id) finish(); }
 
@@ -802,6 +783,8 @@ const TitleLayout = (function () {
   }
 
   if (typeof document !== "undefined") {
+    const arrange = document.getElementById("title-arrange-entry");
+    if (arrange) arrange.addEventListener("click", () => enter(arrange));
     // #4798 gate
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(build) : build()), { once: true });
     else build();

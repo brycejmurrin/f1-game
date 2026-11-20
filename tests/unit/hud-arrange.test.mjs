@@ -172,7 +172,12 @@ function editor(pieceId = "piece", options = {}) {
       el.setAttribute('data-hl-v4', '');
       if (id === 'map') { el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
       return get(id, sn, pn);
-    }, commit() { if (!dirty) return false; dirty = false; stats.saves++; return true; }, resetEl() {} };
+    }, commit() { if (!dirty) return false; dirty = false; stats.saves++; return true; }, resetEl(id, sn, pn) {
+      values.delete(key(sn,pn));
+      ids.get(id).removeAttribute('data-hl-user');
+      ids.get(id).removeAttribute('data-hl-v4');
+      dirty = false;
+    }, resetSet(sn, pn) { this.resetEl(pieceId, sn, pn); } };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
     for (const id of ids) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }
@@ -713,4 +718,29 @@ test("source: TRACK LIMITS gets sample dots and the race tick leaves ARRANGE's s
   assert.match(SRC, /\["limits", \[\[document\.querySelector\("#hud-limits \.limits-dots"\), "[^"]+"\]\]\]/);
   const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
   assert.match(hud, /else if \(!els\.hudLimits\.hidden && !document\.body\.hasAttribute\("data-hud-arrange"\)\)/);
+});
+
+test("movement controls share keyboard offsets, restore a cancelled drag and reset only the selected HUD", () => {
+  const e = editor();
+  e.api.setEditing(true);
+  const button = name => e.ids.get("hud-arrange-" + name);
+  assert.equal(button("left").hidden, true);
+  button("move").onclick();
+  assert.equal(button("move").getAttribute("aria-expanded"), "true");
+  button("left").onclick();
+  button("step").onclick();
+  button("down").onclick();
+  assert.deepEqual(e.get("piece"), {x:-1, y:5, s:100});
+  e.fire("pointerdown"); e.fire("pointermove", {clientX:350}); e.tick();
+  assert.equal(e.get("piece").x, 24);
+  e.fire("pointermove", {clientX:500}); e.fire("pointercancel"); e.tick();
+  assert.deepEqual(e.get("piece"), {x:-1, y:5, s:100});
+  e.api.setEditing(false);
+  e.context("cockpit");
+  e.api.setEditing(true);
+  button("move").onclick(); button("right").onclick(); button("reset-screen").onclick();
+  assert.deepEqual(e.get("piece"), {x:0,y:0,s:100});
+  assert.deepEqual(e.get("piece", "chase", "standard"), {x:-1,y:5,s:100});
+  e.fire("pointerdown"); e.fire("pointermove", {clientX:300}); e.tick(); e.fire("blur");
+  assert.equal(e.ids.get("piece").hasAttribute("data-hl-user"), false, "an interrupted first gesture restores automatic placement");
 });

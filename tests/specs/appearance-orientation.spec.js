@@ -93,3 +93,88 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
     } finally { await context.close(); }
   });
 });
+
+for (const touch of [false, true]) {
+  const landscape = touch ? { width: 844, height: 390 } : { width: 1280, height: 800 };
+  test.describe("Arrange a live screen with " + (touch ? "touch" : "mouse and keyboard"), () => {
+    test.use({ viewport: landscape, hasTouch: touch, deviceScaleFactor: 1, reducedMotion: "reduce" });
+    test("save title and Career independently through rotation, theme change, reload and reset", async ({ page, browser }, testInfo) => {
+      test.setTimeout(180000);
+      const activate = locator => touch ? locator.tap() : locator.click();
+      const button = name => page.locator("#screen-arranger").getByRole("button", { name, exact: true });
+      const career = page.locator("#cr-left");
+      const entry = page.locator("#career .screen-arrange-entry");
+      const layout = () => career.evaluate(el => {
+        const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
+        return { x: rect.x, width: rect.width, scale: css.scale, font: css.fontSize };
+      });
+      const saved = () => page.evaluate(() => ({
+        career: JSON.parse(localStorage.getItem("apex26.screenPlacement"))?.screens?.career,
+        title: JSON.parse(localStorage.getItem("apex26.titleLayout")),
+      }));
+      const capture = async name => {
+        const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
+        const viewport = page.viewportSize();
+        const label = [name, browser.browserType().name(), browser.version(), viewport.width + "x" + viewport.height,
+          touch ? "touch" : "mouse-keyboard", build].join("-");
+        await testInfo.attach(label, { body: await page.screenshot(), contentType: "image/png" });
+      };
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+      await activate(page.locator("#title-arrange-entry"));
+      await activate(page.locator("#tl-size-up"));
+      await activate(page.locator("#tl-done"));
+      const title = (await saved()).title;
+      expect(title.wide.btns.size).toBeGreaterThan(100);
+
+      await activate(page.locator("#mb-career"));
+      await activate(entry);
+      const region = page.locator("#screen-arranger").getByLabel("Region");
+      await region.selectOption("navigation");
+      const initial = await layout();
+      await capture("career-before");
+      if (touch) await activate(button("Right"));
+      else { await button("Right").focus(); await page.keyboard.press("Enter"); }
+      await activate(button("Width +"));
+      const changed = await layout();
+      expect(changed.x).toBeGreaterThan(initial.x);
+      expect(changed.width).toBeGreaterThan(initial.width);
+      expect([changed.font, changed.scale]).toEqual([initial.font, initial.scale]);
+      await capture("career-preview");
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.locator("#screen-arranger-title")).toContainText("portrait");
+      await expect(page.locator("#screen-arranger output")).toContainText("Width auto");
+      await capture("career-portrait");
+      await page.setViewportSize(landscape);
+      await expect(page.locator("#screen-arranger-title")).toContainText("landscape");
+      await activate(button("Apply"));
+      const applied = await saved();
+      expect(applied.career.landscape.navigation.x).toBeGreaterThan(0);
+      expect(applied.career.portrait).toBeUndefined();
+      expect(Math.abs((await layout()).width - changed.width)).toBeLessThan(2);
+
+      await activate(page.locator("#cr-back"));
+      await activate(page.locator("#mb-settings"));
+      await activate(page.locator("#pm-open-appearance"));
+      await page.locator("#pm-uitheme-sel").selectOption("endurance");
+      await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "endurance");
+      expect(await saved()).toEqual(applied);
+
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+      await activate(page.locator("#mb-career"));
+      await activate(entry);
+      await region.selectOption("navigation");
+      expect(Math.abs((await layout()).width - changed.width)).toBeLessThan(2);
+      expect(await saved()).toEqual(applied);
+      await activate(button("Reset screen"));
+      await activate(button("Apply"));
+      await expect(entry).toBeFocused();
+      expect((await saved()).career).toBeUndefined();
+      expect((await saved()).title).toEqual(title);
+      await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "endurance");
+      await capture("career-reset");
+    });
+  });
+}

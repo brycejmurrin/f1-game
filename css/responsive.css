@@ -342,6 +342,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   position: fixed; z-index: 44;
   left: 0; right: 0; bottom: var(--safe-b); margin-inline: auto;
   width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
+  max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
   gap: calc(var(--gap) * 0.5); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
   background: var(--panel); border: 1px solid var(--plate-line); border-radius: 10px;

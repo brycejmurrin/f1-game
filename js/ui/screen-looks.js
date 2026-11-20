@@ -1,45 +1,5 @@
-/* Apex 26 — ScreenLooks: one engine for every per-screen fold under SETTINGS ›
-   APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS,
-   CAREER, GARAGE, POPUPS) and the see-through PEEK every fold previews with.
-
-   Self-wiring like js/ui/pause-opts.js: GameStore at eval (HARD_EDGES), no G
-   façade and no line in js/game.js. SettingRow, SheetShape, PauseOpts, TitleFx
-   and Tracks are read when called, never at eval.
-
-   THE REGISTRY IS THE CONTRACT. SCREENS lists each screen's knobs; css/ keys
-   off what apply() writes, and tests/unit/screen-looks.test.mjs checks every
-   non-default value and every range token has a rule:
-     - an enum knob at a non-default value  → <html data-look-<screen>-<k>="<v>">
-     - a range knob off its default         → inline --look-<screen>-<k> on :root
-       (v / 100 unitless, or "<v>%" for token:"pct") AND a presence attribute
-       data-look-<screen>-<k>, so a rule matches only while it is custom.
-   At its CSS base (`def`) a knob writes NOTHING, so the desktop's shipped
-   screen is the absence of every attribute and token. A PHONE (touch, short
-   side <= 500 px) ships its own value for the knobs that carry `phone`
-   (#5358, the owner's 2026-11-10 profile at UI SIZE 70 %): shipDef() is what
-   an unset knob reads there, and apply() stamps it like any value off `def`. Nothing here paints on first frame (only the
-   title screen does, and TitleLayout / TitleFx own it), so there is no boot
-   copy in index.html: apply() runs at eval, before js/game.js can open any of
-   these screens.
-
-   STORE: one object per screen, apex26.look<Screen> (lookPause, lookDatahub,
-   …), holding only the knobs off their defaults; all-default stores null.
-   normalize() drops unknown keys, checks enums and clamps / snaps ranges, so a
-   hand-edited value reads as shipped.
-
-   PEEK: the settings page is a modal in the top layer, so whatever screen a
-   fold describes is hidden underneath it — or not open at all (settings opens
-   from the title screen or the pause card). While a knob changes,
-   <html data-appearance-peek="<screen>"> fades the settings page to a ghost and
-   css/responsive.css (@layer overlays) DISPLAYS that screen behind it, without
-   ever touching its `hidden` / `open` attributes: TopModal, UiLayers,
-   SheetShape and input gating all key on those, and none of them should
-   believe the screen opened. A screen that is empty because it was never
-   built this session gets a STAND-IN (existing classes, aria-hidden, removed
-   when the peek ends). A peek ends on its timer, Esc (consumed — it does not
-   also close SETTINGS), the gamepad's cancel, a tap outside the fold, the
-   settings page hiding, or the tab hiding. The PEEK button holds one until
-   dismissed, for keyboard and screen-reader players. */
+/* Per-screen appearance settings and preview. Storage and CSS contract:
+   docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const ScreenLooks = (function () {
   "use strict";
 
@@ -233,11 +193,11 @@ const ScreenLooks = (function () {
   const dataKey = (s, n) => "look" + cap(s.id) + cap(n.k);
   const tokenOf = (s, n) => "--look-" + s.id + "-" + n.k;
   function tokenValue(n, v) { return n.token === "pct" ? v + "%" : String(v / 100); }
-  function apply(only) {
+  function apply(only, preview) {
     if (!root || !root.dataset) return;
     for (const s of SCREENS) {
       if (only && s.id !== only) continue;
-      const l = read(s.id);
+      const l = preview || read(s.id);
       for (const n of s.knobs) {
         const v = l[n.k], dk = dataKey(s, n);
         if (v === n.def) {
@@ -269,6 +229,18 @@ const ScreenLooks = (function () {
     apply(id);
     changed(id, !!n.reflow);
     return l[k];
+  }
+  // Geometry preview is paint-only. Re-read the latest stored look on Apply
+  // so any cosmetic or accessibility changes made meanwhile survive.
+  function resetGeometry(id, keys, mode) {
+    const s = screen(id);
+    const raw = { ...store.get(s.key, null) };
+    for (const key of keys) delete raw[key];
+    const durable = mode !== "save" || store.set(s.key, Object.keys(raw).length ? raw : null);
+    apply(id, mode === "preview" ? normalize(id, raw) : null);
+    if (mode === "save") changed(id, true);
+    else if (typeof SheetShape !== "undefined") SheetShape.reclassify?.();
+    return durable;
   }
   function reset(id) {
     const s = screen(id);
@@ -625,7 +597,7 @@ const ScreenLooks = (function () {
 
   return {
     SCREENS, PEEK_ONLY, CORE, PEEK_MS, refreshAvail,
-    read, set, reset, apply, normalize, isShipped, onChange,
+    read, set, reset, resetGeometry, apply, normalize, isShipped, onChange,
     peek, endPeek, holdPeek, build, refresh, mountPeekButton,
     shipDef: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? shipDef(n) : undefined; },
     dataKey: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? dataKey(s, n) : null; },

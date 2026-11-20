@@ -304,6 +304,15 @@ test("setTheme persists and stamps data-ui-theme", () => {
   assert.equal(dataset.uiTheme, "light");
 });
 
+test("Endurance and Drafting write only the theme while retaining cockpit and comfort choices", () => {
+  for (const theme of ["endurance", "drafting"]) {
+    const { M, written, dataset } = load();
+    M.setTheme(theme);
+    assert.equal(dataset.uiTheme, theme);
+    assert.deepEqual(written, { uiTheme: theme });
+  }
+});
+
 test("SYSTEM theme stamps data-ui-theme and re-applies on matchMedia change", () => {
   const { M, dataset, fireMq, written } = load({ preferLight: true });
   M.setTheme("system");

@@ -798,6 +798,30 @@ body:not(.desktop) {
 :root[data-menu-accent="violet"] { --red: #7a5cff; }
 :root[data-menu-accent="lime"]   { --red: #b7e11b; }
 
+/* Global surface themes. Menu and team accents stay independently selectable.
+   Race chrome has a local dark palette so its plate colours are resolved here too. */
+:root[data-ui-theme="endurance"],
+:root[data-ui-theme="endurance"] :is(#hud, #announce, #game-metrics) {
+  --bg: #081511;
+  --carbon: #16342b;
+  --text: #fbf8e9;
+  --dim: #c3d8ca;
+  --plate-line: #738e80;
+  --r-lg: 20px;
+  --r-md: 12px;
+}
+:root[data-ui-theme="drafting"],
+:root[data-ui-theme="drafting"] :is(#hud, #announce, #game-metrics) {
+  --bg: #0b192b;
+  --carbon: #192e45;
+  --text: #eef7ff;
+  --dim: #bfd4e9;
+  --plate-line: #7895ac;
+  --r-lg: 6px;
+  --r-md: 3px;
+  --r-sm: 2px;
+  --font-ui: system-ui, sans-serif;
+}
 /* ---- APPEARANCE: light / system theme ----------------------------------
    Light rewrites the surface ladder; SYSTEM follows the OS preference. */
 :root[data-ui-theme="light"] {

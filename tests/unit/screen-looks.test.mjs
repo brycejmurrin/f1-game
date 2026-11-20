@@ -601,3 +601,84 @@ test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height
     rows: ["ROW HEIGHT", "ROW HEIGHT", "STRIP ROWS"],
   });
 });
+
+function bootPlacement(durable = true) {
+  const sheets = new Set();
+  const store = {
+    get: () => store.value,
+    set: (key, value) => { store.value = value; store.notify({ key }); return durable; },
+    subscribe: fn => { store.notify = fn; },
+  };
+  const media = { matches: false, addEventListener: (_, fn) => { media.change = fn; } };
+  const sb = {
+    GameStore: { store }, matchMedia: () => media,
+    ScreenRegions: {
+      garage: { root: "#carsetup", regions: { panel: { selector: ".panel" } } },
+      career: { root: "#career", regions: { calendar: { selector: ".calendar" } } },
+    },
+    document: {
+      head: { appendChild: sheet => sheets.add(sheet) },
+      getElementById: () => null,
+      querySelector: () => ({ currentCSSZoom: 2 }),
+      createElement: () => ({ dataset: {}, remove() { sheets.delete(this); } }),
+    },
+  };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
+  return { model: sb.ScreenPlacement, sheets, media, store };
+}
+
+test("region preview uses viewport coordinates at UI zoom and keeps width independent from scale", () => {
+  const { model, sheets, store } = bootPlacement();
+  model.apply("garage", { panel: { x: -4, y: 2, width: 50, height: 40, scale: 1.25 } });
+  const [sheet] = sheets;
+  assert.match(sheet.textContent, /translate:-2vw 1vh/);
+  assert.match(sheet.textContent, /width:25vw/);
+  assert.match(sheet.textContent, /height:20vh/);
+  assert.match(sheet.textContent, /scale:1.25/);
+  assert.equal(store.value, undefined);
+  model.restore("garage");
+  assert.equal(sheets.size, 0);
+});
+
+test("region saves validate input, preserve both orientation and screen boundaries, and remove adaptive defaults", () => {
+  const { model, media, store, sheets } = bootPlacement(false);
+  assert.equal(model.save("garage", "landscape", {
+    panel: { x: -120, y: NaN, width: 60, scale: 1 }, gone: { x: 2 },
+  }), false, "save reports session-only storage");
+  assert.deepEqual(plain(model.read("garage", "landscape")), { panel: { x: -50, width: 60 } });
+  model.save("garage", "portrait", { panel: { height: 40 } });
+  model.save("career", "portrait", { calendar: { scale: 1.25 } });
+  media.matches = true;
+  media.change();
+  assert.equal(model.orientation(), "portrait");
+  assert.equal(sheets.size, 2);
+  model.save("garage", "portrait", {});
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+  assert.deepEqual(plain(model.read("career", "portrait")), { calendar: { scale: 1.25 } });
+  assert.equal(model.read("garage", "landscape").panel.width, 60);
+  model.save("career", "portrait", {});
+  model.save("garage", "landscape", {});
+  assert.equal(store.value, undefined);
+  assert.equal(sheets.size, 0);
+  store.value = { v: 999, screens: { garage: { portrait: { panel: { x: 2 } } } } };
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+});
+
+test("a Garage geometry reset previews shipped placement, preserves style and touch settings, and only writes on Apply", () => {
+  const garage = { side: "left", pw: 140, ph: 60, btn: 120, glass: "glass" };
+  const { M, data, html } = boot({ stored: { lookGarage: garage, lookCareer: { side: "swapped" } } });
+  const keys = ["side", "pw", "ph"];
+  M.resetGeometry("garage", keys, "preview");
+  assert.equal(html.dataset.lookGarageSide, undefined);
+  assert.equal(html.dataset.lookGaragePw, undefined);
+  assert.equal(html.dataset.lookGarageGlass, "glass");
+  assert.equal(html.dataset.lookGarageBtn, "120");
+  assert.deepEqual(data.lookGarage, garage);
+  M.resetGeometry("garage", keys, "restore");
+  assert.equal(html.dataset.lookGarageSide, "left");
+  assert.equal(html.dataset.lookGaragePh, "60");
+  M.resetGeometry("garage", keys, "save");
+  assert.deepEqual(plain(data.lookGarage), { btn: 120, glass: "glass" });
+  assert.deepEqual(data.lookCareer, { side: "swapped" });
+});

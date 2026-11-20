@@ -492,7 +492,7 @@ const CSS = [
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
-  "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
+  "css/appearance-studio.css", "css/screen-arranger.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
   "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
@@ -515,7 +515,7 @@ const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css", "css/a11y-loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
-  "css/appearance-studio.css", "css/watch-transport.css",
+  "css/appearance-studio.css", "css/screen-arranger.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
   "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
@@ -1357,10 +1357,11 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 // global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
 // is FULL and read at call time, so it has no edges and no boot stub.
 const LAZY_UI_PRESETS = [
+  "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
   "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js", // LayoutPresets
 ];
-const LAZY_UI_PRESETS_EDGES = [];
+const LAZY_UI_PRESETS_EDGES = [["js/ui/screen-regions.js", "js/ui/screen-placement.js"]];
 
 // RESULTS / TT / STANDINGS / CHAMPION DOM builders (~62 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits

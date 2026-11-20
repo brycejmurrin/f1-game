@@ -15,6 +15,7 @@ window.UiLayers = (function () {
     { id: "overlay", gate: false },
     // Built on demand; owns focus and driving-key gating while pieces stay draggable.
     { id: "hud-arrange-bar" },
+    { id: "screen-arranger" },
     /* The rotate blocker: an opaque z-9000 fixed div shown MID-RACE (unique
        among these layers), self-gated by CSS media queries rather than the
        hidden attribute. gate: false is load-bearing three ways — Escape must

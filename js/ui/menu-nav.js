@@ -56,11 +56,10 @@ window.MenuNav = (function () {
      focus around the fly-cam's own EXIT/FOV buttons and preventDefault the key
      before the camera ever saw it. The tuner panel behind it is equally
      off-limits: it is open by design the whole time you are flying.
-     The TITLE LAYOUT editor (#tl-editor, js/ui/title-layout.js) is the same
-     case: its arrows move the selected title-screen piece. */
+     Title layout keeps pad navigation for its toolbar. */
   function activeLayer() {
     const t = UL.top();
-    return (t && (t.id === "photo-controls" || t.id === "freecam" || t.id === "tl-editor")) ? null : t;
+    return (t && (t.id === "photo-controls" || t.id === "freecam")) ? null : t;
   }
 
   // `oyIn` lets onWheel's ancestor walk share ONE getComputedStyle between
@@ -573,7 +572,8 @@ window.MenuNav = (function () {
     const seed = (key === "Enter" || key === " ") && document.activeElement === document.body;
     if (!dir && !paging && !seed) return;
     const layer = activeLayer();
-    if (!layer) return;
+    // Trusted arrows nudge the selected title region. The pad synthesizes arrows to navigate the toolbar.
+    if (!layer || (dir && layer.id === "tl-editor" && e.isTrusted)) return;
     const active = document.activeElement;
     // key-binds is waiting for this key: let it bind PageDown/Home/arrows without paging the pane.
     if (active && active.dataset && active.dataset.armed === "1") return;

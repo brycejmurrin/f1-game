@@ -375,3 +375,14 @@ test("#4529: PANEL WIDTH below 100 % really shrinks; PANEL HEIGHT caps the portr
   assert.equal(body(at, block), "max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));");
   assert.equal(body(at, ":root[data-look-garage-pw] #carsetup #cs-inner { "), "width: calc(100% * min(var(--look-garage-pw, 1), 1)); justify-self: end;");
 });
+
+test("arranged Garage camera fits the largest free strip after a move or resize", () => {
+  // Floating at x=600, a 500px sheet leaves 600px on the left, 340 on the right.
+  const right = panelCover(rect(600, 0, 500, 900), CANVAS, 1440, 900, noCam, true);
+  assert.equal(right.x, 1 - 600 / 1440);
+  const left = panelCover(rect(100, 0, 500, 900), CANVAS, 1440, 900, noCam, true);
+  assert.equal(left.x, -(1 - 840 / 1440));
+  const portrait = rect(0, 0, 390, 844);
+  const low = panelCover(rect(0, 550, 390, 270), portrait, 390, 844, () => 844, true);
+  assert.equal(low.y, 550 / 844 - 1);
+});

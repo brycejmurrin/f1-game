@@ -87,6 +87,10 @@ function boot(opts = {}) {
       }));
     } };
   }
+  if (opts.regions) {
+    sb.ScreenRegions = opts.regions;
+    vm.runInContext(read("js/ui/screen-placement.js"), ctx, { filename: absSrc("js/ui/screen-placement.js") });
+  }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
@@ -1297,6 +1301,7 @@ test("Home settings and bounded visual profiles survive settings backup without 
     assert.equal(JSON.parse(b.disk.get("apex26.homeCamera")), "front");
     const values = JSON.parse(b.disk.get("apex26.appearanceProfiles"))[0].values;
     assert.equal(values.uiScale, 109.25); assert.equal(values.homeCamera, "rear");
+    assert.equal(values.titleLayout.tall, undefined, "an unset orientation follows the destination device");
     assert.equal(values.titleLayout.wide.btns.x, 18); assert.equal(values.lookCareer.density, "roomy");
     assert.equal(values.steering, undefined); assert.equal(values.account, undefined);
   }
@@ -1953,4 +1958,36 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
     const same = boot({ mobile }).loadSettings(file({ device: { desktop: !mobile } }));
     assert.deepEqual([same.applied, same.skipped], [2, 0], "same kind of device: everything applies");
   }
+});
+
+test("relative placements and named profiles round-trip across devices without saving automatic dimensions", () => {
+  const regions = { carsetup: { regions: { panel: {} } } };
+  const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28 } } } } };
+  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement } }];
+  const source = boot({ mobile: true, appearance: true, realStore: true, denyWrites: true });
+  assert.equal(source.collect("all").settings.appearance.screenPlacement, null);
+  assert.equal(source.collect("changes").settings.appearance?.screenPlacement, undefined);
+  source.GameStore.store.set("screenPlacement", placement);
+  source.GameStore.store.set("appearanceProfiles", profile);
+  for (const mode of ["all", "changes"]) for (const mobile of [true, false]) {
+    const backup = source.collect(mode), target = boot({ mobile, regions, appearance: true });
+    assert.deepEqual(backup.settings.appearance.screenPlacement, placement);
+    assert.equal(target.loadSettings(backup).failed, 0);
+    assert.deepEqual(target.GameStore.store.get("screenPlacement"), placement);
+    assert.deepEqual(target.GameStore.store.get("appearanceProfiles")[0].values.screenPlacement, placement);
+  }
+});
+
+test("placement backup normalization bounds geometry and ignores removed regions", () => {
+  const regions = { carsetup: { regions: { panel: { maxWidth: 65, scale: false } } } };
+  const source = boot({ regions });
+  const saved = source.collect("changes");
+  saved.settings.appearance = { screenPlacement: { v: 1, screens: {
+    missing: { portrait: { gone: { y: 10 } } },
+    carsetup: { portrait: { panel: { width: 999, scale: 1.3, x: -1000, height: "45" }, retired: { x: 7 } } }
+  } } };
+  assert.equal(source.loadSettings(saved).failed, 0);
+  assert.deepEqual(source.GameStore.store.get("screenPlacement"), { v: 1, screens: {
+    carsetup: { portrait: { panel: { x: -50, width: 65 } } }
+  } });
 });

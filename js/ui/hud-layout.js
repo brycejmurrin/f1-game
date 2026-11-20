@@ -1,42 +1,4 @@
-/* Apex 26 — HudLayout: move and size each race HUD element, as a player
-   setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE.
-
-   Explicit entries own their geometry: finite screen-share X/Y offsets and
-   a positive SIZE percentage. Untouched widgets retain the automatic layout.
-   Manual widgets use stable homes and global HUD zoom, independently of the
-   adaptive bands; bottom instruments leave the transformed flex/grid cluster.
-
-   HUD STYLE × CAMERA SET keeps independent layouts for STANDARD / MINIMAL /
-   BROADCAST and COCKPIT / HELMET / OTHER. apex26.hudLayout stores:
-   {v: 4, standard: {cockpit: {id: {x, y, s}}, helmet: {…},
-   other: {…}}, minimal: {…}, broadcast: {…}}.
-   An explicit entry remains manual even at shipped values. RESET removes the
-   entry and restores its shipped automatic layout, which need not be zero.
-
-   Older layout formats start from the shipped automatic layout.
-   The live camera/style selects the race layout; the settings fold previews
-   and edits its chosen set without changing other saved layouts.
-
-   HIDDEN ELEMENTS: hiddenReason(id) says why an element is not on screen in
-   the current mode (MINIMAL, a LAYOUT, a broadcast camera, the cockpit wheel,
-   TYRE WEAR off, MAP/GAPS off, a per-element toggle) so the fold can grey out
-   sliders that would move nothing — from the classes that hide it while the
-   HUD is up (live element has the last word: display none / hidden / zero
-   rect), or from the store / fold preview under SETTINGS where those classes
-   lag. A "soft" reason is one a move cures (a touch cockpit shows a chip the
-   player places) or a chip that only appears on an event: its sliders stay.
-
-   PRESETS are pure data (PRESETS): a partial {id: {x?, y?, s?}} laid over the
-   edited set's shipped layout, so CLEAN in the cockpit keeps the chips beside
-   the wheel. Applying one writes the set and can still be tweaked; a set that
-   matches no preset reads CUSTOM (presetOf).
-
-   PEEK: the race HUD is hidden under the settings page, so a slider would
-   move things nobody can see. While a slider is held (or just moved),
-   js/ui/screen-looks.js's html[data-appearance-peek="hud"] ghosts the page
-   and shows the HUD with the selected element outlined. Only in a race.
-
-   Needs GameStore at eval (HARD_EDGES). ScreenLooks is read at call time. */
+/* Race HUD storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const HudLayout = (function () {
   "use strict";
 

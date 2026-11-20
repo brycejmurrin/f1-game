@@ -1,5 +1,6 @@
 # UI map — navigation and DOM
 
+See the [screen arrangement matrix](notes/SCREEN-ARRANGEMENT.md) for region ownership and player controls.
 This is the lookup map for Apex 26's menu web: where a title-screen action
 leads, which overlays can appear along the way, and which stable DOM roots an
 agent can inspect.

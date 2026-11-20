@@ -5026,9 +5026,24 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/screen-arranger.js",
+      "global": "ScreenArranger",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/screen-looks.js",
       "global": "ScreenLooks",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/screen-placement.js",
+      "global": "ScreenPlacement",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
+      "path": "js/ui/screen-regions.js",
+      "global": "ScreenRegions",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/scroll-fade.js",

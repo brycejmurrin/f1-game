@@ -1,0 +1,13 @@
+{
+  "tree": {
+    "assertPins": 3,
+    "assertPinsAll": 3,
+    "cssClasses": 4,
+    "dynamicIdReads": 3,
+    "eagerBytes": -764,
+    "rawColor": 3,
+    "rawColorDistinct": 3,
+    "shellNodes": 1,
+    "vmSrcLoads": 1
+  }
+}

@@ -1,25 +1,5 @@
 "use strict";
-/* Apex 26 — HudArrange: ARRANGE HUD, the on-screen editor for MOVE & SIZE.
-
-   The numeric editor (js/ui/hud-layout.js, SETTINGS › DISPLAY › HUD › MOVE & SIZE)
-   edits one element at a time behind a settings sheet. This is the
-   same setting edited by hand: a button on the pause card, every HUD element
-   gets a dashed outline, DRAG moves it, a PINCH (or the toolbar's − / +) sizes
-   it, and a pair of elements — or an element and a touch control — that overlap
-   turn red. It writes the offsets HudLayout already stores (x / y as a share of
-   the screen in %, s as a percent, per HUD style and camera set), so presets,
-   RESET and camera sets keep working; explicit placements bypass automatic fitting.
-
-   Mirrors DockLayout's REPOSITION editor: entering hides SETTINGS and PAUSED
-   (showModal dialogs make the rest of the document inert, so a drag could not
-   start), a floating toolbar ends it; so does Escape, or any dialog opening
-   while it is on. Pointer events are taken in the CAPTURE phase so a press on
-   a piece over GAS never reaches the pedal (THROTTLE = LATCH would launch the
-   car on RESUME).
-
-   Pieces the race hides until something happens (the radio card, the caution
-   flag, the LIMITS chip, DAMAGE) are shown with sample content while
-   arranging and put back exactly as they were on exit. */
+/* Live race HUD arrangement. See docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
   const TOUCH_CARRIED = ["ot", "aero", "bb"];
@@ -116,7 +96,9 @@ const HudArrange = (() => {
     let shown = null;      // dialogs WE hid: { settings, pause }
     let preview = null;    // title-screen HUD shell visibility, never saved as a preference
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
-    let bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
+    let move, bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
+    let moving = false, coarse = false, startValue = null;
+    const moveControls = [];
     const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
 
     const elOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? document.querySelector(row[2]) : null; };
@@ -181,9 +163,26 @@ const HudArrange = (() => {
       picker.style.cssText = selectCss + "width:128px;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
       bar.appendChild(picker);
-      const move = mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move");
+      move = mk("MOVE", "Show movement controls; arrow keys also position this element", () => {
+        moving = !moving;
+        after();
+      }, "hud-arrange-move");
       move.setAttribute("data-arrows", "own");
       bar.appendChild(move);
+      for (const [label, x, y] of [["Left", -1, 0], ["Right", 1, 0], ["Up", 0, -1], ["Down", 0, 1]]) {
+        moveControls.push(mk(label, "Move " + label.toLowerCase(), () => nudge(x, y, coarse ? 5 : 1), "hud-arrange-" + label.toLowerCase()));
+      }
+      const step = mk("Fine", "Toggle fine or coarse movement", () => {
+        coarse = !coarse;
+        step.textContent = coarse ? "Coarse" : "Fine";
+        step.setAttribute("aria-pressed", String(coarse));
+      }, "hud-arrange-step");
+      moveControls.push(step, mk("Reset HUD", "Restore this HUD profile and camera group", () => {
+        flush();
+        HudLayout.resetSet(context.set, context.profile);
+        after("Restored " + context.profile + " · " + context.set);
+      }, "hud-arrange-reset-screen"));
+      for (const control of moveControls) { control.hidden = true; bar.appendChild(control); }
       bar.appendChild(nameEl);
       bar.appendChild(hintEl);
       bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
@@ -248,6 +247,12 @@ const HudArrange = (() => {
         SettingRow.disable(visibilityRow, !visibility);
         visibilityRow.title = visibility ? "" : "Shown automatically with race events";
       }
+      for (const control of moveControls) control.hidden = !moving;
+      move.textContent = moving ? "Back" : "MOVE";
+      move.setAttribute("aria-expanded", String(moving));
+      for (const id of ["hud-arrange-smaller", "hud-arrange-larger", "hud-arrange-recover", "hud-arrange-reset"]) $(id).hidden = moving;
+      visibilityRow.hidden = moving;
+      if (moving) { nameEl.hidden = true; hintEl.hidden = !message; }
       placeBar(rects || rectsNow());
     }
 
@@ -345,6 +350,14 @@ const HudArrange = (() => {
         if (HudLayout.visibility(id)?.value !== "off") { if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off"); }
         else el.setAttribute("data-hl-off", "");
       }
+    }
+    function nudge(x, y, amount) {
+      if (!selected) return;
+      flush();
+      const cur = dragOrig(selected);
+      const next = { x: cur.x + x * amount, y: cur.y + y * amount };
+      HudLayout.set(selected, next, context.set, context.profile);
+      after("X " + next.x.toFixed(1) + "% · Y " + next.y.toFixed(1) + "%");
     }
     function size(dir) {
       if (!selected) return;
@@ -467,6 +480,7 @@ const HudArrange = (() => {
       editing = !!on;
       if (editing && !was) {
         ensureBar();
+        moving = false;
         opener = document.activeElement;
         context = { set: HudLayout.shown(), profile: HudLayout.profile() };
         HudLayout.holdArrangePreview(true);
@@ -574,8 +588,10 @@ const HudArrange = (() => {
         try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
         return;
       }
+      if (drag) return;   // another finger must not switch the gesture to a different piece
       flush();
       selected = id;
+      startValue = elOf(id)?.hasAttribute("data-hl-user") ? current(id) : null;
       let orig = dragOrig(id);
       drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
       pinch = null;
@@ -613,7 +629,16 @@ const HudArrange = (() => {
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("pointermove", onPointerMove, true);
     document.addEventListener("pointerup", onPointerUp, true);
-    document.addEventListener("pointercancel", onPointerUp, true);
+    function cancelGesture(e) {
+      if (!drag || (e.pointerId != null && e.pointerId !== drag.pid && e.pointerId !== pinch?.pid)) return;
+      pending = null;
+      paint();
+      if (startValue) HudLayout.set(drag.id, startValue, context.set, context.profile);
+      else HudLayout.resetEl(drag.id, context.set, context.profile);
+      drag = null; pinch = null; pointers.clear(); after();
+    }
+    document.addEventListener("pointercancel", cancelGesture, true);
+    document.addEventListener("lostpointercapture", cancelGesture, true);
     const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
     if (watched.length && typeof MutationObserver !== "undefined") {
       const mo = new MutationObserver(() => { if (editing && watched.some((el) => !el.hidden)) setEditing(false, false); });
@@ -633,10 +658,9 @@ const HudArrange = (() => {
       if (!editing || e.defaultPrevented) return;
       const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
-        e.preventDefault(); e.stopPropagation(); flush();
-        const cur = dragOrig(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
-        HudLayout.set(selected, { x: cur.x + d[0] * step, y: cur.y + d[1] * step }, context.set, context.profile);
-        after(); return;
+        e.preventDefault(); e.stopPropagation();
+        nudge(...dirs[e.key], e.shiftKey || coarse ? 5 : 1);
+        return;
       }
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -655,6 +679,7 @@ const HudArrange = (() => {
           if (editing) { HudLayout.fit(); after(); }
         });
       };
+      window.addEventListener("blur", cancelGesture);
       window.addEventListener("resize", resize, { passive: true });
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", resize, { passive: true });

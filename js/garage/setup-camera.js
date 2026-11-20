@@ -14,7 +14,23 @@ const { X_OPEN_RATE, X_CLOSE_RATE } = PhysicsConsts;
 // Returns { x, y } as fractions of the canvas: x is SIGNED by which half the
 // panel's centre sits in (+ right, the shipped dock, - left), so a right dock
 // returns exactly the unsigned number it always did; y is the portrait band.
-function panelCover(pr, cr, cw, ch, camTop) {
+function panelCover(pr, cr, cw, ch, camTop, arranged) {
+  if (arranged) {
+    // A translated sheet can float in the middle. Fit the camera in the
+    // largest clear strip at either edge, using its actual on-screen depth.
+    const left = Math.min(cw, Math.max(0, pr.left - cr.left));
+    const right = Math.min(cw, Math.max(0, cr.right - pr.right));
+    const top = Math.min(ch, Math.max(0, pr.top - cr.top));
+    const bottom = Math.min(ch, Math.max(0, cr.bottom - pr.bottom));
+    if (Math.max(left, right) >= Math.max(top, bottom)) {
+      const depth = Math.min(.85, 1 - Math.max(left, right) / cw);
+      return { x: left >= right ? depth : -depth, y: 0 };
+    }
+    const cameraInset = Math.max(0, cr.bottom - camTop());
+    const visibleBottom = Math.max(0, bottom - cameraInset);
+    const y = top > visibleBottom ? top / ch - 1 : 1 - (bottom + cameraInset) / ch;
+    return { x: 0, y: Math.max(-.85, Math.min(.85, y)) };
+  }
   const lim = (v) => (v < 0 ? 0 : v > 0.85 ? 0.85 : v);   // M4.clamp(v, 0, 0.85), the clamp this replaced
   if (cw - pr.width >= ch - pr.height) {
     const f = lim(pr.width / cw);
@@ -1184,6 +1200,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     st[0] = canvasEl.clientWidth; st[1] = canvasEl.clientHeight; st[2] = panelEl.clientWidth; st[3] = panelEl.clientHeight;
     st[4] = camOn ? cam.clientWidth : -1; st[5] = camOn ? cam.clientHeight : -1; st[6] = zP; st[7] = zC; st[8] = home.active;
     st[9] = document.documentElement.getAttribute("data-look-garage-side");
+    st[10] = home.active ? 0 : window.ScreenPlacement?.garageRevision || 0;
     let same = _covWas.length === st.length;
     for (let i = 0; same && i < st.length; i++) if (st[i] !== _covWas[i]) same = false;
     if (!same || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
@@ -1194,7 +1211,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
       const camTop = () => camOn
         ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top
         : canvasEl.clientHeight;
-      const cover = panelCover(pr, cr, canvasEl.clientWidth, canvasEl.clientHeight, camTop);
+      const cover = panelCover(pr, cr, canvasEl.clientWidth, canvasEl.clientHeight, camTop, !home.active && window.ScreenPlacement?.garagePanelMoved);
       _covX = cover.x; _covY = cover.y;
     }
     if (home.active) homePane = GarageExperience.freePane(_covPr, _covCr);

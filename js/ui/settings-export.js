@@ -1,38 +1,4 @@
-/* Apex 26 — SettingsExport: SETTINGS › SAVES & DATA,
-   which carries a player's state OUT of the browser and back IN. THREE files,
-   deliberately separate:
-
-     SETTINGS  preferences, tuners and control bindings — how you like the game
-               to behave. CHANGED lists only what differs from the shipped
-               default, each with the default it replaced and the source file
-               that owns it, so "make my settings the defaults" is a list of
-               edits rather than a hunt; ALL lists every key's effective value.
-     GARAGE    parts, liveries, setup sheets and an invented team — what you
-               BUILT. A new phone wants the first file; a friend wants the
-               second.
-     CAREER    the six save slots (driver.0..2, myteam.0..2) and the live
-               slot pointer — what a long championship is. Mounted from the
-               CAREER MODES screen the way GARAGE injects its row, so shell
-               node count does not grow.
-
-   Loading any one overwrites what is stored and reloads the page, so the
-   button asks twice. SETTINGS may carry time-trial leaderboards in an optional
-   `ttlb` section (merged on import, never overwriting blindly). GARAGE and
-   SETTINGS still never carry career or season saves, ghosts, replays, or anything
-   account-shaped, in either direction.
-
-   SPEC below is the allowlist — every player-facing preference, tuner and
-   control binding under the `apex26.` prefix, grouped the way SETTINGS is.
-   Nothing else is ever read: the garage (parts, liveries, setup sheets, MY
-   TEAM), saves (career, season, ghosts, replays, daily bests), accounts
-   and network (Spotify tokens, TURN credentials, relays) and the renderer's
-   self-healing latches stay out by construction, and the unit test asserts
-   that a poisoned store leaks none of them. Two lanes, like the store: `json`
-   values went through store.set (JSON), `raw` values are the bare strings the
-   settings panels keep with store.rawSet ("1"/"0", ids).
-   SettingsExport.create(G) is wired from js/game.js; `collect(mode)` is the
-   pure half (__apex.settingsFile). Consumes GameStore, GameAudio,
-   GfxQuality, Input when present. */
+/* Settings backup storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const SettingsExport = (function () {
   "use strict";
 
@@ -115,6 +81,8 @@ const SPEC = [
   { k: "pauseSide", lane: "json", group: "appearance", def: "centre", src: "js/ui/pause-opts.js PAUSE MENU › SIDE (centre | left | right)", oneOf: ["centre", "left", "right"] },
   { k: "pauseDim", lane: "json", group: "appearance", def: "full", src: "js/ui/pause-opts.js PAUSE MENU › BACKGROUND (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "pauseConfirm", lane: "json", group: "appearance", def: "on", src: "js/ui/pause-opts.js PAUSE MENU › CONFIRM QUIT (on | off; two presses on QUIT / RESTART)", oneOf: ["on", "off"] },
+  { k: "screenPlacement", lane: "json", group: "appearance", def: null, src: "js/ui/screen-placement.js (explicit viewport-relative regions by orientation)",
+    normalize: v => normalizePlacement(v, typeof ScreenRegions === "undefined" ? null : ScreenRegions) },
   { k: "titleLayout", lane: "json", group: "appearance", def: null, src: "js/ui/title-layout.js TITLE LAYOUT (null = shipped; else {v:2, wide, tall}, one {btns,title,art,layout,side} per shape — a missing shape is shipped; a v1 object is both)" },
   { k: "lookPause", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js PAUSE MENU buttons & card (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookDatahub", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js DATA HUB (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
@@ -247,7 +215,7 @@ const SPEC = [
   { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
   // APPEARANCE (js/ui/appearance-opts.js) — theme + dual accents
-  { k: "uiTheme", lane: "json", group: "appearance", def: "dark", src: "js/ui/appearance-opts.js" },
+  { k: "uiTheme", lane: "json", group: "appearance", def: "dark", src: "js/ui/appearance-opts.js", oneOf: ["dark", "light", "system", "endurance", "drafting"] },
   { k: "menuAccent", lane: "json", group: "appearance", def: "ember", src: "js/ui/appearance-opts.js" },
   { k: "hudAccent", lane: "json", group: "appearance", def: "team", src: "js/ui/appearance-opts.js" },
   { k: "menuAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
@@ -351,6 +319,36 @@ if (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.ingestSettin
 
 const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, ghosts, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section (merged on import)";
 
+// The settings file and named profiles can be used before the optional editor is loaded.
+// With its registry available, discard retired regions and their inapplicable controls.
+function normalizePlacement(raw, registry) {
+  if (raw === null) return null;
+  if (!raw || raw.v !== 1 || !isObj(raw.screens)) return undefined;
+  const screens = {}, validId = id => /^[a-z][a-z0-9-]{0,63}$/i.test(id) && !(id in Object.prototype);
+  const bounds = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [.5, 2] };
+  for (const id of Object.keys(raw.screens).slice(0, 128)) {
+    if (!validId(id) || !isObj(raw.screens[id]) || (registry && !Object.hasOwn(registry, id))) continue;
+    for (const orientation of ["portrait", "landscape"]) {
+      const map = raw.screens[id][orientation];
+      if (!isObj(map)) continue;
+      for (const region of Object.keys(map).slice(0, 64)) {
+        if (!validId(region) || !isObj(map[region])) continue;
+        const definitions = registry && registry[id].regions;
+        if (definitions && !Object.hasOwn(definitions, region)) continue;
+        const fields = {};
+        for (const [key, [lo, hi]] of Object.entries(bounds)) {
+          const value = map[region][key];
+          if (!Number.isFinite(value) || definitions?.[region][key] === false) continue;
+          if ((key === "x" || key === "y") && value === 0 || key === "scale" && value === 1) continue;
+          const cap = key === "width" ? definitions?.[region].maxWidth : key === "height" ? definitions?.[region].maxHeight : hi;
+          fields[key] = Math.round(Math.min(cap || hi, Math.max(lo, value)) * 1000) / 1000;
+        }
+        if (Object.keys(fields).length) ((screens[id] ||= {})[orientation] ||= {})[region] = fields;
+      }
+    }
+  }
+  return Object.keys(screens).length ? { v: 1, screens } : null;
+}
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 /** GameAudio's default table, or undefined while only the stub's empty answer is there. */
 function engineTable(fn) {
@@ -1445,7 +1443,7 @@ function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer, collectTtlb, ttlbParseBoard,
          applySettings, applyGarage, applyCareer, applyTtlb, resetGarage, isGarageKey, isCareerKey, garageValue, create,
-         ensureMounted, mount: ensureMounted,
+         normalizePlacement, ensureMounted, mount: ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();

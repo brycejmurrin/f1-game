@@ -122,8 +122,10 @@ test("Menu customization exposes the existing editor and retains persistence, fo
   assert.equal(panel.hidden, true);
   assert.equal(dom.byId("pmsettings").hidden, true);
   dom.byId("tl-size-up").click();
-  assert.equal(values.titleLayout.wide.btns.size, 105, "real editor writes the existing landscape preference");
+  assert.equal(title.current().btns.size, 105, "preview shows the draft");
+  assert.equal(values.titleLayout, undefined, "the title draft waits for Apply");
   dom.byId("tl-done").click();
+  assert.equal(values.titleLayout.wide.btns.size, 105, "Apply writes the existing landscape preference");
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(title.editing, false);
   assert.equal(panel.hidden, false);
@@ -793,4 +795,20 @@ test("Studio coalesces an advanced click and its store notification while preser
   assert.deepEqual(plain(studio.snapshot()), before);
   assert.deepEqual(scenes, ["front", "side"]);
   expectRenders(() => assert.equal(studio.undo(), false), 0);
+});
+
+test("combined profiles restore placement, touch docks and cockpit while earlier profiles leave them alone", () => {
+  const globals = { HudLayout: { migrate: v => ({ standard: v.standard }), apply() {} },
+    DockLayout: { normalize: v => v }, SettingsExport: { normalizePlacement: v => v } };
+  const mine = { hudLayout: LIVE.hudLayout, dockLayout: { buttons: { L: { x: 0.2, y: 0.1 } } },
+    screenPlacement: { v: 1, screens: { carsetup: { portrait: { panel: { width: 50 } } } } } };
+  const { studio, values } = load({ ...mine, appearanceProfiles: [{ id: "old", name: "Earlier", values: { uiTheme: "light" } }] }, true, false, undefined, globals);
+  studio.saveProfile("Phone");
+  studio.loadProfile("old");
+  for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
+  studio.applySnapshot({ ...studio.snapshot(), hudLayout: null, dockLayout: null, screenPlacement: null });
+  studio.loadProfile("profile-1");
+  for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
+  studio.undo();
+  for (const key of Object.keys(mine)) assert.equal(values[key], null);
 });

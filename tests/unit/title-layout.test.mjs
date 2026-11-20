@@ -225,7 +225,7 @@ test("editor: the fold's button trades the settings page for the title screen an
   assert.equal(html.hasAttribute("data-tl-edit"), true);
   const bar = dom.byId("tl-editor");
   assert.equal(bar.hidden, false);
-  assert.deepEqual(bar.children.map((c) => c.id), ["tl-piece", "tl-size-dn", "tl-size-up", "tl-width-dn", "tl-width-up", "tl-reset-piece", "tl-done", "tl-handle"], "DONE adopted into the bar");
+  assert.deepEqual(bar.children.map((c) => c.id), ["tl-piece", "tl-left", "tl-right", "tl-up", "tl-down", "tl-step", "tl-size-dn", "tl-size-up", "tl-width-dn", "tl-width-up", "tl-undo", "tl-reset-piece", "tl-reset-screen", "tl-cancel", "tl-done", "tl-handle"], "DONE adopted into the bar");
   assert.equal(dom.byId("tl-piece").textContent, "BUTTONS · LANDSCAPE · 100% · AUTO WIDTH");
   assert.equal(dom.byId("menu-buttons").hasAttribute("data-tl-sel"), true, "the buttons start selected");
   const art = dom.byId("tl-art");
@@ -240,7 +240,7 @@ test("editor: the fold's button trades the settings page for the title screen an
 });
 
 test("editor: a pointer drag moves a piece in screen percent, the corner handle sizes it, and door clicks are swallowed", () => {
-  const { dom, data, html } = editing();
+  const { dom, M, data, html } = editing();
   const btns = dom.byId("menu-buttons");
   const d = ptr(dom, btns, "pointerdown", 500, 400);
   assert.equal(d.defaultPrevented, true, "no focus, no text selection");
@@ -251,16 +251,16 @@ test("editor: a pointer drag moves a piece in screen percent, the corner handle 
   ptr(dom, btns, "pointermove", 650, 400, 2);
   assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw", "another pointer does not steer it");
   ptr(dom, btns, "pointerup", 600, 350);
-  assert.equal(data.titleLayout.wide.btns.x, 10);
-  assert.equal(data.titleLayout.wide.btns.y, -10);
+  assert.equal(M.current().btns.x, 10);
+  assert.equal(M.current().btns.y, -10);
   ptr(dom, btns, "pointermove", 900, 350);
-  assert.equal(data.titleLayout.wide.btns.x, 10, "released");
+  assert.equal(M.current().btns.x, 10, "released");
   assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw");
   // The corner handle: twice as far from the centre is twice the size.
   ptr(dom, dom.byId("tl-handle"), "pointerdown", 600, 500);
   ptr(dom, dom.byId("tl-handle"), "pointermove", 700, 600);
   ptr(dom, dom.byId("tl-handle"), "pointerup", 700, 600);
-  assert.equal(data.titleLayout.wide.btns.size, 200);
+  assert.equal(M.current().btns.size, 200);
   // The drawing, through its proxy; dragging selects it.
   const art = dom.byId("tl-art");
   ptr(dom, art, "pointerdown", 100, 400);
@@ -268,15 +268,15 @@ test("editor: a pointer drag moves a piece in screen percent, the corner handle 
   assert.equal(btns.hasAttribute("data-tl-sel"), false);
   ptr(dom, art, "pointermove", 100 - 2000, 400);
   ptr(dom, art, "pointerup", 0, 0);
-  assert.equal(data.titleLayout.wide.art.x, -50, "clamped");
+  assert.equal(M.current().art.x, -50, "clamped");
   assert.equal(dom.byId("tl-width-up").disabled, true, "WIDTH is the buttons' alone");
   const click = { type: "click", bubbles: true };
   dom.dispatch(dom.byId("mb-race"), click);
   assert.ok(click.defaultPrevented && click.propagationStopped, "a door's click is swallowed while editing");
 });
 
-test("editor: a drag paints once per frame and writes the store once, at the release (#4933)", () => {
-  const { dom, data, writes, html, tick } = editing({}, { raf: true });
+test("editor: a drag paints once per frame and writes the store once, at Apply (#4933)", () => {
+  const { dom, M, writes, html, tick } = editing({}, { raf: true });
   const btns = dom.byId("menu-buttons");
   writes.length = 0;
   ptr(dom, btns, "pointerdown", 500, 400);
@@ -287,8 +287,9 @@ test("editor: a drag paints once per frame and writes the store once, at the rel
   assert.deepEqual(writes, [], "no store write while the finger is down");
   ptr(dom, btns, "pointermove", 610, 400);
   ptr(dom, btns, "pointerup", 610, 400);
-  assert.deepEqual(writes, ["titleLayout"], "exactly one write, at the release");
-  assert.equal(data.titleLayout.wide.btns.x, 11, "the unpainted last move is not lost");
+  assert.deepEqual(writes, [], "release ends the gesture without accepting the session");
+  assert.equal(M.current().btns.x, 11, "the unpainted last move is not lost");
+  dom.byId("tl-done").click();
   tick();
   assert.deepEqual(writes, ["titleLayout"], "a cancelled frame writes nothing later");
   // A slider: every input paints, the release (`change`) stores once.
@@ -317,38 +318,58 @@ test("a live draft never masks a store write made by someone else (Undo, a profi
   data.titleLayout = { v: 2, wide: { btns: { x: -7 } } };   // AppearanceStudio's undo writes the store
   assert.equal(M.current().btns.x, -7, "the newer store value wins");
   assert.equal(M.commit(), false, "and the stale draft is dropped, not saved over it");
-  assert.equal(data.titleLayout.wide.btns.x, -7);
+  assert.equal(M.current().btns.x, -7);
 });
 
 test("editor: keys nudge, size and cycle the pieces; the bar's steps and RESET PIECE", () => {
-  const { dom, data } = editing({}, { shape: "tall" });
+  const { dom, M, data } = editing({}, { shape: "tall" });
   const right = key(dom, "ArrowRight");
   assert.equal(right.defaultPrevented, true, "the key is the editor's");
   key(dom, "ArrowDown"); key(dom, "ArrowDown");
-  assert.deepEqual([data.titleLayout.tall.btns.x, data.titleLayout.tall.btns.y], [1, 2], "arrows move 1% (the portrait shape)");
-  assert.equal(data.titleLayout.wide, undefined, "landscape untouched");
+  assert.deepEqual([M.current().btns.x, M.current().btns.y], [1, 2], "arrows move 1% (the portrait shape)");
+  assert.equal(data.titleLayout, undefined, "edits stay in the draft");
   key(dom, "+"); key(dom, "=");
-  assert.equal(data.titleLayout.tall.btns.size, 110);
+  assert.equal(M.current().btns.size, 110);
   key(dom, "-");
-  assert.equal(data.titleLayout.tall.btns.size, 105);
+  assert.equal(M.current().btns.size, 105);
   key(dom, "]");
   assert.equal(dom.byId("menu-brand").hasAttribute("data-tl-sel"), true, "]: the title");
   key(dom, "["); key(dom, "[");
   assert.equal(dom.byId("tl-art").hasAttribute("data-tl-sel"), true, "[ back round to the drawing");
   assert.equal(key(dom, "Tab").defaultPrevented, undefined, "Tab is left to the browser: the bar stays reachable");
   key(dom, "ArrowLeft");
-  assert.equal(data.titleLayout.tall.art.x, -1);
-  assert.equal(key(dom, "Escape").defaultPrevented, undefined, "Escape is left to data-esc-close (DONE)");
+  assert.equal(M.current().art.x, -1);
+  assert.equal(key(dom, "Escape").defaultPrevented, undefined, "Escape is left to data-esc-close (Cancel)");
   key(dom, "]");
   dom.byId("tl-size-up").click();
-  assert.equal(data.titleLayout.tall.btns.size, 110);
+  assert.equal(M.current().btns.size, 110);
   dom.byId("tl-width-up").click();
-  assert.equal(data.titleLayout.tall.btns.width, 25, "from AUTO, the width the buttons have now (200 px of 1000) plus a step");
+  assert.equal(M.current().btns.width, 25, "from AUTO, the width the buttons have now (200 px of 1000) plus a step");
   dom.byId("tl-width-dn").click(); dom.byId("tl-width-dn").click();
-  assert.equal(data.titleLayout.tall.btns.width, 0, "under 20% is AUTO again");
+  assert.equal(M.current().btns.width, 0, "under 20% is AUTO again");
   dom.byId("tl-reset-piece").click();
-  assert.deepEqual(plain(data.titleLayout.tall.btns), { x: 0, y: 0, size: 100, width: 0 }, "RESET PIECE");
-  assert.equal(data.titleLayout.tall.art.x, -1, "and only that piece");
+  assert.deepEqual(plain(M.current().btns), { x: 0, y: 0, size: 100, width: 0 }, "RESET PIECE");
+  assert.equal(M.current().art.x, -1, "and only that piece");
+});
+
+test("title entry restores its opener and discards canceled drafts", () => {
+  const { dom, M, timers, data } = boot({}, { editor: true });
+  dom.byId("pmsettings").hidden = true;
+  const opener = dom.byId("mb-race");
+  M.enter(opener);
+  dom.byId("tl-right").click();
+  assert.equal(M.current().btns.x, 1);
+  dom.byId("tl-undo").click();
+  assert.equal(M.current().btns.x, 0);
+  dom.byId("tl-step").click();
+  dom.byId("tl-down").click();
+  assert.equal(M.current().btns.y, 5);
+  dom.byId("tl-cancel").click();
+  assert.equal(data.titleLayout, undefined);
+  assert.equal(M.current().btns.y, 0);
+  assert.equal(dom.byId("pmsettings").hidden, true);
+  timers.at(-1).fn();
+  assert.equal(dom.document.activeElement, opener);
 });
 
 test("editor: DONE gives the settings page back, opens the fold and focuses its button; mid-race it cannot open", () => {
@@ -375,7 +396,7 @@ test("editor: DONE gives the settings page back, opens the fold and focuses its 
   dom.byId("overlay").hidden = true; mutated(dom.byId("overlay"));
   assert.equal(dom.byId("pm-tl-edit").disabled, true, "disabled mid-race (#overlay hidden)");
   assert.equal(M.enter(), false);
-  assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>\s*<button id="tl-done" type="button">DONE<\/button>\s*<\/div>/);
+  assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-cancel" hidden>\s*<button id="tl-done" type="button">Apply<\/button>\s*<\/div>/);
 });
 
 test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, sliders store and PEEK, choices wire, RESET clears", () => {
@@ -554,4 +575,88 @@ test("the offset clamp keeps the skewed doors' painted edge inside the safe box 
   ctx.getComputedStyle = () => ({ paddingLeft: "59px", paddingRight: "59px", paddingTop: "8px", paddingBottom: "21px", getPropertyValue: () => "" });
   M.fit();
   assert.equal(mb.style.getPropertyValue("--tf-dx"), "-2.3px", "pulled in by the 2.3 px the skew overhangs");
+});
+
+test("screen arrangement cancels a captured drag, isolates rotated drafts and restores invoking focus", () => {
+  const dom = makeDom();
+  const root = dom.byId("career");
+  const region = root.appendChild(dom.makeElement("div", "calendar"));
+  const rect = {left:10, top:10, right:210, bottom:110, width:200, height:100};
+  root.matches = () => false;
+  region.getClientRects = () => [rect];
+  region.getBoundingClientRect = () => rect;
+  const invoker = root.appendChild(dom.makeElement("button"));
+  const events = dom.makeElement("div");
+  const stored = {landscape:{}, portrait:{}};
+  let side = "landscape", live, frame;
+  const legacy = [];
+  const win = {
+    addEventListener: events.addEventListener, removeEventListener: events.removeEventListener,
+    ScreenRegions: {career:{root:"#career", label:"Career", regions:{calendar:{selector:"#calendar", label:"Calendar"}}}},
+    ScreenPlacement: {
+      orientation:() => side, read:(id, dir) => stored[dir], save:(id, dir, map) => { stored[dir] = plain(map); },
+      resetLegacy:(id, mode) => { legacy.push(mode); return true; },
+      apply:(id, map) => { live = plain(map); }
+    }
+  };
+  dom.document.createElement = tag => {
+    const el = dom.makeElement(tag);
+    if (tag === "dialog") Object.assign(el, {showModal(){}, close(){}, setPointerCapture(){}});
+    return el;
+  };
+  vm.runInNewContext(read("js/ui/screen-arranger.js"), {
+    window:win, document:dom.document, innerWidth:1000, innerHeight:500,
+    MutationObserver:class { observe(){} disconnect(){} },
+    requestAnimationFrame:fn => { frame = fn; return 1; }, cancelAnimationFrame:() => { frame = null; }
+  });
+  function open() {
+    assert.equal(win.ScreenArranger.open("career", invoker), true);
+    return dom.document.querySelector("#screen-arranger");
+  }
+  let dialog = open();
+  function button(text) { return dialog.querySelectorAll("button").find(el => el.textContent === text); }
+  const pointer = (type, px) => dom.dispatch(dialog, {
+    type, pointerId:7, isPrimary:true, button:0, clientX:px, clientY:50
+  });
+  pointer("pointerdown", 50);
+  pointer("pointermove", 150);
+  frame();
+  assert.equal(live.calendar.x, 10);
+  pointer("pointercancel", 150);
+  assert.deepEqual(live, {});
+  assert.deepEqual(stored.landscape, {});
+  dom.dispatch(events, {type:"keydown", key:"ArrowUp", altKey:true, shiftKey:true, target:button("Up"), stopImmediatePropagation(){}});
+  assert.equal(live.calendar.y, -5);
+  side = "portrait";
+  dom.dispatch(events, {type:"resize"});
+  assert.deepEqual(live, {});
+  button("Copy from landscape").click();
+  assert.equal(live.calendar.y, -5);
+  button("Reset region").click();
+  assert.deepEqual(live, {});
+  button("Undo").click();
+  assert.equal(live.calendar.y, -5);
+  button("Apply").click();
+  assert.deepEqual(stored.portrait, stored.landscape);
+  assert.equal(stored.landscape.calendar.y, -5);
+  assert.equal(dom.document.activeElement, invoker);
+  dialog = open();
+  button("Reset screen").click();
+  assert.deepEqual(live, {});
+  dom.dispatch(events, {type:"keydown", key:"Escape", stopImmediatePropagation(){}});
+  assert.equal(live.calendar.y, -5);
+  assert.equal(dom.document.activeElement, invoker);
+  assert.deepEqual(legacy, ["preview", "restore"]);
+  dialog = open();
+  button("Reset screen").click();
+  button("Undo").click();
+  assert.equal(live.calendar.y, -5);
+  button("Apply").click();
+  assert.deepEqual(legacy.slice(-2), ["preview", "restore"]);
+  assert.equal(stored.portrait.calendar.y, -5);
+  dialog = open();
+  button("Reset screen").click();
+  button("Apply").click();
+  assert.deepEqual(legacy.slice(-2), ["preview", "save"]);
+  assert.deepEqual(stored, {portrait:{}, landscape:{}});
 });

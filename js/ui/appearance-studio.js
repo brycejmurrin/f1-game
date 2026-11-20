@@ -6,7 +6,7 @@ const AppearanceStudio = (function () {
   const store = GameStore.store;
   const PROFILE_KEY = "appearanceProfiles";
   const ENUMS = {
-    uiTheme: ["dark", "light", "system"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
+    uiTheme: ["dark", "light", "system", "endurance", "drafting"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
     hudAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"], textSize: ["normal", "large", "larger"],
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["auto", "reduce", "off"],
     titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"],
@@ -23,7 +23,7 @@ const AppearanceStudio = (function () {
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
     textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
-    titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
+    titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null, hudLayout: null, dockLayout: null, screenPlacement: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
@@ -34,12 +34,12 @@ const AppearanceStudio = (function () {
   // Cosmetic presets must not replace readability, comfort, unit, size or layout
   // preferences (#5058): a preset value never names one of these keys, and a
   // screen look the preset names is merged into the current one, not replaced.
-  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim"]);
+  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "hudLayout", "dockLayout", "screenPlacement", "pauseLayout", "pauseSide", "pauseDim"]);
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
-    hud: ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
@@ -62,8 +62,20 @@ const AppearanceStudio = (function () {
         const lo = k.endsWith("Opacity") ? 20 : k === "hudScale" ? 70 : 40, hi = k.endsWith("Opacity") ? 100 : k === "hudBtnScale" ? 300 : 200;
         out[k] = typeof v === "number" && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v)) * 4) / 4 : null;
       } else if (LOOKS[k]) out[k] = isObject(v) && typeof ScreenLooks !== "undefined" ? ScreenLooks.normalize(LOOKS[k], v) : null;
-      else if (k === "titleLayout") out[k] = isObject(v) && typeof TitleLayout !== "undefined"
-        ? { v: 2, wide: TitleLayout.normalize(v.wide || (v.v === 2 ? null : v)), tall: TitleLayout.normalize(v.tall || (v.v === 2 ? null : v)) } : null;
+      else if (k === "hudLayout") out[k] = isObject(v) && v.v === 4 && typeof HudLayout !== "undefined" ? { v: 4, ...HudLayout.migrate(v) } : null;
+      else if (k === "dockLayout") out[k] = isObject(v) && typeof DockLayout !== "undefined" ? DockLayout.normalize(v) : null;
+      else if (k === "screenPlacement") out[k] = isObject(v) && typeof SettingsExport !== "undefined"
+        ? SettingsExport.normalizePlacement(v, typeof ScreenRegions === "undefined" ? null : ScreenRegions) || null : null;
+      else if (k === "titleLayout") {
+        out[k] = null;
+        if (isObject(v) && typeof TitleLayout !== "undefined") {
+          // v1 shared one shape. In v2 an absent orientation must keep following the device.
+          for (const shape of ["wide", "tall"]) {
+            const layout = v.v === 2 ? v[shape] : v;
+            if (isObject(layout)) (out[k] ||= { v: 2 })[shape] = TitleLayout.normalize(layout);
+          }
+        }
+      }
     }
     return out;
   }
@@ -97,19 +109,28 @@ const AppearanceStudio = (function () {
     if (typeof TitleLayout !== "undefined") { TitleLayout.apply(); TitleLayout.build(); }
     if (typeof PauseOpts !== "undefined") { PauseOpts.apply(); PauseOpts.wireRows(); }
     if (typeof ScreenLooks !== "undefined") { ScreenLooks.apply(); ScreenLooks.refresh(); }
+    if (typeof HudLayout !== "undefined") HudLayout.apply();
     invoke("applyVisuals", values);
     sceneChanged();
   }
   function keysFor(chosenScope) { return chosenScope === "screen" ? SCREEN_KEYS[previewPage] : VISUAL_KEYS; }
   function applySnapshot(value, options = {}) {
     const next = normalizeSnapshot(value), before = snapshot(), keys = keysFor(options.scope || "global");
+    if (options.scope === "screen" && (next.screenPlacement || before.screenPlacement)) {
+      const screens = { ...(before.screenPlacement && before.screenPlacement.screens) };
+      const id = ({ garage: "carsetup", race: "race-settings", pause: "pausemenu" })[previewPage] || previewPage;
+      const selected = next.screenPlacement && next.screenPlacement.screens[id];
+      if (selected) screens[id] = selected;
+      else delete screens[id];
+      next.screenPlacement = Object.keys(screens).length ? { v: 1, screens } : null;
+    }
     let durable = true;
     clearTimeout(pending); muted = true;
     // Only keys whose value actually changes are written: an untouched key stays
     // unset (it keeps following SettingsDefaults), and a null motion REMOVES the
     // key instead of pinning "on".
     try {
-      for (const k of keys) {
+      for (const k of options.scope === "screen" ? [...keys, "screenPlacement"] : keys) {
         if (JSON.stringify(before[k]) === JSON.stringify(next[k])) continue;
         if (store.set(k, k === "motion" && next[k] === null ? undefined : clone(next[k])) === false) durable = false;
       }
@@ -139,7 +160,12 @@ const AppearanceStudio = (function () {
     if (!Array.isArray(raw)) return [];
     const ids = new Set();
     return raw.slice(0, 12).filter((p) => isObject(p) && typeof p.id === "string" && /^[a-z0-9-]{1,64}$/i.test(p.id) && typeof p.name === "string" && p.name.trim() && !ids.has(p.id) && ids.add(p.id))
-      .map((p) => ({ id: p.id, name: p.name.trim().slice(0, 40), values: normalizeSnapshot(p.values) }));
+      .map((p) => {
+        const values = normalizeSnapshot(p.values);
+        // Profiles saved before layout capture leave these devices and screens as configured.
+        for (const k of ["hudLayout", "dockLayout", "screenPlacement"]) if (!Object.hasOwn(p.values || {}, k)) delete values[k];
+        return { id: p.id, name: p.name.trim().slice(0, 40), values };
+      });
   }
   function profiles() { return normalizeProfiles(store.get(PROFILE_KEY, [])); }
   function writeProfiles(rows) {
@@ -154,7 +180,7 @@ const AppearanceStudio = (function () {
     const row = { id: newId, name: label, values: snapshot() }; if (at < 0) rows.push(row); else rows[at] = row;
     selectedProfile = newId; return writeProfiles(rows);
   }
-  function loadProfile(id, chosenScope = scope) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot(p.values, { scope: chosenScope }); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + durabilityNote(result)); return true; }
+  function loadProfile(id, chosenScope = scope) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot({ ...snapshot(), ...p.values }, { scope: chosenScope }); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + durabilityNote(result)); return true; }
   function deleteProfile(id) { const rows = profiles(); if (!rows.some((p) => p.id === id)) return false; selectedProfile = ""; const result = writeProfiles(rows.filter((p) => p.id !== id)); say(result.durable ? "Profile deleted. Your current appearance stays in place." : "Profile deleted for this session. Browser storage could not save that change for your next visit."); return true; }
   function attach(value) { hooks = value || {}; invoke("applyVisuals", snapshot()); sceneChanged(); }
   function setPreviewFrame(url) {
@@ -209,7 +235,7 @@ const AppearanceStudio = (function () {
     ui.previewWrap.dataset.shape = previewShape;
     ui.undo.disabled = !undoStack.length; ui.delete.disabled = !selectedProfile; ui.load.disabled = !selectedProfile;
     ui.scopeGlobal.setAttribute("aria-pressed", String(scope === "global")); ui.scopeScreen.setAttribute("aria-pressed", String(scope === "screen"));
-    ui.scopeNote.textContent = scope === "global" ? "Presets, profile application and reset apply across menus, HUD and scene. Presets preserve accessibility and units; profiles and reset include them." : "Presets, profile application and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
+    ui.scopeNote.textContent = scope === "global" ? "Presets, profile application and reset apply across menus, HUD and scene. Presets keep your placements and accessibility choices. Global profiles and reset include screen placements, cockpit and touch controls, readability, and units." : "Presets, profile application and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
     const rows = profiles(); ui.profileSelect.replaceChildren(); const empty = node("option", "", "New profile"); empty.value = ""; ui.profileSelect.appendChild(empty);
     for (const row of rows) { const opt = node("option", "", row.name); opt.value = row.id; ui.profileSelect.appendChild(opt); }
     ui.profileSelect.value = selectedProfile;
@@ -308,6 +334,7 @@ const AppearanceStudio = (function () {
     for (const [id, name] of [["home", "HOME"], ["pause", "PAUSE"], ["datahub", "DATA HUB"], ["select", "TRACK SELECTOR"], ["career", "CAREER"], ["race", "RACE SETUP"], ["garage", "GARAGE"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
     const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
     tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Representative preview. Use the advanced screen controls below for exact layout and the real-screen preview."));
+    if (typeof CustomEvent === "function") previewSide.dispatchEvent(new CustomEvent("apex:appearance-picker", { bubbles: true }));
     ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
     const advanced = node("details", "as-advanced"), sum = node("summary", "", "ADVANCED · GLOBAL & PER-SCREEN CUSTOMISATION"), body = node("div"); advanced.append(sum, body); panel.appendChild(advanced);
     for (const child of [...panel.children]) if (child !== studio && child !== advanced) body.appendChild(child);
@@ -350,7 +377,7 @@ const AppearanceStudio = (function () {
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
       { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
-      { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system colour color" },
+      { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system endurance drafting colour color" },
       { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
       { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
       { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "pm-contrast-sel", aliases: "readability sunlight outlines" },
