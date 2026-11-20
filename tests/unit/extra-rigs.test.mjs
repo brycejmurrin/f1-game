@@ -120,6 +120,23 @@ test("ExtraRigs.solve returns finite eye/tgt/fov for rival, pitwall, drone", () 
   }
 });
 
+// Rival mode used to allocate a fresh {s,x,p,t,r,hw} bag per frame via carSample.
+// With a rival subject the solve must stay finite across many frames (pooled bag).
+test("ExtraRigs.solve rival with a subject stays finite across many frames (carSample pooled)", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  const track = { total: 1000, pit: { side: 1 }, def: {} };
+  const eye = [0, 0, 0], tgt = [0, 0, 0];
+  const rival = { s: 140, x: 1.5, speed: 50 };
+  for (let i = 0; i < 120; i++) {
+    rival.s = 140 + i * 2;
+    const fov = ExtraRigs.solve("rival", track, 100 + i, 0, 50, 0, {
+      bankDy: 0, rival, carPos: [100 + i, 0], carHead: 0, dt: 1 / 60,
+    }, eye, tgt);
+    assert.ok(Number.isFinite(fov), `fov at frame ${i}`);
+    assert.ok(eye.every(Number.isFinite) && tgt.every(Number.isFinite), `pose at frame ${i}`);
+  }
+});
+
 test("ExtraRigs.tickPitAuto cuts to pitwall on entry and restores on exit", () => {
   const { ExtraRigs } = loadExtraRigs();
   let mode = 0;
@@ -187,6 +204,22 @@ test("ExtraRigs.pickRival reuses its running-car rows and array across calls", (
   assert.ok(seen[1].rows.every((r) => seen[0].rows.includes(r)), "the same row objects are reused");
   assert.equal(seen[1].arr.length, 2);
   assert.equal(seen[1].arr[0].key, a, "rows are re-filled and re-sorted (a leads on prog)");
+});
+
+// localBattles is the no-Broadcast fallback on every RIVAL frame — pool fight bags like Broadcast.battles.
+test("ExtraRigs.localBattles reuses its fight bags across calls", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  const a = { key: { id: "a" }, prog: 100, speed: 50 };
+  const b = { key: { id: "b" }, prog: 80, speed: 50 };   // 0.4 s gap → a battle
+  const c = { key: { id: "c" }, prog: 60, speed: 50 };
+  const first = ExtraRigs.localBattles([a, b, c], 1);
+  assert.ok(first.length >= 1);
+  const bag0 = first[0];
+  const second = ExtraRigs.localBattles([a, b, c], 1);
+  assert.equal(second, first, "the same fights array is reused");
+  assert.equal(second[0], bag0, "the same fight bag object is reused");
+  assert.equal(second[0].key, b.key);
+  assert.equal(second[0].ahead, a.key);
 });
 
 // #4745 D — the pit-entry shot: a short, drivable tracking cut on the entry road of a called stop.
