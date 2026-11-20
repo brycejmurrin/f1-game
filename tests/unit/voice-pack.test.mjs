@@ -504,7 +504,7 @@ test("RECORDED never hands a race line to speech synthesis: a line no clip cover
   miss.v.say("BOX BOX BOX", 3, "info");
   const gap = Object.entries(miss.v.debug().unrecorded);
   assert.equal(gap.length, 1, "each unrecorded line is tallied, not silently dropped (#5991)");
-  assert.match(gap[0][0], /\|box box box$/i);
+  assert.equal(gap[0][0].split("|")[1].toUpperCase(), "BOX BOX BOX");
   assert.equal(gap[0][1], 2, "repeats count, but log only once");
   const sys = radio({ packOn: false });
   sys.v.say("BOX BOX BOX", 3, "info");
