@@ -4633,7 +4633,7 @@ function update(dt) {
   for (let i = 0; i < cars.length; i++) {
     const o = cars[i];
     if (o.retired) { if (o.parkedOnRoad) parked.push(o); continue; }
-    o.stillT = state === "race" && !o.finished && !o.inPit && !o.inPitLane && Math.abs(o.speed) < 1 ? (o.stillT || 0) + dt : 0;
+    o.stillT = AiDrive.stallStep(o.stillT, o.speed, dt, state === "race" && !o.finished && !o.inPit && !o.inPitLane);
     if (o.stillT >= 1.5) stillCars.push(o);
   }
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)

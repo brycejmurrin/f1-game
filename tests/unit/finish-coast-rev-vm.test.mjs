@@ -80,11 +80,19 @@ test("AI finisher: the same coast branch winds its rpm to the crawl, not the cro
     g.apex.carRole(friend, { human: true, local: false });
     g.apex.setInput({ throttle: true, steer: 0 });
     g.step(60 * 8);
-    const ai = G.cars.find((c, i) => i !== friend && c !== G.player && !c.retired && c.speed > 20);
+    // A rival at racing speed in a gear whose crawl (~9 m/s) still reads above the idle floor: in
+    // 5th the coast clamps at IDLE_RPM and has no gear line to measure. Which rival is in which
+    // gear at 8 s depends on the field's start shuffle, so choose it rather than take the first.
+    const rivals = G.cars.filter((c, i) => i !== friend && c !== G.player && !c.retired && c.speed > 20);
+    const ai = rivals.find((c) => c.gear <= 4) || rivals[0];
     assert.ok(ai, "a rival at racing speed");
     const rpmCross = ai.rpm;
     assert.ok(rpmCross > PC.IDLE_RPM + 3000, "crossing revs: " + rpmCross);
     ai.finished = true;
+    // Lift the scripted player (throttle pinned, steer 0): the measurement is the AI's coast, and
+    // a player reaching the crawling finisher at 22 m/s rear-ended it on some field shuffles
+    // (seen once AI cars started passing the stopped friend as a hazard, clean-room 39-41).
+    g.apex.setInput({ throttle: false, steer: 0 });
     const samples = [];
     for (let i = 0; i < 900 && G.state === "race"; i++) { g.step(1); if (i % 30 === 29) samples.push({ rpm: ai.rpm, v: ai.speed, gear: ai.gear }); }
     assert.equal(G.state, "race", "the humans are still running");
