@@ -417,7 +417,7 @@ auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the legacy fleet-status report on pre-2026-10-27 PRs, the lane:<host> label (LANE)
 and the Hand-off block's owner (OWNER), its lease (LEASE: live|parked|lapsed|open, from \`owner: <id> until <ISO>\`),
 the distinct adopting sessions (ADOPTED; \`churn\` at ${CHURN_ADOPTIONS}+), and a SUGGESTION (LAND READY SYNC FIX FOREIGN-ARM WAIT NONE); STATE shows +land, SUGGEST (HOLD) for the hold label.
-Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|union-conflict|stale-red|retest-refused|gate-refused|tip-red|no; git fetch, no writes).
+Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|union-conflict|stale-red|retest-refused|gate-refused|tip-crossed|tip-red|no; git fetch, no writes; no local merge, so tip-crossed needs needs-sync.mjs itself).
 --alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no hold label, no push
 (\`= alarm none|<n> stalled\`; exit 1 when any). Requests go through tools/lib/pr-snapshot.mjs (ETag cache).
 Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
