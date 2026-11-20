@@ -95,25 +95,14 @@ const HudLayout = (function () {
     bb: { x: -18, y: 0, s: 100 },
   };
   // HELMET — the VISOR HUD (js/camera/cam-groups.js HELMET_LAYOUT): the same
-  // wheel, but nothing is left to its LCD. DESKTOP: the cockpit strip plus
-  // GEAR and SPEED stacked left of the wheel above ENERGY / TYRES (1280x720:
-  // gear x-30 y-20 → fit() pins it at the left edge, 4..266 y438-503; speed
-  // 123..210 y366-413; ENERGY from y577 — measured by the hud-survey helmet
-  // cells, docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH,
-  // read through shippedEl while body lacks .desktop): the steer and pedal
-  // columns sit beside the wheel, so ENERGY stacks in the left bottom strip
-  // above TYRES (css/hud.css anchor-positioning on helmet touch — the old
-  // y-37 centre lift read as an ERS pill floating mid-visor, 2026-10-07).
-  // TYRES stays in the left corner between STRATEGY and the steer buttons:
-  // y-2 is 232..273 at 844×390 dock zoom 0.865. GEAR takes the LCD's place
-  // and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay with
-  // the touch buttons that carry them (css/track-detail.css, the helmet
-  // touch hide).
-  const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
-  // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
-  // where the wheel's screen is (the chase row's own centre, one step down),
-  // SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor,
-  // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
+  // wheel, but nothing is left to its LCD. DESKTOP: the cockpit strip, with GEAR
+  // and SPEED on ENERGY / TYRES's offset, so the cluster column moves as ONE stack
+  // left of the wheel (D-037; docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH, via shippedEl without .desktop): ENERGY stacks above TYRES
+  // in the left bottom strip (css/hud.css anchor positioning; a y-37 lift floated mid-visor), GEAR takes the
+  // LCD's place with SPEED right of it; OT / AERO / BB stay with their touch buttons (css/track-detail.css).
+  const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -4, s: 100 }, speed: { x: -30, y: -4, s: 100 } });
+  // Touch GEAR sits on the wheel's screen (the owner's ask, 2026-10-05; its opaque pill covers the LCD digits),
+  // SPEED right of it and one step up, clear of ENERGY and AERO.
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
     gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: -5, s: 100 } };
   const SHIPPED = Object.freeze({
@@ -445,7 +434,13 @@ const HudLayout = (function () {
     for (const [map, b] of [[groups, bounds], [blocks, { left: sa("--sal"), top: sa("--sat"), right: W - sa("--sar"), bottom: H - sa("--sab") }]]) for (const g of map.values()) {
       let l = Infinity, t = Infinity, rr = -Infinity, bb = -Infinity;
       for (const m of g) { l = Math.min(l, m.r.left); t = Math.min(t, m.r.top); rr = Math.max(rr, m.r.right); bb = Math.max(bb, m.r.bottom); }
-      const dx = clampAxis(l, rr, b.left, b.right), dy = clampAxis(t, bb, b.top, b.bottom);
+      const dx = clampAxis(l, rr, b.left, b.right);
+      let dy = clampAxis(t, bb, b.top, b.bottom);
+      // A block the clamp moved steps down past a control it now covers (D-037): S1-S3 out of the notch onto PAUSE.
+      if (map === blocks && (dx || dy)) for (const c of doc.querySelectorAll ? doc.querySelectorAll("#pausebtn, #btn-cam, .touchbtn") : []) {
+        const q = c.hidden ? null : c.getBoundingClientRect();
+        if (q && q.width) for (const m of g) if (m.r.left + dx < q.right && q.left < m.r.right + dx && m.r.top + dy < q.bottom && q.top < m.r.bottom + dy) dy = q.bottom + EDGE - m.r.top;
+      }
       g.dx = dx; g.dy = dy;
       for (const m of g) {
         if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));

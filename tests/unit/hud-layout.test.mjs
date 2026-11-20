@@ -1074,7 +1074,7 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
   const D = load3({ classes: ["desktop"], live: false });
   for (const id of ["energy", "tyre", "ot", "aero", "bb"]) assert.deepEqual(plain(D.H.get(id, "helmet")), plain(D.H.get(id, "cockpit")), id + ": the cockpit strip");
   assert.ok(D.H.get("gearbox", "helmet").x <= -25 && D.H.get("gearbox", "helmet").y < 0, "GEAR left of the wheel and up");
-  assert.ok(D.H.get("speed", "helmet").x <= -25 && D.H.get("speed", "helmet").y < D.H.get("gearbox", "helmet").y, "SPEED above GEAR");
+  for (const id of ["gearbox", "speed"]) assert.deepEqual(plain(D.H.get(id, "helmet")), plain(D.H.get("energy", "helmet")), id + ": one stack with ERS (D-037)");
   assert.deepEqual(plain(D.H.get("gearbox", "cockpit")), { x: 0, y: 0, s: 100 }, "the cockpit still leaves gear to the LCD");
   D.H.setCam("helmet");
   assert.equal(D.els["#hud-gearbox"].props["--hl-x"], String(D.H.SHIPPED.standard.helmet.gearbox.x));
@@ -1669,4 +1669,36 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
   assert.equal(D.H.applyPreset("big", "other"), true, "desktop keeps BIG");
   assert.equal(D.H.applyPreset("corners", "other"), true, "desktop keeps CORNERS");
   assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
+});
+
+test("a placed chip the clamp moves steps down past the control it lands on; one placed on a control stays (D-037)", () => {
+  // Bryce's S1-S3 at 852x393: placed in the 59 px right notch, the clamp brought it onto PAUSE (739..783, 8..52).
+  const W = 852, H = 393;
+  const run = (left) => {
+    const props = {}, attrs = { "data-hl": "" };
+    const sec = { id: "hud-sectors", style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue: (k) => props[k] || "" },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute: (k) => k in attrs,
+      getBoundingClientRect() {
+        const x = left + parseFloat(props["--hl-x"] || 0) / 100 * W, y = 36 + parseFloat(props["--hl-y"] || 0) / 100 * H;
+        return { left: x, top: y, right: x + 50, bottom: y + 78, width: 50, height: 78 };
+      } };
+    const pause = { hidden: false, getBoundingClientRect: () => ({ left: 739, top: 8, right: 783, bottom: 52, width: 44, height: 44 }) };
+    const root = {};
+    const ctx = { console, window: { innerWidth: W, innerHeight: H },
+      getComputedStyle: (el) => el === root ? { getPropertyValue: (k) => ({ "--sal": "59px", "--sar": "59px", "--sab": "21px" }[k] || "") } : { display: "block", visibility: "visible" },
+      document: { readyState: "complete", documentElement: root, getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => false } },
+        querySelector: (sel) => (sel === "#hud-sectors" ? sec : null),
+        querySelectorAll: (sel) => (/#pausebtn/.test(sel) ? [pause] : []) },
+      GameStore: { store: { get: (k, d) => (k === "hudLayout" ? { v: 4, standard: { other: { sectors: { x: 0.5, y: 0, s: 100 } } } } : d), set() { throw new Error("fit must not persist"); } } } };
+    vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+    ctx.HudLayout.apply();
+    assert.ok(sec.hasAttribute("data-hl-user"), "premise: a stored entry is the player's own");
+    return sec.getBoundingClientRect();
+  };
+  const moved = run(785);   // +0.5vw: 789..839 under the notch
+  assert.ok(Math.abs(moved.right - 793) < 0.05, "out of the notch: " + moved.right);
+  assert.ok(moved.top >= 52, "stepped below PAUSE: top " + moved.top);
+  const placed = run(696);   // +0.5vw: 700..750, already over PAUSE where the player put it
+  assert.ok(Math.abs(placed.left - 700.26) < 0.05, "unmoved: " + placed.left);
+  assert.equal(placed.top, 36, "a chip the clamp did not move keeps its spot (Bryce declined the general nudge)");
 });

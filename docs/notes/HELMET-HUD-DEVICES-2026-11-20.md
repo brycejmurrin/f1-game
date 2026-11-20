@@ -44,4 +44,16 @@ HUD. BEFORE shots come from a worktree at the base tip (`2b9d91ce`) carrying onl
   off tap targets and other readouts, is declined: those overlaps in his layout stay his to move. The broader
   paint-time clamp of #5155 stays reverted (#5165).
 
+## Round 2 → 3 (D-037)
+
+Round 2 showed two leftovers. First, the clamp pulled his S1–S3 out of the notch and onto PAUSE (852 × 393:
+40 × 16 px; MacBook: under PAUSE and HELMET). Second, at 125 % the desktop helmet strip was readable but still
+scattered. Bryce picked both fixes (D-037, ~10:32Z):
+
+- `fit()`: a block the clamp moved steps down past `#pausebtn`, `#btn-cam` or a `.touchbtn` it now covers. A
+  chip the clamp did not move keeps its spot, so the general nudge he declined stays off.
+- `HELMET_STRIP`: GEAR and SPEED take the ENERGY / TYRES offset (-30, -4), so `.hud-bottom`'s column (GEAR,
+  SPEED, ERS, TYRES) moves as one stack left of the wheel. At 1280 the column is about 123–388 against a wheel
+  edge near 431; at 1728 at 125 % it is about 181–511 against 540.
+
 Gallery: the living Artifact linked from the PR, republished each round.
