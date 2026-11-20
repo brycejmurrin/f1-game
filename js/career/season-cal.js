@@ -130,10 +130,10 @@ function list() {
 function rounds() { return list().length; }
 function track(round) { return list()[round] || null; }
 const REAL_2026_GP = Object.freeze({ sepang: "Bahrain GP", catalunya: "Barcelona-Catalunya GP" });
-function gpName(t) {
+function gpName(t, calIds) {
   if (!t) return "";
-  if (fmtActive() && REAL_2026_GP[t.id]) {
-    const ids = rulesConfig().trackIds || [];
+  if (REAL_2026_GP[t.id] && (calIds || fmtActive() || flow === "career")) {
+    const ids = calIds || (fmtActive() ? rulesConfig().trackIds || [] : list().map((x) => x.id));
     if (ids.length === REAL_2026.length && REAL_2026.every((r, i) => r.id === ids[i])) return REAL_2026_GP[t.id];
   }
   return t.gp || "";
