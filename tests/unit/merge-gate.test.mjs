@@ -1538,13 +1538,19 @@ test("land.yml sweep also rides a green CI or Deploy finish, at most once per SW
   };
   const runs = (...ids) => JSON.stringify({ workflow_runs: ids.map((id) => ({ id })) });
   const jobs = (...j) => JSON.stringify({ jobs: j });
+  const step = (status, conclusion) => [{ name: rate.name, status: "completed", conclusion: "success" }, { name: sweep.name, status, conclusion }];
+  const sw = (status, conclusion, steps) => ({ name: "sweep", status, conclusion, steps });
   const cases = [
-    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "sweep", status: "completed", conclusion: "success" }) }, "true", "a sweep finished in the window: skip"],
-    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "sweep", status: "in_progress", conclusion: null }) }, "true", "a sweep running now: skip"],
-    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "sweep", status: "completed", conclusion: "skipped" }) }, "false", "a skipped sweep job is no sweep"],
-    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "resolve", status: "completed", conclusion: "success" }) }, "false", "another job is no sweep"],
-    [{ FAKE_RUNS: runs(9), FAKE_RUN: jobs({ name: "sweep", status: "in_progress", conclusion: null }) }, "false", "this run's own sweep does not count"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "success", step("completed", "success"))) }, "true", "a sweep re-gated in the window: skip"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "true", "a sweep re-gating now: skip"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "success", step("completed", "skipped"))) }, "false",
+      "a sweep that itself skipped at the rate step also concludes success, and must not count (or every later sweep skips forever)"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("in_progress", null, step("pending", null))) }, "false", "a sweep still at its own rate check is no sweep yet"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "skipped", [])) }, "false", "a skipped sweep job is no sweep"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "resolve", status: "completed", conclusion: "success", steps: [{ name: sweep.name, status: "completed", conclusion: "success" }] }) }, "false", "another job is no sweep"],
+    [{ FAKE_RUNS: runs(9), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "false", "this run's own sweep does not count"],
     [{ FAKE_RUNS: runs() }, "false", "no recent run: sweep"],
+    [{ FAKE_RUNS: "not json" }, "false", "unreadable history sweeps anyway"],
   ];
   for (const [env, want, why] of cases) assert.equal(go(env).skip, want, why);
   const listed = go({ FAKE_RUNS: runs() }).calls.find((c) => c.includes("land.yml/runs?"));

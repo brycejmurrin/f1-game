@@ -823,8 +823,9 @@ jobs:
       issues: read
       statuses: read
     steps:
-      # RATE LIMIT: a sweep that ran (or is running) in another land.yml run in the last SWEEP_GAP_MIN minutes
-      # answers for this one. Unreadable history sweeps anyway: the sweep itself is bounded by STALE_MAX and RETRY_MAX.
+      # RATE LIMIT: a sweep whose RE-GATE STEP ran (or is running) in another land.yml run in the last SWEEP_GAP_MIN
+      # minutes answers for this one. Matched on that step, never the job: a sweep that skipped here also concludes
+      # success, and counting it would make every later sweep skip forever. Unreadable history sweeps anyway: the sweep itself is bounded by STALE_MAX and RETRY_MAX.
       - name: Rate limit (one CI-driven sweep per SWEEP_GAP_MIN)
         id: rate
         if: github.event_name == 'workflow_run'
@@ -841,7 +842,7 @@ jobs:
             || { echo "recent sweeps unreadable: sweeping"; echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0; }
           for id in $ids; do
             hit=$(gh api "repos/$R/actions/runs/$id/jobs?per_page=100" \
-              --jq '[.jobs[] | select(.name == "sweep" and (.conclusion == "success" or .status == "in_progress"))] | length > 0') || continue
+              --jq '[.jobs[] | select(.name == "sweep") | .steps[]? | select(.name == "Re-gate the land PRs whose gate is older than their last green CI" and (.conclusion == "success" or .status == "in_progress"))] | length > 0') || continue
             if [ "$hit" = true ]; then
               echo "stale-gate sweep skipped: land.yml run $id swept within ${SWEEP_GAP_MIN} min" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
