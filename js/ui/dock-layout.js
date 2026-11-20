@@ -367,6 +367,27 @@ const DockLayout = (function () {
       if (window.visualViewport && window.visualViewport.addEventListener)
         window.visualViewport.addEventListener("resize", paint, { passive: true });
     }
+    if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body) {
+      let mirrored = inboard("L") < 0;
+      new MutationObserver(() => {
+        const m = inboard("L") < 0;
+        if (m !== mirrored) { mirrored = m; paint(); }
+      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
+    if (typeof ResizeObserver !== "undefined") {
+      const usedZ = { L: 0, R: 0 };
+      const ro = new ResizeObserver(() => {
+        const d = docks();
+        let changed = false;
+        for (const side of SIDES) {
+          const z = d[side] ? zoomOf(d[side]) : 0;
+          if (z !== usedZ[side]) { usedZ[side] = z; changed = true; }
+        }
+        if (changed && !drag) paint();
+      });
+      const d = docks();
+      for (const side of SIDES) if (d[side]) ro.observe(d[side]);
+    }
 
     if (store && store.subscribe) {
       store.subscribe((change) => {
