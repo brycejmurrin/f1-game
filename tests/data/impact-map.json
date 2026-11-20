@@ -4814,6 +4814,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -6012,6 +6013,7 @@
         "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
@@ -19874,8 +19876,15 @@
       "flush": [
         "tests/unit/layout-presets.test.mjs"
       ],
+      "move": [
+        "tests/unit/menu-a11y-audit.test.mjs"
+      ],
       "open": [
         "tests/unit/title-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/css-has-scope.test.mjs",
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/ui/screen-looks.js": {
@@ -19946,11 +19955,15 @@
       ],
       "save": [
         "tests/unit/screen-looks.test.mjs"
+      ],
+      "*": [
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/ui/screen-regions.js": {
       "*": [
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/ui/scroll-fade.js": {
@@ -20466,6 +20479,7 @@
       ],
       "move": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/settings-lazy-gate.test.mjs"
       ],
@@ -20494,6 +20508,7 @@
         "tests/specs/title-fit.spec.js"
       ],
       "step": [
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [

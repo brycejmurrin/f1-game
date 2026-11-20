@@ -4,7 +4,6 @@
 window.ScreenArranger = (function () {
   const orientation = () => window.ScreenPlacement.orientation();
   const clone = value => JSON.parse(JSON.stringify(value));
-  const clamp = (n, min, max) => Math.max(min, Math.min(max, Math.round(n * 100) / 100));
   let active = null;
 
   function open(id, invoker = document.activeElement) {
@@ -27,16 +26,21 @@ window.ScreenArranger = (function () {
       initial[side] = clone(drafts[side]);
     }
     let side = orientation(), key = keys[0], marked, drag, frame, closed = false;
-    const dialog = document.createElement("dialog");
+    function el(tag, className) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      return element;
+    }
+    const dialog = el("dialog", "screen-arranger");
     dialog.id = "screen-arranger";
     dialog.dataset.editingScreen = id;
     dialog.setAttribute("aria-labelledby", "screen-arranger-title");
     dialog.setAttribute("data-esc-close", "screen-arranger-cancel");
     function node(tag, parent, value) {
-      const el = document.createElement(tag);
-      if (value) el.textContent = value;
-      parent.appendChild(el);
-      return el;
+      const child = el(tag);
+      if (value) child.textContent = value;
+      parent.appendChild(child);
+      return child;
     }
     const panel = node("section", dialog);
     panel.className = "arrange-tools";
@@ -79,10 +83,11 @@ window.ScreenArranger = (function () {
       render();
     }
     function region() { return drafts[side][key] || (drafts[side][key] = {}); }
+    const fieldValue = (prop, value) => placement.fieldValue(prop, value, screen.regions[key]);
     const directions = {Left: [-1, 0], Right: [1, 0], Up: [0, -1], Down: [0, 1]};
     function offset(record, x, y, dx, dy) {
-      record.x = clamp(x + dx, -50, 50);
-      record.y = clamp(y + dy, -50, 50);
+      record.x = fieldValue("x", x + dx);
+      record.y = fieldValue("y", y + dy);
     }
     function move(name, amount) {
       const [dx, dy] = directions[name];
@@ -99,13 +104,12 @@ window.ScreenArranger = (function () {
         const title = prop[0].toUpperCase() + prop.slice(1) + (sign < 0 ? " −" : " +");
         const btn = button(sizes, title, () => change(() => {
           const r = region(), n = Number(step.value) * sign;
-          if (prop === "scale") r.scale = clamp((r.scale || 1) + n * 0.05, 0.5, 2);
+          if (prop === "scale") r.scale = fieldValue(prop, (r.scale || 1) + n * 0.05);
           else {
             const rect = rectOf(element(key));
             const {w, h} = viewport();
             const measured = rect[prop] / ((prop === "width" ? w : h) * (r.scale || 1)) * 100;
-            const limit = prop === "width" ? screen.regions[key].maxWidth : screen.regions[key].maxHeight;
-            r[prop] = clamp((r[prop] || measured) + n, 5, limit || 100);
+            r[prop] = fieldValue(prop, (r[prop] || measured) + n);
             if (id === "career" && prop === "width" && ["calendar", "navigation"].includes(key)) {
               const other = drafts[side][key === "calendar" ? "navigation" : "calendar"];
               if (other) delete other.width;

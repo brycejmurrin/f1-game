@@ -19,18 +19,22 @@ window.ScreenPlacement = (function () {
     if (value === "tall") return "portrait";
     return SHAPES.includes(value) ? value : null;
   }
+  function fieldValue(key, value, config) {
+    const [min, max] = limits[key];
+    const ceiling = key === "width" ? config.maxWidth : key === "height" ? config.maxHeight : null;
+    return Math.round(1000 * Math.min(ceiling || max, Math.max(min, value))) / 1000;
+  }
   function cleanRegions(id, raw) {
     const out = {};
     if (!Object.hasOwn(registry(), id) || !raw || typeof raw !== "object") return out;
     for (const [region, config] of Object.entries(registry()[id].regions)) {
       if (!Object.hasOwn(raw, region) || !raw[region]) continue;
       const fields = {};
-      for (const [key, [min, max]] of Object.entries(limits)) {
+      for (const key of Object.keys(limits)) {
         const value = raw[region][key];
         if (!Number.isFinite(value) || config[key] === false) continue;
         if ((key === "x" || key === "y") && !value || key === "scale" && value === 1) continue;
-        const ceiling = key === "width" ? config.maxWidth : key === "height" ? config.maxHeight : null;
-        fields[key] = Math.round(1000 * Math.min(ceiling || max, Math.max(min, value))) / 1000;
+        fields[key] = fieldValue(key, value, config);
       }
       if (Object.keys(fields).length) out[region] = fields;
     }
@@ -150,8 +154,10 @@ window.ScreenPlacement = (function () {
         delete document.documentElement.dataset.pauseLayout;
         delete document.documentElement.dataset.pauseSide;
       } else {
-        if (mode === "save") for (const k of [PauseOpts.KEY_LAYOUT, PauseOpts.KEY_SIDE]) {
-          if (!GameStore.store.set(k, undefined)) durable = false;
+        if (mode === "save") {
+          const layoutSaved = GameStore.store.set("pauseLayout", undefined);
+          const sideSaved = GameStore.store.set("pauseSide", undefined);
+          durable = durable && layoutSaved && sideSaved;
         }
         PauseOpts.apply();
       }
@@ -185,6 +191,6 @@ window.ScreenPlacement = (function () {
       else if (change.key === "uiScale") resized();
     });
   }
-  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy,
+  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue,
     get garageRevision() { return garageRevision; }, get garagePanelMoved() { return garagePanelMoved; } });
 })();

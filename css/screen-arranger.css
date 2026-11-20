@@ -42,7 +42,7 @@ body:has(> main#overlay) {
   touch-action: none;
 }
 #screen-arranger::backdrop { background: transparent; }
-#screen-arranger:not([open]) { display: none; }
+.screen-arranger:not([open]) { display: none; }
 /* Draw inside the measured region, including regions clipped by a scroller. */
 .arrange-selection {
   outline: 3px dashed var(--focus);
@@ -59,7 +59,8 @@ body:has(> main#overlay) {
   gap: .5em;
   width: min(23rem, var(--safe-w));
   max-height: calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb)));
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y pinch-zoom;
   padding: .75em;
@@ -185,7 +186,7 @@ body:has(> main#overlay) {
   right: 0;
   bottom: 100%;
 }
-body:has(> #screen-arranger[open]) .screen-arrange-entry { visibility: hidden; }
+body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hidden; }
 @media (orientation: portrait) {
   #screen-arranger .arrange-tools {
     left: var(--safe-l);
@@ -202,3 +203,54 @@ body:has(> #screen-arranger[open]) .screen-arrange-entry { visibility: hidden; }
   #screen-arranger .arrange-tools { width: min(23rem, 49%, var(--safe-w)); }
 }
 } /* @layer layout */
+
+@layer base {
+:root[data-ui-theme="endurance"] {
+  --r-lg: 20px;
+  --r-md: 12px;
+}
+:root[data-ui-theme="drafting"] {
+  --r-lg: 6px;
+  --r-md: 3px;
+  --r-sm: 2px;
+  --font-ui: system-ui, sans-serif;
+}
+:root[data-ui-theme="endurance"] :is(#hud, #announce, #game-metrics) {
+  --bg: #081511;
+  --carbon: #16342b;
+  --text: #fbf8e9;
+}
+:root[data-ui-theme="drafting"] :is(#hud, #announce, #game-metrics) {
+  --bg: #0b192b;
+  --carbon: #192e45;
+  --text: #eef7ff;
+}
+:root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])),
+:root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
+  --dim: #c3d8ca;
+  --plate-line: #738e80;
+}
+:root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])),
+:root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
+  --dim: #bfd4e9;
+  --plate-line: #7895ac;
+}
+}
+
+@layer components {
+/* Keep selection recognizable when team and flag colours coincide. The underline
+   stays within the label, leaving the independent keyboard focus ring visible. */
+button[role="tab"][aria-selected="true"] {
+  text-decoration: underline;
+  text-decoration-thickness: .12em;
+  text-underline-offset: .2em;
+}
+:root[data-ui-theme="endurance"] .sheet-head h2 {
+  font-family: Georgia, serif;
+  letter-spacing: .025em;
+}
+:root[data-ui-theme="drafting"] .sheet-head h2 {
+  font-style: normal;
+  letter-spacing: .08em;
+}
+}

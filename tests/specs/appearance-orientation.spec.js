@@ -117,7 +117,9 @@ for (const touch of [false, true]) {
         const viewport = page.viewportSize();
         const label = [name, browser.browserType().name(), browser.version(), viewport.width + "x" + viewport.height,
           touch ? "touch" : "mouse-keyboard", build].join("-");
-        await testInfo.attach(label, { body: await page.screenshot(), contentType: "image/png" });
+        const path = testInfo.outputPath("arrangement-evidence", label + ".png");
+        await page.screenshot({ path });
+        await testInfo.attach(label, { path, contentType: "image/png" });
       };
       await page.goto("/");
       await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });

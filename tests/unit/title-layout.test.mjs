@@ -594,6 +594,7 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
     addEventListener: events.addEventListener, removeEventListener: events.removeEventListener,
     ScreenRegions: {career:{root:"#career", label:"Career", regions:{calendar:{selector:"#calendar", label:"Calendar"}}}},
     ScreenPlacement: {
+      fieldValue:(_prop, value) => value,
       orientation:() => side, read:(id, dir) => stored[dir], save:(id, dir, map) => { stored[dir] = plain(map); },
       resetLegacy:(id, mode) => { legacy.push(mode); return true; },
       apply:(id, map) => { live = plain(map); }

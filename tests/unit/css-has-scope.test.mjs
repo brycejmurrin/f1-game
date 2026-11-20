@@ -139,7 +139,7 @@ test("scoped :has(> .screen…) holds: every .screen is a <body> child; the one 
   const js = [];
   const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = dir + "/" + f.name;
-    if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /["'\s]screen["'\s]/.test(read(rel)) && /classList\.add\(\s*["']screen["']|className\s*=\s*["'][^"']*\bscreen\b|\bel\(\s*["']dialog["']\s*,\s*["'][^"']*\bscreen\b/.test(read(rel))) js.push(rel);
+    if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /["'\s]screen["'\s]/.test(read(rel)) && /classList\.add\(\s*["']screen["']|className\s*=\s*["'](?:[^"']*\s)?screen(?=\s|["'])|\bel\(\s*["']dialog["']\s*,\s*["'](?:[^"']*\s)?screen(?=\s|["'])/.test(read(rel))) js.push(rel);
   } };
   walk("js");
   assert.deepEqual(js, ["js/share/share-card-chips.js"], "a .screen built at runtime must be a body child (and named here)");
@@ -184,8 +184,9 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; ru
     if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /(?:createElement|\bel)\(\s*["']dialog["']/.test(read(rel))) built.push(rel);
   } };
   walk("js");
-  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry.js", "js/share/share-card-chips.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry.js", "js/share/share-card-chips.js", "js/ui/screen-arranger.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
   assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true, "the share-card preview is a <body> child");
+  assert.match(read("js/ui/screen-arranger.js"), /document\.body\.appendChild\(dialog\)/, "the layout editor is a <body> child");
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
   const bad = [];
   for (const [file, src] of CSS) for (const m of hasArgs(src)) if (/^dialog\b/.test(m[2])) bad.push(`${file}: ${m[0]}`);
