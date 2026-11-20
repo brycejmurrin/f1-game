@@ -67,7 +67,7 @@ body:has(> main#overlay) {
   scroll-padding: .75em;
 }
 #screen-arranger[data-edge="start"] .arrange-tools { right: auto; left: var(--safe-l); }
-#screen-arranger #arrange-bar {
+#screen-arranger #screen-arranger-bar {
   display: flex;
   align-items: center;
   gap: calc(var(--gap, .75rem) / 4);
@@ -75,14 +75,14 @@ body:has(> main#overlay) {
   overscroll-behavior-x: contain;
   touch-action: pan-x;
 }
-#screen-arranger #arrange-bar select {
+#screen-arranger #screen-arranger-bar select {
   height: max(44px, 2.4em);
   white-space: nowrap;
   flex: 1 1 5em;
   min-width: 44px;
   text-overflow: ellipsis;
 }
-#screen-arranger #arrange-bar :is(button, select) {
+#screen-arranger #screen-arranger-bar :is(button, select) {
   min-width: 44px;
   padding-inline: .4em;
 }
@@ -148,6 +148,13 @@ body:has(> main#overlay) {
   top: var(--safe-t);
   font: 600 var(--fs-2)/1.2 var(--font-ui);
   cursor: pointer;
+}
+/* On a short phone Pause reserves every row for the race controls; the
+   existing responsive layout removes this entire header there. The same
+   editor opens from the Pause page in Appearance on every screen size. */
+#pausemenu .sheet-head > .screen-arrange-entry {
+  position: static;
+  margin-inline-start: auto;
 }
 /* Most menus already have a safe, single-column grid. Put the extra door
    after the sheet, beyond the scrollport and the player's moveable regions. */

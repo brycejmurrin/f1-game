@@ -296,6 +296,13 @@ window.MenuNav = (function () {
       }
     }
     const a = centre(from);
+    // The contextual editor door occupies a row AFTER the sheet. On a wide
+    // screen it can sit entirely to the right of the footer, outside every
+    // footer button's vertical band. Down leaves the foot for this next row.
+    if (dy > 0 && from.closest?.(".sheet-foot")) {
+      const entry = list.find(el => el.classList?.contains("screen-arrange-entry"));
+      if (entry && centre(entry).y > a.y) return entry;
+    }
     const sign = dx + dy;
     let best = null, bestAlong = Infinity, bestAcross = Infinity;
     let edge = null, edgeDist = 0;

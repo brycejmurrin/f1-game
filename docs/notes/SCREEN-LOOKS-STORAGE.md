@@ -157,3 +157,9 @@ HELMET — the VISOR HUD (js/camera/cam-groups.js HELMET_LAYOUT): the same wheel
 GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits where the wheel's screen is (the chase row's own centre, one step down), SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor, 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
 
 BIG: tower/map grow in the top band; gaps stay between map and tower (x+7 clears the grown map without meeting the tower); gearbox x-32 y-18 s:115 sits left and above the TYRE row (detached home is bottom:12; y-12 still clipped TYRES by ~14px at 1280) and clear of SPEED at 1280 and 1920. CORNERS: gearbox x+38 y-18 is the right corner ABOVE the chip row; ENERGY x-32 and TYRES x-44 take the vacated left strip (both forced to 130px wide under data-hl-v4; x-42 still kissed ENERGY by 2px at 1280) clear of the reflowed SPEED / BB row at both widths.
+
+## Touch dock and phone wheel coordinates
+
+Touch docks store inward and upward fractions of the layout viewport after subtracting the safe insets. The safe corner is the zero position. Travel stops at 35% so neither pedal group can be placed beyond its home edge. The dock compensates for its effective CSS zoom when painting these offsets. Pinching or changing button size therefore preserves the saved position. Each steering scheme has its own pair of offsets in `apex26.dockLayout`.
+
+The landscape phone wheel stores button offsets as viewport percentages in `apex26.padLayout`. Apply commits the wheel draft. Pairing and menu-pad regions use the shared orientation-specific `apex26.screenPlacement` store on the controller device.

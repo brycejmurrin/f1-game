@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 const root = new URL('../../', import.meta.url);
 const read = (p) => fs.readFileSync(new URL(p, root), 'utf8');
@@ -246,4 +247,40 @@ test('MOVE & SIZE (#5801): placements normalise, keep the 44px touch floor, and 
   assert.deepEqual([L.minScale(88, 200, 100), L.minScale(176, 300, 200), L.minScale(400, 400, 100)], [50, 50, 40], 'a 44px floor on the shorter side, never under 40%');
   assert.equal(L.layoutPreset({ zone: {}, place: { gas: { x: 4, y: 0, s: 100 } } }), 'custom', 'a moved control is CUSTOM');
   assert.deepEqual(plain(L.LAYOUT_PRESETS.phone.place), {}, 'presets carry no placements, so picking one puts every control back');
+});
+
+test("phone wheel edits Gas in each preset, cancels interrupted drags and writes only on Apply", () => {
+  const h = boot(), L = vm.runInContext("PhonePadPage", h.ctx);
+  for (const [preset, layout] of Object.entries(L.LAYOUT_PRESETS)) {
+    const ui = makeDom(), stage = ui.byId("ctl"), gas = ui.makeElement("div", "gas");
+    gas.textContent = "Gas"; gas.getClientRects = () => [{}];
+    stage.appendChild(gas);
+    const parts = Object.fromEntries(["bar","picker","adjust","edge","tools","step","undo","arrangeDone","cancel","resetAll","open"].map(id => [id, ui.byId(id)]));
+    const right = ui.makeElement("button"); right.dataset.nudge = "right";
+    const options = { ...parts, doc:ui.document, body:ui.body, stage, arrange:{gas}, nudges:[right] };
+    const saved = [];
+    const api = L.layout(options, {store:{getItem:() => JSON.stringify(layout), setItem:(k,v) => saved.push(JSON.parse(v))}});
+    const send = (type, x) => {
+      const e = { type, target:gas, pointerId:1, clientX:x, clientY:50, cancelable:true };
+      ui.dispatch(stage, e);
+      assert.ok(e.defaultPrevented && e.propagationStopped, preset + " captures " + type);
+    };
+    api.arrange(true);
+    assert.equal(parts.picker.value, "gas"); assert.equal(parts.tools.hidden, true);
+    parts.edge.click(); assert.equal(parts.bar.hasAttribute("data-bottom"), true);
+    send("pointerdown", 100); send("pointermove", 180);
+    assert.equal(gas.style.translate, "10vw 0vh");
+    send("pointercancel", 180); assert.equal(gas.style.translate, "");
+    send("pointerdown", 100); send("pointermove", 180); send("pointerup", 180);
+    parts.adjust.click(); assert.equal(parts.tools.hidden, false);
+    parts.step.click(); right.click();
+    assert.equal(api.get().place.gas.x, 15);
+    parts.undo.click(); assert.equal(api.get().place.gas.x, 10);
+    parts.cancel.click(); assert.equal(saved.length, 0); assert.deepEqual(plain(api.get()), plain(layout));
+    api.arrange(true); send("pointerdown", 100); send("pointermove", 180); send("pointerup", 180);
+    parts.arrangeDone.click(); assert.equal(saved.length, 1);
+    assert.deepEqual(saved[0], {...plain(layout), place:{gas:{x:10,y:0,s:100}}});
+    api.arrange(true); parts.resetAll.click(); parts.arrangeDone.click();
+    assert.deepEqual(saved[1], plain(L.LAYOUT_PRESETS.classic));
+  }
 });

@@ -48,7 +48,7 @@ window.ScreenRegions = (function () {
     battle: part(".ov-battle", "Battle"), caption: part(".ov-caption", "Caption") }, "main#overlay");
 
   let editorLoad, request = 0;
-  async function openEditor(id, button) {
+  async function openEditor(id, button, prepare) {
     if (!button || !Object.hasOwn(screens, id)) return;
     if (button.getAttribute("aria-busy") === "true") return;
     const mine = ++request;
@@ -69,19 +69,23 @@ window.ScreenRegions = (function () {
       } finally {
         button.removeAttribute("aria-busy");
       }
-      button.textContent = "Arrange this screen";
+      button.textContent = prepare ? "Arrange Pause" : "Arrange this screen";
       button.removeAttribute("title");
     }
-    if (mine === request && button.isConnected && !button.closest("[hidden]")) window.ScreenArranger.open(id, button);
+    if (mine !== request || !button.isConnected || button.closest("[hidden]")) return;
+    const invoker = prepare ? prepare() : button;
+    if (invoker) window.ScreenArranger.open(id, invoker);
   }
 
   function entry(root, label, run) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "screen-arrange-entry";
+    if (root.id) button.id = root.id + "-arrange-entry";
     button.textContent = label;
     button.addEventListener("click", (event) => { event.stopPropagation(); run(button); });
-    root.appendChild(button);
+    const host = root.id === "pausemenu" ? root.querySelector(".sheet-head") : root;
+    host.appendChild(button);
   }
 
   // Appearance keeps its illustrative preview. This button uses the same
@@ -93,7 +97,7 @@ window.ScreenRegions = (function () {
     select: ["Track selector", "mb-race", "From Home, open Race and choose Arrange this screen on the circuit list."],
     datahub: ["Data Hub", "mb-data", "From Home, open Data Hub and choose Arrange this screen."],
     race: ["Race setup", "mb-race", "From Home, open Race, select a circuit and continue to Race Settings. Choose Arrange this screen there."],
-    pause: ["Pause", null, "During a race, pause and choose Arrange this screen."],
+    pause: ["Pause", null, "During a race, pause and open Settings → Appearance. Choose Pause, then Arrange Pause."],
     hud: ["Race HUD", "pm-hud-arrange", "Arrange the HUD for the selected HUD style and camera group."],
     popups: ["Race results", null, "Finish a race, then choose Arrange this screen on Results. Each dialog saves separately."],
   };
@@ -126,11 +130,17 @@ window.ScreenRegions = (function () {
       if (key === "hud") { document.getElementById("pm-hud-arrange")?.click(); return; }
       const back = document.getElementById("pm-settings-close");
       const settings = document.getElementById("pmsettings");
-      // Unwind nested Settings pages through the ordinary Back handler.
-      for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
-      if (!settings.hidden) return;
+      function closeSettings() {
+        // Unwind nested Settings pages through the ordinary Back handler.
+        for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
+        return settings.hidden;
+      }
+      if (key === "pause") {
+        openEditor("pausemenu", go, () => preview.dataset.screen === key && closeSettings() ? document.getElementById("pm-settings") : null);
+        return;
+      }
+      if (!closeSettings()) return;
       if (key === "home") TitleLayout.enter(document.querySelector("#overlay .screen-arrange-entry"));
-      else if (key === "pause") openEditor("pausemenu", document.querySelector("#pausemenu .screen-arrange-entry"));
       else document.getElementById(routes[key][1])?.click();
     });
     refresh();
@@ -163,14 +173,6 @@ window.ScreenRegions = (function () {
     }
     for (const [id, def] of Object.entries(screens)) bind(id, document.querySelector(id === "watch" ? ".watch-transport" : def.root));
     const title = document.querySelector("#overlay #menu-buttons");
-    const pause = document.getElementById("pm-quick-doors");
-    if (pause) {
-      const hud = document.createElement("button");
-      hud.type = "button";
-      hud.textContent = "Arrange race HUD";
-      hud.addEventListener("click", () => { const button = document.getElementById("pm-hud-arrange"); if (button) button.click(); });
-      pause.appendChild(hud);
-    }
     const wheel = document.getElementById("ctl");
     if (wheel) entry(wheel, "Arrange this screen", () => document.getElementById("lay-arrange").click());
     if (!title) return;

@@ -10014,6 +10014,9 @@
       ]
     },
     "js/input/phone-pad-page.js": {
+      "arrange": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
       "cancel": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
