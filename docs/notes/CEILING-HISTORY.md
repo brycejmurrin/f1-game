@@ -41,6 +41,17 @@ run at boot to see a settled rotation; on SHARED, the default, it returns at onc
 (`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
 row stay lazy in `js/ui/layout-presets.js`. Fragment:
 `tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+## 2026-11-20 — PR #5951 (claude/trusting-clarke-01d9ui): desktop graphics tiers above ULTRA
+
+`(tree) eagerBytes` 7972011 → **7974184** (+2173). Deliberate raise past the absorb: the
+`GfxQuality` detail seam in the FULL (eager) `js/perf/quality-preset.js` (the EXTREME preset,
+`detail()`, `feature()`, the `FEATURES` table, `setShed`, `setCinema`). It is eager because every
+renderer and the rival LOD ask it at boot, before any lazy bundle lands. Bryce asked for it in
+chat (2026-11-20: "Increase budget or remove comments"); the tree-wide ceiling still needs his
+own `ratchet-raise` label on the PR. Fragment:
+`tests/data/ratchets.d/claude--trusting-clarke-01d9ui.json`. The number moves again when the
+phase branches merge; this entry is updated in that push.
+
 ## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
 
 `(tree) eagerBytes` 8,015,949 → **8,017,580** (+1,631 B). Deliberate raise; Bryce chose it with
