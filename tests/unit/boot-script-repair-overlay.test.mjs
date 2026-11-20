@@ -7,6 +7,7 @@ import test from "node:test";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { EventEmitter } from 'node:events';
 import { validateFaultScenario, installFaultSchedule, replayFaultScenario } from '../../tools/ui/explorer/fault-schedule.mjs';
+import { bootSummary, routeStallReporter, STALL_ANNOTATION } from '../helpers/stall-diag.js';
 
 const lazyPath = '/js/circuits/monaco.js';
 const faultHold = () => ({ type: 'faultHold', id: 'circuit', path: lazyPath, timeoutMs: 1000 });
@@ -18,17 +19,18 @@ const faultScenario = actions => ({ version: 1, id: 'lazy-preview', goal: 'Leave
 function faultRig() {
   const context = new EventEmitter(), timers = new Map(), calls = [];
   let handler, sequence = 0;
-  context.route = async (_, h) => { handler = h; };
+  const routes = [];
+  context.route = async (url, h) => { routes.push(url); handler = h; };
   context.unroute = async (_, h) => { assert.equal(h, handler); calls.push('unroute'); };
   const clock = { setTimer(fn) { const id = ++sequence; timers.set(id, fn); return id; }, clearTimer(id) { timers.delete(id); } };
   let request, pending;
-  return { context, calls, clock, timers,
+  return { context, calls, clock, timers, routes,
     session: { context, page: { url: () => 'http://localhost/' } },
-    start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false, resourceType = 'script' } = {}) {
+    start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false, resourceType = 'script', hang = false } = {}) {
       request = { url: () => origin + pathname + '?v=dev', resourceType: () => resourceType };
       pending = handler({ request: () => request,
-        fallback: async () => { calls.push('continue'); if (failRoute) throw Error('route failed'); },
-        abort: async () => { calls.push('reject'); context.emit('requestfailed', request); },
+        fallback: async () => { calls.push('continue'); if (hang) await new Promise(() => {}); if (failRoute) throw Error('route failed'); },
+        abort: async () => { calls.push('reject'); if (hang) await new Promise(() => {}); context.emit('requestfailed', request); },
       });
       return pending;
     },
@@ -125,6 +127,24 @@ test('fault fixture routing composes, requires an actual terminal transfer and d
   g.context.unroute = async () => { throw Error('unroute failed'); };
   await assert.rejects(held.close(), error => error.message === 'unroute failed');
   await g.drain(); assert.deepEqual(g.calls, ['reject']);
+});
+
+test('fault schedule unroute leaves a non-matching route so it is not the last interception', async () => {
+  const f = faultRig();
+  const s = await installFaultSchedule(f.context, 'http://localhost', f.clock);
+  assert.equal(f.routes.length, 2);
+  assert.equal(typeof f.routes[0], 'function');
+  assert.equal(f.routes[0](new URL('http://localhost/js/circuits/monaco.js')), false);
+  assert.equal(f.routes[1], '**/*');
+  s.hold(faultHold());
+  void f.start();
+  await s.wait('circuit');
+  const release = s.release('circuit', 'continue');
+  f.finish();
+  await release;
+  await s.close();
+  assert.deepEqual(f.calls, ['continue', 'unroute']);
+  assert.equal(f.routes.length, 2);
 });
 
 test('warming fetches and XHRs of the held pathname do not consume a lazy script hold', async () => {
@@ -244,4 +264,79 @@ test("pinned overlay (second scriptRetry pass) still shows even if __apexScriptR
   }
   assert.equal(overlay && overlay.style.display, "block");
   assert.equal(overlay.textContent.indexOf("Module failed to load") >= 0, true);
+});
+
+// #5542: the evidence names WHICH interception call stalled, and when each fault event happened.
+test('fault schedules time their events and route calls, and report a call still pending past slowMs', async () => {
+  const f = faultRig(), slow = [];
+  let releaseUnroute;
+  const unroute = f.context.unroute;
+  f.context.unroute = (p, h) => new Promise(resolve => { releaseUnroute = () => resolve(unroute(p, h)); });
+  const s = await installFaultSchedule(f.context, 'http://localhost', { ...f.clock, slowMs: 20, onSlowCall: info => slow.push(info) });
+  s.hold(faultHold()); f.expire();
+  assert.deepEqual(s.events.map(e => e.state), ['armed', 'timeout']);
+  assert(s.events.every(e => Number.isFinite(e.t) && e.t >= 0));
+  const closing = s.close();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(slow.length, 1);
+  assert.equal(slow[0].op, 'unroute');
+  assert(slow[0].pendingMs > 0); // timer granularity: setTimeout(20) may read 19 ms on Date.now()
+  assert.deepEqual(slow[0].events.map(e => e.state), ['armed', 'timeout']);
+  assert.deepEqual(slow[0].calls.map(c => [c.op, c.end === null]), [['route', false], ['unroute', true]]);
+  releaseUnroute(); await closing;
+  assert.deepEqual(s.calls.map(c => [c.op, Number.isFinite(c.end)]), [['route', true], ['unroute', true]]);
+  assert.deepEqual(f.calls, ['unroute']);
+  assert.equal(slow.length, 1, 'a call that settles before slowMs reports nothing');
+});
+
+// #5599/#5542: the one job-log line names each boot milestone and the cause indicators, in one line.
+test('stall diagnostics summarise a slow boot and a pending route call in one line each', () => {
+  const diag = { error: 'Timeout 45000ms exceeded.', worker: { boots: 4, lastTitle: 'a race on the shipped renderer finishes' },
+    census: { otherContexts: [] }, network: { navigatedAt: 1900, pending: [{ url: 'http://127.0.0.1:3456/js/render/glx/glx.js?v=dev', age: 70100 }], consoleTail: [] },
+    slow: null, final: { firstLogT: 2100, probe: { dcl: 2000, apexNull: 75300, apexSet: null, apexRace: null, maxTickGap: 70200, long: [[3000, 900], [4200, 70100]] },
+      sw: { controller: null, regs: [] } } };
+  const line = bootSummary('boot', 78000, diag);
+  assert.equal(line, 'stall-diag boot 78.0s FAILED: nav 1.9s dcl 2.0s first-log 2.1s game.js-done 75.3s __apex — race —'
+    + ' | longest task 70.1s@4.2s tick-gap 70.2s | pending 1 (/js/render/glx/glx.js?v=dev 70.1s) | sw ctl=none regs=0'
+    + ' | other contexts 0 | worker boot #4 after "a race on the shipped renderer finishes"');
+  assert(!line.includes('\n'));
+  const info = { annotations: [], attach: async () => {} };
+  routeStallReporter(info, null)({ op: 'unroute', pendingMs: 5000, events: [{ state: 'armed', t: 0 }, { state: 'timeout', t: 1001 }], calls: [] });
+  assert.equal(info.annotations.length, 1);
+  assert.equal(info.annotations[0].type, STALL_ANNOTATION);
+  // Structural, field by field (no page, so no census field): head | events | worker boot #<n>[ after "…"].
+  const parts = info.annotations[0].description.split(' | ');
+  assert.deepEqual(parts.slice(0, 2), ['stall-diag context.unroute still pending after 5.0s', 'events armed@0.0s timeout@1.0s']);
+  assert.equal(parts.length, 3);
+  assert.equal(parts[2].slice(0, 13), 'worker boot #');
+  assert.ok(Number.isInteger(Number(parts[2].slice(13).split(' ')[0])), 'the worker boot count is a number');
+});
+
+// #5542: an interception call or a held route that never settles fails fast with its own name, not at the test timeout.
+test('fault schedule awaits that never settle reject within callMs, naming the call', async () => {
+  const never = () => new Promise(() => {});
+  const named = (what) => (error) => error.message === `Fault schedule ${what} did not settle within 30 ms`;
+  const r = faultRig();
+  r.context.route = never;
+  await assert.rejects(installFaultSchedule(r.context, 'http://localhost', { ...r.clock, callMs: 30 }), named('route'));
+  const u = faultRig(), su = await installFaultSchedule(u.context, 'http://localhost', { ...u.clock, callMs: 30 });
+  su.hold(faultHold()); u.expire();
+  u.context.unroute = never;
+  await assert.rejects(su.close(), named('unroute'));
+  // The spec's never-occurs case expects /not observed/: a stalled unroute behind it must fail that, by name.
+  const p = faultRig();
+  const replay = replayFaultScenario(p.session, faultScenario([faultHold(), faultWait(), faultRelease('continue')]),
+    { ...p.clock, callMs: 30, performAction: async () => {}, matchesOracle: async () => true });
+  await new Promise(resolve => setImmediate(resolve));
+  p.context.unroute = never; p.expire();
+  await assert.rejects(replay, error => error.message === 'Fault replay and cleanup failed (cleanup: Fault schedule unroute did not settle within 30 ms)'
+    && !/not observed/.test(error.message) && /not observed/.test(error.errors[0].message));
+  for (const outcome of ['continue', 'reject']) {
+    const f = faultRig(), s = await installFaultSchedule(f.context, 'http://localhost', { ...f.clock, callMs: 30 });
+    s.hold(faultHold()); void f.start({ hang: true }); await s.wait('circuit');
+    await assert.rejects(s.release('circuit', outcome), named(`route.${outcome === 'continue' ? 'fallback' : 'abort'} for circuit`));
+    await assert.rejects(s.close(), named('held-route drain'));
+    assert.equal(f.timers.size, 0);
+    assert.equal(f.context.listenerCount('requestfailed'), 0);
+  }
 });

@@ -188,7 +188,7 @@ function bootMenus(disk = {}, o = {}) {
   const tiles = () => selTracks.querySelectorAll(".track-row");
   const tile = (id) => tiles().find((r) => LIST[+r.dataset.trackIdx].id === id);
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
-  return { dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
+  return { sb, dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
 
 test("select titles and CTAs name Practice, Time Trial, and Race", () => {
@@ -287,6 +287,21 @@ test("Practice brief is one row on the compact phone card", () => {
   assert.equal(decl(rules, `${card} #practice-brief[hidden]`, "display"), "none", "the row rule must not un-hide the brief");
   assert.equal(decl(rules, `${card} #practice-brief > p`, "clip-path"), "inset(50%)");
   assert.equal(decl(rules, `${card} #practice-brief .set-row`, "flex-wrap"), "nowrap");
+});
+
+// #5890: opened while the circuit file loads, the detail read "0 turns" and never repainted.
+test("CIRCUIT DETAIL repaints when its circuit file arrives, if still open on that circuit", async () => {
+  let land;
+  const h = bootMenus({}, { ensureCircuit: () => new Promise((r) => { land = r; }) });
+  h.menus.openTrackDetail();
+  const meta = () => h.dom.byId("track-detail-meta").textContent;
+  assert.match(meta(), /\b0 turns/, "the meta stub has no corners yet");
+  assert.equal(typeof land, "function", "opening on a stub asks for the circuit file");
+  h.sb.Tracks.LIST[1].path = { pts: [[0, 0], [1, 1]] };
+  h.sb.TrackMaps.corners = () => new Array(19).fill({});
+  land();
+  await new Promise((r) => setImmediate(r));
+  assert.match(meta(), /\b19 turns/, "the open panel repainted with the hydrated circuit");
 });
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
@@ -597,7 +612,7 @@ test("circuit search: a divider survives only while ITS run of tiles does", () =
   assert.ok(fn, "applyTrackSearch is in select-screen.js");
   const mk = (kind, group, search) => {
     const classes = new Set([kind]);
-    return { hidden: false, nextElementSibling: null, dataset: { trackGroup: group, search }, group,
+    return { hidden: false, nextElementSibling: null, dataset: { trackGroup: group, search }, group, click() {},
       classList: { contains: (c) => classes.has(c) } };
   };
   const list = [
@@ -2659,4 +2674,27 @@ test("AriaState sync writes aria-pressed / aria-current only when the value chan
   two.classList.add("active");
   sb.AriaState.sync();
   assert.deepEqual(writes, ["aria-pressed"], "only the button whose state changed is written");
+});
+
+// #5672: Bryce's phone (UI SIZE 70, garage BUTTON 80 %) painted CLOSE GARAGE 35 px and the touch --chip-h 33.6 px
+// (SEASON SETUP ▲ / ▼ / ✕ 34×34); #5755's re-record of his export saw #cs-done at 35.4 at UI SIZE 50 and 70 too.
+// The tokens' own arithmetic, evaluated at both: every touch arm paints 44.2 px.
+test("touch --chip-h and every BUTTON-look arm paint 44.2 px at UI SIZE 50 and 70 (#5672)", () => {
+  const num = (expr, vars) => Function(`"use strict"; return (${String(expr)
+    .replace(/var\((--[\w-]+)(?:,\s*[\d.]+)?\)/g, (_, n) => { assert.ok(n in vars, `${n} in ${expr}`); return String(vars[n]); })
+    .replace(/(\d)px/g, "$1").replace(/calc\(/g, "(").replace(/\bmax\(/g, "Math.max(").replace(/\bmin\(/g, "Math.min(")});`)();
+  const tok = css("css/tokens.css"), ov = css("css/overlays.css");
+  const looks = { datahub: "#datahub", select: "#select", race: "#race-settings", career: "#career", garage: "#carsetup",
+    popups: "dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings)" };
+  for (const s of [0.5, 0.7]) {
+    const r2 = (v) => Math.round(v * s * 100) / 100;
+    const tap0 = num(decl(tok, "body:not(.desktop)", "--tap"), { "--ui-scale": s });
+    const chip0 = num(decl(tok, "body:not(.desktop)", "--chip-h"), { "--ui-scale": s });
+    assert.deepEqual([r2(tap0), r2(chip0)], [44.2, 44.2], `the touch tokens at UI SIZE ${s * 100}`);
+    const painted = (look) => Object.entries(looks).map(([k, sel]) => ["--tap", "--chip-h"].map((p) =>
+      r2(num(decl(ov, `:root[data-look-${k}-btn] ${sel}`, p, { context: /pointer: coarse/ }),
+        { "--ui-scale": s, "--tap-0": tap0, "--chip-h-0": chip0, [`--look-${k}-btn`]: look }))));
+    assert.deepEqual(painted(0.8), Object.keys(looks).map(() => [44.2, 44.2]), `BUTTON 80 % holds the floor at UI SIZE ${s * 100}`);
+    assert.deepEqual(painted(1.5), Object.keys(looks).map(() => [r2(tap0 * 1.5), r2(chip0 * 1.5)]), `a bigger look still scales at UI SIZE ${s * 100}`);
+  }
 });

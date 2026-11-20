@@ -667,7 +667,15 @@
 #trackdesigner [aria-label="Designer mode"] { flex: 1; display: flex; flex-wrap: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button { flex: 1 0 auto; white-space: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button::before { content: attr(data-step); color: var(--dim); margin-inline-end: calc(var(--gap) / 3); }
-#trackdesigner .td-rail { scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2); overflow-anchor: none; }
+#trackdesigner .td-rail {
+  scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2);
+  /* Keep the last inspector chips clear of the SAVE / RACE / TIME TRIAL foot
+     when scrollIntoView / focus lands them at the end of the rail. */
+  scroll-padding-bottom: calc(var(--tap-paint) + var(--gap));
+  padding-bottom: calc(var(--gap) * 1.5);
+  overflow-anchor: none;
+  box-sizing: border-box;
+}
 #trackdesigner [data-role="mode-bar"] [data-role="context-help"] { flex: none; }
 #trackdesigner .td-stage { container-type: inline-size; container-name: designer-map; }
 @media (min-height: 501px) {
@@ -721,6 +729,9 @@
   #trackdesigner [data-role="workspace-status"] .td-msg { min-width: 0; }
 }
 @media (max-width: 760px) and (orientation: portrait) {
+  /* Map keeps 1.3fr: a 1fr map left the profile canvas overhanging .td-stage at
+     390x844 (track-designer.spec "profile must fit its stage"). The rail's
+     scroll-padding-bottom keeps the last chips clear of the foot instead. */
   #trackdesigner .td-body { grid-template-rows: auto minmax(0, 1.3fr) minmax(0, 1fr); }
 }
 
@@ -801,8 +812,34 @@
 @media (min-width: 761px) and (orientation: landscape) {
   :root[data-look-designer-split] #trackdesigner[data-foot="out"] .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, calc(100% - var(--look-designer-split))); }
 }
-:root[data-look-designer-text="small"] #trackdesigner { --fs-2: 14px; --fs-3: 15px; --fs-4: 16px; --fs-5: 17px; --fs-6: 18px; }
-:root[data-look-designer-text="large"] #trackdesigner { --fs-micro: 16px; --fs-2: 17px; --fs-3: 18px; --fs-4: 20px; --fs-5: 21px; --fs-6: 23px; }
+/* 12 PAINTED px text floor (#5235 recipe): --td-zoom multiplies ui-scale by
+   DESIGNER SIZE (phone default 75 %), so the tokens.css ui-scale floor alone
+   still painted UNDO/REDO/FIT at ~7–9 px (0.7 × 0.75 × 16 ≈ 8.4). Re-floor
+   against --td-zoom. Keep these AFTER the look-designer-text knobs so a bare
+   16px LARGE assignment cannot underrun the painted floor again. */
+#trackdesigner {
+  --td-fs-floor: calc(12px / var(--td-zoom));
+  --fs-micro: max(14px, var(--td-fs-floor));
+  --fs-2: max(15px, var(--td-fs-floor));
+  --fs-3: max(16px, var(--td-fs-floor));
+  --fs-4: max(17px, var(--td-fs-floor));
+}
+:root[data-look-designer-text="small"] #trackdesigner {
+  --fs-2: max(14px, var(--td-fs-floor));
+  --fs-3: max(15px, var(--td-fs-floor));
+  --fs-4: max(16px, var(--td-fs-floor));
+  --fs-5: max(17px, var(--td-fs-floor));
+  --fs-6: max(18px, var(--td-fs-floor));
+}
+:root[data-text-size="large"] #trackdesigner,
+:root[data-look-designer-text="large"] #trackdesigner {
+  --fs-micro: max(16px, var(--td-fs-floor));
+  --fs-2: max(17px, var(--td-fs-floor));
+  --fs-3: max(18px, var(--td-fs-floor));
+  --fs-4: max(20px, var(--td-fs-floor));
+  --fs-5: max(21px, var(--td-fs-floor));
+  --fs-6: max(23px, var(--td-fs-floor));
+}
 :root[data-look-designer-profile="short"] #trackdesigner .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 1.6); min-height: var(--tap-paint); }
 :root[data-look-designer-profile="tall"] #trackdesigner .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 3.4); }
 

@@ -80,8 +80,11 @@ function jsFiles(dir, out = []) {
   }
   return out;
 }
-// Always-loaded code: not a lazy bundle (it holds the real objects), not the stubs.
-const SOURCES = jsFiles("js").filter((f) => !LAZY.has(f) && !STUBS.includes(f)).map((rel) => ({
+// Always-loaded code: not a lazy bundle (it holds the real objects), not the stubs. Plus the coach body (#4748): it is
+// the LAST file of LAZY_RACE_SESSION and its façade paints it the moment it evaluates, before onRaceSessionReady
+// swaps G.pits off the stub instance, so its pit reads must be ones the stub answers.
+const STUB_READERS = ["js/race/driving-coach.js"];
+const SOURCES = jsFiles("js").filter((f) => (!LAZY.has(f) || STUB_READERS.includes(f)) && !STUBS.includes(f)).map((rel) => ({
   rel,
   // Strip comments so prose naming a method is not read as a call site.
   src: readFileSync(join(ROOT, rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1"),
