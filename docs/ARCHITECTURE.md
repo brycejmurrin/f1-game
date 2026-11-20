@@ -180,7 +180,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
-| `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
 | `garage-departure-motion.js` | `GarageDepartureMotion` | LAZY_RACE_SESSION | Blender-authored departure transforms. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. |
@@ -295,6 +294,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `progress-backup.js` | `ProgressBackup` | LAZY_SAVES_DATA | ProgressBackup: the `progress` section of the SAVES & DATA settings file (#5992). |
 | `settings-export-body.js` | `SettingsExportBody` | LAZY_SAVES_DATA | SAVES & DATA body (SettingsExportBody, LAZY_SAVES_DATA, #4748): collect / apply for the SETTINGS, GARAGE and CAREER files, the optional time-trial ttlb… |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
 | `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |

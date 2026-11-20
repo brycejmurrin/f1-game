@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, loadAt, ownGrowth, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
+import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, ownGrowth, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
 import { treeRaises } from "../../tools/ci/merge-gate.mjs";
 import { AT_REF } from "../../tools/check/tree-counts.mjs";
 
@@ -50,14 +50,16 @@ test("retiredFor: eagerBytes deleted beside eagerCodeBytes is the planned switch
 });
 
 test("--base: a tree raise inside the base's absorb is no red; past it, it is", () => {
-  const head = loadAt("HEAD");
+  // The base is injected, not read at HEAD: the merge gate's retest worktree has the TIP as HEAD and this branch's
+  // ceilings only in the working tree (merge-gate ratchetsOnMerge / retestOnMerge), so HEAD may predate the entry.
+  const head = load();
   const bump = (n) => ({ ...head, tree: { ...head.tree, eagerCodeBytes: { ...head.tree.eagerCodeBytes, ceiling: head.tree.eagerCodeBytes.ceiling + n } } });
   const inside = [];
-  assert.equal(compareToBase("HEAD", { current: bump(5000), print: (l) => inside.push(l), historyReasoned: false }), 0, inside.join("\n"));
+  assert.equal(compareToBase("HEAD", { base: head, current: bump(5000), print: (l) => inside.push(l), historyReasoned: false }), 0, inside.join("\n"));
   const msg = inside.find((l) => l.startsWith("RAISE  (tree) eagerCodeBytes:"));
   assert.equal(msg?.slice(msg.indexOf("(+5000)")), "(+5000) — inside its 5000 absorb (the branch's own growth; no label)", inside.join("\n"));
   const past = [];
-  assert.notEqual(compareToBase("HEAD", { current: bump(5001), print: (l) => past.push(l), historyReasoned: false }), 0, past.join("\n"));
+  assert.notEqual(compareToBase("HEAD", { base: head, current: bump(5001), print: (l) => past.push(l), historyReasoned: false }), 0, past.join("\n"));
 });
 
 /* D-037 (Bryce, 2026-11-20 ~17:22Z, "Pin slack"): the two pin counters carry the same absorb, 5 pins. */
@@ -87,15 +89,15 @@ test("D-037: the tip's own growth does not count, only the branch's since its me
     [["assertPins", 8144, 8150]], "+6 own: Bryce's ratchet-raise");
   // --base on CI: +5 is named inside the absorb; +6 is a named RAISE (under the 40 per-file absorb a warning there),
   // and the raise row above is what asks Bryce.
-  const head = loadAt("HEAD");
+  // The base is injected (the working-tree ceilings), not read at HEAD: see the --base test above.
+  const head = load();
   for (const m of PINS) {
-    if (!absorbOf(head.tree[m])) continue; // HEAD predates D-037 (a pre-commit run): the merged table carries it
     const bump = (n) => ({ ...head, tree: { ...head.tree, [m]: { ...head.tree[m], ceiling: head.tree[m].ceiling + n } } });
     const out = [];
-    assert.equal(compareToBase("HEAD", { current: bump(5), print: (l) => out.push(l), historyReasoned: false }), 0, out.join("\n"));
+    assert.equal(compareToBase("HEAD", { base: head, current: bump(5), print: (l) => out.push(l), historyReasoned: false }), 0, out.join("\n"));
     assert.ok(out.some((l) => l.startsWith(`RAISE  (tree) ${m}:`) && l.endsWith("inside its 5 absorb (the branch's own growth; no label)")), out.join("\n"));
     const past = [];
-    compareToBase("HEAD", { current: bump(6), print: (l) => past.push(l), historyReasoned: false });
+    compareToBase("HEAD", { base: head, current: bump(6), print: (l) => past.push(l), historyReasoned: false });
     const line = past.find((l) => l.includes(`RAISE  (tree) ${m}:`));
     assert.ok(line && !line.includes("inside its"), past.join("\n"));
   }

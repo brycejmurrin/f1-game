@@ -2258,7 +2258,11 @@ const TrackBuildProps = (function () {
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
     {
       const sk = Object.keys(_suppressed);
-      if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      // A region build (the garage exterior, js/garage/exterior-geometry.js) also
+      // refuses every prop outside its window through rejBox, so its tally is no
+      // guard signal: info, and it says so (#5995, "bahrain: suppressed floodMast=149").
+      if (sk.length && region) Log.info("scenery", def.id + ": region build, outside the window or guarded " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      else if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
       const pk = Object.keys(_superseded);
       if (pk.length) Log.info("scenery", def.id + ": superseded by the pit complex " + pk.map((k) => k + "=" + _superseded[k]).join(" "));
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);

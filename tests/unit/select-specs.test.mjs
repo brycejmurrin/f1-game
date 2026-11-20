@@ -1954,6 +1954,23 @@ test("lanes: a run's legs take distinct lanes from a run-number-rotated start", 
     ["oversize-lane-probe-2", 1], ["oversize-lane-probe-3", 2]], "starts at the rotated lane and wraps");
 });
 
+// D-LANES: the lane count comes from APEX_CI_LANES (ci.yml hands it over only on the variable runner); bounds and
+// fallback. ci-runner-variable.test.mjs pins the condition that keeps fork / unset runs at LANES.
+test("lanes: APEX_CI_LANES sets the lane count in [1, MAX_LANES]; anything else is LANES", async () => {
+  const { LANES, MAX_LANES, ciLanes, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(MAX_LANES, 128);
+  assert.equal(ciLanes({}), LANES, "unset: 28");
+  for (const v of ["", " ", "0", "-4", "3.5", "64x", "0x40", "1e2", "129", "999", "NaN"]) assert.equal(ciLanes({ APEX_CI_LANES: v }), LANES, `'${v}' falls back`);
+  assert.equal(ciLanes({ APEX_CI_LANES: "64" }), 64);
+  assert.equal(ciLanes({ APEX_CI_LANES: " 1 " }), 1);
+  assert.equal(ciLanes({ APEX_CI_LANES: "128" }), 128);
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633", APEX_CI_LANES: "64" }), 12633 % 64, "the start rotates over the raised count");
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633", APEX_CI_LANES: "bogus" }), 12633 % LANES);
+  const lanes = shards(probePlan(4), EMPTY, new Set(), 62, false, 64).map((j) => j.lane);
+  assert.deepEqual(lanes, [62, 63, 0, 1], "legs use lanes above 28 and wrap at the raised count");
+  assert.ok(shards(probePlan(4), EMPTY, new Set(), 27).every((j) => j.lane < LANES), "the default count is unchanged");
+});
+
 // #5536: a plan of at most SMALL_RUN_LEGS legs gets NO_LANE, which ci.yml's `selected` job maps to the
 // per-run group (`matrix.lane >= 0` is false), so a one-leg fix never waits behind wide runs in a lane.
 test("lanes: a plan of 1 or 2 legs gets NO_LANE; 3 legs keep lanes; nothing else in a row changes", async () => {

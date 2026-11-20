@@ -98,12 +98,9 @@ test("flyby CLI advertises and validates condition and variation flags before br
   const { stdout } = await flybyCli("--help");
   for (const flag of ["--tod", "--weather", "--seed"]) assert.ok(stdout.includes(flag), `${flag} is documented`);
   const source = fs.readFileSync(path.join(ROOT, "tools/shot/flyby.mjs"), "utf8");
-  assert.doesNotMatch(source, /addScriptTag[\s\S]{0,100}flyby-overrides/,
-    "the registered data script is not reinjected inline (the shell CSP blocks that)");
-  assert.match(source, /FlybyOverrides\.(catalog|resolve)\(id, FlybySeq\.DEFAULT/,
-    "page evaluation reads FlybySeq's global lexical binding, not a missing window property");
-  assert.match(source, /FlybySeq\.select\(base/,
-    "the sheet path selects night/wet variants for --tod/--weather");
+  assert.doesNotMatch(source, /FlybyOverrides|setSession/, "the removed overrides catalog is not read (#5995)");
+  assert.match(source, /FlybySeq\.select\(FlybySeq\.DEFAULT, info\)/,
+    "the sheet path selects for --tod/--weather");
 
   for (const [flag, value, message] of [
     ["--tod", "noon", /--tod must be one of/],
@@ -118,64 +115,19 @@ test("flyby CLI advertises and validates condition and variation flags before br
   }
 });
 
-async function withOverrides(id, fn) {
-  return withTrack(id, (track, g) => {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/flyby-overrides.js"), "utf8"),
-      g.sandbox, { filename: absSrc("js/data/flyby-overrides.js") });
-    return fn(track, g);
-  });
+// An authored catalog: DEFAULT plus when: variants (the FlybyOverrides file that
+// shipped them never reached a session and was removed: #5995).
+function whenCatalog(F) {
+  const shot = (id, when, y) => Object.assign(JSON.parse(JSON.stringify(F.DEFAULT.find((s) => s.id === id))), { when },
+    { eye: F.DEFAULT.find((s) => s.id === id).eye.map((p) => Object.assign({}, p, { y })) });
+  return F.DEFAULT.concat([shot("turn-mid", { night: true }, 1.5), shot("turn-mid", { wet: true }, 2.5),
+    shot("turn-mid", { night: true, wet: true }, 1.2), shot("wide", { night: true }, 1.4)]);
 }
 
-test("saved shots beat circuit overrides, which patch DEFAULT by shot id without mutation", async () => {
-  await withOverrides("monaco", (_track, g) => {
-    const F = g.sandbox.FlybySeq, O = g.sandbox.FlybyOverrides;
-    const base = F.DEFAULT, snapshot = JSON.stringify(base);
-    const resolved = O.resolve("monaco", base, null), saved = [{ id: "saved" }];
-
-    assert.strictEqual(O.resolve("monaco", base, saved), saved, "an authored list wins unchanged");
-    assert.notStrictEqual(resolved, base, "a circuit with signatures gets a resolved list");
-    assert.equal(JSON.stringify(base), snapshot, "resolving does not mutate DEFAULT");
-    assert.deepEqual(resolved.map((shot) => shot.id), base.map((shot) => shot.id), "patching preserves sequence identity");
-    assert.strictEqual(O.resolve("monza", base, null), base, "a circuit without overrides reuses DEFAULT");
-    assert.notDeepEqual(resolved.find((shot) => shot.id === "turn-mid"),
-      base.find((shot) => shot.id === "turn-mid"), "Monaco replaces the signature shot");
-    assert.ok(O.WHEN && O.WHEN.length && typeof O.catalog === "function", "session when-variants are exported");
-    return null;
-  });
-});
-
-test("every signature list is playable and keeps its camera out of solid scenery", async () => {
-  const { shotErrors } = await import("../../tools/gen/bake-flyby.mjs");
-  for (const id of ["monaco", "spa"]) {
-    await withOverrides(id, (track, g) => {
-      const F = g.sandbox.FlybySeq, O = g.sandbox.FlybyOverrides;
-      const list = O.resolve(id, F.DEFAULT, null);
-      assert.deepEqual(shotErrors(JSON.parse(JSON.stringify(list))), [], `${id}: playable shot list`);
-      assert.deepEqual(shotErrors(JSON.parse(JSON.stringify(O.WHEN))), [], `${id}: when-variants are structurally playable`);
-      assert.ok(O.patches(id), `${id}: has a signature patch`);
-
-      F.reset();
-      const defects = [];
-      for (let i = 0; i <= 240; i++) {
-        const view = F.solve(track, i / 240, list), shot = list[view.index];
-        if (F.onRoadPose(shot.eye[0]) && F.onRoadPose(shot.eye[1])) {
-          const projected = g.sandbox.Tracks.project(track, view.eye[0], view.eye[2], null, view.eye[1]);
-          if (!projected || Math.abs(projected.lat) > 12) defects.push(`${view.id}: off-road`);
-        } else {
-          const hit = F.insideProp(track, view.eye, 0);
-          if (hit) defects.push(`${view.id}: inside ${hit.kind}`);
-        }
-      }
-      assert.deepEqual([...new Set(defects)], [], `${id}: signature containment`);
-      return null;
-    });
-  }
-});
-
 test("select honours when:{night,wet} and prefers the most specific match", async () => {
-  await withOverrides("bahrain", (_track, g) => {
-    const F = g.sandbox.FlybySeq, O = g.sandbox.FlybyOverrides;
-    const catalog = O.catalog("bahrain", F.DEFAULT, null);
+  await withTrack("bahrain", (_track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const catalog = whenCatalog(F);
     const day = F.select(catalog, { tod: "day", weather: "dry" });
     const night = F.select(catalog, { tod: "night", weather: "dry" });
     const wet = F.select(catalog, { tod: "day", weather: "wet" });
@@ -185,10 +137,6 @@ test("select honours when:{night,wet} and prefers the most specific match", asyn
     assert.deepEqual(day.map((s) => s.id), F.DEFAULT.map((s) => s.id), "day keeps the base sequence");
     assert.equal(day.find((s) => s.id === "turn-mid").when, undefined, "day turn-mid is unconditional");
     assert.deepEqual(night.find((s) => s.id === "turn-mid").when, { night: true }, "night picks the night variant");
-    assert.ok(night.find((s) => s.id === "turn-mid").eye[0].y <
-      day.find((s) => s.id === "turn-mid").eye[0].y, "night turn sits lower");
-    assert.ok(night.find((s) => s.id === "turn-mid").eye[0].x <
-      day.find((s) => s.id === "turn-mid").eye[0].x, "night turn sits closer");
     assert.deepEqual(wet.find((s) => s.id === "turn-mid").when, { wet: true }, "wet picks the wet variant");
     assert.deepEqual(nightWet.find((s) => s.id === "turn-mid").when, { night: true, wet: true },
       "night+wet prefers the two-key variant");
@@ -197,28 +145,26 @@ test("select honours when:{night,wet} and prefers the most specific match", asyn
     assert.ok(F.isNight({ tod: "night" }) && F.isWet({ weather: "rain" }));
     assert.ok(F.whenMatch({ night: true }, { tod: "night", weather: "dry" }));
     assert.ok(!F.whenMatch({ wet: true }, { tod: "night", weather: "dry" }));
-    // Circuit signatures outrank generic session variants for the same id.
-    const monacoNight = F.select(O.catalog("monaco", F.DEFAULT, null), { tod: "night", weather: "dry" });
-    assert.equal(monacoNight.find((s) => s.id === "turn-mid").when, undefined,
-      "Monaco's signature turn-mid is kept on a night session");
-    assert.deepEqual(monacoNight.find((s) => s.id === "turn-mid").eye,
-      O.resolve("monaco", F.DEFAULT, null).find((s) => s.id === "turn-mid").eye);
-    // vary() reads setSession when raceIntro cannot pass info (game.js OWNED elsewhere).
-    F.setSession({ tod: "night", weather: "dry" });
-    const varied = F.vary(F.DEFAULT, 3, false);
-    assert.deepEqual(varied.find((s) => s.id === "turn-first").when, { night: true },
-      "vary picks night variants after setSession");
-    F.setSession(null);
+    // An authored signature (non-stock, no when) outranks a generic session variant for the same id.
+    const sig = Object.assign({}, F.DEFAULT.find((s) => s.id === "turn-mid"), { fov: [33, 35] });
+    const signed = catalog.map((s) => (s.id === "turn-mid" && !s.when ? sig : s));
+    assert.strictEqual(F.select(signed, { tod: "night", weather: "dry" }).find((s) => s.id === "turn-mid"), sig,
+      "the signature turn-mid is kept on a night session");
+    // vary() has no session: when: variants never displace the base shot.
+    const varied = F.vary(catalog, 3, false);
+    assert.ok(varied.every((s) => !s.when), "vary picks only unconditional shots");
+    assert.equal(typeof F.setSession, "undefined", "the uncalled session setter is gone (#5995)");
     return null;
   });
 });
 
 test("shotErrors accepts when:{night,wet} and names bad when values", async () => {
   const { shotErrors } = await import("../../tools/gen/bake-flyby.mjs");
-  await withOverrides("monza", (_track, g) => {
-    const F = g.sandbox.FlybySeq, O = g.sandbox.FlybyOverrides;
+  await withTrack("monza", (_track, g) => {
+    const F = g.sandbox.FlybySeq;
     const base = JSON.parse(JSON.stringify(F.DEFAULT[0]));
-    assert.deepEqual(shotErrors(O.WHEN), [], "every when-variant is structurally playable");
+    assert.deepEqual(shotErrors(JSON.parse(JSON.stringify(whenCatalog(F).filter((s) => s.when)))), [],
+      "every when-variant is structurally playable");
     assert.deepEqual(shotErrors([Object.assign({}, base, { when: { night: true } })]), [],
       "when.night boolean is accepted");
     assert.deepEqual(shotErrors([Object.assign({}, base, { when: { wet: true, night: false } })]), [],

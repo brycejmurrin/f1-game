@@ -240,7 +240,6 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
-  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -1370,6 +1369,7 @@ const LAZY_UI_PRESETS_EDGES = [];
 // garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
 // it at idle, at the garage door, with the agent surface and with the career screen.
 const LAZY_SAVES_DATA = [
+  "js/ui/progress-backup.js",      // ProgressBackup (#5992): the settings file's `progress` section; read at call time
   "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
 ];
 const LAZY_SAVES_DATA_EDGES = [];

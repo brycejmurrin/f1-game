@@ -837,6 +837,7 @@
   ],
     LAZY_UI_PRESETS_EDGES: [],
     LAZY_SAVES_DATA: [
+    "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js"
   ],
     LAZY_SAVES_DATA_EDGES: [],
