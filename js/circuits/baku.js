@@ -14,6 +14,7 @@
     lengthKm: 6,
     tyreSeverity: 0.82,
     baseHW: 6,
+    barrierGap: 1.0,
     sceneryCoordinates: "racing",
     dressingExclusions: [
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56 },
