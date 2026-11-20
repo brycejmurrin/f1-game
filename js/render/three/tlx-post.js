@@ -85,6 +85,10 @@
       if (quad) quad.material = null;
       if (viewportScope) viewportScope.dispose();
       if (AA) AA.dispose();
+      // A warm may be suspended with one of these targets still bound.
+      try {
+        if (ownedRTs.has(renderer.getRenderTarget())) renderer.setRenderTarget(null);
+      } catch (_) { /* device already dying */ }
       for (const mat of ownedMaterials) {
         try { mat.dispose(); } catch (_) { /* device already dying */ }
       }
@@ -716,6 +720,7 @@
     function compileCanvas(mat) {
       const mrt = renderer.getMRT();
       const job = () => {
+        if (disposed) return;
         const rt = renderer.getRenderTarget(), mrt0 = renderer.getMRT();
         setQuadMat(mat); renderer.setRenderTarget(null); renderer.setMRT(mrt);
         try { return renderer.compileAsync(quad, quad.camera); } finally { renderer.setRenderTarget(rt); renderer.setMRT(mrt0); }
@@ -929,7 +934,8 @@
         // reading a destroyed render target; null it so the getter falls back
         // to ldrRT, which is the honest answer once the AA target is gone.
         if (_lastPresentRT === aaRT) _lastPresentRT = null;
-        try { ownedRTs.delete(aaRT); aaRT.dispose(); } catch (_) { /* dying */ }
+        unbind(P.sgsr.tex, blackTex);
+        dropRT(aaRT);
         aaRT = null;
       }
     }
@@ -1428,12 +1434,14 @@
       holdFlush(false);   // before a shed below destroys a target a held command buffer still names
       // After the composite has rebound the 1x1 fallbacks. Releasing on the
       // same frame the block drew would dispose a target runPass just wrote.
-      aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
-      grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
-      bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
-      if (HI) {
-        giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
-        cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
+      if (!compileJobs && !_scissorWarm) {
+        aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
+        grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
+        bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
+        if (HI) {
+          giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
+          cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
+        }
       }
       } finally {
         try { holdFlush(false); } catch (_) { /* a throw mid-chain: tlx.js's catch owns the fallback */ }
@@ -1571,6 +1579,7 @@
     }
 
     async function warm(opts, frame) {
+      if (disposed) return;
       // Collect enabled passes first, then compile serially with stable targets.
       const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
       const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest;
@@ -1584,6 +1593,7 @@
         // will see; do not touch it here.
         const deadline = performance.now() + 3000;
         for (const job of jobs) {
+          if (disposed) break;
           renderer.setRenderTarget(job.target);
           // THE LIVE QUAD, not a snapshot: a fresh QuadMesh per job does not
           // share a render-object cache key with the one present() draws, so
@@ -1597,8 +1607,12 @@
           if (performance.now() >= deadline) break;
         }
       } finally {
-        Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
-        renderer.setMRT(mrt); renderer.setRenderTarget(target);
+        // Disposal clears our binding. A replacement chain can own the renderer
+        // by the time this continuation runs.
+        if (!disposed) {
+          Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
+          renderer.setMRT(mrt); renderer.setRenderTarget(target);
+        }
       }
     }
 

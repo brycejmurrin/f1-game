@@ -534,8 +534,9 @@
       if (cat.length > LGRID.IDXW * LGRID.IDXW) return off();
       if (!(g.gw > 0) || !(g.gh > 0) || g.gw > LGRID.G || g.gh > LGRID.G) return off();
 
+      // The shader bounds cell reads by lgSize. Every active grid cell is overwritten,
+      // and its indices reference only freshly packed lamps, including after a shrink.
       const lt = LGRID.lampTex.image.data;
-      lt.fill(0);
       for (let i = 0; i < nLamps; i++) {
         const o = i * 15, r = i * 16;            // 4 texels x RGBA
         lt[r]      = L[o];     lt[r + 1]  = L[o + 1]; lt[r + 2]  = L[o + 2]; lt[r + 3]  = L[o + 6];
@@ -545,10 +546,8 @@
         lt[r + 12] = L[o + 6]; lt[r + 13] = L[o + 10]; lt[r + 14] = L[o + 11]; lt[r + 15] = L[o + 12];
       }
       const it = LGRID.idxTex.image.data;
-      it.fill(0);
-      for (let k = 0; k < cat.length; k++) it[k] = cat[k];
+      it.set(cat);
       const gt = LGRID.gridTex.image.data;
-      gt.fill(0);
       // ROW BY ROW, through the shared helper, never a linear copy: the bake's
       // row stride is g.gw (the occupied extent, a few dozen cells); the
       // texture's is LGRID.G (256, fixed). The shader below reads ivec2(cx, cz),

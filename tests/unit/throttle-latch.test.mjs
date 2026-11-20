@@ -585,6 +585,25 @@ test("THROTTLE = LATCH: sliding off a latched GAS keeps the latch, and BRAKE sti
   assert.deepEqual([btn().throttle, btn().brake], [true, false]);
 });
 
+test("changing a device's bindings releases only that device's toggled throttle", () => {
+  const { Input, listeners, poll, button } = bootPad();
+  Input.setHoldMode({ throttle: "toggle" });
+  const key = { code: "KeyW", key: "w", preventDefault() {}, target: {} };
+  for (const listener of listeners.keydown) listener(key);
+  for (const listener of listeners.keyup) listener(key);
+  assert.equal(Input.throttleLevel(), 1);
+  Input.setPadMap(null);
+  assert.equal(Input.throttleLevel(), 1, "loading a controller profile preserves keyboard gas");
+  Input.setKeyMap(null);
+  assert.equal(Input.throttleLevel(), 0);
+  button(7, true); poll(); button(7, false); poll();
+  assert.equal(Input.throttleLevel(), 1);
+  Input.setKeyMap(null); poll();
+  assert.equal(Input.throttleLevel(), 1, "keyboard changes preserve controller gas");
+  Input.setPadMap(null); poll();
+  assert.equal(Input.throttleLevel(), 0);
+});
+
 test("clean-room 14: a controller that vanishes without a disconnect event drops the GAS / LOOK BACK latch", () => {
   const { Input, sb, pad, poll, button } = bootPad();
   Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
