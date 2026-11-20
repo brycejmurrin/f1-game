@@ -259,6 +259,7 @@ const Collide = (() => {
       a.x += ct.ny * correction * ct.sA; b.x -= ct.ny * correction * ct.sB;
       const ba = body(a, ct.aSp, bodyA), bb = body(b, ct.bSp, bodyB);
       const j = ContactGeometry.impulse(ba, bb, ct.dProg, ct.dX, ct, impulse);
+      if (j.magnitude > 0 && a.human !== b.human) capOrientedPunt(a.human ? a : b, a.human ? b : a, a.human ? ba : bb, a.human ? bb : ba, j, a.human);
       pushVelocity(a, ba, j.ax, j.ay, j.aw); pushVelocity(b, bb, j.bx, j.by, j.bw);
       if (correction > CORR_EPS || j.magnitude > CORR_EPS) {
         if (!netPlay.owns(a)) a.contactT = 0.22;
@@ -269,6 +270,19 @@ const Collide = (() => {
           incidentSim.notifyCar(a, b, j.closing);
         }
       }
+    }
+    function capOrientedPunt(h, o, hb, ob, j, isA) {
+      if (!(hb.invMass > 0)) return;
+      const dx = isA ? j.ax : j.bx, dy = isA ? j.ay : j.by, dw = isA ? j.aw : j.bw;
+      const v0 = Math.hypot(hb.vx, hb.vy), v1 = Math.hypot(hb.vx + dx, hb.vy + dy), gain = v1 - v0;
+      if (!(gain > 0)) return;
+      const w1 = hb.omega + dw, rot = hb.invInertia > 0 ? (w1 * w1 - hb.omega * hb.omega) / hb.invInertia : 0;
+      if (!((v1 * v1 - v0 * v0) / hb.invMass + rot > 0)) return;
+      const capV = hb.invMass * (1 + AiDrive.bumpRestitution(j.closing)) * AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05) / (hb.invMass + ob.invMass);
+      const give = puntShare(o, h, gain, capV);
+      if (give >= gain) return;
+      const f = give / gain;
+      if (isA) { j.ax *= f; j.ay *= f; j.aw *= f; } else { j.bx *= f; j.by *= f; j.bw *= f; }
     }
     function sweepContacts(ranked, dt) {
       sweepGeneration++;
@@ -440,10 +454,10 @@ const Collide = (() => {
             const capJ = (1 + e) * AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05) / iSum;
             if (sgn >= 0) {
               if (iB) b.speed = floorFwd(b, b.speed - iB * jImp);
-              if (iA) a.speed += iA * (a.human ? puntShare(b, a, jImp, capJ) : jImp);
+              if (iA) a.speed += a.human ? puntShare(b, a, iA * jImp, iA * capJ) : iA * jImp;
             } else {
               if (iA) a.speed = floorFwd(a, a.speed - iA * jImp);
-              if (iB) b.speed += iB * (b.human ? puntShare(a, b, jImp, capJ) : jImp);
+              if (iB) b.speed += b.human ? puntShare(a, b, iB * jImp, iB * capJ) : iB * jImp;
             }
           }
           if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }
