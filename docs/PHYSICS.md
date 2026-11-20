@@ -1088,7 +1088,8 @@ but a different tyre model) and GRIP STEER above OFF each give a lap its own lea
 and ghost class: `SessionPhys.controls` adds `wheelState: "on"` / `gripSteer: <level>` to
 `recordControls()` only when not OFF, so every key recorded before them stays valid. A
 STANDARD daily runs with both OFF (`prepareDaily`, session-only, restored after) and
-`accept()` refuses a lap if either is turned back on.
+`accept()` refuses a lap if either is turned back on. WIND OFF is its own class the same way
+(#5895): `config()` adds `wind: "off"` only then, so keys recorded at the default REAL stay valid.
 
 ### Wear, and the stop
 

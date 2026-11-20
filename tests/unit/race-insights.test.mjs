@@ -57,12 +57,13 @@ test('teleports cannot create tyre history or clean sector mastery', () => {
 });
 test('controlled braking drill finishes once, scores stopping distance and records bounded separate mastery', () => {
   const { api, tick, saves, announcements } = fixture();
-  saves.set('circuitMastery', { version: 1, entries: [{ key: 'class:braking:all', best: 12, completed: '999' }] });
+  saves.set('circuitMastery', { version: 1, entries: [{ key: 'c2||:braking:all:v2', best: 20, completed: '999' }] });
   assert.equal(api.startDrill('braking'), true);
   tick({ prog: 20, brakeDemand: 1 }); tick({ prog: 30, speed: .5 }); tick({ speed: 0 });
   const last = api.summary().lastDrill;
-  assert.equal(last.clean, true); assert.equal(last.score, 10); assert.match(last.text, /stopped 10 m after braking from 144 km\/h/);
-  const entry = saves.get('circuitMastery').entries[0]; assert.equal(entry.completed, 1); assert.equal(entry.best, 10);
+  // #5888: scored at one entry speed, 10 m from 40 m/s is 10·(50/40)² = 15.6 m from 50 m/s (180 km/h).
+  assert.equal(last.clean, true); assert.equal(last.score, 15.625); assert.match(last.text, /stopped 10 m after braking from 144 km\/h · 16 m from 180 km\/h/);
+  const entry = saves.get('circuitMastery').entries[0]; assert.equal(entry.completed, 1); assert.equal(entry.best, 15.625);
   assert.equal(announcements.length, 1); assert.match(announcements[0][0], /PRACTICE DONE — STOPPED 10 M.*NEW BEST/);
   assert.equal(announcements[0][2], 'practice', 'a drill verdict is its own announce tier, not a record announcement');
   const summary = api.summary(); summary.lastDrill.clean = false; assert.equal(api.summary().lastDrill.clean, true);
@@ -79,7 +80,7 @@ test("the braking verdict measures how much distance went below the car's own ha
   tick({ prog: 115, brakeDemand: 1, speed: 20, axEstSm: -4 });
   tick({ prog: 135, brakeDemand: 1, speed: .5, axEstSm: -4 });
   const last = api.summary().lastDrill;
-  assert.equal(last.clean, true, last.reason); assert.equal(last.score, 125);
+  assert.equal(last.clean, true, last.reason); assert.equal(last.score, 195.3125);
   assert.equal(last.limit, 100); assert.equal(last.slack, 25);
   assert.match(last.text, /stopped 125 m after braking from 144 km\/h · 25 m of it below your hardest braking/);
 });
@@ -100,7 +101,7 @@ test('a stop held at the peak the whole way reports no slack, and a stop with no
   tick({ prog: 145, brakeDemand: 1, speed: .5 });
   const bare = api.summary().lastDrill;
   assert.equal(bare.limit, null); assert.equal(bare.slack, null);
-  assert.match(bare.text, /^stopped 20 m after braking from 144 km\/h$/);
+  assert.match(bare.text, /^stopped 20 m after braking from 144 km\/h · 31 m from 180 km\/h$/);
 });
 test('a brake tap followed by a coast to a stop is not a controlled stop', () => {
   const { api, tick, saves, announcements } = fixture();
@@ -211,9 +212,9 @@ test('sector mastery follows timing boundaries while other saved drill scores re
   const { api, G, tick, saves } = fixture();
   G.track.def = { sectors: [.28, .62] };
   saves.set('circuitMastery', { version: 1, entries: [
-    { key: 'class:sector:0', best: 1, completed: 5 },
-    { key: 'class:braking:all', best: 12, completed: 2 },
-    { key: 'class:lap:all', best: 60, completed: 3 },
+    { key: 'c2||:sector:0', best: 1, completed: 5 },
+    { key: 'c2||:braking:all:v2', best: 12, completed: 2 },
+    { key: 'c2||:lap:all', best: 60, completed: 3 },
   ] });
   assert.equal(api.mastery('sector'), null, 'legacy scores have no recorded split positions');
   api.startDrill('sector');
@@ -227,7 +228,7 @@ test('sector mastery follows timing boundaries while other saved drill scores re
   assert.equal(api.mastery('lap').best, 60);
   G.track.def.sectors = [.28, .62];
   assert.equal(api.mastery('sector').best, 2, 'split-specific records remain stored');
-  assert.ok(saves.get('circuitMastery').entries.some(e => e.key === 'class:sector:0'),
+  assert.ok(saves.get('circuitMastery').entries.some(e => e.key === 'c2||:sector:0'),
     'unversioned records are retained rather than deleted');
 });
 test('drill speeds read through G.dashKph, the speedometer scale, not raw m/s (PACE)', () => {
@@ -297,11 +298,11 @@ test('attempts are kept per goal as bounded copies and mastery reads the saved b
     tick({ prog: 100 * i + 10, brakeDemand: 1, speed: 40 }); tick({ prog: 100 * i + 12 + i * .5, speed: .5 }); tick({ speed: 40, brakeDemand: 0 });
   }
   const tries = api.attempts('braking');
-  assert.equal(tries.length, 10); assert.equal(tries[0].score, 3); assert.equal(tries.at(-1).score, 7.5);
+  assert.equal(tries.length, 10); assert.equal(tries[0].score, 4.6875); assert.equal(tries.at(-1).score, 11.71875);
   assert.ok(tries.every(a => a.clean), JSON.stringify(tries.filter(a => !a.clean)));
-  tries[0].score = 99; assert.equal(api.attempts('braking')[0].score, 3);
+  tries[0].score = 99; assert.equal(api.attempts('braking')[0].score, 4.6875);
   assert.equal(api.attempts('slalom').length, 0);
-  assert.equal(JSON.stringify(api.mastery('braking')), '{"best":2,"completed":12}');
+  assert.equal(JSON.stringify(api.mastery('braking')), '{"best":3.125,"completed":12}');
   assert.equal(api.mastery('slalom'), null);
   api.reset(); assert.equal(api.attempts('braking').length, 0);
 });
@@ -726,4 +727,48 @@ test('a caution at the lap boundary cannot seed a clean first sector after it cl
   cross(1, 2); cross(2, 2); cross(0, 3);
   assert.equal(api.forecast().lastLapEnergy, null, 'a lap whose first sector began under caution is excluded');
   cross(1, 3); cross(2, 3); cross(0, 4); assert.equal(api.forecast().lastLapEnergy.lap, 3);
+});
+
+// #5888: a race has no TT class key, so G.records.key() was null (or the last time trial's) and every
+// circuit shared one saved best; and a slower entry always "won" the raw-metre braking score.
+function raceFixture(circuit, team) {
+  const f = fixture();
+  f.G.records = { key: () => null }; f.G.track.def = { id: circuit }; f.c.team = { id: team };
+  return f;
+}
+const brakeAt = (api, tick, c, v0) => {   // the same 10 m/s² held from v0 to a stop: v0²/20 m
+  api.startDrill('braking');
+  const p0 = c.prog + 1, stop = v0 * v0 / 20, n = Math.ceil(stop / 10);
+  tick({ prog: p0, brakeDemand: 1, speed: v0, axEstSm: -10 });   // the first firm brake, at v0
+  for (let i = 1; i <= n; i++) tick({ prog: p0 + stop * i / n, brakeDemand: 1, speed: i === n ? .5 : v0 * Math.sqrt(1 - i / n), axEstSm: -10 });
+  tick({ speed: 40, brakeDemand: 0, axEstSm: 0 });
+};
+test('#5888: a drill best saved in a race belongs to its own circuit and team', () => {
+  const { api, G, c, tick } = raceFixture('bahrain', 'ferrari');
+  brakeAt(api, tick, c, 40);
+  assert.ok(api.mastery('braking'), 'Bahrain keeps its best');
+  G.track.def = { id: 'monaco' };
+  assert.equal(api.mastery('braking'), null, 'Monaco does not read the Bahrain best');
+  G.track.def = { id: 'bahrain' }; c.team = { id: 'mclaren' };
+  assert.equal(api.mastery('braking'), null, 'another team has its own best');
+});
+test('#5888: braking from a lower speed at the same deceleration is not a NEW BEST', () => {
+  const { api, c, tick, announcements } = raceFixture('bahrain', 'ferrari');
+  brakeAt(api, tick, c, 40);
+  const first = api.summary().lastDrill.score;
+  brakeAt(api, tick, c, 20);
+  assert.ok(Math.abs(api.summary().lastDrill.score - first) < 1, 'both stops score the same at one entry speed');
+  assert.equal(announcements.at(-1)[0], 'PRACTICE DONE — STOPPED 20 M AFTER BRAKING FROM 72 KM/H · 125 M FROM 180 KM/H', 'no NEW BEST');
+});
+test('#5888: older saved bests move to their circuit and team; a raw-metre braking best is kept, never compared', () => {
+  const { api, saves } = raceFixture('bahrain', 'ferrari');
+  const cls = (circuit, team, tune) => JSON.stringify({ circuit, car: [team, 1], tune: [tune] });
+  saves.set('circuitMastery', { version: 1, entries: [
+    { key: cls('bahrain', 'ferrari', 1) + ':lap:all', best: 92, completed: 2 },
+    { key: cls('bahrain', 'ferrari', 2) + ':lap:all', best: 90, completed: 3 },
+    { key: cls('monaco', 'ferrari', 1) + ':lap:all', best: 70, completed: 1 },
+    { key: cls('bahrain', 'ferrari', 1) + ':braking:all', best: 12, completed: 4 },
+  ] });
+  assert.equal(JSON.stringify(api.mastery('lap')), '{"best":90,"completed":5}', 'two tune classes merge: best kept, runs summed');
+  assert.equal(api.mastery('braking'), null, 'raw-metre braking is not compared with the scaled score');
 });
