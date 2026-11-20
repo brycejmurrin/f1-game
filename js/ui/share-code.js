@@ -173,7 +173,10 @@ const ShareCode = (function () {
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLDC]1\./.test(input)) return input.replace(/\s+/g, "");
+    if (/^APX[SLDC]1\./.test(input)) {
+      try { input = decodeURIComponent(input); } catch (_) { return null; }
+      return input.replace(/\s+/g, "");
+    }
     const match = input.match(/(?:^|[#&])share=([^&]+)/);
     if (!match) return null;
     try { input = decodeURIComponent(match[1]); }
@@ -270,10 +273,8 @@ const ShareCode = (function () {
       if (decoded.livery) {
         const stored = store.get(customKey, []);
         const arr = Array.isArray(stored) ? stored : [];
-        // A generated suffix is not provenance: another player may already own
-        // `default_imported`. A catalog collision replaces an earlier import
-        // only when the paint itself is identical; otherwise it receives the
-        // next free id and every unrelated row survives.
+        // A catalog collision replaces an earlier import only when the paint is
+        // identical; otherwise it gets the next free id (a suffix isn't provenance).
         const incoming = CustomLiveries.normalizeImported(decoded.team, [decoded.livery], decoded.livery.id);
         const catalogCollision = incoming.repaired > 0;
         let replaceId = catalogCollision ? null : decoded.livery.id;

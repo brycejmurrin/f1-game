@@ -482,8 +482,15 @@ test("#4257: own tree lowerings add under a merge, so siblings stay at ceiling =
 
 test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts the working tree", async (t) => {
   const cp = await import("node:child_process");
-  const dirty = cp.execFileSync("git", ["status", "--porcelain", "--", "css/"], { encoding: "utf8" }).trim();
-  if (dirty) { t.skip("css/ differs from HEAD in this checkout"); return; }
+  const { wallNow } = await import("../../tools/check/boot-wall.mjs");
+  // Each metric compares only where its inputs match HEAD: a staged eager-JS edit (pre-commit) is not drift (#5891).
+  const dirty = (paths) => cp.execFileSync("git", ["status", "--porcelain", "--", ...paths], { encoding: "utf8" }).trim();
+  const css = !dirty(["css/"]), wall = !dirty(["index.html", ...wallNow().files]);
   const { AT_REF } = await import("../../tools/check/tree-counts.mjs");
-  for (const [metric, fn] of Object.entries(AT_REF)) assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric);
+  let n = 0;
+  for (const [metric, fn] of Object.entries(AT_REF)) {
+    if (!(/^eager/.test(metric) ? wall : css)) continue;
+    assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric); n++;
+  }
+  if (!n) t.skip("css/ and the boot wall differ from HEAD in this checkout");
 });
