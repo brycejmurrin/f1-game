@@ -25,6 +25,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 // Explicit phone cells use a coherent mobile identity; DPR 1 intentionally limits raster cost.
 const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
@@ -1332,7 +1333,6 @@ test("UI inspector observes intentional hysteresis on forward and reverse paths"
 });
 
 test("UI inspector records bounded alternating classification evidence", async ({ page }) => {
-  const { settleLayout } = await import("../../tools/ui/explorer/transitions.mjs");
   await page.setContent('<main id="sheet" data-density="roomy"><button>Action</button></main>');
   await page.evaluate(() => {
     window.__stopAlternating = false;
@@ -1946,6 +1946,12 @@ async function bootOwnerCell(page, cell, { race = true, store = {} } = {}) {
   }, { data: OWNER_PROFILE, store });
   await page.reload();
   await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  // #5655: __apex lands before the shell's boot flipper has moved the deferred sheets (settings-controls.css and the
+  // rest, media="print") into the cascade; it flips them only once ALL have loaded. The race path's 1.5 s cap wait
+  // hid that; race:false opened SETTINGS straight away and could measure the panel without its 44 px floors.
+  // Route sheets (data-route) stay on print until their screen opens, by design.
+  await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]:not([data-route])')]
+    .every((l) => l.media !== "print" && !!l.sheet), null, { polling: 100, timeout: BOOT_MS });
   const { sal, sar, sab } = cell.insets;
   if (sal || sar || sab) await page.addStyleTag({ content: `:root{--sal:${sal}px;--sar:${sar}px;--sat:0px;--sab:${sab}px;}` });
   if (!race) return;
@@ -2034,6 +2040,9 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
       await page.locator("#mb-settings").click();
       await page.locator("#pm-open-appearance").click();
       await expect(page.locator("#" + ui.id)).toBeVisible();
+      // The sheet's entrance (sheet-in) and SheetShape's first-frame classification must land before the floor is read.
+      const settled = await page.evaluate(settleLayout, { root: "#pmsettings-inner" });
+      expect(settled.stable, "the settings sheet settled: " + (settled.reason || "")).toBe(true);
       const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
       expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: `${ui.phoneMin}%` });
       expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 40 % paints the minimum").toBe(String(ui.phoneMin / 100));
@@ -2042,15 +2051,19 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
       const floor = await page.evaluate(() => {
         const panel = document.getElementById("pm-panel-appearance"), z = +getComputedStyle(/** @type {Element} */ (panel.closest(".sheet"))).zoom;
         const shown = (/** @type {Element} */ el) => el.getClientRects().length > 0;
-        const rows = [...panel.querySelectorAll("button, input, select")].filter(shown).map((el) => Math.min(el.getBoundingClientRect().width, el.getBoundingClientRect().height));
+        const rows = [...panel.querySelectorAll("button, input, select")].filter(shown).map((el) => {
+          const r = el.getBoundingClientRect();
+          return { id: el.id || el.className || el.tagName, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, min: Math.min(r.width, r.height) };
+        });
+        const least = rows.reduce((a, b) => (b.min < a.min ? b : a));
         const probe = panel.appendChild(Object.assign(document.createElement("span"), { textContent: "x" }));
         probe.style.fontSize = "var(--fs-micro)";
         const micro = parseFloat(getComputedStyle(probe).fontSize) * z;
         probe.remove();
-        return { micro, tap: Math.min(...rows) };
+        return { micro, tap: least.min, least: { id: least.id, w: least.w, h: least.h } };
       });
       expect(floor.micro, "the smallest type rung paints 12 px").toBeGreaterThanOrEqual(11.95);
-      expect(floor.tap, "the smallest control in the panel paints 44 px").toBeGreaterThanOrEqual(43.5);
+      expect(floor.tap, "the smallest control in the panel paints 44 px: " + JSON.stringify(floor.least)).toBeGreaterThanOrEqual(43.5);
       for (const v of [100, 125, 150, 200]) {
         await page.evaluate(({ id, v }) => {
           const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
