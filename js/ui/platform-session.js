@@ -345,12 +345,9 @@ document.addEventListener("visibilitychange", () => {
   // return to a live session.
   if (document.hidden) PerfGov.sentinelArm(false);
   else if (G.state === "race" || G.state === "count") PerfGov.sentinelResume();
-  // The platform releases a wake lock on every hide and does not give it
-  // back — re-request it here rather than a fourth listener elsewhere.
+  // The platform drops a wake lock on every hide: re-request it here.
   if (!document.hidden && raceWakeLock.wanted()) raceWakeLock.hold();
-  // VS FRIEND: netPlay.tick runs only from rAF, which a hidden tab stops, so the
-  // rival timed us out after 6 s. Hidden timers still fire ~1 Hz (and WebRTC
-  // pages are exempt from intensive throttling): keep pinging while hidden.
+  // VS FRIEND: rAF stops when hidden (the rival timed out at 6 s); hidden timers still fire ~1 Hz, so ping from one.
   // https://developer.chrome.com/blog/timer-throttling-in-chrome-88
   clearInterval(_netHiddenPump); _netHiddenPump = 0;
   if (document.hidden && G.netPlay.active()) _netHiddenPump = setInterval(() => G.netPlay.tick(performance.now()), 500);
@@ -361,11 +358,12 @@ window.addEventListener("pagehide", () => {
   clearInterval(_netHiddenPump); _netHiddenPump = 0;
   PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep();
 });
-// LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
-// the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
-// or an overlay taking focus, left the car coasting off-line while the field
-// lapped. Settled for 250 ms (a focus hop inside the page is not a leave), never
-// in a friend race (the rival cannot be paused) and never under automation.
+// LEAVE THE RACE? (#5945): a reload loses the race. Not in TT, menus or automation (a reload would hang).
+window.addEventListener("beforeunload", (e) => {
+  if (navigator.webdriver || G.timeTrial || !(G.state === "race" || G.state === "count")) return;
+  e.preventDefault(); e.returnValue = "";
+});
+// LOSING FOCUS WHILE VISIBLE pauses too (visibilitychange misses an Alt-Tab): settled 250 ms, not in a friend race or automation.
 window.addEventListener("blur", () => {
   setTimeout(() => {
     if (document.hidden || document.hasFocus() || navigator.webdriver || G.netPlay.active() || G.paused) return;

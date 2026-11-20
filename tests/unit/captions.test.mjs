@@ -152,3 +152,31 @@ test("the loading caption re-fits the loading card on show and on hide (UI scali
   const bare = loadCaptions(memStore({ captions: "on" }));
   bare.onAnnouncerLine("Radio check.");   // no LoadingScreen global (a page without the screen): no throw
 });
+
+test("SPOKEN ONLY captions only the lines actually heard; ON captions every line (#5946 2A)", () => {
+  const on = loadCaptions(memStore({ captions: "on" }));
+  on.onSpotter("Car left", "car left");
+  on.onAnnouncerLine("Welcome to Monza.");
+  assert.equal(on.ring().length, 2, "ON captions a line whether or not it was voiced");
+
+  const store = memStore({ captions: "spoken" });
+  const C = loadCaptions(store);
+  C.onSpotter("Car left", "car left");
+  C.onAnnouncerLine("Welcome to Monza.");
+  assert.equal(C.ring().length, 0, "a source that reports no voice line is not captioned");
+  assert.equal(C.__strip.hidden, true);
+  C.onSpotter("Car left", "car left", true);
+  C.onAnnouncerLine("Welcome to Monza.", true);
+  assert.equal(C.ring().length, 2, "a heard line is captioned");
+  assert.equal(C.__strip.hidden, false);
+
+  store.set("volRadio", 0);
+  C.onSpotter("Clear", "clear", true);
+  assert.equal(C.ring().length, 2, "a line that plays with VOICE VOLUME at 0 is not heard");
+  store.set("volRadio", 0.8); store.set("sound", false);
+  C.onAnnouncerLine("Lights out.", true);
+  assert.equal(C.ring().length, 2, "…nor one with master SOUND off");
+  store.set("sound", true);
+  C.onAnnouncerLine("Lights out.", true);
+  assert.equal(C.ring().length, 3);
+});

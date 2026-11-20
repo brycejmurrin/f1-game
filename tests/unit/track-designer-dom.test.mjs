@@ -3248,3 +3248,49 @@ test("re-seating the foot on a short-landscape resize keeps focus on the control
   assert.equal(b.root.dataset.foot, "in");
   assert.ok(document.activeElement === draw, "focus outside the foot is left alone");
 });
+
+// #5947 A: a circuit's id is a hash of its SHAPE, so saving a friend's shared copy of your own layout used to
+// replace your name and country without a word. SAVE now asks first: KEEP MINE / USE THEIRS.
+test("saving a shared copy of a circuit you already have asks first: KEEP MINE / USE THEIRS (#5947)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  b.D.setName("MY RING");
+  const mine = b.D.save();
+  assert.equal(mine.ok, true);
+  const shared = Object.assign(b.C.sanitize(b.D.state().design), { name: "THEIR NAME", country: "Italy" });
+  const ask = () => b.dom.document.body.children.find((n) => n.id === "td-label-ask");
+
+  b.D.open({ design: shared, shared: true }); b.D.preview();
+  const asked = b.D.save();
+  assert.deepEqual([asked.ok, asked.reason], [false, "ask"], "the save waits for the answer");
+  assert.equal(b.C.get(mine.id).name, "MY RING", "nothing is written before the answer");
+  const dlg = ask();
+  assert.ok(dlg, "the house modal opens over the designer");
+  assert.equal(dlg.tagName.toLowerCase(), "dialog");
+  assert.equal(dlg.className, "screen dim", "the house .screen sheet");
+  assert.equal(dlg.querySelector(".sheet-body").children[0].textContent, "You already have this circuit as MY RING.");
+  const keep = dlg.querySelector("#td-label-keep"), theirs = dlg.querySelector("#td-label-theirs");
+  assert.equal(keep.textContent, "KEEP MINE"); assert.equal(theirs.textContent, "USE THEIRS");
+  const floor = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
+  for (const d of [keep, theirs]) assert.deepEqual([d.style.minHeight, d.style.minWidth], [floor, floor], "a 44 px painted tap floor");
+  assert.equal(b.dom.document.activeElement, keep, "focus lands on the safe answer");
+  keep.click();
+  assert.equal(ask(), undefined, "the modal closes");
+  assert.equal(b.C.get(mine.id).name, "MY RING", "KEEP MINE keeps your name…");
+  assert.equal(b.C.get(mine.id).country || "", "", "…and your country");
+  assert.equal(b.D.state().design.name, "MY RING", "the designer shows the kept name");
+
+  b.D.open({ design: shared, shared: true }); b.D.preview();
+  assert.equal(b.D.save().reason, "ask");
+  ask().querySelector("#td-label-theirs").click();
+  assert.equal(b.C.get(mine.id).name, "THEIR NAME", "USE THEIRS takes their name…");
+  assert.equal(b.C.get(mine.id).country, "Italy", "…and their country");
+  assert.equal(b.C.list().length, 1, "still one circuit either way");
+
+  // Your own circuit re-saved under a new name (opened from the library) is a rename, not a clash.
+  b.D.open({ design: b.C.get(mine.id), originId: mine.id }); b.D.preview();
+  b.D.setName("RENAMED");
+  assert.equal(b.D.save().ok, true);
+  assert.equal(ask(), undefined);
+  assert.equal(b.C.get(mine.id).name, "RENAMED");
+});
