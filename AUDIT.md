@@ -695,3 +695,28 @@ Proposed by sub-audits and **held as design calls**: forcing calm wind in time t
 by ~0.15 s but is not part of the record key; the patch removes wind from time trial and the daily
 challenge), and scoring the braking drill as distance normalised to 200 km/h (the raw score can be farmed by
 braking from 22 km/h; the patch hides existing braking bests).
+
+### Fixes 43–45 — from the real-world accuracy and rules sub-audits
+
+- **43** `js/career/season-cal.js`, `js/career/experience.js` — **new** — a career on the default real-2026
+  calendar listed two rounds as "Spanish GP" and Sepang as "Malaysian GP"; season mode already used
+  "Barcelona-Catalunya GP" and "Bahrain GP". Real module run in node: career now matches season mode.
+- **44** `js/ui/track-maps.js` — **new** — numbered turn markers snapped onto the neighbouring corner's
+  apex in chicanes, taking its direction, class colour and flyby camera target. All 52 circuits in the
+  page: 26 doubled-up pairs → 0; Monza T1 now reads right, Sochi T3 left; 795 turns unchanged.
+- **45** `index.html` — **new** — How To Play did not mention the two-dry-compound rule the game
+  disqualifies for. One entry added; 39 → 40 entries, no CSP violations.
+
+Reported by those sub-audits and **not changed** (content the owner should decide; sources are in
+`scratchpad/reports/w4-*.md` of this session and were not re-verified by me):
+
+- Naming: "Ferrari 066/12" power unit (2026 unit is reported as 067/6), Red Bull part "Newey Concept",
+  "Mexican GP" (official name Mexico City GP — renaming silences recorded announcer clips keyed on the
+  text), Madrid length 5.47 km (reported real: 5.414), three legends details (Senna "Interlagos '88",
+  Häkkinen "Espoo '98", Moss without Maserati).
+- Sepang turn numbers T2–T15 do not match the real circuit; four circuit lore lines state wrong facts
+  (Sepang final corner, Istanbul Turn 8 duration, Shanghai straight, Hungaroring overtaking turn) —
+  rewording them drops their recorded voice clips until re-recorded.
+- Brands Hatch, Zolder, Estoril, Kyalami and Dijon use today's layout under the historic Grand Prix name.
+- Rules: the two-compound exemption is decided by the weather at the flag rather than by whether the
+  driver fitted wet tyres; Boost is not limited in low grip.
