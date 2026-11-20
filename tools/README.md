@@ -101,6 +101,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
 | **lib/impact-map.mjs** | Narrow `tests/data/impact-map.json` pins for change-aware spec selection. | — |
+| **lib/js-strip.mjs** | Dependency-free JS comment/whitespace stripper; the boot wall's eagerCodeBytes ratchet measures its output. | — |
 | **lib/lint-bins.mjs** | Locates the pinned lint binaries (actionlint, zizmor, glslang, naga, shellcheck) and defines what an absent one means. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
 | **lib/node-compile-cache.cjs** | NODE_COMPILE_CACHE env for tooling-fast / run-group child processes (off under coverage). | — |
@@ -195,7 +196,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
-| **check/boot-wall.mjs** | Boot wall size (eager <script> count and raw bytes), live or at a git ref: the eager* tree ratchets. | — |
+| **check/boot-wall.mjs** | Boot wall size (eager <script> count, raw and code bytes), live or at a git ref: the eager* tree ratchets. | — |
 | **check/brake-cue-calibrate.mjs** | Brake-cue calibration (VM): cue call point vs AiDrive.brakeTarget, dry/rain on slicks, conditionCues off/on. | tune-physics |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-js-types.mjs** | Type-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit). | check-changes |
@@ -216,6 +217,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/physics-oracle.mjs** | Golden physics traces (VM): raw-double per-step player state + track queries for the apex-26 TypeScript port gate. | tune-physics |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
+| **check/quali-calibrate.mjs** | Qualifying calibration (VM): drives the clear-air AI field per circuit, writes `tests/data/quali-calibration.json`. | race-weekend |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
@@ -261,6 +263,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
 | **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |
 | **gen/gen-output-surface.mjs** | Generates the agent output catalog from tools, npm scripts and configured MCP routes; --check detects drift. | agent-config |
+| **gen/gen-quali-calib.mjs** | Regenerates the qualifying factors in `js/race/quali-model.js` from `tests/data/quali-calibration.json`; `--check`. | race-weekend |
 | **gen/gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
 | **gen/gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
 | **gen/gen-test-groups.mjs** | Regenerates package.json's `test:*` scripts from tests/groups.json; `--check`. | check-changes |
@@ -308,6 +311,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
 | **shot/capture-contract.mjs** | Shared bounded input/output and pixel evidence contracts for capture CLIs. | — |
 | **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
+| **shot/capture-fallbacks.mjs** | What a capture drew LESS of, or loaded MORE of, than a player's page (#5790): the TLX software-renderer fallbacks | — |
 | **shot/capture-gallery.mjs** | Verify capture indexes and package all images, recipes and source receipts into a portable static gallery. | — |
 | **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
@@ -720,7 +724,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
 | **ci/merge-train.mjs** | Merge train: folds green `land` PRs onto the deploy tip as a `train/*` PR; the gate checks each car's own rows. |
-| **ci/needs-sync.mjs** | Does a PR branch need a deploy-tip sync? conflict \| union-conflict \| stale-red \| retest-refused \| tip-red \| no. |
+| **ci/needs-sync.mjs** | Sync the deploy tip? conflict \| union-conflict \| stale-red \| retest-refused \| gate-refused \| tip-crossed \| tip-red \| no. |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |

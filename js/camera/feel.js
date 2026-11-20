@@ -31,9 +31,14 @@ const CamFeel = (function () {
     function n(v) {
       return typeof v === "number" && isFinite(v) ? v : 0;
     }
+    // Pooled: broadcast() runs once per rendered frame on heli/side/… and the
+    // fresh {sp,yaw,brake,slip} literal was pure per-frame garbage (PERF-HUNT-2 F10).
+    const _readOut = { sp: 0, yaw: 0, brake: 0, slip: 0 };
     function read(ctx) {
       ctx = ctx || {};
-      return { sp: n(ctx.sp), yaw: n(ctx.yaw), brake: n(ctx.brake), slip: n(ctx.slip) };
+      _readOut.sp = n(ctx.sp); _readOut.yaw = n(ctx.yaw);
+      _readOut.brake = n(ctx.brake); _readOut.slip = n(ctx.slip);
+      return _readOut;
     }
     function broadcast(mode, eye, tgt, ctx) {
       const c = read(ctx);

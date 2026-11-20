@@ -1674,6 +1674,9 @@
       ]
     },
     "js/camera/extra-rigs.js": {
+      "localBattles": [
+        "tests/unit/extra-rigs.test.mjs"
+      ],
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
       ],
@@ -1730,6 +1733,7 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "read": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
@@ -3246,7 +3250,8 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
-        "tests/unit/rear-wing-drs-rail.test.mjs"
+        "tests/unit/rear-wing-drs-rail.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "buildComplete": [
         "tests/specs/parts-physics.spec.js",
@@ -3266,7 +3271,6 @@
         "tests/unit/legends.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ]
     },
@@ -9422,6 +9426,7 @@
       ],
       "create": [
         "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "replace": [
@@ -10099,6 +10104,7 @@
       "create": [
         "tests/specs/steer-migration.spec.js",
         "tests/unit/collide-severity-pace.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/steer-presets.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -10201,6 +10207,9 @@
       ]
     },
     "js/lighting/frame-lights.js": {
+      "_hshOf": [
+        "tests/unit/frame-lights-release.test.mjs"
+      ],
       "appendCarTailLights": [
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/frame-lights-release.test.mjs",
@@ -13436,6 +13445,7 @@
         "tests/unit/daily-challenge.test.mjs"
       ],
       "shareCard": [
+        "tests/unit/daily-challenge.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
       "shareResult": [
@@ -14078,11 +14088,13 @@
     },
     "js/race/quali-model.js": {
       "begin": [
+        "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ],
@@ -14098,6 +14110,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/flying-start.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -14105,6 +14118,7 @@
         "tests/unit/source-pin-hygiene.test.mjs"
       ],
       "medalFor": [
+        "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs"
       ],
       "order": [
@@ -14124,6 +14138,7 @@
         "tests/unit/quali-persist.test.mjs"
       ],
       "rows": [
+        "tests/unit/generated-docs.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
       ],
@@ -16060,6 +16075,9 @@
       "keepNearest": [
         "tests/unit/godray-keep-nearest.test.mjs"
       ],
+      "makeDirtCanvas": [
+        "tests/unit/godray-keep-nearest.test.mjs"
+      ],
       "roadReflection": [
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
@@ -16637,6 +16655,9 @@
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
+      ],
+      "casterRefused": [
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "casterSources": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -17617,6 +17638,8 @@
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/share-card-data.test.mjs"
       ]
     },
@@ -17624,6 +17647,10 @@
       "layout": [
         "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/share/share-card.js": {
@@ -17646,6 +17673,8 @@
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
     },
@@ -20076,7 +20105,7 @@
         "tests/unit/settings-export.test.mjs"
       ]
     },
-    "js/ui/settings-export.js": {
+    "js/ui/settings-export-body.js": {
       "applyCareer": [
         "tests/unit/settings-export.test.mjs"
       ],
@@ -20090,16 +20119,19 @@
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
       ],
       "careerRow": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "collect": [
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
@@ -20109,14 +20141,13 @@
       ],
       "collectGarage": [
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "create": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs",
-        "tests/unit/debris-opts.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
-        "tests/unit/scale-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "defaultOf": [
@@ -20129,11 +20160,8 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "garageRow": [
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
-      ],
-      "isGarageKey": [
-        "tests/unit/garage-defaults.test.mjs",
-        "tests/unit/player-tools-backup.test.mjs"
       ],
       "mount": [
         "tests/unit/settings-export.test.mjs"
@@ -20152,14 +20180,52 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
+        "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
+      ]
+    },
+    "js/ui/settings-export.js": {
+      "create": [
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/debris-opts.test.mjs",
+        "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/scale-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "ensureMounted": [
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "garageValue": [
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "isCareerKey": [
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "isGarageKey": [
+        "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "ready": [
+        "tests/unit/debris-opts.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "*": [
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs",
+        "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
+        "tests/unit/settings-ttlb-backup.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/store-key-types.test.mjs",
         "tests/unit/title-fx.test.mjs",

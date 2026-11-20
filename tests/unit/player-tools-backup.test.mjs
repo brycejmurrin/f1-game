@@ -9,6 +9,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = fs.readFileSync(path.join(ROOT, 'js/ui/settings-export.js'), 'utf8');
+const bodySource = fs.readFileSync(path.join(ROOT, 'js/ui/settings-export-body.js'), 'utf8');
 const plain = (v) => JSON.parse(JSON.stringify(v));
 function boot() {
   const disk = new Map(), writes = [], full = (k) => k.startsWith('apex26.') ? k : 'apex26.' + k;
@@ -28,7 +29,9 @@ function boot() {
   });
   ctx.window = ctx;
   for (const path of ['js/core/mat4.js','js/physics/consts.js','js/garage/setup-tune.js','js/garage/setup-presets.js','js/input/controller-profiles.js']) vm.runInContext(fs.readFileSync(ROOT + '/' + path, 'utf8'), ctx, { filename: absSrc(path) });
-  const api = vm.runInContext(source + ';SettingsExport', ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // LAZY_SAVES_DATA (#4748)
+  const api = vm.runInContext('SettingsExport', ctx);
   const tune = vm.runInContext('SetupTune.defaults("mercedes")', ctx);
   return { api, tune: plain(tune), disk, writes, store, G: { gfx: { isMobile: false } }, ctx,
     settings: (driving, display) => api.applySettings({ format: api.FORMAT, settings: { driving, display } }),
@@ -143,6 +146,6 @@ test('named preset context survives garage backups while malformed metadata cann
 });
 
 test('import UI retains its existing durable-success reload path', () => {
-  assert.match(source, /if \(!r\.applied\)[\s\S]*?reloading = true; b\.disabled = true;[\s\S]*?location\.reload\(\)/);
-  assert.ok(!source.includes('Input.setControllerProfiles('), 'no extra live reapply added to a reload-based importer');
+  assert.match(bodySource, /if \(!r\.applied\)[\s\S]*?reloading = true; b\.disabled = true;[\s\S]*?location\.reload\(\)/);
+  assert.ok(!(source + bodySource).includes('Input.setControllerProfiles('), 'no extra live reapply added to a reload-based importer');
 });
