@@ -637,7 +637,7 @@ function resetGarage() {
       const full = localStorage.key(i);
       if (!full || full.indexOf("apex26.") !== 0) continue;
       const k = full.slice(7);
-      if (isGarageKey(k)) doomed.push(k);
+      if (isGarageKey(k) && k.indexOf("careerSetup.") !== 0) doomed.push(k);
     }
   } catch (_) {  }
   let failed = 0;
