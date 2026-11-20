@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-77g6LRXo2ZvQIJF13Xy9y0t9AlA1mwp1XACwJASXaRY=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -657,15 +657,31 @@
     } catch (e) { /* a wrong first shape is survivable; a boot failure is not */ }
     // Boot progress: --boot-p = scripts downloaded / script tags, read by the
     // wordmark rule until game.js wires the doors (css/title.css PRE-BOOT).
+    // Monotonic (#5995): bt grows as later script tags parse, so bn/bt alone
+    // can shrink between callbacks and run the stripe backwards.
     try {
-      var bn = 0, bpo = new PerformanceObserver(function (l) {
+      var bn = 0, bp = 0, bpo = new PerformanceObserver(function (l) {
         l.getEntries().forEach(function (e) { if (e.initiatorType === "script") bn++; });
         var bt = document.querySelectorAll("script[src]").length;
-        if (bt) document.documentElement.style.setProperty("--boot-p", Math.min(1, bn / bt).toFixed(2));
+        if (bt) { bp = Math.max(bp, Math.min(1, bn / bt)); document.documentElement.style.setProperty("--boot-p", bp.toFixed(2)); }
         if (bt && bn >= bt) bpo.disconnect();
       });
       bpo.observe({ type: "resource", buffered: true });
     } catch (e) { /* the rule just stays short */ }
+    // BOOT TAP (#5995): a door tapped before game.js wires it is marked
+    // aria-busy (the last one wins); js/ui/title-menu.js replays it.
+    try {
+      document.addEventListener("click", function (e) {
+        var de1 = document.documentElement;
+        if (de1.hasAttribute("data-booted")) return;
+        var d = e.target && e.target.closest ? e.target.closest("#menu-buttons button") : null;
+        if (!d) return;
+        e.preventDefault();
+        var was = document.querySelector("#menu-buttons [aria-busy]");
+        if (was) was.removeAttribute("aria-busy");
+        d.setAttribute("aria-busy", "true");
+      }, true);
+    } catch (e) { /* the tap is just lost, as before */ }
     // Title layout: apex26.titleLayout (object | unset), AFTER data-shape
     // above: the store keeps one layout per shape, {v: 2, wide, tall} (a
     // missing shape is shipped), and a v1 object (no `v`) is both. Stored only
@@ -3891,7 +3907,6 @@
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/data/flyby-overrides.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>

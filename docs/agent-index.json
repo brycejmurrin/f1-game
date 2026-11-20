@@ -3239,11 +3239,6 @@
       "roster": "LAZY_DATA"
     },
     {
-      "path": "js/data/flyby-overrides.js",
-      "global": "FlybyOverrides",
-      "roster": "tag"
-    },
-    {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
       "roster": "tag"
