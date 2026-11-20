@@ -173,6 +173,44 @@ test("set: enums stamp an attribute, ranges a token + presence; back to default 
   assert.equal(html.style.getPropertyValue("--look-career-split"), "");
 });
 
+test("phone panel defaults apply before opening Settings and reset restores them", () => {
+  const win = { innerWidth: 844, innerHeight: 390, matchMedia: (query) => ({ matches: query === "(pointer: coarse)" }) };
+  const { M, html, data } = boot({ settingsOpen: false, win });
+  assert.deepEqual([M.read("pause").btn, M.read("pause").w, M.read("garage").pw], [125, 135, 115]);
+  assert.deepEqual([M.read("datahub").tabs, M.read("datahub").stripes, M.read("career").density], ["underline", "on", "roomy"]);
+  assert.deepEqual(["--look-pause-btn", "--look-pause-w", "--look-garage-pw"].map((k) => html.style.getPropertyValue(k)), ["1.25", "1.35", "1.15"]);
+  assert.deepEqual([html.dataset.lookDatahubTabs, html.dataset.lookDatahubStripes], ["underline", "on"]);
+  const previous = boot({ win, stored: { lookPause: { btn: 115 }, lookDatahub: { tabs: "filled" }, lookGarage: { pw: 100 } } });
+  assert.deepEqual([previous.M.read("pause").btn, previous.M.read("pause").w, previous.M.read("datahub").tabs, previous.M.read("garage").pw], [115, 135, "filled", 100]);
+  M.set("pause", "btn", 100);
+  M.set("datahub", "stripes", "off");
+  M.set("garage", "pw", 100);
+  assert.deepEqual(plain([data.lookPause, data.lookDatahub, data.lookGarage]), [{ btn: 100 }, { stripes: "off" }, { pw: 100 }]);
+  for (const key of ["pause", "datahub", "garage"]) { M.reset(key); assert.equal(M.isShipped(key), true); }
+  assert.deepEqual([html.dataset.lookPauseBtn, html.dataset.lookDatahubStripes, html.dataset.lookGaragePw], ["125", "on", "115"]);
+  assert.deepEqual([data.lookPause, data.lookDatahub, data.lookGarage], [undefined, undefined, undefined]);
+  const desktop = boot().M;
+  assert.deepEqual([desktop.read("pause").btn, desktop.read("pause").w, desktop.read("garage").pw], [100, 100, 100]);
+  assert.deepEqual([desktop.read("datahub").tabs, desktop.read("datahub").stripes], ["filled", "off"]);
+});
+
+test("geometry scale readouts use the factory size while splits show the real column share", () => {
+  const win = { innerWidth: 852, innerHeight: 393, matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) };
+  const { M, dom, html, data } = boot({ win });
+  const width = dom.byId("pm-look-garage-pw");
+  assert.equal(width.getAttribute("aria-valuetext"), "100%");
+  assert.deepEqual([width.min, width.max, width.step, width.value], ["60", "150", "5", "115"]);
+  for (const [raw, shown] of [[60, "52.17%"], [120, "104.35%"], [150, "130.43%"]]) {
+    width.value = String(raw); dom.dispatch(width, { type: "input" });
+    assert.equal(data.lookGarage.pw, raw);
+    assert.equal(html.style.getPropertyValue("--look-garage-pw"), String(raw / 100));
+    assert.equal(width.getAttribute("aria-valuetext"), shown);
+  }
+  M.reset("garage");
+  assert.equal(width.getAttribute("aria-valuetext"), "100%");
+  assert.equal(dom.byId("pm-look-designer-split").getAttribute("aria-valuetext"), "55%");
+});
+
 test("normalize: unknown keys dropped, junk enums read as shipped, ranges clamp and snap", () => {
   const { M, html } = boot({ stored: { lookGarage: { side: "left", pw: 999, glass: "neon", bogus: 1 }, lookPause: { gap: 33 } } });
   const g = M.read("garage");

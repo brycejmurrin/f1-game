@@ -27,7 +27,10 @@ args.add_argument('--poses', required=True)
 args.add_argument('--output-dir', required=True)
 args.add_argument('--render', action='store_true')
 args.add_argument('--step', type=int, default=1, help='render every Nth frame (keys stay at full rate)')
-args.add_argument('--res', default='844x390', help='WxH; default the phone landscape the owner plays on')
+phone_record = Path(__file__).resolve().parents[3] / 'tests/data/phone-windows.json'
+landscape = json.loads(phone_record.read_text())['windows']['standalone']
+args.add_argument('--res', default=f"{landscape['width']}x{landscape['height']}",
+                  help='Preview frame WxH; defaults to the iPhone 15 logical landscape size')
 opts = args.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
 data = json.loads(Path(opts.poses).read_text())
 out = Path(opts.output_dir).resolve(); out.mkdir(parents=True, exist_ok=True)

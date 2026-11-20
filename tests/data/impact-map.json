@@ -10279,6 +10279,7 @@
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/night-washout-presets.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -10402,6 +10403,7 @@
         "tests/unit/light-store-cond-layer.test.mjs"
       ],
       "reset": [
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -10455,6 +10457,9 @@
         "tests/unit/light-store-perchunk-pin.test.mjs"
       ],
       "refreshLightTunePanel": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+      ],
+      "update": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "*": [
@@ -19969,6 +19974,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "reset": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
@@ -20143,7 +20149,8 @@
       ],
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/audio-panel-settings-ui.test.mjs"
+        "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ],
       "step": [
         "tests/specs/quali.spec.js",
@@ -20168,6 +20175,7 @@
         "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ]
     },
@@ -20488,9 +20496,6 @@
       ]
     },
     "js/ui/title-fx.js": {
-      "artMode": [
-        "tests/unit/title-fx.test.mjs"
-      ],
       "choice": [
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/title-fx.test.mjs"
@@ -20518,9 +20523,6 @@
         "tests/unit/title-fx.test.mjs"
       ],
       "setWash": [
-        "tests/unit/title-fx.test.mjs"
-      ],
-      "washMode": [
         "tests/unit/title-fx.test.mjs"
       ],
       "*": [
@@ -20576,6 +20578,7 @@
       ],
       "reset": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -20597,6 +20600,7 @@
       ],
       "vars": [
         "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [

@@ -439,10 +439,26 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.equal(all.mode, "all");
   const n = Object.values(all.settings).reduce((a, g) => a + Object.keys(g).length, 0);
   assert.equal(n, SettingsExport.SPEC.length, "every allowlisted key appears once");
-  assert.equal(all.settings.steering.pace, 11);
+  assert.equal(all.settings.steering.pace, 17);
   assert.equal(all.settings.display.gfxPreset, null, "unset per-device default: the loading device keeps its own");
   assert.equal(all.settings.audio.sndTune.gain, 1, "an object default is spelled out");
   assert.deepEqual(all.changed, []);
+});
+
+test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
+  const mobile = true;
+  const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
+  const draft = { weather: "storm", tod: "dusk", mixed: true, laps: "5" };
+  const disk = { "apex26.raceDraft": JSON.stringify(draft), "apex26.hudElements": "{}" };
+  const file = boot({ mobile, globals, disk }).collect("changes");
+  assert.deepEqual(file.settings.driving.raceDraft, draft);
+  assert.deepEqual(file.settings.hud.hudElements, {});
+  const target = boot({ mobile, globals });
+  assert.equal(target.loadSettings(file).ok, true);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.raceDraft")), draft);
+  assert.equal(target.disk.get("apex26.hudElements"), "{}");
+  target.loadSettings({ ...file, settings: { driving: { raceDraft: null } } });
+  assert.equal(target.disk.has("apex26.raceDraft"), false);
 });
 
 test("a changed key carries its value, the default it replaced and the source that owns it", () => {
@@ -461,9 +477,9 @@ test("a changed key carries its value, the default it replaced and the source th
   const f = collect("changes");
   assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneCar", "camera.camTuneGlobal", "camera.camTuneTrack", "camera.cockpitHalo", "camera.motionBlur", "camera.speedLines", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
-  assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
+  assert.equal(f.defaults.audio.volMusic, 0.7, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
-  assert.equal(f.defaults.steering.pace, 11);
+  assert.equal(f.defaults.steering.pace, 17);
   // The halo SHIPS faired; "0" is what counts as a change now.
   assert.equal(f.settings.camera.cockpitHalo, "0", "a raw-lane value stays the string the panel wrote");
   assert.equal(f.defaults.camera.cockpitHalo, "fairing");
@@ -1243,9 +1259,10 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const src = read("js/ui/appearance-opts.js");
   const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);
   assert.ok(keys.length >= 8, "found appearance-opts.js's K_* keys: " + keys.join(", "));
-  // Store non-default values so CHANGES includes them (shipped: large / high).
+  // Store non-default values so CHANGES includes them (shipped: normal / standard contrast).
   const { SettingsExport, collect } = boot({ disk: {
-    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("off"),
+    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("high"),
+    "apex26.titleArt": JSON.stringify("medium"), "apex26.menuWash": JSON.stringify("medium"),
     "apex26.speedUnits": JSON.stringify("mph"), "apex26.ldCard": JSON.stringify({ scale: 1.2, x: 4, y: -3 }),
     "apex26.flybyShots": JSON.stringify([{ id: "a" }]),
   } });
@@ -1253,7 +1270,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   for (const k of keys) assert.ok(inSpec.has(k), k + " (js/ui/appearance-opts.js) needs a SPEC row");
   const f = collect("changes");
   assert.equal(f.settings.appearance.textSize, "larger");
-  assert.equal(f.settings.appearance.uiContrast, "off");
+  assert.equal(f.settings.appearance.uiContrast, "high");
   assert.equal(f.settings.appearance.speedUnits, "mph");
   assert.deepEqual(f.settings.camera.ldCard, { scale: 1.2, x: 4, y: -3 });
   assert.equal(f.settings.camera.flybyShots.length, 1);
@@ -1261,6 +1278,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const res = b.loadSettings(f);
   assert.equal(res.ok, true);
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
+  for (const key of ["titleArt", "menuWash"]) assert.equal(JSON.parse(b.disk.get("apex26." + key)), "medium");
 });
 
 test("caption settings keys are in SPEC and round-trip", () => {
@@ -1320,7 +1338,7 @@ test("appearance import rejects malformed bags and enums and clamps profile cont
   const saved = JSON.parse(b.disk.get("apex26.appearanceProfiles"));
   assert.ok(saved.length <= 12); assert.equal(new Set(saved.map(p => p.id)).size, saved.length);
   assert.equal(saved[0].name.length, 40); assert.equal(saved[0].values.uiScale, 200);
-  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "photo");
+  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "static");
   assert.equal(saved[0].values.lookCareer.density, "auto"); assert.equal(saved[0].values.career, undefined);
 });
 

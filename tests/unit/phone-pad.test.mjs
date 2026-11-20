@@ -1351,7 +1351,7 @@ test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (
   const app = read("js/ui/appearance-opts.js");
   const def = (k) => (app.match(new RegExp(`store\\.get\\(${k},\\s*"(\\w+)"\\)`)) || [])[1];
   const game = { uiTheme: def("K_THEME"), menuAccent: def("K_MENU"), textSize: def("K_TEXT"), uiContrast: def("K_CONTRAST") };
-  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" }, "appearance-opts defaults moved: update controller.html with them");
+  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "normal", uiContrast: "off" }, "appearance-opts defaults moved: update controller.html with them");
   // controller.html's first inline script, run against a phone that never saved a look.
   const page = read("controller.html");
   const script = page.match(/<script>\s*(\/\/ THE PLAYER'S LOOK[\s\S]*?)<\/script>/)[1];
@@ -1362,10 +1362,10 @@ test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (
     return el.dataset;
   };
   // The page writes no data-text-size for "normal" and no data-ui-contrast unless "high", like appearance-opts.
-  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" },
-    "a phone with nothing saved wears LARGE text, HIGH contrast and the ember accent, as the game does");
-  assert.deepEqual({ ...run({ "apex26.textSize": "normal", "apex26.uiContrast": "off", "apex26.menuAccent": "cyan" }) },
-    { uiTheme: "dark", menuAccent: "cyan" }, "a saved choice still wins over the defaults");
+  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember" },
+    "a fresh controller follows the game appearance");
+  assert.deepEqual({ ...run({ "apex26.textSize": "large", "apex26.uiContrast": "high", "apex26.menuAccent": "cyan" }) },
+    { uiTheme: "dark", menuAccent: "cyan", textSize: "large", uiContrast: "high" }, "a saved choice still wins over the defaults");
 });
 
 test("the Android shell holds a permission for every device API the web code calls (R3-ARCHITECTURE-12)", () => {

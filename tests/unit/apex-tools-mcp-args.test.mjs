@@ -72,9 +72,18 @@ test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of
 });
 
 test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near miss", () => {
-  const aliased = callTools([["apex_hud_shot", { device: "ios-iphone-landscape-844", dryRun: true }]])[0].body;
-  assert.equal(aliased.ok, true, JSON.stringify(aliased));
-  assert.match(JSON.stringify(aliased.argv), /phone-landscape-844x390/, "alias rewrites before the CLI");
+  const cases = [
+    ["ios-iphone-landscape-844", "phone-landscape-844x390"],
+    ["ios-iphone-landscape", "ios-iphone-landscape"],
+    ["ios-iphone-portrait", "ios-iphone-portrait"],
+    ["ios-iphone-landscape-safari", "ios-iphone-landscape-safari"],
+    ["bryce-portrait", "bryce-393x852"],
+  ];
+  const results = callTools(cases.map(([device]) => ["apex_hud_shot", { device, dryRun: true }]));
+  for (const [i, { body }] of results.entries()) {
+    assert.equal(body.ok, true, JSON.stringify(body));
+    assert.equal(body.argv[body.argv.indexOf("--device") + 1], cases[i][1]);
+  }
   const miss = callTools([["apex_hud_shot", { device: "phone-landscape-844", dryRun: true }]])[0].body;
   assert.equal(miss.ok, false);
   assert.equal(miss.error, "bad_args");

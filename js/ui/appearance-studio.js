@@ -9,7 +9,7 @@ const AppearanceStudio = (function () {
     uiTheme: ["dark", "light", "system", "endurance", "drafting"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
     hudAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"], textSize: ["normal", "large", "larger"],
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["auto", "reduce", "off"],
-    titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"],
+    titleIntro: ["full", "quick", "off"], menuWash: ["full", "medium", "soft", "off"], titleArt: ["on", "medium", "soft", "off"], titleButtonStyle: ["auto", "racing", "flat"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
     hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
     hudMapVis: ["auto", "on", "off"], hudGapsVis: ["auto", "on", "off"], hudMirror: ["auto", "on", "off"],
@@ -21,22 +21,22 @@ const AppearanceStudio = (function () {
   const shipped = (k, d) => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
     ? SettingsDefaults.get(k) : d;
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
-    textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
+    textSize: shipped("textSize", "normal"), uiContrast: shipped("uiContrast", "off"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
-    titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null, hudLayout: null, dockLayout: null, screenPlacement: null,
+    titleIntro: "full", menuWash: "full", titleArt: "on", titleButtonStyle: "auto", titleLayout: null, hudLayout: null, dockLayout: null, screenPlacement: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
-    homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
+    homeScene: shipped("homeScene", "static"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
   // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
   // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
   // Cosmetic presets must not replace readability, comfort, unit, size or layout
   // preferences (#5058): a preset value never names one of these keys, and a
   // screen look the preset names is merged into the current one, not replaced.
-  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "hudLayout", "dockLayout", "screenPlacement", "pauseLayout", "pauseSide", "pauseDim"]);
+  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleButtonStyle", "titleLayout", "hudLayout", "dockLayout", "screenPlacement", "pauseLayout", "pauseSide", "pauseDim"]);
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
-  const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
+  const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleButtonStyle", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
     hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
@@ -86,7 +86,7 @@ const AppearanceStudio = (function () {
   let photoRows = [], photoGeneration = 0, photoPanelVisible = false;
   function say(message) { if (ui) ui.status.textContent = message; }
   function invoke(name, ...args) { try { if (typeof hooks[name] === "function") return hooks[name](...args); } catch (e) { Log.warn("ui", "Appearance " + name + ": " + e.message); say("Your appearance is saved; the scene preview could not refresh. Try another scene."); } }
-  function scene() { const mode = store.get("homeScene", "photo"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : "photo", motion: motion === "ambient" ? "ambient" : "still" }; }
+  function scene() { const mode = store.get("homeScene", "static"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : DEFAULTS.homeScene, motion: motion === "ambient" ? "ambient" : "still" }; }
   function homeCamera() { const value = store.get("homeCamera", "side"); return ENUMS.homeCamera.includes(value) ? value : "side"; }
   function setHomeCamera(value) { const next = snapshot(); next.homeCamera = value; return applySnapshot(next); }
   function effectiveSceneMotion() {
@@ -377,6 +377,7 @@ const AppearanceStudio = (function () {
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
       { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
+      { id: "title-button-style", label: "Title button style", page: "appearance", target: "pm-titlebuttonstyle-sel", aliases: "main menu home racing flat auto portrait landscape" },
       { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system endurance drafting colour color" },
       { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
       { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },

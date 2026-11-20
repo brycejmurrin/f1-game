@@ -90,17 +90,16 @@ function isWeakPhone(nav) {
   try { return !nav.gpu; } catch (_) { return true; }
 }
 
-// The shipped default matches each device's picture without this control:
-// desktop runs the full stack (HIGH); a capable phone the memory-safe MEDIUM
-// tier; a weak phone LOW. The legacy apex26.gfxHigh opt-in used to mean ULTRA;
-// on phones that is capped to HIGH (see maxId / capId). A fresh capable phone
-// stays MEDIUM: HIGH removes the tier-2 floor and enables the env probe plus
-// lamp shadows/SSR before the governor has measured the device
+// The owner iPhone setup pairs HIGH resolution with the LOW effects budget.
+function isIPhone() {
+  return typeof navigator !== "undefined" && /\biPhone\b/i.test(navigator.userAgent || "");
+}
 function defaultId(mobile, hint) {
   if (!mobile) return "high";
   const s = gstore();
   const legacy = !!s && s.raw("apex26.gfxHigh") === "1";
   if (legacy) return PHONE_MAX_ID;
+  if (isIPhone()) return "low";
   const weak = hint && typeof hint.weak === "boolean" ? hint.weak : isWeakPhone();
   return weak ? "low" : "medium";
 }
@@ -277,7 +276,7 @@ if (typeof document !== "undefined") {
 // cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
-  maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
+  maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
 };
 })();
 Object.freeze(GfxQuality);

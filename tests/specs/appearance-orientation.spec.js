@@ -5,11 +5,11 @@
 //      key and no painted size (--ui-scale, --hud-btn-scale).
 //   2. SEPARATE (opt-in): a settled portrait boot loads the lazy LayoutPresets and swaps in portrait's copy once.
 // Chromium emulation: not WebKit, not his device (bryce-phone `limits`).
+import { rotateIPhone15 } from "../helpers/iphone15.mjs";
 import { test, expect } from "@playwright/test";
 import { openBrycePhone, brycePhone } from "../../tools/lib/bryce-phone.mjs";
 
 const BOOT = 60000;
-const PORTRAIT = { width: 393, height: 852 }, LANDSCAPE = { width: 852, height: 393 };
 
 /** In-page: every stored SETTING (the apex26.* keys SettingsExport.SPEC declares), the painted size tokens and
  *  the ICB shape. Caches outside the SPEC (e.g. the asset pack's `apex26.packIndex`, written async after boot,
@@ -25,8 +25,8 @@ function stateInPage() {
 /** Past AppearanceStudio's SHAPE_SETTLE_MS (2000) since the last shape answer, with margin. */
 const settled = (page) => page.waitForFunction(() => performance.now() - window.__shapeAt > 2600, null, { polling: 100, timeout: 15000 });
 
-async function boot(browser, baseURL, { extra = null, first = LANDSCAPE } = {}) {
-  const { context, page } = await openBrycePhone(browser, { window: "standalone", dpr: 1 });
+async function boot(browser, baseURL, { extra = null, first = "standalone" } = {}) {
+  const { context, page, cdp } = await openBrycePhone(browser, { window: first, dpr: 1 });
   await context.addInitScript((e) => {
     window.__TEST_MODE = true;
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); if (e) for (const [k, v] of Object.entries(e)) localStorage.setItem(k, v); } catch (_) { /* read-back fails loudly */ }
@@ -35,11 +35,10 @@ async function boot(browser, baseURL, { extra = null, first = LANDSCAPE } = {}) 
     document.addEventListener("DOMContentLoaded", () => new MutationObserver(() => { window.__shapeAt = performance.now(); })
       .observe(document.body, { attributes: true, attributeFilter: ["data-shape"] }));
   }, extra);
-  await page.setViewportSize(first);
   await page.goto(String(baseURL), { waitUntil: "domcontentloaded", timeout: 90000 });
   await page.waitForFunction(() => window.__apex && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT });
   await page.evaluate(() => window.__apex.headless(true));
-  return { context, page };
+  return { context, page, cdp };
 }
 
 test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
@@ -47,27 +46,27 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
 
   test("SHARED: a rotation and a stale portrait launch change no stored key and no painted size", async ({ browser, baseURL }) => {
     let before;
-    const { context, page } = await boot(browser, baseURL);
+    const { context, page, cdp } = await boot(browser, baseURL);
     try {
       await settled(page);
       before = await page.evaluate(stateInPage);
       expect(before.shape).toBe("wide");
       expect(before.keys["apex26.appearanceShapes"], "SHARED is the absent key").toBeUndefined();
-      await page.setViewportSize(PORTRAIT);
+      await rotateIPhone15(page, cdp, "portrait");
       await page.waitForFunction(() => document.body.dataset.shape === "tall", null, { polling: 100, timeout: 10000 });
       await settled(page);
       const tall = await page.evaluate(stateInPage);
       expect(tall.keys).toEqual(before.keys);
       expect([tall.ui, tall.btn]).toEqual([before.ui, before.btn]);
-      await page.setViewportSize(LANDSCAPE);
+      await rotateIPhone15(page, cdp, "standalone");
       await settled(page);
       expect(await page.evaluate(stateInPage)).toEqual(before);
     } finally { await context.close(); }
 
     // A Home-Screen launch that reports the portrait pair first, then lays out landscape.
-    const stale = await boot(browser, baseURL, { first: PORTRAIT });
+    const stale = await boot(browser, baseURL, { first: "portrait" });
     try {
-      await stale.page.setViewportSize(LANDSCAPE);
+      await rotateIPhone15(stale.page, stale.cdp, "standalone");
       await stale.page.waitForFunction(() => document.body.dataset.shape === "wide", null, { polling: 100, timeout: 10000 });
       await settled(stale.page);
       const after = await stale.page.evaluate(stateInPage);
@@ -80,7 +79,7 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
 
   test("SEPARATE: a settled portrait boot swaps in portrait's copy once, through the lazy bundle", async ({ browser, baseURL }) => {
     const shapes = { v: 2, mode: "separate", live: "wide", park: { uiScale: 85 } };
-    const { context, page } = await boot(browser, baseURL, { first: PORTRAIT, extra: { "apex26.appearanceShapes": JSON.stringify(shapes) } });
+    const { context, page } = await boot(browser, baseURL, { first: "portrait", extra: { "apex26.appearanceShapes": JSON.stringify(shapes) } });
     try {
       await page.waitForFunction(() => JSON.parse(localStorage.getItem("apex26.appearanceShapes") || "{}").live === "tall", null, { polling: 200, timeout: 15000 });
       const s = await page.evaluate(stateInPage);

@@ -178,14 +178,12 @@ test("RadioVoice.inert() carries sayPreRace like the real inert (loading-screen 
   assert.equal(stubGlobal("RadioVoice").inert().sayPreRace("x", 1, 0), false);
 });
 
-test("the stub AudioPanel paints a saved SOUND OFF on the title button before the real panel lands", () => {
-  // Until the first gesture loads LAZY_AUDIO, index.html's static "SOUND ON" is all the player sees: a
-  // muted player reloaded to a button that claimed the opposite, and tapping it turned the sound ON.
+test("the stub AudioPanel paints the saved master state on the muted title shell", () => {
   const mk = (soundOn) => {
     // The label carries no ♪ text glyph any more: the note is a CSS mask on
     // #soundbtn::before (U+266A is in no bundled font). This mock is the bare
     // button contract the stub writer has always assumed.
-    const btn = { textContent: "SOUND ON", attrs: { "aria-pressed": "true" }, setAttribute(k, v) { this.attrs[k] = v; } };
+    const btn = { textContent: "SOUND OFF", attrs: { "aria-pressed": "false" }, setAttribute(k, v) { this.attrs[k] = v; } };
     stubGlobal("AudioPanel").create({ els: { soundbtn: btn }, store: G0.store, soundOn });
     return btn;
   };

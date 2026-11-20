@@ -289,7 +289,7 @@ const Collide = (() => {
     // Contact SEVERITY reads closing speed on the pace-normalised scale, anchored at the
     // shipped slider default so a default-pace hit scores exactly what it always did: the
     // same shunt at OVERALL SPEED min/max used to score 0.36 / 1.0 (wall strikes: #4947).
-    const sevRef = Math.pow(1.06, -3);   // paceFromSlider(PACE_DEF), js/input/steer-tuning.js (the default-pace literals in collide-severity-pace.test.mjs hold it)
+    const sevRef = Math.pow(1.06, -3);   // fixed at notch 11, the pace used to calibrate impacts
     const sevV = (v) => v * (sevRef / Math.max(G.PACE, 0.05));
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;

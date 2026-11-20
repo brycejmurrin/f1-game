@@ -6,6 +6,7 @@ const TitleLayout = (function () {
   const PARTS = ["btns", "title", "art"];
   const LAYOUTS = [["grid", "GRID"], ["stack", "STACK"], ["row", "ROW"]];
   const SIDES = [["auto", "AUTO"], ["swap", "SWAPPED"]];
+  const WIDTH_MIN = 20;
   const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], size: [50, 200], width: [0, 100] });
   const DEFAULT = Object.freeze({
     btns: Object.freeze({ x: 0, y: 0, size: 100, width: 0 }),
@@ -13,13 +14,19 @@ const TitleLayout = (function () {
     art: Object.freeze({ x: 0, y: 0, size: 100 }),
     layout: "grid", side: "auto",
   });
-  // Keep the adaptive touch defaults in sync with the shell’s first paint.
+  // Phone defaults from the November 20 appearance export. The inline boot in
+  // index.html uses the same layouts before this module loads.
   const PHONE_WIDE = Object.freeze({
-    btns: Object.freeze({ x: 2, y: 1, size: 123, width: 0 }),
-    title: DEFAULT.title, art: DEFAULT.art, layout: "grid", side: "auto",
+    ...DEFAULT,
+    btns: Object.freeze({ x: 0, y: 0, size: 106, width: 25 }),
+    title: Object.freeze({ x: 0, y: 0, size: 108 }),
+    art: Object.freeze({ x: -7, y: -2, size: 86 }),
+  });
+  const PHONE_TALL = Object.freeze({
+    ...DEFAULT, btns: Object.freeze({ x: 0, y: 0, size: 105, width: 0 }),
   });
   const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
-  const shipped = (sh) => (sh === "wide" && phone() ? PHONE_WIDE : DEFAULT);
+  const shipped = (sh) => phone() ? (sh === "tall" ? PHONE_TALL : PHONE_WIDE) : DEFAULT;
   const SHAPES = ["wide", "tall"];
   const SHAPE_NAMES = { wide: "LANDSCAPE", tall: "PORTRAIT" };
   const store = GameStore.store;
@@ -29,8 +36,8 @@ const TitleLayout = (function () {
   const num = (v, k) => {
     const [lo, hi] = LIM[k];
     const n = typeof v === "number" && isFinite(v) ? Math.round(v) : DEFAULT.btns[k];   // btns carries every key
-    // WIDTH: 0 is AUTO; anything else is at least 20 % of the screen.
-    if (k === "width") return n <= 0 ? 0 : Math.max(20, Math.min(hi, n));
+    // WIDTH: 0 is AUTO; explicit requests start at 20.
+    if (k === "width") return n <= 0 ? 0 : Math.max(WIDTH_MIN, Math.min(hi, n));
     return Math.max(lo, Math.min(hi, n));
   };
   /** Any stored value -> a complete, clamped layout. Junk reads as shipped. */
@@ -115,7 +122,7 @@ const TitleLayout = (function () {
   let fitRaf = 0;
   function fitClear(el) { for (const k of FIT_TOKENS) el.style.removeProperty(k); }
   // THE TOUCH PAINT FLOOR (#5213; css/menu-destinations.css): under a finger a door is never under
-  // 44 px, so a cluster too tall RE-FLOWS (8 rows, 7, 5) before it shrinks; the fit wins last.
+  // 44 px, so a cluster too tall RE-FLOWS (8 rows, 7, 6) before it shrinks; the fit wins last.
   const touchHome = () => { try { return phoneWide() && win().matchMedia("(pointer: coarse)").matches; } catch (_) { return false; } };
   const floored = () => { const e = doc && doc.getElementById("menu-buttons"); return !!e && touchHome() && e.getAttribute("data-home-floor") !== "off"; };
   /** BUTTONS SIZE's low end: 100 while the floor holds. */
@@ -145,7 +152,7 @@ const TitleLayout = (function () {
       }
       return true;
     };
-    const tiers = current().layout === "grid" ? ["", "7", "5"] : [""];
+    const tiers = current().layout === "grid" ? ["", "7", "6"] : [""];
     for (const t of tiers) { tier(t); if (fits(1)) { el.style.removeProperty("--tf"); return; } }
     // No row count takes this SIZE: the one that paints the biggest doors, held (--tf) between the
     // floor and the request, so hold() stops the slider (never a bigger SIZE, smaller doors).
@@ -334,20 +341,21 @@ const TitleLayout = (function () {
     else ScreenLooks.endPeek();
   }
 
-  const pctTxt = (k, n) => {
-    if (k === "size") return n + "%";
-    if (k === "width") return n ? n + "%" : "AUTO";
+  const pctTxt = (k, n, part) => {
+    if (k === "size") return Math.round(n * 10000 / shipped(shape())[part].size) / 100 + "%";
+    if (k === "width") return n ? String(n) + (usesWidthSplit() ? "" : "%") : "AUTO";
     if (!n) return "CENTRE";
     if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
     return Math.abs(n) + "% " + (n < 0 ? "up" : "down");
   };
   const NAMES = { size: "SIZE", width: "WIDTH", x: "LEFT / RIGHT", y: "UP / DOWN" };
+  const usesWidthSplit = () => shape() === "wide" && phoneWide();
 
-  /** The whole title screen shipped: this layout AND TitleFx's three looks
+  /** The whole title screen shipped: this layout AND TitleFx's appearance settings
    *  (TitleFx loads first; MOTION is global, so it does not count here). */
   function screenShipped() {
     const fx = typeof TitleFx !== "undefined" ? TitleFx : null;
-    return layoutShipped() && (!fx || (fx.introMode() === "full" && fx.washMode() === "full" && fx.artMode() === "on"));
+    return layoutShipped() && (!fx || (fx.introMode() === "full" && fx.washMode() === "full" && fx.artMode() === "on" && fx.buttonStyle() === "auto"));
   }
   /** APPEARANCE › TITLE SCREEN's closed summary (the shell's #pm-titlescreen-sum). */
   function paintScreenSum() {
@@ -380,7 +388,7 @@ const TitleLayout = (function () {
 
     body.appendChild(el("p", { className: "adv-help", textContent:
       "Move and size the title screen's buttons, title and car drawing. Landscape and portrait keep a layout each; " +
-      "these controls edit the shape the screen is in now. Hold a slider to see the title screen through this page." }));
+      "100% SIZE is the factory size for that piece in the current orientation. Hold a slider to see the title screen through this page." }));
     const shapeLine = el("p", { id: "pm-tl-shape", className: "adv-help", attrs: { "aria-live": "polite", "data-help": "keep" } });
     body.appendChild(shapeLine);
 
@@ -388,22 +396,25 @@ const TitleLayout = (function () {
     function slider(part, k) {
       const id = `pm-tl-${part}-${k}`;
       const out = el("b", { id: id + "-v" });
-      const inp = el("input", { id, type: "range", min: String(LIM[k][0]), max: String(LIM[k][1]), step: "1",
+      // The first WIDTH tick represents AUTO. The others are explicit requests.
+      const min = k === "width" ? WIDTH_MIN - 1 : LIM[k][0];
+      const inp = el("input", { id, type: "range", min: String(min), max: String(LIM[k][1]), step: "1",
         attrs: { "aria-label": `${part === "btns" ? "Buttons" : part === "title" ? "Title" : "Car drawing"} ${NAMES[k].toLowerCase()}` } });
-      const paint = () => {
-        let n = current()[part][k];
-        // Range = what paints, number = the painted size.
-        if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, sizeMin(part)); }
-        if (d.activeElement !== inp) inp.value = String(n);
-        out.textContent = pctTxt(k, n);
+      if (k === "width") inp.setAttribute("aria-describedby", "pm-tl-width-help");
+      const paint = (layout = current()) => {
+        let n = layout[part][k];
+        if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, Number(inp.min)); }
+        inp.value = String(k === "width" && !n ? min : n);
+        out.textContent = pctTxt(k, n, part);
+        inp.setAttribute("aria-valuetext", k !== "width" ? out.textContent
+          : !n ? "Auto, use automatic width"
+          : usesWidthSplit() ? n + " on the column split scale" : n + " percent of screen width requested");
       };
       inp.addEventListener("input", () => {
-        let l = current();
-        l[part][k] = num(parseFloat(inp.value), k);
-        l = hold(set(l, undefined, true), part, k, true);
-        // The thumb shows what was stored: WIDTH 1..19 is 20, a held request is the edge.
-        if (String(l[part][k]) !== inp.value) inp.value = String(l[part][k]);
-        out.textContent = pctTxt(k, l[part][k]); paintSum();
+        const l = current(), n = Number(inp.value);
+        l[part][k] = k === "width" && n === min ? 0 : num(n, k);
+        paint(hold(set(l, undefined, true), part, k, true));
+        paintSum();
         peek(true, 900);
       });
       // The store write waits for the thumb's release (`change`), not each input.
@@ -414,6 +425,8 @@ const TitleLayout = (function () {
       sliders.push(paint);
       body.appendChild(el("label", { className: "tune-row" }, [
         el("span", { className: "tune-label" }, [el("span", { textContent: NAMES[k] + " " }), out]), inp]));
+      if (k === "width") body.appendChild(el("p", { id: "pm-tl-width-help", className: "adv-help", attrs: { "data-help": "keep" },
+        textContent: "AUTO lets the layout size the menu. On short landscape screens, 20 to 100 widens the menu column from 54% to 80% of the available space. In other layouts, WIDTH requests a share of screen width. The buttons adjust to fit." }));
     }
     const rows = [];   // [row, key] — held, not looked up again by a built id
     function choice(id, label, values, key, help) {
@@ -494,7 +507,9 @@ const TitleLayout = (function () {
   const uiScale = () => {
     try { return parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { return 1; }
   };
-  const phoneWide = () => { try { return !!win().matchMedia && win().matchMedia("(max-height: 519px) and (min-aspect-ratio: 1/1)").matches; } catch (_) { return false; } };
+  const shortLandscape = (() => { try { return win().matchMedia("(max-height: 519px) and (min-aspect-ratio: 1/1)"); } catch (_) { return null; } })();
+  const phoneWide = () => !!(shortLandscape && shortLandscape.matches);
+  if (shortLandscape && shortLandscape.addEventListener) shortLandscape.addEventListener("change", () => { for (const fn of onShape) fn(); });
   /** The fit is holding this piece under its requested SIZE (#5150): the box is full. */
   const fitted = (p) => { const e = p === "art" ? null : byId(p === "btns" ? "menu-buttons" : "menu-brand"); return !!(e && e.style && parseFloat(e.style.getPropertyValue("--tf")) < 1); };
   // MEASURED where it can be: the piece's base zoom is not --ui-scale on every screen
@@ -649,7 +664,7 @@ const TitleLayout = (function () {
     select(keys[(keys.indexOf(ed.sel) + dir + keys.length) % keys.length]);
   }
   /** One step of one number on the selected piece. WIDTH from AUTO starts at
-   *  the width the buttons have now; under 20 % it goes back to AUTO. */
+   *  the width the buttons have now; below 20 it goes back to AUTO. */
   function nudge(k, d) {
     if (!ed.on) return;
     remember();
@@ -660,9 +675,12 @@ const TitleLayout = (function () {
       // fifths of the box (css/menu-destinations.css PHONE LANDSCAPE HOME), so AUTO
       // steps from 20; elsewhere it starts at the share the buttons have now.
       const r = pieceEl("btns").getBoundingClientRect();
-      const w = (p.width || (phoneWide() ? 20 : Math.round(r.width / (win().innerWidth || 1) * 100))) + d;
-      p.width = w < 20 ? 0 : num(w, "width");
-    } else p[k] = num(p[k] + d, k);
+      const from = p.width || (phoneWide() ? WIDTH_MIN : Math.round(r.width / (win().innerWidth || 1) * 100));
+      p.width = d < 0 && from <= WIDTH_MIN ? 0 : num(Math.max(WIDTH_MIN, from + d), "width");
+    } else {
+      const from = k === "size" ? Math.max(sizeMin(ed.sel), p.size) : p[k];
+      p[k] = num(from + d, k);
+    }
     hold(set(l), ed.sel, k);
     paintEd();
   }
@@ -682,8 +700,9 @@ const TitleLayout = (function () {
     if (!E || !ed.on) return;
     const p = current()[ed.sel];
     E.name.textContent = PIECES[ed.sel];
-    E.readout.textContent = SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
-      (ed.sel === "btns" ? " · " + (p.width ? p.width + "% WIDE" : "AUTO WIDTH") : "");
+    E.readout.textContent = SHAPE_NAMES[shape()] + " · " + pctTxt("size", Math.max(p.size, sizeMin(ed.sel)), ed.sel) + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
+      (ed.sel === "btns" ? " · " + (!p.width ? "AUTO WIDTH"
+        : (usesWidthSplit() ? "WIDTH SETTING " : "WIDTH REQUEST ") + pctTxt("width", p.width)) : "");
     E.undo.disabled = !ed.history.length;
     E.name.setAttribute("aria-label", "Select next region. " + E.name.textContent + " · " + E.readout.textContent);
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";
@@ -715,6 +734,7 @@ const TitleLayout = (function () {
     const from = Object.assign({}, current()[part]);
     let c = [e.clientX, e.clientY];
     if (mode === "size") {
+      from.size = Math.max(from.size, sizeMin(part));
       const r = pieceEl(part).getBoundingClientRect();
       c = [(r.left + r.right) / 2, (r.top + r.bottom) / 2];
     }

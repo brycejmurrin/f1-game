@@ -36,6 +36,42 @@ const HudLayout = (function () {
   const LIM = Object.freeze({ x: [-Infinity, Infinity], y: [-Infinity, Infinity], s: [0, Infinity] });
   const DEF = Object.freeze({ x: 0, y: 0, s: 100 });
   const fz = (o) => { for (const k in o) Object.freeze(o[k]); return Object.freeze(o); };
+  // Fixed placements in the standard phone HUD. Other profiles retain their automatic layout.
+  const PHONE_STANDARD = {
+    helmet: {
+      tower: { x: 0.4694835680751307, y: 1.4418999151823524, s: 70 },
+      map: { x: -1.2910798122065723, y: 2.714164546225618, s: 85.9375 },
+      gaps: { x: -3.5602503912363113, y: 2.17742790500422, s: 70 },
+      sectors: { x: 4.694835680751162, y: -3.701494910941472, s: 70 },
+      limits: { x: -73.8935348200313, y: -9.446883262265425, s: 60 },
+      flag: { x: 0.2738654147104829, y: 13.480703986429173, s: 100 },
+      mirror: { x: 0.00794818143889378, y: 0.22662213740458376, s: 78.59375 },
+      announce: { x: -43.50547730829421, y: 14.808948571849818, s: 50 },
+      gearbox: { x: 7.116832942097028, y: -49.458539475820345, s: 92.7001953125 },
+      speed: { x: -22.451413341158062, y: -4.60209892602974, s: 100 },
+      energy: { x: 4.585411776212829, y: -4.38711622916005, s: 101.53846153846153 },
+      tyre: { x: 18.309859154929573, y: -80.22689091987381, s: 60 },
+      damage: { x: 5.001952838449952, y: -24.25296644319203, s: 60 },
+      rel: { x: -78.00334996087636, y: 9.889473563235537, s: 40 },
+      strat: { x: -0.0003910213942059926, y: 27.819338888309076, s: 100.00001537409477 },
+      inputs: { x: 74.12673609917152, y: -22.406435538592024, s: 70.76108399958467 },
+    },
+    other: {
+      tower: { x: 0, y: -5.4239903493137414e-15, s: 80 },
+      speed: { x: 9.474031690140844, y: 2.038273960983889, s: 100 },
+      energy: { x: 5.41006455399061, y: -11.279397823731712, s: 101.53846153846153 },
+      ot: { x: -5.247454576089348, y: -0.16698473282442747, s: 100 },
+      aero: { x: 19.800224960876363, y: 3.9042620865139805, s: 100 },
+    },
+  };
+  const phoneStandard = () => typeof HudElements !== "undefined" && HudElements.phone?.() ? PHONE_STANDARD : null;
+  const factorySet = (pn, sn) => (pn === "standard" && phoneStandard()?.[sn]) || {};
+  function matchesFactory(entries, pn, sn) {
+    const factory = factorySet(pn, sn);
+    return Object.keys(entries).length === Object.keys(factory).length
+      && Object.keys(entries).every(id => factory[id] && sameEl(factory[id], entries[id]));
+  }
+
   // Cockpit readouts clear the wheel and touch controls. See the measurements in SCREEN-LOOKS-STORAGE.md.
   const COCKPIT_STRIP = {
     energy: { x: -30, y: -4, s: 100 },
@@ -125,6 +161,8 @@ const HudLayout = (function () {
   /** The shipped {x, y, s} of element `id` in style `pn`, camera set `sn` (a
    *  touch screen takes TOUCH_SHIPPED's for the sets that have one). */
   const shippedEl = (id, sn, pn) => normEl(touch() && TOUCH_SHIPPED[sn] ? TOUCH_SHIPPED[sn][id] : SHIPPED[pn] && SHIPPED[pn][sn] && SHIPPED[pn][sn][id]);
+  const factoryEl = (id, sn, pn) => factorySet(pn, sn)[id] || shippedEl(id, sn, pn);
+  const relativeSize = (size, id, sn, pn) => Number((size / factoryEl(id, sn, pn).s * 100).toPrecision(4));
   /** Explicit entries own their placement, including values equal to shipped. */
   function normSet(v, sn, pn) {
     const out = {};
@@ -137,7 +175,7 @@ const HudLayout = (function () {
     return out;
   }
   const normProf = (v, pn) => Object.fromEntries(SETS.map((sn) => [sn, normSet(v && v[sn], sn, pn)]));
-  /** Read only the current schema; other formats use fresh shipped layouts. */
+  /** Decode explicit placements from the current schema. */
   function migrate(raw) {
     const r = raw && typeof raw === "object" ? raw : {};
     const out = {};
@@ -151,7 +189,7 @@ const HudLayout = (function () {
   function stored() {
     const raw = store ? store.get(KEY, null) : null;
     if (draft && raw !== draftBase) draft = null;
-    return migrate(draft || raw);
+    return migrate(draft || (raw?.v === 4 ? raw : { v: 4, standard: phoneStandard() }));
   }
   /** The layout a style + set paints: stored, else shipped, for every element. Pure. */
   function effective(st, sn, pn) {
@@ -166,14 +204,16 @@ const HudLayout = (function () {
   }
   function save(st, live) {
     const out = { v: 4 };
-    let any = false;
     for (const pn of PROFILES) {
       const p = normProf(st[pn], pn);
-      if (!emptyProf(p)) { out[pn] = p; any = true; }
+      if (!emptyProf(p)) out[pn] = p;
     }
     draft = live ? out : null;
     if (live) draftBase = store ? store.get(KEY, null) : null;
-    if (store && !live) store.set(KEY, any ? out : null);
+    if (store && !live) {
+      const atFactory = PROFILES.every(pn => SETS.every(sn => matchesFactory(st[pn][sn], pn, sn)));
+      store.set(KEY, atFactory ? null : out);
+    }
   }
   /** Save the live edits set(…, live) painted; false when there were none. */
   function commit() {
@@ -918,13 +958,16 @@ const HudLayout = (function () {
   function resetEl(id, setName, pn, live) {
     if (IDS.indexOf(id) < 0) return null;
     const sn = setArg(setName), p = profArg(pn), st = stored();
-    delete st[p][sn][id];
+    const entry = factorySet(p, sn)[id];
+    if (entry) st[p][sn][id] = normEl(entry);
+    else delete st[p][sn][id];
     save(st, live); apply();
-    return shippedEl(id, sn, p);
+    return entry ? normEl(entry) : shippedEl(id, sn, p);
   }
   function resetSet(setName, pn, live) {
     const st = stored();
-    st[profArg(pn)][setArg(setName)] = {};
+    const p = profArg(pn), sn = setArg(setName);
+    st[p][sn] = normSet(factorySet(p, sn), sn, p);
     save(st, live); apply();
   }
 
@@ -952,11 +995,11 @@ const HudLayout = (function () {
     const p = PRESETS.find((q) => q[0] === pid);
     if (!p || !isSet(sn)) return null;
     const pr = isProf(pn) ? pn : "standard";
-    const hold = touch() && TOUCH_PRESET_HOLD[sn];
+    const hold = touch() && TOUCH_PRESET_HOLD[sn], factory = factorySet(pr, sn);
     const out = {};
     for (const id of IDS) {
       const over = hold && hold[id] ? null : p[2][id];
-      out[id] = normEl(Object.assign({}, shippedEl(id, sn, pr), over || {}));
+      out[id] = normEl(Object.assign({}, factory[id] || shippedEl(id, sn, pr), over || {}));
     }
     return out;
   }
@@ -968,7 +1011,7 @@ const HudLayout = (function () {
     const lay = presetLayout(pid, sn, p);
     if (!lay) return false;
     const st = stored();
-    st[p][sn] = Object.fromEntries(IDS.filter((id) => !sameEl(lay[id], shippedEl(id, sn, p))).map((id) => [id, lay[id]]));
+    st[p][sn] = Object.fromEntries(IDS.filter((id) => factorySet(p, sn)[id] || !sameEl(lay[id], shippedEl(id, sn, p))).map((id) => [id, lay[id]]));
     save(st); apply();
     return true;
   }
@@ -987,7 +1030,7 @@ const HudLayout = (function () {
   function isShipped(setName, pn) {
     const st = stored();
     const ps = pn === "all" ? PROFILES : [profArg(pn)];
-    return ps.every((p) => (isSet(setName) ? !Object.keys(st[p][setName]).length : emptyProf(st[p])));
+    return ps.every(p => (isSet(setName) ? [setName] : SETS).every(sn => matchesFactory(st[p][sn], p, sn)));
   }
 
   /** js/ui/hud.js: the race camera (CamModes id) or the HUD style changed. */
@@ -1138,9 +1181,9 @@ const HudLayout = (function () {
     if (on) ScreenLooks.peek("hud", holdMs || 0);
     else ScreenLooks.endPeek();
   }
-  const txt = (k, n) => {
-    if (k === "s") return n + "%";
-    if (!n) return "SHIPPED";
+  const txt = (k, n, id, sn, pn) => {
+    if (k === "s") return relativeSize(n, id, sn, pn) + "% of default";
+    if (!n) return factoryEl(id, sn, pn)[k] ? "0%" : "SHIPPED";
     if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
     return Math.abs(n) + "% " + (n < 0 ? "up" : "down");
   };
@@ -1203,6 +1246,7 @@ const HudLayout = (function () {
     let previewPending = false;
     for (const k of ["x", "y", "s"]) {
       const out = el("b");
+      const paintValue = n => { out.textContent = txt(k, n, sel, editing, editingProf); };
       const inp = el("input", { type: "number", step: "any",
         attrs: { "aria-label": NAMES[k].toLowerCase() } });
       inp.id = "pm-hl-" + k;
@@ -1217,7 +1261,7 @@ const HudLayout = (function () {
         }
         const e = set(sel, { [k]: n }, editing, editingProf);
         inp.value = String(e[k]);
-        out.textContent = txt(k, e[k]); paintSum(); paintPreset();
+        paintValue(e[k]); paintSum(); paintPreset();
         previewPending = true;
       };
       // Drafts stay in the native field. In particular, a minus sign or an
@@ -1241,7 +1285,7 @@ const HudLayout = (function () {
       painters.push(() => {
         const n = get(sel, editing, editingProf)[k];
         if (doc.activeElement !== inp) inp.value = String(n);
-        out.textContent = txt(k, n);
+        paintValue(n);
       });
       body.appendChild(el("label", { className: "tune-row" }, [
         el("span", { className: "tune-label" }, [el("span", { textContent: NAMES[k] + " " }), out]), inp]));
@@ -1327,7 +1371,7 @@ const HudLayout = (function () {
     ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
-    get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
+    get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, relativeSize, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
   };

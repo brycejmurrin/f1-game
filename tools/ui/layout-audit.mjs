@@ -717,7 +717,8 @@ async function sweepViewport(vpEntry, scale, theme) {
   // Log lines and file names carry the theme; the row keeps `viewport` clean
   // and records `theme` on its own (audit-diff's auditCellKey joins them).
   let vpLabel = vpName + themeTag(theme);
-  const ctx = await browser.newContext({ ...vpOpts, colorScheme: theme });
+  const geometryDpr = !wantShots && vpEntry[4]?.nativeDensity ? { deviceScaleFactor: 2 } : {};
+  const ctx = await browser.newContext({ ...vpOpts, ...geometryDpr, colorScheme: theme });
   await ctx.addInitScript(themeInitScript, { key: THEME_KEY, theme });
   // An owner cell (bryce-*) boots on his live settings export; --scale= still overrides its UI SIZE.
   const owner = await seedOwnerProfile(ctx, vpEntry);

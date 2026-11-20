@@ -47,7 +47,7 @@ Door and screen ids drift: read them from `--list` (catalog ids are a subset of
 Every step here is a browser run (Chromium via harness.mjs): session only, never a
 subagent (AGENTS.md rule 10; no hook names this CLI, but `launchChromium` throws under `APEX_SUBAGENT`), never beside a Playwright group.
 `--help`/`--list` need none. The default viewport is a phone touch shape (`--help`);
-Bryce's own is `--viewport 844x390` — shoot that first. `--desktop` is the exception.
+Bryce's own is `--viewport 852x393` — shoot that first. `--desktop` is the exception.
 
 Who owns a row (tune-row, set-row, the pause sheet and its chips): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
 An edit that changes nothing on screen: a LATER `@layer` or a more specific rule wins (loop.md §3).

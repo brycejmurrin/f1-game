@@ -47,13 +47,17 @@ test("#5024: GRIP STEER and WheelState ON each change the key; OFF leaves the ol
 
 test("#5024: a STANDARD daily forces both OFF, restores them after, and refuses a lap if one is turned back on", () => {
   const h = load();
+  const defaultPace = Math.pow(1.06, 3);
+  h.G.PACE = defaultPace;
   h.set({ level: 8, wheel: true });
   h.rec.prepareDaily();
+  assert.equal(h.G.PACE, 0.84, "daily keeps the same competitive pace as older runs");
   assert.deepEqual(h.get(), { level: 1, wheel: false }, "prepareDaily: both OFF");
   h.setDaily({ class: "standard" });
   h.set({ level: 6 });
   assert.equal(h.rec.accept(), false, "GRIP STEER turned on mid-daily: the lap is refused");
   assert.match(h.announced.at(-1), /STANDARD DAILY/);
   h.rec.restoreDaily();
+  assert.equal(h.G.PACE, defaultPace, "daily restores the player's current pace");
   assert.deepEqual(h.get(), { level: 8, wheel: true }, "restoreDaily: the driver's own settings come back");
 });

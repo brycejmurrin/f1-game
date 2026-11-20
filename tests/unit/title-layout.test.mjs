@@ -21,7 +21,7 @@ const SHELL = read("index.html");
 const CSS = read("css/responsive.css");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
-function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = false } = {}) {
+function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = false, viewport = {} } = {}) {
   const dom = makeDom();
   const panel = dom.byId("pm-panel-appearance");
   // The shell's TITLE SCREEN fold: summary + body, REPLAY INTRO last in the body.
@@ -63,6 +63,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     innerWidth: 1000, innerHeight: 500, addEventListener: (n, fn) => (winOn[n] ||= []).push(fn),
   };
+  Object.assign(sb, viewport);
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
   if (raf) { sb.requestAnimationFrame = (fn) => frames.push(fn); sb.cancelAnimationFrame = (n) => { frames[n - 1] = null; }; }
   sb.window = sb;
@@ -129,20 +130,43 @@ test("index.html's first-paint copy writes exactly what the module writes", () =
   const A = { btns: { x: -10, y: 5, size: 120, width: 40 }, title: { x: 3, y: -4, size: 80 }, art: { x: 0, y: 12, size: 150 }, layout: "stack", side: "swap" };
   const B = { btns: { x: 0, y: 0, size: 100, width: 0 }, title: { x: 0, y: 0, size: 100 }, art: { x: 20, y: 0, size: 100 }, layout: "row", side: "auto" };
   // v1 (one layout, both shapes), a v2 pair, and a v2 with only the portrait shape custom.
-  const cases = [A, B, { v: 2, wide: A, tall: B }, { v: 2, tall: A }];
-  for (const stored of cases) for (const shape of ["wide", "tall"]) {
-    const { M, html } = boot({ titleLayout: stored }, { shape });
+  const cases = [null, A, B, { v: 2, wide: A, tall: B }, { v: 2, tall: A }];
+  const phone = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  for (const stored of cases) for (const shape of ["wide", "tall"]) for (const viewport of [{}, phone]) {
+    const { M, html } = boot({ titleLayout: stored }, { shape, viewport });
     const de = { style: { _d: {}, setProperty(k, v) { this._d[k] = v; } }, dataset: {} };
     const sb = { localStorage: { getItem: (k) => (k === "apex26.titleLayout" ? JSON.stringify(stored) : null) }, document: { documentElement: de }, JSON,
       b: { getAttribute: (k) => (k === "data-shape" ? shape : null) } };
-    vm.runInContext(m[1], vm.createContext(sb));
+    vm.runInContext(m[1], vm.createContext({ ...sb, ...viewport }), { filename: absSrc("index.html") });
     const why = `${JSON.stringify(stored).slice(0, 40)}… on ${shape}`;
-    assert.deepEqual(de.style._d, plain(html.style._decls), "same tokens: " + why);
-    assert.deepEqual(de.dataset, plain(html.dataset), "same attributes: " + why);
+    const titleTokens = Object.fromEntries(Object.entries(html.style._decls).filter(([key]) => key.startsWith("--tl-")));
+    assert.deepEqual(de.style._d, titleTokens, "same tokens: " + why);
+    const titleAttrs = Object.fromEntries(Object.entries(html.dataset).filter(([key]) => key.startsWith("title")));
+    assert.deepEqual(de.dataset, titleAttrs, "same attributes: " + why);
     const want = M.isDefault(M.current()) ? {} : plain(M.vars(M.current()));
     assert.deepEqual(de.style._d, want, "and both are TitleLayout.vars of the shape's layout: " + why);
   }
   assert.ok(SHELL.indexOf("// Title layout: apex26.titleLayout") > SHELL.indexOf('b.setAttribute("data-shape"'), "it runs after data-shape is known");
+});
+
+test("factory phone title layouts follow rotation and reset while tablets retain the base layout", () => {
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  const { M, rotate, html, data } = boot({}, { viewport });
+  const profile = JSON.parse(read("tests/data/phone-appearance-2026-11-20.json")).settings.appearance.titleLayout;
+  const wide = profile.wide;
+  assert.deepEqual(plain(M.current()), wide);
+  rotate("tall");
+  assert.equal(html.style.getPropertyValue("--tl-btns-size"), "1.05");
+  assert.equal(html.dataset.titleBtnw, undefined);
+  M.set({ btns: { size: 155 } });
+  rotate("wide");
+  assert.deepEqual(plain(M.current()), wide);
+  assert.equal(M.current("tall").btns.size, 155);
+  M.resetShape("tall");
+  assert.deepEqual(plain(M.current("tall")), profile.tall);
+  assert.equal(data.titleLayout, undefined);
+  const tablet = boot({}, { viewport: { ...viewport, innerWidth: 1024, innerHeight: 768 } });
+  assert.deepEqual(plain(tablet.M.current()), plain(tablet.M.DEFAULT));
 });
 
 test("v1 → v2: a one-layout store is BOTH shapes, and the next write keeps the untouched shape", () => {
@@ -387,6 +411,55 @@ test("title entry restores its opener and discards canceled drafts", () => {
   assert.equal(dom.document.activeElement, opener);
 });
 
+test("phone sliders expose every width step, Auto and the current orientation's reset values", () => {
+  let repaint;
+  const short = { matches: true, addEventListener: (_, fn) => { repaint = fn; } };
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => q === "(pointer: coarse)" ? { matches: true } : short };
+  const { dom, M, rotate } = boot({}, { viewport });
+  const width = dom.byId("pm-tl-btns-width"), size = dom.byId("pm-tl-btns-size");
+  assert.deepEqual([size.value, width.value], ["106", "25"]);
+  for (const part of ["btns", "title", "art"]) {
+    assert.equal(dom.byId("pm-tl-" + part + "-size-v").textContent, "100%");
+    assert.equal(dom.byId("pm-tl-" + part + "-size").getAttribute("aria-valuetext"), "100%");
+  }
+  const art = dom.byId("pm-tl-art-size");
+  art.value = "85"; dom.dispatch(art, { type: "input" }); dom.dispatch(art, { type: "change" });
+  assert.equal(M.current().art.size, 85);
+  assert.equal(art.getAttribute("aria-valuetext"), "98.84%");
+  assert.equal(width.getAttribute("aria-describedby"), "pm-tl-width-help");
+  assert.match(dom.byId("pm-tl-width-help").textContent, /54% to 80%/);
+  assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25");
+  width.focus();
+  for (const requested of [24, 23, 22, 21, 20, 19, 20, 100]) {
+    width.value = String(requested);
+    dom.dispatch(width, { type: "input" });
+    dom.dispatch(width, { type: "change" });
+    const value = requested === 19 ? 0 : requested;
+    assert.equal(M.current().btns.width, value);
+    assert.equal(width.value, String(requested));
+    assert.equal(width.getAttribute("aria-valuetext"), value ? value + " on the column split scale" : "Auto, use automatic width");
+  }
+  dom.byId("pm-tl-reset-shape").click();
+  assert.equal(width.value, "25", "a reset also repaints the focused range");
+  rotate("tall");
+  assert.deepEqual([size.value, width.value, width.getAttribute("aria-valuetext")], ["105", width.min, "Auto, use automatic width"]);
+  assert.equal(size.getAttribute("aria-valuetext"), "100%");
+  rotate("wide");
+  assert.equal(width.value, "25");
+  short.matches = false;
+  repaint();
+  assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25%");
+  assert.equal(width.getAttribute("aria-valuetext"), "25 percent of screen width requested");
+});
+
+test("editor width nudges reach the minimum before Auto from an off-step percentage", () => {
+  const { dom, M } = editing({ titleLayout: { v: 2, wide: { btns: { width: 22 } } } });
+  dom.byId("tl-width-dn").click();
+  assert.equal(M.current().btns.width, 20);
+  dom.byId("tl-width-dn").click();
+  assert.equal(M.current().btns.width, 0);
+});
+
 test("editor: DONE gives the settings page back, opens the fold and focuses its button; mid-race it cannot open", () => {
   const { dom, M, html, timers, mutated } = editing();
   key(dom, "ArrowRight");
@@ -530,10 +603,10 @@ test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; REDUCE MOTIO
   assert.match(readCssSource("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
 });
 
-test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three looks are shipped", () => {
-  const looks = { intro: "full", wash: "full", art: "on" };
+test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's appearance settings are shipped", () => {
+  const looks = { intro: "full", wash: "full", art: "on", style: "auto" };
   const subs = [];
-  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, onChange: (fn) => subs.push(fn) };
+  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, buttonStyle: () => looks.style, onChange: (fn) => subs.push(fn) };
   const { dom, M } = boot({}, { fx });
   const sum = dom.byId("pm-titlescreen-sum");
   assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
@@ -543,17 +616,17 @@ test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three lo
   assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", "a layout slider");
   dom.byId("pm-tl-reset").click();
   assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED", "RESET ALL");
-  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"]]) {
+  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"], ["style", "racing"]]) {
     looks[k] = v; subs[0]();
     assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", `${k} ${v}`);
     assert.equal(M.screenShipped(), false);
-    looks[k] = { intro: "full", wash: "full", art: "on" }[k]; subs[0]();
+    looks[k] = { intro: "full", wash: "full", art: "on", style: "auto" }[k]; subs[0]();
     assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
   }
   const custom = boot({ titleLayout: { v: 2, tall: { side: "swap" } } }, { fx });
   assert.equal(custom.dom.byId("pm-titlescreen-sum").textContent, "TITLE SCREEN · CUSTOM", "painted at build, either shape counts");
   const tfx = read("js/ui/title-fx.js");
-  for (const f of ["setIntro", "setWash", "setArt"])
+  for (const f of ["setIntro", "setWash", "setArt", "setButtonStyle"])
     assert.match(tfx, new RegExp(`function ${f}\\(v\\) \\{[^}]*changed\\(\\);`), `${f} tells the listeners`);
   assert.doesNotMatch(tfx.match(/function set\(v\) \{[^}]*\}/)[0], /changed\(\)/, "MOTION is not a title-screen knob");
 });

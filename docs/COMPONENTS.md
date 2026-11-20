@@ -438,12 +438,31 @@ Chrome DevTools MCP without calling `headless` at all.
 
 ### The viewports, and what each one is for
 
-These are shapes a display can be, not devices people own. Each exists because
-some branch turns on or off at it.
+The standard **iPhone 15** is the reference for owner screenshots. At the default display scale, one logical CSS pixel spans three native pixels on each axis (DPR 3). Use logical dimensions for layout, safe-area insets and browser viewport settings. A full-screen capture at device scale produces the native PNG dimensions below. [Apple iPhone 15 specifications](https://support.apple.com/en-us/111831) · [iPhone 15 viewport and pixel ratio](https://www.webmobilefirst.com/en/devices/apple-iphone-15-2023/)
+
+| iPhone 15 capture | Layout viewport (CSS px) | Screenshot (native px at 3×) |
+|---|---:|---:|
+| Full-screen portrait | 393 × 852 | 1179 × 2556 |
+| Full-screen landscape | 852 × 393 | 2556 × 1179 |
+| Landscape Safari tab, owner measurement | 852 × 368 | 2556 × 1104 (page content only) |
+
+Safari chrome can change the available page height. Its measured 368 CSS px applies to the tab state captured in issue #5218. The physical display is the same in all three cases. Read the shared window record for the insets and their measurement status. [Phone window profiles](../tests/data/phone-windows.json) · [Capture commands](AGENT-SURFACE.md#the-owners-phone-one-preset-2026-11-10)
+
+At factory settings, **UI Size, HUD Size and Button Size each read 100%**. Each control has its own baseline. At the iPhone 15 reference size, the underlying scales are 70% for menus, 100% for the HUD and 143.25% for driving buttons. These are the values used by saved settings and layout tests. A player who changes just the HUD size can still reset the driving buttons independently. [Scale implementation](../js/ui/scale.js) · [Factory scale tests](../tests/unit/scale-defaults.test.mjs)
+
+Title button, wordmark and car sizes also read 100% at their factory sizes for the current orientation. In the November 20 landscape phone layout, the stored-equivalent sizes are 106, 108 and 86 respectively, and the car's X/Y offsets are −7% and −2% of the screen. The button width setting of 25 adjusts the landscape column split. In portrait the button size baseline is 105 and width is Auto. Panel size readouts follow the same convention. For example, the phone Garage panel width of 115 reads 100%, while the Designer's 55% map-width split describes its actual column share. Reset restores the current device's defaults. [Appearance reference](../tests/data/phone-appearance-2026-11-20.json) · [Settings range review](notes/2026-11-20-settings-range-review.md)
+
+The **16-inch MacBook Pro (2024, M4 Pro or M4 Max)** has a 3456 × 2234 panel. Its default Retina setting gives a logical desktop of 1728 × 1117. At 100% browser zoom the full-display reference uses 1728 × 1117 CSS pixels at DPR 2 and produces a 3456 × 2234 PNG. In a normal window, browser chrome, macOS controls and the window size affect the available space. To reproduce a specific window, record `window.innerWidth`, `window.innerHeight` and `window.devicePixelRatio` on the device. [Apple display specifications](https://support.apple.com/en-us/121554) · [Default logical resolution for Mac16,7](https://theapplewiki.com/wiki/Mac16,7)
+
+At this size, a fresh MacBook reads **100% UI Size** in Settings → Appearance and renders menus at a 1.15× base scale. Fine-pointer viewports at least 1600 × 900 CSS pixels use that baseline. Smaller desktop viewports use 1.00×. HUD and button size each use 1.00× on desktop. Stored requests retain their physical scale across window sizes, and reset restores the current viewport's baseline. [Scale implementation](../js/ui/scale.js)
+
+Capture the title at the full-display reference with `node tools/ui/layout-audit.mjs --screen=title --viewport=desktop-macbook-pro-16-m4 --out=artifacts/layout-audit/macbook`. The PNG measures the composited page. The game's Three.js canvas can use a lower internal rendering resolution depending on graphics settings.
+
+The broader viewport matrix covers other device sizes and layout breakpoints.
 
 | viewport | why it is in the matrix |
 |---|---|
-| `ios-iphone-portrait` 393x852 | the phone as most people hold it |
+| `ios-iphone-portrait` 393x852 | standard iPhone 15 in portrait |
 | `ios-iphone-landscape` 852x393 | the shape the game is PLAYED in — 343px of sheet height for everything |
 | `ios-iphone-landscape-safari` 852x368 | landscape Safari tab, the window measured on the owner's iPhone (#5218; it was a guessed 852x344 "collapsed toolbar" cell). The device descriptor's 393px is the FULL-SCREEN/PWA height; sizes come from `tests/data/phone-windows.json` |
 | `ios-iphone-landscape-844` 844x390 | iPhone 12-14 and common Android phones in landscape, full screen. The 852x368 / 852x393 cells never land on it; a title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here |
@@ -451,6 +470,7 @@ some branch turns on or off at it.
 | `ios-ipad-landscape` 1194x834 | the two-column case at its smallest |
 | `desktop-1280x800` | a small laptop |
 | `desktop-1440x900` | the common desktop |
+| `desktop-macbook-pro-16-m4` | 1728 × 1117 CSS px at 2×, full-display Retina capture |
 | `desktop-1920x1080` | full screen on a 1080p monitor |
 | `desktop-windowed-1920x937` | the same monitor with browser chrome — 143px less, and browser chrome is why a "desktop" can land on a phone branch |
 | `desktop-narrow-860x560` | a small window, or a maximised one at 125% zoom; below the 900x600 large-screen gate |

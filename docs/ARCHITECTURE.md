@@ -175,7 +175,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `teams.js` | `Teams` | tag | Teams: hardcoded, verified 2026 grid (11 teams, 22 drivers). |
 | `driver-ratings.js` | `DriverRatings` | tag | DRIVER RATINGS: the five-axis skill table for the 2026 grid. |
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
-| `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
+| `settings-defaults.js` | `SettingsDefaults` | tag | Global factory preferences. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
@@ -268,7 +268,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `title-layout.js` | `TitleLayout` | tag | Title layout owns viewport offsets, fit, and separate wide/tall v2 snapshots. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | Per-screen appearance settings and preview. |
-| `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
+| `post-fx-opts.js` | `PostFxOpts` | tag | Post-processing settings. iPhone starts with ambient occlusion off. |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |

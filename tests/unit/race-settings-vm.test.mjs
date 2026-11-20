@@ -176,6 +176,7 @@ test("settings search cannot reveal race preferences during a live, championship
 test("REMEMBER LAST RACE SETUP: START with 10 / rain / night opens the next circuit the same way", () => {
   const h = sheet();
   assert.equal(h.at("spa"), 3, "nothing stored: the default");
+  assert.deepEqual([h.G.raceWeather, h.G.raceTimeOfDay, h.G.raceChangeable], ["storm", "dusk", true]);
   assert.equal(h.disk.has("raceDraft"), false, "opening the sheet writes nothing");
   Object.assign(h.G, { raceLaps: 10, raceWeather: "rain", raceTimeOfDay: "night", raceChangeable: true });
   h.start();
@@ -651,36 +652,37 @@ test("tile -> SETTINGS -> weather/time chips -> RACE! builds the world once; onl
 
     G.raceTimeOfDay = "default"; G.raceWeather = "dry";
     G.trackIdx = T.LIST.findIndex((d) => d.id === "spa");
-    assert.ok(!T.LIST[G.trackIdx].night, "spa is a day circuit: default and day build the same world");
+    assert.ok(!T.LIST[G.trackIdx].night, "spa is a day circuit: fresh dusk uses a different world than day");
     doc.getElementById("select").hidden = false;
-    G.scheduleFlybyTrack(true);                                   // the tile
+    doc.getElementById("select").appendChild(G.els.selTracks); // mount the picker strip on the inert VM DOM
+    G.buildSelect();                                          // prepare the selected tile
     assert.ok(await until(() => starts.length === 1, 600), "the tile starts a build");
     await frames(8);
     assert.equal(live, 1, "still building (else the taps below prove nothing)");
 
-    doc.getElementById("select").hidden = true; G.openRaceSettings("select");   // SETTINGS (first open: default / dry)
+    doc.getElementById("select").hidden = true; G.openRaceSettings("select");   // SETTINGS keeps the picker’s storm / dusk draft
     await frames(2);
     G.raceWeather = "rain"; G.scheduleFlybyTrack();             // weather chip: no build input
     await frames(2);
-    G.raceTimeOfDay = "day"; G.scheduleFlybyTrack();            // default -> day on a day circuit: the same world
+    G.raceTimeOfDay = "night"; G.scheduleFlybyTrack();          // dusk -> night: the same dark world
     await frames(2);
     assert.equal(live, 1, "the first build is still in flight " + JSON.stringify({ starts, ends }));
-    assert.deepEqual(starts, ["spa:light"], "SETTINGS and the chips kept the build");
+    assert.deepEqual(starts, ["spa:dark"], "SETTINGS and the chips kept the build");
     assert.deepEqual(ends, [], "nothing was abandoned");
 
-    G.raceTimeOfDay = "night"; G.scheduleFlybyTrack();          // a dark session IS a different world
+    G.raceTimeOfDay = "day"; G.scheduleFlybyTrack();            // a daylight session switches the build
     assert.ok(await until(() => starts.length === 2, 600), "a build-key change restarts the build");
     assert.deepEqual(ends, ["abandoned"]);
     await frames(8);
-    G.raceTimeOfDay = "dusk"; G.scheduleFlybyTrack();           // dark -> dark: the same world
+    G.raceTimeOfDay = "default"; G.scheduleFlybyTrack();        // day circuit: the same daylight world
     await frames(2);
     assert.equal(live, 1, "the second build is still in flight " + JSON.stringify({ starts, ends }));
-    assert.deepEqual(starts, ["spa:light", "spa:dark"]);
+    assert.deepEqual(starts, ["spa:dark", "spa:light"]);
 
     G.raceIntro(() => {});                                      // RACE! mid-build joins it
     assert.ok(await until(() => !live && G.track && G.track.def.id === "spa", 3000), "the joined build lands");
     await frames(10);
-    assert.deepEqual(starts, ["spa:light", "spa:dark"], "RACE! started no build of its own");
+    assert.deepEqual(starts, ["spa:dark", "spa:light"], "RACE! started no build of its own");
     assert.deepEqual(ends, ["abandoned", "done"]);
     assert.equal(syncBuilds, 0, "and no synchronous rebuild either: the intro reuses the joined world");
     assert.equal(G.track.def.id, "spa");

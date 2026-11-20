@@ -745,11 +745,16 @@ body:not(.desktop) {
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
 }
+/* Roomy desktop menus, mirrored by the UI SIZE row in js/ui/scale.js. */
+@media (pointer: fine) and (min-width: 1600px) and (min-height: 900px) {
+  :root { --ui-scale: 1.15; }
+}
 /* Why: docs/notes/TOKENS-RATIONALE.md §R7. */
 @media (pointer: coarse) {
   /* Fixed touch-control default; HUD SIZE does not move this axis. */
   :root {
     --ui-scale: 1.09; --hud-scale: 1;
+    --portrait-btn-base: 1.25;
     --hud-btn-mult: 1.25;
     --hud-btn-scale: var(--hud-btn-mult);
   }
@@ -757,7 +762,7 @@ body:not(.desktop) {
 /* A PHONE (touch, short side <= 500 px) ships UI SIZE 70 % (#5358, the owner's 2026-11-10 profile).
    The mirror of PHONE_UI_DEFAULT / phoneUi() in js/ui/scale.js: CSS owns first paint. */
 @media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px) {
-  :root { --ui-scale: 0.7; }
+  :root { --ui-scale: 0.7; --hud-btn-mult: 1.4325; }
 }
 
 /* Why: docs/notes/TOKENS-RATIONALE.md §R8. */

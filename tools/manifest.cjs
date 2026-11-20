@@ -737,6 +737,7 @@ const HARD_EDGES = [
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
+  ["js/perf/quality-preset.js", "js/ui/post-fx-opts.js"],   // iPhone AO default is read at eval
   ["js/core/store.js", "js/ui/post-fx-opts.js"],   // binds GameStore.store at eval
   ["js/core/i18n-pseudo.js", "js/core/i18n.js"],
   ["js/core/store.js", "js/core/i18n.js"],

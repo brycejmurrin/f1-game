@@ -23,7 +23,14 @@ import { screenshotCard, renderGallery } from "./screenshot-gallery.cjs";
 // body classes the platform owns: .desktop, .cockpit-cam), which elements a
 // player must see; a miss is a `missing` finding. Each rule cites the CSS or
 // JS that defines it, so a rule that goes stale points at its source.
+import { BRYCE_WINDOWS } from "./bryce-phone.mjs";
 import { analyzeOverlap } from "./hud-geometry.mjs";
+
+// The menu and HUD probes share the same phone window, whether testing shipped or saved settings.
+function iPhone15(window, savedSettings = false) {
+  const { width: w, height: h, insets: { left: sal, right: sar, top: sat, bottom: sab } } = BRYCE_WINDOWS[window];
+  return { w, h, touch: true, ins: { sal, sar, sat, sab }, window, ...(savedSettings ? { owner: window } : {}) };
+}
 
 export const DEVICES = Object.freeze({
   "desktop-1280": { w: 1280, h: 720, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
@@ -34,10 +41,12 @@ export const DEVICES = Object.freeze({
   // Injected as --sal/--sar/--sat/--sab like hud-layout.spec.js: headless
   // Chromium reports env(safe-area-inset-*) as 0.
   "phone-landscape-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 47, sat: 0, sab: 21 } },
-  // The owner's iPhone (tools/lib/bryce-phone.mjs BRYCE_WINDOWS; issue #5262): Home Screen app and Safari tab. Named
-  // cells, not a matrix axis. `owner`: hud-survey seeds his live settings export unless --settings names another file.
-  "bryce-852x393": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "standalone" },
-  "bryce-852x368": { w: 852, h: 368, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "safari" },
+  "ios-iphone-landscape": iPhone15("standalone"),
+  "ios-iphone-landscape-safari": iPhone15("safari"),
+  "ios-iphone-portrait": iPhone15("portrait"),
+  "bryce-852x393": iPhone15("standalone", true),
+  "bryce-852x368": iPhone15("safari", true),
+  "bryce-393x852": iPhone15("portrait", true),
   "phone-portrait-390x844": { w: 390, h: 844, touch: true, ins: { sal: 0, sar: 0, sat: 47, sab: 34 } },
   // iPhone 15/16 Pro Max portrait (lead-only; HUD Desk readable-floor shots).
   "phone-portrait-430x932": { w: 430, h: 932, touch: true, ins: { sal: 0, sar: 0, sat: 59, sab: 34 } },

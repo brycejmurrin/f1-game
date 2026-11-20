@@ -619,7 +619,7 @@ body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])):has
     width: 100%;
     height: auto;
     max-height: 100%;
-    opacity: 0.9;
+    --title-art-full: 0.9;
   }
   /* Framed for a band the full width of the phone: the pair (placed at viewBox
      x -67..787, y 582..815 by the generator) is scaled 1.2x about the origin so
@@ -662,7 +662,7 @@ body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])):has
     width: 100%;
     height: auto;
     max-height: 100%;
-    opacity: 0.9;
+    --title-art-full: 0.9;
   }
   :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
 }
@@ -754,7 +754,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
    Measuring the ELEMENT's rect instead says nothing: it spans the viewport, so
    the buttons and the wordmark dominate it and the whole 0.4 -> 0.7 sweep moves
    the mean by one unit. */
-:where(body[data-shape="wide"][data-density="compact"]) #title-car { opacity: 0.9; }
+:where(body[data-shape="wide"][data-density="compact"]) #title-car { --title-art-full: 0.9; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,

@@ -12,13 +12,13 @@
 const Menus = (function () {
   "use strict";
 
-function create(G) {
+function create(G, preparePickerTrack = () => G.scheduleFlybyTrack(true)) {
 Log.info("ui", "Menus.create");
 if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) GfxEscalation.noteCleanMenuBoot();
 // Stable helpers from the game.js closure.
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
-const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
+const { $, els, store, cssCol, fmtTime, ttBoard } = G;
 // The best-time star counts only laps of the circuit's CURRENT layout: a lap
 // saved before a layout revision (Kyalami's direction flip, revision 2) stays
 // stored but is a lap of a different circuit, so it is not shown as the record.
@@ -1021,7 +1021,7 @@ function buildSelect(opts) {
         // The still IS the preview — nothing is shown behind the sheet. But once
         // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
-        scheduleFlybyTrack(true);
+        preparePickerTrack();
       };
       els.selTracks.appendChild(row);
       return row;
@@ -1037,7 +1037,7 @@ function buildSelect(opts) {
     updateTrackPreview();
   }
   // Prepare the initial/current tile too, even when no tile is clicked.
-  if (!seasonComplete && !inPlace) scheduleFlybyTrack(true);
+  if (!seasonComplete && !inPlace) preparePickerTrack();
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the

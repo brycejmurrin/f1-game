@@ -464,6 +464,8 @@ reload, and why RESET is per-condition rather than global.
 
 ## Every shipped value is reachable on its own slider
 
+In Lighting Tuner and Photo Studio, the numeric field beside a slider accepts the same minimum, maximum and step. Enter a number and press Enter to apply it, or press Escape to restore the last applied value. Lighting Tuner edits the selected profile. Photo Studio edits the current shoot and restores the race lighting when it closes. Desktop-only lighting options keep that restriction in both controls. [Lighting Tuner](../js/lighting/tuner-panel.js) · [Photo Studio](../js/ui/photo-studio.js)
+
 A knob renders as `<input type="range" min step>`, so the thumb can only land
 on `min + k*step`. A shipped preset value off that grid cannot be represented:
 the readout prints the true value while the thumb snaps to a neighbouring
@@ -595,9 +597,9 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `neonBoost` | NEON & LENS BLOOM | 0 … 1.5 | 0.6 | `uBloomBoost` | ✓ | glx.js×2 |
 | `cityGlowMul` | CITY SKYGLOW | 0 … 2.75 | 1 | — | ✓ | atmosphere.js×2 |
 | `cityGlowWarm` | SKYGLOW WARMTH | -5 … 3.3 | 0 | — | ✓ | atmosphere.js |
-| `cityGlowTint` | SKYGLOW ON AMBIENT | 0 … 0.7 | 0.28 | — | ✓ | game.js×2 |
+| `cityGlowTint` | SKYGLOW ON AMBIENT | 0 … 0.7 | 0.28 | — |   | game.js×2 |
 | `bloomMul` | BLOOM AMOUNT | 0 … 2.5 | 1 | — | ✓ | game.js, setup-camera.js |
-| `bloomSpread` | BLOOM SPREAD | 0.25 … 2.125 | 1 | `uSpread` | ✓ | — |
+| `bloomSpread` | BLOOM SPREAD | 0.25 … 2.125 | 1 | `uSpread` |   | — |
 | `threshOff` | BLOOM THRESHOLD | -0.57 … 0.4 | 0 | — |   | game.js, setup-camera.js |
 | `bloomKnee` | BLOOM ON HIGHLIGHTS | 0 … 1 | 0.5 | `uBloomKnee` | ✓ | — |
 
@@ -669,7 +671,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cloudShadowDim` | CLOUD SHADOW DEPTH | 0 … 1 | 0.8 | `uCloudShadowDim` |   | glx.js×2 |
 | `cloudSpeed` | CLOUD SPEED | 0 … 2.5 | 1 | `uCloudSpeed` |   | game.js×4, glx.js×6, post.js |
 | `starBright` | STAR BRIGHTNESS | 0 … 2.5 | 1 | `uStarBright` | ✓ | game.js×2, glx.js×2 |
-| `starDensity` | STAR DENSITY | 0.2 … 2.2 | 1 | `uStarDensity` | ✓ | game.js×2, glx.js×2 |
+| `starDensity` | STAR DENSITY | 0.2 … 2.2 | 1 | `uStarDensity` |   | game.js×2, glx.js×2 |
 | `skyGrad` | SKY GRADIENT | 0.03 … 0.829 | 0.35 | `uSkyGrad` |   | game.js×2, glx.js×2 |
 | `daySkyBlue` | DAY SKY BLUE | 0 … 2 | 1 | `uDaySkyBlue` | ✓ | game.js×2, glx.js×2 |
 | `mieScatter` | SKY SUN GLOW | 0 … 2.5 | 1 | `uMieScatter` | ✓ | game.js×2, glx.js×2 |
@@ -678,11 +680,11 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `sunDiscSize` | SUN DISC SIZE | 0.06 … 2.405 | 1 | `uSunDiscSize` | ✓ | game.js×2, glx.js×2 |
 | `sunCorona` | SUN CORONA RING | 0 … 2.5 | 1 | `uSunCorona` | ✓ | game.js×2, glx.js×2 |
 | `sunSquash` | SUN HORIZON SQUASH | 0 … 2.5 | 1 | `uSunSquash` | ✓ | game.js×2, glx.js×2 |
-| `starSize` | STAR SIZE | 0.2 … 2.2 | 1 | `uStarSize` | ✓ | game.js×2, glx.js×2 |
+| `starSize` | STAR SIZE | 0.2 … 2.2 | 1 | `uStarSize` |   | game.js×2, glx.js×2 |
 | `starTwinkle` | STAR TWINKLE | 0 … 4 | 1 | `uStarTwinkle` |   | game.js×2, glx.js×2 |
 | `moonDiscSize` | MOON DISC SIZE | 0.06 … 2.405 | 1 | `uMoonDiscSize` |   | game.js×2, glx.js×2 |
 | `moonHalo` | MOON HALO SPREAD | 0 … 2.5 | 1 | `uMoonHalo` |   | game.js×2, glx.js×2 |
-| `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
+| `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` |   | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
 | `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×13, race-control.js, real-race.js, weather-arc.js×6, glx.js×2, puddles.js×2 |

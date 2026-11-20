@@ -200,7 +200,7 @@ function tile(out, x0, x1, z0, z1, col, y, mid) {
 
 // ── room LOOKS (B·G1) ───────────────────────────────────────────────────────
 // The setup sheet's GARAGE row picks the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
-// back-wall branding. `stock` (null) is the shipped room; every other id is a
+// back-wall branding. `stock` (null) is the original room; every other id is a
 // data record GarageDress.look* reads. Trackside pit rows (buildStatic) never
 // see a look. Pick one with ?garageLook=<id>, localStorage apex26.garageLook,
 // or GaragePrims.setLook(id) (the geometry key carries lookId(), so the bay
@@ -312,11 +312,12 @@ const LOOKS = {
   },
 };
 const LOOK_IDS = Object.keys(LOOKS);
-let _look = "stock";
+let _look = "flood";
 try {
   const q = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageLook");
-  const s = typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook");
-  const v = q || s;
+  const v = q || (typeof GameStore !== "undefined" && GameStore.store
+    ? GameStore.store.raw("garageLook")
+    : typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook"));
   if (v && LOOK_IDS.indexOf(v) >= 0) _look = v;
 } catch (_) { /* no storage */ }
 function setLook(id) {
