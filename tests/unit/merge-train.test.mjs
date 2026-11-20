@@ -299,7 +299,10 @@ test("screenFold measures each CUMULATIVE fold on a worktree whose HEAD is the t
     const prepare = ({ cwd }) => { built++; fs.writeFileSync(path.join(cwd, "built.gen"), "x"); return { ok: true }; };
     const sf = screenFold({ tip: r.base, cwd: r.dir, check, prepare, out });
     const cars = [{ pr: 1, head: r.h1, ref: "one" }, { pr: 2, head: r.h2, ref: "two" }, { pr: 3, head: r.h3, ref: "three" }];
-    const f = foldCars({ base: r.base, cars, cwd: r.dir, accept: sf.accept });
+    // commit-tree stamps wall-clock dates: two folds a second apart differ in sha (run 44650842513). Pin the dates so the
+    // sha equality below proves the same fold — same trees, parents and messages — not that both ran in one second.
+    const env = { GIT_AUTHOR_DATE: "2026-11-18T00:00:00Z", GIT_COMMITTER_DATE: "2026-11-18T00:00:00Z" };
+    const f = foldCars({ base: r.base, cars, cwd: r.dir, env, accept: sf.accept });
     sf.cleanup();
     assert.deepEqual(f.cars.map((c) => c.pr), [1]);
     assert.deepEqual(f.dropped, [{ pr: 2, why: "over a ratchet on the merge result: d.txt" }, { pr: 3, why: "conflicts in c.txt (sync-pr.mjs)" }]);
@@ -309,7 +312,7 @@ test("screenFold measures each CUMULATIVE fold on a worktree whose HEAD is the t
     assert.equal(r.g("show", `${f.head}:c.txt`), "one");
     assert.equal(fs.existsSync(path.join(r.dir, "artifacts", "merge-train", "screen-wt")), false, "the worktree is removed");
     // the build reads the screen's verdicts back and folds the very same train with no PR code
-    const again = foldCars({ base: r.base, cars, cwd: r.dir, accept: screenAccept(readScreen(JSON.stringify({ tip: r.base, cars: out }))) });
+    const again = foldCars({ base: r.base, cars, cwd: r.dir, env, accept: screenAccept(readScreen(JSON.stringify({ tip: r.base, cars: out }))) });
     assert.equal(again.head, f.head);
   } finally { r.rm(); }
 });
