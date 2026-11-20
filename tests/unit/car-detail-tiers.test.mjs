@@ -65,7 +65,7 @@ test("detail 0 (and no GfxQuality) is today's mesh, number for number", () => {
 });
 
 test("the flat-loft detail-0 car still matches the wing-foil baseline exactly", () => {
-  const flat = loadCarDetail(null, { skip: ["js/car/car-shade.js"] });
+  const flat = loadCarDetail(null, { omit: ["js/car/car-shade.js"] });
   const B = JSON.parse(readFileSync(join(ROOT, "tests/data/car-wing-foil-tris.json"), "utf8"));
   assert.equal(tris(flat.Car3D.build(C1, C2, { noWheels: true, detail: 0 })), B.body);
   assert.equal(tris(flat.Car3D.buildWheel(0.32, undefined, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, 0)), B.frontWheel);

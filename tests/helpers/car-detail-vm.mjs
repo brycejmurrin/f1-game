@@ -17,9 +17,9 @@ const FILES = ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car
 export function loadCarDetail(extra, opts) {
   const ctx = vm.createContext(Object.assign({ Math, console, Object, Array, Number, isFinite }, extra || {}));
   seedLog(ctx);
-  const skip = new Set((opts && opts.skip) || []);
+  const omit = new Set((opts && opts.omit) || []);
   const files = FILES.concat(opts && opts.rig ? ["js/car/cockpit-rig.js"] : []);
-  for (const f of files) if (!skip.has(f)) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+  for (const f of files) if (!omit.has(f)) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   if (opts && opts.rig) vm.runInContext("CockpitRig.init({ createMesh: (d) => d, freeMesh() {} })", ctx);
   return vm.runInContext("({ Car3D, Parts, Teams, CarGeometry, Helmets" + (opts && opts.rig ? ", CockpitRig" : "") + " })", ctx);
 }
