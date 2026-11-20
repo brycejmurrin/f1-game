@@ -12,8 +12,7 @@ const LoopHealth = (() => {
   const RUN_CAP = 8;
   // Absolute ceiling: stops a fault that alternates clean/throw (~4 s at 60 fps).
   const TOTAL_CAP = 240;
-  // Log the first few faults, then thin out: the record is for the ring buffer
-  // __apex.logs() reads, not 60 identical console lines a second
+  // Log the first few faults, then thin out (for the __apex.logs() ring buffer)
   const LOG_FIRST = 5;
   const LOG_EVERY = 60;
   // A quiet stretch this long forgets the TOTAL_CAP tally (a per-tab lifetime
@@ -34,9 +33,9 @@ const LoopHealth = (() => {
   //                working menu with the "Graphics reset" notice. Budget spent:
   //                record and log only. Software raster (PerfGov.softwareRaster)
   //                would reload onto the same cost — act "budget-sw" skips it.
-  // A race entry on a weak phone is a few multi-second tasks between frames, so
-  // while the loading cover (#loading) is up the shed waits and the reload needs
-  // LOAD_RELOAD_RUN frames: a cover stuck over a glacial build still recovers.
+  // Under the loading cover (a weak phone's race entry is a few multi-second
+  // tasks) the shed waits and the reload needs LOAD_RELOAD_RUN frames: a
+  // cover stuck on a slow build heals anyway.
   // Off under automation (navigator.webdriver) and in the node game VM
   // (tools/lib/game-vm.cjs): software-GL CI presents multi-second frames on
   // purpose. ?stallwatch=1 or apex26.stallWatch=1 forces it on.
@@ -136,11 +135,11 @@ const LoopHealth = (() => {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
     try {
-      const g = typeof document !== "undefined" && document.getElementById;
-      if (!g) return false;
-      const cs = g("carsetup");
+      // Bound: an unbound getElementById throws "Illegal invocation" in a browser.
+      if (typeof document === "undefined" || !document.getElementById) return false;
+      const cs = document.getElementById("carsetup");
       if (cs && !cs.hidden) return true;
-      const rs = g("race-settings");
+      const rs = document.getElementById("race-settings");
       return !!(rs && !rs.hidden);
     } catch (_) { return false; }
   }
