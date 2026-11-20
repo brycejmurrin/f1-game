@@ -170,7 +170,7 @@ const SaveSchemaRegistry = (function () {
     "tlxViz": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmFx": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmPlus": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    // Written by tlx.js itself: WebKit's per-device kill switch (the failure reason); RESET RENDERER clears it.
+    // tlx.js: WebKit's per-device kill switch (the failure reason); RESET RENDERER clears it.
     "tlxWebKitGL": entry("js/render/three/tlx.js", "raw", 1, "rawScalar"),
     "track": entry("js/game.js", "json", 1, "json"),
     "trackFilter": entry("js/ui/select-screen.js", "json", 1, "json"),
@@ -196,15 +196,15 @@ const SaveSchemaRegistry = (function () {
     crashSeen: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeenBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     benchRun: entry("js/perf/bench-run.js", "raw", 1, "string"),   // BENCHMARK plan + last results (JSON text), across its reloads
-    benchCapture: entry("js/perf/bench-capture.js", "raw", 1, "string"),   // BENCHMARK leg breadcrumb (JSON text): what led up to a reload that killed the leg
+    benchCapture: entry("js/perf/bench-capture.js", "raw", 1, "string"),   // BENCHMARK leg breadcrumb (JSON text) before a reload that killed the leg
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
     gfxBootBound: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
-    // Last pack's content-addressed model files. A return visit starts those fetches before the manifest returns; RESET RENDERER drops the hint.
+    // Last pack's model files: a return visit fetches them before the manifest; RESET RENDERER drops the hint.
     packIndex: entry("js/render/shared/assets.js", "raw", 1, "string"),
     gfxProbeStrikes: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
-    // "<backend>:<build>" the boot canary leaves when its second strike rewrites the pick to webgl2 (#4995); SETTINGS reads it.
+    // "<backend>:<build>" left when the boot canary's second strike picks webgl2 (#4995); SETTINGS reads it.
     gfxRetired: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
     "inputGhost.v1": entry("js/car/input-ghost.js", "json", 1, "json"),
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
@@ -212,6 +212,7 @@ const SaveSchemaRegistry = (function () {
     photoBackground: entry("js/ui/photo-studio.js", "raw", 1, "string"),
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
+    setupTrialRecover: entry("js/garage/setup-trials.js", "json", 1, "json"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
     xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
