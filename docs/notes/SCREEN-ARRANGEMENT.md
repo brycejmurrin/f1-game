@@ -1,5 +1,6 @@
 # Screen arrangement coverage
 
+Kind: design
 Deployment baseline `f8970a989e91055231703865d6f5596f6d44be74`. This inventory follows the doors in `index.html`, the input gates in `js/ui/layers.js`, and the modules that populate dialogs at runtime. The regions in the first table identify what the player encounters. The editor bindings below identify which parts can be adjusted independently. Both tables describe source inspection. Rendered checks belong in the PR evidence.
 
 ## Screens and routes
@@ -93,3 +94,5 @@ The local evidence bundle contains the baseline, edited landscape, portrait draf
 ### Compatibility
 
 Existing title, HUD, dock and per-screen layout owners continue to read their original keys. Additional regions use version 1 of `apex26.screenPlacement`, keyed by screen, orientation and region. Coordinates and dimensions are percentages of the layout viewport. Unset dimensions reflow with the shipped CSS. Named profiles and settings-file backups capture explicit overrides. Loading an older named profile preserves keys it never captured.
+
+A second run on the integrated worktree changed title button size, dragged the Career navigation region with 15 mouse-move events, used Undo, then changed X and Width separately. The automated drag covered 35 horizontal pixels and 16 vertical pixels in 691 ms including input dispatch and rendering. Applying Endurance from Settings preserved both layouts. After reload, resetting Career retained Endurance and the saved title layout. This measurement uses Chromium software rendering and does not establish a handset frame rate.

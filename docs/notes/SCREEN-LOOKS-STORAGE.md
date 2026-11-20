@@ -1,5 +1,6 @@
 # Existing per-screen appearance storage
 
+Kind: design
 ScreenLooks: one engine for every per-screen fold under SETTINGS ›
 APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS,
 CAREER, GARAGE, POPUPS) and the see-through PEEK every fold previews with.

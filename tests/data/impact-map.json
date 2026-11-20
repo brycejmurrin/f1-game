@@ -20187,7 +20187,6 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
-        "tests/specs/real-profile-dock.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",

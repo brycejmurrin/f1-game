@@ -13,25 +13,16 @@
 // This file also held the touch-dock sizes for a 100 % default BUTTON SIZE. That change was dropped from the PR
 // (#5297, 2026-11-10): his 2026-11-10 export stores BUTTON SIZE 143 %, and the default sizes are #5358's to choose.
 //
-// Seeds the export the way a boot reads it (title-fit.mjs exportStore's shape) with CDP safe-area
+// Seeds the export the way a boot reads it (tools/lib/bryce-phone.mjs ownerStore) with CDP safe-area
 // insets. Not emulated: iOS itself (display-mode: standalone); nothing measured here reads it.
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { OWNER_EXPORT, ownerStore } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GEO = { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 } };
 
+/** His live export (tools/lib/bryce-phone.mjs `live`, the 2026-11-10 file) as the store keys a boot writes. */
 function liveStore() {
-  const exp = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/settings-live-export-2026-11-10.json"), "utf8"));
-  const spec = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
-  const raw = new Set([...spec.matchAll(/k: "([^"]+)", lane: "raw"/g)].map((m) => m[1]));
-  const out = { json: {}, raw: {} };
-  for (const g of Object.values(exp.settings)) {
-    for (const [k, v] of Object.entries(g)) { if (v === null) continue; (raw.has(k) ? out.raw : out.json)[k] = v; }
-  }
-  return out;
+  return ownerStore({ file: OWNER_EXPORT }).store;
 }
 
 async function boot(page, geo, store) {
