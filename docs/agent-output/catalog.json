@@ -1053,7 +1053,8 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
-        "--json"
+        "--json",
+        "--quiet"
       ]
     },
     {
