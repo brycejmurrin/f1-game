@@ -67,10 +67,11 @@ async function boot(page) {
 }
 
 test.describe("Screen wake lock — held for the duration of a race", () => {
-  // Same four RaceWakeLock cases as tests/unit/wake-lock-vm.test.mjs: a
+  // Same RaceWakeLock cases as tests/unit/wake-lock-vm.test.mjs: a
   // rejected release() must not surface as an unhandled rejection, whether
-  // the grant is late or the throw is sync. Isolated from the race path so
-  // the twin count stays 14-for-14 without extra SwiftShader laps.
+  // the grant is late or the throw is sync; plus coalesce-after-refusal.
+  // Isolated from the race path so the twin count stays matched without
+  // extra SwiftShader laps.
   for (const late of [false, true]) {
     for (const synchronous of [false, true]) {
       test(`${late ? "late grant" : "held lock"} handles ${synchronous ? "synchronous" : "asynchronous"} release failure`, async ({ page }) => {
@@ -163,6 +164,53 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     expect(result.afterVisible).toBe(2);
     expect(result.afterDropFire).toBe(result.afterDrop);
     expect(result.afterHidden).toBe(result.whileHidden);
+  });
+
+  test("a hold coalesced onto a rejecting request is retried once the refusal settles", async ({ page }) => {
+    await boot(page);
+    const result = await page.evaluate(async () => {
+      const outcomes = ["reject", "resolve"];
+      let step = 0;
+      const requests = [];
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: { request: () => {
+          const i = step++;
+          requests.push(i);
+          if (outcomes[i] === "reject") return Promise.reject(new Error("NotAllowedError"));
+          return Promise.resolve({
+            addEventListener() {},
+            release: () => Promise.resolve(),
+          });
+        } },
+      });
+      const owner = RaceWakeLock.create();
+      owner.hold();
+      owner.hold();
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      return { requests: requests.length, wanted: owner.wanted() };
+    });
+    expect(result.requests).toBe(2);
+    expect(result.wanted).toBe(true);
+  });
+
+  test("a lone rejecting request does not spin a retry loop", async ({ page }) => {
+    await boot(page);
+    const result = await page.evaluate(async () => {
+      let requests = 0;
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: { request: () => { requests++; return Promise.reject(new Error("NotAllowedError")); } },
+      });
+      const owner = RaceWakeLock.create();
+      owner.hold();
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      return { requests, wanted: owner.wanted() };
+    });
+    expect(result.requests).toBe(1);
+    expect(result.wanted).toBe(true);
   });
 
   test("starting a race requests the lock", async ({ page }) => {

@@ -33,6 +33,7 @@ import {
 import { chromiumLaunchOptionsForBackend, requireHardwareWebGpu } from "../shot/probe-page.mjs";
 
 import { presentationDeadline, presentationDiagnostics, acquirePresentationResource } from "../lib/presentation.mjs";
+import { loadAllModels } from "../shot/capture-fallbacks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -320,11 +321,7 @@ async function runProbeAttempt(attemptNum) {
     if (hardwareAdapter) log("hardware-adapter", "verified identifiable non-fallback adapter", hardwareAdapter);
 
     log("assets", "loadModels start");
-    await page.evaluate(async () => {
-      if (typeof Assets !== "undefined" && Assets.loadModels) {
-        try { await Assets.loadModels(); } catch (_) { /* pack optional */ }
-      }
-    });
+    await loadAllModels(page, { log: (line) => log("assets", line) });
     log("assets", "loadModels done");
 
     await page.evaluate(({ id, tod, weather }) => {

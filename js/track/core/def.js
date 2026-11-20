@@ -313,8 +313,19 @@ const TrackDef = (function () {
     return pts;
   }
 
+  // The text Assets.modelIds/modelsReady scan for a circuit's pack-model ids: its scenery closure plus each id an
+  // engine helper stamps for a def.furniture flag (ENGINE_MODELS; baked-model-instancing.test.mjs pins the set).
+  const ENGINE_MODELS = Object.freeze({ bakedPines: "pine_lod0" });
+  function scenerySource(def, registry) {
+    const fn = def && (def.scenery || (registry && registry[def.id]));
+    let src = fn ? String(fn) : "";
+    const f = def && def.furniture;
+    if (f) for (const k in ENGINE_MODELS) if (f[k]) src += ' "' + ENGINE_MODELS[k] + '"';
+    return src;
+  }
+
   // dayPal / nightPal / realPoints / applyHwZones / materializeListPoints stay
   // module-local (fromRaw only); elevation readers + fromRaw stay public.
-  return { elevationAt, hasRealElevation, fromRaw };
+  return { elevationAt, hasRealElevation, fromRaw, scenerySource, ENGINE_MODELS };
 })();
 Object.freeze(TrackDef);
