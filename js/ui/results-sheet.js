@@ -219,6 +219,8 @@ function stintStrip(c) {
   });
   const details = document.createElement("details"); details.setAttribute("data-stint-details", "");
   const summary = document.createElement("summary"); summary.textContent = tr("results.stints.title", null, "TYRE STINTS");
+  const who = c && (c.name || c.code);
+  if (who) summary.setAttribute("aria-label", summary.textContent + " — " + who);
   const text = document.createElement("div"); text.setAttribute("data-stint-text", ""); text.textContent = description;
   details.append(summary, text);
   return { strip, details };
