@@ -26,6 +26,7 @@ import {
 import { resolveRepoDefault } from "../lib/output-paths.mjs";
 import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
+import { loadAllModels } from "./capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -111,11 +112,7 @@ await page.waitForFunction(() => window.__apex != null, null, { timeout: 10_000 
 const manifest = { outDir, models: null, shots: [] };
 
 try {
-  const models = await page.evaluate(async () => {
-    if (typeof Assets === "undefined" || !Assets.loadModels) return [];
-    await Assets.loadModels();
-    return Assets.models();
-  });
+  const models = (await loadAllModels(page)).ids || [];
   manifest.models = models;
   console.log(`models loaded: ${models.length}`);
 
