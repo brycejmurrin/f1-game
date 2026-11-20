@@ -215,8 +215,7 @@ const VisorOptics = (function () {
     if (now - _knobsAt < 2000) return _knobs;
     _knobsAt = now;
     try {
-      const A = typeof window !== "undefined" ? window.__apex : null;
-      const t = A && typeof A.lightTune === "function" ? A.lightTune() : null;
+      const t = typeof LightKnobs !== "undefined" && LightKnobs.LT ? LightKnobs.LT : null;
       const b = t ? +t.bloomMul : NaN, gl = t ? +t.glareStr : NaN;
       _knobs = { bloom: Number.isFinite(b) ? b : 1, glare: Number.isFinite(gl) ? gl : 0.12 };
     } catch (_) {  }
