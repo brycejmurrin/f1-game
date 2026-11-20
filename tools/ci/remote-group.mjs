@@ -68,7 +68,7 @@ export const SHARD_CHOICES = [1, 2, 4, 6, 8];   // browser-group.yml's `shards` 
  *  groups (`browser-group-lane-<n>`, `queue: max`), so at most GROUP_LANES group shards hold runners at once across
  *  every dispatch, and the rest wait without holding one. Measured by tools/ci/pool-share.mjs: on 11-19 nine group
  *  runs held up to the whole 40-slot pool while land.yml's seconds-long gate jobs queued behind them; ci.yml's
- *  selected legs already have LANES (select-specs.mjs, 24), so 24 + 8 leaves 8 slots that neither can take.
+ *  selected legs already have LANES (select-specs.mjs, 28 since D-037), so 28 + 8 leaves 4 slots that neither can take.
  *  Lanes are 1..GROUP_LANES (a plan without `lane`, e.g. a hand dispatch of the default plan, falls back to its
  *  shard number in the workflow, so 0 is never a lane). */
 export const GROUP_LANES = 8;

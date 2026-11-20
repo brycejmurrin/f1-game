@@ -75,8 +75,11 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  24, measured 2026-10-15 22:43Z: 17 ready runs held 2–22 legs each (median
  *  ~9, not the ~4 the first value of 12 assumed), 55 legs sat pending in lanes
  *  while only 17–22 of the 40 Linux slots ran. 24 lanes + the train's own legs
- *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
-export const LANES = 24;
+ *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40.
+ *  28 since 2026-11-20 (D-037): at ~18:18Z 21 legs ran while 411 waited in lanes and only 26 of the
+ *  40 Linux runners were busy; 28 + GROUP_LANES (8, remote-group.mjs) = 36 at worst, so 4 runners
+ *  stay free for land, Pages and the fast tier. */
+export const LANES = 28;
 
 /** SMALL RUNS SKIP THE LANES (#5536, 2026-11-18). A plan of at most this many legs
  *  gets lane NO_LANE, and ci.yml gives each of its legs a group of its own
