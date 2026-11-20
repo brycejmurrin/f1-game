@@ -87,7 +87,10 @@ window.ScreenRegions = (function () {
     if (root.id) button.id = root.id + "-arrange-entry";
     button.textContent = label;
     button.addEventListener("click", (event) => { event.stopPropagation(); run(button); });
-    const host = root.id === "pausemenu" ? root.querySelector(".sheet-head") : root;
+    // Pause's door rides its header; the fly-cam's rides its bar, because a
+    // corner door sat over the docked tuner's FREE CAMERA toggle (844x390).
+    const host = root.id === "pausemenu" ? root.querySelector(".sheet-head") :
+      root.id === "photo-controls" ? root.querySelector("#pc-bar") || root : root;
     host.appendChild(button);
   }
 

@@ -270,7 +270,12 @@ export function judgeStored(m) {
   if (!heightBound && m.raceFs < 12) bad.push(`RACE paints at ${m.raceFs}px (under 12 at fit ${fit})`);
   const door = (id) => m.doors.find((d) => d.id === id);
   const sameRow = (a, b) => { const x = door(a), y = door(b); if (!x || !y) return bad.push(`door ${!x ? a : b} missing`); if (Math.abs(x.t - y.t) > TOL) bad.push(`${a} (top ${Math.round(x.t)}) and ${b} (top ${Math.round(y.t)}) do not share a row`); };
-  sameRow("mb-race", "mb-tt"); sameRow("mb-vs", "mb-season"); sameRow("mb-practice", "mb-garage"); sameRow("mb-watch", "mb-data");
+  sameRow("mb-race", "mb-tt"); sameRow("mb-practice", "mb-garage"); sameRow("mb-watch", "mb-data");
+  // VS closes the RACE row in ROWS7 (three play doors a row, #5977) and opens the SEASON row in ROWS8;
+  // GEOS[].rows pins which composition each geometry paints.
+  { const vs = door("mb-vs"), a = door("mb-tt"), b = door("mb-season");
+    if (!vs || !a || !b) bad.push("door mb-vs, mb-tt or mb-season missing");
+    else if (Math.abs(vs.t - a.t) > TOL && Math.abs(vs.t - b.t) > TOL) bad.push(`mb-vs (top ${Math.round(vs.t)}) shares a row with neither mb-tt nor mb-season`); }
   sameRow("mb-settings", "mb-phonepad"); sameRow("mb-phonepad", "mb-help"); sameRow("mb-help", "mb-saves");
   if (!m.disc || m.disc.display === "none" || !(m.disc.h > 0)) bad.push("the disclaimer is hidden");
   else if (!inside(m.disc, m.ov.box, TOL)) bad.push(`disclaimer ${fmt(m.disc)} leaves the box ${fmt(m.ov.box)}`);

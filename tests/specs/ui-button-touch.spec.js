@@ -1211,10 +1211,10 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     // Back in: SHOW restores it.
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
-    const sec2 = await page.locator("#hud-sectors").boundingBox();
-    await page.mouse.move(sec2.x + sec2.width / 2, sec2.y + sec2.height / 2);
-    await page.mouse.down();
-    await page.mouse.up();
+    // By the picker this time: ARRANGE shows a piece's SAVED spot (hud-race-keep-5678), and the
+    // PHONE_STANDARD sectors seed, authored with 59 px insets, saves it at 838.9..873.6 on this
+    // inset-free 844 screen, so its centre is off the glass (measured 2026-11-20).
+    await page.locator("#hud-arrange-element").selectOption("sectors");
     await page.locator("#hud-arrange-move").click();
     await expect(vis).toHaveValue("off");
     await vis.selectOption("on");
@@ -1245,10 +1245,13 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-move").focus();
     await page.keyboard.press("ArrowRight");
     const after = await page.locator("#announce").boundingBox();
-    // HudLayout persists whole percentages: the first placement snaps the
-    // visible origin to that existing grid, then adds the keyboard step.
-    const expectedX = LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
-    const expectedY = LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
+    // An automatic card: HudLayout persists whole percentages, so the first placement snaps the
+    // visible origin to that grid, then adds the step. A stored placement (the phone's
+    // PHONE_STANDARD seed, x -43.505 %) moves by exactly one step of the screen.
+    const seeded = await page.evaluate(() => document.getElementById("announce").hasAttribute("data-hl-user"));
+    const expectedX = seeded ? before.x + LANDSCAPE.width / 100
+      : LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
+    const expectedY = seeded ? before.y : LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
     expect(Math.abs(after.x - expectedX)).toBeLessThan(2);
     expect(Math.abs(after.y - expectedY)).toBeLessThan(2);
     await page.keyboard.press("Shift+ArrowDown");
@@ -1354,6 +1357,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const card = page.locator("#announce");
     await expect(card).toBeVisible();
+    // The factory placement RESET returns to: automatic, or on a phone the PHONE_STANDARD seed.
+    const factory = await page.evaluate(() => ({ v: HudLayout.get("announce"), placed: document.body.hasAttribute("data-radio-placed") }));
     // Drop in the tower's row (the phone report, 2026-10-14). Leave half the
     // viewport for the card: this checks manual placement, not edge clamping.
     const tower = await page.locator(".hud-top").boundingBox();
@@ -1387,7 +1392,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(Math.abs(a2.x - tx), "message at the drop point (x)").toBeLessThanOrEqual(6);
     expect(Math.abs(a2.y - ty), "message at the drop point (y)").toBeLessThanOrEqual(6);
     await page.evaluate(() => HudLayout.resetEl("announce"));
-    await page.waitForFunction(() => !document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction((placed) => document.body.hasAttribute("data-radio-placed") === placed, factory.placed, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => HudLayout.get("announce")), "RESET restores the factory placement").toEqual(factory.v);
   });
 
   test("rotation exits Arrange and keeps restored Settings interactive above Pause", async ({ page }) => {

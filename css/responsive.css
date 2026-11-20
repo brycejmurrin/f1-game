@@ -250,10 +250,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   translate: calc(var(--tl-title-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-title-y, 0px) + var(--tf-dy, 0px));
   zoom: calc(var(--ui-scale) * var(--tl-title-size, 1) * var(--tf, 1));
 }
-/* COMPACT KEEPS ITS CAP. A compact screen paints the UI pieces at the shipped
-   cap (--ui-compact-scale / --ui-compact-brand-scale, css/menus.css), and a
-   layout only scales that: a phone's PHONE_TALL btns 105 at UI SIZE 200 read
-   2 × 1.05 = 2.1 here and pushed the doors 414 px into a 390 px screen. */
+/* Compact keeps its cap (css/menus.css); a layout scales that (390x844 @200: 2.1 overflowed). */
 :root[data-title-layout] :where(body[data-density="compact"]) #menu-buttons {
   zoom: calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
 }
@@ -390,6 +387,9 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   :where(body:not([data-density="compact"])) #menu-buttons {
     width: min(100%, var(--col-max));
     justify-self: center;
+  }
+  :where(body:not([data-density="compact"])) #menu-buttons {
+    --home-label: min(clamp(var(--fs-4), 1.85vw, 2.25rem), calc(var(--col-max) * .045 / var(--ui-scale, 1)));
   }
 }
 

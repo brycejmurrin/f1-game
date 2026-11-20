@@ -195,7 +195,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 @container title-menu (max-width: 12rem) {
   #overlay #menu-buttons #menu-secondary { flex-wrap: wrap; }
   #overlay #menu-buttons #menu-secondary > .bigbtn { flex: 1 1 calc(50% - var(--gap)); width: auto; min-width: 0; overflow-wrap: anywhere; }
-  /* Only stack retention, explore and create. Garage occupies the spare cell beside Practice. */
+  /* Stack retention, explore, create; Garage takes the cell beside Practice. */
   :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) {
     display: flex; flex-direction: column; flex-wrap: nowrap;
   }
@@ -390,7 +390,7 @@ body[data-shape="wide"]:not([hidden]) #overlay {
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
   grid-column: 1; grid-row: 1; align-self: start; align-items: flex-start; text-align: start;
   width: 100%; margin-top: calc(4 * var(--vhz)); padding: 0; background: transparent;
-  /* Apply the same title zoom with or without a saved layout. UI sizes below 100% must keep the brand readable. */
+  /* Same title zoom with or without a saved layout; below 100% the brand stays readable. */
   zoom: calc(var(--tl-title-size, 1) * var(--tf, 1));
   --vwz: 1vw; --vhz: 1vh;
 }

@@ -176,7 +176,7 @@
    to the viewport and the art ran through the button stack; with the box at
    its own aspect a narrow screen gets a band at the foot instead, so it goes
    quiet rather than absent — and the tall phone below then makes it a crop. */
-@media (max-width: 699px)  { #title-car { --title-art-full: 0.22; } }   /* the phone rules end at 699, the iPad ones start at 700 */
+@media (max-width: 699px)  { #title-car { --title-art-full: 0.22; } }   /* phones end at 699, iPads start at 700 */
 /* #tc-frame frames the ONE placement tools/gen/title-art.mjs writes. A CSS
    transform on an SVG element defaults to transform-origin 50% 50% of the
    view-box, which would scale the art about (700,450) and move it as a side

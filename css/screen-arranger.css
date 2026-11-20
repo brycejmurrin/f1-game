@@ -169,6 +169,13 @@ body:has(> main#overlay) {
   position: static;
   margin-inline-start: auto;
 }
+/* The fly-cam's door is one more item in #pc-bar (js/ui/screen-regions.js):
+   in the top-right corner it covered the docked tuner's #pc-toggle. */
+#pc-bar > .screen-arrange-entry {
+  position: static; min-height: var(--tap-min);   /* its siblings' floor, inside the bar's UI SIZE zoom */
+  font-size: var(--fs-micro);
+}
+@media (pointer: coarse) { #pc-bar > .screen-arrange-entry { min-height: var(--tap-paint); } }
 /* Most menus already have a safe, single-column grid. Put the extra door
    after the sheet, beyond the scrollport and the player's moveable regions. */
 .screen:has(> .sheet):has(> .screen-arrange-entry):not(#photo-studio, #carsetup) {
