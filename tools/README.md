@@ -144,6 +144,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/claude-agents.mjs** | Claude Code CLI adapter, reads only: auth status, the remembered cloud-address registry and local session reads. | — |
+| **ci/closing-refs.mjs** | Lists closing keywords (fix/close/resolve #N) in a PR body whose target is an open PR; ship-pr refuses on any (#5929). | ship |
 | **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | steward |
 | **ci/deploy-child.mjs** | Bounded deploy child supervision, including descendants and cooperative shutdown. | — |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
@@ -405,6 +406,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
+| **gfx/sharpness-ab.mjs** | Headless A/B of the phone-sharpness arms on TLX WebGPU: captures, 400% crop sheets, edge metrics. | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
@@ -429,6 +431,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/corner-frames.cjs** | Fleet audit: turns[] on curvature peaks, bankZones and corner-labelled scenery kits on the corner they name. | survey-track |
 | **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
+| **track/footprint-rejected.cjs** | Shrink-only ratchet on modelGroups whose emitted footprint is rejected every build (non-pit "footprint rejected"). | scenery-dress |
 | **track/footprint-support.cjs** | Library, no CLI: full-footprint support checks for box masses (exact vertical contacts, review shot jobs). | scenery-dress |
 | **track/graph-parity.cjs** | Scene-graph migration gate: builds every circuit twice (baseline ref vs tree) and diffs prop geometry vertex for vertex. | scenery-dress |
 | **track/ground-audit.cjs** | Buried/unsupported/coplanar gates plus advisory partial-footprint warnings; `--why --json`, `--shots jobs.json`. | scenery-dress |
@@ -693,6 +696,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
 | **ci/behind-ship.mjs** | Print how many commits a PR head is behind the ship branch; warn over 10, never fail. |
+| **ci/child-health.mjs** | Quota watchdog: which open PRs name a child session that died (usage limit, failed turn, lost worker) as owner. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout diffs against: the test commit's FIRST PARENT, else the fallback given. |
 | **ci/ci-rerun.mjs** | Guarded CI re-run: refuses a superseded run (head_sha ≠ PR head), a live run, or a second re-run. |
@@ -716,13 +720,14 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
 | **ci/merge-train.mjs** | Merge train: folds green `land` PRs onto the deploy tip as a `train/*` PR; the gate checks each car's own rows. |
-| **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| retest-refused \| tip-red \| no. |
+| **ci/needs-sync.mjs** | Does a PR branch need a deploy-tip sync? conflict \| union-conflict \| stale-red \| retest-refused \| tip-red \| no. |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
+| **ci/pool-share.mjs** | Read-only runner-pool census: who held the 40 Linux slots while land.yml jobs queued (#5848). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/preflip-probe.mjs** | Pre-flip probe: merge the deploy tip into a PR head in a temp worktree, run ratchets + fixture audit + diff units. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |

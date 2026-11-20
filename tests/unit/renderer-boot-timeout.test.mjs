@@ -337,6 +337,24 @@ test("a SLOW adapter on a WGX pick still tries WGX, and a refusal names the slow
   assert.equal((await s2).bound, true, "and binds when WGX answers");
 });
 
+// Hunt 2026-11-18 (2) row 4 (#5699): the UNSET default (Bryce's iPhone) treated a slow adapter as absent and bound
+// GLX for the session. Like the WGX pick above, it now still tries TLX; a null adapter still keeps GLX.
+test("a SLOW adapter on the unset default still tries TLX; a null one keeps GLX", async () => {
+  let created = 0;
+  const h = boot({ stored: null, requestAdapter: () => new Promise(() => {}), gfxCreate: async () => { created++; return { api: "three" }; } });
+  const started = h.rb.start();
+  await settle();
+  h.fire(4000);
+  const r = await started;
+  assert.equal(created, 1, "TLX gets its own try after the 4 s cap");
+  assert.equal(r.bound, true);
+  assert.equal(h.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() gave no answer in 4 s", "the boot probe's miss is still recorded");
+  let created2 = 0;
+  const none = boot({ stored: null, requestAdapter: async () => null, gfxCreate: async () => { created2++; return { api: "three" }; } });
+  assert.equal((await none.rb.start()).bound, false);
+  assert.equal(created2, 0, "a null adapter never fetches three");
+});
+
 test("a create() that refuses without its own reason still records one", async () => {
   const h = boot({ stored: "webgpu", gfxCreate: async () => null });
   await h.rb.start();

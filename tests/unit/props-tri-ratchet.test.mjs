@@ -37,6 +37,15 @@ const require = createRequire(import.meta.url);
 // 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
 // Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
 // chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
+// 2026-11-11 W21 (#5303): cota 301685 -> 303352 (+0.55 %), mexico 342242 -> 344035
+// (+0.52 %), fuji 564203 -> 567976 (+0.67 %). Two visible fixes add geometry: a
+// grandstandEx that seats no rows no longer records its solid, so trees now grow
+// where the phantom stand stood (mexico +17 trees, cota +2); and curved stand rows
+// span midpoint to midpoint instead of stopping short (#2204: fuji's back terraces
+// gapped up to 28.8 m). Compaction stays identical on every circuit.
+// 2026-11-18 (#5303, Bryce `decision: A`): hungaroring 213167 -> 214279 (+0.52 %). The
+// deploy tip alone measured 214232 (+0.4996 %); this PR's midpoint-to-midpoint stand
+// rows (stands.js, #2204) add the last 47 tris.
 // 2026-11-10 W5 (#5279): Magny-Cours 249802 -> 240416 (-3.8 %): the Adelaide and
 // Lycée kits moved onto their corners and three treeline/poplar runs were trimmed
 // clear of the relocated stands.
@@ -69,6 +78,12 @@ const require = createRequire(import.meta.url);
 // merged tree: the tip with neither file changed is 214232; the six bank zones re-anchored onto
 // T2-T14 ({ turn: N }) add +465 (props drape on the banked edges); the T1 tyre wall moved to the
 // outside of the hairpin, the T11 terrace and the T5 gravel moved onto their corners add +540.
+// Measured, not widened.
+// 2026-11-19 (#5699 row 18, PR #5747, sync onto 8bb193ac / #5303): remeasured on the merged
+// tree with tools/track/props-tris.cjs. fuji 567976 — the W21 pin; row 18's reserve-after-land
+// is already in that count (the earlier 567046 pin was against tip f25747de, before W21).
+// cota 303352 -> 301674 and mexico 344035 -> 343891: the W21 ceilings sat above the current
+// build, so they are pinned to the measured post-strip counts. hungaroring stays 215237.
 // Measured, not widened.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;

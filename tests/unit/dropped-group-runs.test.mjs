@@ -96,6 +96,51 @@ test("refuse: a red group run of the spec beside a green one (a pass after a red
   assert.equal(decide(world({ extraRuns: [other] })).accept, true);
 });
 
+// #5871 (#5491 af41faed): taint is judged among runs on the same head AND the same base. A red `ui` run whose plan
+// records name another base tested a different merge pair; it must not taint a green same-base run.
+function redOn(planBases, extra = {}) {
+  const red = { id: 299, path: GROUP_WORKFLOW_PATH, event: "workflow_dispatch", head_sha: HEAD, status: "completed", conclusion: "failure", run_attempt: 1, display_title: "browser group ui on cursor/x (llvmpipe)", ...extra };
+  const jobs = planBases.map((_, i) => ({ id: 90 + i, name: `ui (${i + 1}/${planBases.length})`, conclusion: i ? "success" : "failure" }));
+  const plan = (base) => ({ title: GROUP_PLAN_TITLE, message: groupRecordLine({ head: HEAD, base, gl: "llvmpipe", flaky: true, group: "ui", ok: true, units: [UI] }) });
+  const base = world({ extraRuns: [red], jobsOf: (id) => (String(id) === "299" ? jobs : null) });
+  const notesOf = base.annotationsOf;
+  return { ...base, annotationsOf: (jobId) => {
+    const i = Number(jobId) - 90;
+    if (i >= 0 && i < planBases.length) return planBases[i] === undefined ? [] : [plan(planBases[i])];
+    return notesOf(jobId);
+  } };
+}
+
+test("accept: a red group run on ANOTHER base does not taint a green same-base run (#5871)", () => {
+  const v = decide(redOn([OLD, OLD]));
+  assert.equal(v.accept, true, v.why);
+  assert.deepEqual(v.runs, ["300"]);
+  // A branch-head red (base=none) is another pair too.
+  assert.equal(decide(redOn(["none"])).accept, true);
+  // Still-running on another base: no taint and nothing to wait for.
+  const live = decide(redOn([OLD], { status: "in_progress", conclusion: null }));
+  assert.equal(live.accept, true, live.why);
+});
+
+test("refuse: a red group run on the SAME base still taints beside a green one (#5871)", () => {
+  const v = decide(redOn([BASE, BASE]));
+  assert.equal(v.accept, false);
+  assert.equal(v.why, tainted("run 299 (group ui) is completed/failure, attempt 1"));
+  // One job on this base is enough: a mixed run is not "another base".
+  assert.equal(decide(redOn([OLD, BASE])).accept, false);
+});
+
+test("refuse: a red group run whose base cannot be read still taints (#5871)", () => {
+  for (const bases of [[undefined], [OLD, undefined]]) {
+    const v = decide(redOn(bases));
+    assert.equal(v.accept, false, JSON.stringify(bases));
+    assert.equal(v.why, tainted("run 299 (group ui) is completed/failure, attempt 1"));
+  }
+  // No readable jobs at all.
+  const nojobs = decide(world({ extraRuns: [{ id: 299, path: GROUP_WORKFLOW_PATH, event: "workflow_dispatch", head_sha: HEAD, status: "completed", conclusion: "failure", run_attempt: 1, display_title: "browser group ui on cursor/x (llvmpipe)" }] }));
+  assert.equal(nojobs.accept, false);
+});
+
 test("refuse: a non-green run whose group cannot be read refuses every dropped spec", () => {
   const odd = { id: 298, path: GROUP_WORKFLOW_PATH, event: "workflow_dispatch", head_sha: HEAD, status: "completed", conclusion: "failure", run_attempt: 1, display_title: "something else" };
   assert.equal(decide(world({ extraRuns: [odd] })).accept, false);

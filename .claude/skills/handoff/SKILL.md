@@ -23,6 +23,9 @@ Two audiences, two endings (steps 1–2 are shared):
   `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` (MCP `issue_write`: the live list plus it, skill `steward` `references/labels.md`)
   and end. No chat prompt: the takeover reads only the Hand-off
   block and the Plan; the dispatch Action launches it once no live owner names the PR.
+- **Quota wall** (a usage-limit warning or a 429 `usage_limit_reached`; six workers died on one at 2026-11-18
+  22:32–23:37Z and two lost uncommitted work, #5844): do step 1 and refresh the Hand-off block NOW, before the
+  next call, then end without arming a check-in; every wake re-hits the wall. Long waits: AGENTS.md rule 12.
 
 1. **Push first.** A dirty tree or unverified work: commit it as WIP anyway, in two calls (`git add <paths>`, then
    `git commit`; AGENTS.md rule 12), and list what is unverified as **Not run**. If the commit hook's guards

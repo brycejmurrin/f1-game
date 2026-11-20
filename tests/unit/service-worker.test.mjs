@@ -1409,6 +1409,35 @@ test("a slow pack fetch loses the race to a cached copy, and its late answer is 
   assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/assets/pack/manifest.json`).text(), '{"new":true}');
 });
 
+// #5629: the manifest under the page's build (`?b=<n>`) answers from the cache at
+// once and revalidates behind it; a bare or malformed key keeps the network race.
+test("a build-keyed pack manifest answers from the cache at once and revalidates behind it", async () => {
+  let release;
+  const late = new Promise((r) => { release = r; });
+  const url = `${ORIGIN}/assets/pack/manifest.json?b=321`;
+  const h = packHarness({ net: () => late });
+  h.stores.get("apex26-320").set(url, new Response('{"cached":true}', { status: 200 }));
+  const ev = h.fetchEvent(new Request(url));
+  let settled = false;
+  ev.responsePromise.then(() => { settled = true; });
+  for (let i = 0; i < 20 && !settled; i++) await new Promise(setImmediate);
+  assert.equal(settled, true, "no NAV_RACE_MS wait behind a stalled link");
+  assert.equal(await (await ev.responsePromise).text(), '{"cached":true}');
+  release(new Response('{"new":true}', { status: 200 }));
+  await Promise.all(ev.lifetimes);
+  assert.equal(await h.stores.get("apex26-321").get(url).text(), '{"new":true}', "the revalidated copy is cached under THIS build");
+});
+
+test("a build-keyed manifest with no cached copy waits for the network; a malformed key keeps the race", async () => {
+  const h = packHarness({ net: async () => new Response('{"new":true}', { status: 200 }) });
+  const miss = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json?b=321`));
+  assert.equal(await (await miss.responsePromise).text(), '{"new":true}');
+  const bad = `${ORIGIN}/assets/pack/manifest.json?b=0`;
+  h.stores.get("apex26-320").set(bad, new Response('{"old":true}', { status: 200 }));
+  const ev = h.fetchEvent(new Request(bad));
+  assert.equal(await (await ev.responsePromise).text(), '{"new":true}', "?b=0 is not a build: network first");
+});
+
 test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed)", async () => {
   let fetched = 0;
   const h = packHarness({ net: async () => { fetched++; return new Response("net", { status: 200 }); } });
@@ -2256,6 +2285,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
     [`${ORIGIN}/vendor/three-0.187.0/three.core.min.js`]: ["three-core", {}],       // install reuses, no download
     [`${ORIGIN}/assets/voice/a.bin`]: ["voice", { ETag: '"v"' }],                   // VOICE_CACHE's class: not carried
     [`${ORIGIN}/js/ui/hud.js?v=aaaaaaaaaaaa`]: ["old", {}],                            // a ?v= key nobody lists: not carried
+    [`${ORIGIN}/assets/pack/manifest.json?b=320`]: ["man-320", { ETag: '"m"' }],      // the old build's key (#5629): not carried
   };
   const base = installFetch();
   const asked = [];
@@ -2291,6 +2321,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
   assert.equal(await text("assets/sfx/removed.mp3"), undefined, "a file the deploy removed is dropped");
   assert.equal(await text("assets/voice/a.bin"), undefined, "voices are VOICE_CACHE's");
   assert.equal(await text("js/ui/hud.js?v=aaaaaaaaaaaa"), undefined, "unlisted ?v= keys are not carried");
+  assert.equal(await text("assets/pack/manifest.json?b=320"), undefined, "a build-keyed manifest stays with its build (#5629)");
   assert.ok(!asked.includes("/vendor/three-0.187.0/three.core.min.js"), "no download for a path-pinned file already on the device");
 });
 

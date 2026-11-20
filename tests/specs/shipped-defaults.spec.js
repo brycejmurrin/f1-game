@@ -21,6 +21,7 @@
 // value and reason as tlx-probes.spec.js. It changes no product choice.
 import { test, expect, BOOT_MS, RACE_BUILD_MS, SHIPPED_DEFAULTS_TAG, awaitTrackBuild } from "../helpers/fixtures.js";
 import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
+import { watchBoot } from "../helpers/stall-diag.js";
 
 const TAG = { tag: SHIPPED_DEFAULTS_TAG };
 const PHONE = { width: 844, height: 390 };
@@ -37,15 +38,18 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function boot(page) {
-  await page.goto("/");
+  // #5599: a boot past 8 s attaches its milestones (stall-diag.js); the wait below is unchanged.
+  const bootDone = await watchBoot(page, test.info());
+  await page.goto("/").catch(async (e) => { await bootDone(e); throw e; });
   await page.waitForFunction(() => window.__apex != null && !!window.__apex.race, null, { polling: 100, timeout: BOOT_MS })
-    .catch(async (e) => {
+    .then(() => bootDone(), async (e) => {
+      await bootDone(e);
       // Same wait, same BOOT_MS: this only names what the boot was doing when it ran out. CI run 43478086963
       // (job 132069209092) timed out here with the title DOM built and __apex.race missing, and recorded nothing else.
       const s = await page.evaluate(() => {
         const gfx = (st) => { const o = {}; try { for (let i = 0; i < st.length; i++) { const k = st.key(i); if (k && k.startsWith("apex26.gfx")) o[k] = st.getItem(k); } } catch (_) { o.unreadable = true; } return o; };
         return {
-          apex: typeof window.__apex, race: !!(window.__apex && window.__apex.race),
+          apex: window.__apex === null ? "null" : typeof window.__apex, race: !!(window.__apex && window.__apex.race),
           backend: typeof GLX !== "undefined" ? (GLX.backend || "glx") : "no GLX global",
           readyState: document.readyState, session: gfx(sessionStorage), local: gfx(localStorage),
         };
@@ -135,6 +139,9 @@ test.describe("shipped defaults", () => {
     if (s.bootAdapterWhy == null && s.hasAdapter) {
       expect(s.backend, JSON.stringify(s)).toBe("three");
       expect(s.fallbackWhy, JSON.stringify(s)).toBeNull();
+    } else if (s.bootAdapterWhy != null && /no answer in 4 s/.test(s.bootAdapterWhy)) {
+      // A slow adapter is not an absent one: the unset default still tries TLX, which binds or names its refusal.
+      expect(s.backend === "three" || s.fallbackWhy != null, JSON.stringify(s)).toBe(true);
     } else if (s.bootAdapterWhy != null) {
       expect(s.backend, JSON.stringify(s)).toBeUndefined();
     }
