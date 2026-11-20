@@ -123,3 +123,32 @@ test("browser-group: a fork `pr` is refused before checkout on a trial runner", 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// D-LANES: the select step hands vars.APEX_CI_LANES to select-specs only when the legs resolve to the variable runner.
+test("APEX_CI_LANES reaches the planner only on the variable runner; fork, pull_request_target and unset get 28", async () => {
+  const { ciLanes, LANES } = await import("../../tools/ci/select-specs.mjs");
+  const sel = jobs().find((j) => j.key === "ci.yml:select").job.steps.find((st) => st.name === "Select specs for this change");
+  const expr = sel.env.APEX_CI_LANES;
+  assert.equal(expr, "${{ github.event_name != 'pull_request_target' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.APEX_CI_BROWSER_RUNNER != '' && vars.APEX_CI_LANES || '' }}");
+  const lanes = (ctx) => ciLanes({ APEX_CI_LANES: resolve(expr, ctx) });
+  const both = { APEX_CI_BROWSER_RUNNER: "ubicloud-standard-4", APEX_CI_LANES: "64" };
+  const own = "brycejmurrin/f1-game";
+  for (const event of ["pull_request", "push", "schedule", "workflow_dispatch"]) {
+    const ctx = { event, headRepo: own, vars: both };
+    assert.equal(lanes(ctx), 64, event);
+    assert.notEqual(resolve(EXPR["ci.yml:selected"], ctx), "ubuntu-latest", `${event}: raised lanes only where the legs leave ubuntu-latest`);
+  }
+  const hosted = [
+    { event: "pull_request", headRepo: "someone/fork", vars: both },
+    { event: "pull_request_target", headRepo: own, vars: both },
+    { event: "pull_request", headRepo: own, vars: { APEX_CI_LANES: "64" } },
+    { event: "push", vars: { APEX_CI_LANES: "64", APEX_CI_BROWSER_RUNNER: "" } },
+    { event: "push", vars: { APEX_CI_LANES: "64", APEX_BROWSER_RUNNER: "x" } },
+    { event: "pull_request", headRepo: own, vars: {} },
+  ];
+  for (const ctx of hosted) {
+    assert.equal(resolve(EXPR["ci.yml:selected"], ctx), "ubuntu-latest", `${ctx.event} ${ctx.headRepo} runs GitHub-hosted`);
+    assert.equal(lanes(ctx), LANES, `${ctx.event} ${ctx.headRepo}: a GitHub-hosted run keeps 28 lanes`);
+  }
+  assert.equal(lanes({ event: "push", vars: { APEX_CI_BROWSER_RUNNER: "x" } }), LANES, "runner set, lanes unset: 28");
+});
