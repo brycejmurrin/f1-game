@@ -73,17 +73,17 @@ const Quali = (function () {
   // TRACK DESIGNER layout) takes CALIB_DEFAULT, the calendar median.
   // @gen-quali-calib start
   const CALIB = {
-    abudhabi: 0.9500, albert_park: 0.9490, anderstorp: 0.9634, bahrain: 0.9652, baku: 0.9623, brands_hatch: 0.9619,
-    buddh: 0.9597, buenos_aires: 0.9576, catalunya: 0.9588, cota: 0.9393, dijon: 0.9501, donington: 0.9707,
-    estoril: 0.9616, fuji: 0.9592, hockenheim: 0.9689, hungaroring: 0.9512, imola: 0.9792, indianapolis: 0.9519,
-    interlagos: 0.9536, istanbul: 0.9571, jacarepagua: 0.9573, jeddah: 0.9629, jerez: 0.9622, korea: 0.9526,
-    kyalami: 0.9725, madrid: 0.9520, magny_cours: 0.9665, mexico: 0.9517, miami: 0.9467, monaco: 0.9687,
-    mont_tremblant: 0.9712, montreal: 0.9632, monza: 0.9496, mosport: 0.9375, mugello: 0.9374, nurburgring: 0.9567,
-    okayama: 0.9650, paul_ricard: 0.9367, portimao: 0.9739, qatar: 0.9735, redbull: 0.9558, sepang: 0.9684,
-    shanghai: 0.9470, silverstone: 0.9339, singapore: 0.9632, sochi: 0.9688, spa: 0.9527, suzuka: 0.9447,
-    vegas: 0.9483, watkins_glen: 0.9654, zandvoort: 0.9623, zolder: 0.9669,
+    abudhabi: 0.9508, albert_park: 0.9488, anderstorp: 0.9649, bahrain: 0.9662, baku: 0.9653, brands_hatch: 0.9610,
+    buddh: 0.9575, buenos_aires: 0.9582, catalunya: 0.9586, cota: 0.9386, dijon: 0.9506, donington: 0.9693,
+    estoril: 0.9635, fuji: 0.9605, hockenheim: 0.9675, hungaroring: 0.9491, imola: 0.9802, indianapolis: 0.9492,
+    interlagos: 0.9533, istanbul: 0.9554, jacarepagua: 0.9558, jeddah: 0.9640, jerez: 0.9621, korea: 0.9518,
+    kyalami: 0.9563, madrid: 0.9509, magny_cours: 0.9654, mexico: 0.9510, miami: 0.9491, monaco: 0.9678,
+    mont_tremblant: 0.9709, montreal: 0.9656, monza: 0.9532, mosport: 0.9364, mugello: 0.9410, nurburgring: 0.9552,
+    okayama: 0.9651, paul_ricard: 0.9403, portimao: 0.9719, qatar: 0.9699, redbull: 0.9637, sepang: 0.9715,
+    shanghai: 0.9470, silverstone: 0.9340, singapore: 0.9629, sochi: 0.9698, spa: 0.9562, suzuka: 0.9429,
+    vegas: 0.9498, watkins_glen: 0.9689, zandvoort: 0.9611, zolder: 0.9623,
   };
-  const CALIB_DEFAULT = 0.9590;
+  const CALIB_DEFAULT = 0.9584;
   // @gen-quali-calib end
   // Where the field sits against its own clear-air race laps (tyre wear off, the lap
   // CALIB is measured on): the same driver's qualifying lap is 0.2-1.2 % quicker, all
