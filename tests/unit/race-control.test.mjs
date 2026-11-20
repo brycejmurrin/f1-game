@@ -337,6 +337,46 @@ test("a stuck hazard cannot neutralise the race forever", () => {
   assert.equal(rc.info().level, 3, "after the hold, a persistent hazard re-raises");
 });
 
+test("the hard cap counts the EPISODE, not the level: a flag flipping SC<->VSC still caps (#5715)", () => {
+  // Hunt 2026-11-18 (5): every level change reset sinceT, so hazards hovering
+  // at SC_MIN held the race neutralised 599.7 of 600 s and it never went green.
+  // The episode clock resets only on GREEN (or a new peak), so the SC_MAX cap
+  // fires at its designed ~90 s however the level flips underneath it.
+  for (const period of [7, 8, 20]) {
+    let t = 0;
+    const rc = load({ active: () => true, hazards: () => hazards(Math.floor(t / period) % 2 ? 6 : 10, 2) })
+      .create(makeCtx());
+    let firstGreen = null, neutral = 0, levels = new Set();
+    for (let i = 0; i < 600 * 60; i++) {
+      t = i / 60;
+      rc.update(1 / 60);
+      const lv = rc.info().level;
+      levels.add(lv);
+      if (lv) neutral += 1 / 60;
+      else if (firstGreen === null && t > 1) firstGreen = t;
+    }
+    assert.ok(levels.has(2) && levels.has(3), `period ${period}: the flag really flipped SC<->VSC`);
+    assert.ok(firstGreen !== null && firstGreen > 85 && firstGreen < 100,
+      `period ${period}: capped at the designed ~90 s (first green ${firstGreen})`);
+    assert.ok(neutral < 450, `period ${period}: the race goes green between episodes (${neutral.toFixed(1)} s neutralised)`);
+  }
+});
+
+test("a de-escalation stays one episode, while an escalation above its peak gets a fresh cap", () => {
+  let hz = hazards(0, 3);          // local YELLOW
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 25);
+  assert.equal(rc.info().level, 1);
+  hz = hazards(10, 2);             // a real pile: SC, above the yellow peak
+  run(rc, 60);
+  assert.equal(rc.info().level, 3, "the SC gets its own SC_MAX, not the yellow's 30 s remainder");
+  hz = hazards(6, 2);              // steps down to a VSC: the same episode
+  run(rc, 25);
+  assert.equal(rc.info().level, 2, "stepped down to VSC");
+  run(rc, 10);                     // > 90 s since the SC was raised
+  assert.equal(rc.info().level, 0, "the SC's cap still runs through the step-down");
+});
+
 test("the cap's re-arm hold never masks an ESCALATION", () => {
   // The hold exists to stop the SAME stale picture instantly re-flagging. It
   // must not also swallow a genuinely worse incident: a local yellow that
@@ -1152,15 +1192,15 @@ const TRACKS_STUB = {
   inPitLane: (_t, _s, x) => Math.abs(x) > 8,
 };
 // The real lazy module, evaluated beside the stub Tracks it reads.
-function stoppedCars() {
-  const ctx = vm.createContext({ Math, Number, Map, Set, Tracks: TRACKS_STUB });
+function stoppedCars(tracks = TRACKS_STUB) {
+  const ctx = vm.createContext({ Math, Number, Map, Set, Tracks: tracks });
   vm.runInContext(readFileSync(join(ROOT, "js/race/stopped-cars.js"), "utf8"), ctx, { filename: absSrc("js/race/stopped-cars.js") });
   return vm.runInContext("StoppedCars", ctx);
 }
-function stopRace(cars) {
+function stopRace(cars, tracks = TRACKS_STUB) {
   const debrisOff = { active: () => false, hazards() { throw Error("debris is off: no query"); } };
   const G = makeCtx({ cars, track: { total: 3000, def: { sectors: [0.3, 0.7] } } });
-  return { G, rc: load(debrisOff, { Tracks: TRACKS_STUB, StoppedCars: stoppedCars() }).create(G) };
+  return { G, rc: load(debrisOff, { Tracks: tracks, StoppedCars: stoppedCars(tracks) }).create(G) };
 }
 const runner = (num, s) => ({ num, s, x: 0, speed: 60, finished: false, retired: false });
 
@@ -1180,14 +1220,55 @@ test("a car parked on the road raises a local yellow in its sector, then VSC, an
   assert.equal(rc.info().sector, 1, "frac 0.5 is sector 2 of [0.3, 0.7]");
   run(rc, 12);
   assert.equal(rc.level, 2, "still on the road past STOP_VSC: a VSC");
-  parked.x = 7;   // pushed clear past the verge
+  parked.x = 7;   // pushed clear past the verge, into the runoff
   run(rc, 7);
-  assert.equal(rc.level, 0, "off the road: the flag clears after MIN_HOLD");
+  assert.equal(rc.level, 1, "in the runoff: the VSC drops to a local yellow after MIN_HOLD (#5784 B)");
+  run(rc, 40);
+  assert.equal(rc.level, 0, "past STOP_RECOVER the marshals have it: green");
 });
 
-test("a stopped car off the road, in the pit lane or finished raises nothing", () => {
+// #5784 decision B: a reliability DNF parked in the runoff (off the racing
+// surface, inside the barrier) flies a local single YELLOW in its sector for the
+// marshal window, and never a VSC — no marshal crosses the track for it.
+function maxLevel(rc, secs) {
+  let m = 0;
+  for (let t = 0; t < secs * 60; t++) { rc.update(1 / 60); m = Math.max(m, rc.level); }
+  return m;
+}
+test("#5784: a retirement in the runoff raises a sector yellow and never a VSC", () => {
+  const { rc } = stopRace([runner(1, 100), { num: 2, s: 2400, x: -7, speed: 0, finished: false, retired: true }, runner(3, 2900)]);
+  run(rc, 2);
+  assert.equal(rc.level, 0, "not before STOP_DWELL");
+  run(rc, 2);
+  assert.equal(rc.level, 1, "a local yellow once it has stood STOP_DWELL s");
+  assert.equal(rc.info().sector, 2, "frac 0.8 is sector 3 of [0.3, 0.7]");
+  assert.equal(rc.info().cause, "YELLOW");
+  assert.equal(maxLevel(rc, 50), 1, "the whole marshal window stays a yellow: no VSC for an off-road car");
+  run(rc, 10);
+  assert.equal(rc.level, 0, "past STOP_RECOVER: green");
+});
+
+test("#5784: an on-road DNF still escalates to VSC beside a runoff one", () => {
   const { rc } = stopRace([
-    { num: 2, s: 400, x: 7, speed: 0, finished: false, retired: true },      // past the verge
+    { num: 2, s: 400, x: 7, speed: 0, finished: false, retired: true },      // runoff
+    { num: 7, s: 1500, x: 1.2, speed: 0, finished: false, retired: true },   // on the road
+  ]);
+  run(rc, 16);
+  assert.equal(rc.level, 2, "the on-road car is unchanged: VSC at STOP_VSC");
+});
+
+test("#5784: a car stalled off the road, or a retirement past the barrier, raises nothing", () => {
+  const walled = { ...TRACKS_STUB, wallAt: () => 7.5 };
+  const { rc } = stopRace([
+    { num: 2, s: 400, x: 7, speed: 0, finished: false, retired: false },     // off, not retired
+    { num: 3, s: 700, x: 7.8, speed: 0, finished: false, retired: true },    // beyond the barrier
+    runner(6, 2000),
+  ], walled);
+  assert.equal(maxLevel(rc, 30), 0);
+});
+
+test("a stopped car in the pit lane or finished raises nothing", () => {
+  const { rc } = stopRace([
     { num: 4, s: 900, x: 9, speed: 0, finished: false, retired: false },     // in the pit lane
     { num: 5, s: 1200, x: 0, speed: 0, finished: true, retired: false },     // cool-down stop
     runner(6, 2000),

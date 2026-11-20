@@ -720,16 +720,15 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
   || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
-// BLUE FLAGS for the player (AI yields via AiDrive.letPassCase): sustained
-// hold-up while being lapped → warning, then +5 s (js/race/sporting-regs.js;
-// ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
+// BLUE FLAGS, player only (AI: AiDrive.letPassCase): held up while lapped → warn, then +5 s
+// (sporting-regs.js; ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
 const blueWatch = SportingRegs.createBlueFlagWatch(stricken);
+function notePenaltyWhy(c, why) { if (!c.penaltyWhy) c.penaltyWhy = why; else if (c.penaltyWhy.indexOf(why) < 0) c.penaltyWhy += "; " + why; }
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
-  player.penalty += ev.sec;
-  // The results countdown may already be running (the player just finished):
-  // re-read it so a time penalty that reorders the finish is served first.
+  player.penalty += ev.sec; notePenaltyWhy(player, "overtaking under caution");
+  // Restart a running results countdown: the penalty may reorder the finish.
   resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
@@ -738,8 +737,7 @@ function blueFlagCall(ev) {
   if (!ev || !player) return;
   Log.info("game", "Blue flag " + ev.type + (ev.code ? " code=" + ev.code : "") + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap);
   if (ev.type === "warn") { announce("BLUE FLAG WARNING", 2, "penalty-warn"); return; }
-  player.penalty += ev.sec;
-  resultT = 0;
+  player.penalty += ev.sec; notePenaltyWhy(player, "ignoring blue flags"); resultT = 0;
   announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
@@ -1475,10 +1473,10 @@ function makeCars() {
     const worksParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const aiSetup = Career.inCareer() && Career.aiSetup && Career.aiSetup(team);
     const factoryParts = aiSetup ? Parts.resolveSetup(aiSetup, team) : worksParts;
-    // Aero and ERS already feed dedicated channels below. Credit only the other
-    // catalog gains against the current legal works build, without tdev or RNG.
-    const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
-      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
+    // Aero and ERS feed dedicated channels below. Credit the other catalog gains against the legal
+    // works build, without tdev or RNG, clamped to the tier ladder like the hire (#5760: was +7–16 %).
+    const catalogPace = aiSetup ? DriverRatings.ladderPace(buildPace(Parts.resolveSetup({ ...factoryParts.setup,
+      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts), team.tier, TIER_V) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // The hire, like catalogPace: aero/ERS reset (aeroLoad/ersDeploy below carry them), against the team's own
     // factory build (all-stock for the custom team, which has no works build), clamped to the tier ladder (#5035).
@@ -3493,7 +3491,7 @@ const onboard = Onboard.create(G),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
-const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
+const { buildResults, buildTTResults, buildStandings, buildChampion, quali: qualiSheet } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
@@ -3555,7 +3553,7 @@ customTeam = CustomTeam.create({
   getLivDraftOverride: () => customLiv.livDraftOverride,
   setLivDraftOverride: (v) => { customLiv.livDraftOverride = v; },
   getSoundOn: () => soundOn,
-  GameAudio,
+  GameAudio, announce,
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },
@@ -3576,7 +3574,7 @@ const careerUi = CareerUI.create(G);
 const seasonUi = SeasonUI.create(G);
 // QUALIFYING — the model (js/race/quali-model.js: the flying lap plus the simulated field,
 // holding the classification between session and grid) and its sheet (quali-sheet.js).
-const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
+const quali = Quali.create(G);
 qualiNet = QualiNet.create({
   $, fmtTime, isQuali,
   getPlayer: () => player,
@@ -4007,11 +4005,11 @@ function raceIntroFromSheet(go, sheet, btn) {
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
-  // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
-  // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
+  // A DAILY picked before LAZY_RACE_SESSION's hook ran the stub's no-op prepareDaily; the hook then moves
+  // teamIdx/driverIdx/difficulty (entrySettings): the intro went stale, no garage-out (#3591). `records`, not the
+  // global: the bundle reinjects SessionRecords before its hook swaps the instance (#5813).
   const sessionLate = typeof GarageDepartureMotion === "undefined" || typeof GarageDepartureWheels === "undefined"
-    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub);
+    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && !!(records && records._stub));
   try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
@@ -5116,7 +5114,7 @@ function updateCar(c, dt, ranked) {
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // the AI spends it on a car it can attack
+                      : (c.otArmed && raceCtl.level < 2 && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // on a car it can attack; never under a VSC (#5715: held to the delta, it buys nothing; the human still may)
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
                           _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
                           _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed, _aiOtFire.vTop = vT,
@@ -5664,7 +5662,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
         if (c.isPlayer) { announce("LAP INVALIDATED", 1.2, "penalty-warn"); if (soundOn) GameAudio.offtrack(); }
       } else if (c.cutWarn >= 4) {
         c.penalty += 5; Log[c.isPlayer ? "info" : "debug"]("game", "Penalty track-limits car=" + c.code + " +5s total=" + c.penalty + "s lap=" + c.lap);
-        if (!c.penaltyWhy) c.penaltyWhy = "track limits"; else if (c.penaltyWhy.indexOf("track limits") < 0) c.penaltyWhy += "; track limits";   // the results sheet's reason (was null)
+        notePenaltyWhy(c, "track limits");
         if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit"); if (soundOn) GameAudio.penalty(); }
       } else if (c.isPlayer) {
         announce("TRACK LIMITS " + c.cutWarn + "/4" + (c.cutWarn === 3 ? " — BLACK & WHITE FLAG" : ""), 1.2, "penalty-warn");
@@ -8631,7 +8629,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-    if (state === "count" && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // the rear grid's atlases and casters, one budget a frame under the lights (no sim: the sim is above); typeof: tickBody runs in VM slices without CarDraw (results-cam.test)
+    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // rear grid atlases + casters, a budget a frame under the lights or after a green that skips them (go, goRolling; #5830); no CarDraw: results-cam.test
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
@@ -8760,7 +8758,7 @@ $("standings-close").onclick = () => { $("standings").hidden = true; };
 // A refused or offline bundle says so: the tap sound already played, a silent door reads as broken.
 const openDataHub = (tab) => {
   const visit = titleVisit;
-  return ensureDataHub().then((ok) => {
+  return ensureDataHub({ onSlow: () => { if (state === "menu" && visit === titleVisit) announce("STILL LOADING…", 4, "info"); } }).then((ok) => {
     if (state !== "menu" || visit !== titleVisit) return;
     if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
   });
@@ -9226,7 +9224,7 @@ $("cs-unlimited").onclick = () => {
   buildSetup();
 };
 els.resMenu.onclick = () => {
-  const room = netPlay.active();   // read BEFORE the quit: results are shown with NetPlay still live (NEW FRIEND ROOM)
+  const room = els.resMenu.dataset.friend === "1";   // the label buildResults painted (NEW FRIEND ROOM), not the live peer: a guest BYE after results must not turn it into MENU
   quitToMenu();
   if (room && $("mb-vs")) $("mb-vs").click();   // the title's own VS FRIEND door: a fresh room, since the race ended this one
 };
@@ -9325,7 +9323,10 @@ function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPendin
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; G.endRace(); return true; }   // G.endRace: RealRace's wrap
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
-els.workBtn.onclick = openPitWork;
+// END TIME TRIAL (#5789): the box WORK ON CAR slot; the drive-in, then the TT sheet.
+function endTimeTrialFromBox() { if (!isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return; paused = true; GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
+  openGarage("pit"); setupCam.startPitIn(() => { leaveGarage(); G.endRace(); setTimeout(() => { if ($("carsetup").hidden && !setupPreviewOn) garagePre.release(); }, 0); }); }
+els.workBtn.onclick = () => (isTimeTrial() ? endTimeTrialFromBox() : openPitWork());
 
 // ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class

@@ -94,7 +94,11 @@ const ReplayBuf = (function () {
     const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
     let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
     let times = null, data = null, aux = null, status = null, brk = null, breakPending = false;
-    let tags = [], tagPicker = null, tagOptionsKey = null;
+    let tags = [], tagsRev = 0, tagPicker = null, tagOptionsKey = null;
+    // paintDock runs every rendered frame while scrubbing (tickScrub): cached element refs,
+    // writes only on change, and the slider's input coalesced to one apply per frame (#5694 I5).
+    let dockRefs = null, scrubInputRaf = 0, scrubInputU = null;
+    const painted = new Map();
     let scrubbing = false, liveSnap = null;
     let scrubT = 0, scrubRate = 1, scrubPlaying = true;
     let prevStatus = null, sheetBusy = false, sheetGeneration = 0, sheetCancelled = false;
@@ -137,15 +141,11 @@ const ReplayBuf = (function () {
     }
     function writeCar(frame, i, c) {
       const o = (frame * nCars + i) * FLOATS;
-      data[o] = c.s || 0;
-      data[o + 1] = c.x || 0;
-      data[o + 2] = c.head || 0;
-      data[o + 3] = c.speed || 0;
-      data[o + 4] = c.px || 0;
-      data[o + 5] = c.py || 0;
-      data[o + 6] = c.pz || 0;
-      data[o + 7] = c.steer || 0;
-      data[o + 8] = c.yawVis || 0;
+      // A non-finite field keeps the previous sample's value (0 only with no history): storing 0 would park the car at the origin.
+      const po = count > 0 ? (((head + count - 1) % cap) * nCars + i) * FLOATS : -1;
+      const put = (k, v) => { data[o + k] = Number.isFinite(v) ? v : (v == null || v === false ? 0 : (po >= 0 ? data[po + k] : 0)); };
+      put(0, c.s); put(1, c.x); put(2, c.head); put(3, c.speed);
+      put(4, c.px); put(5, c.py); put(6, c.pz); put(7, c.steer); put(8, c.yawVis);
       const q = (frame * nCars + i) * AUXN;
       for (let k = 0; k < AUX.length; k++) aux[q + k] = Math.round(Math.max(0, Math.min(1, +c[AUX[k]] || 0)) * 255);
       const stop = c.pitState === "box" ? (G.pits && G.pits.stopAnim ? G.pits.stopAnim(c).u : 0) : -1;
@@ -185,6 +185,7 @@ const ReplayBuf = (function () {
     }
     function pushTag(kind, t, carIdx) {
       if (tags.length >= TAG_CAP) tags.shift();
+      tagsRev++;
       tags.push({ kind: String(kind || ""), t: +t || 0, car: carIdx | 0 });
     }
     function windowInfo() {
@@ -338,17 +339,17 @@ const ReplayBuf = (function () {
       if (!continuous || jump) snapCamera();   // public apply / slider / LAST are seeks
       return true;
     }
-    // Pick recorded timestamps, not +/-1/HZ: a slow frame may skip samples.
+    // Pick recorded timestamps, not +/-1/HZ: a slow frame may skip samples. Chronological
+    // ring order (frameIndexAt), so a binary search: paintDock asks twice per scrub frame (#5694 I5).
     function adjacentFrame(t, direction) {
       if (!count || (direction !== -1 && direction !== 1)) return null;
-      let found = null;
-      for (let k = 0; k < count; k++) {
-        const time = times[(head + k) % cap];
-        if (direction < 0 ? time < t - 1e-9 : time > t + 1e-9) {
-          if (found === null || (direction < 0 ? time > found : time < found)) found = time;
-        }
+      let lo = 0, hi = count - 1, k = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1, time = times[(head + mid) % cap];
+        if (direction < 0) { if (time < t - 1e-9) { k = mid; lo = mid + 1; } else hi = mid - 1; }
+        else if (time > t + 1e-9) { k = mid; hi = mid - 1; } else lo = mid + 1;
       }
-      return found;
+      return k < 0 ? null : times[(head + k) % cap];
     }
     function stepFrame(direction) {
       if (!scrubbing || sheetBusy || !allowed() || (direction !== -1 && direction !== 1)) return false;
@@ -365,7 +366,7 @@ const ReplayBuf = (function () {
       return ok;
     }
     function endScrub() {
-      sheetGeneration++; sheetBusy = false;
+      sheetGeneration++; sheetBusy = false; scrubInputU = null;
       if (!scrubbing) return false;
       audioOwner.release();
       if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
@@ -515,11 +516,19 @@ const ReplayBuf = (function () {
       };
       dock.querySelector("#pm-replay-scrub").oninput = (ev) => {
         if (sheetBusy) return;
-        const w = windowInfo();
-        const u = (+ev.target.value || 0) / 1000;
         scrubPlaying = false;
-        apply(w.t0 + (w.t1 - w.t0) * u);
-        paintDock();
+        scrubInputU = (+ev.target.value || 0) / 1000;
+        if (scrubInputRaf) return;
+        const flush = () => {
+          scrubInputRaf = 0;
+          const u = scrubInputU; scrubInputU = null;
+          if (u === null || sheetBusy || !scrubbing) return;
+          const w = windowInfo();
+          apply(w.t0 + (w.t1 - w.t0) * u);
+          paintDock();
+        };
+        if (typeof requestAnimationFrame === "function") scrubInputRaf = requestAnimationFrame(flush);
+        else flush();
       };
       return dock;
     }
@@ -532,28 +541,44 @@ const ReplayBuf = (function () {
       const d = document.getElementById("pm-replay-dock");
       if (d) d.hidden = true;
     }
+    // One getElementById per frame (the dock itself); the rest re-resolve only when the dock is replaced.
+    const DOCK_IDS = { play: "pm-replay-play", rate: "pm-replay-rate", scrub: "pm-replay-scrub", label: "pm-replay-label",
+      prev: "pm-replay-prev", next: "pm-replay-next", picker: "pm-replay-tag", sheet: "pm-replay-sheet",
+      cancel: "pm-replay-sheet-cancel", last: "pm-replay-last" };
+    function dockEls() {
+      const dock = document.getElementById("pm-replay-dock");
+      if (!dockRefs || dockRefs.dock !== dock || !dock) {
+        dockRefs = { dock };
+        for (const k in DOCK_IDS) dockRefs[k] = document.getElementById(DOCK_IDS[k]);
+        painted.clear();
+      }
+      return dockRefs;
+    }
+    function put(el, prop, value) {
+      if (!el) return;
+      const slot = painted.get(el) || (painted.set(el, {}), painted.get(el));
+      if (slot[prop] === value && el[prop] === value) return;
+      el[prop] = value; slot[prop] = value;
+    }
     function paintDock() {
       if (typeof document === "undefined" || !scrubbing) return;
       const w = windowInfo();
-      const play = document.getElementById("pm-replay-play");
-      const rate = document.getElementById("pm-replay-rate");
-      const scrub = document.getElementById("pm-replay-scrub");
-      const label = document.getElementById("pm-replay-label");
-      if (play) play.textContent = scrubPlaying ? "PAUSE" : "PLAY";
-      if (rate) rate.textContent = scrubRate + "×";
-      if (scrub && w.t1 > w.t0) {
+      const { play, rate, scrub, label, prev: prevFrame, next: nextFrame, picker, sheet, cancel, last } = dockEls();
+      put(play, "textContent", scrubPlaying ? "PAUSE" : "PLAY");
+      put(rate, "textContent", scrubRate + "×");
+      // A finger on the slider owns its value until the coalesced apply lands.
+      if (scrub && w.t1 > w.t0 && scrubInputU === null) {
         const u = (scrubT - w.t0) / (w.t1 - w.t0);
-        scrub.value = String(Math.round(Math.max(0, Math.min(1, u)) * 1000));
+        put(scrub, "value", String(Math.round(Math.max(0, Math.min(1, u)) * 1000)));
       }
-      if (label) label.textContent = scrubT.toFixed(3) + "s";
-      const prevFrame = document.getElementById("pm-replay-prev"), nextFrame = document.getElementById("pm-replay-next");
-      if (prevFrame) prevFrame.disabled = sheetBusy || adjacentFrame(scrubT, -1) === null;
-      if (nextFrame) nextFrame.disabled = sheetBusy || adjacentFrame(scrubT, 1) === null;
-      const picker = document.getElementById("pm-replay-tag"), sheet = document.getElementById("pm-replay-sheet");
+      put(label, "textContent", scrubT.toFixed(3) + "s");
+      put(prevFrame, "disabled", sheetBusy || adjacentFrame(scrubT, -1) === null);
+      put(nextFrame, "disabled", sheetBusy || adjacentFrame(scrubT, 1) === null);
       if (picker && !sheetBusy) {
-        const visible = tags.map((tag, i) => [i, tag]).filter(([, tag]) => tag.t >= w.t0 && tag.t <= w.t1);
-        const key = JSON.stringify(visible.map(([i, tag]) => [i, tag.kind, tag.t]));
+        // The tag list changes only on pushTag or a moved window: no per-frame stringify.
+        const key = tagsRev + "|" + tags.length + "|" + w.t0 + "|" + w.t1;
         if (picker !== tagPicker || key !== tagOptionsKey) {
+          const visible = tags.map((tag, i) => [i, tag]).filter(([, tag]) => tag.t >= w.t0 && tag.t <= w.t1);
           const selected = picker.value; picker.replaceChildren();
           visible.forEach(([i, tag]) => {
             const option = document.createElement("option"); option.value = String(i); option.textContent = tag.kind + " · " + tag.t.toFixed(1) + "s"; picker.appendChild(option); });
@@ -561,10 +586,13 @@ const ReplayBuf = (function () {
           tagPicker = picker; tagOptionsKey = key;
         }
       }
-      const cancel = document.getElementById("pm-replay-sheet-cancel"); if (cancel) cancel.hidden = !sheetBusy;
-      if (picker) picker.disabled = sheetBusy;
-      if (sheet) { sheet.disabled = sheetBusy || !allowed() || !G.paused || !picker || !picker.children.length || w.t1 - w.t0 < 2 / HZ; sheet.textContent = sheetBusy ? "CAPTURING…" : "CONTACT SHEET PNG"; }
-      for (const id of ["pm-replay-play", "pm-replay-last", "pm-replay-rate", "pm-replay-scrub"]) { const el = document.getElementById(id); if (el) el.disabled = sheetBusy; }
+      put(cancel, "hidden", !sheetBusy);
+      put(picker, "disabled", sheetBusy);
+      if (sheet) {
+        put(sheet, "disabled", sheetBusy || !allowed() || !G.paused || !picker || !picker.children.length || w.t1 - w.t0 < 2 / HZ);
+        put(sheet, "textContent", sheetBusy ? "CAPTURING…" : "CONTACT SHEET PNG");
+      }
+      for (const el of [play, last, rate, scrub]) put(el, "disabled", sheetBusy);
     }
     function refreshButton() {
       if (!scrubbing) discardTimeline(G.raceT);

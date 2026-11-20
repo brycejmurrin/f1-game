@@ -19,6 +19,11 @@ if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) Gfx
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
 const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
+// The best-time star counts only laps of the circuit's CURRENT layout: a lap
+// saved before a layout revision (Kyalami's direction flip, revision 2) stays
+// stored but is a lap of a different circuit, so it is not shown as the record.
+const liveBoard = (t) => typeof Ghost === "undefined" ? ttBoard(t.id)
+  : ttBoard(t.id).filter((e) => Ghost.layoutRevision(e.context) === (t.revision || 1));
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -625,10 +630,7 @@ function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
   for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
-  // A divider introduces the RUN of tiles that follows it (Tracks.LIST interleaves
-  // the groups, so one group owns several dividers): show it only while a tile in
-  // ITS run survives. Testing the whole group left every SEASON divider standing
-  // as an orphan whenever any season circuit matched ("spa" also finds Spain).
+  // A divider shows while ITS run of tiles, not its group, has a match ("spa" finds Spain).
   for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
     let live = false;
     for (let el = head.nextElementSibling; el && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
@@ -638,6 +640,9 @@ function applyTrackSearch(value) {
   }
   const empty = document.getElementById("sel-track-empty");
   if (empty) empty.hidden = rows.some((row) => !row.hidden);
+  // A hidden active circuit still raced (#5889): take the first match.
+  const on = rows.find((r) => r.classList.contains("active"));
+  if (trackQuery && (!on || on.hidden)) rows.find((r) => !r.hidden)?.click();
   ScrollFadeRefresh();
 }
 
@@ -955,7 +960,7 @@ function buildSelect(opts) {
     // Tiles are cached per roster signature (#4671, re-landed): a re-open re-attaches the same
     // nodes and flips .active/aria-pressed only, no flag SVG re-parse per tile.
     const sig = [+ttc, +cues, calIds ? Array.from(calIds).join(",") : "-", shown.map((i) => {
-      const t = Tracks.LIST[i], bd = ttc ? ttBoard(t.id) : [];
+      const t = Tracks.LIST[i], bd = ttc ? liveBoard(t) : [];
       return [i, t.id, t.name, t.country, +!!t.night, +!!t.street, +!!t.custom, +favs.includes(t.id), bd.length ? bd[0].t : "-"].join(":");
     }).join("|")].join("#");
     if (tileCache.sig === sig && tileCache.rows) {
@@ -979,7 +984,7 @@ function buildSelect(opts) {
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
       if (ttc) {
-        const board = ttBoard(t.id);
+        const board = liveBoard(t);
         const rec = board.length ? board[0].t : Infinity;
         const recEl = document.createElement("span");
         recEl.className = "track-row-rec"; recEl.title = "Best across setups and conditions";
@@ -1231,6 +1236,14 @@ function previewMapsCached(t) {
 function previewPathReady(t) {
   return !!(t && !t._metaOnly && t.path && t.path.pts && t.path.pts.length);
 }
+// Hydrate a meta stub, then rerun fn on the same pick. The catch keeps a failed
+// load off index.html's "Promise rejection" overlay.
+function whenCircuit(t, fn) {
+  if (previewPathReady(t) || !G.ensureCircuit) return;
+  const idx = G.trackIdx;
+  G.ensureCircuit(idx).then(() => { if (G.trackIdx === idx && previewPathReady(Tracks.LIST[idx])) fn(); })
+    .catch((e) => Log.warn("track", "could not load circuit " + idx + ": " + ((e && e.message) || e)));
+}
 function fillPreviewMeta(t, crns, dir, elev, dz) {
   const turns = crns && crns.length;
   const km = t.lengthKm || 0;
@@ -1367,16 +1380,7 @@ function updateTrackPreview() {
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
   // Meta stubs have no path — hydrate LAZY_CIRCUIT then redraw (caption paints now).
-  if (t._metaOnly || !(t.path && t.path.pts && t.path.pts.length)) {
-    if (G.ensureCircuit) {
-      const idx = G.trackIdx;
-      // ensureCircuit rejects when the circuit payload fails to load; unhandled,
-      // index.html paints that as a full-screen "Promise rejection" overlay.
-      G.ensureCircuit(idx).then(() => {
-        if (G.trackIdx === idx) updateTrackPreview();
-      }).catch((e) => Log.warn("track", "preview could not load circuit " + idx + ": " + ((e && e.message) || e)));
-    }
-  }
+  whenCircuit(t, updateTrackPreview);
   // Caption ON the still: flag, name, grand prix. No TrackMaps — never hitch.
   const flagEl = document.getElementById("sel-preview-flag");
   if (flagEl) {
@@ -1427,7 +1431,7 @@ function updateTrackPreview() {
       ? "Final standings · " + SeasonCal.rounds() + " rounds"
       : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
   } else {
-    const board = ttBoard(t.id);
+    const board = liveBoard(t);
     const rec = board.length ? board[0].t : Infinity;
     els.selPreviewRec.textContent = isFinite(rec) ? "Best across setups  ★ " + fmtTime(rec)
       : ttChrome() ? "No time set" : "";
@@ -1471,11 +1475,11 @@ function openTrackDetail() {
   if (!t) return;
   const modal = document.getElementById("track-detail");
   if (!modal) return;
+  // A meta stub reads "0 turns", blank map: repaint when it lands (#5890).
+  whenCircuit(t, () => { if (!modal.hidden) openTrackDetail(); });
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
-  // The canvas labels are part of the modal's accessible reading order. Keep
-  // them tied to the selected circuit rather than making every map sound like
-  // the same generic diagram when a player moves between tracks.
+  // Canvas labels name this circuit, so each map reads distinctly to a screen reader.
   const mapCanvas = document.getElementById("track-detail-canvas");
   if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
   const elevCanvas = document.getElementById("track-detail-elev");
@@ -1523,9 +1527,8 @@ function openTrackDetail() {
     paintFav();
   }
 
-  // Legend is built once (like FAVOURITE) so the shell does not pay five
-  // extra nodes. Fast/medium/slow/hairpin reuse tdc-* colour; Sector is the
-  // grey S2 stroke that the 9px canvas key never named.
+  // Legend built once (like FAVOURITE), not in the shell. Fast/medium/slow/hairpin
+  // reuse tdc-* colour; Sector is the grey S2 stroke the canvas key never named.
   const wrap = document.getElementById("track-detail-canvas-wrap");
   let legend = document.getElementById("track-detail-legend");
   if (!legend && wrap) {

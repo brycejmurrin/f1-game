@@ -710,10 +710,10 @@ const GLXBackend = (function () {
         try {
           var _onVis = function () {
             if (document.hidden) return;
-            document.removeEventListener("visibilitychange", _onVis);
+            document.removeEventListener("visibilitychange", _onVis); canvas.__glxVisReload = false;
             try { location.reload(); } catch (_) { /* harness */ }
           };
-          document.addEventListener("visibilitychange", _onVis);
+          document.addEventListener("visibilitychange", _onVis); canvas.__glxVisReload = true;   // restore defers to it (#5699 row 16)
         } catch (_) { /* no document events: the restore handler below is the remaining path */ }
         return;
       }
@@ -744,8 +744,8 @@ const GLXBackend = (function () {
     }, false);
     // Restore obeys the same two-reload budget; storage failure must not skip reload.
     canvas.addEventListener("webglcontextrestored", function () {
-      var n = GfxEscalation.reloadCount();
-      if (n > 2) return;
+      if (document.hidden && canvas.__glxVisReload) return;   // the hidden loss's visibility reload covers it (#5699 row 16)
+      var n = GfxEscalation.reloadCount(); if (n > 2) return;
       if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
@@ -1268,7 +1268,7 @@ const GLXBackend = (function () {
   function freeTexture(t) {
     if (!t) return;
     _texForget(t);
-    if (ctxGone()) return;   // driver already dropped the unit; deleteTexture would be INVALID_OPERATION
+    if (ctxGone()) return;   // a lost context ignores the call (WebGL: default return, no error); skip it
     gl.deleteTexture(t);
   }
 
@@ -1817,7 +1817,7 @@ const GLXBackend = (function () {
     // texture image unit — GLES 3.0 §2.11.7 makes that an INVALID_OPERATION at the
     // next draw, not a link error, so the whole lit pass would draw nothing and
     // the world would vanish under sky + post. Reachable: glx/shadow.js allocates
-    // the blocker as R16F, which needs EXT_color_buffer_float, so a device without
+    // the blocker as R32F, which needs EXT_color_buffer_float, so a device without
     // it fails checkFramebufferStatus and leaves pcssEnabled false forever. The
     // neighbouring uLampShadowMap comment makes this argument correctly for the
     // SAME sampler type; the blocker was the one case it did not cover. Hoisted

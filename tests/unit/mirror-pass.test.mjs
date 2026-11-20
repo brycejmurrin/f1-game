@@ -430,3 +430,39 @@ test("GLX releaseMirror deletes the mirror FBO, texture and depth, is idempotent
   assert.deepEqual([h.count("createTexture"), h.count("createFramebuffer"), h.count("createRenderbuffer")], [1, 1, 1]);
   assert.equal(h.GLX.mirrorState().w, 256);
 });
+
+test("GLX mirror target caps TEXTURE_MAX_LEVEL at the last level generateMipmap writes, per allocation (#4272 item 8)", () => {
+  const h = bootGlx();
+  // The mock mints enums that can collide, so compare the mirror texture's WHOLE
+  // texParameteri span (its level-0 texImage2D up to the unbind) as [pname, value]
+  // pairs built from the mock's own constants, rather than filtering on one pname.
+  const g = h.gl;
+  const span = (w, ht) => {
+    const out = [];
+    h.calls.forEach(([k, a], i) => {
+      if (k !== "texImage2D" || a[1] !== 0 || a[3] !== w || a[4] !== ht) return;
+      const ps = [];
+      for (let j = i + 1; j < h.calls.length && h.calls[j][0] === "texParameteri"; j++) ps.push(h.calls[j][1].slice(1));
+      out.push([a[3], a[4], ps]);
+    });
+    return out;
+  };
+  const want = (w, ht, max) => [[w, ht, [[g.TEXTURE_MIN_FILTER, g.LINEAR_MIPMAP_LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR],
+    [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE], [g.TEXTURE_MAX_LEVEL, max]]]];
+  h.reset();
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true);
+  h.GLX.mirrorEnd();
+  assert.deepEqual(span(256, 128), want(256, 128, 8), "256x128: levels 0..8 (256 → 1 px on the long side)");
+  h.reset();
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true);
+  h.GLX.mirrorEnd();
+  assert.deepEqual(span(256, 128), [], "a same-size pass keeps the target and sets nothing");
+  h.reset();
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 100, 300), true);
+  h.GLX.mirrorEnd();
+  assert.deepEqual(span(100, 300), want(100, 300, 8), "a re-allocation re-caps from the new long side (300 → floor(log2) = 8)");
+  h.reset();
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 90, 40), true);
+  h.GLX.mirrorEnd();
+  assert.deepEqual(span(90, 40), want(90, 40, 6), "90x40: levels 0..6");
+});

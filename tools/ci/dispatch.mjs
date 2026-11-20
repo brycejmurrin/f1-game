@@ -26,7 +26,9 @@
 //   429 with Retry-After, 30 fires/h per task, no idempotency key) and https://code.claude.com/docs/en/routines
 //   (read 2026-11-03: the <routine-fire-payload> wrapper, skills committed to the repo load in the fired session).
 // The claim comment (`dispatch: launched claude:<title> for #<n> at <iso> as <session id>`) is posted ONLY after a 200,
-// so a refused fire leaves no phantom claim; a non-200 prints `= fire failed <status>` and posts nothing. Without
+// so a refused fire leaves no phantom claim; a non-200 prints `= fire failed <status>` and posts nothing. A 200 without a
+// parsable session id still started a worker: it is claimed without ` as <session id>` (so it counts against the caps)
+// and gets no adoption comment. Without
 // WORKER_FIRE_URL / WORKER_FIRE_TOKEN, --apply still writes labels and the Board and prints `= fire skipped: …` per launch.
 // Without `--fire`, --apply prints `LAUNCH <address>` lines and fires nothing (the 24 h plan-only soak, plan §7 Wave 1A).
 //
@@ -638,7 +640,8 @@ export async function applyPlan(plan, { api = githubApi, config, log = console.l
     if (mine) post(`issues/comments/${mine.id}`, { body: plan.board }, "PATCH"); else post(`issues/${plan.boardIssue}/comments`, { body: plan.board });
     writes++;
   } else log(`= board: no open Board issue (#${config.boardIssue || "?"}) — the Board comment was not written`);
-  // The claim comment is posted ONLY after the fire returned 200 with a session id: a refused fire leaves no claim.
+  // The claim comment is posted ONLY after the fire returned 200: a refused fire leaves no claim; a 200 without a session
+  // id started a worker all the same, so it is claimed (no session named) and counted, but not adopted.
   for (const l of plan.launches) {
     const why = launchRecheck(l, { api, now });
     if (why) { log(`= launch skipped for ${l.kind} #${l.number}: ${why}`); continue; }
@@ -646,15 +649,15 @@ export async function applyPlan(plan, { api = githubApi, config, log = console.l
     if (!fire) { log("= fire skipped: --fire not given"); continue; }
     const r = await fireWorker(l.address, { env, fetchImpl });
     if (r.skipped) { log(`= fire skipped: ${r.skipped}`); continue; }
-    if (r.status !== 200 || !r.session) { log(`= fire failed ${r.status}${r.error ? ` ${r.error}` : ""}${r.retryAfter ? ` (retry-after ${r.retryAfter}s)` : ""}`); continue; }
+    if (r.status !== 200) { log(`= fire failed ${r.status}${r.error ? ` ${r.error}` : ""}${r.retryAfter ? ` (retry-after ${r.retryAfter}s)` : ""}`); continue; }
     fired++;
     const body = claimComment(l, now, r.session);
     post(`issues/${l.on}/comments`, { body }); writes++;
-    log(`= launched ${l.address} as ${r.session}${r.url ? ` ${r.url}` : ""}`);
+    log(r.session ? `= launched ${l.address} as ${r.session}${r.url ? ` ${r.url}` : ""}` : `= launched ${l.address}: 200 without a claude_code_session_id — claimed without a session id`);
     if (l.kind === "continue") {   // adopt for the worker: its label DELETE is classifier-denied
       const d = api(`issues/${l.on}/labels/needs-owner`, { method: "DELETE" });
       log(d.error ? `dispatch: needs-owner not removed from #${l.on}: ${d.error}` : `= needs-owner removed from #${l.on}`);
-      post(`issues/${l.on}/comments`, { body: `adopts PR #${l.on} — claude:${r.session} (posted by the dispatcher when it launched the takeover)` }); writes++;
+      if (r.session) { post(`issues/${l.on}/comments`, { body: `adopts PR #${l.on} — claude:${r.session} (posted by the dispatcher when it launched the takeover)` }); writes++; }
     }
   }
   return { writes, fired };
@@ -677,7 +680,7 @@ const USAGE = `usage: node tools/ci/dispatch.mjs --plan [--json] [--now <iso>] [
   --apply  writes labels, the Board comment, needs-decision digests and nudges, then one LAUNCH <address> line per launch
            (ISSUE <n> | CONTINUE PR <n> | DEPLOY-RED <run id>), each re-checked right before (merged/closed/foreign push)
   --fire   with --apply: POST each address to \$WORKER_FIRE_URL (Bearer \$WORKER_FIRE_TOKEN, anthropic-version ${ANTHROPIC_VERSION});
-           on 200 the claim comment names the returned session; non-200 prints \`= fire failed <status>\` and posts nothing;
+           on 200 the claim comment names the returned session (none when the 200 carried none); non-200 prints \`= fire failed <status>\` and posts nothing;
            unset env prints \`= fire skipped: WORKER_FIRE_URL unset\`
   .github/workflows/dispatch.yml runs --apply --fire hourly, on issue/comment events and after CI or a Pages train (header of this file).`;
 

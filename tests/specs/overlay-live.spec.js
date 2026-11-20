@@ -19,8 +19,8 @@ const LANDSCAPE = { width: 844, height: 390 };
 const towerOf = (overlay) => overlay.evaluate(() => Array.from(document.querySelectorAll(".ov-row:not([hidden])"))
   .map((r) => ({ pos: Number(r.querySelector(".ov-pos").textContent), code: r.querySelector(".ov-code").textContent }))
   .sort((a, b) => a.pos - b.pos).map((r) => r.pos + ":" + r.code).join(" "));
-// The field in race order, clipped to the tower's 20 rows (OverlayRender.MAX_ROWS).
-const fieldOf = (page) => page.evaluate(() => window.__apex.field().positions.slice(0, 20).map((r) => r.pos + ":" + r.code).join(" "));
+// The field in race order, clipped to the tower's 22 rows (OverlayRender.MAX_ROWS).
+const fieldOf = (page) => page.evaluate(() => window.__apex.field().positions.slice(0, 22).map((r) => r.pos + ":" + r.code).join(" "));
 
 test.describe("stream overlay — live same-browser feed", () => {
   test.use({ viewport: LANDSCAPE });

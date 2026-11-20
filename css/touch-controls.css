@@ -20,9 +20,9 @@
    home indicator. The controls that actually need to grow live in `.dock`,
    which is a static flex child with no anchors of its own; that gets `zoom`
    further down, which scales its --tap/--hold AND its hard-coded button labels
-   in one declaration. This ladder is what the portrait/desktop fallback uses,
-   and portrait racing is blocked outright (#rotate-device), so it is rarely on
-   screen during a race at all. */
+   in one declaration. This ladder is what the portrait/desktop fallback uses:
+   RACE IN PORTRAIT on the rotate gate races on it, and the portrait block
+   below sizes it from BUTTON SIZE (#5061). */
 :root {
   --btn: 76px;                                        /* action button diameter */
   /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
@@ -115,8 +115,8 @@
    black cockpit that is most of what sits behind them, a 0.42 fill just reads
    as a darker flat colour, which is why they looked like the SOLID pair next to
    OT and AERO rather than the transparent one. */
-#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.85); }
-#btn-throttle:active { background: var(--gas-lit); opacity: 1; }
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); --idle: rgba(0, 170, 70, 0.85); background: var(--idle); }
+#btn-throttle[data-slid="on"], #btn-throttle:active { background: var(--gas-lit); opacity: 1; }
 /* .on is the LATCH (js/input/input.js paintLatch). Same fill as :active and its
    own rule rather than a grouped selector, because :active follows the THUMB and
    the latch outlives it — both have to read as pressed, and ui-journey-race.test
@@ -125,8 +125,13 @@
    BOOST, OT and AERO already use for "engaged". */
 #btn-throttle.on { background: var(--gas-lit); opacity: 1;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent); }
-#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.85); }
-#btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); --idle: rgba(180, 35, 35, 0.85); background: var(--idle); }
+#btn-brake[data-slid="on"], #btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
+/* SLIDE HAND-OFF (js/input/hold-buttons.js, #5575). :active stays with the control
+   the thumb LANDED on, so after a slide onto the sibling the wrong one lit.
+   data-slid="on" is the pressed look for the control that holds the thumb now
+   (it shares the :active rules); "off" puts the one it left back to idle. */
+#btn-throttle[data-slid="off"]:active, #btn-brake[data-slid="off"]:active { background: var(--idle); opacity: var(--btn-a); box-shadow: none; }
 
 /* BOOST IS THE BATTERY, so it is GREEN and its colour IS the charge. `--e` is
    written each frame by hud.js from player.energy (0..1) and mixed between a
@@ -207,9 +212,9 @@
    An outside ring costs no layout (box-shadow draws outside the border box and
    does not reflow the dock) and reads at a glance in peripheral vision, which
    is all a driver has to spare. */
-.touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+.touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
 @media (prefers-reduced-transparency: reduce) {
-  .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+  .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
 }
 
 /* WHERE THE FINGER LANDED, in TOUCH mode. Drag-to-steer is an invisible
@@ -310,8 +315,9 @@ body[data-dock-edit] .dock:active { cursor: grabbing; }
 /* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
    so the left thumb steers like a d-pad and the right thumb stays free for the
    action buttons (BRAKE/BOOST/OT). */
-.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: var(--steer); height: var(--steer); }
-.steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+.steerbtn { font-size: 22px; --idle: rgba(20, 20, 30, 0.55); background: var(--idle); width: var(--steer); height: var(--steer); }
+.steerbtn[data-slid="on"], .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+.steerbtn[data-slid="off"]:active { background: var(--idle); box-shadow: none; }
 #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
 #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(16px + var(--sab)); }
 
@@ -333,8 +339,8 @@ body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab));
    landscape failure. It was read that way once, and the whole diagnosis it
    produced was wrong; the real landscape budget is the sum in the buttons-mode
    block at the bottom of this file. In portrait 428px fits with 239px to spare
-   on the shortest screen the suite tests, and racing in portrait is blocked
-   outright (#rotate-device) besides. */
+   on the shortest screen the suite tests; BUTTON SIZE grows it up to --btn-room
+   (the portrait block below). */
 /* POSITION ONLY, NEVER A FILL. `body.steer-buttons #btn-throttle` is (1,1,1)
    and `#btn-throttle:active` is (1,1,0), so a background restated here beats
    the pressed colour and the pedal stops lighting up under the thumb — in
@@ -356,7 +362,26 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* DIVIDED BY --hud-z: .hud-bottom rides `zoom: var(--hud-z)` (css/hud.css), so
      a bare inset here was multiplied by HUD SIZE — 21px of home indicator
      counted as 42 at 200%. Same compensation as every anchor in the zoom list. */
-  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab) / var(--hud-z)); }
+  /* THE STACK STANDS ON THE STEER ROW (16 + --steer + 12, in painted px). The literal 112 was that row at
+     84 px, but it rode the zoom: under HUD SIZE 100 % the stack sank into the arrows (360x740 @70 %:
+     the AERO chip on GAS). max() keeps the zoomed 112 at 100 % and above, where nothing moves. */
+  body.steer-buttons .hud-bottom { bottom: calc(max(112px, (28px + var(--steer)) / var(--hud-z)) + var(--sab) / var(--hud-z)); }
+}
+/* BUTTON SIZE IN A PORTRAIT RACE (#5061). RACE IN PORTRAIT is a shipped path, and every --hud-btn-scale
+   rule sat in the landscape block below, so the ladder painted 76 / 84 px at any setting. The ladder
+   follows the slider RELATIVE TO THE TOUCH DEFAULT (--hud-btn-mult): an untouched slider keeps today's
+   sizes, 143 % paints 76 * 1.43 / 1.25. Declared on the buttons and the cluster that stands on them, not
+   on :root: photo mode reads --steer too. --btn-room is the px one ladder px may take: two arrows and a
+   pedal across the width, the five-high column under the top band. Never under the 44 px rung.
+   js/ui/hud.js (capPortrait) keeps the gear cluster and TYRES between the columns as they grow. */
+@media (orientation: portrait) {
+  .touchbtn, .hud-bottom {
+    --btn-k: calc(var(--hud-btn-scale) / var(--hud-btn-mult, 1));
+    --btn-room: min(calc((100vw - var(--sal) - var(--sar) - 54px) / 244), calc((100vh - var(--sat) - var(--sab) - 264px) / 380));
+    --btn: clamp(44px, calc(76px * var(--btn-k)), max(76px, calc(var(--btn-room) * 76)));
+    --steer: clamp(calc(44px * 84 / 76), calc(84px * var(--btn-k)), max(84px, calc(var(--btn-room) * 84)));
+    --btn-pitch: calc(var(--btn) + var(--btn-gap));
+  }
 }
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
@@ -797,6 +822,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   :root {
     --btn: var(--touch-tablet-btn);
     --steer: var(--touch-tablet-steer);
+  }
+  .touchbtn, .hud-bottom {
+    --btn: clamp(44px, calc(var(--touch-tablet-btn) * var(--btn-k)), max(var(--touch-tablet-btn), calc(var(--btn-room) * 76)));
+    --steer: clamp(calc(44px * 84 / 76), calc(var(--touch-tablet-steer) * var(--btn-k)), max(var(--touch-tablet-steer), calc(var(--btn-room) * 84)));
   }
   body.steer-buttons .hud-bottom {
     bottom: calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z));

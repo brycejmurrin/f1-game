@@ -82,4 +82,28 @@ test('contract preview preserves authored works research across era bans without
   const p = C.offerPreview(0); assert.equal(vm.runInContext('Parts.legality()', ctx), legal); assert.equal(vm.runInContext('Parts.legalityKey()', ctx), key);
   ctx.preview = p; const rawEngine = vm.runInContext('Parts.FACTORY_PRESETS.mclaren.engine', ctx); assert.equal(p.fitted.engine, rawEngine, 'banned works engine is retained as researched ownership');
   C.acceptOffer(0, p); ctx.fitted = C.data().fitted; assert.deepEqual(copy(p.resolvedFitted), copy(vm.runInContext("Parts.resolveSetup(fitted, Teams.LIST.find(t=>t.id==='mclaren')).setup", ctx))); assert.equal(C.data().fitted.engine, rawEngine); assert.equal(vm.runInContext('Parts.legality()', ctx), legal);
+});// #5657 row 1: CLEAR LOGO stored null and identityValue read a held null as absent, so the
+// GP logo (the fallback loadCustomLogo passes) came back at the next sync or reload.
+const LOGO = 'data:image/png;base64,AAAA';
+test('MY TEAM CLEAR LOGO survives a save and reload with a GP logo present (#5657)', () => {
+  const { C, store } = careerHarness();
+  store.set('customLogo', LOGO); C.start({ flavour: 'myteam', slot: 0, seed: 7 }); C.engage(true);
+  assert.equal(C.identityValue('customLogo', store.get('customLogo', null)), LOGO, 'capture() copies the GP logo at the start');
+  assert.equal(C.setIdentityValue('customLogo', null), true);
+  assert.equal(C.identityValue('customLogo', store.get('customLogo', null)), null, 'cleared, not the GP logo');
+  C.load(); C.engage(true);
+  assert.equal(C.identityValue('customLogo', store.get('customLogo', null)), null, 'still cleared after the reload');
+  assert.equal(store.get('customLogo', null), LOGO, 'the GP logo itself is untouched');
+  C.engage(false);
+  assert.equal(C.identityValue('customLogo', store.get('customLogo', null)), LOGO, 'outside the career the GP logo applies');
+});
+test('old saves read the same identity: a held null logo stays none, a save without identity adopts once (#5657)', () => {
+  const { C, store } = careerHarness(); C.start({ flavour: 'myteam', slot: 0, seed: 3 });
+  // Fixture: the stored shape is unchanged by this fix — a pre-#5657 save that captured no logo.
+  const held = Object.assign(copy(C.data()), { myTeamIdentity: { customTeam: null, customLogo: null, 'livery.custom.custom': null, 'livery.custom': null } });
+  store.set('career.myteam.0', held); store.set('customLogo', LOGO); C.load(); C.engage(true);
+  assert.equal(C.identityValue('customLogo', store.get('customLogo', null)), null, 'a held null is this career\'s "no logo", never the GP one');
+  assert.equal(C.identityValue('customTeam', 'GP TEAM'), 'GP TEAM', 'keys with no empty value still fall back on null');
+  const legacy = copy(held); delete legacy.myTeamIdentity; store.set('career.myteam.0', legacy); C.load(); C.engage(true);
+  assert.equal(C.identityValue('customLogo', null), LOGO, 'a save that never held an identity adopts the GP logo once');
 });

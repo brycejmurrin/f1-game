@@ -18,7 +18,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` was never loaded and was deleted 2026-11-10) |
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
 | Pitch curve | `baseRate()` in `engine.js` (`RATE_IDLE`/`RATE_SPAN` scaled by the tune's `idle`/`revRange`, rev bent by `curve`), then × boost pitch, `rateTrim`, `pitch` and `revFlare` |
-| Pitch, per gear | Sample core: no gear term, one rev = one note in every gear (synth fallback: per-gear `gIdle`/`gSpan`). `rev` = `rpmFor(gear, speed)` normalised, 1 at the top of each gear; `GameAudio.rate()` reads it |
+| Pitch, per gear | Sample core: no gear term, one rev = one note in every gear (the synth fallback follows rev alone too: `SYNTH_IDLE_HZ` + rev × `SYNTH_SPAN_HZ`, `js/audio/engine.js`). `rev` = `rpmFor(gear, speed)` normalised, 1 at the top of each gear; `GameAudio.rate()` reads it |
 | Gravel | Sine at the crank rate into `engGain.gain`; depth falls with rev, × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
 | Rev limiter | Square LFO into `engGain.gain` near the rev ceiling, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
 | Limiter, top gear | The cut is a short burst fading to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
@@ -105,7 +105,7 @@ revRange, curve, pitch })` (ranges: `__apex.audio().range`) covers a wide spread
    `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. The limiter
    fade in top gear is in the Layers table. Read
    `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:
-   equal = pinned by design. The Node VM has no AudioContext, so `rate()` is 0 there. To
+   equal = pinned by design. `GameAudio` is not loaded in the Node VM (`apex_eval {vm:true}`, `apex-eval --vm`): these reads are browser-only. To
    widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
 
 ## Gear-shift cue silent
@@ -120,7 +120,7 @@ for it. The remaining gate is the SHIFT trim (`#as-t-shift`; `0` =
 silent gearbox; the rev-cut duck is separate and survives it).
 
 Read it: `GameAudio.shiftState()` → `{ fired, peak }` (not in `__apex.audio()`;
-call it via `apex_eval`/DevTools). `fired` not rising on an upshift = the
+call it via `apex_eval` without `vm:true`, or DevTools). `fired` not rising on an upshift = the
 trigger never reached `shift()` (check `soundOn`, `c.local`, gear mode);
 `fired` rising with `peak: 0` = SHIFT trim at 0; both fine = bus/mute, see
 above. No browser needed for the unit check:

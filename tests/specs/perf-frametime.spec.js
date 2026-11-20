@@ -17,8 +17,10 @@ import {
   STRICT,
   compareToBaseline,
   envOf,
+  readPageEnv,
   writeArtifact,
   loadBaseline,
+  runnerCpu,
 } from "../helpers/perf-frametime.mjs";
 import { blessing } from "../helpers/baseline-blessing.mjs";
 
@@ -161,32 +163,13 @@ test.describe("perf frametime — SwiftShader race regression", () => {
       heapTotalMB: prep.snap.heapTotalMB,
     };
 
-    const env = await page.evaluate(() => {
-      const safe = (fn) => { try { return fn(); } catch (_) { return null; } };
-      const state = safe(() => (typeof gfx !== "undefined" && typeof gfx.backendState === "function" ? gfx.backendState() : null));
-      // The adapter from a throwaway canvas: a GL sniff on #game would bind it (__apex.diag's trap).
-      const adapter = safe(() => {
-        const gl = document.createElement("canvas").getContext("webgl2");
-        if (!gl) return null;
-        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-        const name = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-        const lose = gl.getExtension("WEBGL_lose_context");
-        if (lose) lose.loseContext();
-        return name;
-      });
-      return {
-        build: (document.querySelector('meta[name="apex-build"]') || {}).content || null,
-        sha: (document.querySelector('meta[name="apex-sha"]') || {}).content || null,
-        renderer: safe(() => (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend && RendererPicker.liveBackend()) || sessionStorage.getItem("apex26.gfxBound")),
-        api: state && typeof state.api === "string" ? state.api : null,
-        adapter,
-        userAgent: navigator.userAgent,
-        viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
-      };
-    });
+    const env = await page.evaluate(readPageEnv);
     env.browser = browser.browserType().name();
     env.browserVersion = browser.version();
+    env.cpu = runnerCpu();
     const compared = envOf(env);
+    // Logged on every run, green included, so the job log names the runner class it measured (#5903).
+    console.log(`[perf-frametime env] cpu=${compared.cpu} p50=${measured.p50} p95=${measured.p95} p99=${measured.p99}`);
 
     const payload = {
       at: new Date().toISOString(),

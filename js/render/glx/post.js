@@ -548,11 +548,17 @@ const GLXPost = (function () {
     const _canInvalidate = typeof gl.invalidateFramebuffer === "function";
     // DEFAULT-FRAMEBUFFER INVALIDATION IS OFF ON WEBKIT. Safari's WebGL maps the default
     // framebuffer onto an internal FBO, and invalidating it is the one GLX path TLX never
-    // takes. WebKit 280799 (Safari 18: first frame, then a black canvas; fixed 18.2) is
-    // the shape of the iPhone "GLX shows black" report. The cost is a DEPTH store hint
-    // (alpha:false already turns the COLOR invalidate into an ANGLE no-op). FBO targets
-    // keep theirs. Device A/B: patch WebGL2RenderingContext.prototype.invalidateFramebuffer
-    // from Web Inspector (docs/notes/PERF-HUNT-8-2026-10-30.md).
+    // takes. WebKit 280799 (Safari 18: first frame, then a black canvas; fixed 18.2,
+    // 286127@main) has the shape of the iPhone "GLX shows black" report, but the bug page
+    // never names the default framebuffer: its reporter invalidated after MSAA resolves
+    // ("commenting out InvalidateFramebuffer fixes it") and the fix reverts a generic path.
+    // So this guard is a partial hedge, not the cure: the MSAA-blit and sceneFBO-depth
+    // invalidates below still run on WebKit (an unfixed 18.0/18.1 still meets the
+    // trigger), and a fixed Safari gains nothing from it. Changing either is a device A/B
+    // (#5651 GLX-07). The cost is a DEPTH store hint (alpha:false already turns the COLOR
+    // invalidate into an ANGLE no-op). Device A/B: patch
+    // WebGL2RenderingContext.prototype.invalidateFramebuffer from Web Inspector
+    // (docs/notes/PERF-HUNT-8-2026-10-30.md).
     const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
     const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
     const _invFbo = _canInvalidate;
@@ -1221,6 +1227,9 @@ const GLXPost = (function () {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // The chain ends at the last level mirrorMips' generateMipmap writes
+      // (1 px on the long side), not GL's default 1000 (#4272 item 8).
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, Math.floor(Math.log2(Math.max(w, h))));
       gl.bindTexture(gl.TEXTURE_2D, null);
       mirDepthRB = gl.createRenderbuffer();
       gl.bindRenderbuffer(gl.RENDERBUFFER, mirDepthRB);

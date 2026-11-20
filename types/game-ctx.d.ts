@@ -946,6 +946,7 @@ declare const SettingsExport: GameModuleFactory;
 
 declare const SessionRecords: GameModuleFactory;
 declare const DrivingCoach: GameModuleFactory;
+declare const DrivingCoachBody: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
 
 declare const PlatformSession: GameModuleFactory;

@@ -244,14 +244,23 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
 
+test("nextAction: the land step is the MCP issue_write recipe, never a gh label write (PR #5809)", async () => {
+  const { nextAction } = await import("../../tools/ci/ready-gate.mjs");
+  const land = 'next: GitHub MCP issue_write  method=update  owner/repo=brycejmurrin/f1-game  issue_number=7  labels=<the live list from issue_read get_labels, plus "land">   (one label per call, skill steward references/labels.md)';
+  assert.deepEqual(nextAction("passed", 7), ["next: GitHub MCP update_pull_request  owner/repo=brycejmurrin/f1-game  pullNumber=7  draft:false", land]);
+  assert.deepEqual(nextAction("not-draft", 7), [`${land}   (already ready: flip nothing; add land only)`]);
+  assert.equal(nextAction("refused", 7), null);
+  assert.equal(nextAction("passed", 0), null);
+});
+
 test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label call, a refusal prints neither; nothing is flipped itself", async () => {
   const { main: ship, nextCalls } = await import("../../tools/ci/ship-pr.mjs");
   const out = [], seen = [];
-  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l) }), out.join("\n")]; };
+  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l), closing: () => ({ ok: true, lines: [] }) }), out.join("\n")]; };
   let [rc, text] = go(["--pr", "7"], 0);
   assert.equal(rc, 0);
   assert.deepEqual(seen.at(-1), ["--pr", "7"]);
-  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", 'issue_write  method=update  owner/repo=brycejmurrin/f1-game  issue_number=7  labels=<the live list from issue_read get_labels, plus "land">'];
   assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the receipt-age note are printed");
   [rc, text] = go(["--pr", "7"], 1);
   assert.equal(rc, 1);

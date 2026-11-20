@@ -50,10 +50,12 @@ const SERVER_VERSION = "1.19.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
-const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
+// APEX_BROWSER_LOCK points the browser lock at another file, so an in-process unit test that takes it never meets a
+// parallel test file's (or a live tool's) scratch/apex-browser.lock (#5787). Read per call: a test sets it after import.
+const lockPath = () => process.env.APEX_BROWSER_LOCK || path.join(ROOT, "scratch", "apex-browser.lock");
 // APEX_TEST_BG_STATE points the occupancy check at another registry, so a test
 // never rewrites the real artifacts/logs/test-bg.json under a live run (TS1).
-const TEST_BG_STATE = process.env.APEX_TEST_BG_STATE || path.join(ROOT, "artifacts", "logs", "test-bg.json");
+const testBgState = () => process.env.APEX_TEST_BG_STATE || path.join(ROOT, "artifacts", "logs", "test-bg.json");
 const CHROME_DAEMON_STATE = path.join(ROOT, "scratch", "probe-chrome-daemon.port");
 const ARTIFACTS_DIR = path.join(ROOT, "artifacts");
 const SCRATCH_DIR = path.join(ROOT, "scratch");
@@ -224,12 +226,12 @@ function playwrightLive() {
 }
 
 function testBgStatus() {
-  if (!fs.existsSync(TEST_BG_STATE)) {
+  if (!fs.existsSync(testBgState())) {
     return { recorded: false, running: [], browserRunning: [], runs: [] };
   }
   let state;
   try {
-    state = JSON.parse(fs.readFileSync(TEST_BG_STATE, "utf8"));
+    state = JSON.parse(fs.readFileSync(testBgState(), "utf8"));
   } catch {
     return { recorded: true, running: [], browserRunning: [], runs: [], error: "unreadable" };
   }
@@ -246,10 +248,10 @@ function testBgStatus() {
 }
 
 function lockInfo() {
-  if (!fs.existsSync(LOCK_PATH)) return { held: false };
+  if (!fs.existsSync(lockPath())) return { held: false };
   let raw;
   try {
-    raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
+    raw = JSON.parse(fs.readFileSync(lockPath(), "utf8"));
   } catch {
     return { held: true, stale: false, error: "unreadable" };
   }
@@ -261,8 +263,8 @@ function lockInfo() {
 
 function reapStaleLock() {
   const info = lockInfo();
-  if (info.stale && fs.existsSync(LOCK_PATH)) {
-    try { fs.unlinkSync(LOCK_PATH); } catch { /* ignore */ }
+  if (info.stale && fs.existsSync(lockPath())) {
+    try { fs.unlinkSync(lockPath()); } catch { /* ignore */ }
   }
 }
 
@@ -325,9 +327,9 @@ function occupancyRefuse() {
 export function acquireLock(tool) {
   const busy = occupancyRefuse();
   if (busy) return busy;
-  fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
+  fs.mkdirSync(path.dirname(lockPath()), { recursive: true });
   const payload = { pid: process.pid, since: Date.now(), tool };
-  try { fs.writeFileSync(LOCK_PATH, JSON.stringify(payload), { flag: "wx" }); }
+  try { fs.writeFileSync(lockPath(), JSON.stringify(payload), { flag: "wx" }); }
   catch (e) {
     if (e.code === "EEXIST") return refuse("lock_held", "another tool claimed the browser lock", "Retry after the owner exits.");
     throw e;
@@ -345,9 +347,9 @@ export function acquireLock(tool) {
 
 export function releaseLock() {
   try {
-    if (!fs.existsSync(LOCK_PATH)) return;
-    const raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
-    if (Number(raw.pid) === process.pid) fs.unlinkSync(LOCK_PATH);
+    if (!fs.existsSync(lockPath())) return;
+    const raw = JSON.parse(fs.readFileSync(lockPath(), "utf8"));
+    if (Number(raw.pid) === process.pid) fs.unlinkSync(lockPath());
   } catch { /* ignore */ }
 }
 
@@ -560,7 +562,7 @@ const CATALOG = [
   {
     name: "apex_eval",
     week: 2,
-    description: "Browser (lock first) — boot harness Chromium and evaluate one __apex expression; `backend` pins three|webgl2|webgpu (a `GLX.*` expr under the default answers for TLX); `vm: true` runs the same expr in the Node VM instead (no browser, no pixels, ~4 s). Local only, no --url. Skill: playwright-probe.",
+    description: "Browser (lock first; `vm: true` takes no lock) — boot harness Chromium and evaluate one __apex expression; `backend` pins three|webgl2|webgpu (a `GLX.*` expr under the default answers for TLX); `vm: true` runs the same expr in the Node VM instead (no browser, no lock, runs beside another browser tool, no pixels, ~4 s); `raw: true` prints arrays in full. Local only, no --url. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
@@ -744,7 +746,7 @@ const CATALOG = [
   {
     name: "apex_select_specs",
     week: 3,
-    description: "Tree — which SPECS a change needs, ranked and fit to the CI budget: since a git ref, or for files you name (a hypothetical edit, any tree). `floor` is AGENTS.md rule 3's ONE pre-push spec, or null with floorReason. Never starts tests. Skill: check-changes.",
+    description: "Tree — which SPECS a change needs, ranked and fit to the CI budget: since a git ref, or for files you name (a hypothetical edit, any tree). `floor` is the one cheapest routed spec (CI runs it; the local pre-push floor is AGENTS.md rule 3's tooling-fast --changed), or null with floorReason. Never starts tests. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2065,7 +2067,7 @@ function mockSuccess(name, argv, env = {}) {
   });
 }
 
-function statusNext(lock, playwright, loadavg) {
+export function statusNext(lock, playwright, loadavg) {
   const load = Array.isArray(loadavg) ? loadavg[0] : 0;
   if (lock?.held) {
     return {
@@ -2095,7 +2097,9 @@ function statusNext(lock, playwright, loadavg) {
     action: "ready",
     tool: "apex_shot_survey",
     reason: "lock free; occupancy clear",
-    hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
+    hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[]. Main session only: "
+      + "this server cannot see who calls it, and a subagent never starts a browser (AGENTS.md rule 10).",
+    subagentTool: "apex_eval {vm:true}",
   };
 }
 /** apex_help: the uncompacted description + inputSchema that tools/list shortens (see compactTool). */
@@ -2610,6 +2614,9 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   }
 
   const kind = toolKind(known);
+  // apex_eval {vm:true} boots the Node VM, never Chromium: no browser lock, no occupancy refusal (#5674), the same
+  // verdict mcp-browser-guard and chat-gateway give it. Its other args keep the browser gate (local only, no url).
+  const locks = kind === "browser" && !(name === "apex_eval" && args.vm === true);
   const gated = kind === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
   if (gated) return gated;
 
@@ -2626,7 +2633,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const env = extraEnv(name, args);
 
   if (args.dryRun) {
-    if (kind === "browser" && !mockMode()) {
+    if (locks && !mockMode()) {
       const busy = occupancyRefuse();
       if (busy) return busy;
     }
@@ -2652,6 +2659,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     return runSpawn(argv, { timeoutMs: HUD_TIMEOUT_MS(name, args), env, signal })
       .then((r) => (name === "apex_hud_mock" ? hudMockResult(r, args) : hudResult(name, r, args))).finally(releaseLock);
   }
+  if (kind === "browser" && !locks) return runSpawn(argv, { timeoutMs: browserTimeoutMs(name, args), env, signal });
   if (kind === "browser") {
     const took = acquireLock(name);
     if (took) return took;
@@ -2968,7 +2976,7 @@ export const ROUTES = [
   "apex-tools: local CLI wraps (apex_*); the tools/ CLIs do the work, this server pins safe flags. Map: docs/AGENT-SURFACE.md.",
   "VENDOR READS ONLY — Cursor agent list/status/transcript: apex_cursor_agents; Claude CLI auth and local sessions: apex_claude_agents. " +
     "Neither sends, launches or steers an agent; GitHub (PR body, labels, comments) is the bus.",
-  "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
+  "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the one cheapest routed spec; the local floor is tooling-fast --changed); " +
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; flyby framing: apex_frame_report; " +
     "one __apex expr without a browser: apex_eval {vm:true}; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; " +
     "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; offline viewer page: apex_viewer. " +

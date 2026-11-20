@@ -17,7 +17,7 @@ const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 const isGarageData = (f) => /^js\/garage\/|^js\/data\/garage-/.test(f);   // incl. the optional authored entrance motion
 const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
 const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
-// LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
+// LAZY_RACE_SESSION — pit / radio / coach / reliability (~380 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
 const RACE_SESSION_FILES = ApexRoster.LAZY_RACE_SESSION || [];
@@ -46,6 +46,7 @@ const RACE_SESSION_READY = {
   "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
+  "js/race/driving-coach.js": () => typeof DrivingCoachBody !== "undefined",   // the DrivingCoach façade creates it on its next call
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
 // idiom): a retry loads only the rest. The hook runs once, on the transition to complete.
@@ -134,7 +135,6 @@ function ensureCircuit(idx) {
   let p = _circuitLoads.get(def.id);
   if (!p) {
     p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
-      _circuitLoads.delete(def.id);
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
         return false;
@@ -152,7 +152,7 @@ function ensureCircuit(idx) {
         return false;
       }
       return Tracks.hydrate(raw);
-    });
+    }).finally(() => _circuitLoads.delete(def.id));
     _circuitLoads.set(def.id, p);
   }
   // Reject when hydrate/load fails so ensureScenery / startRace never build a
@@ -177,10 +177,8 @@ const SCENERY_DIR = ApexRoster.SCENERY_DIR;
 function sceneryResident(id) {
   return !!(window.TrackScenery && window.TrackScenery[id]);
 }
-// Memoised on the in-flight PROMISE (the ensureDataHub idiom below): several
-// callers ask for the same circuit before sceneryResident() goes true and
-// would each inject their own copy (28-58 KB, up to four times). Cleared on
-// settle so a dropped fetch retries.
+// Memoised on the in-flight PROMISE: callers asking before sceneryResident() goes true
+// would each inject a copy (28-58 KB, up to 4x). Cleared on settle so a drop retries.
 const _sceneryLoads = new Map();
 // Also wait for THIS circuit's baked models (Assets.modelsReady, capped at
 // 4 s): prop placement is synchronous, so a build that ran before the models
@@ -363,9 +361,7 @@ function ensureRealRace() {
   return realRaceLoad;
 }
 
-// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
-// inject the bundle twice, and the second tap has to await the first load
-// rather than call DataHub.open() while hub.js is still in flight.
+// Memoised on the PROMISE: a second DATA tap awaits the first load, never a 2nd inject or an early open().
 let dataHubLoad = null;
 const DATA_HUB_RETRY_MS = [400, 1200];
 function dataHubRetryDelay(attempt) {
@@ -373,20 +369,25 @@ function dataHubRetryDelay(attempt) {
   if (!ms) return Promise.resolve();
   return new Promise((r) => setTimeout(r, ms));
 }
-function ensureDataHub() {
-  if (dataHubLoad) return dataHubLoad;
+// #5764: STILL LOADING… at ScriptLoader's slow mark, to every tap; a stall is not retried.
+let dataHubSlow = [];   // the load's onSlow taps; true once it stalled
+function ensureDataHub(opts) {
+  const cb = opts && opts.onSlow;
+  if (dataHubLoad) { if (cb) { if (dataHubSlow === true) cb(); else dataHubSlow.push(cb); } return dataHubLoad; }
+  dataHubSlow = cb ? [cb] : [];
+  const markSlow = () => { const cbs = dataHubSlow; if (cbs !== true) { dataHubSlow = true; cbs.forEach((f) => f()); } };
   dataHubLoad = (async () => {
     const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) await dataHubRetryDelay(attempt);
       // WATCH & DRIVE launches RealRace: its engine lands with the hub, never after a tap.
       const [complete, realOk] = await Promise.all([loadBackendScripts(DATA_FILES, DATA_EDGES, {
-        strict: true, loaded: dataScriptsLoaded,
+        strict: true, loaded: dataScriptsLoaded, onSlow: markSlow,
         ready: (src) => DATA_READY[src] && DATA_READY[src](),
         cacheBust: attempt > 0 ? attempt : 0,
       }), ensureRealRace()]);
       if (!complete || !realOk) {
-        if (attempt < maxAttempts - 1) continue;
+        if (attempt < maxAttempts - 1 && dataHubSlow !== true) continue;
         Log.warn("data", "the data hub bundle did not load — DATA stays closed");
         dataHubLoad = null;
         return false;
@@ -404,12 +405,8 @@ function ensureDataHub() {
   return dataHubLoad;
 }
 
-// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
-// player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
-// wanted: js/agent/apex.js reads NetTransport / NetSession / NetSnapshot and 22
-// netLobby methods directly and drives the multiplayer specs, so tying the two
-// together keeps every test and dev session behaving exactly as before and
-// confines this change to players, who load neither.
+// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack: loaded by VS FRIEND and, at
+// boot, with the agent surface (js/agent/apex.js reads the net globals and drives the specs).
 const NET_FILES = ApexRoster.LAZY_NET;
 const NET_EDGES = ApexRoster.LAZY_NET_EDGES;
 let netLoad = null;
@@ -449,9 +446,7 @@ function ensureNet() {
     // A failed group may leave a binding in its temporal dead zone, where even
     // typeof throws: only probe the globals after a complete load.
     if (!complete || typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
-      // inject() resolves on error, so this is the only place a miss shows.
-      // Keep the stubs (the game stays playable solo) and null the memo so a
-      // second attempt can succeed rather than latching for the session.
+      // The only place a miss shows: keep the stubs (solo stays playable), null the memo to retry.
       Log.warn("net", "the multiplayer bundle did not load — VS FRIEND unavailable");
       netLoad = null;
       return false;
@@ -945,7 +940,7 @@ function ensureLightPresets() {
     if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }
     deps.applyLightTuneIfReady();
     return true;
-  });
+  }).catch(() => false);
   return lightLoad;
 }
 // THE GARAGE'S BLENDER TABLES (GarageData): asked for at idle, on garage entry,
@@ -1069,10 +1064,40 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
+// ROUTE SHEETS (#5394 row 2). A <link data-route="id id…" media="print"> (MANIFEST.CSS_ROUTE) is skipped by the
+// shell's boot flipper, so its rules stay out of the cascade through the title intro. It turns on the first time one
+// of its elements is shown: a MutationObserver record on hidden/open is a microtask, so a loaded sheet applies before
+// the frame that paints the screen, the same guarantee the boot flip gives. A root built later (#ceremony-podium) is
+// caught by the subtree watch. The backstop flips whatever is left once, idle after ROUTE_BACKSTOP_MS, so a missed
+// coupling can never leave a screen unstyled for long; then the observer goes.
+const ROUTE_BACKSTOP_MS = 15000;
+const routeLinks = () => {
+  try { return Array.from(document.querySelectorAll('link[rel="stylesheet"][data-route][media="print"]')); } catch (_) { return []; }
+};
+function ensureRouteCss(id) {
+  let n = 0;
+  for (const l of routeLinks()) if (id == null || l.dataset.route.split(" ").includes(id)) { l.media = "all"; n++; }
+  return n;
+}
+function watchRouteCss() {
+  if (typeof document === "undefined" || !document.documentElement || typeof MutationObserver !== "function") return null;
+  const links = routeLinks();
+  if (!links.length) return null;
+  const ids = new Set(links.flatMap((l) => l.dataset.route.split(" ")));
+  const shown = (el) => !!el && ids.has(el.id) && (!el.hidden || el.open === true);
+  const flip = (id) => { ids.delete(id); ensureRouteCss(id); if (!routeLinks().length) mo.disconnect(); };
+  const mo = new MutationObserver((recs) => { for (const r of recs) if (shown(r.target)) flip(r.target.id); });
+  mo.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ["hidden", "open"] });
+  // A deep link opened one already. One selector over the roots, not a lookup per id (shell-ids counts those).
+  for (const el of Array.from(document.querySelectorAll([...ids].map((id) => "#" + id).join(",")))) if (shown(el)) flip(el.id);
+  setTimeout(() => scheduleIdle(() => { ensureRouteCss(); mo.disconnect(); }, 4000), ROUTE_BACKSTOP_MS);
+  return mo;
+}
+watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

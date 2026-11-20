@@ -10,8 +10,8 @@ wgx-defects.md (linked from SKILL.md).
 - 3. Unit gates and live poke (the live pokes are BROWSER-ONLY)
 
 WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
-`wgsl-post.js`.
-DEFERRED: no `<script>` tag; `js/game.js` injects it when
+`wgsl-post.js`, `wgx-post.js`, `wgx-shadow.js`, `wgx-chunked.js`, `wgx-roadlut.js`, `wgx-debug-labels.js`.
+DEFERRED: no `<script>` tag; `js/render/renderer-boot.js` injects it when
 `apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
 WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,
 never a dead canvas (deliberate exceptions: blocked storage, hidden-tab loss —
@@ -59,7 +59,7 @@ Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`)
 awaits `WGX.create()`, which returns null on ANY failure after
 `wgx.js` records `_lastFailure` + `apex26.gfxWgxFail` and logs
 `WGX unavailable (...) — falling back to WebGL2`; `Gfx.create` logs
-`Gfx.bind fallback webgl2` and `js/game.js` binds GLX (so after a WGX fallback `env.backend` reads `webgl2`: continue in the GLX section; a Mac report of see-through cars is instead TLX, see tlx-transparent-cars.md). No `navigator.gpu` or
+`Gfx.bind fallback webgl2` and `js/render/renderer-boot.js` binds GLX (`GLX.init`) (so after a WGX fallback `env.backend` reads `webgl2`: continue in the GLX section; a Mac report of see-through cars is instead TLX, see tlx-transparent-cars.md). No `navigator.gpu` or
 no `WGX` global returns null with NO log line. NaN-white road with
 NO fallback = warning-mode Dawn ran undefined derivatives (wgx-defects.md #2);
 with fallback = strict uniformity error. Static half of that check:

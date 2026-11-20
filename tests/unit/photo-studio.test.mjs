@@ -58,7 +58,7 @@ function boot(options = {}) {
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
     Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
-    } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     NativeDownload: options.nativeDownload,
     LightTune: options.noLightTune ? undefined : {
       LT,
@@ -70,7 +70,10 @@ function boot(options = {}) {
     },
     LightStore: { reapply: () => { order.push("lt-reapply"); } },
     DrivingLine: { shown: () => true, setPhoto: () => {} },
-    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; } } },
+    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; },
+      // js/core/store.js rawSet/rawDel: false (never a throw) when the write fails.
+      rawSet: (k, v) => { try { ctx.localStorage.setItem(k, v); return true; } catch (_) { return false; } },
+      rawDel: (k) => { try { ctx.localStorage.removeItem(k); return true; } catch (_) { return false; } } } },
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
@@ -432,6 +435,15 @@ test("missing IndexedDB uses a visit-only library and localStorage quota failure
   assert.equal(b.PS.setBackground("data:image/jpeg;base64,ZmFrZQ=="), false);
   assert.equal(b.PS.setBackground("javascript:alert(1)"), false);
   assert.equal(b.api.state().busy, false);
+});
+
+test("the menu background goes through GameStore's raw lane and reads back the same text (#5023)", () => {
+  const b = boot(), img = "data:image/jpeg;base64,ZmFrZQ==";
+  assert.equal(b.PS.setBackground(img), true);
+  assert.equal(b.storage.get("apex26.photoBackground"), img, "stored bare, never JSON-quoted");
+  assert.equal(b.PS.background(), img);
+  assert.equal(b.PS.setBackground(""), true);
+  assert.equal(b.storage.has("apex26.photoBackground"), false);
 });
 
 // #2848: USE AS MENU BACKGROUND / library tiles stay inert unless Appearance Scene is My photo.
@@ -836,4 +848,35 @@ test("all shipped garage styles and lighting remain shared by Team and both gara
     assert.equal(team.specs().find(s => s.key === "mood").cur, nextMood, "Photo lighting remains selected in Team");
   }
   assert.equal(repaints, 6, "each changed photo visit refreshes the garage panel");
+});
+
+// ── hunt #5743 P1 / P3 ───────────────────────────────────────────────────────
+test("#5743 P1: a borrowCar that throws hands FreeCam and photo mode back and open() answers false", () => {
+  const b = boot({ borrowCar: () => { throw new Error("makeCars failed"); } });
+  assert.equal(b.api.open({ source: "home-track" }), false);
+  assert.equal(b.closed(), 1, "the camera handover is undone");
+  assert.equal(b.G.photoMode, false);
+  assert.equal(b.overlays(), true, "FreeCam's guides come back");
+  assert.equal(b.api.state().open, false);
+  // A later open still works.
+  assert.equal(b.api.open({ source: "race" }), true);
+});
+
+test("#5743 P3: a readback that never resolves times out to Capture failed, not busy, and frees the slot", async () => {
+  const timers = [];
+  const b = boot({ setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } });
+  let cancelled = null;
+  b.G.gfx.capturePixels = () => new Promise(() => {});
+  b.G.gfx.cancelCapture = (why) => { cancelled = why; };
+  b.api.open();
+  const pending = b.api.capture();
+  assert.equal(b.api.state().busy, true);
+  const t = timers.find((x) => x.ms === 8000);
+  assert.ok(t, "an 8 s capture timeout is armed");
+  t.fn();
+  assert.equal(await pending, false);
+  assert.equal(b.api.state().busy, false);
+  assert.equal(b.api.state().captured, false);
+  assert.equal(cancelled, "capture timed out");
+  assert.equal(b.dom.byId("ps-message").textContent.split(":")[0], "Capture failed");
 });

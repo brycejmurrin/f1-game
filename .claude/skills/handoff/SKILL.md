@@ -20,9 +20,12 @@ Two audiences, two endings (steps 1–2 are shared):
 - **Attended** (the user asked, or the context is long; no brief, so no cap advisory): steps 1–3, then output the
   prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
 - **Unattended owner at its cap or stuck** (skill `steward` §Lane 5; `context-cap.py` advises against the cap in
-  `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` with
-  `gh api -X POST …/labels -f 'labels[]=needs-owner'` and end. No chat prompt: the takeover reads only the Hand-off
+  `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` (MCP `issue_write`: the live list plus it, skill `steward` `references/labels.md`)
+  and end. No chat prompt: the takeover reads only the Hand-off
   block and the Plan; the dispatch Action launches it once no live owner names the PR.
+- **Quota wall** (a usage-limit warning or a 429 `usage_limit_reached`; six workers died on one at 2026-11-18
+  22:32–23:37Z and two lost uncommitted work, #5844): do step 1 and refresh the Hand-off block NOW, before the
+  next call, then end without arming a check-in; every wake re-hits the wall. Long waits: AGENTS.md rule 12.
 
 1. **Push first.** A dirty tree or unverified work: commit it as WIP anyway, in two calls (`git add <paths>`, then
    `git commit`; AGENTS.md rule 12), and list what is unverified as **Not run**. If the commit hook's guards
@@ -37,8 +40,8 @@ Two audiences, two endings (steps 1–2 are shared):
 3. **The prompt**, in this order:
    - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL
    - first: ADOPT the PR (skill `steward` §Lane 3): comment `adopts PR #<n> — <host>:<session id>`,
-     remove `needs-owner` if set (`gh api -X DELETE …/labels/needs-owner`; a dispatch-launched owner skips this, the
-     Action already did), set `owner:` in the Hand-off block
+     remove `needs-owner` if set (MCP `issue_write`: the live list minus it, skill `steward` `references/labels.md`; a
+     dispatch-launched owner skips this, the Action already did), set `owner:` in the Hand-off block
    - Goal in one sentence; Plan: the done / now / next items from the PR body
    - what is not run, unverified or red, with the exact command to reproduce
    - accessible evidence links; ignored `artifacts/` or `scratch/` paths are

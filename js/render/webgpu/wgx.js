@@ -326,6 +326,9 @@ const WGX = (function () {
     const initActive = () => !initOwner || initOwner.active;
     if (!initActive()) return null;
     if (typeof navigator === "undefined" || !navigator.gpu) return null;
+    // A new device's account starts clean: the module-scope pair outlives a failed create for the post-mortem read,
+    // but a second create kept the first's count, so past GPU_ERR_LOG_CAP it never logged again (#5699 row 23).
+    _gpuErrors = 0; _gpuFirstMsg = null;
     // No WGSL sources -> no renderer. Refuse BEFORE touching the canvas, so the
     // GLX fallback can still attach a webgl2 context to it.
     if (!_Chunks || !_Chunks.LIT || !_Chunks.SKY || !_Chunks.BLIT || !_Chunks.SHADOW) {
@@ -863,7 +866,7 @@ const WGX = (function () {
     // once GPU_ERR_QUIET_FRAMES presents pass with no error. As lifetime
     // counters, eight one-off errors in three frames hours apart (a freed-decal
     // bind, say) "persisted" and reloaded the phone a rung down mid-race
-    // (2026-09-24). _gpuErrors stays the lifetime total WGX.gpuErrors() reports.
+    // (2026-09-24). _gpuErrors stays this device's total WGX.gpuErrors() reports.
     const GPU_ERR_QUIET_FRAMES = 2;
     let _gpuErrRun = 0;
     try {
@@ -6041,6 +6044,8 @@ const WGX = (function () {
       // container's pixel oracle (tools/gfx/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
+      // The caller gave up on a pending capture (photo studio's timeout): free the one slot (#5743 P3).
+      cancelCapture: (why) => _rejectCapture(why || "capture cancelled"),
       awaitSoftPresent,
       invalidateSoftPresent,
       holdSoftPresent,

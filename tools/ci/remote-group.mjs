@@ -64,6 +64,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const REPO = "brycejmurrin/f1-game";
 export const WORKFLOW = "browser-group.yml";
 export const SHARD_CHOICES = [1, 2, 4, 6, 8];   // browser-group.yml's `shards` options
+/** GROUP LANES (#5848, 2026-11-19). browser-group.yml's shard job joins one of GROUP_LANES fleet-wide concurrency
+ *  groups (`browser-group-lane-<n>`, `queue: max`), so at most GROUP_LANES group shards hold runners at once across
+ *  every dispatch, and the rest wait without holding one. Measured by tools/ci/pool-share.mjs: on 11-19 nine group
+ *  runs held up to the whole 40-slot pool while land.yml's seconds-long gate jobs queued behind them; ci.yml's
+ *  selected legs already have LANES (select-specs.mjs, 24), so 24 + 8 leaves 8 slots that neither can take.
+ *  Lanes are 1..GROUP_LANES (a plan without `lane`, e.g. a hand dispatch of the default plan, falls back to its
+ *  shard number in the workflow, so 0 is never a lane). */
+export const GROUP_LANES = 8;
+/** The matrix with a lane per shard: consecutive lanes from `base`, so one run's shards never queue behind each
+ *  other and runs dispatched at different minutes start on different lanes. Pure. */
+export function withLanes(matrix, base = 0) {
+  const b = ((Math.floor(Number(base)) || 0) % GROUP_LANES + GROUP_LANES) % GROUP_LANES;
+  return (matrix || []).map((m, i) => ({ ...m, lane: ((b + i) % GROUP_LANES) + 1 }));
+}
 const say = (...a) => console.log("[remote-group]", ...a);
 
 /** Resolve workers for a group: explicit request, else GL + render-heavy heuristic. */
@@ -330,6 +344,21 @@ export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N]
        node tools/ci/remote-group.mjs --watch <run-id>
        node tools/ci/remote-group.mjs --help
   --interval <s> poll period (min 10, default 30). An unknown flag prints this usage and exits 2, before any dispatch.`;
+/**
+ * The dispatch is a GitHub WRITE made with the gh token, which GitHub records as the repository owner's own act (no
+ * app marker), so an agent's dispatch cannot be told from Bryce's. Owner decision 2026-11-11: agents do not write to
+ * GitHub with that token; whether this tool dispatches at all is Bryce's open call (named on the PR that added this).
+ * Until then it dispatches only when APEX_GH_OWNER_WRITE=1 is in the environment, set by Bryce himself; the Bash
+ * guard refuses an agent that sets it. Reusing a live or green run (a read) needs no opt-in.
+ */
+export const OWNER_OPT_IN = "APEX_GH_OWNER_WRITE";
+export function ownerWriteGate(env = process.env) {
+  const ok = env[OWNER_OPT_IN] === "1";
+  const lines = [`this dispatch is a GitHub write made with the gh token, recorded as the repository owner's own act (no app marker).`];
+  if (!ok) lines.push(`refused: only the owner opts in (${OWNER_OPT_IN}=1 in his own environment; an agent never sets it). An agent asks on its PR with needs-decision, and the PR's own CI runs the browser shard.`);
+  return { ok, lines };
+}
+
 export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--plan-record", "--watch"];
 
 /** The open PR whose head is `branch`, as the dispatch's `pr` input: "" when there is none, the lookup fails, or
@@ -476,8 +505,11 @@ async function main() {
     }
     if (have?.kind === "green" && !pr) { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
   }
+  const gate = ownerWriteGate();
+  for (const l of gate.lines) say(l);
+  if (!gate.ok) return 3;
   const since = Date.now();
-  const plan = JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) });
+  const plan = JSON.stringify({ matrix: withLanes(p.matrix, Math.floor(since / 60000)), ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
     // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.

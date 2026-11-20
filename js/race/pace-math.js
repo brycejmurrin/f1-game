@@ -48,13 +48,15 @@ const PaceMath = (function () {
     function aStd(a) { return a / Math.max(getPACE(), 0.05); }
 
     function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
+    // An AI car's X-mode reads the neutral wing (docs/PHYSICS.md, #5791).
+    function xLoadOf(c) { return c && c.human === false ? 0.5 : aeroLoadOf(c); }
     // LOW GRIP (FIA 2026 B7.1.2(b)): active aero is PARTIAL in the wet — half the
     // trade each way. Exactly 1 on a slick track, so the dry car is untouched.
     function aeroWetK() {
       const rc = getRaceCtl();
       return rc && rc.lowGrip() ? 0.5 : 1;
     }
-    function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
+    function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, xLoadOf(c)); }
     // The per-node AI speed/vmax profile paceSample learns, one per field
     // (kept on the function: no new top-level state).
     function paceRef() {
@@ -67,8 +69,8 @@ const PaceMath = (function () {
       }
       return r;
     }
-    function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
-    function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
+    function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, xLoadOf(c)); }
+    function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, xLoadOf(c)); }
 
     function isErsDeploying(c) {
       if (!c) return false;

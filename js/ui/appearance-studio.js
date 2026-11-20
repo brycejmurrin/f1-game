@@ -329,6 +329,9 @@ const AppearanceStudio = (function () {
           photoGeneration++; photoPanelVisible = false; ui.photoBox.removeAttribute("aria-busy");
           openGen++;
           panel.removeAttribute("aria-busy");
+          // Drop a pending input/store debounce so render()/sceneChanged() cannot
+          // run after Appearance (or Settings) has closed.
+          clearTimeout(pending); pending = 0;
           if (typeof ScreenLooks !== "undefined") ScreenLooks.endPeek();
           return;
         }
@@ -357,11 +360,35 @@ const AppearanceStudio = (function () {
       { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
     ]);
   }
+  // #4529 PORTRAIT & LANDSCAPE. SHARED (the default: no apex26.appearanceShapes, or anything but v:2 —
+  // the reverted #4897's v:1 included) does nothing. SEPARATE swaps through the lazy LayoutPresets.syncShape
+  // only once body[data-shape] (SheetShape's ICB classifier) has held the other answer SHAPE_SETTLE_MS with
+  // the tab visible, so a stale boot or mid-rotation reading never swaps sizes.
+  const SHAPE_SETTLE_MS = 2000;
+  const shapeNow = () => { const s = typeof document !== "undefined" && document.body ? document.body.getAttribute("data-shape") : null; return s === "tall" || s === "wide" ? s : null; };
+  let shapeTimer = 0;
+  function shapeSettle() {
+    clearTimeout(shapeTimer);
+    const st = store.get("appearanceShapes", null), at = shapeNow();
+    if (!isObject(st) || st.v !== 2 || st.mode !== "separate" || !at || st.live === at) return;
+    shapeTimer = setTimeout(() => {
+      if (shapeNow() !== at || document.hidden) return;
+      const run = () => { if (typeof LayoutPresets !== "undefined" && LayoutPresets.syncShape(at)) { undoStack.length = 0; render(); } };
+      if (typeof LayoutPresets !== "undefined") run(); else if (typeof SettingsNav !== "undefined" && SettingsNav.presets) SettingsNav.presets().then(run);
+    }, SHAPE_SETTLE_MS);
+  }
+  try {
+    if (typeof document !== "undefined" && document.body && typeof MutationObserver !== "undefined") {
+      new MutationObserver(shapeSettle).observe(document.body, { attributes: true, attributeFilter: ["data-shape"] });
+      document.addEventListener("visibilitychange", shapeSettle);
+      shapeSettle();
+    }
+  } catch (e) { Log.warn("ui", "orientation watch: " + e.message); }
   // #4798 gate
   if (typeof document !== "undefined") {
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI()), { once: true });
     else initUI();
   }
   return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, PRESET_PRESERVE, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
-    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
+    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, shapeNow, attach, setPreviewFrame, notify: say, initUI });
 })();

@@ -2,6 +2,7 @@
  * for tests/specs/perf-frametime.spec.js (SwiftShader frame-cost regression lane).
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,8 +57,56 @@ export function summariseFrameMs(samples) {
 }
 
 /** What a frame time depends on beyond the scenario: two runs that differ in
- *  any of these measure different machines, so a ratio between them is noise. */
-export const ENV_KEYS = ["renderer", "api", "adapter", "browser", "viewport"];
+ *  any of these measure different machines, so a ratio between them is noise.
+ *  `cpu` (#5903): llvmpipe rasterises on the CPU, so the runner's CPU class IS
+ *  the measurement. GitHub hands this lane VMs of two speeds: the same sha
+ *  8bb193ac read p50 1.84x in one VM and green in another, alone and one worker
+ *  each, and the adapter string ("llvmpipe ... 256 bits") is the same on both. */
+export const ENV_KEYS = ["renderer", "api", "adapter", "browser", "viewport", "cpu"];
+
+/** The machine the browser runs on, as "<model> x<logical cores>" (Playwright
+ *  drives a local browser, so the Node host is that machine). Null when the
+ *  platform reports no model. `cpus` is injectable for the unit test. */
+export function runnerCpu(cpus = os.cpus()) {
+  const list = Array.isArray(cpus) ? cpus : [];
+  const model = list.length && typeof list[0].model === "string" ? list[0].model.replace(/\s+/g, " ").trim() : "";
+  return model ? `${model} x${list.length}` : null;
+}
+
+/** The page-side env read, run as `page.evaluate(readPageEnv)`: self-contained
+ *  (Playwright ships its source text, so it may not touch this module's scope).
+ *  `api` is the BOUND backend's own account via `__apex.lifecycle().api`; the
+ *  bare `gfx` this used to read is not a page global (the module is `Gfx`, the
+ *  picker; the bound backend lives on G), so every CI run recorded `api: null`
+ *  and no baseline could ever match on it. `w` is the window; a unit test
+ *  passes a fake. The adapter comes from a throwaway canvas: a GL sniff on
+ *  #game would bind it (__apex.diag's trap). */
+export function readPageEnv(w = globalThis) {
+  const safe = (fn) => { try { return fn(); } catch (_) { return null; } };
+  const meta = (name) => safe(() => (w.document.querySelector(`meta[name="${name}"]`) || {}).content || null);
+  // A script-level `const` is a global binding, not a window property: read it bare in the page, from `w` in a test.
+  // eslint-disable-next-line no-undef
+  const rp = w.RendererPicker || safe(() => (typeof RendererPicker !== "undefined" ? RendererPicker : null));
+  const life = safe(() => (w.__apex && typeof w.__apex.lifecycle === "function" ? w.__apex.lifecycle() : null));
+  const adapter = safe(() => {
+    const gl = w.document.createElement("canvas").getContext("webgl2");
+    if (!gl) return null;
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    const lose = gl.getExtension("WEBGL_lose_context");
+    if (lose) lose.loseContext();
+    return name;
+  });
+  return {
+    build: meta("apex-build"),
+    sha: meta("apex-sha"),
+    renderer: safe(() => (rp && rp.liveBackend && rp.liveBackend()) || w.sessionStorage.getItem("apex26.gfxBound")),
+    api: life && typeof life.api === "string" ? life.api : null,
+    adapter,
+    userAgent: safe(() => w.navigator.userAgent),
+    viewport: { width: w.innerWidth, height: w.innerHeight, dpr: w.devicePixelRatio },
+  };
+}
 
 /** The run's environment in the compared shape: browser by name and major
  *  version, viewport as "WxH@dpr"; a field the page could not read is null. */
@@ -70,6 +119,7 @@ export function envOf(raw) {
   return {
     renderer: str(r.renderer), api: str(r.api), adapter: str(r.adapter),
     browser: str(r.browser) ? str(r.browser) + (m ? " " + m[1] : "") : null, viewport: vp,
+    cpu: str(r.cpu),
   };
 }
 

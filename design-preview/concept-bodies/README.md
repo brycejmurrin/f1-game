@@ -5,7 +5,8 @@ Rift / Keel / Delta / Serpent BODY_STYLES rows. Gallery: https://claude.ai/artif
 - `node design-preview/concept-bodies/envelope.mjs` — size table; each new body must stay ≤ p75 of the
   shipped styles (also ≤ `p75-3160.json`, the same envelope measured on #3160's resized tree).
 - `SKIP=rift,keel,delta,serpent node design-preview/concept-bodies/identical.mjs` — hash of every factory
-  car and shipped body (square + rounded); must equal the base (`a333ba0d…` on #3145 @42dbbf57).
+  car and shipped body (square + rounded). Recompute against a base with
+  `HEAD_REF=<sha> …`; the #3145 @42dbbf57 pin was `a333ba0d…` (historical only).
 - Fit: `node tools/car/car-fit-audit.mjs --base <base>` (factory, 0 NEW/WORSE) and, for the bodies,
   `car-fit-audit --bodies=rift,keel,delta,serpent --json > a.json` vs a zero-offset `probe0` body row
   (all style fields 0, `fitSeat: 1`, added temporarily) audited the same way into `probe.json`:
