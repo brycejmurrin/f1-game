@@ -1502,28 +1502,45 @@ export class Lsp {
       }
     }
   }
-  // References' half of what callers does: an export row's own references (the destructures `const { x } = M`
-  // and aliases in other files), then each alias binding's uses, tagged `via`. Without it `refs GaragePrims.tube`
-  // answered 3 rows in 1 file while callers found 84 uses in 7 (2026-11-20). Returns only the rows not in `locs`.
-  async exportAndAliasUses(locs) {
+  // One member, whichever module names it: the fixed point over its def, export and alias rows. A def row's
+  // references (the declaring file's own calls), an export row's (the public `Head.member` uses and the
+  // destructures `const { x } = Head` elsewhere), an alias binding's (its uses, tagged `via`), and a definition hop
+  // from each export or alias row. A destructured member re-exported by a shorthand (`return { x }`) is the same
+  // member under the next module's name: `refs TrackSpline.curvature` answered 16 of the 68 sites that
+  // `refs Tracks.curvature` found (B13, 2026-11-20). Bounded rounds; returns only the rows not in `locs`.
+  async memberClosure(locs, { seed = null, includeDeclaration = true, rounds = 6 } = {}) {
     const norm = l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l;
     const key = l => `${l.uri}\u0000${l.range.start.line}:${l.range.start.character}`;
     const tagOf = l => this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character);
-    const all = locs.map(norm), seen = new Set(all.map(key)), added = [];
-    const add = l => { if (!seen.has(key(l))) { seen.add(key(l)); added.push(l); } };
-    const exportRefs = await Promise.all(all.filter(l => tagOf(l) === "export").map(l =>
-      this.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])));
-    for (const refs of exportRefs) for (const r of refs || []) if (["use", "alias"].includes(tagOf(r))) add(r);
-    const aliases = [...all, ...added].filter(l => tagOf(l) === "alias");
-    const viaAlias = await Promise.all(aliases.map(async l => {
-      const f = this.rel(l.uri), binding = this.aliasBindingAt(f, l.range.start.line, l.range.start.character);
-      if (!binding) return [];
-      this.ensureOpen(f);
-      const refs = (await this.request("textDocument/references", { textDocument: { uri: l.uri }, position: { line: binding.line, character: binding.character }, context: { includeDeclaration: false } }).catch(() => [])) || [];
-      return refs.filter(r => r.range.start.line !== binding.line || r.range.start.character !== binding.character).map(r => ({ ...r, via: binding.name }));
-    }));
-    for (const batch of viaAlias) for (const r of batch) add(r);
-    return added;
+    const js = l => !!l?.uri?.startsWith("file:") && /\.(?:[cm]?js)$/.test(l.uri) && this.mtimes.has(this.rel(l.uri));
+    const all = locs.map(norm), seen = new Set(all.map(key)), added = [], expanded = new Set();
+    const add = (l, next) => { const k = key(l); if (seen.has(k)) return; seen.add(k); added.push(l); next.push(l); };
+    const request = (method, uri, position, extra = {}) => {
+      this.ensureOpen(this.rel(uri));
+      return this.request(method, { textDocument: { uri }, position, ...extra }).then(r => [].concat(r || []).map(norm)).catch(() => []);
+    };
+    const refsAt = (uri, position) => request("textDocument/references", uri, position, { context: { includeDeclaration: true } });
+    const defsAt = async (uri, position) => (await request("textDocument/definition", uri, position)).filter(l => js(l) && tagOf(l) === "def");
+    let frontier = [...all];
+    if (seed) for (const d of await defsAt(this.uriOf(seed.file), { line: seed.line0, character: seed.col0 })) add(d, frontier);
+    for (let round = 0; round < rounds && frontier.length; round++) {
+      const jobs = frontier.filter(l => js(l) && !expanded.has(key(l)) && ["def", "export", "alias"].includes(tagOf(l)));
+      for (const l of jobs) expanded.add(key(l));
+      const found = await Promise.all(jobs.map(async l => {
+        const tag = tagOf(l), out = [];
+        if (tag === "alias") {
+          const f = this.rel(l.uri), binding = this.aliasBindingAt(f, l.range.start.line, l.range.start.character);
+          // A local binding is used only in its own file: its rows there are `via` it; a row elsewhere is public.
+          if (binding) for (const r of await refsAt(l.uri, { line: binding.line, character: binding.character }))
+            if (r.uri !== l.uri || r.range.start.line !== binding.line || r.range.start.character !== binding.character) out.push(r.uri === l.uri ? { ...r, via: binding.name } : r);
+        } else out.push(...await refsAt(l.uri, l.range.start));
+        if (tag !== "def") out.push(...await defsAt(l.uri, l.range.start));
+        return out;
+      }));
+      frontier = [];
+      for (const batch of found) for (const r of batch) if (js(r)) add(r, frontier);
+    }
+    return includeDeclaration ? added : added.filter(l => tagOf(l) !== "def");
   }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
   // Location rows, paged (offset/limit). References carry the enclosing function
@@ -1678,42 +1695,10 @@ export async function callTool(lsp, name, a = {}) {
         const normalized = (Array.isArray(result) ? result : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l);
         const all = [...new Map(normalized.map(l => [locationKey(l), l])).values()];
         const tagOf = l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character);
-        const locs = all.filter(l => tagOf(l) === "use");
-        // An implementation-position query first reaches the IIFE export shorthand.
-        // Query that export to reach the public member's uses. Pipeline: M4.lerp
-        // alone fans out to dozens of alias rows; serial RPCs timed out the MCP
-        // client case on CI (run 39158195670, testTimeoutFailure @ 90 s).
-        const exportRefs = await Promise.all(all.filter(l => tagOf(l) === "export").map(l =>
-          lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])));
-        for (const refs of exportRefs) for (const r of refs || []) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
-        // A symbol query anchored at an outside use reaches the export's uses, not the declaring file's own calls:
-        // `callers Career.inCareer` said 21 functions while the declaration's position gave 37 (2026-11-20).
-        // Ask the [def] row too; rows dedupe below.
-        if (a.symbol && p) {
-          lsp.ensureOpen(p.file);
-          const defs = [].concat((await lsp.request("textDocument/definition", { textDocument: { uri: lsp.uriOf(p.file) }, position: { line: p.line0, character: p.col0 } }).catch(() => null)) || [])
-            .map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l)
-            .filter(l => l?.uri?.startsWith("file:") && !lsp.rel(l.uri).startsWith("types/") && tagOf(l) === "def");
-          const defRefs = await Promise.all(defs.map(l => {
-            lsp.ensureOpen(lsp.rel(l.uri));
-            return lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => []);
-          }));
-          for (const refs of defRefs) for (const r of refs || []) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
-        }
-        // Direct and destructured aliases hide real callers behind a local binding.
-        const aliasLocs = all.filter(l => tagOf(l) === "alias");
-        const viaAlias = await Promise.all(aliasLocs.map(async l => {
-          const f = lsp.rel(l.uri), binding = lsp.aliasBindingAt(f, l.range.start.line, l.range.start.character);
-          if (!binding) return [];
-          lsp.ensureOpen(f);
-          const refs = (await lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: { line: binding.line, character: binding.character }, context: { includeDeclaration: false } }).catch(() => [])) || [];
-          return refs.filter(r => r.range.start.line !== binding.line || r.range.start.character !== binding.character)
-            .map(r => ({ ...r, via: binding.name }));
-        }));
-        for (const batch of viaAlias) locs.push(...batch);
-        // Uses that the export and declaration hops added to `all` after `locs` was taken (they were dropped:
-        // only alias rows reached the caller table). The dedupe below keeps each location once.
-        locs.push(...all.filter(l => tagOf(l) === "use"));
+        // The same closure refs uses (def, export and alias rows, re-exports in both directions), so callers and
+        // references agree whichever module names the member. A symbol query anchored at an outside use also hops
+        // to the [def]: `callers Career.inCareer` said 21 functions while the declaration's position gave 37.
+        const locs = [...all, ...await lsp.memberClosure(all, { seed: a.symbol && p ? p : null, includeDeclaration: false })];
         // Export and alias routes may reach the same use more than once.
         // Keep distinct columns on a line, and never count declarations as calls.
         const seen = new Set(), uses = locs.filter(l => {
@@ -1760,14 +1745,16 @@ export async function callTool(lsp, name, a = {}) {
         text = `${locs.length} use${locs.length === 1 ? "" : "s"}${calls !== locs.length ? ` (${calls} call${calls === 1 ? "" : "s"})` : ""} in ${groups.size} function${groups.size === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"} ${head.replace("%SELF%", `query at ${p ? pos(p) : "—"}`)}\n${rendered}`;
       } else {
         let resolved = result;
+        // The closure runs over the WHOLE answer, then the scope filters it: a member reached only through another
+        // module's re-export still counts inside the scope.
+        if (!isDef && Array.isArray(resolved) && !(at.note && /text match/.test(at.note))) {
+          const more = await lsp.memberClosure(resolved, { seed: a.symbol && p ? p : null, includeDeclaration: a.includeDeclaration !== false });
+          if (more.length) resolved = [...resolved, ...more];
+        }
         if (scope) {
-          const list = Array.isArray(result) ? result : result ? [result] : [], unfiltered = list.length;
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [], unfiltered = list.length;
           resolved = list.filter(l => inScope(lsp.rel(l.targetUri || l.uri), scope));
           notes.push(`scope path "${scope}": ${resolved.length} of ${unfiltered} resolved ${isDef ? "definitions" : "references"}`);
-        }
-        if (!isDef && Array.isArray(resolved) && !(at.note && /text match/.test(at.note))) {
-          const more = (await lsp.exportAndAliasUses(resolved)).filter(l => !scope || inScope(lsp.rel(l.uri), scope));
-          if (more.length) resolved = [...resolved, ...more];
         }
         const made = !isDef && p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
         if (made?.uses.length) {

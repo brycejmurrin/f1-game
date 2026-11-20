@@ -38,6 +38,8 @@ const QUESTIONS = [
   { q: "Who calls a factory-instance method (pits.update via PitLane.create)?", tool: ["lsp_callers", { symbol: "pits.update" }], answer: /js\/game\.js:\d+ {2}updateCar /, grep: "grep -rn 'pits\\.update' js" },
   { q: "Where is LoopHealth.recover used (an inline-script caller)?", tool: ["lsp_references", { symbol: "LoopHealth.recover" }], answer: /index\.html:\d+/, grep: "grep -rn 'LoopHealth\\.recover' js index.html" },
   { q: "Who reads penaltyWhy (a property only ever set on untyped objects)?", tool: ["lsp_references", { symbol: "penaltyWhy", format: "concise" }], answer: /^[1-9]\d* references in [1-9]\d* files[^\n]*text matches of \.penaltyWhy[^]*js\/ui\/results-sheet\.js:\d+:\d+ {2}\[use\]/, grep: "grep -rn 'penaltyWhy' js" },
+  // Round 3 (the stress-test open items): each answered a subset or the wrong file before.
+  { q: "Who uses TrackSpline.curvature, through the Tracks re-export too?", tool: ["lsp_references", { symbol: "TrackSpline.curvature", files: true }], answer: /\njs\/game\.js \d+\n/, grep: "grep -rn 'curvature' js" },
   { q: "Does a missing member answer honestly?", tool: ["lsp_definition", { symbol: "GameHud.noSuchMember" }], answer: /has no member noSuchMember/, grep: "grep -rn 'GameHud\\.noSuchMember' js" },
 ];
 
