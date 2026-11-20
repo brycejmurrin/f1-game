@@ -1,6 +1,18 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-20 — batch PR (claude/batch-5896-5878-5877): share-link undo, repair stop, season points (#5896, #5878, #5877)
+
+`(tree) eagerBytes` 7,968,253 → **7,970,447** (+2,194 B). Deliberate raise; Bryce decided the fixes
+(`decision: A` on #5896, `decision: A` on #5878, `decision: B` on #5877, 2026-11-20 ~06:36Z) and the
+orchestrator chose the raise over pruning unrelated comments (06:56Z); the tree-wide ceiling still
+needs his `ratchet-raise` label on the PR. The growth is the fixes' own code in three FULL (eager)
+files, after trimming their comments: `js/ui/share-code.js` +1,145 (`importValues` keeps the
+player's pre-link values across links), `js/career/season-cal.js` +925 (`seatPlayer`, the seat
+move) and `js/game.js` +124 (its one-line call in `makeCars`, also `js/game.js` codeLines/lines
++1). The repair-only stop (#5878) is in the lazy `js/race/pit-lane.js`. Fragment:
+`tests/data/ratchets.d/claude--batch-5896-5878-5877.json`.
+
 ## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
 
 `(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that

@@ -86,7 +86,12 @@ var PitLane = (function () {
     const tt = () => !!G.timeTrial;
     // wear-off TT: no service (a TT with wear on stops as a race does)
     const ttStop = () => tt() && !enabled();
-    function laneOpen() { return enabled() || !!(z() && tt()); }
+    /** #5878 (decision A): DAMAGE HANDLING with wear off opens the lane for a REPAIR-ONLY stop (Damage
+     *  repairs on the release edge); no tyres are fitted, and strategy stays on enabled(). */
+    const damageOn = () => typeof DamageHandling !== "undefined" && DamageHandling.isEnabled();
+    function laneOpen() { return enabled() || !!(z() && (tt() || damageOn())); }
+    // A stop that fits no tyres: a wear-off Time Trial or a repair-only stop.
+    const noService = () => !enabled();
     /** How long a Time Trial holds the car in its box: the stop plus time to tap END TIME TRIAL (#5789). */
     const TT_DECIDE_S = 4;
 
@@ -326,7 +331,8 @@ var PitLane = (function () {
      *  cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
      *  marker on the map and the words on the HUD can never disagree. */
     function worthStopping(c) {
-      if (!enabled() || !c || c.retired || c.finished) return false;
+      if (!c || c.retired || c.finished) return false;
+      if (!enabled()) return laneOpen() && !tt() && damageOn() && typeof Damage !== "undefined" && Damage.state(c).shown;
       const wear = G.tyres.spent(c);
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
@@ -405,7 +411,7 @@ var PitLane = (function () {
         // …AND WHAT WILL BE FITTED. The stop is booked by a gesture, and a
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
-        const next = ttStop() ? null : nextFor(c);
+        const next = noService() ? null : nextFor(c);
         // "BOX BOX" as the engineer says it (see the note in engineer.js): the
         // repeat is the call, and it reads as a radio instruction rather than
         // as a label on the screen.
@@ -876,7 +882,7 @@ var PitLane = (function () {
     function commitNow(c) {
       c.pitCommitT = 0; c.pitCommitted = true;
       arm(c, true);
-      const next = ttStop() ? null : nextFor(c);
+      const next = noService() ? null : nextFor(c);
       if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
     }
     function update(c, dt) {
@@ -949,13 +955,13 @@ var PitLane = (function () {
         // at latch: fitting at latch made the compound stripe change before
         // anything moved, so the axle slide read as "no tyre swap". Ensure a
         // fit still lands before release if the hold is cut short.
-        if (!c.pitFitted && !ttStop()) {
+        if (!c.pitFitted && !noService()) {
           const a = stopAnim(c);
           if (a.u >= 0.50) { serviceCar(c); c.pitFitted = true; }
         }
         c.pitT = (c.pitT || 0) - dt;
         if (c.pitT <= 0) {
-          if (!c.pitFitted && !ttStop()) serviceCar(c);
+          if (!c.pitFitted && !noService()) serviceCar(c);
           c.pitFitted = true;
           c.pitState = "out"; c.pitT = 0; release(c, zz);
         }

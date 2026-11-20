@@ -319,7 +319,7 @@ const ShareCode = (function () {
     return CORRUPT;
   }
 
-  // One-deep undo of the last setup/livery code: overwritten keys and prior values (null = absent).
+  // Undo of setup/livery codes: keys, the values before the first link (null = absent), next = what links wrote (#5896).
   function durableSet(store, key, value) {
     try { return store.set(key, value) === true; }
     catch (_) { return false; }
@@ -334,18 +334,36 @@ const ShareCode = (function () {
     }
     return complete;
   }
+  // What the player STORED, not get()'s default fallback: undo must not pin a default (#2191).
+  function storedOf(store, k) {
+    const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
+    return v === undefined ? null : v;
+  }
+  const same = (a, b) => JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b);
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   function importValues(store, decoded, values) {
     const keys = Object.keys(values);
-    const prev = {};
-    // What the player STORED, not get()'s default fallback: undo must not pin a default (#2191).
-    for (const k of keys) {
-      const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
-      prev[k] = v === undefined ? null : v;
-    }
+    const current = {};
+    for (const k of keys) current[k] = storedOf(store, k);
+    // #5896: a no-op link keeps the undo record; a key still at the last link's value keeps its original.
+    if (keys.every((k) => same(current[k], values[k]))) return null;
     const oldUndo = store.get(UNDO_KEY, undefined);
-    const rec = { keys, prev, at: Date.now(), pending: true };
     const failed = (reason) => ({ ok: false, kind: decoded.kind, team: decoded.team, reason });
     if (oldUndo && oldUndo.pending === true) return failed("recovery-pending");
+    const prev = {}, next = {}, recKeys = [];
+    const old = oldUndo && Array.isArray(oldUndo.keys) && oldUndo.prev && oldUndo.next
+      && typeof oldUndo.prev === "object" && typeof oldUndo.next === "object" ? oldUndo : null;
+    for (const k of old ? old.keys : []) {
+      if (!own(old.prev, k) || !own(old.next, k) || recKeys.includes(k)) continue;
+      if (!same(own(current, k) ? current[k] : storedOf(store, k), old.next[k])) continue;
+      prev[k] = old.prev[k]; next[k] = old.next[k]; recKeys.push(k);
+    }
+    for (const k of keys) {
+      if (!own(prev, k)) { prev[k] = current[k]; recKeys.push(k); }
+      next[k] = values[k];
+    }
+    const rec = { keys: recKeys, prev, next, at: Date.now(), pending: true };
+    const rollback = { keys, prev: current };
     if (!durableSet(store, UNDO_KEY, rec)) {
       // GameStore caches refused writes (SAVE RETRY replays them): put the old record back.
       durableSet(store, UNDO_KEY, oldUndo);
@@ -354,14 +372,14 @@ const ShareCode = (function () {
     for (const k of keys) {
       if (!durableSet(store, k, values[k])) {
         // A quota failure must not look loaded; a refused rollback keeps the durable backup.
-        restoreValues(store, rec);
+        restoreValues(store, rollback);
         return failed("import-save-failed");
       }
     }
     if (!durableSet(store, UNDO_KEY, Object.assign({}, rec, { pending: false }))) {
       // Still pending: restore the cached record so no import replaces the only originals.
       durableSet(store, UNDO_KEY, rec);
-      restoreValues(store, rec);
+      restoreValues(store, rollback);
       return failed("import-save-failed");
     }
     return null;

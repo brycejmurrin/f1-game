@@ -5006,6 +5006,9 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
+      "seatPlayer": [
+        "tests/unit/season-cal.test.mjs"
+      ],
       "setConfig": [
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-season-tab.test.mjs",
