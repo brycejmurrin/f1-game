@@ -652,7 +652,9 @@ function resetGarage() {
 const CAREER_FORMAT = "apex26-career-v1";
 const CAREER_FLAVOURS = ["driver", "myteam"];
 const CAREER_SLOT_N = 3;
-const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), standalone season, lap records, ghosts, daily challenge, accounts";
+const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), lap records, ghosts, accounts";
+const CAREER_EXTRAS = ["season", "badges", "daily"];
+const CAREER_EXTRA_KEYS = { season: "season", badges: "badges", daily: "daily.v1" };
 const CAREER_SLOT_RE = /^career\.(driver|myteam)\.([0-2])$/;
 function isCareerKey(k) {
   return k === "careerSlot" || CAREER_SLOT_RE.test(k);
@@ -708,10 +710,15 @@ function collectCareer() {
     out.careerSlot = live;
     n++;
   }
+  const extras = {};
+  if (store && store.get) for (const name of CAREER_EXTRAS) {
+    const v = store.get(CAREER_EXTRA_KEYS[name], null);
+    if (v != null && typeof v === "object" && !Array.isArray(v)) { extras[name] = JSON.parse(JSON.stringify(v)); n++; }
+  }
   let build = null;
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) {  }
-  return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
-           excluded: CAREER_EXCLUDED, count: n, careers: out };
+  return Object.assign({ format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
+           excluded: CAREER_EXCLUDED, count: n, careers: out }, extras);
 }
 function careerReady() {
   if (typeof CareerBackup !== "undefined") return Promise.resolve(true);
@@ -750,12 +757,15 @@ async function applyCareer(file, revisions) {
     if (!c) { skipped++; continue; }
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
-  if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
-  const r = await CareerBackup.applyWithUndo({ format: CareerBackup.FORMAT, slots },
-    Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: false }));
+  const envelope = { format: CareerBackup.FORMAT, slots };
+  for (const name of CAREER_EXTRAS) if (file[name] != null) envelope[name] = file[name];
+  const hasExtras = CAREER_EXTRAS.some((name) => envelope[name] != null);
+  if (!slots.length && liveSlot == null && !hasExtras) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
+  const r = await CareerBackup.applyWithUndo(envelope,
+    Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: hasExtras }));
   if (!r.ok) return refused(r.reason);
   const failed = r.failed || 0;
-  return { ok: true, applied: r.written.length + (r.selectionWritten ? 1 : 0), skipped, failed, reason: null };
+  return { ok: true, applied: Array.isArray(r.applied) ? r.applied.length : r.written.length + (r.selectionWritten ? 1 : 0), skipped, failed, reason: null };
 }
 
 async function download(obj, name) {
