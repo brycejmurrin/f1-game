@@ -257,7 +257,7 @@ const HudArrange = (() => {
       for (const [id, , sel] of ELEMENTS) {
         const el = document.querySelector(sel);
         if (!visible(el)) continue;
-        const r = el.getBoundingClientRect();
+        const r = HudLayout.maxRect ? HudLayout.maxRect(id, el) : el.getBoundingClientRect();   // at its widest race content: SECTORS "--" grows at S1 (#5678)
         out.push({ id, l: r.left, t: r.top, r: r.right, b: r.bottom });
       }
       const ctl = document.querySelectorAll("#hud-dock .touchbtn:not([hidden]), #pausebtn, #btn-cam");
@@ -370,10 +370,15 @@ const HudArrange = (() => {
       const rect = el.getBoundingClientRect();
       const oversized = rect.width > bounds.right - bounds.left || rect.height > bounds.bottom - bounds.top;
       const message = oversized ? "Oversized widget: leading edge in view. Size unchanged." : "Brought into view. Size unchanged.";
-      const move = r => ({
-        x: Math.max(bounds.left, Math.min(r.left, bounds.right - r.width)) - r.left,
-        y: Math.max(bounds.top, Math.min(r.top, bounds.bottom - r.height)) - r.top,
-      });
+      // Where the race will keep it (#5678): at its widest content, inside the bounds and off the controls, so the
+      // spot it is recovered to is the spot it paints after Done and Resume (HudLayout.keepUser moves it no further).
+      const move = r => {
+        const m = HudLayout.maxRect ? HudLayout.maxRect(selected, el) : r, w = m.right - m.left, h = m.bottom - m.top;
+        const d = { x: Math.max(bounds.left, Math.min(m.left, bounds.right - w)) - m.left, y: Math.max(bounds.top, Math.min(m.top, bounds.bottom - h)) - m.top };
+        if (!HudLayout.keepClear || !HudLayout.ctrlRects) return d;
+        const k = HudLayout.keepClear({ left: m.left + d.x, right: m.right + d.x, top: m.top + d.y, bottom: m.bottom + d.y }, bounds, HudLayout.ctrlRects());
+        return { x: d.x + k.dx, y: d.y + k.dy };
+      };
       let delta = move(rect);
       if (!delta.x && !delta.y) { after(oversized ? message : "Already in view. Size unchanged."); return; }
       const orig = dragOrig(selected);

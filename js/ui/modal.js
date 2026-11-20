@@ -127,9 +127,8 @@ window.TopModal = (function () {
      ON `document` AND NOT `window`, DELIBERATELY. An inner disclosure has to be
      able to claim Escape before its screen does — the GARAGE's camera panel is
      the case: Escape there shuts the panel, not the GARAGE. That handler is on
-     document/capture too (js/game.js) and registers at script-eval time, i.e.
-     before this one, so it runs first and marks the event handled. A listener
-     on `window` would beat it and there would be no way back.
+     `window`/capture (js/garage/setup-camera.js), so it runs first and marks
+     the event handled; one here on `window` would race it.
 
      Stopping propagation is the point, not a side effect: it is what keeps the
      key from also reaching the pause switch in js/input/input.js, which is on
@@ -244,7 +243,7 @@ window.TopModal = (function () {
     if (layer.tagName === "DIALOG") {
       if (t && t !== document.body && layer.contains(t)) return;
       const focusable = firstFocusable(layer, false) || layer;
-      try { focusable.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+      focusShown(focusable);
       return;
     }
     if (t && layer.contains(t)) return;
@@ -253,7 +252,7 @@ window.TopModal = (function () {
       // No preventDefault: `focusin` is NOT cancelable, so the call was a
       // no-op that read as if it were suppressing the stray focus. The
       // focus() below is what actually pulls focus back into the layer.
-      try { focusable.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+      focusShown(focusable);
     }
   }
 
@@ -285,6 +284,11 @@ window.TopModal = (function () {
   const inside = (layer, el) => !!el && el !== document.body && layer.contains(el);
   const connected = (el) => !!el && !!document.body && document.body.contains(el);
   const focusQuiet = (el) => { try { el.focus({ preventScroll: true }); } catch (_) { /* detached */ } };
+  // A wrap or pull-back focus can land far off screen: scroll it in (nearest edge).
+  const focusShown = (el) => {
+    focusQuiet(el);
+    try { if (document.activeElement === el && el.scrollIntoView) el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) { /* detached */ }
+  };
 
   function landing(layer) {
     const auto = layer.querySelector("[autofocus]");
@@ -404,7 +408,7 @@ window.TopModal = (function () {
       const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
       if (!edge || document.activeElement !== edge) return;
       e.preventDefault();
-      focusQuiet(e.shiftKey ? stops[stops.length - 1] : stops[0]);
+      focusShown(e.shiftKey ? stops[stops.length - 1] : stops[0]);
     });
   }
 

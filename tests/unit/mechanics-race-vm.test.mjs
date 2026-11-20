@@ -296,3 +296,17 @@ test("#5015 the drawn lens (G.lens.fovY) widens with speed on a landscape screen
     assert.ok(Math.abs((fast.drawn - rest.drawn) - (fast.authored - rest.authored)) < 0.5, "the whole dynamic share, one for one");
   } finally { p.speed = keep; G.snapGameCam(); }
 });
+
+// #5876 (clean-room audit A22): RECOVER kept the car's speed (max(speed, 16·PACE)), so pressing it
+// three times a second at full throttle lapped Bahrain in a valid 97 s against 120 s for the best AI.
+// A recovery now leaves the car at the recovery speed whatever it carried in; a stopped car still gets its push.
+test("#5876 rescuePlayer puts the car back at the recovery speed, never at the speed it carried", async () => {
+  await g.race("monza"); g.apex.go(); g.apex.headless(true);
+  const p = g.G.player, rec = 16 * Math.max(g.G.PACE, 0.05);
+  try {
+    for (const v0 of [70, 40, 0]) {
+      p.speed = v0; g.G.rescuePlayer(p);
+      assert.ok(Math.abs(p.speed - rec) < 1e-9, `from ${v0} m/s RECOVER left ${p.speed.toFixed(1)} m/s, want ${rec.toFixed(1)}`);
+    }
+  } finally { g.apex.headless(false); g.G.quitToMenu(); }
+});

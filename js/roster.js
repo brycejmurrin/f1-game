@@ -275,7 +275,8 @@
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
     "js/race/retired-card.js",
-    "js/race/driving-coach.js"
+    "js/race/driving-coach.js",
+    "js/ui/hud-inputs.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [
@@ -831,6 +832,10 @@
     "js/ui/layout-presets.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],
+    LAZY_SAVES_DATA: [
+    "js/ui/settings-export-body.js"
+  ],
+    LAZY_SAVES_DATA_EDGES: [],
     LAZY_RESULTS_SHEET: [
     "js/share/share-card-data.js",
     "js/share/share-card-layout.js",

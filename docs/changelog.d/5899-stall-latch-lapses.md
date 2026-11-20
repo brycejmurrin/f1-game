@@ -1,0 +1,1 @@
+Fixed: after the game had to restart itself because a race ran too slowly, it used to keep car reflections and per-section track lights off on that device forever; that safety setting now wears off after three days (longer if it keeps happening), while a real graphics crash still keeps it until you reset the renderer (#5899).

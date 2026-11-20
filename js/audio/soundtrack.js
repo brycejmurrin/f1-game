@@ -17,7 +17,7 @@ var GameAudioSoundtrack = (function () {
     let _decodeTail = Promise.resolve();
     const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
     const _musicLoadControllers = {};        // url -> AbortController for in-flight loads
-    const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
+    const _bufKeys = [];                     // least recently played first (bound: MUSIC_CACHE)
     // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
     // keeps the 2 most recent so a two-track playlist alternates without a
     // re-decode; a PHONE keeps only the playing track — the second buffer was
@@ -111,7 +111,7 @@ var GameAudioSoundtrack = (function () {
 
     // musicResumeBuf is the resume KEY: the decoded AudioBuffer on the decode
     // path, the url on the stream path. musicResumeAt is context.currentTime at
-    // the last start (NaN while streaming — only musicResumeOff matters then).
+    // the last start (NaN while streaming or suspended, when the offset is frozen).
     let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
     // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
     // advanced the playlist, and a failed fetch/decode (an upload in a format
@@ -149,7 +149,10 @@ var GameAudioSoundtrack = (function () {
       const el = musicEl;
       el.onended = el.onerror = el.onloadedmetadata = el.onplaying = el.onpause = null;
       try { el.pause(); } catch (e) { /* an element mid-teardown is silent either way */ }
-      if (release) { try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded */ } }
+      if (release) {
+        try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded */ }
+        musicElUrl = null;
+      }
       musicStreaming = false;
     }
     // Same contract as the decode path: resume offset per url, ended -> next,
@@ -236,14 +239,18 @@ var GameAudioSoundtrack = (function () {
       src.connect(musicGain);
       src.onended = function () {
         if (src !== musicSrc || token !== musicToken || !musicOn) return;
+        // On a one-song playlist the next source uses this same buffer. A
+        // delayed ended callback must still start the repeat at sample zero.
+        musicResumeBuf = null;
         nextTrack(1);
       };
       // Resume where the same song left off: a tab-hide stops the source and
       // the return restarted it from 0:00 — every lock or app switch rewound
       // the track. The offset is kept per BUFFER so a different song starts clean.
       let off = 0;
-      if (musicResumeBuf === buf && Number.isFinite(musicResumeAt) && buf.duration > 0) {
-        off = Math.max(0, (host.context().currentTime - musicResumeAt) + musicResumeOff) % buf.duration;
+      if (musicResumeBuf === buf && buf.duration > 0) {
+        const elapsed = Number.isFinite(musicResumeAt) ? host.context().currentTime - musicResumeAt : 0;
+        off = Math.max(0, elapsed + musicResumeOff) % buf.duration;
       }
       src.start(0, off);
       musicResumeBuf = buf; musicResumeAt = host.context().currentTime; musicResumeOff = off;
@@ -318,8 +325,19 @@ var GameAudioSoundtrack = (function () {
       // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
       if (host.context().state !== "running" && !document.hidden) { const p = host.context().resume(); if (p && p.catch) p.catch(host.resumeRejected("music")); }
       const isUser = !PLAYLIST[musicIndex].builtin;
-      if ((isUser || streamMusic()) && typeof Audio === "function" && host.context().createMediaElementSource && streamTrack(url, token)) return;
-      if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
+      if ((isUser || streamMusic()) && typeof Audio === "function" && host.context().createMediaElementSource && streamTrack(url, token)) {
+        cancelMusicLoads();
+        return;
+      }
+      if (musicElUrl !== null) stopStream(true);
+      cancelMusicLoads(url);
+      if (musicBuffers[url]) {
+        const slot = _bufKeys.indexOf(url);
+        if (slot >= 0) _bufKeys.splice(slot, 1);
+        _bufKeys.push(url);
+        playMusicBuffer(musicBuffers[url], token);
+        return;
+      }
       // SONG-CHANGE SPIKE (perf-memory M-4a). The eviction below runs only once
       // the NEW decode resolves, and musicResumeBuf pins the old track too, so a
       // phone held old + new PCM (~150-170 MB) at every song change. A phone
@@ -341,7 +359,11 @@ var GameAudioSoundtrack = (function () {
       const controller = typeof AbortController === "function" ? new AbortController() : null;
       if (controller) _musicLoadControllers[url] = controller;
       const _load = fetch(url, controller ? { signal: controller.signal } : undefined)
-        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
+        .then((r) => {
+          if (_musicLoads[url] !== _load) return null;
+          if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
+          return r.arrayBuffer();
+        })
         .then((ab) => (_musicLoads[url] !== _load ? null : isUser ? userDecodeGate(url, ab) : ab))
         .then((ab) => {
           const decode = _decodeTail.then(() => {
@@ -368,6 +390,7 @@ var GameAudioSoundtrack = (function () {
           return buf;
         })
         .catch((err) => {
+          if (_musicLoads[url] !== _load) return null;
           // Music is optional and the game plays on without it. Retained rather
           // than printed: a soundtrack that never starts is otherwise invisible.
           Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
@@ -533,14 +556,17 @@ var GameAudioSoundtrack = (function () {
       if (i < 0) stopInternal(); else playIndex(i);
     }
 
-    function cancelMusicLoads() {
+    function cancelMusicLoads(keepUrl) {
       for (const url in _musicLoadControllers) {
+        if (url === keepUrl) continue;
         try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
         delete _musicLoadControllers[url];
       }
       // Clearing logical ownership also handles an unavailable AbortController
       // or a response/decode that ignores abort and settles after a restart.
-      for (const url in _musicLoads) delete _musicLoads[url];
+      for (const url in _musicLoads) {
+        if (url !== keepUrl) delete _musicLoads[url];
+      }
     }
     function stopInternal() {
       musicOn = false;
@@ -586,6 +612,12 @@ var GameAudioSoundtrack = (function () {
     // Hide preserves the clock position; an explicit stop drops it.
     function suspendMusic() {
       captureStreamPos();
+      const ctx = host.context();
+      if (ctx && musicSrc && Number.isFinite(musicResumeAt)) {
+        // A context can keep advancing if background suspension is delayed or refused.
+        musicResumeOff = Math.max(0, musicResumeOff + ctx.currentTime - musicResumeAt);
+        musicResumeAt = NaN;
+      }
       const hidBuf = musicResumeBuf, hidAt = musicResumeAt, hidOff = musicResumeOff;
       if (musicOn) stopPlayback();
       musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff;

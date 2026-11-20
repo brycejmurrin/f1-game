@@ -59,9 +59,9 @@ const DataTelemetryRender = (function () {
         const MW = view.mw, MH = view.mh;
         mg.setTransform(R, 0, 0, R, 0, 0);
         mg.clearRect(0, 0, MW, MH);
-        if (view.onboard && view.mapT) {
-          const here = locAt(view, view.primary, T);
-          const ahead = locAt(view, view.primary, Math.min(view.tMax, T + 0.6));
+        const here = view.onboard && view.mapT && locAt(view, view.primary, T);
+        const ahead = here && locAt(view, view.primary, Math.min(view.tMax, T + 0.6));
+        if (ahead) {
           const p0 = mapPoint(view, here), p1 = mapPoint(view, ahead);
           const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
           const ZOOM = 2.6;

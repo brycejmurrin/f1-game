@@ -60,8 +60,9 @@ test("AI cars race on their team's factory aeroLoad and ERS, not a shared midpoi
     for (const c of ai) {
       const setup = P.getFactorySetup(c.team), ersP = P.ersProfile(setup, c.team);
       assert.equal(c.aeroLoad, P.aeroLoad(setup, c.team), `${c.team.id}: AI aeroLoad is its factory value`);
-      assert.equal(c.ersDeploy, ersP.deploy, `${c.team.id}: AI ersDeploy is its factory value`);
-      assert.equal(c.ersRegen, ersP.regen, `${c.team.id}: AI ersRegen is its factory value`);
+      // #5330: the factory ERS map, bounded to within AiDrive.AI_ERS_SPAN of the midpoint.
+      assert.equal(c.ersDeploy, g.sandbox.AiDrive.aiErs(ersP.deploy), `${c.team.id}: AI ersDeploy is its bounded factory value`);
+      assert.equal(c.ersRegen, g.sandbox.AiDrive.aiErs(ersP.regen), `${c.team.id}: AI ersRegen is its bounded factory value`);
     }
     const aeroSet = new Set(ai.map((c) => c.aeroLoad.toFixed(4)));
     assert.ok(aeroSet.size >= 6, `the AI field carries ${aeroSet.size} distinct aeroLoads`);

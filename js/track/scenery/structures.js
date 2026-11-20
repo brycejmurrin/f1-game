@@ -419,6 +419,11 @@ const SceneryStructures = (function () {
       push(false); push(true);   // both windings → visible from either side
     };
     const MARSHAL_PANEL = [0.06, 0.06, 0.07];   // an unlit LED light panel
+    // Each style's trackward half-width at car height (walls, poles, door,
+    // board; eaves overhang above a car). `gap` is the hut's CENTRE (anchor),
+    // so the car must stop this much short of it: blocked at `gap` itself, a
+    // car drove 1.0-1.5 m into every post (#5998).
+    const MARSHAL_HALF = { cabin: 1.1, container: 1.25, kiosk: 1.02, bunker: 1.5, tent: 1.16, tower: 1.09, hut: 1.18 };
     const marshalPost = (k, side, gap, opts) => {
       const st = (opts && opts.style) || kitOf("marshal", "hut");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
@@ -506,7 +511,13 @@ const SceneryStructures = (function () {
       }, { kind: "marshalPost", k, side });
       flagQuad(panelAt, p.t, p.u, 1.05, 0.62, MARSHAL_PANEL, true);
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
-      blockAt(k, side, gap, 1.3);   // solid hut
+      // Solid hut, stopped at its INNER FACE, over at least one node either
+      // side: blockAt is node-granular and a hut 8-10 m out on a curve
+      // projects onto the NEIGHBOURING node, whose limit stayed the 9 m
+      // default, so a car drove into it from there (#5998). The hut does not
+      // move: set back by its half-width it clipped circuit bushes and
+      // spectator-hill treads on six circuits.
+      blockAt(k, side, gap - (MARSHAL_HALF[st] || MARSHAL_HALF.hut), Math.max(1.3, ds));
     };
     const cameraTower = (k, side, gap, opts) => {
       opts = opts || {};

@@ -872,6 +872,23 @@ if (wheelAnchor && wheelAnchor.parentNode && wheelAnchor.parentNode.parentNode &
   SettingRow.wire("pm-wheelmodel", { values: WHEEL_VALUES, read: WheelState.mode, write: (m) => { WheelState.setMode(m); if (G.soundOn) GameAudio.uiSelect(); } });
   SettingRow.paint(built.row, WheelState.mode(), WHEEL_VALUES);
 }
+// PEDAL SLIDE (#5996), built at runtime under LEFT-HANDED like WHEEL LOCK.
+if (typeof Input !== "undefined" && Input.setPedalSlide) {
+  Input.setPedalSlide(store.get("pedalSlide", "instant"));
+  const mirrorHelp = $("pm-mirror") && $("pm-mirror").nextElementSibling;
+  if (mirrorHelp && typeof document !== "undefined") {
+    const SLIDE_VALUES = [["instant", "INSTANT"], ["ease", "EASE"]];
+    const built = SettingRow.build("pm-pedalslide", "PEDAL SLIDE", SLIDE_VALUES);
+    const help = document.createElement("p");
+    help.className = "adv-help"; help.id = "pm-pedalslide-help";
+    help.textContent = "Sliding a thumb from GAS onto BRAKE, or back. INSTANT presses it fully at once. EASE builds it up over a short slide, so sliding off GAS cannot slam the brakes.";
+    built.sel.setAttribute("aria-describedby", help.id);
+    mirrorHelp.after(built.row, help);
+    SettingRow.wire("pm-pedalslide", { values: SLIDE_VALUES, read: Input.pedalSlide,
+      write: (v) => { store.set("pedalSlide", Input.setPedalSlide(v)); if (G.soundOn) GameAudio.uiSelect(); } });
+    SettingRow.paint(built.row, Input.pedalSlide(), SLIDE_VALUES);
+  }
+}
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();
 };

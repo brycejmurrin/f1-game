@@ -1,6 +1,7 @@
 /* Apex 26 — the race HUD's derived readouts, kept out of js/ui/hud.js.
    Pure helpers plus two small stateful pieces GameHud owns one of each:
      lapsApart   — a gap of a lap or more reads "+1L", not ~90 s of distance ÷ speed
+     gapClock    — the ▲/▼ chip's time gap at a timing line both cars crossed
      gapDecimals / fmtGapSec / fmtGap — shared gap spelling (2 dp under ~10 s)
      energy      — the ERS store as MJ (PhysicsConsts.ES_MJ) and deploy/harvest state
      bbText      — the brake-bias chip ("BB 56%")
@@ -305,11 +306,53 @@ const HudReadouts = (function () {
     } else if (el.dataset.flagCue != null) delete el.dataset.flagCue;
   }
 
+  /* THE GAP IS A TIME GAP (#5678). distance ÷ the player's own speed doubled at every brake zone for a car
+     a few hundred metres up the road (PER 5.2 → 13.2 → 7.9 → 18.0 s in 40 s at Monaco). Real timing takes
+     the interval at a line both cars crossed: this clock keeps each car's crossing time of LINES timing
+     lines per lap (prog / step, interpolated between samples), so the gap moves only when the cars do.
+     The live reading is "how long ago the car ahead was where the car behind is now".
+     A ring of LINES + 4 covers a lap — beyond that the chip reads "+1L" (lapsApart). */
+  const LINES = 256;
+  function gapClock() {
+    const N = LINES + 4, cars = new Map();
+    let step = 0;
+    /** Record `car` at progress `prog` (m) at race time `T` (s); lap length `L` sets the line spacing. */
+    function sample(car, prog, T, L) {
+      if (!(L > 0) || !Number.isFinite(prog) || !Number.isFinite(T)) return;
+      if (L / LINES !== step) { step = L / LINES; cars.clear(); }
+      let c = cars.get(car);
+      // A re-grid or a reset moves a car BACK: its history no longer describes this run.
+      if (!c || prog < c.p - 1 || T < c.t) { c = { p: prog, t: T, k: new Float64Array(N).fill(NaN), at: new Float64Array(N).fill(NaN) }; cars.set(car, c); return; }
+      for (let i = Math.floor(c.p / step) + 1, e = Math.floor(prog / step); i <= e; i++) {
+        const j = ((i % N) + N) % N;
+        c.k[j] = i; c.at[j] = c.t + (T - c.t) * (i * step - c.p) / (prog - c.p);
+      }
+      c.p = prog; c.t = T;
+    }
+    const at = (car, i) => { const c = cars.get(car), j = ((i % N) + N) % N; return c && c.k[j] === i ? c.at[j] : NaN; };
+    /** Seconds since `front` was where `back` is now (its crossings either side, interpolated): a stopped car's gap
+     *  grows with the clock. The interval at the last shared line before `front` crosses the next; else NaN.
+     *  `laps`: whole laps `front` is up on `back` by race distance, so a car on another lap is read at the same
+     *  TRACK point (REL's lapped rows), not a lap's worth of seconds. */
+    function gap(front, back, laps) {
+      const c = cars.get(back);
+      if (!c || !(step > 0)) return NaN;
+      const i = Math.floor(c.p / step), sh = (laps | 0) * LINES, a = at(front, i + sh), b = at(front, i + sh + 1);
+      const d = b >= a ? c.t - (a + (b - a) * (c.p / step - i)) : at(back, i) - a;
+      return d >= 0 ? d : NaN;
+    }
+    /** gap(front, back), or `fallback` while there is none (distance ÷ speed until both cars cross a line). */
+    const gapOr = (front, back, fallback, laps) => { const g = gap(front, back, laps); return g >= 0 ? g : fallback; };
+    return { sample, gap, gapOr, reset: () => cars.clear() };
+  }
+
+  /** THE one race clock: hud.js samples and resets it each HUD tick; the chips, RELATIVE and STRATEGY read it. */
+  const gaps = gapClock();
   // GAP_FINE_LT stays module-local (gapDecimals only).
   /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): any pitState but "none" (lane, box, out). */
   function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
   return { inPit, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
-    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
+    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S, gapClock, gaps,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };
 })();
