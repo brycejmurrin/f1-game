@@ -357,10 +357,12 @@ export function treeCeilingsAt(ref, request) {
   };
   const base = read("tests/data/ratchets.json");
   if (base.error) return base;
-  const tree = {};
+  const tree = {}, absorb = {};
   for (const [m, v] of Object.entries(base.json?.tree || {})) {
     const c = typeof v === "number" ? v : v?.ceiling;
     if (typeof c === "number" && Number.isFinite(c)) tree[m] = c;
+    // B+D (2026-11-20): an entry's `absorb` is growth a PR may add with no label (treeRaises below).
+    if (v && typeof v === "object" && Number.isFinite(v.absorb) && v.absorb > 0) absorb[m] = v.absorb;
   }
   const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
   if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
@@ -374,16 +376,20 @@ export function treeCeilingsAt(ref, request) {
       tree[m] += d;
     }
   }
-  return { tree };
+  return { tree, absorb };
 }
 
 /** The tree metrics whose ceiling is higher at `after` than at `before`, and those `before` carries that `after` does
  *  not: ratchets.mjs measures only the metrics ratchets.json names, so deleting one removes its ceiling, the widest
  *  raise there is (`to: null`, shown as "removed"). A metric only `after` carries is a new ceiling, no raise. Pure. */
-export function treeRaises(before, after) {
-  const b = before || {}, a = after || {};
-  return Object.keys(b).filter((m) => !Object.hasOwn(a, m) || a[m] > b[m]).sort()
+export function treeRaises(before, after, absorbBefore = {}, absorbAfter = {}) {
+  const b = before || {}, a = after || {}, ab = absorbBefore || {}, aa = absorbAfter || {};
+  // B+D (2026-11-20): growth inside the absorb the BASE granted is no raise; a wider absorb is one (`<m> absorb`).
+  const inside = (m) => Object.hasOwn(a, m) && ab[m] > 0 && a[m] - b[m] <= ab[m] && (aa[m] || 0) <= ab[m];
+  const rows = Object.keys(b).filter((m) => (!Object.hasOwn(a, m) || a[m] > b[m]) && !inside(m))
     .map((m) => ({ metric: m, from: b[m], to: Object.hasOwn(a, m) ? a[m] : null }));
+  for (const m of Object.keys(aa)) if (Object.hasOwn(b, m) && aa[m] > (ab[m] || 0)) rows.push({ metric: `${m} absorb`, from: ab[m] || 0, to: aa[m] });
+  return rows.sort((x, y) => (x.metric < y.metric ? -1 : x.metric > y.metric ? 1 : 0));
 }
 
 /**
@@ -414,7 +420,7 @@ export function prRaisesAt(sha, base, request) {
   if (before.error) return before;
   const after = treeCeilingsAt(sha, request);
   if (after.error) return after;
-  return { raises: treeRaises(before.tree, after.tree) };
+  return { raises: treeRaises(before.tree, after.tree, before.absorb, after.absorb) };
 }
 
 /** Does `now` raise nothing beyond `then` (the raises Bryce saw when he clicked)? Every metric raised now was raised

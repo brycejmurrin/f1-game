@@ -264,7 +264,7 @@
     "tools/check/boot-wall.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes) for the eager* tree ratchets; no CLI output"
+      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes, stripped code bytes) for the eager* tree ratchets; CLI prints one JSON line, or with --growth [--days=N] the wall's change over N days (the weekly report)"
     },
     "tools/check/brake-cue-calibrate.mjs": {
       "action": "keep-native",
@@ -1612,6 +1612,11 @@
       "preserve": "@c3"
     },
     "tools/lib/impact-map.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/js-strip.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
