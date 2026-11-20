@@ -634,3 +634,23 @@ Proposed but **not applied**: clearing the renderer boot canary when a hung star
 (A28, patch in the sub-audit's notes). It stops a slow first load from retiring the three.js renderer, but
 a machine whose GPU driver hangs would then wait 15 s on every boot instead of being retired after two —
 a trade-off for the owner.
+
+### Fixes 27–32 — career and save integrity (addendum A8, A17, and one new)
+
+Six separate commits, each verified in Chromium before and after:
+
+- **27** `js/career/career-backup.js`: an import naming an unknown team or an impossible round is refused
+  (IMPORT FAILED — UNKNOWN-TEAM / ROUND-RANGE; both were restored before). Genuine exports still validate.
+- **28** `js/career/save-migrate.js`: a stored save with an unknown team is seated at the default team
+  (was: budget 0 and the player racing and being paid as Red Bull's VER).
+- **29** `js/career/career.js` `useSlot`: opening the new-career wizard on an empty slot no longer changes
+  which career "continue" resumes.
+- **30** `js/career/career.js` `rollover`: refused unless the season is finished.
+- **31** `js/career/career.js`: **new finding** — one failed write at season rollover set the conflict flag,
+  so the retry was refused even with space freed and the hub showed a conflict panel comparing two identical
+  saves until a reload. The flag is now set only for a real conflict; the retry succeeds.
+- **32** `js/ui/settings-export.js`: RESET GARAGE keeps `careerSetup.*`, matching its tooltip.
+
+Ready but **not applied**, pending the owner's decision: locking the team for a season with progress and
+storing the season's own seat (finding 4; patch proven: 5 points stayed with the player, and a single race
+in another car no longer moves the season seat), and rejecting a career driver code already on the grid.
