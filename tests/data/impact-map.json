@@ -3247,7 +3247,8 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
-        "tests/unit/rear-wing-drs-rail.test.mjs"
+        "tests/unit/rear-wing-drs-rail.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "buildComplete": [
         "tests/specs/parts-physics.spec.js",
@@ -3267,7 +3268,6 @@
         "tests/unit/legends.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ]
     },
@@ -16677,6 +16677,9 @@
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
+      ],
+      "casterRefused": [
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "casterSources": [
         "tests/unit/gfx-backend-canary.test.mjs",

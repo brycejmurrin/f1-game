@@ -1,5 +1,15 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-20 — PR #5788 (claude/render-caster-position-only-1118): car shadow casters position-only
+
+`(tree) eagerCodeBytes` 4018312 → **4018390** (+78, stripped code bytes; inside the 5,000 B absorb).
+Deliberate raise of the exact boot-wall ceiling; it still needs Bryce's `ratchet-raise` label on the PR.
+The growth is this PR's eager `js/car/car-draw.js` and `js/car/car3d.js`. The code is the `_casterOnly`
+flag on the two depth-only builds (the team caster and the first-person caster), which lets TLX allocate
+position + index alone (about 8 to 10 MB of `carSh` geometry saved per race). The earlier `eagerBytes`
++224 raise (2026-11-19) lapsed when the tip moved to `eagerCodeBytes`.
+Fragment: `tests/data/ratchets.d/claude--render-caster-position-only-1118.json`.
+
 ## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
 
 `(tree) eagerBytes` 8015286 → **8016541** (+1255). Deliberate raise of the exact boot-wall ceiling;
