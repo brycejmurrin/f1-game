@@ -43,7 +43,7 @@ function trackDefs() {
 // `const SeasonCal` lands in the context's global LEXICAL scope, not on the
 // global object — read it back by evaluating its name (same shape as
 // career-settle.test.mjs).
-function load(stored0, tracks0) {
+function load(stored0, tracks0, extra) {
   const stored = new Map(Object.entries(stored0 || {}));
   const subscribers = [];
   const revisions = new Map();
@@ -70,6 +70,7 @@ function load(stored0, tracks0) {
     },
     Tracks: tracks,
     Teams: { POINTS },
+    ...(extra || {}),
   });
   seedLog(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
@@ -895,6 +896,30 @@ test("the 2026 REAL calendar names its rounds as raced: Bahrain GP at Sepang, Ba
   // An edited calendar is no longer 2026 as raced: the circuit's own name again.
   assert.equal(S.applyConfig(S.preset("full")).ok, true);
   assert.equal(S.gpName(byId("sepang")), byId("sepang").gp || "");
+});
+
+// Clean-room fix 43: a CAREER on the real-2026 calendar listed two "Spanish GP"
+// rounds and a "Malaysian GP" at Sepang, because the 2026 names were applied in
+// season mode only. A career races Career.calendar(), so the test is that list.
+test("a career on the 2026 REAL calendar uses the same Grand Prix names as season mode", () => {
+  const tracks = realTracks();
+  const byId = (id) => tracks.LIST.find((t) => t.id === id);
+  const real = REAL_ORDER.map(byId);
+  const { S } = load(null, tracks, { Career: { calendar: () => real } });
+  S.engage("career");
+  assert.equal(S.gpName(byId("sepang")), "Bahrain GP");
+  assert.equal(S.gpName(byId("catalunya")), "Barcelona-Catalunya GP");
+  assert.equal(S.gpName(byId("monza")), byId("monza").gp || "");
+  // An explicit calendar (the next-race card passes the career's) decides alone.
+  assert.equal(S.gpName(byId("sepang"), REAL_ORDER), "Bahrain GP");
+  assert.equal(S.gpName(byId("sepang"), REAL_ORDER.slice(1)), byId("sepang").gp || "", "an edited calendar keeps the circuit's name");
+  // A career on the 24-round default calendar is not 2026 as raced.
+  const { S: D } = load(null, tracks, { Career: { calendar: () => tracks.SEASON } });
+  D.engage("career");
+  assert.equal(D.gpName(byId("sepang")), byId("sepang").gp || "");
+  // A quick race (flow "gp") keeps the circuit's own name.
+  const { S: Q } = load(null, tracks, { Career: { calendar: () => real } });
+  assert.equal(Q.gpName(byId("sepang")), byId("sepang").gp || "");
 });
 
 // ── bug hunt 2026-09-29: persistence ──────────────────────────────────────────

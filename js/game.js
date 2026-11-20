@@ -7991,7 +7991,7 @@ function render(dt) {
       }
       if (_out) continue;
     }
-    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));   // visible cars only; rivals cast into the maps within 50 m
+    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2, fovY));   // visible cars only; rivals cast into the maps within 50 m (lens-adjusted, like the detail tier)
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the same yawVis as the body
     // (heading vs road tangent) so the nose rotates when the car does. Pitch,
@@ -8214,7 +8214,7 @@ function render(dt) {
     }
     // The player's ERS strip and every car's throttle-lift after-fire (rivals
     // within 60 m, FieldLod): js/car/car-draw.js drawExhaustFx.
-    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2));
+    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2, fovY));
   }
   CarMesh.flushTailGlows();   // the night tail glows queued above, one run (TLX instances it; hunt 2 F3)
   // Flush all accumulated car decals in one decal-program block — not

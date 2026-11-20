@@ -317,7 +317,7 @@ under 100 ms through) lifts `_frameEMA` 3-8 ms, decaying over ~10 frames.
 Taken just before an evaluation it crosses `degradeAt`, the cut is priced
 against that inflated EMA, and 75-135 frames later the EMA has relaxed back,
 so the step "verifies" by regression to the mean, whatever it bought. On a
-phone a verified shed then latches `_phoneSlowLatch` for the session (raised
+phone a verified shed then latches `_phoneSlowLatch` for the rest of that race (raised
 by #3657; replays: docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md). So the degrade
 gate and both ends of a verify read `_evEMA`: the same alpha-0.1 average,
 fed the same samples, except that a multi-vsync stall (over 2.5 floors)

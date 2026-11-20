@@ -4251,6 +4251,7 @@
       "calendar": [
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs"
       ],
       "chooseObjective": [

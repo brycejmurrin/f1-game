@@ -134,7 +134,7 @@ function audioPanelHarness({ voiceUI = false } = {}) {
   seedDom(context);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
     { filename: absSrc("js/audio/panel.js") });
-  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired, voices, tunes };
+  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired, voices, tunes, GameAudio };
 }
 
 test("audio boot restore keeps saved master sound off when music is on", () => {
@@ -171,6 +171,23 @@ test("master sound off cancels pending announcements and every recorded channel"
   assert.ok(calls.includes("radio-stop"));
   assert.ok(calls.includes("ann-stop"));
   assert.ok(calls.includes("pack-stop"));
+});
+
+// Clean-room fix 46: SOUND ON is the label before any audio exists, so the first
+// press must unlock and stay on, not mute and save the mute.
+test("the first SOUND ON press before audio has played unlocks instead of muting", () => {
+  for (const ctx of [null, { state: "suspended", currentTime: 0 }, { state: "running", currentTime: 0.05 }]) {
+    const { panel, G, nodes, writes, GameAudio } = audioPanelHarness(); panel.init();
+    GameAudio.context = () => ctx;
+    {
+      G.soundOn = true;
+      nodes.get("soundbtn").onclick();
+      assert.equal(G.soundOn, true, JSON.stringify(ctx));
+      assert.notEqual(writes.get("sound"), false, "no mute is saved");
+      if (ctx) { ctx.state = "running"; ctx.currentTime = 5; }
+      if (ctx) { nodes.get("soundbtn").onclick(); assert.equal(G.soundOn, false, "once audio has played, a press mutes"); }
+    }
+  }
 });
 
 test("music and SFX enable clicks also unlock a saved-off master synchronously", () => {
