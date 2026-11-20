@@ -96,7 +96,8 @@ concurrency:
 jobs:
   group:
     name: "${{ inputs.group }} (${{ matrix.shard }}/${{ matrix.total }})"
-    runs-on: ubuntu-latest
+    # UBICLOUD TRIAL (Bryce 2026-11-20 ~21:55Z "try using ubicloud directly now"): a throwaway branch, never merged.
+    runs-on: ${{ vars.APEX_BROWSER_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -111,7 +112,7 @@ jobs:
     # replaces a superseded dispatch, pending shards included.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
     concurrency:
-      group: browser-group-lane-${{ matrix.lane || matrix.shard }}
+      group: browser-group-ubicloud-trial-${{ matrix.shard }}
       queue: max
     steps:
       # `pr` is text from whoever dispatched: digits or nothing, checked before it names a ref (env, never inline).
