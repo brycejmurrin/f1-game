@@ -155,7 +155,6 @@ test("mobile-ui: ICS row share in data.css; the howto/quali/install overrides ar
   // data.css loads for the data routes only (index.html data-route), so How To Play, the quali sheet and the
   // iOS install tip never saw these rules before a late fallback (clean-room audit, 2026-11-20). They live with
   // their screens' eager-deferred sheets now.
-  for (const sel of ["#howtoplay-inner #htp-contents", "#quali .sheet:not", "#ios-install"]) {
-    assert.equal(DATA_CSS.includes(sel), false, sel + " is not in css/data.css");
-  }
+  const moved = ["#howtoplay-inner #htp-contents", "#quali .sheet:not", "#ios-install"];
+  assert.deepEqual(rules.filter((r) => moved.some((sel) => r.selector.includes(sel))).map((r) => r.selector), [], "no css/data.css rule names a moved screen");
 });
