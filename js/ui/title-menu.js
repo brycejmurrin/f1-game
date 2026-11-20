@@ -233,7 +233,7 @@ const TitleMenu = (function () {
       const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
       if (dailyBtn && dailySub) {
         const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
-        setText(dailySub, p.trackName + " · " + p.weather.toUpperCase()
+        setText(dailySub, p.trackName + " · " + (typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase())
           + (streak > 0 ? " · STREAK " + streak : ""));
         // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
         setAttr(dailyBtn, "aria-label", "Daily time trial — " + dailySub.textContent);

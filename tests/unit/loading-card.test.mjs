@@ -1245,3 +1245,11 @@ test("fitCard runs after every reveal and whenever the card's geometry or the wi
   const cap = read("js/ui/captions.js");
   assert.match(cap.slice(cap.indexOf("function paintLoading("), cap.indexOf("function applyDom()")), /el\.hidden = false;\n\s*refitCard\(\);[\s\S]*if \(el\) el\.hidden = true;\n\s*refitCard\(\);/, "the radio caption is the card's tallest late arrival: captions.js re-fits on show and hide");
 });
+
+// #5897 row 3 (Bryce, via the orchestrator 2026-11-20 07:21Z: CLOUDY wins): one weather word for
+// overcast. The Daily sub-line and the track-select Daily chip printed p.weather.toUpperCase(), "OVERCAST".
+test("wxWord names overcast CLOUDY, and the Daily sub-line and chip print it", () => {
+  assert.deepEqual(["overcast", "rain", "dry", "hail", ""].map(LC.wxWord), ["CLOUDY", "RAIN", "DRY", "HAIL", ""]);
+  const src = ["js/ui/title-menu.js", "js/ui/select-screen.js"].map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
+  assert.equal((src.match(/LoadingCard\.wxWord\(p\.weather\)/g) || []).length, 2, "both Daily labels use LoadingCard.wxWord");
+});
