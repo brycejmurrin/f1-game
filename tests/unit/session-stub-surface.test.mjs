@@ -197,22 +197,23 @@ test("the stub AudioPanel paints a saved SOUND OFF on the title button before th
   assert.equal(on.attrs["aria-pressed"], "true");
 });
 
-// #5900: SOUND OFF as the first click downloaded the whole audio bundle (~3.6 MB) only to stay
-// silent: the stub ran AudioPanel._ensure() before reading which way the click went.
-test("the stub AudioPanel turns sound OFF without loading the audio bundle; ON still loads it", async () => {
+// The pre-unlock "SOUND ON" press asks to hear the game: it loads the bundle and
+// stays ON (Bryce 21:39Z, option A; clean-room fix 46 over #5900.2).
+test("the stub AudioPanel's first SOUND ON press loads the audio bundle and stays ON", async () => {
   const P = stubGlobal("AudioPanel"), was = P._ensure;
   let loads = 0;
   P._ensure = () => { loads++; return Promise.resolve(); };
   try {
+    const writes = [];
+    const store = { get: (k, d) => d, set: (k, v) => { writes.push([k, v]); } };
     const btn = { textContent: "SOUND ON", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, onclick: null };
-    const G = { els: { soundbtn: btn }, store: G0.store, soundOn: true };
+    const G = { els: { soundbtn: btn }, store, soundOn: true };
     P.create(G);
     btn.onclick();
-    await Promise.resolve();
-    assert.equal(loads, 0, "OFF needs no audio bundle");
-    assert.equal(G.soundOn, false);
-    assert.equal(btn.textContent, "SOUND OFF");
-    btn.onclick();
-    assert.equal(loads, 1, "ON loads the bundle");
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(loads, 1, "the first press loads the audio bundle");
+    assert.equal(G.soundOn, true, "and keeps sound on");
+    assert.equal(btn.textContent, "SOUND ON");
+    assert.deepEqual(writes.filter(([k]) => k === "sound"), [["sound", true]], "it saves sound=true, never a mute");
   } finally { P._ensure = was; }
 });
