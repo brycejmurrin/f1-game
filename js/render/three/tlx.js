@@ -619,9 +619,24 @@ const TLX = (function () {
       // FIRST on this canvas and its attributes are the ones that take (a
       // second getContext returns the existing context and silently drops
       // them).
+      // DESKTOP TIERS (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): GfxQuality.feature(name), false on any throw
+      // or without the module, so every extra below falls back to today's path.
+      const _gfxx = (n) => { try { return typeof GfxQuality !== "undefined" && !!GfxQuality.feature(n); } catch (_) { return false; } };
+      const _deskTier = !isMobile && !isWebKit && !_softAdapter;
+      let _hdrPeak = 1;   // hdrOut: 1 = SDR; set after init from what the canvas reports (TLXAA.hdrPeak)
+      // mirrorHi (ULTRA+): the mirror target's clamp, 2048x1024 (js/render/shared/mirror-pass.js targetSize).
+      const _mirHi = !isMobile && _gfxx("mirrorHi");
+      const _mirCapW = _mirHi ? 2048 : 1024, _mirCapH = _mirHi ? 1024 : 512;
       let ownGL = null;
       async function bootRenderer(forceWebGL) {
         let glCtx = null;
+        // hdrOut: ask three for an rgba16float canvas with toneMapping "extended" (WebGPUBackend configure); whether
+        // the browser and display honour it is checked after init. Never on WebKit (#269582), a phone or software.
+        let hdrAsk = false;
+        try {
+          hdrAsk = !forceWebGL && !_liteGpu && typeof GfxQuality !== "undefined" && !!GfxQuality.feature("hdrOut")
+            && typeof matchMedia === "function" && matchMedia("(dynamic-range: high)").matches;
+        } catch (_) { hdrAsk = false; }
         if (forceWebGL) {
           try {
             // Flat players (iOS / mobile / CI): do NOT set xrCompatible here —
@@ -664,6 +679,7 @@ const TLX = (function () {
           ...(!forceWebGL && (isMobile || isWebKit)
             ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
             : {}),
+          ...(hdrAsk ? { outputType: THREE.HalfFloatType } : {}),   // hdrOut (above); !_liteGpu excludes the branch above
           forceWebGL,
           // Phase 0 XR uses XRWebGLLayer + manual per-eye present — not three's
           // multiview ArrayCamera path. Keep multiview off: three #32538
@@ -812,6 +828,17 @@ const TLX = (function () {
       _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
+      // hdrOut: the canvas configuration the browser reports back decides (TLXAA.hdrPeak); anything short of a
+      // confirmed rgba16float + "extended" canvas on an HDR display keeps the SDR composite (peak 1).
+      const _hdrWant = !!(renderer.backend && renderer.backend.parameters && renderer.backend.parameters.outputType === THREE.HalfFloatType);
+      if (_hdrWant && !forceWebGL && window.TLXAA) {
+        try {
+          const be = renderer.backend, gctx = be && be.isWebGPUBackend ? be.context : null;
+          _hdrPeak = TLXAA.hdrPeak({ want: true, webgpu: !!gctx, soft: _softBlit, displayHdr: true,
+            config: gctx && typeof gctx.getConfiguration === "function" ? gctx.getConfiguration() : null });
+        } catch (_) { _hdrPeak = 1; }
+        try { Log.info("gfx", "TLX hdrOut: peak " + _hdrPeak); } catch (_) { /* harness */ }
+      }
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
       // or call getContext("2d"|"webgl2") on three's node — init() has not
       // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads
@@ -1279,6 +1306,29 @@ const TLX = (function () {
 
       // lifecycle state
       let renderScale = 1;
+      // superSample (ULTRA+) / ss2x (CINEMA): renderScale may exceed 1 up to _ssCeil() (TLXAA.ssCeil: 1.5 at DPR <=
+      // 1.25, 2 while GfxQuality.cinema()). Desktop, not a software adapter. The governor steps it down like any
+      // scale; begin() re-reads the ceiling every 32 frames (a shed or a cinema flip) and clamps or raises to it.
+      const _ssOk = !isMobile && !_softAdapter && !!window.TLXAA;
+      let _ssN = 0, _ssCine = false, _ssPrev = 1, _ssCineNow = false;
+      function _ssCeil() {
+        _ssCineNow = false;
+        if (!_ssOk) return 1;
+        try {
+          const cine = _ssCineNow = !!(typeof GfxQuality !== "undefined" && GfxQuality.cinema && GfxQuality.cinema() && _gfxx("ss2x"));
+          const dev = renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device;
+          return TLXAA.ssCeil({ superSample: _gfxx("superSample"), ss2x: !!cine, dpr: window.devicePixelRatio || 1,
+            presentW, presentH, maxDim: (dev && dev.limits && dev.limits.maxTextureDimension2D) || 8192 });
+        } catch (_) { return 1; }
+      }
+      function _ssTick() {
+        if (!_ssOk || ((++_ssN) & 31) !== 1) return;
+        const ceil = _ssCeil(), cine = _ssCineNow && ceil > 1;
+        if (cine && !_ssCine) { _ssCine = true; _ssPrev = renderScale; renderScale = ceil; }
+        else if (!cine && _ssCine) { _ssCine = false; renderScale = Math.min(_ssPrev, ceil); }
+        else if (renderScale > ceil + 1e-6) renderScale = ceil;
+        else if (_ssN === 1 && ceil > 1 && renderScale === 1) renderScale = ceil;   // first frame: boot at the ceiling unless something already lowered it
+      }
       let W = 1, H = 1;
       // Present size (css×dpr) vs render size (×renderScale). With
       // apex26.spatialUpscale=1 and scale < ~1, canvas/soft display is present
@@ -1456,6 +1506,7 @@ const TLX = (function () {
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
             renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : (_ultra && !softContent("shadow") ? 4096 : 0), carSize: _ultra ? 2048 : 0,
             isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
+            extras: _ultra && !_lite,   // EXTREME csm / lampShadows may build (tlx-shadow.js asks GfxQuality.feature)
           });
         }
       } catch (e) {
@@ -1513,6 +1564,8 @@ const TLX = (function () {
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
               postSubmitHold: function () { return _postSubmitOn; },
+              // Desktop tiers (tsl-aa.js): TRAA on native WebGPU in place of FXAA; the HDR composite peak (1 = SDR).
+              traa: !forceWebGL && _deskTier && _gfxx("traa"), hdrPeak: _hdrPeak,
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -1856,10 +1909,25 @@ const TLX = (function () {
           // the lit shader fails to LINK on iOS Safari and every lit surface
           // draws nothing. Same _liteGpu gate as antialias/outputType above.
           // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
+          const litCtx = { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
             sharedUniforms: _sharedUniforms,
-            maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
+            // EXTREME lightsHi: 128 slots on three's WebGPU backend only (LightBudget.tlxSlots).
+            maxLights: _liteGpu ? LightBudget.LITE : LightBudget.tlxSlots(isWebGPU()) };
+          // EXTREME material detail / env-everywhere (tsl-lit.js MAT_DETAIL, ENV_ALL): desktop WebGPU only; a
+          // factory that throws with them retries as today's program.
+          let litDetail = null;
+          try {
+            if (!isMobile && typeof GfxQuality !== "undefined" && renderer.backend && renderer.backend.isWebGPUBackend) {
+              litDetail = { matDetail: GfxQuality.feature("matDetail"), envAll: GfxQuality.feature("envAll"), envLods: Math.log2(ENV_SIZE) };
+              if (!litDetail.matDetail && !litDetail.envAll) litDetail = null;
+            }
+          } catch (_) { litDetail = null; }
+          try { lit = TLXShaders.lit(THREE, TSL, litDetail ? Object.assign({ detail: litDetail }, litCtx) : litCtx); } catch (e) {
+            if (!litDetail) throw e;
+            Log.warn("gfx", "TLX: detail lit factory failed, today's program —", e);
+            lit = TLXShaders.lit(THREE, TSL, litCtx);
+          }
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
@@ -4839,8 +4907,13 @@ const TLX = (function () {
           presentW = Math.max(1, Math.floor(presentW * k));
           presentH = Math.max(1, Math.floor(presentH * k));
         }
-        const rw = Math.max(1, Math.round(presentW * renderScale));
-        const rh = Math.max(1, Math.round(presentH * renderScale));
+        let rw = Math.max(1, Math.round(presentW * renderScale));
+        let rh = Math.max(1, Math.round(presentH * renderScale));
+        // superSample: a scale above 1 must not push the render size past the device limit (presentW is clamped).
+        if (renderScale > 1 && maxDim && (rw > maxDim || rh > maxDim)) {
+          const k = Math.min(maxDim / rw, maxDim / rh);
+          rw = Math.max(1, Math.floor(rw * k)); rh = Math.max(1, Math.floor(rh * k));
+        }
         const fixedNow = fixedActive();
         const up = fixedNow ? (rw !== presentW || rh !== presentH) : wantSpatialUpscale();
         // Fixed: the drawing buffer is present-sized at EVERY scale (it is never resized by a step).
@@ -5262,11 +5335,13 @@ const TLX = (function () {
         init() { return true; },             // already initialised by create()
         resize,
         setRenderScale(s) {
-          const v = Math.min(1, Math.max(0.5, +s || 0));
+          const v = Math.min(_ssOk ? _ssCeil() : 1, Math.max(0.5, +s || 0));   // superSample: the ceiling above 1
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
           renderScale = v; resizeNow(); return true;
         },
         getRenderScale() { return renderScale; },
+        maxRenderScale() { return _ssCeil(); },
+        mirrorMax: _mirHi ? [_mirCapW, _mirCapH] : null,   // mirrorHi: mirror-pass.js targetSize's cap (GLX/WGX: none, 1024x512)   // superSample / ss2x ceiling (1 everywhere else): the governor's climb
         // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
         capDpr(n) {
           if (!(n >= 1) || n >= DPR_CAP) return false;
@@ -5326,6 +5401,7 @@ const TLX = (function () {
         // Read by the producer before resolving/packing casters; mobile Begin hooks are no-ops.
         get carShadowEnabled() { return !!(shadowSys && shadowSys.S.carEnabled); },
         get lampShadowEnabled() { return !!(shadowSys && shadowSys.S.lampEnabled); },
+        get shadowX() { return (shadowSys && shadowSys.x) || null; },   // EXTREME cascades + extra lamps; .state() for __apex
         carShadowState() {
           const s = shadowSys && shadowSys.S;
           return s ? { enabled: s.carEnabled, arms: s.carArms, armed: s.carArmed } : { enabled: false, arms: 0, armed: false };
@@ -5944,7 +6020,7 @@ const TLX = (function () {
           if (_softBlit && _softReadPending) return false;
           if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
           if (mirrorWarmGate()) return false;   // B-F3.1: its programs first (startMirrorWarm), never a cold link mid-frame
-          w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
+          w = Math.max(16, Math.min(_mirCapW, w | 0)); h = Math.max(8, Math.min(_mirCapH, h | 0));   // mirrorHi: 2048x1024 (mirror-pass.js HI_W)
           try {
             prepareMirrorTarget(w, h);
           } catch (e) {
@@ -6311,6 +6387,8 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           // three's per-frame tick (info.reset, nodeFrame.update), once per drawn frame — see pumpAnimation.
           if (renderer.__apexPump) renderer.__apexPump.drain();
+          // superSample / ss2x: the renderScale ceiling, before the resize that applies it
+          _ssTick();
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // Existing bounded retry remains synchronous. Fully warmed recovery
@@ -6359,13 +6437,19 @@ const TLX = (function () {
             camera.matrixWorld.identity();
           }
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+          // traa: this frame's sub-pixel jitter on the MAIN camera only (the mirror builds mirCam from frame.proj, the
+          // HUD is DOM), and only on a frame the post chain will resolve (post.taaJitter answers null otherwise).
+          if (post && post.taaJitter && frame && frame.proj && frame.viewProj && !frame.noEnv && !_xrActive) {
+            const j = post.taaJitter(W, H);
+            if (j) { TLXAA.applyJitter(camera.projectionMatrix.elements, j[0], j[1]); camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert(); }
+          }
           if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
           if (lit && frame) {
             lit.updateFrame(frame);
             if (lit.setEnvStr) {
               const _T = frame.tune;
               const _envOn = envRT && envReady && !_envBlank && !frame.noEnv && !_envActive;
-              lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0);
+              lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0, _envOn);
             }
           }
           if (fx && frame) fx.updateFrame(frame);
@@ -6630,7 +6714,7 @@ const TLX = (function () {
               // it: the slider is step 0.001, so keying the raw float rebuilt the
               // grid on every drag step that mapped to the same cap.
               // Compared as numbers first: the string is built only when a part moves.
-              const kp = _lgKP, kCap = LampChunks.capFor(knob), kGen = typeof LampBake !== "undefined" ? LampBake.gen() : 0;
+              const kp = _lgKP, kCap = LampChunks.capFor(knob, LightBudget.bakeChunk()), kGen = typeof LampBake !== "undefined" ? LampBake.gen() : 0;
               if (kp[0] !== kCap || kp[1] !== total || kp[2] !== nrec || kp[3] !== cell || kp[4] !== kGen) {
                 kp[0] = kCap; kp[1] = total; kp[2] = nrec; kp[3] = cell; kp[4] = kGen;
                 kp.str = kCap + "|" + total + "|" + nrec + "|" + cell + "|" + kGen;
@@ -6650,8 +6734,13 @@ const TLX = (function () {
                     _lgChs = fresh; _lgChsFirst = first; _lgChsTotal = total; _lgChsNrec = nrec;
                   }
                   const chs = _lgChs;
-                  const table = LampChunks.resolve(AL, chs, knob);
-                  const grid = LampChunks.buildGrid(table, chs);
+                  // lightsHi bakes 48 a cell; a grid that outgrows the 256^2 index texture re-bakes at 24.
+                  let table = LampChunks.resolve(AL, chs, knob, LightBudget.bakeChunk());
+                  let grid = LampChunks.buildGrid(table, chs);
+                  if (LightBudget.bakeChunk() > LampChunks.CAP && (grid.concat || table.concat).length > LG_IDX * LG_IDX) {
+                    table = LampChunks.resolve(AL, chs, knob);
+                    grid = LampChunks.buildGrid(table, chs);
+                  }
                   const okG = lit.setLampGrid({ lights: AL, table, grid, cell });
                   _lampGridState = { on: !!okG, lamps: (AL.length / 15) | 0,
                                      chunks: chs.length, recs: nrec, idx: (grid.concat || table.concat).length,

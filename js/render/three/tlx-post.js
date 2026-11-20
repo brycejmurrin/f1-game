@@ -75,6 +75,7 @@
     let quad = null;
     let disposed = false;
     let viewportScope = null;
+    let AA = null;   // traa: the TLXAA.taa controller (built below, after the pass set)
     function ownRT(rt) { ownedRTs.add(rt); return rt; }
     function ownTexture(tex) { if (tex) ownedTextures.add(tex); return tex; }
     function trackMaterial(mat) { if (mat) ownedMaterials.add(mat); return mat; }
@@ -83,6 +84,7 @@
       disposed = true;
       if (quad) quad.material = null;
       if (viewportScope) viewportScope.dispose();
+      if (AA) AA.dispose();
       for (const mat of ownedMaterials) {
         try { mat.dispose(); } catch (_) { /* device already dying */ }
       }
@@ -309,7 +311,9 @@
     }
     // LDR target: composite output, FXAA input (always allocated — FXAA is
     // the unconditional resolve, like GLX's ldrFBO).
-    const ldrRT = makeRT(1, 1, THREE.UnsignedByteType);
+    // hdrOut (tsl-aa.js hdrPeak): above 1 the composite writes highlights past SDR white, so its target is half-float.
+    const hdrPeak = webgpu && ctx.hdrPeak > 1 ? +ctx.hdrPeak : 1;
+    const ldrRT = makeRT(1, 1, hdrPeak > 1 ? THREE.HalfFloatType : THREE.UnsignedByteType);
     ldrRT.texture.name = "TLXPostLDR";
     // SGSR intermediate (render res): FXAA writes here when upscaling.
     let aaRT = null;
@@ -414,18 +418,24 @@
       if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
+    // DESKTOP TIERS (tsl-gi.js): ssaoHi / gtao put the AO pair at the full post size (never with phys targets: the
+    // build plan is empty there); SSGI's pair is half size; DoF / motion blur ping-pong two LDR targets at post size.
+    let _aoFull = false;
+    let giRT = null, giBlurRT = null, giW = 1, giH = 1, cineA = null, cineB = null;
     const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
     const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
       // Base AO/GR off the post working size, including physical allocations.
-      aoW = halfOf(pW);
-      aoH = halfOf(pH);
-      grW = aoW; grH = aoH;
+      aoW = _aoFull ? Math.max(1, pW) : halfOf(pW);
+      aoH = _aoFull ? Math.max(1, pH) : halfOf(pH);
+      grW = halfOf(pW); grH = halfOf(pH);
       const physBaseW = fixed ? postSize(PW) : (orientCover ? PW : pW);
       const physBaseH = fixed ? postSize(PH) : (orientCover ? PH : pH);
       const pw = phys ? halfOf(physBaseW) : aoW, ph = phys ? halfOf(physBaseH) : aoH;
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
+      if (giRT) { giW = grW; giH = grH; rtSetSize(giRT, giW, giH); rtSetSize(giBlurRT, giW, giH); }
+      if (cineA) { rtSetSize(cineA, pW, pH); rtSetSize(cineB, pW, pH); }
     }
     function layoutBloom() {
       if (!bloomLv) return;
@@ -451,21 +461,58 @@
     }
 
     // the TSL pass set (tsl-post.js) — needs the REAL scene textures
-    const P = TLXShaders.post(THREE, TSL, {
+    // DESKTOP TIERS: the extras this chain BUILDS, decided once from GfxQuality (tsl-gi.js buildPlan; null = none,
+    // which is every phone, HIGH and below, and fixed / orient-cover targets). hiLive() says which are LIVE a frame.
+    const GIM = (window.TLXShaders && TLXShaders.gi) || null;
+    let HI = null;
+    try {
+      const plan = GIM ? GIM.buildPlan(GIM.gfxEnv({ webgpu, mobile: !!ctx.isMobile, phys, hdr })) : null;
+      if (plan && GIM.anyBuilt(plan)) HI = plan;
+    } catch (_) { HI = null; }
+    const postCtx = (hi) => ({
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
-      trackMaterial, vp: phys ? VP : null,
+      trackMaterial, vp: phys ? VP : null, hdrPeak,
+      hi, ownTexture,
     });
+    let P = null;
+    try { P = TLXShaders.post(THREE, TSL, postCtx(HI)); } catch (e) {
+      if (!HI) throw e;
+      // A desktop extra that fails to build must not cost the chain: today's pass set, nothing extra.
+      try { Log.warn("gfx", "TLX post: desktop-tier passes failed to build, using the standard set: " + (e && e.message)); } catch (_) { /* harness */ }
+      HI = null;
+      P = TLXShaders.post(THREE, TSL, postCtx(null));
+    }
+    ownTexture(P.composite && P.composite.giOffTex);
+    let _hiLive = null, _hiAge = 0;
+    // feature() reads storage; a 15-present cadence keeps it off the hot path (a shed or the cinema flag lands <0.25 s late).
+    function hiLive() {
+      if (!HI) return null;
+      if (_hiLive && _hiAge++ < 15) return _hiLive;
+      _hiAge = 0;
+      try { _hiLive = GIM.livePlan(HI, GIM.gfxFeature); } catch (_) { _hiLive = null; }
+      return _hiLive;
+    }
     ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
     if (P.composite && P.composite.U) P.composite.U.sceneHdr.value = _sceneHdr;
+    if (P.composite && P.composite.U && P.composite.U.hdrPeak) P.composite.U.hdrPeak.value = hdrPeak;
+    // traa (tsl-aa.js): TEMPORAL AA in place of FXAA on native WebGPU when tlx.js passes ctx.traa. A build throw
+    // keeps FXAA: AA stays null and nothing below changes.
+    if (ctx.traa && webgpu && window.TLXAA && TLXAA.taa) {
+      try {
+        AA = TLXAA.taa(THREE, TSL, { runPass: (m, t) => runPass(m, t), ownRT, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex });
+      } catch (e) { AA = null; try { Log.warn("gfx", "TLX TRAA build failed, FXAA kept —", e); } catch (_) { /* harness */ } }
+    }
+    // The TAA runs on a frame with nothing else claiming the final pass: no ?viz=, no fixed/cover targets, no SGSR.
+    const taaLive = () => !!(AA && !viz && !phys && !(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()));
 
     // Frames a lazy block may stay shut before its targets are disposed.
     // Eight presents is ~130 ms at 60 Hz: long enough that a one-frame gate
     // flicker keeps the pair, short enough that a shed does not hold the
     // half-res surfaces for the rest of the session (plan M-11).
     const SHED_FRAMES = 8;
-    let aoIdle = 0, grIdle = 0, bloomIdle = 0;
+    let aoIdle = 0, grIdle = 0, bloomIdle = 0, giIdle = 0, cineIdle = 0;
     function dropRT(rt) {
       if (!rt) return;
       ownedRTs.delete(rt);
@@ -506,6 +553,80 @@
       for (let i = 0; i < bloomLv.length; i++) dropRT(bloomLv[i].rt);
       bloomLv = null;
       nLv = 0;
+    }
+    function releaseGI() {
+      if (!giRT) return;
+      const G = P.gi;
+      if (G && G.giH) { unbind(G.giH.tex, blackTex); unbind(G.giV.tex, blackTex); }
+      if (P.composite.tex.gi) unbind(P.composite.tex.gi, P.composite.giOffTex || blackTex);
+      dropRT(giRT); dropRT(giBlurRT);
+      giRT = null; giBlurRT = null;
+    }
+    let focusRT = null, _fi = 0, _focusOk = false, _focusT = 0, _prevOk = false;
+    const _prevVP = new Float32Array(16);
+    function releaseCine() {
+      const G = P.gi;
+      if (G && G.motionBlur) unbind(G.motionBlur.src, blackTex);
+      if (G && G.dof) { unbind(G.dof.src, blackTex); unbind(G.dof.focusTex, blackTex); }
+      if (G && G.focus) unbind(G.focus.prevTex, blackTex);
+      if (cineA) { dropRT(cineA); dropRT(cineB); cineA = null; cineB = null; }
+      if (focusRT) { dropRT(focusRT[0]); dropRT(focusRT[1]); focusRT = null; }
+      _focusOk = false;
+    }
+    function ensureGI() {
+      if (!giRT) { giRT = makeRT(1, 1, hdrType); giBlurRT = makeRT(1, 1, hdrType); layoutHalf(); }
+      return true;
+    }
+    function ensureCine() {
+      if (!cineA) { cineA = makeRT(1, 1, THREE.UnsignedByteType); cineB = makeRT(1, 1, THREE.UnsignedByteType); layoutHalf(); }
+      return true;
+    }
+    function ensureFocus() {
+      if (!focusRT) { focusRT = [makeRT(1, 1, hdrType), makeRT(1, 1, hdrType)]; _focusOk = false; }
+      return true;
+    }
+    function setAoFull(on) {
+      if (_aoFull === on) return;
+      _aoFull = on;
+      layoutHalf();
+    }
+    // CINEMA (dof / motionBlur live): composite output -> motion blur -> depth of field, ping-ponging cineA / cineB.
+    // Returns the target FXAA reads (src itself when neither runs, which is every frame below EXTREME).
+    function cinemaPost(src, F, o) {
+      const HV = _hiLive, G = P.gi;
+      _last.dof = false; _last.mblur = false;
+      if (!HV || !G || viz || !F || !(HV.dof || HV.motionBlur)) { _focusOk = false; return src; }
+      let cur = src;
+      const next = () => (cur === cineA ? cineB : cineA);
+      if (HV.motionBlur && G.motionBlur && F.invVP && F.viewProj) {
+        ensureCine();
+        const M = G.motionBlur;
+        M.U.invVP.value.fromArray(F.invVP);
+        M.U.prevVP.value.fromArray(_prevOk ? _prevVP : F.viewProj);
+        M.src.value = cur.texture;
+        const out = next();
+        runPass(M.mat, out); cur = out; _last.mblur = true;
+      }
+      if (HV.dof && G.dof && G.focus && F.invProj && F.proj) {
+        ensureCine(); ensureFocus();
+        const FU = G.focus.U, D = G.dof;
+        setPersp(FU, F.invProj, F.proj);
+        const now = typeof performance !== "undefined" ? performance.now() : 0;
+        FU.blend.value = GIM.focusBlend((now - _focusT) / 1000, !_focusOk);
+        _focusT = now; _focusOk = true;
+        FU.fixed.value = o && o.focusDist > 0 ? o.focusDist : 0;
+        G.focus.prevTex.value = focusRT[_fi ^ 1].texture;
+        runPass(G.focus.mat, focusRT[_fi]);
+        setPersp(D.U, F.invProj, F.proj);
+        D.U.texel.value.set(1 / pW, 1 / pH);
+        D.U.maxPx.value = GIM.DOF.maxPx1080 * pH / 1080;
+        D.focusTex.value = focusRT[_fi].texture;
+        _fi ^= 1;
+        D.src.value = cur.texture;
+        const out = next();
+        runPass(D.mat, out); cur = out; _last.dof = true;
+      } else _focusOk = false;
+      return cur;
     }
     // have* is this frame's gate. A shut block counts; an open one resets.
     function shedIdle(live, idle, release) {
@@ -699,7 +820,8 @@
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     // Last-presented-frame block states (__tlx.postState()).
-    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false, held: 0, submits: 0 };
+    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false, taa: false, held: 0, submits: 0,
+      aoHi: 0, rays: 0, gi: false, ssrHi: false, dof: false, mblur: false };   // the desktop-tier extras that ran
     let _lastPresentRT = null;
 
     // w x h: the render (logical) size; pw x ph: the present size (phys mode).
@@ -768,6 +890,23 @@
       }
     }
 
+    // hdrOut: a capture (screenshot, soft present) unpacks RGBA8 rows, so a half-float source is first copied
+    // through the debug blit (which clamps to 0..1: the SDR view of the HDR frame) into an 8-bit target.
+    let cap8RT = null;
+    function cap8(rt) {
+      if (!rt || !rt.texture || rt.texture.type === THREE.UnsignedByteType || !P.blit) return rt;
+      try {
+        if (!cap8RT) { cap8RT = makeRT(rt.width, rt.height, THREE.UnsignedByteType); cap8RT.texture.name = "TLXPostCap8"; }
+        rtSetSize(cap8RT, rt.width, rt.height);
+        const B = P.blit, t0 = renderer.getRenderTarget(), ac = renderer.autoClear, tex0 = B.tex.value;
+        try {
+          B.U.mono.value = 0; B.U.gain.value = 1; B.tex.value = rt.texture;
+          runPass(B.mat, cap8RT);
+        } finally { B.tex.value = tex0; renderer.setRenderTarget(t0); renderer.autoClear = ac; }
+        return cap8RT;
+      } catch (_) { return rt; }
+    }
+
     // Output logical size of a pass (phys mode; the shaders' VP.uv reads it).
     function vset(pass, w, h) { if (phys && pass && pass.V) pass.V.set(w, h); }
     // ONE scratch pair, read at once by every caller (up to once a present on a
@@ -823,7 +962,11 @@
       // -3 half-res passes. ?viz=ssao keeps the standalone pair it blits. The
       // warm (compileJobs) still queues the standalone pair: AO without god-rays
       // (no sun shadow, GOD-RAY knob 0) keeps the program set it had.
-      const aoFold = _aoFold && wantAO && wantGR && viz !== "ssao";
+      // Desktop tiers: 2 = GTAO + bilateral denoise, 1 = the 16-tap SSAO, both at full post size and never folded.
+      const HV = hiLive();
+      const aoHi = !HV || viz ? 0 : HV.gtao && P.gi && P.gi.gtao ? 2 : HV.ssaoHi && P.ssaoHi ? 1 : 0;
+      if (wantAO) setAoFull(aoHi > 0);
+      const aoFold = _aoFold && wantAO && wantGR && viz !== "ssao" && !aoHi;
       const haveAO = wantAO && (!aoFold || !!compileJobs) && ensureAO();
       if (wantAO) {
         const U = P.ssao.U;
@@ -837,8 +980,19 @@
       }
       if (haveAO) {
         vset(P.ssao, aoW, aoH); vset(P.blurAOH, aoW, aoH); vset(P.blurAOV, aoW, aoH); vset(P.blurAO, aoW, aoH);
-        runPass(P.ssao.mat, ssaoRT);
-        // Blur H (ssao -> blur) then V (blur -> ssao). Half res.
+        if (aoHi === 2) {
+          const G = P.gi;
+          G.gtao.U.texel.value.set(1 / aoW, 1 / aoH);
+          G.gtao.U.halfH.value = aoH * 0.5;
+          runPass(G.gtao.mat, ssaoRT);
+          G.gtaoH.tex.value = ssaoRT.texture; G.gtaoH.U.dir.value.set(1 / aoW, 0);
+          runPass(G.gtaoH.mat, ssaoBlurRT);
+          G.gtaoV.tex.value = ssaoBlurRT.texture; G.gtaoV.U.dir.value.set(0, 1 / aoH);
+          runPass(G.gtaoV.mat, ssaoRT);
+        } else {
+        if (aoHi === 1) runPass(P.ssaoHi.mat, ssaoRT);
+        else runPass(P.ssao.mat, ssaoRT);
+        // Blur H (ssao -> blur) then V (blur -> ssao). Half res (ssaoHi: full).
         if (_fixedMats && P.blurAOH) {
           P.blurAOH.U.dir.value.set(1 / aoW, 0);
           runPass(P.blurAOH.mat, ssaoBlurRT);
@@ -852,10 +1006,13 @@
           P.blurAO.U.dir.value.set(0, 1 / aoH);
           runPass(P.blurAO.mat, ssaoRT);
         }
+        }
       }
 
       // 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js)
       const haveGR = wantGR && ensureGR(gr11Knob && !aoFold);
+      // raysHi (ULTRA+): the 32-step march over the nearest 12 lamps; it shares P.godray's scalar uniforms.
+      const GRP = HV && HV.raysHi && P.godrayHi ? P.godrayHi : P.godray;
       if (haveGR) {
         const U = P.godray.U;
         U.invVP.value.fromArray(F.invVP);
@@ -889,16 +1046,17 @@
           // march can never equal: its beam glowed straight through cars and
           // walls instead of being carved by them, on any dense floodlit
           // section. Same defect GLX carried until glx/post.js was cut to 6.
-          grNL = _grKeepNearest(total, 6);
+          if (GRP !== P.godray) grNL = _grKeepNearest(total, GRP.maxLights);   // raysHi: its own march bound
+          else grNL = _grKeepNearest(total, 6);
           for (let i = 0; i < grNL; i++) {
             const oi = _grSel[i].o;
             // Map the record holding this frame's spot-shadow map to its slot
             // in THIS pass's nearest-N ordering (js/render/glx/shaders/glsl-post.js).
             if (lampArmed && oi === S.lampIdx * 15) grLampIdx = i;
-            P.godray.lightPos[i].set(L[oi], L[oi + 1], L[oi + 2]);
-            P.godray.lightCol[i].set(L[oi + 3], L[oi + 4], L[oi + 5]);
-            P.godray.lightDir[i].set(L[oi + 7], L[oi + 8], L[oi + 9]);
-            P.godray.lightGeo[i].set(L[oi + 6], L[oi + 10], L[oi + 11], L[oi + 13]);
+            GRP.lightPos[i].set(L[oi], L[oi + 1], L[oi + 2]);
+            GRP.lightCol[i].set(L[oi + 3], L[oi + 4], L[oi + 5]);
+            GRP.lightDir[i].set(L[oi + 7], L[oi + 8], L[oi + 9]);
+            GRP.lightGeo[i].set(L[oi + 6], L[oi + 10], L[oi + 11], L[oi + 13]);
           }
         }
         U.numLights.value = grNL;
@@ -910,7 +1068,7 @@
         U.hgFloor.value = _gk(GT, "godrayFloor");      // GOD-RAY HAZE knob
         U.aoOn.value = aoFold ? 1 : 0;
         vset(P.godray, grW, grH); vset(P.blurGRH, grW, grH); vset(P.blurGRV, grW, grH); vset(P.blurGR, grW, grH);
-        runPass(P.godray.mat, godrayRT);
+        runPass(GRP.mat, godrayRT);
         // Double separable blur (H+V twice) — soft wide volumes, no stripes.
         // TLX-PERF-PLAN G1: lamp beams alone (no sun shafts) take ONE blur pair.
         // The second pair exists for the sun march's shadow-slice stripes; a lamp
@@ -940,6 +1098,19 @@
             runPass(P.blurGR.mat, godrayRT);
           }
         }
+      }
+
+      // 0c) SSGI (EXTREME, tsl-gi.js): half-res one-bounce diffuse, then a depth-aware bilateral H+V. Spatial only:
+      // no history target exists in this chain, so there is no temporal accumulation.
+      const GIP = P.gi;
+      const haveGI = !!(HV && HV.ssgi && GIP && GIP.ssgi && P.composite.matHi && F.invProj && F.proj && !viz) && ensureGI();
+      if (haveGI) {
+        setPersp(GIP.ssgi.U, F.invProj, F.proj);
+        runPass(GIP.ssgi.mat, giRT);
+        GIP.giH.tex.value = giRT.texture; GIP.giH.U.dir.value.set(1 / giW, 0);
+        runPass(GIP.giH.mat, giBlurRT);
+        GIP.giV.tex.value = giBlurRT.texture; GIP.giV.U.dir.value.set(0, 1 / giH);
+        runPass(GIP.giV.mat, giRT);
       }
 
       // 1+2) bright pass + mip-chain bloom (js/render/glx/shaders/glsl-post.js)
@@ -1103,6 +1274,16 @@
       }
       C.ssrOk.value = haveRefl ? 1 : 0;
       C.reflect.value = haveRefl ? reflStr : 0;
+      // Desktop tiers: the hi composite (ssrHi march + rough blur, the SSGI add) only while one of them is live.
+      const compHi = !!(P.composite.matHi && HV && (HV.ssrHi || haveGI));
+      if (P.composite.matHi) {
+        P.composite.mat = compHi ? P.composite.matHi : P.composite.matBase;
+        C.ssrHi.value = compHi && HV.ssrHi ? 1 : 0;
+        C.giOn.value = haveGI ? 1 : 0;
+        C.giStr.value = GIM.BUDGET.ssgiStr;
+        C.giTexel.value.set(1 / giW, 1 / giH);
+        if (P.composite.tex.gi) P.composite.tex.gi.value = haveGI ? giRT.texture : P.composite.giOffTex;
+      }
 
       // 3/4) composite -> LDR, FXAA -> canvas (or the ?viz= bisect blit)
       // softDest: software-WebGPU present target. Never setRenderTarget(null)
@@ -1119,15 +1300,29 @@
           : (viz === "shafts" || viz === "godray") ? (haveGR ? godrayRT.texture : blackTex)
           : sceneRT.texture;   // composite-off | scene: the raw HDR world
         _vizDest = dest;   // the blit must read what this pass wrote, not ldrRT
+        _last.taa = false;
+        if (AA) AA.skipped();
         if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
         runPass(B.mat, dest);
       } else {
         vset(P.composite, pW, pH); vset(P.fxaa, pW, pH);
         runPass(P.composite.mat, ldrRT);
-        P.fxaa.tex.value = ldrRT.texture;
+        P.fxaa.tex.value = cinemaPost(ldrRT, F, o).texture;   // CINEMA: motion blur + DoF, else ldrRT itself
         P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
         const useUpscale = !!(P.sgsr && aaRT && !!(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()) !== _warmFlipUp);
-        if (useUpscale) {
+        const useTaa = !useUpscale && taaLive() && !!(F.invVP && F.viewProj);
+        if (AA && !useTaa) AA.skipped();
+        _last.taa = false;
+        if (useTaa) {
+          // TRAA: history <- resolve(ldr, history), history -> dest, the mirror inset on top (never jittered: its
+          // own camera, composited after the resolve). Captures keep reading the pre-AA LDR, as on the FXAA path.
+          if (P.fxaa.mirTex) fxaaMirror(false);
+          AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm);
+          _last.taa = true;
+          mirrorPass(dest);
+          _lastPresentRT = dest || ldrRT;
+          _last.sgsr = false;
+        } else if (useUpscale) {
           if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
@@ -1158,13 +1353,22 @@
       _last.bloom = !!haveBloom;
       _last.shafts = !!haveGR;
       _last.ssr = !!(haveRefl && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
-      _last.fxaa = !viz;
+      _last.fxaa = !viz && !_last.taa;
+      _last.aoHi = haveAO ? aoHi : 0;
+      _last.rays = haveGR && GRP !== P.godray ? 1 : 0;
+      _last.gi = !!haveGI;
+      _last.ssrHi = !!(compHi && HV.ssrHi);
+      if (F.viewProj && F.viewProj.length >= 16) { _prevVP.set(F.viewProj); _prevOk = !!_last.mblur; }
       holdFlush(false);   // before a shed below destroys a target a held command buffer still names
       // After the composite has rebound the 1x1 fallbacks. Releasing on the
       // same frame the block drew would dispose a target runPass just wrote.
       aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
       grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
       bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
+      if (HI) {
+        giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
+        cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
+      }
       } finally {
         try { holdFlush(false); } catch (_) { /* a throw mid-chain: tlx.js's catch owns the fallback */ }
         if (!dest) {
@@ -1213,6 +1417,7 @@
     function needsTag(opts, F) {
       const o = opts || {};
       if (viz) return true;
+      if (_hiLive && (_hiLive.dof || _hiLive.motionBlur)) return true;   // CINEMA: the car mask / autofocus read the tag
       const hz = o.haze;
       if (hz && hz.str > 0.002) return true;   // the plume's car-mask fetch
       const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
@@ -1231,6 +1436,8 @@
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
+      if (_hiLive && (_hiLive.ssgi || _hiLive.dof || _hiLive.motionBlur)) return true;   // desktop tiers read scene depth
+      if (taaLive() && F.invVP && F.viewProj) return true;   // TRAA reprojects from the scene depth
       if (((o.ssao !== undefined ? o.ssao : 0) > 0 || (o.contact !== undefined ? o.contact : 0) > 0) && F.invProj) return true;   // SSAO, contact, AO upsample
       const S = shadow ? shadow.S : null;
       const lampVol = (o.mist || 0) > 0 ? (o.lampVol || 0) : 0;
@@ -1378,10 +1585,13 @@
       // UnsignedByte composite (FXAA input) — the screenshot / soft-present
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
-      ldrTarget: () => ldrRT,
+      ldrTarget: () => cap8(ldrRT),
       // WHAT THE LAST FRAME ACTUALLY WROTE. Soft-present / capture must read
       // the FXAA (or SGSR) destination when upscaling — not pre-FXAA ldrRT.
-      presentedTarget: () => (viz ? _vizDest : (_lastPresentRT || ldrRT)),
+      presentedTarget: () => (viz ? _vizDest : cap8(_lastPresentRT || ldrRT)),
+      // TRAA: this frame's NDC jitter for the main camera (tlx.js begin), or null while the TAA would not run.
+      taaJitter: (w, h) => (taaLive() ? AA.jitter(w, h) : null),
+      taaReset: () => { if (AA) AA.reset(); },
       // SGSR linked — tlx.js wantSpatialUpscale() requires this (fail-closed).
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       fixedOk: () => fixed && !!(P && P.sgsr && P.sgsr.mat),   // #2655: tlx.js keeps the canvas present-sized
@@ -1423,6 +1633,7 @@
         tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
+        aa: { traa: !!AA, taa: _last.taa, hdrPeak, ldr: hdrPeak > 1 ? "rgba16f" : "rgba8", state: AA ? AA.state() : null },
         submitHold: { on: !!(ctx.postSubmitHold && ctx.postSubmitHold()), held: _last.held, submits: _last.submits },   // the last present: command buffers held, submit calls
         targets: [W, H],
         // Post working size (PHONE_POST_SCALE of scene on phones). Aux passes half of this.
@@ -1431,6 +1642,10 @@
         // Lazy targets still alive. A shed that stuck must drop these; the
         // leak test counts them after N closed presents.
         held: { ssao: !!ssaoRT, bloom: !!bloomLv, shafts: !!godrayRT },
+        // Desktop tiers (tsl-gi.js): what this chain built, what is live, and what the last present ran.
+        hi: HI ? { built: Object.assign({}, HI), live: _hiLive ? Object.assign({}, _hiLive) : null, aoFull: _aoFull,
+          ran: { aoHi: _last.aoHi, rays: _last.rays, gi: _last.gi, ssrHi: _last.ssrHi, dof: _last.dof, mblur: _last.mblur },
+          held: { gi: !!giRT, cine: !!cineA, focus: !!focusRT } } : null,
         rtResizes: _rtResizes,
         fixed: fixed ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
         // #3311 phone orientation cover (square physical; logical follows the flip).
@@ -1441,7 +1656,8 @@
       // has presented). Next present() rewrites _last from that frame.
       clearLast() {
         _last.ssao = false; _last.bloom = false; _last.shafts = false;
-        _last.ssr = false; _last.fxaa = false; _last.sgsr = false;
+        _last.ssr = false; _last.fxaa = false; _last.sgsr = false; _last.taa = false;
+        _last.aoHi = 0; _last.rays = 0; _last.gi = false; _last.ssrHi = false; _last.dof = false; _last.mblur = false;
       },
     };
     } catch (e) {

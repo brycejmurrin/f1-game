@@ -1,0 +1,7 @@
+{
+  "_doc": "tests/unit/props-hi-detail.test.mjs pins. d0 = the pre-propsHi bytes (HEAD dce9a300, harness build, uncompacted, night off): must never move. d2 = props triangles with track._detailFeatures.propsHi (EXTREME). Re-pin d2 in a commit that says why.",
+  "circuits": {
+    "monza": { "d0": { "tris": 285079, "props": "38617caeef9e79f1", "glass": "1435b628c80fab64" }, "d2": { "tris": 511682 } },
+    "monaco": { "d0": { "tris": 255839, "props": "4b2ac0e73edb1296", "glass": "7b108aed452a9e57" }, "d2": { "tris": 284930 } }
+  }
+}

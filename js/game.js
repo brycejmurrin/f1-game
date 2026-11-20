@@ -8536,6 +8536,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
   if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
+  if (typeof GfxQuality !== "undefined") GfxQuality.setCinema(setupPreviewOn || photoMode || replayBuf.isScrubbing());   // CINEMA: garage / photo / replay (EXTREME only)
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,

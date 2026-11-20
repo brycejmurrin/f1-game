@@ -253,8 +253,8 @@ test("a full drag costs ONE bake, not one per input event", () => {
   // inner binding, so wrap by re-running the source with a counting shim.
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const Counted = new Function(
-    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
-                "function buildTable(lights, chunks, knob) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob, capMax) {",
+                "function buildTable(lights, chunks, knob, capMax) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
     + "; return LampChunks;")();
   globalThis.__bakes = 0;
   for (let k = 0; k <= 1.0001; k += 0.001) Counted.resolve(lights, chunks, Math.round(k * 1000) / 1000);
@@ -464,8 +464,8 @@ function tlxLampGrid() {
   const block = liftBlock(TLX, "if (lit && lit.setLampGrid) {");
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const LC = new Function(
-    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
-                "function buildTable(lights, chunks, knob) { __n.bakes++;")
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob, capMax) {",
+                "function buildTable(lights, chunks, knob, capMax) { __n.bakes++;")
     + "; return LampChunks;")
   ;
   const n = { bakes: 0, grids: 0 };
@@ -473,7 +473,9 @@ function tlxLampGrid() {
   const LampChunksC = LC();
   const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => {} };
   const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs")].join("\n");
-  const run = new Function("LampChunks", "Log", "lit", `
+  // The block reads LightBudget.bakeChunk() (EXTREME lightsHi): the real budget, detail 0 here.
+  const LB = new Function(DEPS + "; return LightBudget;")();
+  const run = new Function("LampChunks", "Log", "lit", "LightBudget", `
     ${decls}
     let frameAllLightsGen = 0, _lgGen = -1, _lampGridState = null;
     let frameAllLights = null, framePerChunk = 0, drawList = null;
@@ -481,7 +483,7 @@ function tlxLampGrid() {
       drawList = dl; frameAllLights = AL; framePerChunk = knob;
       ${block}
       return _lampGridState;
-    };`)(LampChunksC, { info() {} }, lit);
+    };`)(LampChunksC, { info() {} }, lit, LB);
   return { run, n };
 }
 

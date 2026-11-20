@@ -154,6 +154,8 @@ async function build(m, job) {
   const gfx = {
     createMesh: rec("mesh"), createChunkedMesh: rec("chunked"), createInstancedBatch: rec("inst"),
     mobileTier: !!m.mobileTier, chunkedTrackCoords: m.chunkedTrackCoords,
+    // The page's desktop detail level; Tracks.build resolves it (TrackDetail.resolve) onto track._detail*.
+    trackDetail: { detail: m.detail | 0, detailFeatures: m.detailFeatures || {} },
   };
   if (m.scenery && !_scenery.has(m.scenery)) { await importScriptsRetry(m.scenery); _scenery.add(m.scenery); }
   const def = Tracks.LIST[m.idx];

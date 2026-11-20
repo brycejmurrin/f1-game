@@ -10,6 +10,40 @@ const SceneryStructures = (function () {
             anchor, rejBox } = ctx;
     Log.info("scenery", "scenery-structures dress " + (def && def.id));
     const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
+    // EXTREME props detail (TrackModels.propsHi; sources in models.js): every hi shape below is a
+    // SEPARATE model key or an extra emission behind this one flag, so detail 0 builds today's exact
+    // bytes. Visual only: no recordBarrier / blockAt / post / indexBarrier call reads it.
+    const HI = typeof TrackModels !== "undefined" && TrackModels.propsHi(track);   // VM harnesses may omit models.js
+    // A member box from a to b (world points), square section `th`: a truss diagonal or a brace.
+    const strutBox = (a, b2, th, col, hint) => {
+      const d = [b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]];
+      const L = Math.hypot(d[0], d[1], d[2]);
+      if (!(L > 1e-3)) return;
+      const ax = [d[0] / L, d[1] / L, d[2] / L];
+      let s1 = cross(ax, hint);
+      if (!(Math.hypot(s1[0], s1[1], s1[2]) > 1e-3)) s1 = cross(ax, [0.3, 0.1, 0.9]);
+      s1 = norm(s1);
+      const s2 = norm(cross(s1, ax));
+      addBox(out, [(a[0] + b2[0]) / 2, (a[1] + b2[1]) / 2, (a[2] + b2[2]) / 2], [th, L, th], col, [s1, ax, s2]);
+    };
+    // W-beam profile (canonical, unit length along t), `d` = the track-facing sign (-side).
+    // Two crests proud, the valley set back, rolled lips top and bottom: the shadow lines
+    // that make a rail read as pressed steel (FHWA M617 W-beam, ~0.31 m deep section).
+    const wBeam = (rec, d, yc, k, col) => {
+      const dk = [col[0] * 0.82, col[1] * 0.82, col[2] * 0.84];
+      rec.box([d * 0.05, yc + 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // upper crest
+      rec.box([d * 0.05, yc - 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // lower crest
+      rec.box([0, yc, 0], [0.07, 0.11 * k, 1], dk);                       // valley, set back
+      for (const sg of [-1, 1])
+        rec.box([d * -0.01, yc + sg * 0.215 * k, 0], [0.06, 0.03 * k, 1], dk);   // rolled lips
+    };
+    // Steel C-post set behind the rail (the track face is `d` = -side).
+    const cPost = (rec, d, h, yb, col) => {
+      rec.box([-d * 0.17, yb + h / 2, 0], [0.15, h, 0.06], col);              // web
+      for (const sg of [-1, 1])
+        rec.box([-d * 0.10, yb + h / 2, sg * 0.055], [0.06, h, 0.02], col);  // flanges
+    };
+    const RAIL_STYLES = new Set(["doubleArmco", "wArmco", "jersey", "cable", "safer"]);
 
     // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart. Passes the
     // ACTUAL along-track spacing used (stepM rounds to a whole number of nodes,
@@ -172,8 +206,12 @@ const SceneryStructures = (function () {
       // AWAY from the track (Monza, Imola, Catalunya). The other styles are
       // side-independent, and the duplicate-string note above is why they keep
       // sharing one key instead of paying for a second family.
+      // Hi catch fence (mesh / chainlink / leaning, >= 2 m): a base plate and a cranked top
+      // leaning at the track on each post, longitudinal cables on the mesh's track face.
+      const hiF = HI && h >= 2 && (st === "mesh" || st === "chainlink" || st === "leaning");
       const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`
-        + (st === "leaning" ? `|${side}` : "");
+        + (st === "leaning" || hiF ? `|${side}` : "") + (hiF ? "|hi" : "");
+      const crankKey = `fence-crank|${h}|${st}|${postCol.join(",")}|${side}`;
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -198,10 +236,29 @@ const SceneryStructures = (function () {
             rec.cyl([0, 0, 0], 0.13, 1, postCol, 5);
           },
           { kind: "fence", k, side });
+        if (hiF) ctx.instance(crankKey, { o: vadd(p.c, p.u, h), r: p.r, u: p.u, t: p.t },
+          (rec) => {
+            const d = -side;
+            rec.box([d * 0.05, 0.22, 0], [0.12, 0.48, 0.12], postCol);
+            rec.box([d * 0.20, 0.50, 0], [0.30, 0.10, 0.10], postCol);
+            rec.box([d * 0.42, 0.62, 0], [0.24, 0.08, 0.09], postCol);
+            rec.box([0, -h + 0.02, 0], [0.46, 0.04, 0.46], postCol);   // base plate on the ground
+            for (const [bx, bz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+              rec.cyl([bx * 0.16, -h + 0.03, bz * 0.16], 0.025, 0.05, postCol, 4);   // anchor bolts
+          },
+          { kind: "fence", k, side });
         const span = Object.assign({ s: [1, 1, spacing] }, place);
         ctx.instance(meshKey, span,
           (rec) => {
-            if (st === "chainlink") {
+            if (hiF) {
+              const d = -side;
+              rec.box([0, h * 0.55, 0], [0.05, h * 0.9, 1], meshCol);
+              for (const f of [0.12, 0.42, 0.72, 0.97])
+                rec.box([d * 0.045, h * f, 0], [0.035, 0.035, 1], postCol);   // cables
+              rec.box([d * 0.20, h + 0.40, 0], [0.04, 0.16, 1], meshCol);     // overhang mesh
+              rec.box([d * 0.42, h + 0.56, 0], [0.04, 0.12, 1], meshCol);
+              if (st === "leaning") rec.box([d * h * 0.09, h * 0.95, 0], [h * 0.20, 0.05, 1], meshCol);
+            } else if (st === "chainlink") {
               rec.box([0, h * 0.95, 0], [0.07, 0.07, 1], meshCol);
             } else if (st === "panelled") {
               for (const f of [0.30, 0.90])
@@ -232,8 +289,11 @@ const SceneryStructures = (function () {
       // Keys and tints hoisted for the reason written out over `fence` above.
       const postCol = (opts && opts.postCol) || [0.5, 0.5, 0.52];
       const railCol = col || [0.82, 0.82, 0.85];
-      const postKey = `guardrail-post|${st}|${postCol.join(",")}`;
-      const railKey = `guardrail-rail|${st}|${railCol.join(",")}`;
+      // Hi keys name the side: the W-beam and the C-post face the road, so they are handed.
+      const hiK = HI ? `|hi|${side}` : "";
+      const postKey = `guardrail-post|${st}|${postCol.join(",")}` + hiK;
+      const railKey = `guardrail-rail|${st}|${railCol.join(",")}` + hiK;
+      const d = -side;
       // The on-track margin must stay BELOW the gap: a post anchored at hw+gap
       // sits (hw+gap)·cos(θ/2) from the neighbouring chord, so a fixed 0.5
       // against gap 0.5 failed for ANY curvature and dropped every post of
@@ -253,12 +313,41 @@ const SceneryStructures = (function () {
             // Tall enough to carry its top rail: the cable's upper rope runs at
             // 0.95 m, and a 0.70 m post left it hanging 0.2 m clear of every
             // post (978 floating rails, buenos_aires/jacarepagua/kyalami).
-            (rec) => rec.cyl([0, -0.35, 0], 0.09, st === "doubleArmco" ? 1.45 : st === "cable" ? 1.35 : 1.05, postCol, 4),
+            (rec) => {
+              const ph = st === "doubleArmco" ? 1.45 : st === "cable" ? 1.35 : 1.05;
+              if (!HI) return rec.cyl([0, -0.35, 0], 0.09, ph, postCol, 4);
+              cPost(rec, d, ph, -0.35, postCol);
+              // the blockout spacer between post and rail at each beam's height (~0.2 m)
+              const bl = [postCol[0] * 0.7, postCol[1] * 0.7, postCol[2] * 0.7];
+              for (const y of st === "doubleArmco" ? [0.62, 1.16] : st === "cable" || st === "jersey" ? [] : [0.72])
+                rec.box([-d * 0.07, y, 0], [0.08, 0.24, 0.14], bl);
+              if (st === "cable") for (const y of [0.58, 0.95])
+                rec.box([-d * 0.07, y, 0], [0.06, 0.05, 0.12], bl);          // rope hooks
+              rec.box([-d * 0.15, -0.35 + ph + 0.015, 0], [0.19, 0.03, 0.16], postCol);   // cap plate
+            },
             { kind: "guardrail", k, side });
         ctx.instance(railKey,
           Object.assign({ s: [1, 1, spacing] }, place),
           (rec) => {
-            if (st === "doubleArmco") {                    // old European two-rail
+            if (HI && (st === "doubleArmco" || st === "wArmco" || !RAIL_STYLES.has(st))) {
+              if (st === "doubleArmco") { wBeam(rec, d, 0.62, 0.84, railCol); wBeam(rec, d, 1.16, 0.84, railCol); }
+              else wBeam(rec, d, st === "wArmco" ? 0.72 : 0.70, 1, railCol);
+            } else if (HI && st === "jersey") {           // F-shape: stepped faces read as the slope
+              const dk = [railCol[0] * 0.9, railCol[1] * 0.9, railCol[2] * 0.9];
+              rec.box([0, 0.04, 0], [0.62, 0.08, 1], dk);
+              rec.box([0, 0.18, 0], [0.56, 0.20, 1], railCol);
+              rec.box([0, 0.39, 0], [0.46, 0.22, 1], railCol);
+              rec.box([0, 0.72, 0], [0.32, 0.46, 1], railCol);
+              rec.box([0, 0.965, 0], [0.34, 0.03, 1], dk);
+            } else if (HI && st === "cable") {
+              for (const y of [0.58, 0.76, 0.95])
+                rec.box([0, y, 0], [0.045, 0.045, 1], railCol);
+            } else if (HI && st === "safer") {             // steel tubes over the foam block
+              rec.box([-d * 0.04, 0.66, 0], [0.26, 0.56, 1], postCol);
+              for (const y of [0.46, 0.66, 0.86])
+                rec.box([d * 0.10, y, 0], [0.14, 0.16, 1], railCol);
+              rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
+            } else if (st === "doubleArmco") {                    // old European two-rail
               rec.box([0, 0.62, 0], [0.18, 0.38, 1], railCol);
               rec.box([0, 1.16, 0], [0.18, 0.38, 1], railCol);
             } else if (st === "wArmco") {                  // the W cross-section
@@ -294,7 +383,7 @@ const SceneryStructures = (function () {
       // `cap` and the top strip `tyre`, the plain stack the reverse. A key that
       // omitted one let the circuit's first wall colour every later one.
       const slab = st === "tecpro" || st === "airfence";
-      const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "");
+      const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "") + (HI ? "|hi" : "");
       const capKey = `tyre-cap|${st}|${(slab ? tyre : cap).join(",")}`;
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
@@ -306,7 +395,30 @@ const SceneryStructures = (function () {
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
         ctx.instance(stackKey, place,                                           // base sunk
           (rec) => {
-            if (st === "tecpro") {
+            if (HI && st === "tecpro") {
+              // TecPro block: chamfered vertical edges (two crossed boxes), the moulded
+              // strap bands and the steel pin cap (~1.5 x 1.2 x 0.6 m blocks, strapped).
+              rec.box([0, 0.20, 0], [1.5, 1.2, 1.44], cap);
+              rec.box([0, 0.20, 0], [1.36, 1.2, 1.6], cap);
+              const band = [cap[0] * 0.72, cap[1] * 0.72, cap[2] * 0.74];
+              for (const y of [0.02, 0.50]) rec.box([0, y, 0], [1.54, 0.12, 1.48], band);
+              rec.box([0, 0.86, 0], [1.5, 0.14, 1.6], tyre);
+              rec.cyl([0, 0.93, 0.62], 0.07, 0.06, [0.35, 0.36, 0.38], 6);
+            } else if (HI && st === "airfence") {
+              rec.frustum([0, -0.35, 0], 1.05, 0.72, 1.45, cap, 12);
+              const seam = [cap[0] * 0.8, cap[1] * 0.8, cap[2] * 0.8];
+              rec.frustum([0, 0.15, 0], 0.92, 0.88, 0.06, seam, 12);
+              rec.frustum([0, 0.60, 0], 0.81, 0.78, 0.06, seam, 12);
+            } else if (HI) {
+              // Three columns of bolted tyres in a triangle: tread bands round a dark core,
+              // each band a little off the last so the stack reads as tyres, not a drum.
+              const core = [tyre[0] * 0.55, tyre[1] * 0.55, tyre[2] * 0.55];
+              for (const [x, z] of [[-0.42, -0.48], [-0.42, 0.48], [0.42, 0]]) {
+                rec.cyl([x, -0.35, z], 0.30, 1.25, core, 6);
+                for (let i = 0; i < 4; i++)
+                  rec.cyl([x + (i & 1 ? 0.02 : -0.02), -0.33 + i * 0.31, z], 0.55, 0.25, tyre, 7);
+              }
+            } else if (st === "tecpro") {
               rec.box([0, 0.20, 0], [1.5, 1.2, 1.6], cap);
               rec.box([0, 0.86, 0], [1.5, 0.14, 1.6], tyre);
             } else if (st === "airfence") {
@@ -368,6 +480,29 @@ const SceneryStructures = (function () {
             [1.0, 0.5, 0.9], c, basis);                                          // boom root
         } else {
           addCyl(out, aC, 0.3, L, c, 6, basis);                                  // box (default)
+        }
+        if (!HI) return;
+        // Hi: the truss's faces get their diagonals (real-section members, alternating
+        // so each bay reads as a Warren panel) and every leg stands on a bolted base plate.
+        const plate = [c[0] * 0.8, c[1] * 0.8, c[2] * 0.85];
+        if (st === "truss" || st === "scaffold") {
+          const e = st === "truss" ? 0.55 : 0.5;
+          const nb = Math.max(2, Math.floor(L / (st === "truss" ? 3 : 2.2)));
+          const P = (dr, dt, y) => vadd(vadd(vadd(aC, basis[0], dr * e), basis[2], dt * e), basis[1], y);
+          for (let i = 0; i < nb; i++) {
+            const y0 = i * L / nb, y1 = (i + 1) * L / nb, f = (i & 1) ? 1 : -1;
+            if (st === "scaffold") { strutBox(P(0, -f, y0), P(0, f, y1), 0.08, c, basis[0]); continue; }
+            for (const g of [-1, 1]) {
+              strutBox(P(g, -f, y0), P(g, f, y1), 0.08, c, basis[0]);   // the two r faces
+              strutBox(P(-f, g, y0), P(f, g, y1), 0.08, c, basis[2]);   // the two t faces
+            }
+          }
+          addBox(out, vadd(aC, basis[1], 0.03), [2 * e + 0.5, 0.06, 2 * e + 0.5], plate, basis);
+        } else {
+          addBox(out, vadd(aC, basis[1], 0.03), [1.6, 0.06, 1.6], plate, basis);   // base plate
+          for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+            addCyl(out, vadd(vadd(aC, basis[0], dr * 0.62), basis[2], dt * 0.62), 0.05, 0.12, plate, 6, basis);
+          if (st !== "portal") addCyl(out, vadd(aC, basis[1], L * 0.5), (st === "cantilever" ? 0.42 : 0.3) + 0.05, 0.18, plate, 8, basis);
         }
       };
       // A cantilever gantry hangs from ONE side — that is its whole silhouette.
@@ -504,6 +639,30 @@ const SceneryStructures = (function () {
         // still chains support to the pole under the AABB touch test.
         rec.box([side * (POLE_LAT * 0.5), 1.55, 0], [POLE_LAT, 0.14, 0.14], [0.4, 0.4, 0.42]);
       }, { kind: "marshalPost", k, side });
+      // Hi: framed door and window with a sill, eaves fascia, a concrete plinth; the tower
+      // gets a guard rail round its deck and ladder rungs. One extra model per style + side.
+      if (HI) ctx.instance(`marshalPost-hi|${st}|${side}|${roof.join(",")}`,
+        { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
+        rec.mat(0);
+        const d = -side, trim = [0.30, 0.31, 0.34], conc = [0.62, 0.62, 0.60];
+        if (st === "hut") {
+          rec.box([0, 0, 0], [2.5, 0.2, 2.5], conc);
+          for (const z of [-0.5, 0.5]) rec.box([d * 1.15, 0.6, z], [0.16, 1.4, 0.08], trim);   // door jambs
+          rec.box([d * 1.15, 1.25, 0], [0.16, 0.10, 1.08], trim);                              // door head
+          for (const y of [1.47, 2.13]) rec.box([d * 1.15, y, 0.6], [0.06, 0.06, 0.72], trim);
+          for (const z of [0.27, 0.93]) rec.box([d * 1.15, 1.8, z], [0.06, 0.6, 0.06], trim);
+          rec.box([d * 1.17, 1.44, 0.6], [0.16, 0.05, 0.80], conc);                           // sill
+          for (const x of [-1.32, 1.32]) rec.box([x, 2.42, 0], [0.06, 0.16, 2.7], roof);      // fascia
+        } else if (st === "tower") {
+          const rail = [0.62, 0.63, 0.66];
+          for (const z of [-1.27, 1.27]) rec.box([0, 4.30, z], [2.6, 0.05, 0.05], rail);
+          for (const x of [-1.27, 1.27]) rec.box([x, 4.30, 0], [0.05, 0.05, 2.6], rail);
+          for (const [x, z] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) rec.box([x * 1.27, 3.85, z * 1.27], [0.05, 0.9, 0.05], rail);
+          for (let y = 0.3; y < 3.35; y += 0.3) rec.box([side * 1.38, y, 0], [0.06, 0.04, 0.5], rail);   // rungs
+        } else {
+          rec.box([0, 0, 0], st === "container" ? [2.7, 0.2, 5.7] : [3.0, 0.2, 3.0], conc);
+        }
+      }, { kind: "marshalPost", k, side });
       flagQuad(panelAt, p.t, p.u, 1.05, 0.62, MARSHAL_PANEL, true);
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
@@ -544,6 +703,20 @@ const SceneryStructures = (function () {
             addBox(out, vadd(vadd(p.c, p.r, sr * legR), p.u, y), [0.1, 0.12, legR * 2], col, b);
           for (const st of [-1, 1])
             addBox(out, vadd(vadd(p.c, p.t, st * legR), p.u, y), [legR * 2, 0.12, 0.1], col, b);
+        }
+        if (HI) {
+          // Hi: a K-free Warren lattice — one diagonal per bay per face, alternating —
+          // and a bolted base plate under every leg.
+          const P = (dr, dt, y) => vadd(vadd(vadd(p.c, p.r, dr * legR), p.t, dt * legR), p.u, y);
+          for (let i = 0; i < bays; i++) {
+            const y0 = i / bays * h, y1 = (i + 1) / bays * h, f = (i & 1) ? 1 : -1;
+            for (const g of [-1, 1]) {
+              strutBox(P(g, -f, y0), P(g, f, y1), 0.08, col, p.r);
+              strutBox(P(-f, g, y0), P(f, g, y1), 0.08, col, p.t);
+            }
+          }
+          for (const sr of [-1, 1]) for (const st of [-1, 1])
+            addBox(out, vadd(P(sr, st, 0), p.u, 0.03), [0.5, 0.06, 0.5], [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], b);
         }
       }
       // Platform + seated track-facing guard panel supporting the camera head.
@@ -606,6 +779,18 @@ const SceneryStructures = (function () {
           for (const st of [-1, 1])
             addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
                    [0.13, 0.9, 0.14], postCol, b);
+        }
+        if (HI && (hst === "panel" || hst === "double")) {
+          // Hi: the board's steel frame (rails and stiles proud of the print) and a raking
+          // back strut behind each post, footed on the ground.
+          const top = hst === "double" ? h * 0.92 + h * 0.4 : h / 2;
+          for (const y of [-h / 2, top])
+            addBox(out, vadd(c, p.u, y), [0.21, 0.07, panel + 0.05], postCol, b);
+          for (const st of [-1, 1]) {
+            addBox(out, vadd(vadd(c, p.t, st * (panel / 2 + 0.01)), p.u, (top - h / 2) / 2), [0.21, top + h / 2, 0.05], postCol, b);
+            const at = vadd(p.c, p.t, st * panel * 0.36);
+            strutBox(vadd(vadd(at, p.r, side * 0.12), p.u, 0.45 + h * 0.6), vadd(at, p.r, side * 0.9), 0.07, postCol, p.t);
+          }
         }
         idx++;
       }, `hoarding|${side}|${gap}|${h}|${hst}|${step}`);

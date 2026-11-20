@@ -171,6 +171,38 @@ const ShadowPass = (function () {
       if (ch && ch.chunks) G.gfx.castShadowChunked(ch, MAT_IDENT);
       else G.gfx.castShadow(plain, MAT_IDENT);
     }
+    // GRAPHICS: EXTREME extras (TLX gfx.shadowX, null on every other path): the backend plans the far sun cascades
+    // and the extra floodlight maps (tlx-shadow.js csmPlanner / lampXDriver); this side only casts into them.
+    // Far cascades take terrain, road and the chunked props; only the mid one (i 0) the instanced batches.
+    const _csmIn = { sd: null, ctr: _shadowCtr, box: 80, far: 0, propTop: null, frameNo: 0, sunRebuilt: false, read: false,
+      cast(i) {
+        _castRibbonSh(G.track.terrainGeo, "terrainChunked", G.track.meshes.terrain);
+        _castRibbonSh(G.track.roadGeo, "roadChunked", G.track.meshes.road, G.gfx.chunkedTrackCoords !== false);
+        G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+        if (i === 0) _castPropBatchesShadow();
+      } };
+    // Each extra lamp map holds what the one-lamp map holds: the cars within reach (keyed as _lampCasterKey) + props.
+    const _lxIn = { L: null, nRec: 0, tailFrom: 0, lum: null, eye: null, primary: -1, frameNo: 0, live: false,
+      carKey(lx, ly, lz, r2) {
+        const pm = _playerMat(), px = pm[12] - lx, py = pm[13] - ly, pz = pm[14] - lz;
+        let k = _lxIn.live && px * px + py * py + pz * pz <= r2 ? _lampCasterKey(1, pm) : 0;
+        for (let i = 0; i < _shadowCount; i++) {
+          const m = _shadowMats[i], dx = m[12] - lx, dy = m[13] - ly, dz = m[14] - lz;
+          if (_shadowCars[i] !== G.player && _shadowCast[i] && dx * dx + dy * dy + dz * dz <= r2) k = _lampCasterKey(k, m);
+        }
+        return k;
+      },
+      cast(reach, r2) {
+        const pm = _playerMat(), px = pm[12] - reach[0], py = pm[13] - reach[1], pz = pm[14] - reach[2];
+        if (_lxIn.live && px * px + py * py + pz * pz <= r2) _castPlayer();
+        for (let i = 0; i < _shadowCount; i++) {
+          const m = _shadowMats[i], dx = m[12] - reach[0], dy = m[13] - reach[1], dz = m[14] - reach[2];
+          if (_shadowCars[i] !== G.player && _shadowCast[i] && dx * dx + dy * dy + dz * dz <= r2) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), m);
+        }
+        for (let j = 0; j < 4; j++) _flReach[j] = reach[j];
+        G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
+        _castPropBatchesShadow(_flReach);
+      } };
 
     // Sun-shadow snap caches — loadTrack invalidates them so a new track whose
     // first snapped cell + sunDir happen to match the previous track's last values
@@ -185,6 +217,8 @@ const ShadowPass = (function () {
       // _shadowMats stays pooled — pushCaster overwrites it slot by slot.
       _shadowCount = 0;
       _shadowCars.length = 0; _shadowTeams.length = 0; _shadowCast.length = 0;
+      const _x = G.gfx && G.gfx.shadowX;
+      if (_x && typeof _x.reset === "function") _x.reset();   // EXTREME extras: the cascades and extra lamp maps hold the previous track too
       // The car map holds the PREVIOUS session's cars: the cadence keep must not
       // re-arm it until a pass of this session draws it (#2180).
       _carMapEmpty = true;
@@ -321,6 +355,7 @@ const ShadowPass = (function () {
         // gate onto a stale map and hold it until the next cell crossing.
         const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
         const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+        let _sunBuilt = false;
         if (!_shadowsRead) {
           _shadowSnapX = _shadowSnapZ = _shadowBox = null;
           _shadowSunX = _shadowSunY = _shadowSunZ = null;
@@ -341,7 +376,7 @@ const ShadowPass = (function () {
         // and needs real hardware, not a gate.
         } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
             sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
-          _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
+          _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox; _sunBuilt = true;
           _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
           // Rebuild the snapped centre in world space. The along-sun component needs
           // no snap — it only shifts depth values, which the bias absorbs.
@@ -389,6 +424,12 @@ const ShadowPass = (function () {
             _castPropBatchesShadow();
           }
           G.gfx.shadowEnd();
+        }
+        const _x = G.gfx.shadowX;
+        if (_x && _x.csmOn === true) {
+          _csmIn.sd = sd; _csmIn.box = sBox; _csmIn.far = SUN_FAR; _csmIn.propTop = G.track.propTop;
+          _csmIn.frameNo = _frameNo; _csmIn.sunRebuilt = _sunBuilt; _csmIn.read = _shadowsRead;
+          _x.csmPass(_csmIn);
         }
         // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
         // the snap-cached static map above; that's why cars only had blob shadows).
@@ -734,6 +775,12 @@ const ShadowPass = (function () {
             G.gfx.lampShadowEnd();
             } // end lamp-shadow snap rebuild
             } // end near-pool gate
+          }
+          const _x = G.gfx.shadowX;
+          if (_x && _x.lampOn === true) {
+            _lxIn.L = L; _lxIn.nRec = nRec; _lxIn.tailFrom = tailFrom; _lxIn.lum = lum; _lxIn.eye = G.camEye;
+            _lxIn.primary = flBest; _lxIn.frameNo = _frameNo; _lxIn.live = _hasLivePlayerShadow;
+            _x.lampPass(_lxIn);
           }
         }
       }

@@ -1,5 +1,20 @@
 {
+  "files": {
+    "js/car/car3d.js": {
+      "lines": 36
+    },
+    "js/game.js": {
+      "codeLines": 1,
+      "lines": 1
+    },
+    "js/track/tracks.js": {
+      "lines": 25
+    }
+  },
   "tree": {
-    "eagerBytes": 2173
+    "assertPins": 28,
+    "assertPinsAll": 34,
+    "eagerBytes": 49307,
+    "vmSrcLoads": 5
   }
 }

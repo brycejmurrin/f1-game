@@ -123,6 +123,74 @@ let _stallsTrimmed = 0;   // this evaluation window
 //   3  car sun-shadow map off (the blob contact shadow remains) + reduced wet-road SSR
 //   4  SSAO + god rays + bloom off
 
+// UPPER LADDER (desktop ULTRA / EXTREME on TLX; inert at detail 0). Why: docs/GOVERNOR-RATIONALE.md §gov-42.
+let _xShed = 0, _xFutile = false;
+const GPU_BOUND = 0.75, GPU_ROOM = 0.7, GPU_FRESH_MS = 2000;
+function _xq() {
+  try {
+    return _gfx && _gfx.__tlx && typeof GfxQuality !== "undefined" && GfxQuality.detail() > 0 && GfxQuality.SHED_ORDER ? GfxQuality : null;
+  } catch (_) { return null; }
+}
+// Next / previous shed count that changes an enabled extra, or -1.
+function _xNext(q) {
+  try {
+    const max = q.SHED_ORDER.length;
+    for (let n = _xShed; n < max; n++) if (q.feature(q.SHED_ORDER[max - 1 - n])) return n + 1;
+  } catch (_) { /* fall through: no rung */ }
+  return -1;
+}
+function _xPrev(q) {
+  try {
+    const max = q.SHED_ORDER.length;
+    for (let n = _xShed - 1; n >= 0; n--) {
+      q.setShed(n);
+      if (q.feature(q.SHED_ORDER[max - 1 - n]) || n === 0) { q.setShed(_xShed); return n; }
+    }
+    q.setShed(_xShed);
+  } catch (_) { /* fall through */ }
+  return -1;
+}
+function _xSet(n) { const q = _xq(); try { _xShed = q ? q.setShed(n) : 0; } catch (_) { _xShed = 0; } }
+// A fresh TLX GPU timer reading in ms, or -1.
+function _gpuMs() {
+  try {
+    if (!_gfx || typeof _gfx.gpuMs !== "function" || typeof _gfx.gpuTimer !== "function") return -1;
+    const st = _gfx.gpuTimer();
+    if (!st || !st.on || !(st.sampleAgeMs >= 0) || st.sampleAgeMs > GPU_FRESH_MS) return -1;
+    const v = +_gfx.gpuMs();
+    return v > 0 && Number.isFinite(v) ? v : -1;
+  } catch (_) { return -1; }
+}
+function _xShedStep(ev) {
+  const q = _xq();
+  if (!q || _xFutile || _tierHold) return false;
+  const g = _gpuMs();
+  if (g > 0 && g < ev * GPU_BOUND) return false;
+  const n = _xNext(q);
+  if (n < 0) return false;
+  _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev };
+  _xSet(n); _govCool = 90; _downHold = _chargeCut();
+  return true;
+}
+function _xRestoreStep(ev) {
+  const q = _xq();
+  if (!q || _xShed <= 0 || _tierHold) return false;
+  const g = _gpuMs();
+  if (g > 0 && g > _floorMs * GPU_ROOM) return false;
+  const n = _xPrev(q);
+  if (n < 0) return false;
+  _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev, up: true };
+  _xSet(n); _govCoolMs = 4000; _sinceUp = 0;
+  return true;
+}
+
+// The restore climb's top: _resCeil, or the backend's supersampling ceiling above 1 (§gov-42).
+function _climbTop() {
+  let m = 1;
+  try { if (_gfx && typeof _gfx.maxRenderScale === "function") m = +_gfx.maxRenderScale() || 1; } catch (_) { m = 1; }
+  return m > 1 ? Math.max(_resCeil, Math.min(2, m)) : _resCeil;
+}
+
 // Why: docs/GOVERNOR-RATIONALE.md §gov-14.
 const SENT_ACTIVE = "apex26.raceActive";
 // Set from tick(), which game.js only calls in race/count. loadTrackStepped
@@ -224,6 +292,8 @@ function init(gfx) {
   _perfTier = _perfTierFloor;
   _autoShed = 0;
   _phoneSlowLatch = false;
+  _xShed = 0; _xFutile = false;
+  try { if (_xq() && typeof gfx.gpuTimer === "function") gfx.gpuTimer(true); } catch (_) { /* timing is optional */ }
   // Two strikes: the phone was killed twice, so boot with the smallest backing store too (TLX reads this after create; GLX has no capDpr).
   if (_crashStrikes >= 2 && gfx && gfx.isMobile && typeof gfx.capDpr === "function") gfx.capDpr(1);
 }
@@ -252,7 +322,7 @@ function sentinelArm(on) {
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0;
             // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
-            _tierFutile = false; _scaleFutile = false;
+            _tierFutile = false; _scaleFutile = false; _xFutile = false;
             _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; } else _live = false;   // §2au verdicts are race-local too
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
@@ -311,7 +381,7 @@ function _ageClocks(stepMs) {
   // Headroom has to be UNBROKEN to age the ceiling: any frame back over the
   // restore threshold restarts the two minutes, so a device that is merely
   // between heavy sections never probes its way back up.
-  if (_scaleCap <= 1) {
+  if (Number.isFinite(_scaleCap)) {   // §gov-42: a measured cap may exceed 1
     // §2au: headroom is judged against the SUSTAINED floor (the shadow, which
     // never rewinds) — against the held floor a plateaued EMA would read as
     // "still missing" forever and the ceiling could never age out.
@@ -396,6 +466,10 @@ function tick(dtMs, drawn) {
         _perfTier++; _autoShed++; _pendingVerify = v; _govCool = 90;
         return;
       }
+      if (v.kind === "xshed" && !v.up) {
+        const q = _xq(), n = q ? _xNext(q) : -1;
+        if (n > 0) { _xSet(n); _pendingVerify = v; _govCool = 90; return; }
+      }
       if (v.kind === "scale") {
         // Why: docs/GOVERNOR-RATIONALE.md §gov-27.
         const now = _gfx.getRenderScale ? _gfx.getRenderScale() : 1, big = 0.5;
@@ -414,7 +488,8 @@ function tick(dtMs, drawn) {
         // this device has just answered for. (An UP step failing says the
         // opposite — there was no headroom — and implies nothing about fill.)
         if (!v.up) _scaleFutile = true;
-      } else { _perfTier = v.prev; _autoShed = v.shed; if (!v.up) _tierFutile = true; }
+      } else if (v.kind === "xshed") { _xSet(v.prev); if (!v.up) _xFutile = true; }
+      else { _perfTier = v.prev; _autoShed = v.shed; if (!v.up) _tierFutile = true; }
       _govCoolMs = VERIFY_COOL;
       // A failed UP step is the device saying "no headroom". Without a hold
       // the restore gate (EMA under the floor, _downHold 0) was true again
@@ -427,7 +502,7 @@ function tick(dtMs, drawn) {
       // (cost rose when resolution did), so it latches; a refused DOWN step
       // that reaches here is final — the continuations above returned — and
       // final indifference clears the latch. See _computeBound.
-      if (v.up) _latchBound(); else _computeBound = false;
+      if (v.kind !== "xshed") { if (v.up) _latchBound(); else _computeBound = false; }
       return;
     }
     // Verified feature shed on a phone: latch so headroom cannot restore full
@@ -437,7 +512,7 @@ function tick(dtMs, drawn) {
     // §2au, the success half: a DOWN step the EMA felt is the compute-bound
     // proof; an UP step it accepted means the headroom was real and the
     // episode, if any, is over.
-    if (v.up) _computeBound = false; else _latchBound();
+    if (v.kind !== "xshed") { if (v.up) _computeBound = false; else _latchBound(); }
     // A climb that passed its verify is still ON PROBATION: the survival clock
     // above, not this one evaluation, is what restores the backoff.
   }
@@ -451,6 +526,7 @@ function tick(dtMs, drawn) {
   if (ev <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (ev > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
+    if (_xShedStep(ev)) { _degradeArm = 0; return; }   // §gov-42
     if (_shedDprBoost()) { _degradeArm = 0; return; }
     // Why: docs/GOVERNOR-RATIONALE.md §gov-29.
     let stepped = false;
@@ -474,6 +550,7 @@ function tick(dtMs, drawn) {
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
+    _xFutile = false;
     // Futility may clear (a later wet race can use a rung that was useless dry),
     // but a phone that already measured a helpful shed stays latched — calm EMA
     // at the shed quality is not evidence the full stack fits again.
@@ -486,7 +563,8 @@ function tick(dtMs, drawn) {
     // that gap only hands the next heavy section something to take back. The
     // margin belongs to a measurement, never to the default — subtracting it
     // from an untouched ceiling would pin every healthy device at 0.9.
-    const ceil = _scaleCap > 1 ? _resCeil : Math.max(0.5, Math.min(_resCeil, _scaleCap - 0.1));
+    const top = _climbTop();
+    const ceil = !Number.isFinite(_scaleCap) ? top : Math.max(0.5, Math.min(top, _scaleCap - 0.1));
     if (_autoRes && cur < ceil - 1e-9) {
       // Why: docs/GOVERNOR-RATIONALE.md §gov-32.
       const gap = ceil - cur;
@@ -502,6 +580,7 @@ function tick(dtMs, drawn) {
     // taken AT the user's floor is released; the crash floor is never lifted.
     // Phone slow latch: never promote effects back after a verified shed.
     if (!stepped && !_tierHold && !_phoneSlowLatch && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
+      stepped = true;
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: ev, up: true };
       // LOW starts at its preset floor: its measured post/lamp cut still
       // needs recovery. tier() keeps the preset and crash floors intact.
@@ -510,6 +589,7 @@ function tick(dtMs, drawn) {
       } else { _perfTier = _perfTierFloor; _autoShed = 0; }
       _govCoolMs = 4000; _sinceUp = 0;
     }
+    if (!stepped) _xRestoreStep(ev);   // §gov-42
   }
 }
 
@@ -580,6 +660,9 @@ return {
   // accessor rather than a redefinition of autoTier().
   autoShed: () => Math.max(_perfTierFloor, _autoShed),
   tierFloor: () => _perfTierFloor,
+  // §gov-42
+  extrasShed: () => _xShed,
+  gpuMs: () => _gpuMs(),
   userTier: () => _userTier,
   // Clamped to the ladder's own range so a bad preset id can't invent a tier 7
   // that every `tier() >= N` gate would satisfy. Drops any pending verify for

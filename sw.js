@@ -393,10 +393,13 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-viewport.js",
+    "js/render/three/tsl-carsurf.js",
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-gi.js",
     "js/render/three/tsl-post.js",
+    "js/render/three/tsl-aa.js",
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
@@ -408,6 +411,7 @@ async function precacheAssetLists() {
     "js/lighting/presets.js",
     "js/garage/garage-data.js",
     "js/garage/arrival-rows.js",
+    "js/garage/hi-prims.js",
     // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
@@ -436,6 +440,7 @@ async function precacheAssetLists() {
     "js/race/retired-card.js",
     "js/race/driving-coach.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
+    "js/render/shared/mesh-detail.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
@@ -453,6 +458,7 @@ async function precacheAssetLists() {
     "js/track/scenery/guards.js",
     "js/track/scenery/api-wrap.js",
     "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
     "js/track/scenery/build-props.js",
     // LAZY_GARAGE_EXTERIOR — optional selected-circuit pit slice
     "js/garage/exterior-geometry.js",
@@ -979,7 +985,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/mesh-detail\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.

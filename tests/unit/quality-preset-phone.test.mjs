@@ -144,6 +144,9 @@ test("phone ULTRA row is disabled with the NOT ON PHONES note", () => {
   assert.ok(ultra, "ULTRA stays in the list");
   assert.equal(ultra[2], true, "ULTRA is the disabled option on phones");
   assert.ok(String(ultra[1]).includes("NOT ON PHONES"), "disabled label carries the cap note");
+  const extremePhone = painted[painted.length - 1].find((row) => row[0] === "extreme");
+  assert.equal(extremePhone[2], true, "EXTREME is disabled on phones too");
+  assert.ok(!String(extremePhone[1]).includes(Q.EXTREME_NOTE), "a phone shows the cap note, not the desktop note");
   delete globalThis.SettingRow;
   delete globalThis.GLX;
   delete globalThis.localStorage;
@@ -153,6 +156,38 @@ test("phone ULTRA row is disabled with the NOT ON PHONES note", () => {
 
 // DESKTOP DETAIL SEAM: detail() is a boot-time level, feature() gates every extra, the governor's
 // setShed() drops extras from the end of SHED_ORDER, and apex26.gfxx.<name> forces one off / on.
+test("desktop EXTREME row says desktop / THREE.JS WebGPU only, in the phone note style", () => {
+  const Q = loadQuality();
+  const painted = [];
+  let built = null;
+  globalThis.SettingRow = {
+    paint(_row, _cur, values) { painted.push(values); },
+    build(_id, _label, values) { painted.push(values); built = { title: "" }; return { row: built }; },
+    wire() {},
+  };
+  globalThis.document = {
+    readyState: "complete",
+    getElementById: (id) => (id === "pm-gfx"
+      ? { parentNode: { replaceChild() {} }, title: "", hidden: true, textContent: "" }
+      : null),
+    addEventListener() {},
+  };
+  globalThis.GLX = { isMobile: false };
+  globalThis.PerfGov = { setUserTier() {} };
+  GameStore.store.set("gfxPreset", "high");
+  Q.init();
+  const rows = painted[painted.length - 1];
+  const extreme = rows.find((row) => row[0] === "extreme");
+  assert.equal(extreme[2], undefined, "EXTREME is selectable on desktop");
+  assert.equal(extreme[1], "EXTREME" + Q.EXTREME_NOTE);
+  assert.equal(rows.find((row) => row[0] === "ultra")[1], "ULTRA", "ULTRA's label is unchanged");
+  assert.equal(built.title.includes("looks like ULTRA"), true, "the row title explains GLX / WGX equal ULTRA");
+  delete globalThis.SettingRow;
+  delete globalThis.GLX;
+  delete globalThis.document;
+  delete globalThis.PerfGov;
+});
+
 test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and the per-feature override", () => {
   const boot = (preset, mobile, raw = {}) => {
     const store = { get: (k, d) => (k === "gfxPreset" ? preset : d), raw: (k) => (k in raw ? raw[k] : null), set() {}, rawSet() {} };

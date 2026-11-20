@@ -1,4 +1,4 @@
-/* Apex 26 — GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist (apex26.gfxHigh), the apex26.gfxPreset store key and the #pm-gfx button. The RENDERER picker (WEBGL2 / THREE.JS / WEBGPU, RESET RENDERER, THREE PATH, SCREENSHOTS) is js/perf/renderer-picker.js. */
+/* Apex 26 — GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA / EXTREME) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist (apex26.gfxHigh), the apex26.gfxPreset store key and the #pm-gfx button. The RENDERER picker (WEBGL2 / THREE.JS / WEBGPU, RESET RENDERER, THREE PATH, SCREENSHOTS) is js/perf/renderer-picker.js. */
 const GfxQuality = (function () {
   "use strict";
 
@@ -65,6 +65,10 @@ function setCinema(on) { _cinema = !!on; return _cinema; }
 const PHONE_MAX_ID = "high";
 const PHONE_ULTRA_NOTE = " — NOT ON PHONES";
 const PHONE_CAP_TITLE = "ULTRA is capped on phones (BrowserStack 2026-10-21: ~24 fps avg on iPhone 15). HIGH is the phone ceiling.";
+// EXTREME's extras are built for three.js on WebGPU (TLX); on WEBGL2 (GLX) or WGX nothing consumes them and the
+// picture equals ULTRA. Desktop only: phones cap at HIGH (above). Same note style as PHONE_ULTRA_NOTE.
+const EXTREME_NOTE = " — DESKTOP, THREE.JS WEBGPU";
+const EXTREME_TITLE = "EXTREME is for desktop GPUs on the THREE.JS renderer with WebGPU; on WEBGL2 or WEBGPU (WGX) it looks like ULTRA. Replay, photo mode and the garage add depth of field and motion blur on EXTREME.";
 const RELOAD_DELAY_MS = 260;
 
 let curId = "high";
@@ -174,6 +178,7 @@ function gfxValues(note) {
     let text = p.label;
     const phoneBlocked = isMobile && p.mobileHigh;
     if (phoneBlocked) text += PHONE_ULTRA_NOTE;
+    else if (p.id === "extreme") text += EXTREME_NOTE;
     if (note && p.id === curId) text += note;
     return phoneBlocked ? [p.id, text, true] : [p.id, text];
   });
@@ -259,7 +264,7 @@ function mountControl() {
   const host = btn.parentNode;
   if (typeof SettingRow !== "undefined" && host && typeof host.replaceChild === "function" && !row) {
     const built = SettingRow.build("pm-gfx", "GRAPHICS", gfxValues(""));
-    built.row.title = isMobile ? PHONE_CAP_TITLE : (btn.title || "");
+    built.row.title = isMobile ? PHONE_CAP_TITLE : ((btn.title ? btn.title + " " : "") + EXTREME_TITLE);
     host.replaceChild(built.row, btn);
     row = built.row;
     SettingRow.wire(row, { values: gfxValues(""), read: () => curId, write: (v) => { set(v); uiSelect(); } });
@@ -268,7 +273,7 @@ function mountControl() {
   }
   btn.hidden = false;
   btn.textContent = label();
-  if (isMobile) btn.title = PHONE_CAP_TITLE;
+  btn.title = isMobile ? PHONE_CAP_TITLE : ((btn.title ? btn.title + " " : "") + EXTREME_TITLE);
   btn.onclick = () => { cycle(); uiSelect(); };
 }
 
@@ -308,7 +313,7 @@ if (typeof document !== "undefined") {
 // cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
-  maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
+  maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
   detail, feature, setShed, setCinema, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();

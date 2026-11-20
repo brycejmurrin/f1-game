@@ -59,6 +59,8 @@ const SceneryNature = (function () {
             terrainYAt, onTrack, hash, upOf, norm, vadd, bankOffsetAt } = ctx;
     Log.info("scenery", "scenery-nature dress " + (def && def.id));
     const { CROWD_DAY } = TrackSceneryData;
+    // Desktop EXTREME extras (js/track/scenery/detail.js); every flag is false at detail 0.
+    const DF = ctx.detailFeatures || {};
 
     const _guCand = new Array(n);
     const groundUnder = (x, z) => {
@@ -548,8 +550,10 @@ const SceneryNature = (function () {
       }
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
+      // treesHi (EXTREME, near the road): twice the radial sections and a rounding band; the same envelope.
+      const HI = DF.treesHi && initialDist <= 40 ? 2 : 1;
       out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) { refuseTree(); return; }   // no trunk, no crown (the pit complex keeps footings out)
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6 * HI, b) === false) { refuseTree(); return; }   // no trunk, no crown (the pit complex keeps footings out)
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.22, h * 1.0);
       {
@@ -578,8 +582,9 @@ const SceneryNature = (function () {
           }
           return under(sx / m, sy / m, sz / m) && seen > 0;
         };
-        for (let i = 0; i < 9; i++) {
-          const a0 = i / 9 * 6.2832, a1 = (i + 1) / 9 * 6.2832;
+        const wedges = 9 * HI;
+        for (let i = 0; i < wedges; i++) {
+          const a0 = i / wedges * 6.2832, a1 = (i + 1) / wedges * 6.2832;
           const tri = [ring(a0), ring(a1), apex];
           if (hidden(tri)) continue;
           emit(out, tri, usCol, uref);
@@ -587,24 +592,26 @@ const SceneryNature = (function () {
       }
       if (crown === "vase") {
         // Eucalyptus / elm: narrow at the fork, spreading upward and outward.
-        addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8, b);
-        addCone(out, vadd(a.c, a.u, h * 0.56), (3.4 + h * 0.15) * j * sp, h * 0.28, col, 9, b);
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.78), a.r, lean), (4.0 + h * 0.17) * j * sp, h * 0.24, c2, 9, b);
+        addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8 * HI, b);
+        addCone(out, vadd(a.c, a.u, h * 0.56), (3.4 + h * 0.15) * j * sp, h * 0.28, col, 9 * HI, b);
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.78), a.r, lean), (4.0 + h * 0.17) * j * sp, h * 0.24, c2, 9 * HI, b);
       } else if (crown === "weeping") {
         // Willow: a high dome with the mass hanging BELOW it.
-        addCone(out, vadd(a.c, a.u, h * 0.62), (3.6 + h * 0.15) * j * sp, h * 0.30, col, 9, b);
+        addCone(out, vadd(a.c, a.u, h * 0.62), (3.6 + h * 0.15) * j * sp, h * 0.30, col, 9 * HI, b);
         addFrustum(out, vadd(a.c, a.u, h * 0.24), (1.4 + h * 0.05) * j * sp,
-          (3.9 + h * 0.16) * j * sp, h * 0.40, c2, 9, b);
+          (3.9 + h * 0.16) * j * sp, h * 0.40, c2, 9 * HI, b);
       } else if (crown === "columnar") {
         // Poplar / lombardy: a tall narrow spire, almost no spread.
-        addCone(out, vadd(a.c, a.u, h * 0.30), (1.5 + h * 0.05) * j * sp, h * 0.36, col, 7, b);
-        addCone(out, vadd(a.c, a.u, h * 0.56), (1.2 + h * 0.04) * j * sp, h * 0.34, col, 7, b);
-        addCone(out, vadd(a.c, a.u, h * 0.80), (0.8 + h * 0.03) * j * sp, h * 0.26, c2, 6, b);
+        addCone(out, vadd(a.c, a.u, h * 0.30), (1.5 + h * 0.05) * j * sp, h * 0.36, col, 7 * HI, b);
+        addCone(out, vadd(a.c, a.u, h * 0.56), (1.2 + h * 0.04) * j * sp, h * 0.34, col, 7 * HI, b);
+        addCone(out, vadd(a.c, a.u, h * 0.80), (0.8 + h * 0.03) * j * sp, h * 0.26, c2, 6 * HI, b);
       } else {
-        addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j * sp, h * 0.30, col, 9, b);   // wide skirt
-        addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j * sp, h * 0.26, col, 9, b);   // widest bulge
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8, b);    // shoulder
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7, b);    // rounded cap
+        addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j * sp, h * 0.30, col, 9 * HI, b);   // wide skirt
+        addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j * sp, h * 0.26, col, 9 * HI, b);   // widest bulge
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8 * HI, b);    // shoulder
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7 * HI, b);    // rounded cap
+        // HI: a band filling the step between the bulge and the shoulder, inside both cones' radii.
+        if (HI > 1) addFrustum(out, vadd(a.c, a.u, h * 0.42), (3.5 + h * 0.13) * j * sp, (2.8 + h * 0.10) * j * sp, h * 0.22, col, 18, b);
       }
       reserve();
       out._mat = 0; swayOff();
@@ -933,8 +940,17 @@ const SceneryNature = (function () {
           } else {
             col = CROWD_DAY[Math.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
           }
-          ctx.instance("crowd-body",
-            { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col },
+          const place = { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col };
+          // crowd3d: a seated figure (pose and skin from the seat hash, facing the track) inside the same envelope.
+          if (DF.crowd3d && gap + back <= TrackDetail.CROWD_NEAR_M) {
+            const pose = Math.floor(hash(k * 3.7 + r * 2.9 + s2 * 6.1 + side) * TrackDetail.POSES) % TrackDetail.POSES;
+            const skin = Math.floor(hash(k * 5.1 + r * 1.3 + s2 * 2.3 + side * 7.9) * 3) % 3;
+            ctx.instance(`crowd-fig|${pose}|${skin}|${side}|${NIGHT ? 1 : 0}`, place,
+              (rec) => TrackDetail.crowdFigure(rec, MAT.FABRIC, pose, skin, -side, NIGHT, TrackGraph.NODE_COLOR),
+              { kind: "crowd", k, side }, { unguarded: true });
+            continue;
+          }
+          ctx.instance("crowd-body", place,
             (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.55, 1, 0.5], TrackGraph.NODE_COLOR); },
             { kind: "crowd", k, side }, { unguarded: true });
         }
@@ -1517,6 +1533,11 @@ const SceneryNature = (function () {
         const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
         const d = clearTreeDist(k, side, dist + back, canopy);
         if (d == null) return;
+        // density (EXTREME): a deeper third row behind the edge, broadleaf only, through the same guards.
+        if (DF.density && !isPalm && hash(k * 3.3 + side * 9.1) < 0.6) {
+          const d3 = clearTreeDist(k, side, dist + canopy * 2.8, canopy);
+          if (d3 != null) tree(k, side, d3, h * (0.9 + hash(k * 1.9 + side) * 0.25), treeCol);
+        }
         if (isPalm) palm(k, side, d, h, palmCol);
         else if (isPine) pine(k, side, d, h, pineCol);
         else if (detailed && Number.isInteger(limit) && limit > 0 && limit <= 60 && accepted < limit) {
@@ -1541,6 +1562,7 @@ const SceneryNature = (function () {
       const c2 = [bc[0] * 0.90, bc[1] * 0.94, bc[2] * 0.88];
       const jh = hash(k * 4.3 + side * 2.1 + dist);
       let lobes = (opts && opts.lobes) || (jh < 0.4 ? 2 : 3);   // most clumps 2-3 lobes
+      if (DF.density) lobes++;   // EXTREME: one more lobe, rounder sections (below)
       // Understorey is foliage too: inheriting FLAT from the caller makes
       // clumps shade as solid props and misclassifies natural crown overlap.
       const previousMat = out._mat;
@@ -1564,7 +1586,7 @@ const SceneryNature = (function () {
         const lx = Math.cos(ang) * off, lz = Math.sin(ang) * off;
         const lc = vadd(vadd(p.c, p.r, lx), p.t, lz);
         const rad = (1.1 + lh * 0.9) * (lobes > 1 ? 0.82 : 1.15);
-        addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, 6, b);
+        addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, DF.density ? 9 : 6, b);
       }
       out._mat = previousMat;
     };

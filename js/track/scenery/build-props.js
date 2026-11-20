@@ -103,11 +103,13 @@ const TrackBuildProps = (function () {
     // NOT opted into GRAPHICS: HIGH) coarsen that grid, cutting ~20-24% of the props
     // verts on the dense street tracks that OOM-crash iOS — the exact jetsam trigger.
     // CITY_LOD = 1 on desktop and HIGH-tier phones ⇒ geometry is byte-identical there;
-    // `lod()` only ever shrinks a count and never below its floor.
+    // `lod()` never goes below its floor; only the EXTREME `density` flag (never a phone) grows a count.
     // Façade wiring: read mobileTier off the injected backend (stashed on the
     // track by build()), falling back to the GLX global for VM/stub callers.
     const G = track._gfx || (typeof GLX !== "undefined" ? GLX : null);
-    const CITY_LOD = (G && G.mobileTier) ? 0.72 : 1;
+    // Desktop DETAIL (js/track/scenery/detail.js): `density` at EXTREME raises the same knob above 1.
+    const DF = track._detailFeatures || {};
+    const CITY_LOD = (G && G.mobileTier) ? 0.72 : DF.density ? 1.3 : 1;
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
     // Props run ~70-290 verts per metre of lap (median ~130; 52-circuit sweep): start at 100/m so a
     // typical build grows once, not seven times from 8192. Glass and water stay small.
@@ -1319,6 +1321,8 @@ const TrackBuildProps = (function () {
       // output buffers + per-build state
       out, glassBuf, waterBuf, track, def, theme, pal, n, ds, px, py, pz, hw,
       pyMin, NIGHT, MAT, lod,
+      // desktop detail level (0 today) and its feature flags (TrackDetail.NAMES; all false at 0)
+      detail: track._detail || 0, detailFeatures: DF,
       // guarded emitters + the raw escape hatch
       addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain,
       emit, RAW: raw, rejBox, rejRad,

@@ -204,6 +204,18 @@ const CarDraw = (function () {
       const d = team.drivers && team.drivers[G.driverIdx | 0];
       return d && d.code ? d.code : undefined;
     }
+    // DESKTOP DETAIL (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): read once, at the first build — the level
+    // is boot-time. The player gets meshHi at its full level plus the heroCar pass; a rival meshHi at most 1 and
+    // never the hero pass. All 0 / false on HIGH and below, every phone and in node (CarGeometry.detailFor).
+    let _det = null;
+    function carDetail() {
+      if (!_det) {
+        const CG = typeof CarGeometry !== "undefined" && CarGeometry.detailFor ? CarGeometry : null;
+        const pd = CG ? CG.detailFor(true) : 0, hero = CG ? CG.heroOn() : false;
+        _det = { player: pd, rival: CG ? CG.detailFor(false) : 0, hero, key: pd || hero ? ":d" + pd + (hero ? "h" : "") : "" };
+      }
+      return _det;
+    }
     const lidKey = (team, suffix) => team.id === "legends" ? suffix + ":" + legendLid(team) : suffix;
     function buildCarData(team, extra) {
       const liv = livOf(team);   // chosen paint job (else team colours)
@@ -222,6 +234,7 @@ const CarDraw = (function () {
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
         silhouette: !!(extra && extra.silhouette),
         seats: extra && extra.seats,   // body-only: teammates' bodies from this build (#4219)
+        detail: extra && extra.silhouette ? 0 : carDetail().rival,   // meshHi rival (0 below ULTRA)
       });
     }
 
@@ -1450,7 +1463,7 @@ const CarDraw = (function () {
       const view = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(source) : null, liv = view ? view.livery : source;
       return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
         { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
-          parts: _cbParts }));
+          parts: _cbParts, detail: carDetail().player, hero: carDetail().hero }));
     }
     // The first-person SHADOW caster: the WHOLE exterior car (wheels, engine
     // cover/airbox, fin, rear wing) as a depth silhouette minus only what made
@@ -1477,7 +1490,7 @@ const CarDraw = (function () {
       const body = CockpitOpts.body();
       const finish = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.stamp() : 0;
       if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || bs !== _cbBs || num !== _cbNum || finish !== _cbFinish) {
-        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + body + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + body + (bs ? ":S" + bs : "") + ":" + num + carDetail().key;   // halo size keys the cache: a change rebuilds, no reload
         _cbKey += ":F" + finish; _cbFinish = finish;
         _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key
         _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbBs = bs; _cbNum = num;
@@ -1780,11 +1793,11 @@ const CarDraw = (function () {
       // LEGENDS: ten legends share num 1, so the picked legend's code joins the key
       // and names the lid (Car3D opts.helmetKey); no other team moves (lid undefined).
       const ld = team.id === "legends" && team.drivers ? team.drivers[G.driverIdx | 0] : null, lid = ld && ld.code || undefined;
-      const key = team.id + ":" + visualKey + ":" + carDecalNum(team, car) + (lid ? ":" + lid : "");
+      const det = carDetail(), key = team.id + ":" + visualKey + ":" + carDecalNum(team, car) + (lid ? ":" + lid : "") + det.key;
       const liv = deps.resolveLivery(team);
       return putBoundedMesh(playerBodies, playerBodyOrder, key, () => G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
         { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car), helmetKey: lid,
-          parts: playerPartsFor(team, visualKey) })), PLAYER_BODY_CACHE_MAX);
+          parts: playerPartsFor(team, visualKey), detail: det.player, hero: det.hero })), PLAYER_BODY_CACHE_MAX);
     }
     // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
     // colour + caliper accent) so a parts change rebuilds the right mesh instead
@@ -1805,15 +1818,15 @@ const CarDraw = (function () {
     function getPlayerWheelMeshes(team) {
       // livery wheel tints (rimTint / caliperTint) join the key: "" when unset, so today's key is unchanged
       const wt = CarWheels.tints(team && deps.resolveLivery(team));
-      const key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key;
+      const pd = carDetail().player, key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key + (pd ? ":d" + pd : "");
       return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
         const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
         const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
         const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
         const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd);
         const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1853,7 +1866,7 @@ const CarDraw = (function () {
       const vt = st.parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
       // A pure function of the cached state's parts, so it is built once per state.
       const wt = CarWheels.tints(livOf(team));   // rimTint / caliperTint: part of the key ("" unset)
-      const base = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
+      const base = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1") + (carDetail().rival ? ":d" + carDetail().rival : ""));
       // tints() is memoised per livery, so `wt` is identity-stable: the concatenation is built once per state
       // and tint set, not per car per frame.
       let key = base;
@@ -1870,8 +1883,9 @@ const CarDraw = (function () {
         const wt = _fwTints;
         const caliper = wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes]);
         const rim = wt.rim || (brake && brake.rim);
-        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
-        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
+        const rd = carDetail().rival;   // meshHi rival wheels (the level joins fwKey above)
+        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf, rd);
+        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf, rd);
         // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
         // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
         // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and

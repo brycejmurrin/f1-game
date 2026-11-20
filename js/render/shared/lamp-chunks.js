@@ -19,8 +19,25 @@ const LampChunks = (function () {
   // 0..1 knob -> effective cap. Verbatim the shipped GLX formula: a partial
   // knob shrinks the set (floor 8 keeps a chunk from losing its own lamp),
   // 0 and 1 both mean the full cap (0 never reaches here — the feature is off).
-  function capFor(knob) {
-    return (knob > 0 && knob < 1) ? Math.max(8, Math.round(CAP * knob)) : CAP;
+  // capMax (optional): the full cap instead of CAP — only TLX passes one, LightBudget.bakeChunk(), which
+  // is CAP everywhere but an EXTREME `lightsHi` boot (HI_CHUNK 48). Absent, the formula is the shipped one.
+  function capFor(knob, capMax) {
+    const full = capMax > CAP ? capMax | 0 : CAP;
+    return (knob > 0 && knob < 1) ? Math.max(8, Math.round(full * knob)) : full;
+  }
+
+  // THE HI ORDER (only for a table baked above CAP: lightsHi). Today's bake keeps the NEAREST lamps.
+  // With 48 slots a cell also holds lamps near the edge of their reach, and a big floodlight 30 m off
+  // outshines a small kerb lamp 10 m off, so the HI bake ranks by the lit shader's own geometric
+  // attenuation at the box's nearest point instead: win^2 / (max(d, NEAR)^2 + 1), win = 1 - (d/rad)^4
+  // (tsl-lit.js lamp loop, LAMP NEAR CLAMP def 4 m). The key is its reciprocal, so "smaller is better"
+  // and the heap below is shared. Colour is not in it: the bake runs once per track, often before the
+  // lamps have warmed up, so the lanes it reads are the four the cache key snapshots (x, y, z, radius).
+  const NEAR2 = 16;
+  function hiKey(d2, rad) {
+    const q = d2 / (rad * rad), win = 1 - q * q;
+    if (!(win > 0)) return Infinity;
+    return ((d2 > NEAR2 ? d2 : NEAR2) + 1) / (win * win);
   }
 
   // Bake the whole table for one (lights, chunks, knob) triple. lights is the
@@ -30,8 +47,9 @@ const LampChunks = (function () {
   //   offsets/counts Uint32Array per chunk into concat
   // Deterministic: lamps are baked per track and chunk bounds never move, so
   // this is genuine build-time work — never a per-frame cull.
-  function buildTable(lights, chunks, knob) {
-    const cap = capFor(knob), n = (lights.length / 15) | 0, nc = chunks.length;
+  function buildTable(lights, chunks, knob, capMax) {
+    const cap = capFor(knob, capMax), n = (lights.length / 15) | 0, nc = chunks.length;
+    const hi = capMax > CAP;   // lightsHi: rank by attenuation (hiKey), not by distance
     const lists = new Array(nc);
     // Position and radius, packed and stripped of dead radii, in source order.
     // The chunk loop streams that list instead of gathering stride-15 floats
@@ -73,18 +91,19 @@ const LampChunks = (function () {
         const d2 = Frustum.aabbDist2(ch.min, ch.max, pack[k], pack[k + 1], pack[k + 2]);
         if (!(d2 <= rad * rad)) continue;
         const i = live[j];
+        const key = hi ? hiKey(d2, rad) : d2;
         if (m < cap) {
           let p = m++;
-          idx[p] = i; dist[p] = d2;
+          idx[p] = i; dist[p] = key;
           while (p > 0) {
             const up = (p - 1) >> 1;
             if (!worse(p, up)) break;
             swap(p, up); p = up;
           }
-        } else if (d2 < dist[0]) {
+        } else if (key < dist[0]) {
           // Source indices arrive in ascending order, so an equal-distance
           // newcomer always loses the stable tie, including Infinity.
-          idx[0] = i; dist[0] = d2; sink(m);
+          idx[0] = i; dist[0] = key; sink(m);
         }
       }
       for (let end = m - 1; end > 0; end--) { swap(0, end); sink(end); }
@@ -168,16 +187,17 @@ const LampChunks = (function () {
     }
     return false;
   }
-  function resolve(lights, chunks, knob) {
-    const cap = capFor(knob);
+  // capMax: see capFor (TLX's lightsHi bake). It is part of the key; the knob, through the cap, is not.
+  function resolve(lights, chunks, knob, capMax) {
+    const fullCap = capFor(1, capMax), cap = capFor(knob, capMax);
     let e = _cache.get(chunks);
-    if (!e || e.src !== lights || _moved(e.snap, lights)) {
+    if (!e || e.src !== lights || e.fullCap !== fullCap || _moved(e.snap, lights)) {
       // Bake at the FULL cap once; every narrower cap is a prefix of it.
-      const full = buildTable(lights, chunks, CAP);
-      e = { src: lights, snap: _snap(lights), full, cap: CAP, table: full };
+      const full = buildTable(lights, chunks, 1, fullCap);
+      e = { src: lights, snap: _snap(lights), full, fullCap, cap: fullCap, table: full };
       _cache.set(chunks, e);
     }
-    if (e.cap !== cap) { e.table = cap === CAP ? e.full : _reCap(e.full, cap); e.cap = cap; }
+    if (e.cap !== cap) { e.table = cap === fullCap ? e.full : _reCap(e.full, cap); e.cap = cap; }
     return e.table;
   }
 

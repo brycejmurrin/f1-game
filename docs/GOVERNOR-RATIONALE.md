@@ -909,3 +909,49 @@ its own measurements. Not _floorTier(): that folds in the GRAPHICS preset, so
 one strike paid down on MEDIUM (2 > 2 is false) left autoTier() pinned at the
 old floor for the session (#3294). tier() still applies the preset at read time.
 ```
+
+### gov-42
+
+Above `let _xShed = 0;` (added 2026-11-20, #5951; design: `docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md`).
+
+```text
+THE UPPER LADDER. Desktop ULTRA and EXTREME on TLX add extras above tier 0
+(GfxQuality.FEATURES). They are the most expensive and least look-defining
+work in the frame, so when the frame slips they go FIRST: one extra per
+evaluation via GfxQuality.setShed(n), last of SHED_ORDER first (SSGI, then
+supersampling, SSR, GTAO, SSAO, rays, lights), rungs the level never enabled
+skipped. Each step is provisional like every other: a verify that shows no
+gain tries the next extra; when none helped the whole trial rolls back,
+_xFutile latches, and today's levers (DPR boost, scale, tier 1-4) run as
+before. Restore runs in reverse and LAST: scale first, then tier, then one
+extra per ~4 s, under the same _downHold / backoff / probation as a climb.
+
+A SECOND SIGNAL. The rAF interval cannot tell "the GPU is full" from "the
+display caps the rate": both read as a calm EMA at the floor. While the
+upper ladder is live the governor switches the TLX GPU timer on
+(gpuTimer(true), timestamp-query) and reads gpuMs() when fresh (< 2 s):
+- degrade: GPU ms under 75 % of the frame means the bottleneck is CPU or a
+  cap; shedding a GPU extra cannot help, so the step goes to today's ladder.
+- restore: GPU ms over 70 % of the floor means a capped display has no GPU
+  room left; the extra stays shed even though the EMA looks calm.
+No reading (WebGL2 without the extension, software GL, Inspector hold) is
+-1 and the frame-time logic alone decides, as today.
+
+SUPERSAMPLING CEILING. The restore climb tops out at
+gfx.maxRenderScale() when the backend publishes one above 1 (TLX: 1.5
+with superSample, 2 with CINEMA ss2x, else 1), so a cut from 1.5 can come
+back above 1.0. A measured _scaleCap is any finite value (it may now exceed
+1); Infinity still means "none".
+
+INERT AT DETAIL 0. _xq() is null for HIGH and below, every phone, and any
+backend without __tlx (GLX, WGX): no timer, no extras, no step; with
+maxRenderScale absent or 1 the climb top is _resCeil. The verdict is
+frame-for-frame identical to the governor before this section
+(tests/unit/perf-governor-upper.test.mjs replays today's traces both ways).
+setTierHold pins this ladder too. Extras verdicts never touch the §2au
+latch: an extra says nothing about fill.
+
+CINEMA (level 3: dof / motionBlur / ss2x) is not on this ladder: game.js
+tickBody sets GfxQuality.setCinema(garage || photo mode || replay scrub)
+every frame, and only EXTREME lifts those features.
+```

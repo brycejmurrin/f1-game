@@ -130,6 +130,17 @@ const GfxDebug = (() => {
       if (strikes === "?" && typeof PerfGov !== "undefined" && PerfGov.strikes) strikes = num(PerfGov.strikes());
     } catch (_) { /* governor not loaded */ }
     lines.push(`mem heap=${heap} rObj=${rObj} geo=${geo} tex=${tex} tier=${tier} crashStrikes=${strikes}`);
+    pushDetail(lines);
+  }
+
+  // The desktop detail level and the governor's upper ladder (docs/GOVERNOR-RATIONALE.md §gov-42); absent pre-boot.
+  function pushDetail(lines) {
+    try {
+      if (typeof GfxQuality === "undefined" || !GfxQuality.detail) return;
+      const max = GfxQuality.SHED_ORDER ? GfxQuality.SHED_ORDER.length : 0;
+      const g = typeof PerfGov !== "undefined" && PerfGov.gpuMs ? PerfGov.gpuMs() : -1;
+      lines.push(`detail=${GfxQuality.detail()} shed=${GfxQuality.shed()}/${max} cinema=${GfxQuality.cinema() ? 1 : 0} gpuMs=${g > 0 ? g.toFixed(2) : "n/a"}`);
+    } catch (_) { /* quality module not up: the rest of the paste stands */ }
   }
 
   function sampleSoftLuma(soft, ctx2d) {

@@ -43,14 +43,20 @@ row stay lazy in `js/ui/layout-presets.js`. Fragment:
 `tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
 ## 2026-11-20 — PR #5951 (claude/trusting-clarke-01d9ui): desktop graphics tiers above ULTRA
 
-`(tree) eagerBytes` 7972011 → **7974184** (+2173). Deliberate raise past the absorb: the
-`GfxQuality` detail seam in the FULL (eager) `js/perf/quality-preset.js` (the EXTREME preset,
-`detail()`, `feature()`, the `FEATURES` table, `setShed`, `setCinema`). It is eager because every
-renderer and the rival LOD ask it at boot, before any lazy bundle lands. Bryce asked for it in
-chat (2026-11-20: "Increase budget or remove comments"); the tree-wide ceiling still needs his
-own `ratchet-raise` label on the PR. Fragment:
-`tests/data/ratchets.d/claude--trusting-clarke-01d9ui.json`. The number moves again when the
-phase branches merge; this entry is updated in that push.
+`(tree) eagerBytes` 7972011 → **8021318** (+49307). Deliberate raise past the absorb, asked for
+by Bryce in chat (2026-11-20: "Increase budget or remove comments"); the tree-wide ceiling still
+needs his own `ratchet-raise` label on the PR. The new render, mesh and garage code is in lazy
+files (`tsl-aa.js`, `tsl-gi.js`, `tsl-carsurf.js`, `mesh-detail.js`, `track/scenery/detail.js`,
+`garage/hi-prims.js`); what is eager is the code that must sit in files the shell already boots:
+the `GfxQuality` detail seam (`quality-preset.js`), the governor's upper shed ladder
+(`governor.js`), cascades and extra lamp maps (`shared/shadow-pass.js`), the light budget and lamp
+grid (`light-budget.js`, `lamp-chunks.js`, `frame-lights.js`), the HD pack tier (`shared/assets.js`),
+the mirror cap (`mirror-pass.js`), the track build's detail fields (`tracks.js`, `build-client.js`)
+the garage's dense-primitive scope (`js/garage/*`) and the car detail tiers (`js/car/*`: segment
+counts, the hero-car refine pass and the modelled parts, about +24 KB). Other ceilings in the same fragment:
+`js/car/car3d.js` lines +36, `js/track/tracks.js` lines +25, `js/game.js` lines +1 / codeLines +1 (one `setCinema` line),
+`assertPins` +28, `assertPinsAll` +34, `vmSrcLoads` +5 (the new unit files). Fragment:
+`tests/data/ratchets.d/claude--trusting-clarke-01d9ui.json`.
 
 ## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
 

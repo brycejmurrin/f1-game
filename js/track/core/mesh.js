@@ -342,7 +342,7 @@ const TrackMesh = (function () {
     return [nx * sg, ny * sg, nz * sg];
   }
 
-  function buildKerbs(track, out) {
+  function buildKerbs(track, out, prof) {
     const { n, px, py, pz, hw } = track;
     const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
     const ds = track.total / n;
@@ -504,6 +504,11 @@ const TrackMesh = (function () {
         let len = 1;
         while (len < n - m && joins((i + len) % n)) len++;
         ribbon(U(i), U(i) + len, side);
+        // kerbProfile (TrackDetail): the same strip, profiled, into the drawn-only buffer.
+        if (prof && !prof.failed) {
+          try { TrackDetail.kerbRibbon(track, U(i), U(i) + len, side, prof, { KW, KH0, style, ka, kb, ds, STRIPE_M, upOf, bankOffsetAt, MAT }); }
+          catch (e) { prof.failed = true; Log.warn("track", "kerbProfile failed, flat kerbs: " + ((e && e.message) || e)); }
+        }
         m += len;
       }
     }
@@ -909,9 +914,15 @@ const TrackMesh = (function () {
         skirt(0); skirt(13);
       }
     }
-    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    const kf = track._detailFeatures, i0 = idxArr.length;
+    const prof = kf && kf.kerbProfile && typeof TrackDetail !== "undefined" ? { pos: [], nrm: [], col: [], mat: [], trk: [], idx: [] } : null;
+    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr }, prof);
+    const i1 = idxArr.length;
     buildPitHatch(track, { pos, nrm, col, mat, trk, idx: idxArr });
-    return { pos, nrm, col, mat, trk, idx: idxArr };
+    const geo = { pos, nrm, col, mat, trk, idx: idxArr };
+    // The drawn copy swaps the flat kerb triangles for the profiled ones; tracks.js uploads it, keeps `geo`.
+    if (prof && !prof.failed && prof.idx.length) geo._visual = TrackDetail.withKerbs(geo, i0, i1, prof);
+    return geo;
   }
 
   function buildTerrain(track) {

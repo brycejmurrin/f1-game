@@ -2793,7 +2793,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /queue\.writeBuffer\(\s*buf\s*,\s*0\s*,\s*staging\s*\)/);
   assert.match(tlx, /function\s+_instColorAttr\b/);
   assert.match(tlx, /\bisInstancedBufferAttribute\b/);
-  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
+  // hdrOut: a half-float LDR is copied to RGBA8 first (cap8 is the identity on an 8-bit target).
+  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*cap8\(ldrRT\)/);
 });
 
 test("TLX coalesces window resize to one target realloc per frame", () => {
@@ -6514,6 +6515,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
+  const carDetail = () => ({ player: 0, rival: 0, hero: false, key: "" });   // desktop detail: HIGH (CarGeometry.detailFor 0)
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
   let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;

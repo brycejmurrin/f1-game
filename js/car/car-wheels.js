@@ -142,7 +142,10 @@ const CarWheels = (function () {
       // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
       // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
       // with the measurement (480 per wheel).
-      const SEG = 24, rw = typeof CarShade !== "undefined" && CarShade.any();   // rw: tread normals from its real shape (js/car/car-shade.js)
+      // meshHi (CarGeometry detail 1 / 2): 48 / 64. Every pattern below that counted segments (cover peeks)
+      // counts the detail-0 segment `ib` instead, so a finer wheel keeps today's layout.
+      const LVL = CarGeometry.level(), SEG = LVL >= 2 ? 64 : LVL >= 1 ? 48 : 24, rw = typeof CarShade !== "undefined" && CarShade.any();
+      const X2 = LVL >= 1 ? 2 : 1;   // the small fixed rings (hat, dish, tape, nut collar) double   // rw: tread normals from its real shape (js/car/car-shade.js)
       const x0 = cx - w/2, x1 = cx + w/2;
       const rimR = r * 0.68;
       const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -253,7 +256,8 @@ const CarWheels = (function () {
         // closed STYLE Full Disc (cover + coverOpen 0) must stay sealed.
         const peekCal = useCover && coverOpen > 0
           && Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
-        const coverSeg = useCover && (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
+        const ib = Math.floor(i * 24 / SEG);
+        const coverSeg = useCover && (!coverOpen || ib % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
         if (coverSeg || !useCover) {
           for (const sd of [[x1, 1], [x0, -1]]) {
             const xw = sd[0], dir = sd[1];
@@ -326,7 +330,7 @@ const CarWheels = (function () {
         }
         if (rotorDetail >= 2) {
           const hatOuter = rotorInner * 1.08, hatInner = rotorInner * 0.52;
-          const HAT_SEG = 8;
+          const HAT_SEG = 8 * X2;
           for (let i = 0; i < HAT_SEG; i++) {
             const a0 = i / HAT_SEG * Math.PI * 2, a1 = (i + 1) / HAT_SEG * Math.PI * 2;
             const P = (rad, a) => [face[0], cy + rad*Math.cos(a), cz + rad*Math.sin(a)];
@@ -586,7 +590,21 @@ const CarWheels = (function () {
         if (blownAxle) {
           // no centre nut: the bore IS the hub
         } else if (!gunNut) {
-          addBox(out, hubX - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
+          const nS = Math.max(hcR * 0.55, rimR * 0.12);
+          addBox(out, hubX - dir * 0.002, cy, cz, 0.026, nS, nS, nutCol, SURFACES.metal);
+          if (LVL >= 2) {
+            // EXTREME: the centre-lock nut's hex crown, 6 mm proud of the block, and six drive pegs round it.
+            const hx0 = hubX - dir * 0.002 + dir * 0.013, hx1 = hx0 + dir * 0.006, hR = nS * 0.46;
+            for (let h = 0; h < 6; h++) {
+              const a0 = (h / 6) * Math.PI * 2 + Math.PI / 6, a1 = ((h + 1) / 6) * Math.PI * 2 + Math.PI / 6;
+              const P = (x, a) => [x, cy + hR * Math.cos(a), cz + hR * Math.sin(a)];
+              addQuad(out, P(hx1, a0), P(hx1, a1), P(hx0, a1), P(hx0, a0), nutCol, SURFACES.metal);
+              addTri(out, [hx1, cy, cz], P(hx1, a0), P(hx1, a1), nutCol, SURFACES.metal);
+              const pa = (h / 6) * Math.PI * 2, pr = nS * 0.78;
+              addBox(out, hx0 - dir * 0.004, cy + pr * Math.cos(pa), cz + pr * Math.sin(pa), 0.010, 0.008, 0.008,
+                     [nutCol[0] * 0.7, nutCol[1] * 0.7, nutCol[2] * 0.7], SURFACES.metal);
+            }
+          }
         } else {
           const nx = hubX - dir * 0.001;
           const nR = Math.max(hcR * 0.55, rimR * 0.10);
@@ -604,8 +622,8 @@ const CarWheels = (function () {
             addTri(out, [xOut, cy, cz], [xOut, y0, z0], [xOut, y1, z1], nutCol, SURFACES.metal);
           }
           const cR0 = nR * 1.15, cR1 = nR * 1.55, cxCol = nx - dir * nDeep * 0.55;
-          for (let h = 0; h < 12; h++) {
-            const a0 = (h / 12) * Math.PI * 2, a1 = ((h + 1) / 12) * Math.PI * 2;
+          for (let h = 0; h < 12 * X2; h++) {
+            const a0 = (h / (12 * X2)) * Math.PI * 2, a1 = ((h + 1) / (12 * X2)) * Math.PI * 2;
             const P = (rad, a) => [cxCol, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             addQuad(out, P(cR0, a0), P(cR0, a1), P(cR1, a1), P(cR1, a0),
                     [nutCol[0] * 0.75, nutCol[1] * 0.75, nutCol[2] * 0.75], SURFACES.metal);
@@ -653,15 +671,15 @@ const CarWheels = (function () {
         // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
         if (wheelStyle && wheelStyle.tape) {
           const tr = rimR * 1.02, tc = (wheelStyle.nut) || bandColor;
-          for (let k = 0; k < 20; k++) {
-            const a0 = (k / 20) * Math.PI * 2, a1 = ((k + 1) / 20) * Math.PI * 2;
+          for (let k = 0; k < 20 * X2; k++) {
+            const a0 = (k / (20 * X2)) * Math.PI * 2, a1 = ((k + 1) / (20 * X2)) * Math.PI * 2;
             const A = (rad, a) => [ss[0] + dir * 0.010, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             addQuad(out, A(tr, a0), A(tr + 0.022, a0), A(tr + 0.022, a1), A(tr, a1), tc, SURFACES.metal);
           }
           const beadR = rimR * 1.01;
           const bx0 = ss[0] + dir * 0.002, bx1 = ss[0] + dir * 0.016;
-          for (let k = 0; k < 16; k++) {
-            const a0 = (k / 16) * Math.PI * 2, a1 = ((k + 1) / 16) * Math.PI * 2;
+          for (let k = 0; k < 16 * X2; k++) {
+            const a0 = (k / (16 * X2)) * Math.PI * 2, a1 = ((k + 1) / (16 * X2)) * Math.PI * 2;
             const y0 = cy + beadR * Math.cos(a0), z0 = cz + beadR * Math.sin(a0);
             const y1 = cy + beadR * Math.cos(a1), z1 = cz + beadR * Math.sin(a1);
             addQuad(out, [bx0, y0, z0], [bx1, y0, z0], [bx1, y1, z1], [bx0, y1, z1], tc, SURFACES.metal);
@@ -681,7 +699,7 @@ const CarWheels = (function () {
           // brake disc visible. 0.024*dish → 24 / 48 mm for parts-sweep WEAK_MM.
           const dishStep = useCover ? 0.012 * dish : 0.024 * dish;
           const dxIn = ss[0] + dir * (0.014 - dishStep);
-          const DISH_SEG = 16;
+          const DISH_SEG = 16 * X2;
           for (let k = 0; k < DISH_SEG; k++) {
             const a0 = (k / DISH_SEG) * Math.PI * 2, a1 = ((k + 1) / DISH_SEG) * Math.PI * 2;
             const oy0 = cy + rimR * 0.98 * Math.cos(a0), oz0 = cz + rimR * 0.98 * Math.sin(a0);
@@ -787,13 +805,22 @@ const CarWheels = (function () {
       }
     }
 
-    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
+    // detail (optional, last): the CarGeometry tessellation level for this wheel; omitted = the level of the
+    // build in progress (0 outside one), so every existing caller builds today's wheel.
+    const atDetail = (d, fn) => d == null ? fn() : CarGeometry.withDetail(d, fn);
+    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf, detail) {
+      return atDetail(detail, () => buildWheel0(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf));
+    }
+    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf, detail) {
+      return atDetail(detail, () => buildWheelLayers0(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf));
+    }
+    function buildWheel0(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
         grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor, rimSurf);
       return CarGeometry.weld(out);   // exact repeat corners merged (car3d.js build)
     }
-    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
+    function buildWheelLayers0(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const width = w || 0.34;

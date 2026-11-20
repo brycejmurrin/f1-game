@@ -102,8 +102,8 @@ const MirrorPass = (function () {
   // frame to frame: the "flashy" mirror reported from a phone. The fragments
   // are cheap at this size (a phone's frame is ~8k pixels; the mirror's cost is
   // its draw calls), so the rungs keep their draw-distance / cadence savings and
-  // resolution buys the steadiness. MAX_W/MAX_H are every backend's own clamp,
-  // applied here with the aspect kept (a per-axis clamp would stretch it).
+  // resolution buys the steadiness. MAX_W/MAX_H (or gfx.mirrorMax) is the
+  // backend's own clamp, kept to aspect here (a per-axis clamp stretches it).
   const SS = 2, MAX_W = 1024, MAX_H = 512;
   // A RUNG HOLDS ~1.5 s before the governor may move it. On a phone the tier
   // moves on its own measurements, and every move swapped resolution, draw
@@ -230,16 +230,15 @@ const MirrorPass = (function () {
     // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped as
     // the main canvas is: 1.5 on a mobileTier phone, else 2 — glx.js / tlx.js
     // DPR_CAP) x the rung's res (x the render scale, scaledRes) x SS. A flat cap
-    // of 2 gave an iPhone (DPR 3) (2/1.5)^2 = 1.78x the lite rung's designed
-    // pixels in the mirror pass and its mips. It reallocates when the frame
-    // resizes, the rung changes or the main frame's scale moves.
+    // of 2 gave an iPhone (DPR 3) 1.78 times the lite rung's designed pixels. It reallocates
+    // when the frame resizes, the rung changes or the main frame's scale moves.
     function targetSize(cssW, cssH, res) {
       const cap = G.gfx && G.gfx.mobileTier ? 1.5 : 2;
       const dpr = Math.min(cap, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
       res = scaledRes(res);
       const ss = _q.ss || SS;
       let w = cssW * dpr * res * ss, h = cssH * dpr * res * ss;
-      const k = Math.min(1, MAX_W / (w || 1), MAX_H / (h || 1));
+      const m = (G.gfx && G.gfx.mirrorMax) || [MAX_W, MAX_H], k = Math.min(1, m[0] / (w || 1), m[1] / (h || 1));
       w = Math.round(w * k); h = Math.round(h * k);
       _sz[0] = w; _sz[1] = h;
       return _sz;

@@ -1,7 +1,7 @@
 /* Apex 26 — GarageEquipment: the pit equipment in the bay. build(g, liv, ctx) parks the rear jack, the wheel guns on their hose reels, the tyre trolleys, the floor boxes, the extractor fan, the trophy cabinet and the timing-screen housing in the per-wall groups; the other builders are the workshop models GarageScene.buildProps places. */
 const GarageEquipment = (function () {
   "use strict";
-  const { Z_BACK, STEEL, DARK, block, cyl, tube, hose, MAT, scale, rgb, tile } = GaragePrims;
+  const { Z_BACK, STEEL, DARK, block, cyl, tube, hose, tyre, MAT, scale, rgb, tile, isDense } = GaragePrims;
 
 const RUBBER = [0.045, 0.045, 0.050];
 const HOSE = [0.12, 0.14, 0.20];
@@ -114,7 +114,7 @@ function tyreTrolley(out, x, z, comps, c1) {
   tube(out, [x - 0.42, 0.94, z + 1.3], [x + 0.42, 0.94, z + 1.3], 0.03, RUBBER, 8);
   for (let i = 0; i < 4; i++) {
     const wz = z - 1.0 + i * 0.68;
-    tube(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);
+    tyre(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);   // EXTREME: a lathed slick, else today's tube
     tube(out, [x - 0.15, 0.44, wz], [x + 0.15, 0.44, wz], 0.36, scale(c1, 0.6), 14);   // blanket
     tube(out, [x - 0.10, 0.44, wz], [x - 0.20, 0.44, wz], 0.20, scale(STEEL, 0.9), 10, MAT.METAL);   // rim face
     block(out, x + 0.17, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
@@ -129,7 +129,12 @@ function toolChest(out, x, z, c1) {
   block(out, x, 1.16, z, 0.38, 0.03, 0.82, STEEL);
   for (let d = 0; d < 4; d++) {
     block(out, x + s * 0.37, 0.26 + d * 0.24, z, 0.012, 0.09, 0.72, scale(c1, 0.32));
-    block(out, x + s * 0.39, 0.28 + d * 0.24, z, 0.010, 0.015, 0.24, STEEL, MAT.METAL);
+    if (!isDense()) { block(out, x + s * 0.39, 0.28 + d * 0.24, z, 0.010, 0.015, 0.24, STEEL, MAT.METAL); continue; }
+    // EXTREME: a round full-width pull on two stand-offs, and the drawer's shadow gap above it.
+    const py = 0.28 + d * 0.24;
+    tube(out, [x + s * 0.41, py, z - 0.30], [x + s * 0.41, py, z + 0.30], 0.011, STEEL, 8, MAT.METAL);
+    for (const pz of [-0.27, 0.27]) tube(out, [x + s * 0.382, py, z + pz], [x + s * 0.41, py, z + pz], 0.007, STEEL, 6, MAT.METAL);
+    block(out, x + s * 0.3825, 0.35 + d * 0.24, z, 0.0025, 0.004, 0.70, DARK);
   }
   block(out, x - s * 0.36, 1.22, z, 0.02, 0.025, 0.82, STEEL, MAT.METAL);
   for (const sz of [-1, 1]) block(out, x, 1.22, z + sz * 0.80, 0.36, 0.025, 0.02, STEEL, MAT.METAL);
@@ -259,6 +264,11 @@ function monitorGantry(out, x, z, c1) {
     block(out, x, 2.36, z + dz, 0.015, 0.19, 0.015, STEEL, MAT.METAL);
     block(out, x + s * 0.09, 1.92, z + dz, 0.03, 0.26, 0.40, DARK);
     block(out, x + s * 0.11, 1.92, z + dz, 0.01, 0.22, 0.34, scale(STEEL, 0.42));
+    if (!isDense()) continue;
+    // EXTREME: a raised bezel lip round the panel and the mount box behind it.
+    for (const sy of [-1, 1]) block(out, x + s * 0.125, 1.92 + sy * 0.235, z + dz, 0.006, 0.012, 0.37, DARK);
+    for (const sz of [-1, 1]) block(out, x + s * 0.125, 1.92, z + dz + sz * 0.36, 0.006, 0.225, 0.012, DARK);
+    block(out, x + s * 0.045, 1.98, z + dz, 0.02, 0.06, 0.06, scale(STEEL, 0.6), MAT.METAL);
   }
 }
 function wheelDolly(out, x, z, c1) {

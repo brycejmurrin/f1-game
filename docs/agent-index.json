@@ -1672,6 +1672,7 @@
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
+        "tests/unit/props-hi-detail.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/road-under-floor.test.mjs",
@@ -1682,6 +1683,7 @@
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/stand-curve-gap-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
+        "tests/unit/track-detail.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
         "tests/unit/track-themes-build.test.mjs",
         "tests/unit/track-validate-fleet.test.mjs",
@@ -3546,6 +3548,11 @@
       "roster": "LAZY_RACE"
     },
     {
+      "path": "js/garage/hi-prims.js",
+      "global": "GarageHiPrims",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/garage/livery-design-editor.js",
       "global": "GarageLiveryDesignEditor",
       "roster": "tag"
@@ -4451,6 +4458,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/render/shared/mesh-detail.js",
+      "global": "MeshDetail",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/render/shared/mirror-pass.js",
       "global": "MirrorPass",
       "roster": "tag"
@@ -4501,12 +4513,27 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tsl-aa.js",
+      "global": "TLXAA",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-carsurf.js",
+      "global": "TLXCarSurf",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tsl-chunks.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-fx.js",
+      "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-gi.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
     },
@@ -4684,6 +4711,11 @@
       "path": "js/track/scenery/data.js",
       "global": "TrackSceneryData",
       "roster": "tag"
+    },
+    {
+      "path": "js/track/scenery/detail.js",
+      "global": "TrackDetail",
+      "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/facade.js",

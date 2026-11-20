@@ -305,6 +305,10 @@ const Tracks = (function () {
     // don't inject one: the Node-VM build guard (tools/track/verify-track.cjs) and the
     // VM tests, which install a stub GLX global instead of an opts.gfx.
     track._gfx = G;
+    // Desktop DETAIL (js/track/scenery/detail.js): 0 builds today's world; the flags gate visual-only extras.
+    const _det = typeof TrackDetail !== "undefined" ? TrackDetail.resolve(opts, G) : null;
+    track._detail = _det ? _det.level : 0;
+    track._detailFeatures = _det ? _det.features : {};
     // Keep the upload block scoped; the precondition at entry guarantees it runs.
     {
       track.geometryDiagnostics = [];
@@ -341,10 +345,18 @@ const Tracks = (function () {
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
       const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo"); yield track; _t = _now();
-      track.meshes.floor = G.createMesh(floorGeo); lap("floor", "up"); yield track; _t = _now();
+      // farTerrain uploads the floor after the props (its hills keep clear of them); today's slot otherwise.
+      const farFloor = !!track._detailFeatures.farTerrain && !def.street;
+      if (!farFloor) track.meshes.floor = G.createMesh(floorGeo);
+      lap("floor", "up"); yield track; _t = _now();
       const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
+      // kerbProfile: the DRAWN road carries the profiled kerbs; track.roadGeo (debris collider, agent, shadow
+      // caster, quality-recovery re-chunk) stays the flat-kerb geometry every detail level shares.
+      let roadVis = roadGeo._visual || null;
+      delete roadGeo._visual;
+      if (roadVis && !TrackModels.validateGeometry(roadVis).ok) roadVis = null;
       lap("road", "geo"); yield track; _t = _now();
-      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
+      track.roadGeo = roadGeo; buildRibbon(roadVis || roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
       const terrainGeo = yield* inner(buildTerrainSteps(track));
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       lap("terrain", "geo"); yield track; _t = _now();
@@ -394,12 +406,15 @@ const Tracks = (function () {
       // WEBGL_multi_draw is the lever; if it is slower, vertices bind and the
       // query overhead is the thing to fix. Either answer closes a question
       // that has been guessed at twice.
+      // farTerrain's flat-under-props mask, sampled before an upload may drop the positions.
+      const _farProps = farFloor ? TrackDetail.sampleXZ(propsGeo.pos) : null;
       let _unchunked = false;
       try { _unchunked = localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { /* no storage */ }
       track.meshes.props = (G.createChunkedMesh && !_unchunked)
         ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
       lap("props", "up"); yield track; _t = _now();
       track.meshes.propBatches = null;
+      let _farInst = null;
       if (track.graph && G.createInstancedBatch) {
         const { batches } = track.graph.batches({ instancedOnly: true });   // uploading the plain (capability) set ships glassBuf's panes twice — graph.js batches()
         // These placements' triangles were WITHHELD from propsGeo (city masses,
@@ -412,6 +427,7 @@ const Tracks = (function () {
           const pb = track.meshes.propBatches = [];
           for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
         }
+        if (farFloor) _farInst = TrackDetail.batchXZ(batches);
       }
       lap("batches", "up"); yield track; _t = _now();
       // The graph's placement nodes are build inputs, not race state. On a
@@ -425,8 +441,17 @@ const Tracks = (function () {
       track.waterGeo = waterGeo;
       glassGeo._keepPositions = glassGeo._keepFullGeometry = keepGeometry;
       lap("glassWater", "geo"); yield track; _t = _now();
+      const _farWet = farFloor ? [TrackDetail.sampleXZ(glassGeo.pos), TrackDetail.sampleXZ(waterGeo.pos)] : null;
       track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
       track.meshes.water = G.createMesh(waterGeo);
+      if (farFloor) {
+        let far = null;
+        try { far = TrackDetail.farTerrain(track, floorGeo, [_farProps, _farInst].concat(_farWet)); }
+        catch (e) { Log.warn("track", def.id + " farTerrain failed, flat floor: " + ((e && e.message) || e)); far = null; }
+        if (far && !TrackModels.validateGeometry(far).ok) far = null;
+        track.meshes.floor = G.createMesh(far || floorGeo);
+        lap("farTerrain", "up"); yield track; _t = _now();
+      }
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
       lap("trim", "up"); yield track; _t = _now();

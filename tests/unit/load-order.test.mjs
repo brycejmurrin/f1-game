@@ -685,6 +685,7 @@ test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the build files", () => {
     "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
     "js/track/scenery/guards.js",
     "js/track/scenery/region.js",
+    "js/track/scenery/detail.js", "js/render/shared/mesh-detail.js",   // the detail tiers above ULTRA (#5951)
   ];
   assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, want.length);
   for (const f of want) {

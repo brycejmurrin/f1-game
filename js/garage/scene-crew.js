@@ -222,10 +222,16 @@ const GarageCrew = (function () {
     const nose = noseTip(teamId, liv), noseY = nose.at(nose.z - 0.1);
     // Snapshot components rather than a weighted sum: distinct palettes can
     // share a numeric hash, and the editor can mutate a colour array in place.
+    const hi = GaragePrims.hiLive("crewHi");   // EXTREME: denser bodies and props; the key carries it
     if (mechMesh && key && key[0] === style && key[1] === c1[0] && key[2] === c1[1] && key[3] === c1[2] &&
-        key[4] === c2[0] && key[5] === c2[1] && key[6] === c2[2] && key[7] === nose.z && key[8] === noseY) return;
+        key[4] === c2[0] && key[5] === c2[1] && key[6] === c2[2] && key[7] === nose.z && key[8] === noseY && key[9] === hi) return;
     free();
-    key = [style, ...c1, ...c2, nose.z, noseY];
+    try { if (hi) { GaragePrims.dense(true, () => GarageCrewDraw.body.detail(true, () => make(style, c1, c2, nose))); key = [style, ...c1, ...c2, nose.z, noseY, hi]; return; } }
+    catch (e) { free(); Log.warn("game", `GarageCrew dense crew failed, stock crew: ${e && e.message}`); }
+    make(style, c1, c2, nose);
+    key = [style, ...c1, ...c2, nose.z, noseY, hi];
+  }
+  function make(style, c1, c2, nose) {
     const J = joints("stand");
     const m = acc(); rig(m, J, c1, c2, false);
     mechMesh = gfx.createMesh(m);

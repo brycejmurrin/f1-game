@@ -2,6 +2,30 @@
 "use strict";
 
 const CarGeometry = (function () {
+  // DESKTOP DETAIL (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): the tessellation level of the build in
+  // progress, 0 = today's mesh (HIGH and below, every phone, every node test), 1 = meshHi (ULTRA), 2 = EXTREME.
+  // Set only for the span of one build by withDetail(); every builder that reads it keeps its detail-0 grid
+  // lines, so a level only ADDS vertices between today's ones.
+  // _hero: the EXTREME player car's modelled detail (heroCar) is being built: bevelled boxes, round beams, aerofoil
+  // arms, wishbone webs with thickness (below), plus the parts Car3D adds itself. Never set for a rival.
+  let _lvl = 0, _hero = false;
+  const clampDetail = (d) => { d = Math.round(+d || 0); return d >= 2 ? 2 : d >= 1 ? 1 : 0; };
+  function withDetail(d, fn, hero) {
+    const prev = _lvl, ph = _hero; _lvl = clampDetail(d); _hero = !!hero;
+    try { return fn(); } finally { _lvl = prev; _hero = ph; }
+  }
+  // The detail a car gets: the player the boot-time level, a rival at most 1 (meshHi), 0 when meshHi is off or
+  // GfxQuality is absent (node tests) or throws. heroOn: the EXTREME smoothing pass (refine below), player only.
+  function detailFor(isPlayer) {
+    try {
+      if (typeof GfxQuality === "undefined" || !GfxQuality.feature("meshHi")) return 0;
+      const d = clampDetail(GfxQuality.detail());
+      return isPlayer ? d : Math.min(1, d);
+    } catch (_) { return 0; }
+  }
+  function heroOn() {
+    try { return typeof GfxQuality !== "undefined" && !!GfxQuality.feature("heroCar"); } catch (_) { return false; }
+  }
   function create(context) {
     const { SURFACES, CARBON, DARK, INTAKE, TYRE, RIM, HUB, HALO, VISOR, PANEL } = context;
 
@@ -57,8 +81,73 @@ const CarGeometry = (function () {
     }
 
     function addBox(out, cx, cy, cz, sx, sy, sz, col, surface) {
+      const b = _hero ? Math.min(BEVEL, Math.min(sx, sy, sz) * 0.25) : 0;
+      if (b >= 0.0008) return addBevelBox(out, cx, cy, cz, sx, sy, sz, b, col, surface);
       addLoft(out, cz-sz/2, cx, cy, sx, sy, cz+sz/2, cx, cy, sx, sy, col, surface);
     }
+    // heroCar: a box with every edge chamfered by b (one 45 degree segment) and every corner cut: the face planes
+    // and so the extents are the box's own; 6 inset faces + 12 edge strips + 8 corner triangles (44 triangles).
+    const BEVEL = 0.004;
+    function addBevelBox(out, cx, cy, cz, sx, sy, sz, b, col, surface) {
+      const h = [sx / 2, sy / 2, sz / 2], c = [cx, cy, cz];
+      // the point on face (axis k, sign s) at in-plane offsets (u, v) along the other two axes, inset by b
+      const P = (k, sg, du, dv) => {
+        const p = [0, 0, 0], u = (k + 1) % 3, v = (k + 2) % 3;
+        p[k] = sg * h[k]; p[u] = du * (h[u] - b); p[v] = dv * (h[v] - b);
+        return [c[0] + p[0], c[1] + p[1], c[2] + p[2]];
+      };
+      const face = (k, sg) => {
+        const q = [P(k, sg, -1, -1), P(k, sg, 1, -1), P(k, sg, 1, 1), P(k, sg, -1, 1)];
+        if (sg > 0) addQuad(out, q[0], q[1], q[2], q[3], col, surface); else addQuad(out, q[0], q[3], q[2], q[1], col, surface);
+      };
+      for (let k = 0; k < 3; k++) { face(k, 1); face(k, -1); }
+      // the strip between face (k, sk) and face (u, su), u = k+1, running along axis v = k+2
+      for (let k = 0; k < 3; k++) for (const sk of [-1, 1]) for (const su of [-1, 1]) {
+        const u = (k + 1) % 3;
+        // on face k: offset along u is su (to the edge), along v is -1..1; on face u: its own (u+1)%3 = v... map
+        const a0 = P(k, sk, su, -1), a1 = P(k, sk, su, 1);
+        // face u's in-plane axes are (u+1)%3 = v and (u+2)%3 = k
+        const b0 = P(u, su, -1, sk), b1 = P(u, su, 1, sk);
+        addQuadOut(out, a0, a1, b1, b0, c, col, surface);
+      }
+      for (const sx2 of [-1, 1]) for (const sy2 of [-1, 1]) for (const sz2 of [-1, 1]) {
+        const s3 = [sx2, sy2, sz2];
+        const corner = (k) => { const u = (k + 1) % 3, v = (k + 2) % 3; return P(k, s3[k], s3[u], s3[v]); };
+        addTriOut(out, corner(0), corner(1), corner(2), c, col, surface);
+      }
+    }
+    // A triangle / quad wound so its normal points away from `c` (the solid's centre).
+    function addTriOut(out, a, b, d, c, col, surface) {
+      const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2], vx = d[0]-a[0], vy = d[1]-a[1], vz = d[2]-a[2];
+      const n = [uy*vz - uz*vy, uz*vx - ux*vz, ux*vy - uy*vx];
+      const o = (a[0]+b[0]+d[0])/3 - c[0], p = (a[1]+b[1]+d[1])/3 - c[1], q = (a[2]+b[2]+d[2])/3 - c[2];
+      if (n[0]*o + n[1]*p + n[2]*q < 0) addTri(out, a, d, b, col, surface); else addTri(out, a, b, d, col, surface);
+    }
+    function addQuadOut(out, a, b, d, e, c, col, surface) {
+      addTriOut(out, a, b, d, c, col, surface); addTriOut(out, a, d, e, c, col, surface);
+    }
+    // heroCar: a straight member between p0 and p1 with a closed section (an n-gon in the (A, B) frame, A and B
+    // carrying the half-extents) and capped ends. Normals come from refine's crease-angle pass.
+    function addSectionBar(out, p0, p1, A, B, section, col, surface) {
+      const ring = (p) => section.map(([a, b]) => [p[0] + A[0]*a + B[0]*b, p[1] + A[1]*a + B[1]*b, p[2] + A[2]*a + B[2]*b]);
+      const R0 = ring(p0), R1 = ring(p1), n = section.length, mid = [(p0[0]+p1[0])/2, (p0[1]+p1[1])/2, (p0[2]+p1[2])/2];
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; addQuadOut(out, R0[i], R0[j], R1[j], R1[i], mid, col, surface); }
+      for (const [R, p] of [[R0, p0], [R1, p1]]) {
+        const dir = [p[0] - mid[0], p[1] - mid[1], p[2] - mid[2]], far = [mid[0] - dir[0], mid[1] - dir[1], mid[2] - dir[2]];
+        for (let i = 0; i < n; i++) addTriOut(out, p, R[i], R[(i + 1) % n], far, col, surface);
+      }
+    }
+    const ROUND12 = Array.from({ length: 12 }, (_, i) => [Math.cos(i / 12 * Math.PI * 2), Math.sin(i / 12 * Math.PI * 2)]);
+    // symmetric aerofoil, chord along a (-1 leading .. +1 trailing), thickness along b: a 12-point NACA-like loop
+    const FOIL12 = (() => {
+      const xs = [1, 0.75, 0.45, 0.15, -0.3, -0.75], pts = [];
+      const th = (x) => { const t = (x + 1) / 2; return (0.2969*Math.sqrt(t) - 0.1260*t - 0.3516*t*t + 0.2843*t**3 - 0.1015*t**4) / 0.1003; };
+      pts.push([-1, 0]);
+      for (const x of xs.slice().reverse()) pts.push([x, Math.min(1, th(x))]);
+      pts.push([1, 0]);
+      for (const x of xs) pts.push([x, -Math.min(1, th(x))]);
+      return pts;
+    })();
 
     // Any n-corner section (a chined pod has five), front to rear, capped: CarShade.loftRings'
     // faces and winding (CCW from +Z, fixed by signed area so either side's mirror lofts outward).
@@ -113,6 +202,7 @@ const CarGeometry = (function () {
     // knife rather than a 40 % linear fade from mid-chord to the TE (the look
     // that read as a rounded plank, especially on GLX/WGX paint).
     const FOIL_T = [0, 0.08, 0.28, 0.60, 0.84, 1];
+    const FOIL_T_HI = FOIL_T.flatMap((t, i) => i ? [(FOIL_T[i - 1] + t) / 2, t] : [t]);
     const FOIL_PEAK = Math.pow(0.5 / 1.6, 0.5) * Math.pow(1 - 0.5 / 1.6, 1.1);
     const foilThick = (t) => Math.pow(t, 0.5) * Math.pow(1 - t, 1.1) / FOIL_PEAK;
     const FOIL_CAMBER = 0.05;
@@ -169,12 +259,15 @@ const CarGeometry = (function () {
     function addWingFoil(out, spec, col, surface) {
       const half = spec.half, mid = half * 0.67, inner = half * 0.34;
       const at = (x, t) => foilAt(spec, x, t);
-      const segments = spec.wave || spec.bowl ? Array.from({ length: 6 }, (_, i) =>
+      let segments = spec.wave || spec.bowl ? Array.from({ length: 6 }, (_, i) =>
         [-half + 2 * half * i / 6, -half + 2 * half * (i + 1) / 6])
         : [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
+      // meshHi (detail >= 1): every span and chord interval halved; the detail-0 stations stay on the grid.
+      const ft = _lvl >= 1 ? FOIL_T_HI : FOIL_T;
+      if (_lvl >= 1) segments = segments.flatMap(([a, b]) => [[a, (a + b) / 2], [(a + b) / 2, b]]);
       for (const [x0, x1] of segments) {
-        for (let i = 0; i < FOIL_T.length - 1; i++) {
-          const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
+        for (let i = 0; i < ft.length - 1; i++) {
+          const t0 = ft[i], t1 = ft[i + 1];
           const a0 = at(x0, t0), b0 = at(x1, t0), b1 = at(x1, t1), a1 = at(x0, t1);
           const up = (p) => [p.x, p.y + p.h, p.z], dn = (p) => [p.x, p.y - p.h, p.z];
           // Upper surface wound so the normal points +Y, lower reversed.
@@ -231,6 +324,8 @@ const CarGeometry = (function () {
       const vx = dy*uz-dz*uy;
       const vy = dz*ux-dx*uz;
       const vz = dx*uy-dy*ux;
+      // heroCar: a round rod (12-gon inscribed in the square section) — mirror stalks, track rods, pushrods
+      if (_hero) return addSectionBar(out, p0, p1, [ux, uy, uz], [vx, vy, vz], ROUND12, col, surface);
       const station = (p) => [
         [p[0]-ux-vx,p[1]-uy-vy,p[2]-uz-vz], [p[0]+ux-vx,p[1]+uy-vy,p[2]+uz-vz],
         [p[0]+ux+vx,p[1]+uy+vy,p[2]+uz+vz], [p[0]-ux+vx,p[1]-uy+vy,p[2]-uz+vz],
@@ -254,6 +349,8 @@ const CarGeometry = (function () {
       lx = lx / ll * thick * 0.5;
       ly = ly / ll * thick * 0.5;
       lz = lz / ll * thick * 0.5;
+      // heroCar: the faired wishbone leg as a real symmetric aerofoil section (same chord and thickness)
+      if (_hero) return addSectionBar(out, p0, p1, [ax, ay, az], [lx, ly, lz], FOIL12, col, surface);
       const station = (p) => [
         [p[0] - ax, p[1] - ay, p[2] - az],
         [p[0] - lx, p[1] - ly, p[2] - lz],
@@ -270,6 +367,17 @@ const CarGeometry = (function () {
       ];
       const a = p(inLead, outer, 0.40), b = p(inTrail, outer, 0.40);
       const c = p(inTrail, outer, 0.70), d = p(inLead, outer, 0.70);
+      if (_hero) {
+        // heroCar: a 4 mm carbon plate, not two coincident faces: both skins offset 2 mm along its normal, closed
+        const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2], vx = d[0]-a[0], vy = d[1]-a[1], vz = d[2]-a[2];
+        let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+        const nl = Math.hypot(nx, ny, nz);
+        if (nl > 1e-12) {
+          nx *= 0.002 / nl; ny *= 0.002 / nl; nz *= 0.002 / nl;
+          const up = (q) => [q[0] + nx, q[1] + ny, q[2] + nz], dn = (q) => [q[0] - nx, q[1] - ny, q[2] - nz];
+          return addBlock(out, [up(a), up(b), up(c), up(d), dn(a), dn(b), dn(c), dn(d)], col, null, surface);
+        }
+      }
       addQuad(out, a, b, c, d, col, surface);
       addQuad(out, a, d, c, b, col, surface);
     }
@@ -280,6 +388,7 @@ const CarGeometry = (function () {
     // the tangent crosses the hoop apex. No end caps: both halo ends bury in the
     // pillar / collar. Cost: path.length*sides verts, (path.length-1)*sides*2 tris.
     function addTube(out, path, r, sides, col, surface) {
+      if (_lvl >= 1 && sides >= 6) sides *= 2;   // meshHi: round tubes rounder (square 4-sided ones stay square)
       const i0 = out.pos.length / 3;
       const material = surfaceOf(col, surface);
       const rgb = material === SURFACES.paint
@@ -367,6 +476,133 @@ const CarGeometry = (function () {
     return out;
   }
 
+  // REFINE (feature heroCar, EXTREME player car): `levels` rounds of 1-to-4 triangle subdivision over a WELDED
+  // mesh, in place. Interpolating, not approximating: every existing vertex stays exactly where it is (no Loop-style
+  // shrink, so the bounding box and every decal anchor hold) and each new edge point sits on the PN-triangle cubic
+  // through the edge's two positions and normals, so a smooth panel bulges toward the curved surface its normals
+  // describe. First, once, CREASE-ANGLE NORMALS: a flat-shaded vertex (its normal is its own faces' normal) takes
+  // the area-weighted mean of every face at its position within CREASE_DEG of it, so a faceted loft reads round and
+  // a box corner or wing endplate (90 degrees) stays sharp; authored smooth normals (CarShade) are kept. An edge is
+  // a CREASE, kept straight, when its position pair is not shared by exactly two triangles or the two sides carry
+  // different normals at it (a hard edge, an open rim, a floor or endplate edge). The bulge is clamped to MAX_BULGE:
+  // livery decals ride 4-8 mm proud of the panels and must stay in front of them. New normals: the PN quadratic
+  // normal; colour, uv and surface interpolate along the edge (surface: the first end's).
+  const MAX_BULGE = 0.002, CREASE_DEG = 35, CREASE_COS = Math.cos(CREASE_DEG * Math.PI / 180);
+  // `minEdge` (metres): an edge at or under it is not split, so the triangles go where the panels are big and
+  // a 3 mm bolt head is left alone. The decision belongs to the POSITION edge, so both triangles on an edge agree
+  // and no T-junction opens; a triangle with one, two or three split edges becomes two, three or four.
+  function refine(out, levels, minEdge) {
+    for (let l = 0; l < (levels | 0); l++) refineOnce(out, l === 0, minEdge > 0 ? minEdge : 0);
+    return out;
+  }
+  function positionIds(P, n) {
+    const pid = new Int32Array(n), byPos = new Map();
+    for (let v = 0; v < n; v++) {
+      const k = Math.round(P[v*3] * 1e5) + "," + Math.round(P[v*3+1] * 1e5) + "," + Math.round(P[v*3+2] * 1e5);
+      let id = byPos.get(k);
+      if (id === undefined) { id = byPos.size; byPos.set(k, id); }
+      pid[v] = id;
+    }
+    return { pid, np: byPos.size };
+  }
+  function creaseNormals(P, N, I, pid, np) {
+    const n = P.length / 3, tris = I.length / 3, fn = new Float64Array(tris * 3);
+    const own = Array.from({ length: n }, () => []), at = Array.from({ length: np }, () => []);
+    for (let t = 0; t < tris; t++) {
+      const a = I[t*3], b = I[t*3+1], c = I[t*3+2];
+      const ux = P[b*3]-P[a*3], uy = P[b*3+1]-P[a*3+1], uz = P[b*3+2]-P[a*3+2];
+      const vx = P[c*3]-P[a*3], vy = P[c*3+1]-P[a*3+1], vz = P[c*3+2]-P[a*3+2];
+      fn[t*3] = uy*vz - uz*vy; fn[t*3+1] = uz*vx - ux*vz; fn[t*3+2] = ux*vy - uy*vx;
+      for (const v of [a, b, c]) own[v].push(t);
+      for (const p of new Set([pid[a], pid[b], pid[c]])) at[p].push(t);
+    }
+    const unit = (t) => { const l = Math.hypot(fn[t*3], fn[t*3+1], fn[t*3+2]); return l > 1e-14 ? l : 0; };
+    const next = N.slice();
+    for (let v = 0; v < n; v++) {
+      const nx = N[v*3], ny = N[v*3+1], nz = N[v*3+2];
+      let flat = own[v].length > 0;
+      for (const t of own[v]) { const l = unit(t); if (l && (fn[t*3]*nx + fn[t*3+1]*ny + fn[t*3+2]*nz) / l < 0.9999) { flat = false; break; } }
+      if (!flat) continue;
+      let sx = 0, sy = 0, sz = 0;
+      for (const t of at[pid[v]]) {
+        const l = unit(t);
+        if (l && (fn[t*3]*nx + fn[t*3+1]*ny + fn[t*3+2]*nz) / l > CREASE_COS) { sx += fn[t*3]; sy += fn[t*3+1]; sz += fn[t*3+2]; }
+      }
+      const sl = Math.hypot(sx, sy, sz);
+      if (sl > 1e-14) { next[v*3] = sx / sl; next[v*3+1] = sy / sl; next[v*3+2] = sz / sl; }
+    }
+    for (let i = 0; i < next.length; i++) N[i] = next[i];
+  }
+  function refineOnce(out, first, minEdge) {
+    const P = out.pos, N = out.nrm, C = out.col, M = out.mat, U = out.uv && out.uv.length ? out.uv : null, I = out.idx;
+    const n = P.length / 3, tris = I.length / 3;
+    if (!n || !tris) return out;
+    const { pid, np } = positionIds(P, n);
+    if (first) creaseNormals(P, N, I, pid, np);
+    // per position-edge: triangle count, and whether every use carries the same normals at both ends
+    const sameN = (a, b) => Math.abs(N[a*3]-N[b*3]) + Math.abs(N[a*3+1]-N[b*3+1]) + Math.abs(N[a*3+2]-N[b*3+2]) < 1e-4;
+    const pe = new Map();
+    for (let t = 0; t < tris; t++) for (let e = 0; e < 3; e++) {
+      let a = I[t*3+e], b = I[t*3+(e+1)%3];
+      if (pid[a] > pid[b]) { const s = a; a = b; b = s; }
+      const k = pid[a] * np + pid[b], r = pe.get(k);
+      if (!r) pe.set(k, { c: 1, a, b, same: true,
+        split: Math.hypot(P[b*3]-P[a*3], P[b*3+1]-P[a*3+1], P[b*3+2]-P[a*3+2]) > minEdge });
+      else { r.c++; if (r.same && !(sameN(r.a, a) && sameN(r.b, b))) r.same = false; }
+    }
+    const mids = new Map(), L = n;
+    const mid = (a, b) => {
+      if (pid[a] > pid[b]) { const s = a; a = b; b = s; }
+      const vk = a * L + b;
+      let m = mids.get(vk);
+      if (m !== undefined) return m;
+      const r = pe.get(pid[a] * np + pid[b]);
+      if (!r.split) { mids.set(vk, -1); return -1; }
+      const ax = P[a*3], ay = P[a*3+1], az = P[a*3+2], bx = P[b*3], by = P[b*3+1], bz = P[b*3+2];
+      const nax = N[a*3], nay = N[a*3+1], naz = N[a*3+2], nbx = N[b*3], nby = N[b*3+1], nbz = N[b*3+2];
+      let mx = (ax + bx) / 2, my = (ay + by) / 2, mz = (az + bz) / 2;
+      let qx = nax + nbx, qy = nay + nby, qz = naz + nbz;
+      const ex = bx - ax, ey = by - ay, ez = bz - az, ee = ex*ex + ey*ey + ez*ez;
+      if (r && r.c === 2 && r.same && ee > 1e-14 && nax*nbx + nay*nby + naz*nbz > CREASE_COS) {
+        // PN cubic midpoint: (Pa+Pb)/2 - (wab Na + wba Nb)/8, wab = (Pb-Pa).Na, wba = (Pa-Pb).Nb
+        const wab = ex*nax + ey*nay + ez*naz, wba = -(ex*nbx + ey*nby + ez*nbz);
+        let dx = -(wab*nax + wba*nbx) / 8, dy = -(wab*nay + wba*nby) / 8, dz = -(wab*naz + wba*nbz) / 8;
+        const dl = Math.hypot(dx, dy, dz), cap = Math.min(MAX_BULGE, Math.sqrt(ee) * 0.15);
+        if (dl > cap) { const s = cap / dl; dx *= s; dy *= s; dz *= s; }
+        mx += dx; my += dy; mz += dz;
+        // PN quadratic normal: Na+Nb - v (Pb-Pa), v = 2 (Pb-Pa).(Na+Nb) / |Pb-Pa|^2
+        const v = 2 * (ex*qx + ey*qy + ez*qz) / ee;
+        qx -= v * ex; qy -= v * ey; qz -= v * ez;
+      }
+      let ql = Math.hypot(qx, qy, qz);
+      if (!(ql > 1e-9)) { qx = nax; qy = nay; qz = naz; ql = Math.hypot(qx, qy, qz) || 1; }
+      m = P.length / 3;
+      P.push(mx, my, mz); N.push(qx / ql, qy / ql, qz / ql);
+      C.push((C[a*3] + C[b*3]) / 2, (C[a*3+1] + C[b*3+1]) / 2, (C[a*3+2] + C[b*3+2]) / 2);
+      if (M) M.push(M[a]);
+      if (U) U.push((U[a*2] + U[b*2]) / 2, (U[a*2+1] + U[b*2+1]) / 2);
+      mids.set(vk, m);
+      return m;
+    };
+    const idx = [];
+    for (let t = 0; t < tris; t++) {
+      let a = I[t*3], b = I[t*3+1], c = I[t*3+2];
+      let ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+      const k = (ab >= 0) + (bc >= 0) + (ca >= 0);
+      if (k === 3) { idx.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca); continue; }
+      if (k === 0) { idx.push(a, b, c); continue; }
+      // rotate (a, b, c) so the split edges come first: one split -> ab; two -> ab and bc
+      for (let r = 0; r < 3 && !(ab >= 0 && (k === 1 || bc >= 0)); r++) {
+        const s = a; a = b; b = c; c = s;
+        const sm = ab; ab = bc; bc = ca; ca = sm;
+      }
+      if (k === 1) idx.push(a, ab, c, ab, b, c);
+      else idx.push(ab, b, bc, a, ab, bc, a, bc, c);
+    }
+    out.idx = idx;
+    return out;
+  }
+
   // DECIMATE: vertex clustering for a body seen from far away (a rival past ~250 m is 1-3 px tall, so only its
   // silhouette reads). Vertices fall into the cells of a cubic grid; a cell becomes one vertex (mean position,
   // mean normal renormalised, mean colour, the first surface id); triangles that collapse onto <3 cells or repeat
@@ -442,6 +678,7 @@ const CarGeometry = (function () {
     return out;
   }
 
-  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT };
+  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
+           withDetail, level: () => _lvl, hero: () => _hero, clampDetail, detailFor, heroOn, refine, MAX_BULGE };
 })();
 Object.freeze(CarGeometry);
