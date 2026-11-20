@@ -64,12 +64,13 @@ test("pick advances as the car passes each cam, with hysteresis", () => {
 test("pose tightens the lens when the car is far and opens it when the car is close", () => {
   const TS = load();
   const track = { total: 1000, id: "test" };
-  const near = TS.pose(track, 100, 0, { carPos: [0, 100] });
+  // pose() returns a pooled bag — snapshot scalars before the next call.
+  const nearFov = TS.pose(track, 100, 0, { carPos: [0, 100] }).fov;
   track._tsIdx = 0;
-  const far = TS.pose(track, 280, 0, { carPos: [0, 280] });
-  assert.ok(near.fov > far.fov, `close shot should be wider (${near.fov} vs ${far.fov})`);
-  assert.ok(far.fov <= 22, `a distant car should be on the long lens, got ${far.fov}`);
-  assert.ok(near.fov <= 50 && far.fov >= 18, "fov stays inside the clamp");
+  const farFov = TS.pose(track, 280, 0, { carPos: [0, 280] }).fov;
+  assert.ok(nearFov > farFov, `close shot should be wider (${nearFov} vs ${farFov})`);
+  assert.ok(farFov <= 22, `a distant car should be on the long lens, got ${farFov}`);
+  assert.ok(nearFov <= 50 && farFov >= 18, "fov stays inside the clamp");
 });
 
 test("far-subject trackside long lens survives final landscape FOV fitting", () => {
@@ -90,6 +91,16 @@ test("pose aims at the subject car when carPos is supplied", () => {
   assert.equal(p.tgt[0], 3);
   assert.equal(p.tgt[2], 160);
   assert.equal(p.count, 3);
+});
+
+test("pose reuses one bag across calls (per-frame alloc gone)", () => {
+  const TS = load();
+  const track = { total: 1000, id: "test" };
+  const a = TS.pose(track, 100, 0, { carPos: [0, 100] });
+  const b = TS.pose(track, 280, 0, { carPos: [0, 280] });
+  assert.equal(a, b, "the same pose object is reused");
+  assert.equal(a.eye, b.eye);
+  assert.equal(a.tgt, b.tgt);
 });
 
 test("trackside snap selects the seek destination without inheriting hysteresis", () => {

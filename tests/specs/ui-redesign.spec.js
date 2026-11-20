@@ -3,6 +3,7 @@
 // changed surface so SwiftShader boot cost is paid once rather than per assertion.
 import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { previewMapSettled } from "../../tools/ui/menu-readiness.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
@@ -126,10 +127,15 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     root.setProperty("--sab", "21px");
     if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(150);
   });
-  await page.waitForFunction(() => {
+  // #5824: the wait used to be density/shape alone, which was already true BEFORE uiScale(150), so it passed at once
+  // and the row was measured before SheetShape's two-frame reclassify (watchScale) had landed. Wait for the real
+  // settle: classification and geometry unchanged for 3 frames with no running animation.
+  const settled = await page.evaluate(settleLayout, { root: "#sel-inner" });
+  expect(settled.stable, "the picker settled after uiScale(150): " + (settled.reason || "")).toBe(true);
+  expect(await page.evaluate(() => {
     const sel = document.getElementById("sel-inner");
-    return sel?.dataset.density === "compact" && sel.dataset.shape !== "tall";
-  }, null, { polling: 100, timeout: 10_000 });
+    return [sel.dataset.density, sel.dataset.shape !== "tall"];
+  }), "150% on the phone keeps the compact, non-tall card").toEqual(["compact", true]);
   const compactCatalogue = await page.evaluate(() => {
     const list = document.getElementById("sel-tracks").getBoundingClientRect();
     const first = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
@@ -140,6 +146,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     return {
       firstVisible: Math.max(0, Math.min(list.right, first.right) - Math.max(list.left, first.left)),
       oneRow: Math.max(...controls.map((r) => r.top)) - Math.min(...controls.map((r) => r.top)) < 2,
+      tops: controls.map((r) => Math.round(r.top * 10) / 10),
       heroH: hero.height,
       geometry: {
         filter: [filter.top, filter.bottom, filter.height], list: [list.top, list.bottom, list.height],
@@ -147,7 +154,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       },
     };
   });
-  expect(compactCatalogue.oneRow, "compact filter oneRow").toBe(true);
+  expect(compactCatalogue.oneRow, "compact filter oneRow, control tops " + JSON.stringify(compactCatalogue.tops)).toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
   expect(compactCatalogue.heroH, "the still survives 150% on a notched phone").toBeGreaterThan(60);
   // At the slider maximum the toolbar stays ONE row (nowrap; it pans rather

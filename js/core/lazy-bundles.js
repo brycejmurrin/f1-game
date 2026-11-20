@@ -189,7 +189,7 @@ const _sceneryLoads = new Map();
 function sceneryModels(def) {
   if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
   const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
-  return Assets.modelsReady(0, fn ? String(fn) : "");
+  return Assets.modelsReady(0, typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, window.TrackScenery) : fn ? String(fn) : "");
 }
 // One fetch of the closure, shared by every caller in flight. The loader RESOLVES
 // false on an error (offline, a CDN 404, a refused stale-build request), so the

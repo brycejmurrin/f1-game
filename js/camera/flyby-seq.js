@@ -157,8 +157,8 @@ const FlybySeq = (function () {
       // ON the road is not beside it: a box whose centre is within LM_EDGE of
       // the road edge straddles the track (a bridge, an overhead sign), and its
       // "track side" is the tarmac under it.
-      const pr = Tracks.project(track, r.x, r.z);
-      if (pr) {
+      const pr = Tracks.project(track, r.x, r.z, null, null, _pr);
+      if (pr && isFinite(pr.s)) {
         Tracks.sample(track, pr.s, _smp);
         if (Math.abs(pr.lat) - (_smp.hw || 10) < LM_EDGE) continue;
       }
@@ -415,6 +415,7 @@ const FlybySeq = (function () {
   }
 
   const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  const _pr = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
 
   /** The bearing from a landmark to its nearest stretch of track — what a
    *  landmark `bear` of 0 means. Shot from that side, the circuit sits between
@@ -447,8 +448,8 @@ const FlybySeq = (function () {
   function lmNear(track, r) {
     const cache = track._fbLmNear || (track._fbLmNear = new Map());
     if (cache.has(r)) return cache.get(r);
-    const pr = Tracks.project(track, r.x, r.z);
-    const d = pr ? Math.abs(pr.lat) : 0;
+    const pr = Tracks.project(track, r.x, r.z, null, null, _pr);
+    const d = pr && isFinite(pr.lat) ? Math.abs(pr.lat) : 0;
     cache.set(r, d);
     return d;
   }
@@ -599,7 +600,7 @@ const FlybySeq = (function () {
   }
 
   function trackPose(track, p, opts) {
-    const pr = Tracks.project(track, p[0], p[2]);
+    const pr = Tracks.project(track, p[0], p[2], null, null, _pr);
     // project() measures `lat` along the interpolated right vector from the
     // nearest point on the node CHORD, but that vector is not square to the
     // chord inside a corner, and posePoint() walks it from sample(s). At 18 m
@@ -681,7 +682,7 @@ const FlybySeq = (function () {
       const nl = opts.rank == null ? nearestLandmark(track, p) : null;
       pose = landmarkPose(track, p, opts.rank != null ? opts.rank : (nl ? nl.rank : 0));
     } else if (at === "auto") {
-      const pr = Tracks.project(track, p[0], p[2]);
+      const pr = Tracks.project(track, p[0], p[2], null, null, _pr);
       const trackMax = opts.trackMax == null ? 80 : opts.trackMax;
       if (pr.dist > trackMax) {
         const nl = nearestLandmark(track, p);
@@ -1248,6 +1249,9 @@ const FlybySeq = (function () {
      sample, never below SIGHT_MIN of the authored lead. */
   const SIGHT_EDGE = 1, SIGHT_MIN = 0.3;
   const _sa = [0, 0, 0], _sb = [0, 0, 0], _sm = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  // sightOff's own project bag — separate from module `_pr` so a nested
+  // landmark score during planning cannot clobber a mid-segment projection.
+  const _prSight = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
   function arcDelta(track, a, b) {
     const total = track.total || 1;
     let d = anchorS(track, b) - anchorS(track, a);
@@ -1280,8 +1284,8 @@ const FlybySeq = (function () {
       while (dl < -total / 2) dl += total;
       for (let k = 1; k <= 8; k++) {
         const f = k / 8;
-        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f, se + dl * f);
-        if (!pr) continue;
+        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f, se + dl * f, null, _prSight);
+        if (!pr || !isFinite(pr.s)) continue;
         Tracks.sample(track, pr.s, _sm);
         const off = Math.abs(pr.lat) - (_sm.hw || 10);
         if (off > worst) worst = off;

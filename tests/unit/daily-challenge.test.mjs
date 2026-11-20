@@ -465,3 +465,29 @@ test("stop() resumes the sim stream where the Daily found it (G.simSeed(seed, st
   assert.equal(seed, 777);
   assert.equal(stream, 123456, "the stream is back where race 1 left it");
 });
+
+// #5821: the share-card stack rides LAZY_RESULTS_SHEET (off the boot wall). Daily shareCard() loads that
+// group through GameResults.ensureLoaded before painting, instead of throwing "unavailable" at the title.
+test("shareCard() loads the lazy share-card group before rendering, and the stack is off the boot wall", async () => {
+  const { d, ctx } = load();
+  const delivered = [];
+  let loads = 0;
+  ctx.GameResults = { ensureLoaded: () => {
+    loads++;
+    ctx.ShareCardData = { fromDaily: () => ({ link: null }) };
+    ctx.ShareCard = { render: () => Promise.resolve({ type: "image/png" }), deliver: (blob, name) => { delivered.push(name); return Promise.resolve("shared"); } };
+    return Promise.resolve(true);
+  } };
+  assert.equal(await d.shareCard("gold"), "shared");
+  assert.equal(loads, 1, "the results-sheet group was loaded once");
+  assert.equal(delivered[0].startsWith("apex26-daily-"), true, delivered[0]);
+  await d.shareCard("gold");
+  assert.equal(loads, 1, "a second share does not reload");
+  const manifest = (await import("../../tools/manifest.cjs")).default;
+  const { eagerScriptsOf } = await import("../../tools/check/boot-wall.mjs");
+  const lazy = new Set(manifest.LAZY_RESULTS_SHEET), wall = new Set(eagerScriptsOf(readFileSync(join(ROOT, "index.html"), "utf8")));
+  for (const f of ["js/share/share-card-data.js", "js/share/share-card-layout.js", "js/share/share-card.js"]) {
+    assert.equal(lazy.has(f), true, f + " rides LAZY_RESULTS_SHEET");
+    assert.equal(wall.has(f), false, f + " has no boot <script> tag");
+  }
+});
