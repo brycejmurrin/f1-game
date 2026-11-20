@@ -83,7 +83,9 @@ const TrackStamps = (function () {
     const st = sample(kind, params, { x: anchor[0], z: anchor[1], th: S.heading(pts, i0) });
     if (!st || !st.pts.length) return { ok: false, reason: "unknown stamp" };
     const covered = (j) => S.wrapI(j - i0, N);
-    const insert = i0 === i1, reach = insert ? 12 : 7;
+    const insert = i0 === i1, reach = insert ? 24 : 7;
+    const knots = (P) => S.crossings(P.map((q) => q[0]), P.map((q) => q[1]), P.length, 3).length, was = knots(pts);
+    let tangled = null;
     for (let k = 0; k < reach; k++) {
       const j = S.wrapI(i1 + (insert ? 1 : 0) + k, N);
       if (j === i0 || covered(j) > N - 4) break;
@@ -115,8 +117,11 @@ const TrackStamps = (function () {
         selB -= a - pre.length; selA -= a - pre.length;
         if (out.length > 200) return { ok: false, reason: "too many points — delete some first" };
       }
-      return { ok: true, pts: out, sel: [selA, selB], word: fill.word };
+      const res = { ok: true, pts: out, sel: [selA, selB], word: fill.word };
+      if (knots(out) > was) { if (!tangled) tangled = res; continue; }
+      return res;
     }
+    if (tangled) return tangled;
     return { ok: false, reason: "no room to rejoin the loop here — pick a longer span or a smaller stamp" };
   }
 
