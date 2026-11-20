@@ -2553,6 +2553,25 @@ test("a guest that backed out of quali joins the race when the host sends qgo (a
   } finally { h.lobby.cancel(); }
 });
 
+for (const changed of [false, true]) {
+  test("qualifying exit orders QGO after " + (changed ? "changed" : "unchanged") + " queued settings", async () => {
+    const { h, made: [session] } = await guestInQuali();
+    let starts = 0, at = performance.now() + 2000, flush;
+    h.G.startRace = async () => { starts++; return false; };
+    h.context.performance = { now: () => at };
+    try {
+      h.lobby.abortQuali();
+      h.context.setTimeout = (fn) => { flush = fn; return 1; };
+      for (let i = 0; i < 5; i++) session.deliver("settings", initialGuestSettings({ quali: true }));
+      session.deliver("settings", initialGuestSettings({ quali: true, laps: changed ? 5 : 3, revision: changed ? 1 : 0 }));
+      session.deliver("qgo", {});
+      assert.equal(starts, 0, "pending rules order the guest's grid handoff");
+      at += 1001; flush();
+      assert.equal(starts, changed ? 0 : 1, "only approved rules can start the race");
+    } finally { h.lobby.cancel(); }
+  });
+}
+
 test("a failed quali prepare (sheet never opens) cancels the lobby so persistOrder is not gated for the page session", async () => {
   const { h } = await guestInQuali({}, false);
   try {
@@ -2839,15 +2858,21 @@ test("HELLO keeps only the profile fields; guest SETTINGS skip unchanged snapsho
     const snap = initialGuestSettings({ laps: laps0 });
     s.deliver("settings", snap); s.deliver("settings", snap);
     assert.equal(h.G.raceLaps, 98, "an unchanged snapshot is not re-applied");
-    // Let the rolling window (EVENT_WINDOW_MS = 1000) empty, then burst 10 CHANGED snapshots synchronously:
-    // exactly HELLO_RATE (5) may apply. Count the applies by the raceLaps writes applySettings makes.
-    await new Promise((r) => setTimeout(r, 1050));
-    let lapsNow = h.G.raceLaps, lapWrites = 0;
-    Object.defineProperty(h.G, "raceLaps", { configurable: true, enumerable: true,
-      get: () => lapsNow, set: (v) => { lapWrites++; lapsNow = v; } });
-    for (let n = 0; n < 10; n++) s.deliver("settings", initialGuestSettings({ laps: 5 + n % 2 }));
-    assert.equal(lapWrites, 5, "past 5 SETTINGS in a rolling second the rest are dropped");
-    assert.equal(h.G.raceLaps, 5, "the fifth (laps 5) is the last one applied");
+    // One arrival, four late arrivals, then a trailing revision. At expiry
+    // only the oldest token is free. The four later arrivals still count.
+    let at = performance.now() + 2000, scheduled;
+    h.context.performance = { now: () => at };
+    h.context.setTimeout = (fn) => { scheduled = fn; return 1; };
+    s.deliver("settings", initialGuestSettings({ laps: 4 }));
+    at += 900;
+    for (let laps = 5; laps <= 10; laps++) s.deliver("settings", initialGuestSettings({ laps }));
+    assert.equal(h.G.raceLaps, 8, "only five settings apply inside the first window");
+    at += 101; scheduled();
+    assert.equal(h.G.raceLaps, 10, "the latest snapshot uses the single released token");
+    s.deliver("settings", initialGuestSettings({ laps: 11 }));
+    assert.equal(h.G.raceLaps, 10, "staggered arrivals retain their own timestamps");
+    at += 900; scheduled();
+    assert.equal(h.G.raceLaps, 11);
   } finally { h.lobby.cancel(); }
 });
 

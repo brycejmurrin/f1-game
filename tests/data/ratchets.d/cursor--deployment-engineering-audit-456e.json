@@ -1,4 +1,9 @@
 {
+  "files": {
+    "js/net/lobby.js": {
+      "lines": 15
+    }
+  },
   "tree": {
     "eagerBytes": -689
   }

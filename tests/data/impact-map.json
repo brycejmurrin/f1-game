@@ -10808,6 +10808,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "setReady": [
+        "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"

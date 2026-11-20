@@ -1703,7 +1703,7 @@ function wakePad(over = {}, extra = {}) {
     rtc: () => {
       let close;
       const t = { status: "open", send: () => true, pump() {}, onMessage() {}, onClose(f) { close = f; },
-        close() { t.status = "closed"; if (close) close(); } };
+        close(why) { t.status = "closed"; if (close) close(why); } };
       transports.push(t); return t;
     }, swap: async () => ({ ok: true }), ...over,
   } });
@@ -1749,6 +1749,8 @@ test("page exit cancels pending pairing; its late lock and answer cannot affect 
   const first = h.ctl.connect("ABC234"); await settle();
   h.fire("pagehide");
   assert.equal(h.transports[0].status, "closed");
+  h.fire("pageshow"); await settle();
+  assert.equal(swaps, 1, "a first pairing cancelled by page exit is not retried");
   await h.ctl.connect("ABC234");
   const current = h.lock(); h.requests[1].resolve(current); await settle();
   const stale = h.lock(); h.requests[0].resolve(stale); finish({ ok: true });
@@ -2513,6 +2515,61 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no CONNECT tap");
   assert.equal(h.ctl.state().linked, true);
   h.ctl.cancel();
+});
+
+for (const stage of ["hidden", "backoff", "negotiating"]) {
+  test("pagehide preserves the established phone pairing during reconnect: " + stage, async () => {
+    const codes = [];
+    let resolveOld;
+    const h = wakePad({ swap: async ({ code }) => {
+      codes.push(code);
+      if (codes.length === 2 && stage === "backoff") return { ok: false, error: "expired" };
+      if (codes.length === 2 && stage === "negotiating") return new Promise(r => { resolveOld = r; });
+      return { ok: true };
+    } });
+    await h.ctl.connect("ABC234");
+    if (stage === "hidden") h.doc.visibilityState = "hidden";
+    h.transports[0].close("disconnected"); await settle();
+    const beforeHide = stage === "hidden" ? 1 : 2;
+    assert.equal(codes.length, beforeHide);
+    h.doc.visibilityState = "hidden"; h.fire("pagehide");
+    h.doc.visibilityState = "visible"; h.fire("pageshow"); h.fire("visibilitychange"); await settle();
+    if (resolveOld) { resolveOld({ ok: false, error: "expired" }); await settle(); }
+    assert.deepEqual(codes, Array(beforeHide + 1).fill("ABC234"));
+    assert.equal(h.ctl.state().linked, true);
+    assert.equal(h.timeouts.some(t => !t.cleared && t.ms === 5000), false);
+    h.ctl.cancel();
+  });
+}
+
+test("explicit cancel while waiting to reconnect keeps the controller unpaired on return", async () => {
+  let swaps = 0;
+  const h = wakePad({ swap: async () => { swaps++; return { ok: true }; } });
+  await h.ctl.connect("ABC234");
+  h.doc.visibilityState = "hidden";
+  h.transports[0].close("disconnected"); await settle();
+  h.ctl.cancel(); h.fire("pagehide");
+  h.doc.visibilityState = "visible"; h.fire("pageshow"); await settle();
+  assert.equal(swaps, 1);
+  assert.equal(h.ctl.state().linked, false);
+});
+
+test("page exit after publishing the first answer but before RTC opens cancels pairing", async () => {
+  const wires = [], codes = [];
+  const h = wakePad({
+    rtc: () => {
+      const wire = { status: "connecting", send: () => false, pump() {}, onMessage() {}, onOpen() {}, onClose() {},
+        close() { wire.status = "closed"; } };
+      wires.push(wire); return wire;
+    },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async o => { codes.push(o.code); return { ok: !!await o.reply("OFFER") }; },
+  });
+  assert.equal((await h.ctl.connect("ABC234")).ok, true);
+  h.fire("pagehide"); h.fire("pageshow"); await settle();
+  assert.deepEqual(codes, ["ABC234"]);
+  assert.equal(wires[0].status, "closed");
+  assert.equal(h.dom.connect.disabled, false);
 });
 
 test("#5739 row 5: an answer whose link never opens ends at the connect deadline, says so and frees CONNECT", async () => {
