@@ -5,7 +5,7 @@ const TrackFixes = (function () {
   const LAP = Object.freeze({ short: 4000, long: 6500 });
   const MAP = 9500, SPACING = 8, PTS_CAP = 180, PULL = 0.3, PASSES = 3, ROUNDS = 3;
   const ORDER = Object.freeze(["start", "length", "bounds", "spacing", "points", "kink", "radius", "fold", "crossing", "clearance"]);
-  const REPEAT = { crossing: 4, clearance: 3 };
+  const REPEAT = { crossing: 4, clearance: 3, fold: 4 };
 
   const q = (v) => Math.round(v * 4) / 4;
   const wrap01 = (v) => ((v % 1) + 1) % 1;
@@ -212,6 +212,45 @@ const TrackFixes = (function () {
     if (!pairs || out.length < LIM().ptsMin) return null;
     return { design: rebuilt(d, pts, out, pairs), msg: "Smoothed the " + (issue.code === "kink" ? "kink" : "corner") + " at " + km(issue.s) };
   }
+  function foldScore(tr, s) {
+    if (!tr || !tr.px) return -Infinity;
+    const n = tr.n, ds = tr.total / n, k0 = Math.round(s / ds), span = Math.round(150 / ds), P = (k) => [tr.px[(k + n) % n], tr.pz[(k + n) % n]];
+    let worst = Infinity;
+    for (let o = -span; o <= span; o++) { const k = k0 + o, hw = tr.hw[(k + n) % n] || 1; worst = Math.min(worst, S.menger(P(k - 1), P(k), P(k + 1)) / hw); }
+    return worst;
+  }
+  function evened(d, pts, issue, built) {
+    const tr = trOf(d, built), N = pts.length;
+    if (!tr || N + 4 > LIM().ptsMax) return null;
+    const c = nearestCtrl(pts, tr, issue.s, false);
+    if (c < 0) return null;
+    const w = (i) => ((i % N) + N) % N, len = (i) => { const a = pts[w(i)], b = pts[w(i + 1)]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
+    const point = (i, fromEnd, m) => { const a = pts[w(i)], b = pts[w(i + 1)], t = (fromEnd ? len(i) - m : m) / len(i); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; };
+    const ins = new Map();
+    for (let i = c - 2; i <= c + 1; i++) {
+      const L = len(i), prev = len(i - 1), next = len(i + 1), add = [];
+      if (L > 3 * prev && L > 48) add.push(point(i, false, Math.min(Math.max(2 * prev, 16), L / 3)));
+      if (L > 3 * next && L > 48) add.push(point(i, true, Math.min(Math.max(2 * next, 16), L / 3)));
+      if (add.length) ins.set(w(i), add);
+    }
+    if (!ins.size) return null;
+    const out = [], pairs = [];
+    pts.forEach((p, i) => { pairs.push([i, out.length]); out.push(p); if (ins.has(i)) out.push(...ins.get(i)); });
+    return { design: rebuilt(d, pts, out, pairs), msg: "Evened out the points into the corner at " + km(issue.s) };
+  }
+  function fixFold(d, pts, issue, built) {
+    if (!Number.isFinite(issue.s)) return null;
+    let best = null, bs = foldScore(trOf(d, built), issue.s);
+    for (const r of [evened(d, pts, issue, built), fixSmooth(d, pts, issue, built)]) {
+      if (!r) continue;
+      const v = check(r.design);
+      if (!v) continue;
+      if (!stillThere(v, "fold", "red", issue.s, 150)) return r;
+      const sc = foldScore(v.tr, issue.s);
+      if (sc > bs) { best = r; bs = sc; }
+    }
+    return best;
+  }
   function fixCrossing(d, issue, built) {
     if (!Number.isFinite(issue.s)) return null;
     const tr = trOf(d, built);
@@ -296,7 +335,7 @@ const TrackFixes = (function () {
     points: (d, pts) => (pts.length > PTS_CAP ? fixSpacing(d, pts) : null),
     kink: (d, pts, it, b) => fixSmooth(d, pts, it, b),
     radius: (d, pts, it, b) => fixSmooth(d, pts, it, b),
-    fold: (d, pts, it, b) => fixSmooth(d, pts, it, b),
+    fold: (d, pts, it, b) => fixFold(d, pts, it, b),
     crossing: (d, pts, it, b) => fixCrossing(d, it, b),
     clearance: (d, pts, it, b) => fixClearance(d, pts, it, b),
   };
