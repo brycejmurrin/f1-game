@@ -1,6 +1,6 @@
 # A `cancelled` run, and syncing with the base
 
-Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict`, `stale-red`, `retest-refused` or `gate-refused`.
+Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict`, `union-conflict`, `stale-red`, `retest-refused` or `gate-refused`.
 
 ## `cancelled`: read the jobs, not the conclusion
 
@@ -21,13 +21,17 @@ A PR that ends `cancelled` twice with zero failures:
 ## When to sync
 
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
-(`= sync needed: conflict | stale-red | retest-refused | gate-refused | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
+(`= sync needed: conflict | union-conflict | stale-red | retest-refused | gate-refused | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
 the deploy tip is red on code, so a sync would import the red; the gate's `base` row holds merges until the fix lands,
 #5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`. A newest run that ended `cancelled`
 after at least one job concluded `failure`, or green only on `run_attempt` > 1 after an earlier attempt had a red job
 (merge-gate refuses that green), counts as red for `stale-red`; zero failed jobs (a cancel, a cancel-only re-run) stays `no` (rule 8). A red is stale
 when the tip gained a commit after the run started OR when the run's recorded merge base (the tooling A `apex-guards`
 annotation) is not the current tip: a `pull/<n>/merge` ref can sit on an older tip than the clock suggests (#5832).
+
+`union-conflict` (#5922): `merge-tree` is clean only because git's union driver joined a `merge=union` path both
+sides appended to (`docs/notes/CEILING-HISTORY.md`). GitHub runs no merge driver, so it calls the PR dirty and never
+merges it. `sync-pr` runs it as a normal sync, with no force flag: its local merge applies the union.
 
 `retest-refused` (#5554): the head is green, its newest `gate` status is a refusal with `ci=ok gen=ok retest=FAIL`,
 and merge-gate's own retest window still names a tip merge the head lacks. The row's evidence says "sync-pr.mjs and

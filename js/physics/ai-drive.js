@@ -522,25 +522,18 @@ const AiDrive = (function () {
   // One feasible lateral envelope for the planner and the kinematic actuator.
   // speed is in world m/s; pace removes the ground-speed scale.
   //
-  // THE SAME WINGS AS THE PLAYER. The player's grip RISES by DOWNFORCE (65 %)
-  // from 20 m/s to the top speed (game.js aeroGrip); an AI envelope that does
-  // not gives a player roughly twice the lateral grip at 60 m/s and every fast
-  // corner a free second. Aero on the PLANNER alone fails too — the actuator
-  // cannot turn at the speeds it plans (docs/notes/AI-FIELD-RESEARCH.md) — so
-  // both share one function: planner (cornerSpeed
-  // inverts this exactly) and actuator (game.js gripScale / yaw cap) read the
-  // one curve, so they rise together. The player's PLAYER_GRIP forgiveness
-  // headroom is NOT copied — the AI gets the car's aero, not the assist.
+  // THE SAME WINGS AS THE PLAYER: grip RISES by DOWNFORCE to the top speed (game.js aeroGrip), or a
+  // player has ~2x the lateral grip at 60 m/s. Planner (cornerSpeed inverts this) and actuator (game.js
+  // gripScale / yaw cap) share this one curve: aero on the planner alone outruns the actuator
+  // (docs/notes/AI-FIELD-RESEARCH.md). PLAYER_GRIP's assist headroom is NOT copied.
   const AI_DF = 0.65;   // PhysicsConsts.DOWNFORCE (not bound here: unit VMs load this file alone)
-  // `aero` scales the wing term. The heading controller's YAW budget is the
-  // exception that does not get the wings (yawScale below): it is how quickly
-  // a lane change may bend the nose, a smoothness budget rather than grip, and
-  // letting it rise with downforce took the solo-lap lateral-jerk figure in
-  // ai-racecraft-vm from 5.9 to 8.1 m/s² (cap 7.5) — twitchier lane changes on
-  // every straight for no corner speed at all.
+  // `aero` scales the wing term. The YAW budget (yawScale) gets no wings: it is a lane-change smoothness
+  // budget, and wings took ai-racecraft-vm's solo lateral jerk from 5.9 to 8.1 m/s² (cap 7.5).
+  const AERO_GRIP_K = 0.055;   // PhysicsConsts.AI_WING_GRIP, unbound as AI_DF
+  function aeroGrip(load) { return 1 + ((load != null ? load : 0.5) - 0.5) * AERO_GRIP_K; }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    return (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
+    return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
   }
   // The yaw budget keeps the OLD high-speed taper (1 - 0.28 at the top speed,
   // here as its quadratic twin) so the heading controller is exactly as calm
@@ -551,7 +544,7 @@ const AiDrive = (function () {
   const _lsOut = { yaw: 1, lat: 1 };   // pooled
   function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    const pre = (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip);
+    const pre = (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip);
     out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
     out.lat = pre * (1 + AI_DF * aero * q * q);
     return out;
@@ -582,7 +575,7 @@ const AiDrive = (function () {
     const sampleN = window ? window.n : samples.length;
     let windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
-    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
+    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_GRIP_K);
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
@@ -1711,7 +1704,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, aeroGrip, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

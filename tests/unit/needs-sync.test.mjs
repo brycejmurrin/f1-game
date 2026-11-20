@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal, gateMergeRefusal } from "../../tools/ci/needs-sync.mjs";
+import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal, gateMergeRefusal, unionTextConflicts } from "../../tools/ci/needs-sync.mjs";
 
 const T0 = "2026-10-16T08:00:00Z", T1 = "2026-10-16T09:00:00Z";
 
@@ -32,8 +32,9 @@ test("decideSync: a stray `distance` fact changes nothing (the verdict went with
   assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
 });
 test("exit codes and verdict line", () => {
-  assert.deepEqual(VERDICTS, ["conflict", "stale-red", "retest-refused", "gate-refused", "tip-red", "no"]);
+  assert.deepEqual(VERDICTS, ["conflict", "union-conflict", "stale-red", "retest-refused", "gate-refused", "tip-red", "no"]);
   assert.equal(exitCode({ ok: true, verdict: "gate-refused" }), 0, "gate-refused is a sync");
+  assert.equal(exitCode({ ok: true, verdict: "union-conflict" }), 0, "union-conflict is a sync");
   assert.equal(exitCode({ ok: true, verdict: "retest-refused" }), 0, "retest-refused is a sync");
   assert.equal(exitCode({ ok: true, verdict: "tip-red" }), 1, "tip-red is not a sync");
   assert.equal(exitCode({ ok: true, verdict: "conflict" }), 0);
@@ -345,4 +346,62 @@ test("needsSync: a green head the gate refused on gen / ratchets = gate-refused,
     assert.equal(exitCode(v), 0);
     assert.equal(verdictLine(v), "= sync needed: gate-refused");
   }
+});
+
+// #5922: a merge=union path both sides appended to. git's union driver merges it (merge-tree clean); GitHub merges
+// it as text, reports the PR dirty and never merges it, so needs-sync must name it.
+function unionRepo(tipLog, prLog, { attr = "LOG.md merge=union\n", prOther = null } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "needs-sync-union-"));
+  const g = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  const w = (f, t) => fs.writeFileSync(path.join(dir, f), t);
+  g("init", "-q", "-b", "deploy"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+  w(".gitattributes", attr); w("LOG.md", "# log\n- one\n"); w("f.txt", "base\n"); g("add", "."); g("commit", "-qm", "base");
+  g("checkout", "-qb", "pr"); if (prLog !== null) w("LOG.md", prLog); if (prOther) w(prOther[0], prOther[1]); g("add", "."); g("commit", "-qm", "pr");
+  g("checkout", "-q", "deploy"); if (tipLog !== null) w("LOG.md", tipLog); else w("f.txt", "tip\n"); g("add", "."); g("commit", "-qm", "tip");
+  g("update-ref", "refs/remotes/origin/deploy", "deploy"); g("update-ref", "refs/remotes/origin/pr", "pr");
+  return (args) => { const r = spawnSync("git", args, { cwd: dir, encoding: "utf8" }); return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() }; };
+}
+const BASE_LOG = "# log\n- one\n";
+
+test("decideSync: union-conflict sits after conflict and before stale-red; tip-red still wins", () => {
+  const u = { behind: true, conflict: false, unionConflicts: ["docs/notes/CEILING-HISTORY.md"], ci: "success" };
+  assert.equal(decideSync(u).verdict, "union-conflict");
+  assert.match(decideSync(u).why, /CEILING-HISTORY\.md conflict as text/);
+  assert.equal(decideSync({ ...u, conflict: true }).verdict, "conflict");
+  assert.equal(decideSync({ ...u, ci: "failure", runStartedAt: T0, tipNewestAt: T1 }).verdict, "union-conflict");
+  assert.equal(decideSync({ ...u, tip: { state: "code-red", evidence: "pages red" } }).verdict, "tip-red");
+  assert.equal(decideSync({ ...u, behind: false }).verdict, "no");
+  assert.equal(decideSync({ ...u, unionConflicts: [] }).verdict, "no");
+});
+
+test("needsSync: both sides append to a union file = union-conflict, exit 0 (merge-tree alone says clean)", () => {
+  const rg = alias(unionRepo(BASE_LOG + "- tip\n", BASE_LOG + "- pr\n"));
+  const v = needsSync("pr", { fetch: false, offline: true, readGit: rg });
+  assert.equal(v.ok, true, v.error);
+  assert.equal(v.conflict, false, "the union driver merges it");
+  assert.deepEqual(v.unionConflicts, ["LOG.md"]);
+  assert.equal(v.verdict, "union-conflict");
+  assert.equal(exitCode(v), 0);
+});
+
+test("needsSync: a union file changed on one side only, or edits that merge as text, stay no", () => {
+  const one = needsSync("pr", { fetch: false, offline: true, readGit: alias(unionRepo(null, BASE_LOG + "- pr\n")) });
+  assert.deepEqual([one.verdict, one.unionConflicts], ["no", []]);
+  const apart = needsSync("pr", { fetch: false, offline: true, readGit: alias(unionRepo("# LOG\n- one\n", BASE_LOG + "- pr\n")) });
+  assert.deepEqual([apart.verdict, apart.unionConflicts], ["no", []], "non-overlapping hunks merge as text too");
+});
+
+test("needsSync: the same both-sides append on a path without merge=union is a plain conflict", () => {
+  const v = needsSync("pr", { fetch: false, offline: true, readGit: alias(unionRepo(BASE_LOG + "- tip\n", BASE_LOG + "- pr\n", { attr: "# none\n" })) });
+  assert.equal(v.verdict, "conflict");
+});
+
+test("unionTextConflicts: a union path deleted on one side counts; a merge-base failure is an error, not a verdict", () => {
+  const rg = unionRepo(BASE_LOG + "- tip\n", BASE_LOG + "- pr\n");
+  assert.deepEqual(unionTextConflicts("deploy", "pr", rg), { paths: ["LOG.md"] });
+  const bad = unionTextConflicts("deploy", "pr", () => ({ code: 1, out: "", err: "boom" }));
+  assert.deepEqual(bad.paths, []);
+  assert.match(bad.error, /merge-base failed: boom/);
+  const del = (args) => (args[0] === "rev-parse" && args.at(-1).startsWith("deploy:") ? { code: 1, out: "", err: "" } : rg(args));
+  assert.deepEqual(unionTextConflicts("deploy", "pr", del), { paths: ["LOG.md"] });
 });

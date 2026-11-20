@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Does a PR branch need a deploy-tip sync? conflict | stale-red | retest-refused | gate-refused | tip-red | no.
+ * @doc Needs a deploy-tip sync? conflict | union-conflict | stale-red | retest-refused | gate-refused | tip-red | no.
  * @section runner
  * @skill steward
  *
@@ -11,6 +11,12 @@
  * Verdicts (issue #2449 design, phase 0):
  *   conflict   `git merge-tree --write-tree` of the deploy tip and the branch exits 1
  *              (sync-pr.mjs still cures generated-file-only conflicts itself)
+ *   union-conflict  merge-tree is clean only because a `merge=union` path (.gitattributes, e.g.
+ *              docs/notes/CEILING-HISTORY.md) changed on both sides and git's union driver joined
+ *              them. GitHub's mergeability check ignores merge drivers, so it merges that path as
+ *              text, calls the PR dirty and never merges it (#5922, #5778). The same paths are
+ *              re-merged as plain text (`git merge-file` on the three blobs); a conflict there is
+ *              this verdict. sync-pr runs it as a normal sync: its local merge applies the union.
  *   stale-red  the newest ci.yml run on the branch head failed AND the deploy tip gained
  *              a commit after that run started, OR the run's recorded merge base (the
  *              tooling A `apex-guards` annotation, merge-gate ciRecordedBase) is not the
@@ -46,7 +52,7 @@
  *              PR merges as it stands, and a clean refresh buys a full tier that repeats
  *              the old verdict. (The `distance` verdict went with merge-gate's distance
  *              row on 2026-11-03: gen and ratchets run on the real merge result.)
- * Exit: 0 sync needed (conflict | stale-red | retest-refused | gate-refused), 1 no sync needed (no | tip-red), 2 bad args, 3 could not
+ * Exit: 0 sync needed (conflict | union-conflict | stale-red | retest-refused | gate-refused), 1 no sync needed (no | tip-red), 2 bad args, 3 could not
  * decide (fetch / git / merge-tree failed). The API half degrades: no token or an API
  * error leaves ci "unknown", so only `conflict` can fire (the line says so).
  * Needs the merge base: a shallow clone must be deep enough for `git merge-tree`.
@@ -62,16 +68,17 @@ import { readDeployTip } from "./lib/deploy-tip.mjs";
 import { ciRecordedBase, newerTipPaths } from "./merge-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const VERDICTS = ["conflict", "stale-red", "retest-refused", "gate-refused", "tip-red", "no"];
+export const VERDICTS = ["conflict", "union-conflict", "stale-red", "retest-refused", "gate-refused", "tip-red", "no"];
 /** The verdicts that mean "sync now" (exit 0). */
-export const SYNC_VERDICTS = Object.freeze(["conflict", "stale-red", "retest-refused", "gate-refused"]);
+export const SYNC_VERDICTS = Object.freeze(["conflict", "union-conflict", "stale-red", "retest-refused", "gate-refused"]);
 
 /**
  * The verdict from the facts. Pure.
- * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null,
+ * @param {{ behind: boolean, conflict: boolean, unionConflicts?: string[], ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null,
  *   failedJobs?: number|null, jobsError?: string|null, attempt?: number, retryFailedJobs?: number|null,
  *   tip?: { state: string, evidence: string }|null, retest?: { refused: boolean, tipMerges?: number, commits?: string[] }|null,
  *   gate?: { refused: boolean, rows: string[] }|null, ciBase?: string, baseMoved?: boolean, baseMoves?: number }} f
+ *   unionConflicts = `merge=union` paths whose plain-text merge conflicts (unionTextConflicts()).
  *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks; tip = tipState() of the deploy
  *   branch's newest completed pages.yml run (null: not read).
  *   failedJobs = jobs of a `cancelled` newest run that concluded `failure` (null: not read); jobsError = why not.
@@ -80,12 +87,16 @@ export const SYNC_VERDICTS = Object.freeze(["conflict", "stale-red", "retest-ref
  *   merge-gate's retest window still names for this head (null: not read).
  *   gate = gateMergeRefusal() of the same status; ciBase / baseMoved / baseMoves = the newest run's recorded merge base
  *   and whether (how many) first-parent tip commits the head lacks lie past it (#5832).
- * @returns {{ verdict: "conflict"|"stale-red"|"retest-refused"|"gate-refused"|"tip-red"|"no", why: string }}
+ * @returns {{ verdict: "conflict"|"union-conflict"|"stale-red"|"retest-refused"|"gate-refused"|"tip-red"|"no", why: string }}
  */
 export function decideSync(f) {
   if (!f.behind) return { verdict: "no", why: "the branch already contains the deploy tip" };
   if (f.tip?.state === "code-red") return { verdict: "tip-red", why: `${f.tip.evidence}: do not sync onto a red tip; wait for the fix to land` };
   if (f.conflict) return { verdict: "conflict", why: "merging the deploy tip conflicts" };
+  if (f.unionConflicts?.length) {
+    const shown = f.unionConflicts.slice(0, 3).join(", ") + (f.unionConflicts.length > 3 ? ` +${f.unionConflicts.length - 3}` : "");
+    return { verdict: "union-conflict", why: `merge=union path(s) ${shown} conflict as text: git's union driver merges them, GitHub does not, so it reports the PR dirty and never merges it` };
+  }
   const ran = Date.parse(f.runStartedAt || ""), tipAt = Date.parse(f.tipNewestAt || "");
   const timeMoved = !!(ran && tipAt && tipAt > ran);
   // #5832: a date is not a commit. The run's merge ref sat on `ciBase`; tip commits past it (that the head lacks)
@@ -179,6 +190,42 @@ export function failedJobCount(request, runId, { attempt = null, bad = new Set([
   return { error: "more than 20 pages of jobs" };
 }
 
+/** The empty blob (a path absent on one side merges against it, as add/add does). */
+const EMPTY_BLOB = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
+
+/**
+ * `merge=union` paths that both sides changed since their merge base and whose PLAIN-TEXT three-way merge conflicts:
+ * what GitHub's mergeability check sees, since it runs no merge driver (#5922). Attributes are read from the tip's
+ * tree. A path deleted on one side counts as a conflict (modify/delete). `readGit` injectable.
+ * @returns {{ paths: string[], error?: string }}
+ */
+export function unionTextConflicts(tip, head, readGit = git) {
+  const base = readGit(["merge-base", tip, head]);
+  if (base.code !== 0 || !base.out) return { paths: [], error: `merge-base failed: ${base.err || base.out || "no common ancestor"}` };
+  const changed = (to) => {
+    const d = readGit(["diff", "--name-only", "--no-renames", base.out, to]);
+    return d.code === 0 ? d.out.split("\n").filter(Boolean) : null;
+  };
+  const a = changed(tip), b = changed(head);
+  if (!a || !b) return { paths: [], error: "git diff failed" };
+  const both = a.filter((p) => b.includes(p));
+  if (!both.length) return { paths: [] };
+  const attr = readGit(["check-attr", "--source", tip, "merge", "--", ...both]);
+  if (attr.code !== 0) return { paths: [], error: `git check-attr failed: ${attr.err || attr.out}` };
+  const union = attr.out.split("\n").map((l) => l.match(/^(.*): merge: union$/)?.[1]).filter(Boolean);
+  const paths = [];
+  for (const p of union) {
+    const blob = (rev) => { const r = readGit(["rev-parse", "--verify", "--quiet", `${rev}:${p}`]); return r.code === 0 ? r.out : null; };
+    const o = blob(base.out) || EMPTY_BLOB, t = blob(tip), h = blob(head);
+    if (!t || !h) { paths.push(p); continue; }
+    // merge-file exits with the conflict count (0 clean); a negative (255) is an error, not a verdict.
+    const m = readGit(["merge-file", "-p", "--object-id", h, o, t]);
+    if (m.code > 0 && m.code < 128) paths.push(p);
+    else if (m.code !== 0) return { paths: [], error: `git merge-file failed on ${p} (${m.code}): ${m.err}` };
+  }
+  return { paths };
+}
+
 // The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
 function git(args, run = spawnSync) { return gitRun(args, { cwd: ROOT, run }); }
 
@@ -206,8 +253,14 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     if (m.code !== 0 && m.code !== 1) return { ok: false, error: `git merge-tree failed (${m.code}): ${m.err || m.out}` };
     conflict = m.code === 1;
   }
+  let unionConflicts = [], note0 = null;
+  if (behind && !conflict) {
+    const u = unionTextConflicts(tip.out, head.out, readGit);
+    if (u.error) note0 = `union paths unchecked (${u.error}): a union-conflict cannot be detected`;
+    unionConflicts = u.paths;
+  }
   let ciBase = "", baseMoved = false, baseMoves = 0, gate = null;
-  let ci = "unknown", runStartedAt = null, note = null, failedJobs = null, jobsError = null, attempt = 1, retryFailedJobs = null, deployTip = null, retest = null;
+  let ci = "unknown", runStartedAt = null, note = note0, failedJobs = null, jobsError = null, attempt = 1, retryFailedJobs = null, deployTip = null, retest = null;
   const addNote = (t) => { note = note ? `${note}; ${t}` : t; };
   if (behind && !offline) {
     const t = readDeployTip(DEPLOY, request);
@@ -268,8 +321,8 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     }
   } else if (offline) addNote("offline: CI state not read, only a conflict can be detected");
   const tipNewestAt = behind ? readGit(["log", "-1", "--format=%cI", `${head.out}..${tip.out}`]).out || null : null;
-  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, failedJobs, jobsError, attempt, retryFailedJobs, tip: deployTip, retest, gate, ciBase, baseMoved, baseMoves });
-  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, failedJobs, attempt, retryFailedJobs, deployTip, retest, gate, ciBase, baseMoved, ...d, note };
+  const d = decideSync({ behind, conflict, unionConflicts, ci, runStartedAt, tipNewestAt, failedJobs, jobsError, attempt, retryFailedJobs, tip: deployTip, retest, gate, ciBase, baseMoved, baseMoves });
+  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, unionConflicts, ci, failedJobs, attempt, retryFailedJobs, deployTip, retest, gate, ciBase, baseMoved, ...d, note };
 }
 
 /** The one verdict line. */

@@ -4,9 +4,7 @@ const DailyChallenge = (function () {
 
   const KEY = "daily.v1";   // store adds the apex26. prefix
   const HISTORY_DAYS = 60;
-  // Weighted toward dry so most days are a clean lap; the rest are the game's
-  // real conditions (game.js WEATHER chips). Time of day includes night, which
-  // loadTrack lights per circuit.
+  // Weighted to dry; the rest are game.js WEATHER chips. loadTrack lights night per circuit.
   const WEATHER = ["dry", "dry", "overcast", "wet", "rain", "fog"];
   const TOD = ["default", "dawn", "day", "dusk", "night"];
 
@@ -15,10 +13,8 @@ const DailyChallenge = (function () {
   // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
   function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
-  // The player's LOCAL calendar day, YYYY-MM-DD (#5010). A UTC key rolled at 4 pm in Los Angeles,
-  // so a 3 pm and a 6 pm lap on consecutive local days were two UTC days apart and reset the streak.
-  // The plan is still a pure function of the date string, so one date is one shared plan; prevDay
-  // and the history window do date-only arithmetic on the key and stay calendar-correct.
+  // The player's LOCAL day, YYYY-MM-DD (#5010): a UTC key rolled at 4 pm in Los Angeles and split
+  // consecutive local days. The plan is a pure function of the string; prevDay is date-only arithmetic.
   function dayKey(d) {
     const t = d || new Date(), p2 = (n) => String(n).padStart(2, "0");
     return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate());
@@ -57,21 +53,19 @@ const DailyChallenge = (function () {
       e.classes[context] = cls;
     }
     if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-    // Streak: consecutive local days with at least one lap. Only a NEWER day
-    // moves it (ISO dates compare as strings): a tab left on yesterday's plan
-    // past midnight, today already played elsewhere, reset it to 1.
-    if (!d.streak.last || day > d.streak.last) {
+    // Streak: consecutive local days with a lap. Only a NEWER day moves it (a tab left on yesterday
+    // past midnight reset it to 1), or a last 2+ days past the clock: a clock once ahead froze it (#5887).
+    const t = new Date(), soon = (t.setDate(t.getDate() + 1), dayKey(t));
+    if (!d.streak.last || day > d.streak.last || d.streak.last > soon) {
       d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
       d.streak.last = day;
     }
-    // The per-day history is write-only (every reader asks for today; the
-    // streak lives in d.streak), so it keeps a window rather than growing
-    // ~680 chars a day for ever.
+    // Write-only history (readers ask for today): a window, not ~680 chars a day for ever.
     const floor = new Date(day + "T00:00:00Z");
     if (Number.isFinite(floor.getTime())) {
       floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
       const cut = floor.toISOString().slice(0, 10);
-      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
+      for (const k of Object.keys(d.days)) if (k < cut || k > soon) delete d.days[k];
     }
     return e;
   }
@@ -91,10 +85,8 @@ const DailyChallenge = (function () {
     }
     function today() { const e = data().days[dayKey()]; return isObj(e) ? e : null; }
 
-    // Stage the plan as a TIME TRIAL without starting it. The circuit picker
-    // uses this so DAILY follows the same select → NEXT → RACE SETTINGS → RACE!
-    // contract as every circuit button; open() remains the explicit direct-start
-    // API for the title door and scripted hooks.
+    // Stage the plan as a TIME TRIAL without starting it: the picker's DAILY follows the select →
+    // NEXT → RACE SETTINGS → RACE! contract; open() is the direct start (title door, hooks).
     function select(day, mode = "standard") {
       const p = plan(day);
       const idx = Tracks.LIST.findIndex((t) => t.id === p.trackId);

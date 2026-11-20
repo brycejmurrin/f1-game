@@ -859,6 +859,12 @@
       ]
     },
     {
+      "path": "tools/ci/closing-refs.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1053,7 +1059,8 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
-        "--json"
+        "--json",
+        "--quiet"
       ]
     },
     {
