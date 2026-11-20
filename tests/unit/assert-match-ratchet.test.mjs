@@ -15,6 +15,10 @@
  * the deploy branch); the absolute ceiling runs with APEX_RATCHET_ABSOLUTE=1,
  * which ci.yml sets on push and schedule. tools/check/ratchets.mjs ratchetMode.
  *
+ * ABSORB (D-037). The entry carries `absorb: 5`: the commit hook writes a branch's own growth of up to 5 pins
+ * since its merge base as a ratchets.d fragment, so this test reads the raised ceiling; past 5 it needs
+ * Bryce's `ratchet-raise` (tests/unit/ratchet-absorb.test.mjs).
+ *
  * Run: node --test tests/unit/assert-match-ratchet.test.mjs
  */
 import { test } from "node:test";

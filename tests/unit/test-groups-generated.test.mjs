@@ -168,8 +168,11 @@ test("interrupting a Node group forwards the signal and prevents later phases", 
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM"); });
   const exited = new Promise(resolve => child.on("close", (code, signal) => resolve({ code, signal })));
   const deadline = Date.now() + 10000;
-  while (!fs.existsSync(f.events) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.ok(fs.existsSync(f.events), "the isolated phase started before interruption");
+  // Wait for the start LINE, not the file: appendFileSync creates the file before it writes, so a
+  // SIGTERM sent on existence alone can land in between and read [""] (CI run 44765026806, load 8.6).
+  const started = () => fs.existsSync(f.events) && fs.readFileSync(f.events, "utf8").includes("waiting-bench:start\n");
+  while (!started() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(started(), "the isolated phase started before interruption");
   child.kill("SIGTERM");
   assert.deepEqual(await exited, { code: null, signal: "SIGTERM" });
   assert.deepEqual(f.history(), ["waiting-bench:start"]);

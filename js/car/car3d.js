@@ -2840,7 +2840,7 @@ const Car3D = (function () {
     finishPass(out, liv, fin);
     if (ckpt && opts.cockpitHalo) for (let i = cockpitHaloFrom; i < cockpitHaloTo; i++) out.mat[i] = opts.cockpitHalo.surface;
     // Measure each closed section from the vertices it emitted.
-    if (sil) out._releaseCpuMirror = true;   // TLX: car shadow casters only (plan M-2)
+    if (sil) out._releaseCpuMirror = true;   // TLX `carSh`: every silhouette build (casters: car-draw.js _casterOnly)
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
           z0 = Infinity, z1 = -Infinity;

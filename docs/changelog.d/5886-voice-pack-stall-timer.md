@@ -1,0 +1,1 @@
+Fixed: on a slow mobile connection the race announcer stayed silent and its 4 MB voice pack downloaded again every 30 seconds, because the whole download had to finish in 15 seconds; now it only gives up after 15 seconds with no data arriving (#5886).

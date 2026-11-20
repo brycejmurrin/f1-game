@@ -2272,6 +2272,8 @@ const TLX = (function () {
       // regrew it 17 -> 334 twice a frame (young-gen garbage, perf hunt A5).
       const drawList = _recPool;    // {geo, matrix, material} in submission order
       drawList.n = 0;
+      // UNGUARDED ON PURPOSE: callers index the record this wrote. A position-only shadow caster (geo.__tlxCasterOnly)
+      // is refused by every ENTRY that takes a mesh instead; a new lit entry point must refuse it too (casterRefused).
       function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
         let r = _recPool[drawList.n];
         if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null, split: null };
@@ -3148,7 +3150,7 @@ const TLX = (function () {
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
-        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || geo.__tlxCasterOnly || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
         const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
         // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
@@ -4108,7 +4110,7 @@ const TLX = (function () {
         });
       }
       function _captureRec(mesh, model, opts) {
-        if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
+        if (!mesh || !mesh.geo || (opts && opts.coalesce) || mesh.geo.__tlxCasterOnly) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1,
@@ -4782,7 +4784,10 @@ const TLX = (function () {
         const pos = data.pos.length ? data.pos : [0, 0, 0];
         const verts = pos.length / 3;
         g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
-        if (_pk) {
+        // A CAR SHADOW CASTER (car-draw.js data._casterOnly) is position + index: the depth pass reads nothing else
+        // (tlx-shadow.js depthMat), so normal / colour / mat / trk are never allocated. casterRefused keeps it unlit.
+        if (data._casterOnly) g.__tlxCasterOnly = true;
+        else if (_pk) {
           // fmt24: WebGPU has no 1- or 3-wide 8/16-bit vertex format, and
           // three names 'float16x3' / 'uint32' for them — pipeline refused
           // (tlx-chunked.js packAttr, PERF-FINDINGS 2n). Same rule, same arg.
@@ -4812,6 +4817,12 @@ const TLX = (function () {
         const ids = data.mat;
         if (ids) for (let i = 0; i < ids.length; i++) { const v = Math.round(ids[i]); if (v >= 60 && v <= 85) { g.userData.tlxFx = true; break; } }
         return _regGeo(g, "mesh");
+      }
+      let _casterWarned = false;
+      function casterRefused(geo) {   // a lit material on a position-only geometry binds attributes it does not have
+        if (!geo || !geo.__tlxCasterOnly) return false;
+        if (!_casterWarned) { _casterWarned = true; try { Log.warn("gfx", "TLX: a position-only shadow caster was offered to a lit pass; not drawn"); } catch (_) { /* no Log in the node harness */ } }
+        return true;
       }
       const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
 
@@ -6136,7 +6147,7 @@ const TLX = (function () {
         // target it is about to render into).
         drawMirrorGlass(mesh, model, opts) {
           if (_mirActive || _mirDead || !mirRT || _mirRenders <= 0 || !_mirFlip || !fx || !fx.mirrorGlassMaterial
-              || !mesh || !mesh.geo || !model) return false;
+              || !mesh || !mesh.geo || !model || mesh.geo.__tlxCasterOnly) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
           _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
@@ -6534,14 +6545,14 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
-          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
+          if (mesh && mesh.geo && !casterRefused(mesh.geo)) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
             pushRec(null, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, mesh, null);
-          } else if (mesh.geo) {
+          } else if (mesh.geo && !casterRefused(mesh.geo)) {
             pushRec(mesh.geo, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, null, null);
           }
         },
@@ -6663,7 +6674,7 @@ const TLX = (function () {
           _fxFrame.particles += verts / 6;
         },
         drawDecal(mesh, modelMat, tex, opts) {
-          if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
+          if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat || mesh.geo.__tlxCasterOnly) return;
           const mat = fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0);
           _fxFrame.decals++;
           if (opts && opts.batch && _decalAppend(mesh.geo, modelMat, mat)) return;

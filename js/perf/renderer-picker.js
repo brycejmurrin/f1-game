@@ -249,7 +249,7 @@ const RENDERER_LS_KEYS = [
   // assets.js remembers the last pack's model file+md5 so the next visit can
   // start those fetches before the manifest returns. RESET drops the hint.
   "apex26.packIndex",
-  "apex26.envProbeOff", "apex26.perChunkOff",
+  "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
   "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
   // tlx.js's per-device WebKit kill switch: AUTO on WebKit stays on three WebGL2 until RESET.
   "apex26.tlxWebKitGL",

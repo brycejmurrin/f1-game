@@ -413,7 +413,6 @@ const FULL = [
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
-  "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
@@ -1164,6 +1163,7 @@ const LAZY_RACE_SESSION = [
   "js/race/stopped-cars.js", // StoppedCars: cars stopped on the road, RaceControl's second hazard source (W34)
   "js/race/retired-card.js", // RetiredCard: a retired solo player's RETIRED card + SKIP TO RESULTS (W34); RaceControl typeof-guards it
   "js/race/driving-coach.js", // DrivingCoachBody: the coach (#4748); the FULL façade js/race/driving-coach-boot.js creates it once it lands
+  "js/ui/hud-inputs.js",     // HudInputs: opt-in INPUTS trace + pause REVIEW INPUTS (mounts itself); GameHud typeof-guards it (#5682)
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat
