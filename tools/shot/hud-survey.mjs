@@ -24,7 +24,9 @@
 //   --no-shots (measure only; skips the lit-frame wait)  --render-every-frame (keep the 3D loop drawing
 //   between captures; default paints ONE frame per cell, then __apex.headless)  --backend three|webgl2
 //   --gl swiftshader|llvmpipe (default $APEX_GL or swiftshader)  --min-font 10
-//   --wait <s boot budget, 180>  --settings <apex26-settings-v1 export, seeded per boot>  --json (summary JSON as the last stdout block)
+//   --wait <s boot budget, 180>  --settings <apex26-settings-v1 export, seeded per boot>
+//   --json (summary JSON as the last stdout block)  --as-seeded (keep the seeded export's HUD style, sizes,
+//   toggles and MOVE & SIZE: no per-cell reset)
 //   --list (cells, no browser)  --plan  --self-test  --merge <dir…>
 //   one-cell knobs: --device --cam --profile --layout --map --gaps --mirror
 //   --preset (name or inline JSON offsets) --preset-set cam|both
@@ -93,7 +95,7 @@ const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile
   "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--preset-prof": "presetProf", "--theme": "theme",
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
   "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
-export const KNOWN_FLAGS = ["--matrix", "--track", "--portrait", "--frac", "--only", "--shard", "--out", "--no-shots", "--render-every-frame", "--backend", "--gl",
+export const KNOWN_FLAGS = ["--as-seeded", "--matrix", "--track", "--portrait", "--frac", "--only", "--shard", "--out", "--no-shots", "--render-every-frame", "--backend", "--gl",
   "--min-font", "--wait", "--settings", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", ...Object.keys(CELL_FLAGS)];
 
 const insideOutput = (p) => ["artifacts", "scratch"].some((d) => {
@@ -136,7 +138,7 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
     if (!settings || settings.format !== "apex26-settings-v1") throw new CliArgError("--settings needs an apex26-settings-v1 export");
   }
   const common = { out, track, frac, backend, gl, minFont, settings, waitMs: waitS * 1000, shots: !F.has("--no-shots"), renderAll: F.has("--render-every-frame"),
-    json: F.has("--json"), list: F.has("--list"), plan: F.has("--plan") };
+    json: F.has("--json"), asSeeded: F.has("--as-seeded"), list: F.has("--list"), plan: F.has("--plan") };
   if (F.has("--merge")) {
     // Every non-flag token after --merge is a shard directory.
     const i = argv.indexOf("--merge");
@@ -213,27 +215,30 @@ export function applyCell(c) {
     s.dispatchEvent(new Event("change", { bubbles: true }));
   };
   a.freeze(false);
+  // --as-seeded: the --settings export (or the owner's) IS the HUD under test, so its style, appearance, sizes,
+  // element toggles and MOVE & SIZE layout stay as imported; only camera, tyres, time of day and the jump apply.
+  const own = (k, f) => { if (!c.asSeeded) step(k, f); };
   // The boot profile back first: a previous cell's live switch must not leak.
-  step("profile", () => row("pm-hudprofile", c.profile));
-  step("theme", () => AppearanceOpts.setTheme(c.theme));
-  step("cvd", () => AppearanceOpts.setCvdMode(c.cvd));
-  step("contrast", () => AppearanceOpts.setContrast(c.contrast));
-  step("textSize", () => AppearanceOpts.setTextSize(c.textSize));
-  step("hudScale", () => a.hudScale(c.hudScale == null ? null : c.hudScale));
-  step("uiScale", () => a.uiScale(c.uiScale == null ? null : c.uiScale));
-  step("btnScale", () => a.btnScale(c.btnScale == null ? null : c.btnScale));
+  own("profile", () => row("pm-hudprofile", c.profile));
+  own("theme", () => AppearanceOpts.setTheme(c.theme));
+  own("cvd", () => AppearanceOpts.setCvdMode(c.cvd));
+  own("contrast", () => AppearanceOpts.setContrast(c.contrast));
+  own("textSize", () => AppearanceOpts.setTextSize(c.textSize));
+  own("hudScale", () => a.hudScale(c.hudScale == null ? null : c.hudScale));
+  own("uiScale", () => a.uiScale(c.uiScale == null ? null : c.uiScale));
+  own("btnScale", () => a.btnScale(c.btnScale == null ? null : c.btnScale));
   step("tyres", () => a.tyres({ level: c.tyres === "off" ? "off" : "real" }));
-  step("map", () => row("pm-hudmap", c.map));
-  step("gaps", () => row("pm-hudgaps", c.gaps));
-  step("mirror", () => { try { row("pm-hudmirror", c.mirror); } catch (e) { a.mirror(c.mirror); } });
-  step("elements", () => {
+  own("map", () => row("pm-hudmap", c.map));
+  own("gaps", () => row("pm-hudgaps", c.gaps));
+  own("mirror", () => { try { row("pm-hudmirror", c.mirror); } catch (e) { a.mirror(c.mirror); } });
+  own("elements", () => {
     for (const [id] of HudElements.ELEMENTS) HudElements.set(id, true);
     for (const id of c.off || []) HudElements.set(id, false);
   });
   step("tod", () => a.setTimeOfDay(c.tod));
   step("go", () => a.go());
   step("camera", () => a.camera(c.cam));
-  step("preset", () => {
+  own("preset", () => {
     // Every style: a previous cell's presetProf write must not leak.
     for (const pn of HudLayout.PROFILES || [undefined]) { HudLayout.resetSet("cockpit", pn); HudLayout.resetSet("other", pn); }
     const sets = c.presetSet === "both" ? ["cockpit", "other"] : [HudLayout.camSet(c.cam)];
@@ -463,7 +468,7 @@ async function runGroup(browser, group, plan, log) {
       const t1 = Date.now();
       const rec = { id: cell.id, cell, shot: null, shotRel: null };
       try {
-        const applied = await page.evaluate(applyCell, { ...cell, frac: plan.frac });
+        const applied = await page.evaluate(applyCell, { ...cell, frac: plan.frac, asSeeded: !!plan.asSeeded });
         await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
         await sleep(300);
         let lit = null, repainted = false;

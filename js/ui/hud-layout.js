@@ -95,25 +95,14 @@ const HudLayout = (function () {
     bb: { x: -18, y: 0, s: 100 },
   };
   // HELMET — the VISOR HUD (js/camera/cam-groups.js HELMET_LAYOUT): the same
-  // wheel, but nothing is left to its LCD. DESKTOP: the cockpit strip plus
-  // GEAR and SPEED stacked left of the wheel above ENERGY / TYRES (1280x720:
-  // gear x-30 y-20 → fit() pins it at the left edge, 4..266 y438-503; speed
-  // 123..210 y366-413; ENERGY from y577 — measured by the hud-survey helmet
-  // cells, docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH,
-  // read through shippedEl while body lacks .desktop): the steer and pedal
-  // columns sit beside the wheel, so ENERGY stacks in the left bottom strip
-  // above TYRES (css/hud.css anchor-positioning on helmet touch — the old
-  // y-37 centre lift read as an ERS pill floating mid-visor, 2026-10-07).
-  // TYRES stays in the left corner between STRATEGY and the steer buttons:
-  // y-2 is 232..273 at 844×390 dock zoom 0.865. GEAR takes the LCD's place
-  // and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay with
-  // the touch buttons that carry them (css/track-detail.css, the helmet
-  // touch hide).
-  const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
-  // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
-  // where the wheel's screen is (the chase row's own centre, one step down),
-  // SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor,
-  // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
+  // wheel, but nothing is left to its LCD. DESKTOP: the cockpit strip, with GEAR
+  // and SPEED on ENERGY / TYRES's offset, so the cluster column moves as ONE stack
+  // left of the wheel (D-038; docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH, via shippedEl without .desktop): ENERGY stacks above TYRES
+  // in the left bottom strip (css/hud.css anchor positioning; a y-37 lift floated mid-visor), GEAR takes the
+  // LCD's place with SPEED right of it; OT / AERO / BB stay with their touch buttons (css/track-detail.css).
+  const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -4, s: 100 }, speed: { x: -30, y: -4, s: 100 } });
+  // Touch GEAR sits on the wheel's screen (the owner's ask, 2026-10-05; its opaque pill covers the LCD digits),
+  // SPEED right of it and one step up, clear of ENERGY and AERO.
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
     gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: -5, s: 100 } };
   const SHIPPED = Object.freeze({
@@ -385,7 +374,7 @@ const HudLayout = (function () {
   }
 
   /* Keep automatic shipped offsets on screen. Explicit user entries bypass
-     every placement correction, including viewport and safe-area bounds. */
+     every placement correction except the hardware safe-area insets (fit(), D-037). */
   const EDGE = 4;
   // Intersect the visible viewport with hardware insets. Browser zoom and
   // keyboards can expose only part of the layout viewport; never save this fit.
@@ -404,16 +393,9 @@ const HudLayout = (function () {
     if (hi > max) return max - hi;
     return 0;
   }
-  // Pieces that share one NON-ZERO offset move as ONE BLOCK: clamping each on
-  // its own pulled AERO (the right-hand chip) back onto OVERTAKE beside it — the
-  // shipped cockpit layout moves both +30vw, and at 1280 wide only AERO overran
-  // the edge, so it landed on top of OT (measured: visor x 1176 vs 1177). The
-  // block is clamped by the UNION of its members' rects and every member gets
-  // the same correction, so neighbours keep their spacing. A piece whose only
-  // change is SIZE (offset 0,0) is clamped ON ITS OWN: those sit in different
-  // corners, and one union of them spans the screen, so the "bigger than the
-  // screen" branch pinned it (BIG + TOWER SIZE 200 at 844 wide left the tower
-  // ~170 px off the left edge).
+  // Pieces sharing one NON-ZERO offset clamp as ONE BLOCK (by the union of their rects), so neighbours keep
+  // their spacing: alone, AERO was pulled onto OT at 1280. A size-only piece (0,0) clamps ON ITS OWN: a union
+  // of those spans the screen and the "bigger than the screen" branch pinned the tower off the edge.
   function fit() {
     if (!doc || typeof window === "undefined" || !window.innerWidth) return;
     // The fold is never collapsed when SETTINGS closes (or a race resumes), so
@@ -429,35 +411,44 @@ const HudLayout = (function () {
     const bounds = screenBounds(W, H);
     const a = all()[shown()];
     const groups = new Map();   // "x,y" offset (or "solo:id" at 0,0) -> [{ el, e, r }]
+    const blocks = new Map();   // the player's own chips (D-037): clamped to the insets only, never pushed
     for (const [id, , sel] of ELEMENTS) {
       const e = a[id];
       if (!e || isDefEl(e)) continue;
       const el = doc.querySelector(sel);
       if (!el || !el.getBoundingClientRect || !el.hasAttribute("data-hl")) continue;
-      if (manuallyPlaced(el)) continue;
+      const user = manuallyPlaced(el);
       el.style.setProperty("--hl-x", String(e.x));
       el.style.setProperty("--hl-y", String(e.y));
       // fitHud may have crossed TRACK LIMITS to the other column since apply().
-      el.style.setProperty("--hl-o", originOf(id));
+      if (!user) el.style.setProperty("--hl-o", originOf(id));
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;                // hidden right now: nothing to keep on screen
-      const k = e.x || e.y ? e.x + "," + e.y : "solo:" + id;
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push({ el, e, r });
+      const k = e.x || e.y ? e.x + "," + e.y : "solo:" + id, into = user ? blocks : groups;
+      if (!into.has(k)) into.set(k, []);
+      into.get(k).push({ el, e, r });
     }
-    for (const g of groups.values()) {
+    // Placed chips: the layout viewport less the safe-area insets, no air, no visual viewport (D-037).
+    const cs = doc.documentElement && typeof getComputedStyle === "function" ? getComputedStyle(doc.documentElement) : null;
+    const sa = (k) => (cs && cs.getPropertyValue ? Math.max(0, parseFloat(cs.getPropertyValue(k)) || 0) : 0);
+    for (const [map, b] of [[groups, bounds], [blocks, { left: sa("--sal"), top: sa("--sat"), right: W - sa("--sar"), bottom: H - sa("--sab") }]]) for (const g of map.values()) {
       let l = Infinity, t = Infinity, rr = -Infinity, bb = -Infinity;
       for (const m of g) { l = Math.min(l, m.r.left); t = Math.min(t, m.r.top); rr = Math.max(rr, m.r.right); bb = Math.max(bb, m.r.bottom); }
-      const dx = clampAxis(l, rr, bounds.left, bounds.right), dy = clampAxis(t, bb, bounds.top, bounds.bottom);
+      const dx = clampAxis(l, rr, b.left, b.right);
+      let dy = clampAxis(t, bb, b.top, b.bottom);
+      // A block the clamp moved steps down past a control it now covers (D-038): S1-S3 out of the notch onto PAUSE.
+      if (map === blocks && (dx || dy)) for (const c of doc.querySelectorAll ? doc.querySelectorAll("#pausebtn, #btn-cam, .touchbtn") : []) {
+        const q = c.hidden ? null : c.getBoundingClientRect();
+        if (q && q.width) for (const m of g) if (m.r.left + dx < q.right && q.left < m.r.right + dx && m.r.top + dy < q.bottom && q.top < m.r.bottom + dy) dy = q.bottom + EDGE - m.r.top;
+      }
       g.dx = dx; g.dy = dy;
       for (const m of g) {
         if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));
         if (dy) m.el.style.setProperty("--hl-y", String(+(m.e.y + dy / H * 100).toFixed(2)));
       }
     }
-    // A CLAMPED BLOCK MUST NOT LAND ON A NEIGHBOUR. Desktop cockpit at HUD 150%: the strip's TYRES (-30vw) runs
-    // off the left edge and the clamp brings it back onto BRAKE BIAS (-18vw, its own block; hud-mock 1440x900).
-    // Push the untouched neighbour the clamp's way, clear of it; at 100% nothing is hit, so nothing moves.
+    // A CLAMPED BLOCK MUST NOT LAND ON A NEIGHBOUR (desktop cockpit HUD 150%: TYRES clamped onto BRAKE BIAS):
+    // push the untouched neighbour the clamp's way.
     const at = (m, g) => ({ L: m.r.left + g.dx, R: m.r.right + g.dx, T: m.r.top + g.dy, B: m.r.bottom + g.dy });
     for (const g of groups.values()) {
       if (!g.dx) continue;

@@ -759,6 +759,10 @@ body:not(.desktop) {
 @media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px) {
   :root { --ui-scale: 0.7; }
 }
+/* Big desktop HUD SIZE 125 % (D-037); mirror: js/ui/scale.js BIG_HUD_MQ. */
+@media (pointer: fine) and (min-width: 1600px) and (min-height: 960px) {
+  :root { --hud-scale: 1.25; }
+}
 
 /* Why: docs/notes/TOKENS-RATIONALE.md §R8. */
 :root {

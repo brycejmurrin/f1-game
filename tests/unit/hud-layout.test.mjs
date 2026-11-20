@@ -547,7 +547,7 @@ test("module has no Tracks / curvature reads", () => {
   assert.doesNotMatch(SRC, /\bTracks\b|\bcurvature\b/);
 });
 
-test("fit retains a moved piece beyond the screen at its stored offset", () => {
+test("fit brings a moved piece back on screen without touching its stored offset (D-037)", () => {
   const src = SRC;
   const props = {}, attrs = { "data-hl": "" };
   const el = {
@@ -567,11 +567,11 @@ test("fit retains a moved piece beyond the screen at its stored offset", () => {
   vm.runInContext(src + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = el.getBoundingClientRect();
-  assert.equal(r.right, 1060, "the player can leave the right edge outside the screen");
+  assert.equal(r.right, 1000, "a placed piece is kept inside the viewport (D-037)");
   assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
 });
 
-test("fit preserves manual geometry across safe-area and visual-viewport changes", () => {
+test("fit keeps manual geometry out of the safe-area insets, steady across visual-viewport changes", () => {
   const props = {}, root = {}, attrs = { 'data-hl': '' };
   const viewport = { innerWidth: 1000, innerHeight: 600,
     visualViewport: { width: 500, height: 300, offsetLeft: 200, offsetTop: 100 } };
@@ -590,10 +590,11 @@ test("fit preserves manual geometry across safe-area and visual-viewport changes
   vm.createContext(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
   ctx.HudLayout.apply();
   const initial = map.getBoundingClientRect();
+  assert.equal(initial.right, 980, "the right inset (20px) clamps a placed widget (D-037)");
   for (const vv of [viewport.visualViewport, {width:250,height:200,offsetLeft:50,offsetTop:40}, null]) {
     viewport.visualViewport = vv;
     ctx.HudLayout.fit();
-    assert.deepEqual(map.getBoundingClientRect(), initial, "safe bounds do not clamp an edited widget");
+    assert.deepEqual(map.getBoundingClientRect(), initial, "pinch zoom and the keyboard never move an edited widget");
     const before = { ...props };ctx.HudLayout.fit();assert.deepEqual(props,before,'repeated fits do not drift');
     assert.equal(JSON.stringify(saved),original);
   }
@@ -626,13 +627,13 @@ test("fit preserves independently edited pieces sharing an offset", () => {
   assert.ok(ot.hasAttribute("data-hl-user") && aero.hasAttribute("data-hl-user"), "stored STANDARD cockpit edits own both widgets");
   ctx.HudLayout.fit();
   const o = ot.getBoundingClientRect(), r = aero.getBoundingClientRect();
-  assert.equal(r.right, 1060, "AERO keeps the requested offscreen edge");
+  assert.equal(r.right, 1000, "the shared-offset block comes back on screen together (D-037)");
   assert.ok(o.right <= r.left, `OT (${o.left}-${o.right}) still left of AERO (${r.left}-${r.right})`);
-  assert.equal(ot.props["--hl-x"], "30");
-  assert.equal(aero.props["--hl-x"], "30");
+  assert.equal(r.left - o.right, 10, "the player's spacing is kept");
+  assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the block");
 });
 
-test("fit never brings an edited block on screen or pushes its edited neighbour", () => {
+test("fit brings an edited block on screen but never pushes its edited neighbour", () => {
   // Desktop cockpit, HUD 150 % at 1440x900 (hud-mock 2026-10-14): ENERGY + TYRES ship at -30,-4 and TYRES runs
   // off the left edge; the clamp brought it back onto BRAKE BIAS (-18,0, its own block). At 100 % the clamp
   // leaves TYRES short of BRAKE BIAS, so BRAKE BIAS must keep its own offset.
@@ -662,14 +663,14 @@ test("fit never brings an edited block on screen or pushes its edited neighbour"
     return { tyre: tyre.getBoundingClientRect(), bb: bb.getBoundingClientRect(), bbX: bb.props["--hl-x"] };
   };
   const at150 = run(195);
-  assert.equal(at150.tyre.left, -197, "TYRES keeps the chosen offscreen position");
+  assert.ok(Math.abs(at150.tyre.left) < 0.05, "TYRES comes back to the left edge (D-037), no air: " + at150.tyre.left);
   assert.equal(at150.bbX, "-18", "BRAKE BIAS receives no neighbour correction");
   const at100 = run(120);
   assert.ok(at100.tyre.right < 129, "at 100 % the clamped TYRES stops short of BRAKE BIAS: " + at100.tyre.right);
   assert.equal(at100.bbX, "-18", "BRAKE BIAS keeps its own offset when nothing lands on it");
 });
 
-test("fit leaves size-only edited pieces at their requested positions", () => {
+test("fit clamps size-only edited pieces one by one, not as one 0,0 block", () => {
   // BIG + TOWER SIZE 200 at 844 wide: the tower (centred, grown to 640) and the
   // map (top-left, grown) both carry offset 0,0. Grouped as one "0,0" block their
   // union outgrew the screen and was pinned to the map's left edge, leaving the
@@ -701,10 +702,10 @@ test("fit leaves size-only edited pieces at their requested positions", () => {
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const t = tower.getBoundingClientRect(), m = map.getBoundingClientRect();
-  assert.equal(t.left, 432);
-  assert.equal(t.right, 1072, "the enlarged tower may extend beyond the screen");
+  assert.ok(Math.abs(t.right - W) < 0.05, "the enlarged tower is kept inside the viewport (D-037): " + t.right);
   assert.equal(m.left, 10, "the map, already on screen, is not dragged with the tower");
   assert.equal(map.props["--hl-x"], "0");
+  assert.equal(ctx.HudLayout.get("tower", "other").x, 0, "stored offset unchanged");
   assert.equal(ctx.HudLayout.get("tower", "other").s, 200, "stored size unchanged");
 });
 
@@ -735,8 +736,8 @@ test("clearControls preserves manual placement and discards stale automatic clea
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
-  assert.equal(r.right, 1200, "an edited widget is not brought back on screen");
-  assert.equal(props["--hl-x"], "30", "control clearance cannot change the saved geometry");
+  assert.equal(r.right, 1000, "an edited widget is kept inside the viewport (D-037)");
+  assert.equal(props["--hud-clear-x"], undefined, "control clearance never nudges an edited widget");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
   // A prior terminal placement must not bias the next edge clamp. Simulate a
   // correction from a denser viewport before re-fitting the same saved move.
@@ -1075,7 +1076,7 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
   const D = load3({ classes: ["desktop"], live: false });
   for (const id of ["energy", "tyre", "ot", "aero", "bb"]) assert.deepEqual(plain(D.H.get(id, "helmet")), plain(D.H.get(id, "cockpit")), id + ": the cockpit strip");
   assert.ok(D.H.get("gearbox", "helmet").x <= -25 && D.H.get("gearbox", "helmet").y < 0, "GEAR left of the wheel and up");
-  assert.ok(D.H.get("speed", "helmet").x <= -25 && D.H.get("speed", "helmet").y < D.H.get("gearbox", "helmet").y, "SPEED above GEAR");
+  for (const id of ["gearbox", "speed"]) assert.deepEqual(plain(D.H.get(id, "helmet")), plain(D.H.get("energy", "helmet")), id + ": one stack with ERS (D-038)");
   assert.deepEqual(plain(D.H.get("gearbox", "cockpit")), { x: 0, y: 0, s: 100 }, "the cockpit still leaves gear to the LCD");
   D.H.setCam("helmet");
   assert.equal(D.els["#hud-gearbox"].props["--hl-x"], String(D.H.SHIPPED.standard.helmet.gearbox.x));
@@ -1171,10 +1172,10 @@ test("every edited widget retains geometry through clearance and high-scale pack
   for (let pass = 0; pass < 3; pass++) { ctx.HudLayout.fit(); ctx.HudLayout.clearReadouts(); }
   for (const [id, , sel] of ctx.HudLayout.ELEMENTS) {
     const el = elements[sel], wanted = saved.standard.other[id];
-    assert.equal(el.props["--hl-x"], String(wanted.x), id);
-    assert.equal(el.props["--hl-y"], String(wanted.y), id);
     assert.equal(el.props["--hl-s"], String(wanted.s / 100), id);
-    assert.deepEqual(el.getBoundingClientRect(), before[sel], id + " stays where the player put it");
+    assert.deepEqual(el.getBoundingClientRect(), before[sel], id + " stays where fit() first put it: no drift");
+    const r = before[sel];
+    if (r.right - r.left <= W) assert.ok(r.left >= 0 && r.right <= W, id + " inside the viewport (D-037)");
     for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) assert.equal(el.hasAttribute(a), false, id + " " + a);
     for (const p of ["translate", "margin-left", "margin-top", "--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
   }
@@ -1690,4 +1691,36 @@ test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMCo
   cls.delete("desktop");                                  // iPad undocked: pointer goes coarse
   for (const cb of kindCbs) cb(true);
   assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "a pointer-kind flip re-applies the touch helmet");
+});
+
+test("a placed chip the clamp moves steps down past the control it lands on; one placed on a control stays (D-038)", () => {
+  // Bryce's S1-S3 at 852x393: placed in the 59 px right notch, the clamp brought it onto PAUSE (739..783, 8..52).
+  const W = 852, H = 393;
+  const run = (left) => {
+    const props = {}, attrs = { "data-hl": "" };
+    const sec = { id: "hud-sectors", style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue: (k) => props[k] || "" },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute: (k) => k in attrs,
+      getBoundingClientRect() {
+        const x = left + parseFloat(props["--hl-x"] || 0) / 100 * W, y = 36 + parseFloat(props["--hl-y"] || 0) / 100 * H;
+        return { left: x, top: y, right: x + 50, bottom: y + 78, width: 50, height: 78 };
+      } };
+    const pause = { hidden: false, getBoundingClientRect: () => ({ left: 739, top: 8, right: 783, bottom: 52, width: 44, height: 44 }) };
+    const root = {};
+    const ctx = { console, window: { innerWidth: W, innerHeight: H },
+      getComputedStyle: (el) => el === root ? { getPropertyValue: (k) => ({ "--sal": "59px", "--sar": "59px", "--sab": "21px" }[k] || "") } : { display: "block", visibility: "visible" },
+      document: { readyState: "complete", documentElement: root, getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => false } },
+        querySelector: (sel) => (sel === "#hud-sectors" ? sec : null),
+        querySelectorAll: (sel) => (/#pausebtn/.test(sel) ? [pause] : []) },
+      GameStore: { store: { get: (k, d) => (k === "hudLayout" ? { v: 4, standard: { other: { sectors: { x: 0.5, y: 0, s: 100 } } } } : d), set() { throw new Error("fit must not persist"); } } } };
+    vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+    ctx.HudLayout.apply();
+    assert.ok(sec.hasAttribute("data-hl-user"), "premise: a stored entry is the player's own");
+    return sec.getBoundingClientRect();
+  };
+  const moved = run(785);   // +0.5vw: 789..839 under the notch
+  assert.ok(Math.abs(moved.right - 793) < 0.05, "out of the notch: " + moved.right);
+  assert.ok(moved.top >= 52, "stepped below PAUSE: top " + moved.top);
+  const placed = run(696);   // +0.5vw: 700..750, already over PAUSE where the player put it
+  assert.ok(Math.abs(placed.left - 700.26) < 0.05, "unmoved: " + placed.left);
+  assert.equal(placed.top, 36, "a chip the clamp did not move keeps its spot (Bryce declined the general nudge)");
 });
