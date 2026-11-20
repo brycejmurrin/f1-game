@@ -57,21 +57,19 @@ const DailyChallenge = (function () {
       e.classes[context] = cls;
     }
     if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-    // Streak: consecutive local days with at least one lap. Only a NEWER day
-    // moves it (ISO dates compare as strings): a tab left on yesterday's plan
-    // past midnight, today already played elsewhere, reset it to 1.
-    if (!d.streak.last || day > d.streak.last) {
+    // Streak: consecutive local days with a lap. Only a NEWER day moves it (a tab left on yesterday
+    // past midnight reset it to 1), or a last 2+ days past the clock: a clock once ahead froze it (#5887).
+    const t = new Date(), soon = (t.setDate(t.getDate() + 1), dayKey(t));
+    if (!d.streak.last || day > d.streak.last || d.streak.last > soon) {
       d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
       d.streak.last = day;
     }
-    // The per-day history is write-only (every reader asks for today; the
-    // streak lives in d.streak), so it keeps a window rather than growing
-    // ~680 chars a day for ever.
+    // Write-only history (readers ask for today): a window, not ~680 chars a day for ever.
     const floor = new Date(day + "T00:00:00Z");
     if (Number.isFinite(floor.getTime())) {
       floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
       const cut = floor.toISOString().slice(0, 10);
-      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
+      for (const k of Object.keys(d.days)) if (k < cut || k > soon) delete d.days[k];
     }
     return e;
   }

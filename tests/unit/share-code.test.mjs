@@ -146,6 +146,20 @@ test("daily encode/decode", () => {
   assert.equal(decoded.streak, 3);
 });
 
+// #5887 (audit A4): a daily link from another day opens the recipient's own daily (title-flow
+// openDaily), so the toast must not name the sender's circuit.
+test("a daily link from another day says it has ended; today's names its circuit", () => {
+  const { ShareCode, store } = harness();
+  for (const [day, msg] of [["2026-10-26", "That daily challenge has ended — here is today's."],
+    ["2026-10-27", "Daily challenge — MONZA."]]) {
+    const decoded = ShareCode.decode(ShareCode.encode("daily", { day, track: "monza", trackName: "Monza", best: 81.2 }).code);
+    let opened = 0;
+    const result = ShareCode.apply(decoded, { store, today: "2026-10-27", openDaily: () => opened++ });
+    assert.equal(opened, 1, day);
+    assert.equal(ShareCode.messageFor(result), msg, day);
+  }
+});
+
 test("corrupt and unknown-team codes are refused", () => {
   const { ShareCode } = harness();
   assert.equal(ShareCode.decode("APXS1.p.not-valid").ok, false);

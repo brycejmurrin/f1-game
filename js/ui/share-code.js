@@ -231,6 +231,7 @@ const ShareCode = (function () {
       if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
+      if (result.kind === "daily" && result.expired) return "That daily challenge has ended — here is today's.";
       if (result.kind === "daily") return "Daily challenge — " + (result.trackName || result.track).toUpperCase() + ".";
       if (result.kind === "lap") return "Lap challenge — " + trackLabel(result.track) + (result.time ? " · BEAT " + clock(result.time) : "") + ".";
     }
@@ -270,10 +271,8 @@ const ShareCode = (function () {
       if (decoded.livery) {
         const stored = store.get(customKey, []);
         const arr = Array.isArray(stored) ? stored : [];
-        // A generated suffix is not provenance: another player may already own
-        // `default_imported`. A catalog collision replaces an earlier import
-        // only when the paint itself is identical; otherwise it receives the
-        // next free id and every unrelated row survives.
+        // A suffix is not provenance (another player may own `default_imported`): a collision
+        // replaces an earlier import only for identical paint, else it takes the next free id.
         const incoming = CustomLiveries.normalizeImported(decoded.team, [decoded.livery], decoded.livery.id);
         const catalogCollision = incoming.repaired > 0;
         let replaceId = catalogCollision ? null : decoded.livery.id;
@@ -310,15 +309,14 @@ const ShareCode = (function () {
       return { ok: true, kind: "livery", team: decoded.team };
     }
     if (decoded.kind === "lap") {
-      // Stage only: today's Daily when the card was today's, else the circuit in
-      // free play. A past day is never re-selected (record() would reset the streak).
+      // Stage only: today's card opens the Daily, else free play (record() would reset the streak).
       if (decoded.day && decoded.day === h.today) { if (typeof h.openDaily === "function") h.openDaily(decoded); }
       else if (typeof h.openTrack === "function") h.openTrack(decoded);
       return { ok: true, kind: "lap", track: decoded.track, day: decoded.day || null, time: decoded.time || null };
     }
     if (decoded.kind === "daily") {
       if (typeof h.openDaily === "function") h.openDaily(decoded);
-      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track };
+      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track, expired: !!(h.today && decoded.day !== h.today) };
     }
     return CORRUPT;
   }
