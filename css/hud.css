@@ -379,8 +379,9 @@ body[data-hl-set="helmet"] #hud-gearbox {
   clip-path: inset(0 calc((1 - var(--rpm, 0)) * 100%) 0 0);
 }
 :root { --hud-pulse: 0.8s; }
-/* F-14 tokens: unfitted tower height, and the gap strip's left anchor (minimap 10 + 128 wide + 8 gap). */
-:root { --hud-top-h-0: 54px; --hud-map-x: 146px; }
+/* F-14 tokens: unfitted tower height, the gap strip's left anchor (minimap 10 + 128 wide + 8 gap); F-17: the LIMITS
+   chip's drop under the sector box, read by js/ui/hud.js. */
+:root { --hud-top-h-0: 54px; --hud-map-x: 146px; --limits-drop: 15px; }
 @keyframes pulse { 50% { opacity: 0.55; } }
 /* REDLINE. dc40f95a unified every other pulse onto --hud-pulse but DELETED this
    rule instead of converting it, so the tach stopped flashing at redline while
@@ -1262,7 +1263,7 @@ body:not(.desktop) #hud-sectors {
      outside the broadcast profile — left this chip hanging 77px below an empty
      corner. The var is 0 exactly when the box is gone, so the chip rides up
      into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop));
   /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
      that row is the BOOST pedal — so a track-limits warning painted straight
      over a tap target (reported from a phone). --dock-r-w is the right dock's
@@ -1324,7 +1325,7 @@ body[data-density="compact"] #hud-flag {
    body as a descendant of :root — the class still lives only on body. */
 :root:not([data-limits-left]) .hud-prof-broadcast[data-density="compact"]:has(#hud-flag:not([hidden])) #hud-limits:not([data-hl-user]) {
   top: max(
-    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px),
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop)),
     calc(max(72px + var(--sat) / var(--hud-z), var(--hud-gaps-b, 0px) + 8px, var(--mir-bot, 0px) + 8px) + 40px)
   );
 }
@@ -2282,7 +2283,7 @@ body[data-helmet-cam]:not([data-helmet-visor="off"]) #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px));
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop) + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px));
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   display: flex;
   align-items: center;
@@ -2366,7 +2367,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
      (sectors, limits, INPUTS, DAMAGE) reaches 346px and the home at 274px put
      RELATIVE under DAMAGE and the trace (15.6k px², hud-mock 2026-10-14). The
      stack's own bottom edge is the floor — same terms as #hud-damage above. */
-  top: max(calc(38svh / var(--hud-z)), calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px) + var(--rc-damage-h, 0px) + 4px));
+  top: max(calc(38svh / var(--hud-z)), calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop) + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px) + var(--rc-damage-h, 0px) + 4px));
   border-left: 3px solid var(--plate-line);
 }
 #hud-rel > div {
@@ -2621,7 +2622,7 @@ body.hud-prof-broadcast .hud-top[data-hl-v4] { left: calc(10px + var(--sal) / va
 .hud-gaps[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: calc(var(--hud-map-x) + var(--sal) / var(--hud-z)) !important; }
 :is(#hud-sectors, #hud-limits, #hud-damage, #hud-rel)[data-hl-v4] { right: calc(10px + var(--sar) / var(--hud-z)) !important; left: auto !important; }
 #hud-sectors[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z)) !important; }
-#hud-limits[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 4.8em + 15px) !important; }
+#hud-limits[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 4.8em + var(--limits-drop)) !important; }
 #hud-damage[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 7.4em + 18px) !important; }
 #hud-rel[data-hl-v4] { top: calc(38svh / var(--hud-z)) !important; }
 #hud-strat[data-hl-v4] { top: calc(40svh / var(--hud-z)) !important; left: calc(10px + var(--sal) / var(--hud-z)) !important; }

@@ -101,7 +101,7 @@ function fakeEl() {
   };
 }
 
-function load(stored = {}) {
+function load(stored = {}, extra = {}) {
   const written = Object.assign({}, stored);
   const els = {};
   const doc = {
@@ -109,9 +109,11 @@ function load(stored = {}) {
     getElementById: () => null,
     querySelector: (sel) => (els[sel] || (els[sel] = fakeEl())),
     addEventListener() {},
+    ...extra.doc,
   };
   const ctx = {
     console,
+    ...extra.ctx,
     document: doc,
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
@@ -1677,4 +1679,24 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
   assert.equal(D.H.applyPreset("big", "other"), true, "desktop keeps BIG");
   assert.equal(D.H.applyPreset("corners", "other"), true, "desktop keeps CORNERS");
   assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
+});
+
+
+test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMContentLoaded) and on a pointer-kind flip", () => {
+  // hud-layout applies at eval, before platform-session's syncPointerKind writes
+  // body.desktop; shippedEl reads touch() and setCam skips an unchanged set.
+  const cls = new Set(), dcl = [], kindCbs = [];
+  const { H, els } = load({}, {
+    doc: { readyState: "interactive", body: { classList: { contains: (c) => cls.has(c) }, setAttribute() {} },
+      addEventListener: (t, f) => { if (t === "DOMContentLoaded") dcl.push(f); } },
+    ctx: { setTimeout: (f) => f(), Input: { onPointerKindChange: (cb) => kindCbs.push(cb) } },
+  });
+  H.setCam("helmet");
+  assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "touch values painted at eval");
+  cls.add("desktop");                                     // initInput -> syncPointerKind, before DOMContentLoaded
+  for (const f of dcl) f();
+  assert.equal(els["#hud-gearbox"].props["--hl-x"], "-30", "DOMContentLoaded re-applies the desktop helmet");
+  cls.delete("desktop");                                  // iPad undocked: pointer goes coarse
+  for (const cb of kindCbs) cb(true);
+  assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "a pointer-kind flip re-applies the touch helmet");
 });
