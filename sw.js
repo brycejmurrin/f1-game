@@ -666,6 +666,9 @@ async function precacheAssetLists() {
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
+    "js/share/share-card-data.js",
+    "js/share/share-card-layout.js",
+    "js/share/share-card.js",
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",
     "js/ui/quali-sheet.js",
@@ -979,7 +982,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
