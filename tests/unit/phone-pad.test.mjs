@@ -2642,7 +2642,7 @@ test("the phone's surface follows the game's screen from the first frame it is a
     for (let i = 0; i < 6; i++) frame();
     assert.ok(dom.body.classes.has("awaiting"), "open but not admitted: the page waits");
     assert.ok(!dom.body.classes.has("linked"), "and shows no wheel or pad the game would ignore");
-    assert.match(dom.status.textContent, /ALLOW/, "it says what to do on the game's screen");
+    assert.equal(dom.status.textContent, "Connected — waiting for the game… If it asks, tap ALLOW on its screen.", "it says what to do on the game's screen");
     allow(true); await settle();
     frame(); frame();
     assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "admitted: the controls appear");
