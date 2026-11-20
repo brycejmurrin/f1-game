@@ -3,7 +3,6 @@ const Quali = (function () {
 
   const STEP = 4;
 
-  const QUALI_TRIM = 0.92;
   const PACE_CORNER = 1.15;
 
   const CALIB = {
@@ -108,10 +107,6 @@ const Quali = (function () {
       return id != null && Object.prototype.hasOwnProperty.call(CALIB, id) ? CALIB[id] : CALIB_DEFAULT;
     }
 
-    function paceLap(track, free, grip, corner) {
-      const p = paceNow();
-      return QUALI_TRIM * lapTime(track, free, grip, { pace: p, free, corner: PACE_CORNER * corner });
-    }
     function carLap(c, track, grip, raw) {
       const free = freeFor(c.tierV, c.skill);
       const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * cornerFor(c.skill) * wingFor(c) });
@@ -126,7 +121,8 @@ const Quali = (function () {
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
-      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip(), cornerFor(1));
+      return QUALI_CENTRE * calibFor(track) * lapTime(track, freeFor(Teams.TIER_V[0], 1), referenceGrip(),
+        { pace: paceNow(), free: freeFor(Teams.TIER_V[0], 1), corner: PACE_CORNER * cornerFor(1) });
     }
 
     function simLap(c, track, grip, round, seed) {
