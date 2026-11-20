@@ -42,7 +42,7 @@ const DesignerCanvas = (function () {
     let stale = false;
     let issues = [];
     let sel = -1, span = -1, hover = -1, tool = "select";
-    let scale = 0.1, cx = 0, cz = 0, fitted = false;
+    let scale = 0.1, cx = 0, cz = 0, fitted = false, viewMoved = false;
     let preIns = null;
     let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null, rangeAnchor = -1;
     let dragGroup = null, dragOrigins = null, drag0 = null;
@@ -76,20 +76,20 @@ const DesignerCanvas = (function () {
       const spanX = Math.max(60, b.x1 - b.x0), spanZ = Math.max(60, b.z1 - b.z0);
       scale = clamp(Math.min(W / spanX, H / spanZ) * 0.82, MIN_SCALE, MAX_SCALE);
       cx = (b.x0 + b.x1) / 2; cz = (b.z0 + b.z1) / 2;
-      fitted = true;
+      fitted = true; viewMoved = false;
       if (hooks.onView) hooks.onView(view());
     }
     function view() { return { scale, cx, cz, w: W, h: H }; }
     function zoomAt(f, sx, sy) {
       const wx = toWX(sx), wz = toWZ(sy);
-      scale = clamp(scale * f, MIN_SCALE, MAX_SCALE);
+      scale = clamp(scale * f, MIN_SCALE, MAX_SCALE); viewMoved = true;
       cx = wx - (sx - W / 2) / scale; cz = wz - (sy - H / 2) / scale;
       if (hooks.onView) hooks.onView(view());
     }
     function focusAt(s) {
       if (!built || !built.n) return;
       const k = Math.round((((s / built.total) % 1) + 1) % 1 * built.n) % built.n;
-      cx = built.px[k]; cz = built.pz[k];
+      cx = built.px[k]; cz = built.pz[k]; viewMoved = true;
       if (scale < 0.6) scale = 0.6;
       render();
     }
@@ -110,7 +110,7 @@ const DesignerCanvas = (function () {
       if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
       W = w; H = h;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      if (!fitted) fit();
+      if (!fitted || !viewMoved) fit();
       render();
     }
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
@@ -286,7 +286,7 @@ const DesignerCanvas = (function () {
       if (mode === "pinch" && pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-        scale = clamp(pinch0.scale * d / pinch0.dist, MIN_SCALE, MAX_SCALE);
+        scale = clamp(pinch0.scale * d / pinch0.dist, MIN_SCALE, MAX_SCALE); viewMoved = true;
         const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         cx = pinch0.wx - (mx - W / 2) / scale; cz = pinch0.wz - (my - H / 2) / scale;
         render();
@@ -303,7 +303,7 @@ const DesignerCanvas = (function () {
         return;
       }
       if (mode === "pan") {
-        cx -= (p.x - prev.x) / scale; cz -= (p.y - prev.y) / scale;
+        cx -= (p.x - prev.x) / scale; cz -= (p.y - prev.y) / scale; viewMoved = true;
         render();
         return;
       }
