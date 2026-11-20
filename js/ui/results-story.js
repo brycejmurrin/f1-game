@@ -29,7 +29,7 @@ const ResultsStory = (function () {
     } else if (data.player && !o.watched) {
       const p = data.player;
       head.append(el("strong", "", p.out ? "A tough finish" : p.pos === 1 ? "Race winner" : p.pos <= 3 ? "On the podium" : "Across the line"),
-        el("span", "", p.out === "NC" ? "NC · 0 points" : p.out ? String(p.out) : "P" + p.pos + " · " + p.points + " points"));
+        el("span", "", p.out === "NC" ? "NC · 0 points" : p.out ? String(p.out) : "P" + p.pos + " · " + p.points + (p.points === 1 ? " point" : " points")));
       if (G.careerSettlement && G.careerSettlement.obj) head.appendChild(el("span", "", G.careerSettlement.obj.done
         ? "Round objective achieved" : "Round objective missed"));
     } else head.appendChild(el("strong", "", "At the chequered flag"));
