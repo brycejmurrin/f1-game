@@ -9498,6 +9498,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -9520,7 +9521,8 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "wireHold": [
-        "tests/unit/key-binds-hunt.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs"
       ],
       "wireTap": [
         "tests/unit/key-binds-hunt.test.mjs"
@@ -9964,6 +9966,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
