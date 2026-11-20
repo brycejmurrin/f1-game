@@ -238,11 +238,23 @@ const DataRealRaceFetch = (function () {
     });
   }
 
+  // A script assembled within a day of the start is PROVISIONAL: stewards'
+  // penalties, DSQs and late lap rows land after the flag, so it is reused for
+  // PROVISIONAL_MS and then rebuilt (through the raw cache's own TTLs). One
+  // fetched a day or more after the start is final. No dates (an older cache)
+  // reads as final rather than refetching forever (hunt #5694 B3).
+  const SETTLED_MS = 24 * 3600 * 1000, PROVISIONAL_MS = 30 * 60 * 1000;
+  function settled(s, now) {
+    const at = Date.parse(s.fetchedAt), start = Date.parse(s.dateStart);
+    if (!Number.isFinite(at) || !Number.isFinite(start) || at - start >= SETTLED_MS) return true;
+    return now - at >= 0 && now - at < PROVISIONAL_MS;
+  }
   function cached(sessionKey) {
     try {
       const raw = localStorage.getItem(CACHE_KEY + sessionKey);
       const s = raw ? JSON.parse(raw) : null;
-      const ok = s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      const ok = s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) &&
+        settled(s, Date.now()) ? s : null;
       if (ok) lruWrite(lruFront(sessionKey));
       return ok;
     } catch (e) { return null; }
