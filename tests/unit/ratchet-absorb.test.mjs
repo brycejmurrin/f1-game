@@ -96,7 +96,7 @@ test("D-037: the tip's own growth does not count, only the branch's since its me
     assert.ok(out.some((l) => l.startsWith(`RAISE  (tree) ${m}:`) && l.endsWith("inside its 5 absorb (the branch's own growth; no label)")), out.join("\n"));
     const past = [];
     compareToBase("HEAD", { current: bump(6), print: (l) => past.push(l), historyReasoned: false });
-    const line = past.find((l) => l.startsWith(`RAISE  (tree) ${m}:`));
+    const line = past.find((l) => l.includes(`RAISE  (tree) ${m}:`));
     assert.ok(line && !line.includes("inside its"), past.join("\n"));
   }
 });
