@@ -95,7 +95,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
    The orchestrator's infra re-run (§CI) gives a verdict only; the PR still lands on a fresh commit.
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
-   and only when `needs-sync` says so (`conflict | stale-red | retest-refused`; `tip-red` waits for the fix to land);
+   and only when `needs-sync` says so (`conflict | union-conflict | stale-red | retest-refused`; `tip-red` waits for the fix to land);
    never to "refresh" a cancelled run and never for clean-behind. `retest-refused` is the gate's `retest` row
    refusing this head: the sync is that row's cure, no force flag. Red AND conflicting: a `stale-red` syncs first, any other red
    is fixed first, then sync once and ONE push. A PR whose Plan waits on an unmerged PR does not sync on each

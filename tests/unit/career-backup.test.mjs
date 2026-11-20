@@ -781,7 +781,7 @@ test("malformed history / offers / moves / roster rows import without crashing c
   assert.equal(r.ok, true);
   const d0 = JSON.parse(h.disk.get("apex26.career.driver.0"));
   assert.deepEqual(d0.history, [{ year: 2025, pos: 1, wins: 2 }]);
-  assert.deepEqual(d0.offers, [{ team: "haas" }]);
+  assert.deepEqual(d0.offers, [], "a row with no Teams.LIST teamId can never be signed: dropped, or it locks GO RACING");
   assert.deepEqual(d0.moves, [{ id: "m" }]);
   assert.equal(JSON.parse(h.disk.get("apex26.career.myteam.0")).roster, null);
   const rows = h.Career.slots();
