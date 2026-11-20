@@ -261,7 +261,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `live-region.js` | `LiveRegion` | tag | LiveRegion: the ONE writer of #announce-live, the always-present polite region screen readers hear the race through. |
 | `hud-skin.js` | `HudSkin` | tag | HudSkin: the runtime team accent of the HUD (skinAccent + its WCAG ink pick). |
 | `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
-| `hud-relative.js` | `HudRelative` | tag | the opt-in RELATIVE box (iRacing-style) for GameHud. |
+| `hud-relative.js` | `HudRelative` | tag | Opt-in RELATIVE HUD. |
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
 | `hud-inputs.js` | `HudInputs` | tag | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
@@ -610,7 +610,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.6 MB / 24 cars, under a 0.7 MB cap). |
+| `replay-buf.js` | `ReplayBuf` | tag | Solo instant replay keeps 20 s of field poses at 30 Hz in a bounded RAM ring. |
 | `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
 | `cam-tuner-boot.js` | `CamTunerPanel` | tag | CAMERA TUNER boot stub (FULL). |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |

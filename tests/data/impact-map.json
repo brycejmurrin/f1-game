@@ -2491,6 +2491,9 @@
       "onPause": [
         "tests/unit/replay-buf.test.mjs"
       ],
+      "onRaceStart": [
+        "tests/unit/replay-buf.test.mjs"
+      ],
       "onTick": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/replay-buf.test.mjs",
@@ -5385,7 +5388,8 @@
     },
     "js/core/clipboard.js": {
       "read": [
-        "tests/unit/gfx-debug-overlay.test.mjs"
+        "tests/unit/gfx-debug-overlay.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "*": [
         "tests/unit/free-cam.test.mjs",
@@ -7012,9 +7016,6 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "shareCard": [
-        "tests/unit/track-designer-dom.test.mjs"
-      ],
-      "shareCode": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "showPane": [

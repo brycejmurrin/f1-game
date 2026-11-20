@@ -798,6 +798,7 @@
   "results.championshipSprint": "CHAMPIONSHIP — AFTER THE SPRINT, ROUND {round} / {rounds}",
   "results.clearGhost": "✕ CLEAR GHOST",
   "results.clearGhostConfirm": "TAP AGAIN TO CLEAR",
+  "results.clearGhostFailed": "GHOST KEPT — RETRY CLEAR",
   "results.clearRivalGhost": "✕ CLEAR RIVAL GHOST",
   "results.coach": "COACH INSIGHT",
   "results.constructorStandings": "Constructor standings",

@@ -89,6 +89,7 @@ var PitLane = (function () {
     function laneOpen() { return enabled() || !!(z() && tt()); }
     /** How long a Time Trial holds the car in its box: the stop plus time to tap END TIME TRIAL (#5789). */
     const TT_DECIDE_S = 4;
+    function boxHoldSeconds(zz) { return zz.boxS + (ttStop() ? TT_DECIDE_S : 0); }
 
     /** The speed cap inside the lane, in m/s at the CURRENT pace scale. */
     function limit() {
@@ -539,16 +540,16 @@ var PitLane = (function () {
      *  also ends the teach. */
     function release(c, zz) {
       c.pitOutT = SERVED_S;
+      const held = boxHoldSeconds(zz) + (c.pitWorked || 0);
       // One line per stop: the player at info, the AI field at debug (20 cars).
       Log[c.local ? "info" : "debug"]("race", "Pit stop done car=" + c.code + " lap=" + c.lap + " stop=" + (c.pitStops || 0) +
-        " held=" + ((zz ? zz.boxS : 0) + (c.pitWorked || 0)).toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
+        " held=" + held.toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
       if (!c.local) return;
       const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
       const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
       // The stop's REAL length, work included: a summary that reported 2.2 s
       // after twenty seconds in the garage would be the one number the driver
       // knows is wrong.
-      const held = zz.boxS + (c.pitWorked || 0);
       if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
       c.pitPos0 = 0; c.pitWorked = 0;
       // Only the FIRST stop writes: a store write bumps store.rev, which re-resolves every team's
@@ -1014,7 +1015,7 @@ var PitLane = (function () {
         Tracks.sample(G.track, c.s, _smp);
         if (!boxSquare(c, _smp, zz.side)) return;
         c.pitState = "box";
-        c.pitT = zz.boxS + (ttStop() ? TT_DECIDE_S : 0);
+        c.pitT = boxHoldSeconds(zz);
         c.pitArmed = false;
         c.pitStops = (c.pitStops || 0) + 1;
         // The set is fitted mid-hold (see the box branch above) so the wheels

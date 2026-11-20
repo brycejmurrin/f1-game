@@ -450,6 +450,33 @@ test("clearing an exact context key preserves sibling contexts and clears the se
   assert.equal(saved["v2:monza:wet"].time, 42);
 });
 
+test("refused ghost deletion preserves the disk PB and a faster pending lap until retry", () => {
+  for (const id of ["monza", "v2:monza:dry", null]) {
+    const opts = { deferWrites: true };
+    const h = createHarness(opts);
+    const coldBest = () => {
+      const cold = createHarness({ disk: Object.fromEntries(h.disk) });
+      cold.Ghost.setTrack("monza", "dry");
+      return cold.Ghost.bestTime();
+    };
+    h.Ghost.setTrack("monza", "dry");
+    recordLap(h.Ghost, 42);
+    h.Ghost.flush();
+    recordLap(h.Ghost, 40);
+    opts.failWrites = true;
+    assert.equal(h.Ghost.clear(id), false);
+    assert.equal(h.Ghost.bestTime(), 40, "the pending PB is still playable");
+    assert.equal(coldBest(), 42, "the prior durable PB survives reload");
+    opts.failWrites = false;
+    h.Ghost.flush();
+    assert.equal(coldBest(), 40, "the refused clear preserved the pending save");
+    assert.equal(h.Ghost.clear(id), true);
+    h.flushTimers();
+    assert.equal(h.Ghost.hasGhost(), false);
+    assert.equal(coldBest(), Infinity, "retry commits the clear through reload");
+  }
+});
+
 function recordLap(Ghost, time) {
   Ghost.startLap();
   for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, i * 0.2);

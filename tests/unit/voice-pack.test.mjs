@@ -759,6 +759,43 @@ test("an engineer line waits for a spotter call on the air, and RadioVoice repor
   assert.equal(RadioVoice.inert().busy(), false);
 });
 
+test("a timed-out clip retries in the same audio context and late completion cannot replace the retry", async () => {
+  const man = { binary: integrity(8), clips: { left: [0, 4, 0.5], clear: [4, 4, 0.5] } };
+  const timers = new Map(), decoded = [], played = [];
+  let oldDecode;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    setTimeout: (fn, ms) => { timers.set(fn, ms); return fn; },
+    clearTimeout: (fn) => timers.delete(fn),
+    fetch: async () => ({ ok: true, json: async () => man, arrayBuffer: async () => new ArrayBuffer(8) }),
+    GameAudio: { now: () => 0, ctxGen: () => 1,
+      decodeClip: () => {
+        const id = decoded.length + 1;
+        decoded.push(id);
+        return id === 2 ? new Promise((resolve) => { oldDecode = resolve; }) : Promise.resolve(id);
+      },
+      radioVoice: (parts) => { played.push([...parts]); return { end: 0.5, stop() {} }; },
+    },
+  });
+  const pack = sb.VoicePack.create({});
+  await pack.load("george");
+  const speak = async (text) => {
+    assert.equal(pack.speak("george", text, { channel: "spotter" }), true);
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  await speak("clear");
+  await speak("left");
+  for (const [fn, ms] of timers) if (ms === 4000) { timers.delete(fn); fn(); }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pack.busy("spotter"), false);
+  await speak("left");
+  assert.deepEqual(played, [[1], [3]], "retry plays the new decode");
+  oldDecode(2);
+  await speak("left");
+  await speak("clear");
+  assert.deepEqual(played, [[1], [3], [3], [1]], "both healthy cache entries still play");
+  assert.equal(decoded.length, 3);
+});
+
 test("an AudioContext rebuilt while a line decodes drops the line instead of scheduling it on the old clock", async () => {
   const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5] } };
   let gen = 1, played = 0, decodeRes;
