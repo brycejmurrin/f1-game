@@ -273,13 +273,13 @@ function lap() { return Mod.curv(1) + Mod.bare(); }
 globalThis.keep = { lap };
 `,
 }, async ({ q }) => {
-  const doc = (await q("lsp_hover", { symbol: "Mod.curv" })).join("\n");
-  const lines = doc.split("\n");
-  assert.deepEqual(lines.slice(lines.indexOf("Hot path: read the baked table,"), lines.indexOf("metres⁻¹") + 1), ["Hot path: read the baked table,", "never recompute it.", "metres⁻¹"], doc);
-  assert.doesNotMatch(doc, /eslint/);
-  assert.equal(lines.at(-1), "(// comments at src/mod.js:6)", doc);
-  const none = (await q("lsp_hover", { symbol: "Mod.bare" })).join("\n");
-  assert.doesNotMatch(none, /\/\/ comments at/, none);
+  // Exact answers: the `// eslint-disable…` line is skipped, the two doc lines and the trailing comment are shown, and a
+  // declaration with no `//` block gets no comments note.
+  assert.deepEqual(await q("lsp_hover", { symbol: "Mod.curv" }), ["```typescript", "(property) curv: (t: any) => any", "```", "",
+    "Hot path: read the baked table,", "never recompute it.", "metres⁻¹",
+    "at src/use.js:2:29  [use] function lap() { return Mod.curv(1) + Mod.bare(); }", "(// comments at src/mod.js:6)"]);
+  assert.deepEqual(await q("lsp_hover", { symbol: "Mod.bare" }), ["```typescript", "(property) bare: () => number", "```", "",
+    "at src/use.js:2:43  [use] function lap() { return Mod.curv(1) + Mod.bare(); }"]);
 }));
 
 test("a global beside its session-stub.js placeholder: real module first, own-file calls kept, exports followed (B2)", { timeout: 60000 }, () => withFixture({
