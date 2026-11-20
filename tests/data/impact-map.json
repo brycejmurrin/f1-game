@@ -12717,7 +12717,16 @@
       "overlap": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "pitWallAim": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
+      "pitWallX": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
       "sweep": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
+      "wallLimits": [
         "tests/unit/contact-geometry.test.mjs"
       ],
       "*": [
