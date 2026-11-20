@@ -183,7 +183,7 @@ test("no game.js path ends a race past the G.endRace façade", () => {
 // update() even while paused (the solo frame loop does not), so the paused case is the rule itself —
 // the online path, where the race keeps running under the pause sheet. Stepped one second at a time,
 // tracking the highest count: the field comes round and shunts a parked car, and any motion restarts it.
-test("W26: a parked player is retired after 60 s under green, never while paused or under VSC / SC", async () => {
+test("W26: a parked player is retired after 60 s under green and under VSC / SC (#5892), never while paused or under a red", async () => {
   const G = g.G, A = g.apex;
   const watch = (p, secs) => { let hi = 0; for (let t = 0; t < secs && !p.retired; t++) { A.step(1, 1); hi = Math.max(hi, p.stallT || 0); } return hi; };
   let p = await drive();
@@ -198,12 +198,15 @@ test("W26: a parked player is retired after 60 s under green, never while paused
     assert.ok(!p.retired && hi === 0, `paused: max stallT ${hi}, retired ${p.retired}`);
   } finally { G.paused = false; }
 
-  for (const level of [2, 3]) {
+  // #5892: the caution a stopped car raises itself lasts 60 s; pausing the clock under it gave
+  // the car ~60 s more of green on the racing line. Only a red (the field held on purpose) stops it.
+  for (const level of [2, 3, 4]) {
     p = await drive(); A.step(1, 1);
     assert.ok(G.applyCaution({ level, replay: true }), "caution applied");
     const hi = watch(p, 90);
-    assert.equal(A.caution().level, level, "the caution held for the whole window");
-    assert.ok(!p.retired && hi === 0, `level ${level}: max stallT ${hi}, retired ${p.retired}`);
+    if (!p.retired) assert.equal(A.caution().level, level, "the caution held for the whole window");
+    if (level < 4) assert.ok(p.retired && p.dnf === "stationary", `level ${level}: max stallT ${hi}, retired ${p.retired}`);
+    else assert.ok(!p.retired && hi === 0, `red: max stallT ${hi}, retired ${p.retired}`);
     G.applyCaution({ level: 0 });
   }
 });

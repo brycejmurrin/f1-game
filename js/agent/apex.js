@@ -72,6 +72,8 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // telemetry getter, collide.js's pre-collision speed read, and this file's
   // own tyres() hook), so undefined is a tolerated input.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  // Collide's per-step punt budget (#5894) and the stopped-car hazard (clean-room 39/40).
+  "_puntGot", "stillT", "_hzOf", "_hzSide",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
   // `errCount` counts AI mistakes within ONE race, so a cold car has none (a

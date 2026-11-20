@@ -1000,9 +1000,7 @@ const AiDrive = (function () {
     const hi = Math.sqrt(k * Math.max(0, hiLim - x)), lo = -Math.sqrt(k * Math.max(0, loLim + x));
     return want > hi ? hi : want < lo ? lo : want;
   }
-  // A STOPPED CAR IS A HAZARD (W26): not retired/parked (Collide.parkedAhead) but stopped,
-  // e.g. a human parked on the grid, which the queue/pass logic treated as a slow blocker.
-  // Under 6 % of vTop and not in the pits; steer round it from hazardReach metres.
+  // A STOPPED CAR IS A HAZARD (W26), not a slow blocker: under 6 % of vTop, not in the pits.
   const HAZARD_V_FRAC = 0.06;
   function stoppedHazard(o, vTop) {
     if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
@@ -1018,20 +1016,23 @@ const AiDrive = (function () {
     if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
     return Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72) < SLOW_V_FRAC;
   }
-  // THE GAP ROUND A STATIC BODY (#5539): a street's minLatGap (2.2 m at Monaco) leaves 0.2 m to a
-  // 2.0 m car. Fine beside a moving neighbour, who gives; a parked retirement or a stopped car
-  // does not, and the lane change onto that aim overshoots it (measured 0.35 m at 59 m/s): a
-  // dead stop from full speed and a queue behind. A hazard gets the permanent-circuit lane.
+  // THE GAP ROUND A STATIC BODY (#5539): a street's 2.2 m minLatGap left 0.2 m to a car that does
+  // not give (overshoot 0.35 m at 59 m/s: a dead stop). A hazard gets the permanent-circuit lane.
   const HAZARD_CLEAR_M = 2.8;
   function hazardClear(clear) { return clear > HAZARD_CLEAR_M ? clear : HAZARD_CLEAR_M; }
-  // ...AND THE HEADING STOPS AT THAT GAP, the edgeHead rule with the hazard's clear line as the
-  // edge: the racing line's own slope (tanT) carried a car 0.85 m past a clamped aim. The side
-  // is game.js's (pass on the centre side of the hazard). An aim beyond the line (the pit lane,
-  // a rub yield: something later overrode the clamp) is left alone. Pure, no allocation.
-  function hazardHead(want, x, hz, clear, desiredX, v, yawMax) {
+  // ...AND THE HEADING STOPS AT THAT GAP (the edgeHead rule; tanT carried a car 0.85 m past a
+  // clamped aim) on the committed `side` (hazardSide; absent: the centre side). An aim beyond the
+  // line (pit lane, rub yield) is left alone. hazardSide: once per hazard (clean-room 40), the
+  // car's own side, else the roomier one; -1 = pass on its -x side.
+  const HAZARD_COMMIT_M = 1;
+  function hazardSide(x, hzX) {
+    if (Math.abs(x - hzX) >= HAZARD_COMMIT_M) return x < hzX ? -1 : 1;
+    return hzX > 0 ? -1 : 1;
+  }
+  function hazardHead(want, x, hz, clear, desiredX, v, yawMax, side) {
     if (!hz || !(v > 1) || !(yawMax > 0)) return want;
     const k = 2 * EDGE_YAW_SHARE * yawMax / v;
-    if (hz.x > 0) {
+    if (side ? side < 0 : hz.x > 0) {
       const lim = hz.x - clear;
       if (desiredX > lim + 0.01) return want;
       const hi = Math.sqrt(k * Math.max(0, lim - x));
@@ -1745,7 +1746,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, hazardSide, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

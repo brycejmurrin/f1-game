@@ -2024,7 +2024,7 @@ test("#5539: a static hazard gets a full lane, and the heading stops at its clea
   assert.equal(A.hazardHead(-0.1, 2.4, { x: 4.5 }, clear, 1.75, v, yaw), -0.1);
 });
 
-test("row 5: stallSweep counts only a LOCAL, running car on the road under green, and retires it once at 60 s", () => {
+test("row 5: stallSweep counts only a LOCAL, running car on the road while live, and retires it once at 60 s", () => {
   const mk = (o) => Object.assign({ local: true, speed: 0, retired: false, finished: false, inPit: false, inPitLane: false }, o);
   const cars = [mk({}), mk({ local: false }), mk({ inPit: true }), mk({ inPitLane: true }), mk({ finished: true }), mk({ retired: true })];
   const out = [];
@@ -2032,8 +2032,8 @@ test("row 5: stallSweep counts only a LOCAL, running car on the road under green
   assert.deepEqual(out, [0], "only the parked local car on the road is retired, once");
   for (const c of cars.slice(1)) assert.ok(!(c.stallT > 0), "a remote, pitting, pit-lane, finished or retired car counts nothing");
   const live = mk({});
-  for (let i = 0; i < 120 * 60; i++) A.stallSweep([live], 1 / 60, false, () => assert.fail("not green: never retired"));
-  assert.equal(live.stallT, 0, "a non-green race (pause, caution, grid, quali, time trial) counts nothing");
+  for (let i = 0; i < 120 * 60; i++) A.stallSweep([live], 1 / 60, false, () => assert.fail("not live: never retired"));
+  assert.equal(live.stallT, 0, "a non-live race (pause, red flag, grid, quali, time trial) counts nothing");
   const lane = mk({ stallT: 59 });
   A.stallSweep([lane], 1 / 60, true, () => {}); lane.inPitLane = true; A.stallSweep([lane], 1 / 60, true, () => {});
   assert.equal(lane.stallT, 0, "entering the pit lane resets the count");
@@ -2046,7 +2046,7 @@ test("row 5: stallStep counts stationary live seconds and resets on motion or a 
   assert.ok(t >= A.STALL_RETIRE_S, "61 s parked under green crosses the 60 s retirement");
   assert.equal(A.STALL_RETIRE_S, 60);
   assert.equal(A.stallStep(t, 15, 1 / 60, true), 0, "moving resets it");
-  assert.equal(A.stallStep(30, 0, 1 / 60, false), 0, "a caution, the pits or a finished race resets it");
+  assert.equal(A.stallStep(30, 0, 1 / 60, false), 0, "a red flag, the pits or a finished race resets it");
 });
 
 test("lateralScales / sbsLimits are bit-identical to the single-purpose functions (#4668)", () => {
@@ -2087,4 +2087,20 @@ test("AI wing grip: AiDrive.aeroGrip spans PhysicsConsts.AI_WING_GRIP about the 
   assert.equal(A.aeroGrip(0), 1 - 0.5 * K, "wing 0 loses the other half");
   assert.equal(A.lateralScale(0, 1, 1, 1, 72, 1), A.aeroGrip(1), "lateralScale reads it");
   assert.equal(A.lateralScales(0, 0, 1, 1, 72, 1, {}).lat, A.aeroGrip(0), "lateralScales reads it");
+});
+
+test("clean-room 40: hazardSide commits to the side the car is on, else the roomier side; hazardHead follows it", () => {
+  assert.equal(A.hazardSide(-3, 0.5), -1, "already 3.5 m to its -x side: pass there");
+  assert.equal(A.hazardSide(4, 0.5), 1, "already on its +x side: pass there");
+  assert.equal(A.hazardSide(0.6, 2), -1, "level with a car right of centre: the -x side has more road");
+  assert.equal(A.hazardSide(-1.5, -2), 1, "level with a car left of centre: the +x side");
+  // The committed side overrides the hazard-position default: a car committed to +x is
+  // never steered toward -x of a hazard sitting at x = +1 (the old default chose -x).
+  const v = 40, yaw = 0.3, clear = 2.8, hz = { x: 1 };
+  // Committed to +x, 4.5 m out, aiming just outside the gap (3.9 m) and turning hard toward it:
+  // the heading is capped so the car stops at the gap's +x edge (3.8 m).
+  const capped = A.hazardHead(-0.3, 4.5, hz, clear, 3.9, v, yaw, 1);
+  assert.ok(capped > -0.3 && capped < 0, `committed +x: the turn toward the hazard is capped (${capped})`);
+  assert.equal(A.hazardHead(-0.3, 4.5, hz, clear, 3.9, v, yaw), -0.3, "no side: the old hz.x > 0 rule reads it as a -x pass and caps nothing");
+  assert.equal(A.hazardHead(-0.3, 4.5, hz, clear, 3.9, v, yaw, -1), -0.3, "side -1 is that old rule");
 });

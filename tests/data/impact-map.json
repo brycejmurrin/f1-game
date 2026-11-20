@@ -12151,6 +12151,9 @@
       "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "hazardSide": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "holdLineGap": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -12158,7 +12161,8 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "humanInvMass": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs"
       ],
       "humanPuntCap": [
         "tests/unit/ai-drive.test.mjs",
@@ -12624,6 +12628,7 @@
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "parkedAhead": [
+        "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs"
       ],
       "pushVelocity": [
@@ -12733,11 +12738,13 @@
       "sweep": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "wallLimits": [
+        "tests/unit/collision-contact-vm.test.mjs"
+      ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
-        "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
