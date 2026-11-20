@@ -1055,7 +1055,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // assets.js remembers the last pack's model file+md5 (a js/render write, so
     // RESET must clear it). The next visit relearns the hint from the manifest.
     "apex26.packIndex",
-    "apex26.envProbeOff", "apex26.perChunkOff",
+    "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
     "apex26.tlxWebKitGL",

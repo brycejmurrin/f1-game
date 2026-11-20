@@ -338,11 +338,7 @@ let _gapTight = null, _gapDrop = null;
 // screen. fitHud needs BOTH to answer its two questions without feeding its own
 // output back in — see the rung comment there.
 const _gapW = [0, 0];
-// The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
-// halves within a second and the tenths jumped 2x between ticks (10 Hz) with
-// the rival not having moved relative to the car. Smooth the displayed
-// seconds (EMA, ~0.3 s at 10 Hz) per slot; a neighbour change resets the
-// slot so a new rival never inherits the old one's lag.
+// A time gap at a timing line (HudReadouts.gapClock; distance ÷ own speed until both cross one), EMA-smoothed per slot.
 const _gapSm = [NaN, NaN], _gapWho = [null, null];
 function gapDecimals(sec) {
   // Shared with REL / tower via HudReadouts: two decimals under ~10 s on every
@@ -401,8 +397,8 @@ function gapForm() {
 function gapText(slot, gap, arrow, o, dist, vFloor) {
   const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
   if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, slot ? -n : n, gap === _gapFormShort); }
-  return gap(arrow, o.code, gapSec(slot, o, dist / vFloor));
-}
+  return gap(arrow, o.code, gapSec(slot, o, _gapClk ? _gapClk.gapOr(slot ? G.player : o, slot ? o : G.player, dist / vFloor) : dist / vFloor));   // time at a line (#5678)
+} const _gapClk = _ro && _ro.gaps;   // the shared clock: REL and STRATEGY read it too
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
 const _gapFormShort = (arrow, code, t) => arrow + " " + t;
@@ -446,9 +442,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
-// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box), so the paused landscape
-// HUD kept no caps until RESUME. Refit at the flip and once the viewport settles; the paused card's HUD ticks run it.
-const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true; };
+// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box). Refit at the flip and the
+// settle; a paused race runs NO HUD tick (game.js parks the loop before updateHud), so then it fits here, bounded.
+const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true;
+  if (G.paused && (G.state === "race" || G.state === "count")) for (let i = 0; i < 4 && _fitPending; i++) updateHud(true); };
 if (_rotMq && typeof _rotMq.addEventListener === "function") _rotMq.addEventListener("change", () => { refitRot(); setTimeout(refitRot, VP_SETTLE_MS); });
 // THE 3 s BACKSTOP RE-FITS ONLY WHAT RESIZED, seen by a ResizeObserver (no layout read); why and the settle window: docs/notes/LIVE-INPUT-H11-2026-10-20.md.
 const FIT_SETTLE_MS = 400, FIT_SKIP_MAX = 9, _fitSeen = new WeakSet(), _fitSize = new WeakMap();
@@ -517,7 +514,7 @@ function hlKey() {
 // container whose tree stays clean — so this is a structural fix, not a
 // measured win, and the honest claim is that it removes a per-tick flush whose
 // cost depends on a tree this box does not reproduce.
-let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
+let _cssRootKey = "", _cssScale = 1, _cssMult = 1, _cssDrop = 15;
 function syncComputedRootVars() {
   // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
   // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
@@ -527,7 +524,7 @@ function syncComputedRootVars() {
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
   // which has no getComputedStyle — the same guard the reads below carried.
-  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; return; }
+  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; _cssDrop = 15; return; }
   // ONE CSSStyleDeclaration for both: the flush happens on first access, so two
   // getComputedStyle calls were two chances to pay for it.
   const cs = getComputedStyle(document.documentElement);
@@ -536,6 +533,7 @@ function syncComputedRootVars() {
   // token reads back as a literal string and coerces to NaN — so --hud-btn-mult
   // is resolved from its own factor rather than parsed out of the calc.
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
+  _cssDrop = parseFloat(cs.getPropertyValue("--limits-drop")) || 15;   // css/hud.css F-17: the LIMITS chip's drop
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 // LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
@@ -915,7 +913,7 @@ function fitHud() {
   if (fitPass(true, scale, btnScale, placedSectors)) fitPass(false, scale, btnScale, placedSectors);
   else ["--hud-z-top", "--hud-z-bot"].forEach((p, i) => (zWas[i] ? root.style.setProperty(p, zWas[i]) : root.style.removeProperty(p)));   // nothing laid out
 }
-let _fitCanon = null;   // the cap pass's { top, bot }, consumed by the paint pass
+let _fitCanon = null;   // the cap pass's { top, bot, topMax }, consumed by the paint pass
 let _tyreRestack = null;   // the paint pass's stored limits-left TYRES restack { key, leftBot, metricsB } (#2797)
 function fitPass(canon, scale, btnScale, placedSectors) {
   const root = document.documentElement;
@@ -930,12 +928,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // would read a 0.82 dock as 18 % wider than it paints. Read AFTER the
   // same-key return above: a steady tick must not pay a computed-style pass.
   let btnFloor = 1;
-  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
-  // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
-  // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
-  // 142 = 110×0.862/0.666). Dividing getBoundingClientRect by that stale live
-  // zoom over/under-estimates intrinsics and the next pass flips between
-  // ~--hud-scale (uncapped) and the 0.4 floor. Measure with what we published.
+  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom, which lags --hud-z-top a frame under load
+  // (Pages 37714419183): dividing rects by it flipped the next pass between uncapped and the 0.4 floor.
   // No currentCSSZoom on a real DOM (iOS Safari < 26.4) still paints zoom into rects:
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
@@ -1101,7 +1095,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
     // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
     // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
-    const bz = Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    // Landscape touch: the real 44 px pair; the plate is pinned (css/hud.css, #5256), capRow clears it.
+    const bz = vpW() > vpH() && !document.body.classList.contains("desktop") ? 1 : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
     const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
@@ -1128,7 +1123,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     // tower's row and is the right-half budget's business (a vertical limit there only drives the band to the floor).
     if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
   }
-  let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  // capTop's rung follows HUD SIZE; topMax, its slider's range, is the ceiling over all rungs (#5478).
+  let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo))), topMax = Math.min(capChrome, capRow, Math.max(capLong, capShort, capNo));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1166,35 +1162,17 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // so a zoom-1 copy was an A->B swap of root vars (a whole-document restyle) on every full fit.
   if (!canon) {
     hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
-    // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
-    // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
-    // where the BOOST pedal is on a touch phone, so a track-limits warning painted
-    // over a tap target. Published in the chrome's own zoom space (the dock zooms
-    // by the RAW slider, the chrome by --hud-z-top) so the CSS can add it directly.
-    // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
-    // --hud-z-top group, so its `right:` needs the stand-off in that space, and
-    // the dock's own zoom (the raw slider) never enters it.
-    // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge.
-    // #hud-limits derived that offset from a hand-computed `4.8em` (three rows at
-    // line-height 1.6) — which is only the box's height while the box EXISTS. Every
-    // profile that hides it (MINIMAL, and a broadcast camera outside the broadcast
-    // profile) left the chip hanging in mid-air below an empty corner, reported
-    // from a phone as "LIMITS floats in the middle of the screen". Measured, in
-    // the chip's own zoom units, it is 0 exactly when the box is gone.
+    // THE RIGHT DOCK'S WIDTH, so right-anchored chrome stands off it: #hud-limits sits BELOW #hud-sectors, where
+    // the BOOST pedal is on a touch phone. Published in the chrome's zoom space (--hud-z-top), not the dock's.
+    // THE SECTOR BOX'S HEIGHT, for the chip hanging off its bottom: a hand-computed `4.8em` held only while the
+    // box EXISTS, so MINIMAL and a broadcast camera left LIMITS floating mid-screen. Measured, it is 0 when gone.
     const secH = tall(els.hudSectors, zTopPub);
     hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
     const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
-    // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
-    // Standing off unconditionally dragged a top-right chip halfway across the
-    // screen on any viewport tall enough for the two never to meet (the second
-    // half of the same phone report). #hud-dock is bottom-anchored and only as
-    // tall as its tallest column, so the test is one rect comparison: does the
-    // chip's bottom edge reach the dock's top edge? The chip's own box cannot be
-    // measured — it is `hidden` until the player takes a strike — so its top is
-    // reconstructed from the column it hangs in: #pausebtn's bottom edge plus the
-    // same 4 px of air css/hud.css puts between them, then the sector box, then
-    // the 15 px offset. CHIP_H is its one line plus padding at --fs-micro.
-    const CHIP_H = 26, CHIP_DROP = 15;
+    // …BUT ONLY WHEN THE CHIP REACHES THE DOCK: standing off unconditionally dragged it halfway across a tall
+    // screen. The chip is `hidden` until a strike, so its box is rebuilt from its column: #pausebtn's bottom
+    // + 4 px, the sector box, --limits-drop (F-17), and CHIP_H (one line plus padding at --fs-micro).
+    const CHIP_H = 26, CHIP_DROP = _cssDrop;
     const pauseR = els.pausebtn ? els.pausebtn.getBoundingClientRect() : null;
     const colTop = scR && scR.height ? scR.top : (pauseR && pauseR.height ? pauseR.bottom + 4 : 0);
     const limBot = colTop + (secH + CHIP_DROP + CHIP_H) * chromeZ;
@@ -1384,10 +1362,11 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
       // The cluster is budgeted at its SHIPPED size: a smaller HUD SIZE used to GROW the steer pad (#5206).
-      // capKeepS also leaves a HUD SIZE above 100 % its cluster: BUTTON SIZE's slider stops there.
+      // capKeepS also leaves a HUD SIZE above 100 % its cluster (at the gear row's kept size, #5256 D: else BUTTON SIZE's
+      // first move budgeted the pinned HUD SIZE and cut its own range, 194 -> 174.25 % at cell A): the slider stops there.
       const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
       capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
-      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
+      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot, +root.style.getPropertyValue("--hud-bot-keep") || 9)) - 1)) / gS.w : Infinity));
     } else capDockS = capKeepS = capDock;
     const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
@@ -1406,7 +1385,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       // Floor at 11 painted px over --fs-micro 14 (Apple HIG's 11 pt minimum; the
       // 10 px READABLE_Z floor painted POS / LAP / TIME at 10.1 px, UI-HUNT-2-HUD).
       const cap = Math.max(11 / 14, (roomL - gL.h * zDL) / Math.max(1, height));
-      capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
+      capTop = Math.min(capTop, cap); topMax = Math.min(topMax, cap); capBot = Math.min(capBot, cap);
     }
 
   }
@@ -1458,7 +1437,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       if (capSide > 0) capPortrait = Math.min(capPortrait, capSide);
     }
   }
-  capBot = Math.min(capBot, capPortrait);
+  capBot = Math.min(capBot, capPortrait, +root.style.getPropertyValue("--hud-bot-keep") || 9);   // the gear row's kept size (UiScale, #5256)
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
@@ -1482,13 +1461,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       root.style.setProperty(prop, String(Math.max(floor, q)));
     }
   };
-  if (canon) { set("--hud-z-top", capTop, scale); set("--hud-z-bot", capBot, scale); _fitCanon = { top: capTop, bot: capBot }; return true; }
-  capTop = _fitCanon.top; capBot = Math.min(_fitCanon.bot, capPortrait);
+  if (canon) { set("--hud-z-top", capTop, scale); set("--hud-z-bot", capBot, scale); _fitCanon = { top: capTop, bot: capBot, topMax }; return true; }
+  capTop = _fitCanon.top; topMax = _fitCanon.topMax; capBot = Math.min(_fitCanon.bot, capPortrait);
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
   // What this window can paint: "top bot pedals steer steerKeep btnFloor" zooms, 9 = no limit (UiScale, #5206).
-  hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
+  hStyle(root, "--hud-cap", [topMax, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
   // The paint pass measured it under the zoom the cap pass published, so it is
@@ -1870,7 +1849,8 @@ function updateHud(force, dtMs) {
   }
   _holdPrev = player.lastLap;
   if (_holdOn && !(player.lapTime < 3)) _holdOn = false;
-  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : player.lapTime));
+  // LAP 0 (grid to line) is off the lap clock, as for DELTA and every recorded lap: TIME reads 0, not a run-up that rewinds (#5678).
+  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : sess === "race" && lapN < 1 ? 0 : player.lapTime));
   hData(els.time, "hold", _holdOn ? (player.lastLap <= player.best ? "pb" : "lap") : null);
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
@@ -2097,7 +2077,7 @@ function updateHud(force, dtMs) {
     // literal: PACE scales real speeds, so an absolute floor swallowed most
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
     // 0.26 × vTop ≈ 25 m/s at default pace.
-    const vFloor = Math.max(player.speed, G.vTop() * 0.26);
+    const vFloor = Math.max(player.speed, G.vTop() * 0.26); if (_gapClk && G.track) for (const c of cars) _gapClk.sample(c, c.prog, G.raceT, G.track.total);
     hText(els.gapA, a ? gapText(0, gap, "▲", a, a.prog - player.prog, vFloor) : "");
     hText(els.gapB, b ? gapText(1, gap, "▼", b, player.prog - b.prog, vFloor) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
@@ -2259,7 +2239,7 @@ function resetRace() {
   if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
   if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
-  _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
+  _holdLap = 0; _holdPrev = 0; _holdOn = false; if (_gapClk) _gapClk.reset(); _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
   // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
   // delta's colour inline, a race the neighbour's team bar, the tow halo and

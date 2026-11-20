@@ -1,32 +1,22 @@
 /* Apex 26 — LoopHealth: the frame-loop fault policy and the one heartbeat that
-   outlives the loop. A run of consecutive frame faults is tolerated (a null
-   player in the async startRace window heals on the next frame) and any clean
-   frame pays it back; at the cap the loop reports and rethrows, so a
-   deterministic fault still stops loudly. The heartbeat exists because every
-   other health surface freezes when the loop dies: PerfGov.fpsEMA() is written
-   only inside PerfGov.tick, so the METRICS and ?gfxdebug=1 overlays (both on
-   setInterval) keep painting a plausible 60 fps over a frozen canvas. game.js's
-   `lastFrame` is not the heartbeat either — it is stamped at the top of
-   tickBody, so a loop throwing every frame keeps it fresh. Only clean() below
-   is reached by a frame that finished. */
+   outlives the loop. A run of frame faults is tolerated (a null player in the
+   async startRace window heals next frame) and a clean frame pays it back; at
+   the cap the loop reports and rethrows. The heartbeat exists because the
+   METRICS and ?gfxdebug=1 overlays (setInterval) keep painting PerfGov's last
+   fps over a frozen canvas, and game.js's `lastFrame` is stamped at the top of
+   tickBody. Only clean() is reached by a frame that finished. */
 const LoopHealth = (() => {
   "use strict";
 
-  // Consecutive throws tolerated before the loop stops: the transient shapes
-  // this exists for heal in one frame, and 8 is still a fraction of a second.
-  // These count FAULTS, not time — the same cap on any refresh rate by design.
+  // Consecutive throws tolerated before the loop stops (a count, not time).
   const RUN_CAP = 8;
-  // Absolute ceiling: a run counter that any clean frame resets can never stop
-  // a fault that alternates clean/throw. 240 is ~four seconds of a half-broken
-  // loop at 60 fps, less on a faster display; a count, not a clock.
+  // Absolute ceiling: stops a fault that alternates clean/throw (~4 s at 60 fps).
   const TOTAL_CAP = 240;
-  // Log the first few faults, then thin out: the record is for the ring buffer
-  // __apex.logs() reads, not 60 identical console lines a second
+  // Log the first few faults, then thin out (for the __apex.logs() ring buffer)
   const LOG_FIRST = 5;
   const LOG_EVERY = 60;
-  // TOTAL_CAP was once a per-TAB lifetime count that was never paid back, so a
-  // long PWA session whose transients each healed could have its loop killed
-  // hours later by a harmless fault. A quiet stretch this long forgets the tally
+  // A quiet stretch this long forgets the TOTAL_CAP tally (a per-tab lifetime
+  // count once killed long PWA sessions hours later)
   const QUIET_RESET_MS = 4000;
 
   // THE STALL WATCHDOG (#3510). Slow frames do not throw, so the fault policy
@@ -37,21 +27,18 @@ const LoopHealth = (() => {
   // a sleep or a debugger pause, not a frame. A run of SLOW_MS frames, counted
   // in FRAMES so a single build/shader-compile hitch never trips it:
   //   SHED_RUN   — drop to the lowest quality rung for this session;
-  //   RELOAD_RUN — still glacial after the shed: latch the same lighter-
-  //                renderer keys a context loss writes (read at boot) and
-  //                reload once per tab session (apex26.stallReloads, the
-  //                ctxLostReloads shape), which hands the player back a working
-  //                menu with the "Graphics reset" notice. With the budget spent
-  //                it only records and logs. On software raster (SwiftShader /
-  //                llvmpipe via PerfGov.softwareRaster), reload lands on the
-  //                same path and cost — act "budget-sw" skips location.reload().
-  // A race entry on a weak phone is a few multi-second tasks between frames, so
-  // while the loading cover (#loading) is up the shed waits and the reload needs
-  // LOAD_RELOAD_RUN frames: a cover stuck over a glacial build still recovers.
+  //   RELOAD_RUN — still glacial after the shed: latch the lighter-renderer
+  //                keys a context loss writes (read at boot; they lapse, #5899)
+  //                and reload once per tab session (apex26.stallReloads) to a
+  //                working menu with the "Graphics reset" notice. Budget spent:
+  //                record and log only. Software raster (PerfGov.softwareRaster)
+  //                would reload onto the same cost — act "budget-sw" skips it.
+  // Under the loading cover (a weak phone's race entry is a few multi-second
+  // tasks) the shed waits and the reload needs LOAD_RELOAD_RUN frames: a
+  // cover stuck on a slow build heals anyway.
   // Off under automation (navigator.webdriver) and in the node game VM
-  // (tools/lib/game-vm.cjs, which reports webdriver false): software-GL CI
-  // presents multi-second frames on purpose and a shed or reload there would
-  // change the spec. ?stallwatch=1 or apex26.stallWatch=1 forces it on.
+  // (tools/lib/game-vm.cjs): software-GL CI presents multi-second frames on
+  // purpose. ?stallwatch=1 or apex26.stallWatch=1 forces it on.
   const SLOW_MS = 1000;
   const SUSPEND_MS = 60000;
   const SHED_RUN = 4;
@@ -60,6 +47,19 @@ const LoopHealth = (() => {
   const RELOAD_KEY = "apex26.stallReloads";
   const RELOAD_BUDGET = 1;
   const NOTICE_KEY = "apex26.ctxLostNotice";
+  // #5899: a reload latch is stamped "<ms>:<strikes>" and lapses at boot after 3^strikes days; "0:<n>" = lapsed
+  // A context-loss latch has no stamp: it is kept until RESET (renderer-picker.js clears it)
+  const LATCH_KEY = "apex26.stallLatch";
+  function latchLapse(t) {
+    try {
+      const m = String(localStorage.getItem(LATCH_KEY) || "").split(":"), at = +m[0], n = +m[1] || 1;
+      if (!(at > 0 && t - at > 864e5 * Math.pow(3, n))) return false;
+      localStorage.removeItem("apex26.envProbeOff"); localStorage.removeItem("apex26.perChunkOff");
+      localStorage.setItem(LATCH_KEY, "0:" + n);
+      return true;
+    } catch (_) { return false; }
+  }
+  latchLapse(Date.now());
 
   let run = 0;
   let total = 0;
@@ -168,7 +168,10 @@ const LoopHealth = (() => {
       return;
     }
     stallReloads++; stallAct = "reload";
-    try { localStorage.setItem("apex26.envProbeOff", "1"); localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* blocked storage: the reload still lands on the menu */ }
+    try {
+      localStorage.setItem("apex26.envProbeOff", "1"); localStorage.setItem("apex26.perChunkOff", "1");
+      localStorage.setItem(LATCH_KEY, Date.now() + ":" + ((+String(localStorage.getItem(LATCH_KEY) || "").split(":")[1] || 0) + 1));
+    } catch (_) { /* blocked storage: the reload still lands on the menu */ }
     Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms) — reloading to the menu`);
     try { sessionStorage.setItem(RELOAD_KEY, String(spent + 1)); sessionStorage.setItem(NOTICE_KEY, "1"); } catch (_) { /* see the budget read */ }
     try { location.reload(); } catch (_) { /* file:// / test host */ }

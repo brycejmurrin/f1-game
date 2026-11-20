@@ -201,6 +201,34 @@ test("a race: 3rd strike is the black-and-white flag, 4th AND EACH ADDITIONAL +5
   assert.ok((p.cuts | 0) >= 6, "lifetime cuts still accumulate");
 });
 
+test("ONE strike per trip off: a long excursion counts once, the next separate trip counts again (#5945 1A)", async () => {
+  // The -2 grace used to re-arm WHILE the car was still off, so an 8 s spin on
+  // the grass counted a strike every 3.2 s (three strikes, the 4th is +5 s).
+  const g = await race();
+  try {
+    const p = g.G.player;
+    p.penalty = 0; p.cutWarn = 0;
+    const before = p.cuts | 0;
+    // Under throttle so the car is not beached (an auto-rescue ends the trip).
+    g.apex.jump(0.5, 60, 40);
+    g.apex.setInput({ throttle: true, steer: 0 });
+    let offSteps = 0;
+    for (let i = 0; i < 8 * 60; i++) { g.apex.step(1 / 60, 1); if (!p.offroad) break; offSteps++; }
+    // The old re-arm counted again at 1.2 + 3.2 = 4.4 s; the trip must outlast it.
+    assert.ok(offSteps > 4.8 * 60, "the car must stay off past the old re-count (" + offSteps + " steps off)");
+    assert.equal((p.cuts | 0) - before, 1, "one continuous trip off is ONE strike");
+    g.apex.setInput({ throttle: false, steer: 0 });
+    assert.equal(p.cutWarn, 1);
+    // Rejoin, let the grace clear, then a separate trip counts again.
+    g.apex.jump(0.5, 60, 0);
+    for (let i = 0; i < 240 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
+    assert.equal(p.offT, 0, "the grace clears once back on the track");
+    const cut = cutOffTrack(g, 200);
+    assert.ok(cut.counted, "a second, separate trip off counts");
+    assert.equal(p.cutWarn, 2);
+  } finally { g.close(); }
+});
+
 test("a race lap with a counted cut is DELETED — no best/last lap — but still counts for distance", async () => {
   // Same guidelines: "Lap Deleted / Strike". Before, only time trial and
   // qualifying invalidated a cut lap, so a race lap run off-track could be the

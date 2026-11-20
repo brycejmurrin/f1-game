@@ -8,7 +8,7 @@ const InputHoldButtons = (function () {
   const PEDAL_TRAVEL_PX = PedalTravel.TRAVEL_PX;
   const PEDAL_MIN = PedalTravel.MIN;
 
-  function create({ clamp, beforeReleaseAll }) {
+  function create({ clamp, beforeReleaseAll, slideEase }) {
     // Every wireHold button registers here so its private pressed-pointer set can
     // be cleared from OUTSIDE the closure. Nets that hang off this list:
     //   1. window-level capture-phase pointerup/pointercancel (init) release that
@@ -46,7 +46,7 @@ const InputHoldButtons = (function () {
         h.anchors && h.anchors.clear();
         h.levels && h.levels.clear();
         h.live && h.live.clear();
-        h.slid.clear(); h.gone.clear(); h.rects.clear();
+        h.slid.clear(); h.gone.clear(); h.rects.clear(); h.ramps.clear();
         look(h.el, null);
         h.apply(false);
         h.level && h.level(0);
@@ -98,7 +98,8 @@ const InputHoldButtons = (function () {
     // moment it is inside that sibling's box: THE CONTROL UNDER THE FINGER WINS.
     //   - only THAT pointer moves; a second finger on either control is untouched;
     //   - the arrival is a full press (no ease: the slide that brought it there
-    //     is the same motion as the ease gesture, so it must not read as a lift);
+    //     is the same motion as the ease gesture, so it must not read as a lift),
+    //     unless PEDAL SLIDE = EASE (#5996, `opts.easeIn`): PedalTravel.arrive ramps it in;
     //   - it hands back the same way, and every release net above still applies
     //     to whichever control holds the pointer now.
     // The sibling's box is read once per contact, never per pointermove: a
@@ -146,6 +147,8 @@ const InputHoldButtons = (function () {
       const slid = new Set();                     // pointerIds that ARRIVED by a slide: full travel, no ease
       const gone = new Set();                     // pointerIds that slid AWAY and are still down (pressed-look only)
       const rects = new Map();                    // pointerId -> the sibling's box for this contact
+      const easeIn = !!(level && opts && opts.easeIn);
+      const ramps = new Map();                    // pointerId -> EASE arrival point, until full
       // Every contact holds independently: easing or releasing one finger must
       // not override another finger's stronger press. Both release routes use
       // the same aggregation, including window capture before the local event.
@@ -162,6 +165,7 @@ const InputHoldButtons = (function () {
       function release(pointerId) {
         if (gone.delete(pointerId) && gone.size === 0 && slid.size === 0) look(el, null);
         rects.delete(pointerId);
+        ramps.delete(pointerId);
         if (slid.delete(pointerId) && slid.size === 0) look(el, gone.size ? "off" : null);
         anchors && anchors.delete(pointerId);
         levels && levels.delete(pointerId);
@@ -183,7 +187,9 @@ const InputHoldButtons = (function () {
         if (firstContact) apply(true);
         if (level) {
           anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY);
-          levels.set(e.pointerId, 1);
+          const ramp = arrived && easeIn && !!slideEase && slideEase();
+          if (ramp) ramps.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          levels.set(e.pointerId, ramp ? PedalTravel.arrive(0) : 1);
           paintLevel();
         }
         gone.clear();
@@ -202,7 +208,7 @@ const InputHoldButtons = (function () {
         to.press(e, true);
         return true;
       }
-      const rec = { ids, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, move: null };
+      const rec = { ids, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, ramps, move: null };
       holdBtns.push(rec);
       holdByEl.set(el, rec);
       holdById.set(id, rec);
@@ -221,6 +227,14 @@ const InputHoldButtons = (function () {
       });
       if (level || sibId) rec.move = (e) => {
         if (inBox(rects.get(e.pointerId), e.clientX, e.clientY) && handOff(e)) return;
+        const r = ramps.get(e.pointerId);
+        if (r) {
+          const lv = Math.max(levels.get(e.pointerId) || 0, PedalTravel.arrive(Math.hypot(e.clientX - r.x, e.clientY - r.y)));
+          levels.set(e.pointerId, lv);
+          if (lv >= 1) ramps.delete(e.pointerId);
+          paintLevel();
+          return;
+        }
         const a = anchors ? anchors.get(e.pointerId) : null;
         if (a == null || slid.has(e.pointerId)) return;
         if (axis === "x") {

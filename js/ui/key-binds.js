@@ -372,15 +372,13 @@ function create(G) {
     reveal = () => setTimeout(() => { if (keys.hidden() && Input.keyboardSeen()) keys.render(); if (!keys.hidden()) window.removeEventListener("keydown", reveal); }, 0);
     window.addEventListener("keydown", reveal);
   }
-  // body.desktop is written by game.js's syncPointerKind() AFTER this create
-  // (and again whenever the pointer kind flips at runtime), so the tables'
-  // first render above ran with no verdict: re-render once the shell has
-  // settled and on every later flip.
+  // body.desktop is written by syncPointerKind() AFTER this create and on every
+  // pointer-kind flip (its callback runs after ours: defer), so re-render then.
   const rerender = () => {
     for (const s of sections) s.render();
     if (reveal && keys && !keys.hidden()) window.removeEventListener("keydown", reveal);
   };
-  if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
+  if (Input.onPointerKindChange) Input.onPointerKindChange(() => setTimeout(rerender, 0));
   // `hidden` is the shell's source of truth for dialog visibility. The
   // observer keeps Help's first disclosure aligned with the source the player
   // actually used when the dialog is opened, without a per-frame DOM walk.

@@ -10,6 +10,7 @@ const PedalTravel = (function () {
   const DEAD_PX = 12;     // slop first, so a thumb tremor is not a lift
   const TRAVEL_PX = 90;   // finger travel from full press to the light end
   const MIN = 0.12;       // never quite zero: sliding off is not releasing
+  const RAMP_PX = 40;     // PEDAL SLIDE = EASE (#5996): px past a slide's arrival to full
 
   // Vertical pedal: up the screen (decreasing clientY) eases off. The
   // horizontal steer-button path keeps its own axis and uses the constants.
@@ -18,6 +19,10 @@ const PedalTravel = (function () {
     return Math.max(MIN, Math.min(1, 1 - up / TRAVEL_PX));
   }
 
-  return { DEAD_PX, TRAVEL_PX, MIN, ease };
+  function arrive(dist) {
+    return Math.max(MIN, Math.min(1, dist / RAMP_PX));
+  }
+
+  return { DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive };
 })();
 Object.freeze(PedalTravel);
