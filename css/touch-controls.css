@@ -316,6 +316,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     #hud-gear { font-size: 40px; }
     #hud-tach { width: 84px; }
     body:not(.desktop) #hud-energy { width: 108px; }
+    body:not(.desktop) .hud-energy-label { white-space: nowrap; letter-spacing: 0; }
+    body:not(.desktop) #hud-energy-n { margin-left: 0.25em; }
     body:not(.desktop) #hud-speed { font-size: calc(30px * var(--hud-text-boost, 1)); }
     body:not(.desktop) #hud-gear { font-size: 28px; }
     body:not(.desktop) #hud-ot,
