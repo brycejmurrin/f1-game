@@ -8,8 +8,9 @@ const CamComfort = (function () {
   // Bare string on the raw lane (same pattern as CockpitOpts flags).
   const KEY = "camComfortPref";   // "on" | "off" | unset
   const FX_DEFS = Object.freeze([
-    // Drives the speed blur (blurAmount); default OFF, a saved notch is kept (#5990).
-    Object.freeze({ id: "motionBlur", label: "MOTION BLUR", min: 1, max: 10, step: 1, def: 1, unit: "",
+    // Drives the speed blur (blurAmount); default OFF (#5990). A NEW key: the old
+    // `motionBlur` notch drew nothing and old exports carry its def 5, so it stays inert.
+    Object.freeze({ id: "blurNotch", label: "MOTION BLUR", min: 1, max: 10, step: 1, def: 1, unit: "",
       help: "Radial blur toward the screen edges at speed. Notch 1 is OFF." }),
     // Not built on any backend: hidden; the key and export row stay.
     Object.freeze({ id: "speedLines", label: "SPEED LINES", min: 1, max: 10, step: 1, def: 5, unit: "", hidden: true,
@@ -87,7 +88,7 @@ const CamComfort = (function () {
     const s = store || (typeof GameStore !== "undefined" ? GameStore.store : null);
     if (s && s === _bS && s.rev === _bRev) return _bVal;
     _bS = s; _bRev = s && typeof s.rev === "number" ? s.rev : -1;
-    return (_bVal = (fxGet(s, "motionBlur") - 1) / 4);
+    return (_bVal = (fxGet(s, "blurNotch") - 1) / 4);
   }
 
   // Optional renderer hook for FX not drawn yet (speed lines): setComfortFx(opts).

@@ -63,15 +63,15 @@ test("reduced-motion boot preselects both renderer comfort hooks off", () => {
   const s = rawStore();
   const reduced = { matchMedia: (query) => ({ matches: query === "(prefers-reduced-motion: reduce)" }) };
   CC.boot(s, { maxTouchPoints: 0 }, reduced);
-  assert.equal(s.get("motionBlur"), 1, "notch 1 disables motion blur");
+  assert.equal(s.get("blurNotch"), 1, "notch 1 disables motion blur");
   assert.equal(s.get("speedLines"), 1, "notch 1 disables speed lines");
 
-  s.set("motionBlur", 7);
+  s.set("blurNotch", 7);
   s.set("speedLines", 4);
   let applied = null;
   const G = { gfx: { setComfortFx(opts) { applied = opts; } } };
-  assert.deepEqual({ ...CC.applyFx(G, s) }, { motionBlur: 7, speedLines: 4 });
-  assert.deepEqual({ ...applied }, { motionBlur: 7, speedLines: 4 },
+  assert.deepEqual({ ...CC.applyFx(G, s) }, { blurNotch: 7, speedLines: 4 });
+  assert.deepEqual({ ...applied }, { blurNotch: 7, speedLines: 4 },
     "the persisted flags reach the optional renderer hook");
 });
 
@@ -149,19 +149,19 @@ test("active() is memoised on the store's rev / rawRev: no raw read per frame, e
 
 test("fxSet clamps to the knob range, rounds to a notch, and rejects non-numbers", () => {
   const CC = load();
-  const d = CC.FX_DEFS.find((x) => x.id === "motionBlur");
+  const d = CC.FX_DEFS.find((x) => x.id === "blurNotch");
   const s = rawStore();
-  assert.equal(CC.fxSet(s, "motionBlur", d.max + 50), true);
-  assert.equal(s.get("motionBlur"), d.max, "above range clamps to max");
-  CC.fxSet(s, "motionBlur", d.min - 50);
-  assert.equal(s.get("motionBlur"), d.min, "below range clamps to min");
-  CC.fxSet(s, "motionBlur", d.min + 1.4);
-  assert.equal(s.get("motionBlur"), d.min + 1, "fractions round to the nearest notch");
-  assert.equal(CC.fxGet(s, "motionBlur"), d.min + 1);
+  assert.equal(CC.fxSet(s, "blurNotch", d.max + 50), true);
+  assert.equal(s.get("blurNotch"), d.max, "above range clamps to max");
+  CC.fxSet(s, "blurNotch", d.min - 50);
+  assert.equal(s.get("blurNotch"), d.min, "below range clamps to min");
+  CC.fxSet(s, "blurNotch", d.min + 1.4);
+  assert.equal(s.get("blurNotch"), d.min + 1, "fractions round to the nearest notch");
+  assert.equal(CC.fxGet(s, "blurNotch"), d.min + 1);
   for (const bad of [NaN, Infinity, "5", null, undefined]) {
-    assert.equal(CC.fxSet(s, "motionBlur", bad), false, `rejects ${String(bad)}`);
+    assert.equal(CC.fxSet(s, "blurNotch", bad), false, `rejects ${String(bad)}`);
   }
-  assert.equal(s.get("motionBlur"), d.min + 1, "rejected writes leave the stored notch alone");
+  assert.equal(s.get("blurNotch"), d.min + 1, "rejected writes leave the stored notch alone");
   assert.equal(CC.fxSet(s, "nope", 3), false, "unknown id is refused");
   assert.equal(s._disk.has("nope"), false);
 });
@@ -171,17 +171,19 @@ test("fxSet clamps to the knob range, rounds to a notch, and rejects non-numbers
 test("MOTION BLUR defaults OFF and maps a saved notch onto the SPEED BLUR scale", () => {
   const CC = load();
   const s = rawStore();
-  assert.equal(CC.FX_DEFS.find((d) => d.id === "motionBlur").def, 1, "default notch is OFF: the shipped look is unchanged");
+  assert.equal(CC.FX_DEFS.find((d) => d.id === "blurNotch").def, 1, "default notch is OFF: the shipped look is unchanged");
   assert.equal(CC.blurAmount(s), 0, "unset key → no blur");
-  s.set("motionBlur", 5); s.rev = 1;
-  assert.equal(CC.blurAmount(s), 1, "a saved notch 5 is kept and reads as amount 1");
-  s.set("motionBlur", 10); s.rev = 2;
+  const legacy = rawStore({ motionBlur: 5 }); legacy.rev = 1;
+  assert.equal(CC.blurAmount(legacy), 0, "the pre-#5990 motionBlur notch (old def 5, never drew) stays inert");
+  s.set("blurNotch", 5); s.rev = 1;
+  assert.equal(CC.blurAmount(s), 1, "notch 5 reads as amount 1");
+  s.set("blurNotch", 10); s.rev = 2;
   assert.equal(CC.blurAmount(s), 2.25);
   const knob = /id: "speedBlur"[^}]*max: ([\d.]+)/.exec(fs.readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"));
   assert.ok(knob && CC.blurAmount(s) <= Number(knob[1]), "notch 10 stays inside the SPEED BLUR knob's range");
-  s.set("motionBlur", 1); s.rev = 3;
+  s.set("blurNotch", 1); s.rev = 3;
   assert.equal(CC.blurAmount(s), 0, "notch 1 is off");
-  s.set("motionBlur", 7);
+  s.set("blurNotch", 7);
   assert.equal(CC.blurAmount(s), 0, "memoised until the store's revision moves");
 });
 
@@ -189,7 +191,7 @@ test("SPEED LINES is hidden from the camera tuner until a backend draws it; its 
   const CC = load();
   const sl = CC.FX_DEFS.find((d) => d.id === "speedLines");
   assert.equal(sl.hidden, true);
-  assert.equal(CC.FX_DEFS.find((d) => d.id === "motionBlur").hidden, undefined);
+  assert.equal(CC.FX_DEFS.find((d) => d.id === "blurNotch").hidden, undefined);
   const s = rawStore({ speedLines: 4 });
   assert.equal(CC.fxGet(s, "speedLines"), 4, "a saved notch is still read (export / import round-trip)");
 });
