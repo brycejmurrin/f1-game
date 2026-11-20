@@ -166,3 +166,55 @@ Forcing LSP-first lowered success in the published harness study (§Research). S
 - tsgo status ("nearly all" language-service features): https://github.com/microsoft/typescript-go. A probe of 7.0.2 shows `callHierarchyProvider` works on JS, a candidate for `lsp_callers`.
 - Agents use LSP tools rarely on "where is X" tasks, and do better when results carry each reference's line text inline. Sources: Xu, arXiv 2608.13568 (https://arxiv.org/abs/2608.13568) and https://agentconnect.md/blog/grep-beat-lsp-harness/. Forcing LSP-first hurt success, which is why this lane names the tool instead of blocking grep. Both are reported by the research subagent; I did not re-read them.
 - Project references: https://www.typescriptlang.org/docs/handbook/project-references.html. Not worth it for one global scope with no imports, because splitting would route references through declaration files.
+
+## 5. Round 2: four subagents over js/ (2026-11-20, PR after #5971)
+
+Four read-only agents hit the tool on the branch code, each checking against a grep ground truth they built by hand. Reports are in `scratch/lsp-stress/` (not committed).
+
+| Slice | Queries | Correct |
+|---|---|---|
+| render / agent / track | 74 | 51 |
+| race / physics / car / audio + game.js | 60 | 37 |
+| ui / garage / editor / input / core | 46 | 27 |
+| protocol / edge / perf | 6 bugs | — |
+
+A bulk script also checked every IIFE module:
+- outline: 393/476 match the AST exports. Most misses were the harness splitting one-row multi-declarator constants; 1 real empty outline.
+- hover: 468 of 852 members answer `any`.
+- callers vs references: 15 of 852 disagree.
+
+**The stale-server finding.** The session's attached MCP server had started before the branch fixes and silently answered with the old code. 11 queries differed from the CLI.
+
+**Fixed in this PR**
+| Bug | Before → after |
+|---|---|
+| A call argument read as an export shorthand (`addEventListener("click", onX, true)`, `setTimeout(render, 0)`; ~250 sites dropped from callers) | `callers onPauseClick` 0 → 1 |
+| Refs did not follow `const { tube } = GaragePrims` | `refs GaragePrims.tube` 3 rows in 1 file → 92 in 7 (callers: 84 uses) |
+| Callers by symbol missed the declaring file's own calls (export- and def-hop uses never reached the caller table) | `callers Career.inCareer` 21 → 37 functions, equal to the position query; `Input.touchControlsNeeded` 9 → 14 |
+| A `window.X = X` self re-export counted as a second declaration | `outline ApexGpuCapture` was empty, now 5 exported; `def` header no longer says "2 separate declarations" |
+| `const MIN_SEP = 0.03` tagged `[alias]` | `[def]` |
+| Every game.js caller labelled `callback ›` (the file-wrapping IIFE) | `tickBody`, `top level` |
+| A destructured key at a position (`const { IDLE_RPM } = PhysicsConsts`) | "nothing resolvable" → `PhysicsConsts.IDLE_RPM` at consts.js |
+| CLI crash ("tsc --lsp is not running", uncaught) after an input error | clean error, exit 1 |
+| `def file.md:1` / `.mjs` targets read as a malformed symbol | "unsupported language" / a file |
+| A server whose own code changed on disk | every answer ends with a restart line |
+
+All are pinned by `tests/unit/lsp-stress-fixes.test.mjs` and `lsp-eval` 16/16.
+
+**Open (ranked by agent value)**
+1. Re-export chains (B13): `refs TrackSpline.curvature` gives 16 of 68 sites, while `refs Tracks.curvature` gives 67.
+2. Duplicated globals (Damage, GameAudio stubs) drop rows, and PitLane members resolve to `session-stub.js`.
+3. A hung tsc is never reset (each call takes the 30 s timeout), and one serial queue holds `ping` behind it.
+4. An untracked new js/ file turns off "new since HEAD" for every file.
+5. TS2554 / TS2349 false positives come from zero-parameter stubs (22 of game.js's 26 diagnostics).
+6. Compact output keeps the head and tail, hiding rows behind a correct-looking paging footer, and never names `output_read`.
+7. Hover ignores the `//` comment blocks this codebase uses for docs.
+8. Multi-line destructures of `G`, three-part names (`PhysicsConsts.DirtyAir.isLevel`), and a `--path` that matches nothing.
+9. Did-you-mean for members and globals, and a hint when a name exists only in tools/ or tests/.
+
+**Game code the round found (low severity):** extra arguments silently ignored at:
+- `js/physics/wall-clamp.js:194`: `AiDrive.wallAiScrub(!!track.street)` takes no parameter
+- `js/car/cockpit-rig.js:265`
+- `js/render/glx/glx.js:2828`
+
+`js/ui/experience.js:177` reads `.shot`, which the scene never has.

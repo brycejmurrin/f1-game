@@ -192,7 +192,8 @@ test("MCP client: wrapS callers keep same-file uses, bounds-checked positions, T
   // The declaration behind Tracks' destructured re-export is a row, and the header names it
   // (never presenting the use-site anchor as the answer).
   assert.deepEqual(rows(refs).filter(r => r.tag === "def").map(r => r.file), ["js/track/core/spline.js"]);
-  assert.equal(/; declared at (\S+):\d+:\d+\)$/.exec(refs.content[0].text.split("\n")[0])?.[1], "js/track/core/spline.js");
+  // Notes may follow (2026-11-20: refs now count uses reached through destructures, as callers did).
+  assert.equal(/; declared at ([^\s;)]+):\d+:\d+[;)]/.exec(refs.content[0].text.split("\n")[0])?.[1], "js/track/core/spline.js");
 });
 
 test("tsc --lsp starts on the first call, exits when idle, and restarts on demand", { timeout: 60000 }, async () => {

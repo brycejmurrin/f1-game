@@ -157,7 +157,7 @@ export function classify(line, col, next = "") {
   if (/\b(const|let|var)\s*[{[][^}\]]*$/.test(before)) return "alias";
   // `const x = …` and later declarators (`const a = 1, x = …`): a bare member expression is an alias.
   if (/\b(const|let|var)\s+$/.test(before) || (/^\s*(const|let|var)\s/.test(line) && /,\s*$/.test(before) && /^\s*=(?!=)/.test(after)))
-    return /^\s*=\s*(window\.)?[\w$]+(\.[\w$]+)*\s*([;,].*|\/\/.*)?$/.test(after) ? "alias" : "def";
+    return /^\s*=\s*(window\.)?[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*\s*([;,].*|\/\/.*)?$/.test(after) ? "alias" : "def";   // `= 0.03` is a value (2026-11-20)
   const closesDestructure = !/\breturn\b/.test(before) && /^[^;]*?\}\s*=(?![=>])/.test(`${after}\n${next}`);
   if ((/^\s*(async\s+)?(get\s+|set\s+)?$/.test(before) || /[{,]\s*$/.test(before)) && (/^\??\s*:(?!:)/.test(after) || /^\s*\([^)]*\)\s*\{/.test(after)))
     return closesDestructure && /^\s*:\s*[\w$]+\s*[,}]/.test(after) ? "alias" : "def";
@@ -169,7 +169,22 @@ export function classify(line, col, next = "") {
 }
 
 // Is the identifier at `col` a shorthand property (`{ a, name, b }`) — an export, not a declaration?
-const isShorthand = (line, col) => /^[\w$]+\s*[,}]/.test(line.slice(col)) && !/(const|let|var|function)\s+$/.test(line.slice(0, col));
+// The innermost bracket still open before `col` on this line must be `{`: in `addEventListener("click", onX, true)`
+// or `[a, b]` the name is an argument or element, a USE (2026-11-20: ~250 such sites dropped out of lsp_callers).
+// No opener on the line (a multi-line `return {` list) keeps the shorthand reading.
+const openerBefore = (s) => {
+  const stack = [];
+  for (let i = 0, q = null; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { if (ch === "\\") i++; else if (ch === q) q = null; continue; }
+    if (ch === '"' || ch === "'" || ch === "`") q = ch;
+    else if ("({[".includes(ch)) stack.push(ch);
+    else if (")}]".includes(ch)) stack.pop();
+  }
+  return stack.at(-1) || null;
+};
+const isShorthand = (line, col) => /^[\w$]+\s*[,}]/.test(line.slice(col)) && !/(const|let|var|function)\s+$/.test(line.slice(0, col))
+  && !["(", "["].includes(openerBefore(line.slice(0, col)));
 
 // Which characters of a source text are NOT code: comments, string and template text
 // (a template's `${…}` is code again), regex literals. One pass, state carried across
@@ -336,7 +351,12 @@ export class Lsp {
         let m;
         try { m = JSON.parse(buf.subarray(h + 4, h + 4 + len).toString()); } catch { buf = buf.subarray(h + 4 + len); continue; }
         buf = buf.subarray(h + 4 + len);
-        if (m.method && m.id != null) this.send({ jsonrpc: "2.0", id: m.id, result: m.method === "workspace/configuration" ? (m.params?.items || []).map(() => null) : null });
+        // A server request that lands after stop() (a CLI error path, an idle or config restart) is answered on
+        // ITS process, or dropped: this.send() threw "tsc --lsp is not running" as an uncaught crash (2026-11-20).
+        if (m.method && m.id != null) {
+          if (this.proc !== proc || proc.stdin.destroyed) continue;
+          try { this.send({ jsonrpc: "2.0", id: m.id, result: m.method === "workspace/configuration" ? (m.params?.items || []).map(() => null) : null }); } catch { /* stopped meanwhile */ }
+        }
         else if (m.id != null && this.pending.has(m.id)) { this.pending.get(m.id)(m); this.pending.delete(m.id); }
       }
     });
@@ -585,6 +605,9 @@ export class Lsp {
       visitParents(this.astOf(file), (n, parents) => {
         if (!["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(n.type)) return;
         const parent = parents.at(-1), grand = parents.at(-2);
+        // `(async function () { … })();` wrapping a whole file (game.js) is no caller: it prefixed every game.js
+        // row with "callback ›" (2026-11-20).
+        if (parent?.type === "CallExpression" && parent.callee === n && grand?.type === "ExpressionStatement" && parents.at(-3)?.type === "Program") return;
         let name = n.id?.name || "";
         if (!name && parent?.type === "VariableDeclarator" && parent.id.type === "Identifier") name = parent.id.name;
         if (!name && parent?.type === "Property") {
@@ -983,7 +1006,12 @@ export class Lsp {
         const near = (await this.symbols(name)).filter(s => s.name.toLowerCase() === name.toLowerCase() && !s.containerName && [5, 12, 13, 14].includes(s.kind)).slice(0, 3);
         throw Error(`symbol not found: ${name}${near.length ? `; did you mean ${near.map(s => `${s.name} (${this.rel(s.location.uri)}:${s.location.range.start.line + 1})`).join(", ")}?` : " (try lsp_symbols for a prefix)"}`);
       }
-      const top = hits.filter(s => !s.containerName);
+      // tsgo lists `window.X = X` (a self re-export of the script declaration) as a second top-level symbol: one
+      // module read as "2 separate top-level declarations" and its outline came back empty (ApexGpuCapture).
+      const selfAlias = s => new RegExp(`(?:window|self|globalThis)\\.${name.replace(/[$]/g, "\\$")}\\s*=\\s*${name.replace(/[$]/g, "\\$")}\\s*(?:[;,)]|$)`)
+        .test(this.textLines(this.rel(s.location.uri))[s.location.range.start.line] || "");
+      let top = hits.filter(s => !s.containerName);
+      if (top.length > 1 && top.some(s => !selfAlias(s))) top = top.filter(s => !selfAlias(s));
       return { cands: hits.map(at), parts, top: (top.length ? top : hits).map(at) };
     }
     const re = new RegExp(`\\b${parts.map(p => p.replace(/[$]/g, "\\$")).join("\\??\\.")}\\b`, "g");
@@ -1041,7 +1069,17 @@ export class Lsp {
     // modules; a window global is `any`): answer as the qualified name, the way a symbol query would.
     if (args.file && first && !answered(first.result) && !args._qualified) {
       const ln = this.textLines(first.p.file)[first.p.line0] || "", before = ln.slice(0, first.p.col0);
-      const m = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\??\.\s*$/.exec(before), member = /^[\w$]+/.exec(ln.slice(first.p.col0))?.[0];
+      let m = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\??\.\s*$/.exec(before), member = /^[\w$]+/.exec(ln.slice(first.p.col0))?.[0];
+      // `const { IDLE_RPM, MAX_RPM: max } = PhysicsConsts` (or `= window.PhysicsConsts`): the key is Head.member.
+      if (!m && member) {
+        visitParents(this.astOf(first.p.file), (n, parents) => {
+          if (m || n.type !== "Identifier" || n.loc.start.line - 1 !== first.p.line0 || n.loc.start.column !== first.p.col0) return;
+          const prop = parents.at(-1), pattern = parents.at(-2), decl = parents.at(-3);
+          if (prop?.type !== "Property" || pattern?.type !== "ObjectPattern" || decl?.type !== "VariableDeclarator" || decl.id !== pattern) return;
+          const key = !prop.computed && (prop.key.name ?? prop.key.value), head = objectName(decl.init)?.replace(/^(?:window|self|globalThis)\./, "");
+          if (key && head && /^[A-Za-z_$][\w$]*$/.test(head)) { m = [null, head]; member = String(key); }
+        });
+      }
       if (m && member && (this.facadeOf(m[1]) || /^[A-Z]/.test(m[1]))) {
         try {
           const q = await this.at({ symbol: `${m[1]}.${member}`, _qualified: true }, method, extra);
@@ -1075,7 +1113,7 @@ export class Lsp {
   }
   windowDecl(h, all = false) {
     const esc = h.replace(/[$.]/g, "\\$&"), declarations = [];
-    const win = new RegExp(`(?:^|[;{}(])\\s*(?:window|self|globalThis)\\.${esc}\\s*=(?!=)`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
+    const win = new RegExp(`(?:^|[;{}(])\\s*(?:window|self|globalThis)\\.${esc}\\s*=(?!=)(?!\\s*${esc}\\s*(?:[;,)]|$))`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
     for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(h)) continue;
@@ -1464,6 +1502,29 @@ export class Lsp {
       }
     }
   }
+  // References' half of what callers does: an export row's own references (the destructures `const { x } = M`
+  // and aliases in other files), then each alias binding's uses, tagged `via`. Without it `refs GaragePrims.tube`
+  // answered 3 rows in 1 file while callers found 84 uses in 7 (2026-11-20). Returns only the rows not in `locs`.
+  async exportAndAliasUses(locs) {
+    const norm = l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l;
+    const key = l => `${l.uri}\u0000${l.range.start.line}:${l.range.start.character}`;
+    const tagOf = l => this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character);
+    const all = locs.map(norm), seen = new Set(all.map(key)), added = [];
+    const add = l => { if (!seen.has(key(l))) { seen.add(key(l)); added.push(l); } };
+    const exportRefs = await Promise.all(all.filter(l => tagOf(l) === "export").map(l =>
+      this.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])));
+    for (const refs of exportRefs) for (const r of refs || []) if (["use", "alias"].includes(tagOf(r))) add(r);
+    const aliases = [...all, ...added].filter(l => tagOf(l) === "alias");
+    const viaAlias = await Promise.all(aliases.map(async l => {
+      const f = this.rel(l.uri), binding = this.aliasBindingAt(f, l.range.start.line, l.range.start.character);
+      if (!binding) return [];
+      this.ensureOpen(f);
+      const refs = (await this.request("textDocument/references", { textDocument: { uri: l.uri }, position: { line: binding.line, character: binding.character }, context: { includeDeclaration: false } }).catch(() => [])) || [];
+      return refs.filter(r => r.range.start.line !== binding.line || r.range.start.character !== binding.character).map(r => ({ ...r, via: binding.name }));
+    }));
+    for (const batch of viaAlias) for (const r of batch) add(r);
+    return added;
+  }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
   // Location rows, paged (offset/limit). References carry the enclosing function
   // (`(GameHud › updateDash)`); format "concise" drops the source text.
@@ -1625,6 +1686,20 @@ export async function callTool(lsp, name, a = {}) {
         const exportRefs = await Promise.all(all.filter(l => tagOf(l) === "export").map(l =>
           lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])));
         for (const refs of exportRefs) for (const r of refs || []) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
+        // A symbol query anchored at an outside use reaches the export's uses, not the declaring file's own calls:
+        // `callers Career.inCareer` said 21 functions while the declaration's position gave 37 (2026-11-20).
+        // Ask the [def] row too; rows dedupe below.
+        if (a.symbol && p) {
+          lsp.ensureOpen(p.file);
+          const defs = [].concat((await lsp.request("textDocument/definition", { textDocument: { uri: lsp.uriOf(p.file) }, position: { line: p.line0, character: p.col0 } }).catch(() => null)) || [])
+            .map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l)
+            .filter(l => l?.uri?.startsWith("file:") && !lsp.rel(l.uri).startsWith("types/") && tagOf(l) === "def");
+          const defRefs = await Promise.all(defs.map(l => {
+            lsp.ensureOpen(lsp.rel(l.uri));
+            return lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => []);
+          }));
+          for (const refs of defRefs) for (const r of refs || []) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
+        }
         // Direct and destructured aliases hide real callers behind a local binding.
         const aliasLocs = all.filter(l => tagOf(l) === "alias");
         const viaAlias = await Promise.all(aliasLocs.map(async l => {
@@ -1636,6 +1711,9 @@ export async function callTool(lsp, name, a = {}) {
             .map(r => ({ ...r, via: binding.name }));
         }));
         for (const batch of viaAlias) locs.push(...batch);
+        // Uses that the export and declaration hops added to `all` after `locs` was taken (they were dropped:
+        // only alias rows reached the caller table). The dedupe below keeps each location once.
+        locs.push(...all.filter(l => tagOf(l) === "use"));
         // Export and alias routes may reach the same use more than once.
         // Keep distinct columns on a line, and never count declarations as calls.
         const seen = new Set(), uses = locs.filter(l => {
@@ -1686,6 +1764,10 @@ export async function callTool(lsp, name, a = {}) {
           const list = Array.isArray(result) ? result : result ? [result] : [], unfiltered = list.length;
           resolved = list.filter(l => inScope(lsp.rel(l.targetUri || l.uri), scope));
           notes.push(`scope path "${scope}": ${resolved.length} of ${unfiltered} resolved ${isDef ? "definitions" : "references"}`);
+        }
+        if (!isDef && Array.isArray(resolved) && !(at.note && /text match/.test(at.note))) {
+          const more = (await lsp.exportAndAliasUses(resolved)).filter(l => !scope || inScope(lsp.rel(l.uri), scope));
+          if (more.length) resolved = [...resolved, ...more];
         }
         const made = !isDef && p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
         if (made?.uses.length) {
@@ -1755,6 +1837,19 @@ export async function handleRpc(lsp, msg) {
   return rpcError(id, -32601, "Method not found");
 }
 
+// A long-lived server keeps the code it started with. After a pull, a sync or an edit of the tool, answers came
+// from the old code with no sign (2026-11-20: one session's server missed every fix on its own branch). Say so.
+const SELF_FILES = ["tools/mcp/lsp-mcp.mjs", "tools/mcp/member-check.mjs"].map(f => path.join(ROOT, f));
+const mtimeOf = f => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
+const STARTED = SELF_FILES.map(mtimeOf);
+export function staleNote(r, now = SELF_FILES.map(mtimeOf)) {
+  const changed = SELF_FILES.filter((f, i) => now[i] !== STARTED[i]);
+  const text = r?.result?.content?.[0];
+  if (!changed.length || !text || typeof text.text !== "string") return r;
+  text.text += `\n(apex-lsp: ${changed.map(f => path.relative(ROOT, f)).join(", ")} changed since this server started; this answer comes from the old code. Restart the MCP server, or run node tools/mcp/lsp-mcp.mjs for the current code.)`;
+  return r;
+}
+
 export async function serve() {
   const lsp = new Lsp();
   for (const s of ["SIGINT", "SIGTERM"]) process.once(s, () => { lsp.stop(); process.exit(0); });
@@ -1764,7 +1859,7 @@ export async function serve() {
     if (!line.trim()) continue;
     let msg;
     try { msg = JSON.parse(line); } catch { process.stdout.write(JSON.stringify(rpcError(null, -32700, "Invalid JSON")) + "\n"); continue; }
-    chain = chain.then(() => handleRpc(lsp, msg)).then(r => { if (r) process.stdout.write(JSON.stringify(r) + "\n"); })
+    chain = chain.then(() => handleRpc(lsp, msg)).then(r => { if (r) process.stdout.write(JSON.stringify(staleNote(r)) + "\n"); })
       .catch(e => process.stderr.write(`apex-lsp: ${e.message}\n`));
   }
   await chain; lsp.stop();
@@ -1781,7 +1876,9 @@ async function cli([cmd, target, ...rest]) {
     ].join("\n") + "\n");
     return cmd === "--help" ? 0 : 2;
   }
-  const pos = /^(.+\.(?:js|ts)):(\d+)(?::(\d+))?$/.exec(target), file = /\.(js|ts)$/.test(target);
+  // Any `path:line[:col]` is a position (the tool call then names an unsupported language plainly), and .mjs/.cjs
+  // and .mts/.cts files are files: `def <file>.mjs:<line>` used to fail as "symbol must be Name or Head.member".
+  const pos = /^(.+\.[A-Za-z]+):(\d+)(?::(\d+))?$/.exec(target), file = /\.[cm]?[jt]s$/.test(target);
   const args = name === "lsp_symbols" ? { query: target } : name === "lsp_diagnostics" ? { file: target }
     : name === "lsp_outline" ? (file ? { file: target } : { symbol: target })
     : pos ? { file: pos[1], line: +pos[2], ...(pos[3] ? { column: +pos[3] } : {}) } : { symbol: target };
