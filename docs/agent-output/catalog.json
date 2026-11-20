@@ -2883,6 +2883,15 @@
       "outputPolicy": "page-results"
     },
     {
+      "path": "tools/mcp/lsp-coverage.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/mcp/lsp-eval.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2939,6 +2948,11 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/mcp/member-check.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/mcp/output-level-mcp.mjs",

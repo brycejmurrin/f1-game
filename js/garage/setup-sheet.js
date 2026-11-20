@@ -1200,7 +1200,7 @@ function buildLiveryCreator(container, team) {
   // not a number; NUMBER FONT and the mark colours are always live (the nose
   // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
-  let designTools = null;
+  let /** @type {ReturnType<typeof GarageLiveryDesignEditor.attach> | null} */ designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
   const wheelParts = Parts.getVisualTiers(getTeamParts(team.id), team);

@@ -274,7 +274,7 @@ const RealReplay = (function () {
   function create(G) {
     let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey}
     let captionGeneration = 0;
-    let transport = null;
+    let /** @type {ReturnType<typeof WatchTransport.create> | null} */ transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
     // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.

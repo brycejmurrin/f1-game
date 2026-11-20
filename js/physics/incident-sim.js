@@ -298,7 +298,7 @@ const IncidentSim = (function () {
         const c = G.cars && G.cars[i];
         if (!c) { finishCar(inc, i); continue; }
         if (c.retired || c.finished) { handbackCar(inc, i, true); continue; }
-        let pose = null;
+        let /** @type {ReturnType<typeof DebrisWorld.carBodyPose> | null} */ pose = null;
         try { pose = DebrisWorld.carBodyPose(i); } catch (e) { pose = null; }
         if (!pose || !fin(pose.x) || !fin(pose.z) || !fin(pose.qw)) { handbackCar(inc, i, true); continue; }
         // Candidate world position + heading from the 6-DoF body.

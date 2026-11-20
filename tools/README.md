@@ -599,6 +599,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools b
 | **mcp/js-debugger-smoke.mjs** | Parent-only native Chromium smoke for js-debugger-mcp's real stdio/CDP debugging workflow. | — |
 | **mcp/js-debugger-trace.mjs** | Non-pausing debugger tools: logpoints, exception log, listener counts, live-object counts (CDP). | — |
 | **mcp/js-debugger-workflow.mjs** | Batched debugger workflows: break-and-inspect, logpoint collect, and the scope-locals reader they share. | — |
+| **mcp/lsp-coverage.mjs** | apex-lsp accuracy vs a lexical ground truth: reference recall (raw tsc vs tool), member reads, Module.member defs. | — |
 | **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
 | **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
 | **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
@@ -606,6 +607,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools b
 | **mcp/mcp-listing-cost.mjs** | Sizes each .mcp.json server's tools/list: tool count, chars, est. tokens, names-only cost. `--json`, `--entry`. | agent-config |
 | **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes repo MCP wrappers (apex_status, chrome-devtools status, js-debugger/apex-lsp list-tools, probe help). No Chromium. | check-changes |
+| **mcp/member-check.mjs** | apex-lsp diag APX1/APX2: a call or read of a Module.member or factory-instance member nothing defines. | — |
 | **mcp/output-level-mcp.mjs** | Wrap a stdio MCP server with bounded output levels and saved-result retrieval. | — |
 | **mcp/output-level-mcp.sh** | Agent MCP entrypoint: compact by default; outputLevel diagnostic/full and saved-result retrieval for every tool. | check-changes |
 | **mcp/playwright-mcp.sh** | Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server. | survey-ui-matrix / css-play / mcp-probe |

@@ -29,6 +29,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import { parse } from "espree";
 import { analyze } from "eslint-scope";
+import { buildIndex, checkFile } from "./member-check.mjs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -315,7 +316,7 @@ function configFiles(root, src) {
 export class Lsp {
   // tsc --lsp holds ~400 MB beside SwiftShader runs: it starts on the first tool
   // call, never at session start, and exits after idleMs without one.
-  constructor({ root = ROOT, src = SRC, anchor = ANCHOR, cmd = path.join(ROOT, "node_modules/.bin/tsc"), timeout = 30000,
+  constructor({ root = ROOT, src = SRC, anchor = ANCHOR, cmd = process.env.APEX_LSP_TSC || path.join(ROOT, "node_modules/.bin/tsc"), timeout = 30000,
     idleMs = +(process.env.APEX_LSP_IDLE_MS || 10 * 60000) } = {}) {
     this.root = root; this.src = src; this.anchor = anchor; this.cmd = cmd; this.timeout = timeout; this.idleMs = idleMs; this.idle = null; this.proc = null; this.ready = null;
     this.open = new Map(); this.mtimes = new Map(); this.lines = new Map(); this.syms = new Map(); this.configs = null; this.generation = 0;
@@ -370,7 +371,35 @@ export class Lsp {
     const s = JSON.stringify(o); this.proc.stdin.write(`Content-Length: ${Buffer.byteLength(s)}\r\n\r\n${s}`);
   }
   notify(method, params) { this.send({ jsonrpc: "2.0", method, params }); }
-  request(method, params) {
+  async request(method, params) {
+    const result = await this.rawRequest(method, params);
+    if (method !== "textDocument/references" || (result != null && !Array.isArray(result))) return result;
+    return this.withLexicalRefs(params, result || []);
+  }
+  withLexicalRefs(params, result) {
+    let file;
+    try { file = this.rel(params.textDocument.uri); } catch { return result; }
+    if (!/\.(?:js|mjs|cjs)$/.test(file) || !this.mtimes.has(file)) return result;
+    const t = this.textOf(file), line = t.lines[params.position.line];
+    if (line == null) return result;
+    let col = params.position.character;
+    while (col > 0 && /[\w$]/.test(line[col - 1])) col--;
+    const variable = this.lexicalRefs(file).get(t.starts[params.position.line] + col);
+    if (!variable || !variable.scope || variable.scope.type === "global") return result;
+    const uri = params.textDocument.uri, have = new Set(result.filter(r => r.uri === uri).map(r => `${r.range.start.line}:${r.range.start.character}`));
+    const declared = new Set(variable.identifiers.map(id => id.range[0])), added = [];
+    const ids = [...(params.context?.includeDeclaration === false ? [] : variable.identifiers), ...variable.references.map(r => r.identifier)];
+    for (const id of ids) {
+      if (params.context?.includeDeclaration === false && declared.has(id.range[0])) continue;
+      const start = { line: id.loc.start.line - 1, character: id.loc.start.column }, key = `${start.line}:${start.character}`;
+      if (have.has(key)) continue;
+      have.add(key);
+      added.push({ uri, range: { start, end: { line: id.loc.end.line - 1, character: id.loc.end.column } } });
+    }
+    if (added.length) this.lexicalAdded = (this.lexicalAdded || 0) + added.length;
+    return added.length ? [...result, ...added] : result;
+  }
+  rawRequest(method, params) {
     return new Promise((resolve, reject) => {
       if (!this.proc) return reject(Error("tsc --lsp is not running"));
       const id = ++this.seq;
@@ -790,6 +819,22 @@ export class Lsp {
     return `${f}\n${pageRows.join("\n")}${out.length > offset + limit ? `\n… ${out.length - offset - limit} more rows (offset: ${offset + limit})` : ""}`;
   }
 
+  memberIndex() {
+    const stamp = [...this.mtimes].map(([f, m]) => `${f}:${m}`).join("|");
+    if (this._memberIndex && this._memberIndexStamp === stamp) return this._memberIndex;
+    const asts = new Map();
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) { const ast = this.astOf(f); if (ast) asts.set(f, ast); }
+    this._memberIndexStamp = stamp;
+    return this._memberIndex = buildIndex(asts);
+  }
+  memberDiagnostics(text) {
+    let ast;
+    try { ast = parse(text, { ecmaVersion: "latest", sourceType: "script", loc: true, range: true }); } catch { return []; }
+    const lines = text.split("\n");
+    return checkFile(ast, text, this.memberIndex()).filter(m => !m.guarded && m.member !== "_stub").map(m => ({ line0: m.line0, col0: m.col0, code: m.called ? "APX1" : "APX2",
+      msg: m.called ? `${m.owner}.${m.member}() is called, but no declaration of it defines '${m.member}' (TypeError at run time)` : `${m.owner}.${m.member} is read, but no declaration of it defines '${m.member}' (always undefined)`,
+      src: (lines[m.line0] || "").trim() }));
+  }
   // ── Diagnostics an edit introduced: per-file // @ts-check, high-signal codes, minus HEAD's ──
   async diagnose(file, all = false) {
     await this.prepare();
@@ -803,24 +848,25 @@ export class Lsp {
       this.open.set(f, v);
       this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(f), version: v }, contentChanges: [{ text: "// @ts-check\n" + text }] });
       const r = await this.request("textDocument/diagnostic", { textDocument: { uri: this.uriOf(f) } });
-      return (r?.items || []).filter(d => {
+      const ts = (r?.items || []).filter(d => {
         if (d.code < 2000) return true;   // syntax
         if (!DIAG_CODES.has(d.code)) return false;
         const name = /'([\w$]+)'/.exec(d.message)?.[1];
         if ((d.code === 2304 || d.code === 2552) && name && this.windowDecl(name)) return false;   // a window.X / CommonJS-flagged global: invisible to the checker
         if (d.code === 2451 && name && new RegExp(`declare\\s+(const|let|var|function)\\s+${name}\\b`).test(ambient)) return false;   // the .d.ts contract re-declares it
         return true;
-      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: d.code, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: `TS${d.code}`, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+      // APX rows add what the checker cannot see; one the checker already flags at that spot (TS2551) is noise.
+      const at = new Set(ts.map(d => `${d.line0}:${d.col0}`));
+      return ts.concat(this.memberDiagnostics(text).filter(d => !at.has(`${d.line0}:${d.col0}`)));
     };
     try {
       const now = await check(fs.readFileSync(path.join(this.root, f), "utf8"));
       let head = null;
-      try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { /* untracked or no git */ }
-      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  TS${d.code} ${d.msg}`;
+      try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch {  }
+      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  ${d.code} ${d.msg}`;
       if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
-      // A per-file HEAD overlay cannot reproduce HEAD with edited dependencies.
-      // Report current errors honestly instead of classifying them as old.
-      let dependenciesChanged = true;
+      let dependenciesChanged = true, changedOthers = [];
       try {
         // --no-renames reports both ends as ordinary paths, including a
         // dependency moved out of src/. Unlike status -z, no second record
@@ -832,18 +878,44 @@ export class Lsp {
           const rel = path.relative(this.root, file);
           return rel.startsWith("..") || path.isAbsolute(rel) || rel.split(path.sep).includes("node_modules");
         });
-        // A package config has no corresponding blob in this repository's
-        // HEAD, so a per-file overlay can never establish its baseline.
-        dependenciesChanged = externalConfig || changed.some(other => other !== f && (
-          (/\.(?:[cm]?js|ts)$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/"))) ||
+        // A package config has no corresponding blob in this repository's HEAD, and a changed
+        // declaration file or config changes every file's baseline: no trustworthy subtraction.
+        // Other edited JavaScript sources still allow one: the per-file overlay says which
+        // diagnostics this file's own edits added, and names the other files.
+        changedOthers = changed.filter(other => other && other !== f && /\.(?:[cm]?js)$/.test(other) && other.startsWith(`${this.src}/`));
+        // Only MODIFIED sources can be put back to HEAD in the overlay; an added, deleted or moved one cannot.
+        const tracked = new Set(gitPaths(["ls-files", "-z", "--", this.src]));
+        const overlayable = changedOthers.length <= 40 && changedOthers.every(other => tracked.has(other) && fs.existsSync(path.join(this.root, other)));
+        const baselineChanged = externalConfig || (changedOthers.length && !overlayable) || changed.some(other => other !== f && (
+          (/\.ts$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/"))) ||
           configs.has(path.resolve(this.root, other))
         ));
+        dependenciesChanged = baselineChanged ? true : changedOthers.length ? "sources" : false;
       } catch { /* no trustworthy baseline */ }
-      if (dependenciesChanged) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, JavaScript or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
-      const before = await check(head), key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
+      if (dependenciesChanged === true) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, package config or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      // Edited sibling sources: put each back to its HEAD text for the baseline, so a dependency's edit
+      // (a new required parameter) still shows as new here, and this file's own edits are not hidden.
+      const restored = [];
+      if (dependenciesChanged === "sources") for (const other of changedOthers) {
+        const old = execFileSync("git", ["show", `HEAD:${other}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString();
+        const v = this.ensureOpen(other) + 1;
+        this.open.set(other, v); restored.push(other);
+        this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(other), version: v }, contentChanges: [{ text: old }] });
+      }
+      let before;
+      try { before = await check(head); }
+      finally {
+        for (const other of restored) {
+          const v = this.open.get(other) + 1;
+          this.open.set(other, v);
+          this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(other), version: v }, contentChanges: [{ text: fs.readFileSync(path.join(this.root, other), "utf8") }] });
+        }
+      }
+      const key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
       for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
       const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
-      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax)\n${fresh.map(fmt).join("\n")}`.trim();
+      const others = restored.length ? `; baseline with ${restored.length} other edited file${restored.length === 1 ? "" : "s"} at HEAD (${restored.slice(0, 4).join(", ")}${restored.length > 4 ? ", …" : ""})` : "";
+      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden${others}; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax + missing module/instance members)\n${fresh.map(fmt).join("\n")}`.trim();
     } catch (error) { failed = true; throw error; }
     finally {
       // Never close an old overlay in a replacement server or mask its failure.
@@ -881,6 +953,21 @@ export class Lsp {
       // name. Without it the zero notes cut the name from the column ("ineCells") and lost the text-match warning.
       const ln = lines[line - 1], word = (ch) => /[\w$]/.test(ch || "");
       let col0 = Math.max(0, (column || 1) - 1);
+      // No column: ask about the NAME the line declares (`function countCredit(`, `const x =`, `key: v`, a method),
+      // else its first identifier. Column 1 used to sit on the indent or `function` and answer "0 uses" silently.
+      if (column == null) {
+        let best = null;
+        const take = n => { if (n?.type === "Identifier" && n.loc.start.line === line && (!best || n.range[0] < best.range[0])) best = n; };
+        visit(this.astOf(f), n => {
+          if (n.loc?.start.line > line || n.loc?.end.line < line) return;
+          if (["FunctionDeclaration", "FunctionExpression", "ClassDeclaration"].includes(n.type)) take(n.id);
+          else if (n.type === "VariableDeclarator") take(n.id);
+          else if ((n.type === "Property" || n.type === "MethodDefinition") && !n.computed) take(n.key);
+          else if (n.type === "AssignmentExpression") take(n.left.type === "MemberExpression" ? n.left.property : n.left);
+        });
+        const first = /(?<![\w$])(?!(?:function|const|let|var|async|return|class|export|static|get|set|new|await|typeof|if|else|for|while)\b)[A-Za-z_$][\w$]*/.exec(ln);
+        if (best) col0 = best.loc.start.column; else if (first) col0 = first.index;
+      }
       if (!word(ln[col0]) && word(ln[col0 - 1])) col0--;
       while (col0 > 0 && word(ln[col0]) && word(ln[col0 - 1])) col0--;
       return { cands: [{ file: f, line0: line - 1, col0 }], parts: [] };
@@ -933,8 +1020,7 @@ export class Lsp {
   async at(args, method, extra = {}) {
     await this.prepare();
     const c = await this.candidates(args);
-    // Untyped heads never answer from the checker: skip the round-trips.
-    if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length === 2 && this.facadeOf(c.parts[0])) return { ...c, ...(await this.facade(c.parts, method, extra)) };
     if (c.parts.length > 1) {
       const owner = c.parts.slice(0, -1).join(".");
       if (this.windowDecl(owner) || this.repeatedIifeDecl(owner)) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
@@ -951,7 +1037,20 @@ export class Lsp {
       first ??= { p, result };
       if (answered(result)) return { ...c, p, result, note: p.note };
     }
-    if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    // A position on `Head.member` the checker cannot type (`G` is an untyped `create(G)` parameter in most
+    // modules; a window global is `any`): answer as the qualified name, the way a symbol query would.
+    if (args.file && first && !answered(first.result) && !args._qualified) {
+      const ln = this.textLines(first.p.file)[first.p.line0] || "", before = ln.slice(0, first.p.col0);
+      const m = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\??\.\s*$/.exec(before), member = /^[\w$]+/.exec(ln.slice(first.p.col0))?.[0];
+      if (m && member && (this.facadeOf(m[1]) || /^[A-Z]/.test(m[1]))) {
+        try {
+          const q = await this.at({ symbol: `${m[1]}.${member}`, _qualified: true }, method, extra);
+          if (answered(q.result)) return { ...q, note: [`answered as ${m[1]}.${member} (the checker cannot type ${m[1]} at ${first.p.file}:${first.p.line0 + 1})`, q.note].filter(Boolean).join("; ") };
+        } catch { /* keep the honest empty answer below */ }
+      }
+    }
+    if (c.parts.length === 2 && this.facadeOf(c.parts[0])) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length > 1 && first?.p.note && !(this.windowDecl(c.parts.slice(0, -1).join(".")) || this.repeatedIifeDecl(c.parts.slice(0, -1).join(".")))) return { ...c, ...first, note: first.p.note };
     if (c.parts.length > 1) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
     if (c.parts.length === 1 && method === "textDocument/definition") {
       const p = c.top[0];
@@ -976,18 +1075,19 @@ export class Lsp {
   }
   windowDecl(h, all = false) {
     const esc = h.replace(/[$.]/g, "\\$&"), declarations = [];
-    const win = new RegExp(`(?:^|[;{}])\\s*window\\.${esc}\\s*=`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
+    const win = new RegExp(`(?:^|[;{}(])\\s*(?:window|self|globalThis)\\.${esc}\\s*=(?!=)`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
     for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(h)) continue;
       for (const [re, kind] of [[win, "window"], ...(text.includes("module.exports") ? [[cjs, "cjs"]] : [])]) {
         re.lastIndex = 0;
         for (const m of text.matchAll(re)) {
-          const pos = this.posOf(f, m.index + (kind === "window" ? m[0].indexOf("window") : 0));
+          const globalHead = kind === "window" ? /window|self|globalThis/.exec(m[0]) : null;
+          const pos = this.posOf(f, m.index + (globalHead ? globalHead.index : 0));
           if (this.nonCode(f, pos.line0, pos.col0)) continue;
           if (kind === "window") {
             let globalWindow = false;
-            visit(this.astOf(f), n => { if (n.type === "Identifier" && n.name === "window" && n.loc.start.line - 1 === pos.line0 && n.loc.start.column === pos.col0) globalWindow = this.isGlobalHead(f, n, "window"); });
+            visit(this.astOf(f), n => { if (n.type === "Identifier" && n.name === globalHead[0] && n.loc.start.line - 1 === pos.line0 && n.loc.start.column === pos.col0) globalWindow = this.isGlobalHead(f, n, globalHead[0]); });
             if (!globalWindow) continue;
           }
           const d = { file: f, ...pos, kind };
@@ -1031,7 +1131,13 @@ export class Lsp {
   async textFallback(parts, method, head, extra = {}) {
     const [h, member] = [parts.slice(0, -1).join("."), parts.at(-1)];
     const d = this.windowDecl(h) || this.repeatedIifeDecl(h);
-    if (!d && head) throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; try lsp_hover ${h} or lsp_symbols ${member}`);
+    if (!d && head) {
+      // A lowercase head is usually a LOCAL (`pits`, `track`) declared in many files: the symbol search's first
+      // hit is not the one the caller means. Say so, and point at the position form that names the right one.
+      const local = /^[a-z_]/.test(h) && !this.windowDecl(h);
+      const used = [...this.mtimes.keys()].some(f => this.textOf(f).text.includes(`${h}.${member}`));
+      throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; ${local ? `${h} looks like a local, and the symbol search picked the first file declaring one; ${used ? "" : `no ${h}.${member} text in ${this.src}/; `}ask by position instead (lsp_definition file+line of a ${h}.${member} use, or of ${member}'s declaration), or ` : ""}try lsp_hover ${h} or lsp_symbols ${member}`);
+    }
     if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
     // Read the actual assignment/initializer and its exported object. A later
     // object or an internal helper is never evidence of a member on this owner.
@@ -1042,7 +1148,7 @@ export class Lsp {
       const candidates = [];
       visit(this.astOf(owner.file), n => {
         if (n.loc.start.line - 1 !== owner.line0 || n.loc.start.column !== owner.col0) return;
-        if (owner.kind === "window" && n.type === "AssignmentExpression" && objectName(n.left) === `window.${h}`) candidates.push(n.right);
+        if (owner.kind === "window" && n.type === "AssignmentExpression" && [`window.${h}`, `self.${h}`, `globalThis.${h}`].includes(objectName(n.left))) candidates.push(n.right);
         if (["cjs", "script"].includes(owner.kind) && n.type === "VariableDeclaration") for (const v of n.declarations) {
           if (objectName(v.id) !== h) continue;
           if (owner.kind === "script" && (v.id.loc.start.line - 1 !== owner.idLine0 || v.id.loc.start.column !== owner.idCol0)) continue;
@@ -1064,6 +1170,17 @@ export class Lsp {
         }
       }
     }
+    const assigned = new RegExp(`(?:^|[;{}])\\s*(?:(?:window|self|globalThis)\\.)?${h.replace(/[$.]/g, "\\$&")}\\.(${member.replace(/[$]/g, "\\$")})\\s*=(?!=)`, "gm");
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
+      const { text } = this.textOf(f);
+      if (!text.includes(`${h}.${member}`)) continue;
+      for (const m of text.matchAll(assigned)) {
+        const pos = this.posOf(f, m.index + m[0].lastIndexOf(member, m[0].lastIndexOf("=")));
+        if (this.nonCode(f, pos.line0, pos.col0)) continue;
+        if (!defs.some(x => x.uri === this.uriOf(f) && x.range.start.line === pos.line0 && x.range.start.character === pos.col0))
+          defs.push({ uri: this.uriOf(f), range: { start: { line: pos.line0, character: pos.col0 } } });
+      }
+    }
     if (!defs.length) throw Error(`${d.kind === "window" ? `window.${h}` : h} (${d.file}:${d.line0 + 1}) has no member ${member}`);
     const qualifications = [];
     if (owners.length > 1 || defs.length > 1) qualifications.push("multiple assignments/member contributions; candidates shown; runtime load order may determine the winner");
@@ -1077,6 +1194,10 @@ export class Lsp {
     const refs = await this.textRefs(parts, def, extra.context?.includeDeclaration !== false);
     if (extra.context?.includeDeclaration !== false) for (const other of defs.slice(1)) if (!refs.some(r => r.uri === other.uri && r.range.start.line === other.range.start.line && r.range.start.character === other.range.start.character)) refs.push(other);
     return { p, result: refs, note };
+  }
+  facadeOf(h) {
+    const facade = FACADES[h];
+    return facade && fs.existsSync(path.join(this.root, facade.file)) ? facade : null;
   }
   async facade([h, member], method, extra) {
     // tsgo's workspace/symbol skips .d.ts files: read the interface block, then let the checker type the row.
@@ -1110,6 +1231,98 @@ export class Lsp {
     return [`0 semantic uses, but ${hits.length} text match${hits.length === 1 ? "" : "es"} of .${name} (a member on an object the checker cannot type, e.g. a factory's return; verify each): ${at}${hits.length > 6 ? ", …" : ""}`];
   }
 
+  factoryOf(file, line0, col0) {
+    const ast = this.astOf(file), refs = this.lexicalRefs(file), { starts } = this.textOf(file);
+    if (!ast) return [];
+    const fnTypes = ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"];
+    let target = null;
+    visit(ast, n => { if (!target && n.type === "Identifier" && n.loc.start.line - 1 === line0 && col0 >= n.loc.start.column && col0 <= n.loc.end.column) target = refs.get(n.range[0]) || null; });
+    if (!target) return [];
+    const unwrap = o => o?.type === "CallExpression" && objectName(o.callee) === "Object.freeze" ? o.arguments[0] : o;
+    const returned = fn => (fn.body?.type === "BlockStatement" ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [fn.body]).map(unwrap).filter(o => o?.type === "ObjectExpression");
+    const keyFor = (fn, variable) => {
+      for (const object of returned(fn)) for (const prop of object.properties) {
+        if (prop.type !== "Property" || prop.computed || prop.value.type !== "Identifier") continue;
+        if (refs.get(prop.value.range[0]) === variable) return String(prop.key.name ?? prop.key.value);
+      }
+      return null;
+    };
+    const out = [];
+    for (const statement of ast.body) {
+      if (statement.type !== "VariableDeclaration") continue;
+      for (const declarator of statement.declarations) {
+        const top = declarator.id.type === "Identifier" && iife(declarator.init);
+        if (!top) continue;
+        visit(top.body, fn => {
+          if (!fnTypes.includes(fn.type) || fn.type !== "FunctionDeclaration" || !fn.id) return;
+          const member = keyFor(fn, target);
+          if (!member) return;
+          const made = refs.get(fn.id.range[0]), via = made && keyFor(top, made);
+          if (via && !out.some(x => x.head === declarator.id.name && x.via === via && x.member === member)) out.push({ head: declarator.id.name, via, member });
+        });
+      }
+    }
+    void starts;
+    return out;
+  }
+  factoryUses(file, line0, col0) {
+    const found = this.factoryOf(file, line0, col0);
+    if (!found.length) return null;
+    const esc = x => x.replace(/[$]/g, "\\$"), files = [...this.mtimes.keys()].filter(x => !x.endsWith(".ts")).sort();
+    const all = { head: found[0].head, via: found.map(f => f.via).join("/"), member: found[0].member, instances: [], uses: [] }, seen = new Set();
+    for (const f of found) {
+      const made = new RegExp(`([A-Za-z_$][\\w$]*)\\s*=(?!=)[^;\\n]*?(?<![\\w$.])${esc(f.head)}\\.${esc(f.via)}\\(`, "g"), instances = new Set();
+      for (const x of files) {
+        const { text } = this.textOf(x);
+        if (!text.includes(`${f.head}.${f.via}(`)) continue;
+        for (const m of text.matchAll(made)) { const pos = this.posOf(x, m.index); if (!this.nonCode(x, pos.line0, pos.col0)) instances.add(m[1]); }
+      }
+      if (!instances.size) continue;
+      for (const i of instances) if (!all.instances.includes(i)) all.instances.push(i);
+      const use = new RegExp(`(?<![\\w$])(?:${[...instances].map(esc).join("|")})\\s*\\??\\.\\s*(${esc(f.member)})(?![\\w$])`, "g");
+      for (const x of files) {
+        const { text } = this.textOf(x);
+        if (!text.includes(f.member)) continue;
+        for (const m of text.matchAll(use)) {
+          const pos = this.posOf(x, m.index + m[0].length - f.member.length), key = `${x}:${pos.line0}:${pos.col0}`;
+          if (seen.has(key) || this.nonCode(x, pos.line0, pos.col0)) continue;
+          seen.add(key);
+          all.uses.push({ uri: this.uriOf(x), range: { start: { line: pos.line0, character: pos.col0 }, end: { line: pos.line0, character: pos.col0 + f.member.length } }, factory: true });
+        }
+      }
+    }
+    return all;
+  }
+  factoryNote(f) {
+    return `${f.uses.length} of them are text matches on instances of ${f.head}.${f.via}() (${f.instances.slice(0, 6).join(", ")}${f.instances.length > 6 ? ", …" : ""}).${f.member}; an instance passed on under another name is not followed`;
+  }
+  outsideFiles() {
+    if (this._outside) return this._outside;
+    const out = [];
+    const add = (dir, re) => { try { for (const x of fs.readdirSync(path.join(this.root, dir)).sort()) if (re.test(x)) out.push(path.join(dir, x)); } catch {  } };
+    add("", /\.(?:html|js|mjs)$/); add("worker", /\.(?:js|mjs)$/);
+    return this._outside = out.filter(f => !f.startsWith(`${this.src}/`));
+  }
+  outsideNote(a, p) {
+    const symbol = a.symbol || /^[\w$]+/.exec((this.textLines(p.file)[p.line0] || "").slice(p.col0))?.[0];
+    if (!symbol || !/^[\w$.]+$/.test(symbol)) return [];
+    // A position query names a bare identifier: only a script GLOBAL can be used by another page or the
+    // service worker. A factory local (`update`) used to list every `update` in index.html.
+    if (!a.symbol) {
+      const variable = this.lexicalRefs(p.file).get(this.textOf(p.file).starts[p.line0] + p.col0);
+      if (!variable || variable.scope?.type !== "global") return [];
+    }
+    const parts = symbol.split("."), esc = x => x.replace(/[$]/g, "\\$");
+    const re = new RegExp(`(?<![\\w$])${parts.map(esc).join("\\s*\\??\\.\\s*")}(?![\\w$])`, "g"), hits = [];
+    for (const f of this.outsideFiles()) {
+      let text;
+      try { text = fs.readFileSync(path.join(this.root, f), "utf8"); } catch { continue; }
+      if (!text.includes(parts.at(-1))) continue;
+      for (const m of text.matchAll(re)) hits.push(`${f}:${text.slice(0, m.index).split("\n").length}`);
+    }
+    if (!hits.length) return [];
+    return [`${hits.length} text match${hits.length === 1 ? "" : "es"} of ${symbol} outside ${this.src}/ (inline scripts, service worker, other pages; not indexed, verify each): ${hits.slice(0, 6).join(", ")}${hits.length > 6 ? ", …" : ""}`];
+  }
   /** `.name` member accesses in code (not comments or strings) across the tree: the bounded text cross-check that
    *  keeps a semantic zero from reading as "unused" when the member sits on an object the checker cannot type,
    *  e.g. one a factory returns (`chunkedSys.mergeVisible(`, #5674). Rows: { file, line0, col0 }. */
@@ -1160,7 +1373,7 @@ export class Lsp {
           ? !!lexicalOwner && n?.type === "Identifier" && this.lexicalRefs(f).get(n.range[0]) === lexicalOwner
           : this.isGlobalHead(f, n, head)
         : this.isGlobalHead(f, n, head);
-      if (parts.length < 2 || FACADES[head]) usesOf(f, direct, name.length);
+      if (parts.length < 2 || this.facadeOf(head)) usesOf(f, direct, name.length);
       else visit(this.astOf(f), n => {
         if (n.type !== "MemberExpression" || !validHead(n.object)) return;
         const member = n.computed && n.property.type === "Literal" ? n.property.value : !n.computed && n.property.type === "Identifier" ? n.property.name : null;
@@ -1379,7 +1592,7 @@ export async function callTool(lsp, name, a = {}) {
         }).find(Boolean);
         // MERGE, never replace: the declaration's own same-file uses (wrapS in
         // game.js) are not uses of the exported member. Rows dedupe below.
-        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra)).result || [])];
+        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra).catch(() => null))?.result || [])];
       }
       if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
@@ -1419,7 +1632,14 @@ export async function callTool(lsp, name, a = {}) {
           seen.add(key); return true;
         });
         locs.length = 0; locs.push(...uses);
+        const made = p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
+        if (made?.uses.length) {
+          const fresh = made.uses.filter(l => !seen.has(locationKey(l)));
+          for (const l of fresh) { seen.add(locationKey(l)); locs.push(l); }
+          if (fresh.length) notes.push(lsp.factoryNote({ ...made, uses: fresh }));
+        }
         if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
+        if (p) notes.push(...lsp.outsideNote(a, p));
         const unfiltered = locs.length;
         if (scope) {
           const scopedLocs = locs.filter(l => inScope(lsp.rel(l.uri), scope));
@@ -1453,6 +1673,12 @@ export async function callTool(lsp, name, a = {}) {
           resolved = list.filter(l => inScope(lsp.rel(l.targetUri || l.uri), scope));
           notes.push(`scope path "${scope}": ${resolved.length} of ${unfiltered} resolved ${isDef ? "definitions" : "references"}`);
         }
+        const made = !isDef && p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
+        if (made?.uses.length) {
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [], key = l => `${l.targetUri || l.uri}\u0000${(l.targetSelectionRange || l.range).start.line}:${(l.targetSelectionRange || l.range).start.character}`;
+          const have = new Set(list.map(key)), fresh = made.uses.filter(l => !have.has(key(l)) && (!scope || inScope(lsp.rel(l.uri), scope)));
+          if (fresh.length) { resolved = [...list, ...fresh]; notes.push(lsp.factoryNote({ ...made, uses: fresh })); }
+        }
         const r = await lsp.locRows(resolved, { limit, offset, declFirst: isDef, where: !isDef, concise: a.format === "concise", render: !a.files });
         const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : !isDef && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
         const self = isDef && r.total === 1 && p && r.rows[0].startsWith(`${pos(p)} `);
@@ -1461,6 +1687,7 @@ export async function callTool(lsp, name, a = {}) {
           notes.push(/^[\w$]/.test(ln[p.col0] || "") ? `nothing resolvable at ${pos(p)} ("${w}")` : `${pos(p)} is not on a name (column ${p.col0 + 1} of "${ln.trim().slice(0, 60)}"); point the column at the symbol`);
         }
         if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
+        if (!isDef && p) notes.push(...lsp.outsideNote(a, p));
         const viaAlias = r.list.filter(l => l.via).length;
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);
         const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;

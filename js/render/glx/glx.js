@@ -17,7 +17,7 @@ const GLXBackend = (function () {
   let canvas = null;
   // HeadlessChrome soft-present overlay lives in js/render/glx/soft.js (GLXSoft).
   // Created once the ctxGone helper exists; deps close over gl/canvas/PST/outFBO.
-  let Soft = null;
+  let /** @type {ReturnType<typeof GLXSoft.create> | null} */ Soft = null;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -225,7 +225,7 @@ const GLXBackend = (function () {
   // The split renderer subsystems (js/render/glx/{post,shadow,chunked}.js),
   // wired at init() through the GLXCore ctx built there. PST = post chain,
   // SHD = shadow maps (sun/car/lamp + PCSS blocker), CHK = chunked meshes.
-  let core = null, PST = null, SHD = null, CHK = null;
+  let core = null, /** @type {ReturnType<typeof GLXPost.init> | null} */ PST = null, /** @type {ReturnType<typeof GLXShadow.init> | null} */ SHD = null, /** @type {ReturnType<typeof GLXChunked.init> | null} */ CHK = null;
   Soft = GLXSoft.create({
     getGl: () => gl,
     getCanvas: () => canvas,
@@ -1013,7 +1013,7 @@ const GLXBackend = (function () {
   }
   // CSS-box observation is shared; this backend still owns DPR, the driver
   // clamp and every render-target allocation below.
-  let cssSizeCache = null;
+  let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ cssSizeCache = null;
   function watchCanvasSize() {
     cssSizeCache = CanvasCssSize.create(canvas, { settleFrames: 8 });
   }

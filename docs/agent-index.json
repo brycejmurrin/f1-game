@@ -1262,6 +1262,7 @@
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/lsp-navigation-efficiency.test.mjs",
+        "tests/unit/lsp-port-cleanroom.test.mjs",
         "tests/unit/lsp-reference-fixes.test.mjs",
         "tests/unit/lsp-workflow-fixes.test.mjs",
         "tests/unit/mcp-listing-cost.test.mjs",

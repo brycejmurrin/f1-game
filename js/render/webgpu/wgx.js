@@ -604,7 +604,7 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
-    let _cssSizeCache = null, _pageListenersOff = null;
+    let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
       try { if (_pageListenersOff) _pageListenersOff(); } catch (_) { /* no document events */ }   // TLX _createUndo parity
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
@@ -985,9 +985,9 @@ const WGX = (function () {
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
-    let SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
-    let CHK = null;   // WGXChunked.init — culled chunked meshes
-    let PST = null;   // WGXPost.init — post pipeline build
+    let /** @type {ReturnType<typeof WGXShadow.init> | null} */ SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
+    let /** @type {ReturnType<typeof WGXChunked.init> | null} */ CHK = null;   // WGXChunked.init — culled chunked meshes
+    let /** @type {ReturnType<typeof WGXPost.init> | null} */ PST = null;   // WGXPost.init — post pipeline build
 
     // Shadow-pass objects.
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run

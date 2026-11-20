@@ -226,7 +226,7 @@ function reloadOnceIntoGlx(disarm) {
 }
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
-let _initOwner = null;
+let /** @type {ReturnType<typeof Gfx.createInitOwner> | null} */ _initOwner = null;
 let _createHung = false;     // the backend's create() never answered: leave its canary armed
 let pref = "webgl2", pick = "", why = "";   // the resolved pick, the explicit one, and why it did not bind (#2285: never silent)
 try {

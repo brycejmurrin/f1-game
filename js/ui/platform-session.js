@@ -220,7 +220,7 @@ function phoneLink(url) {
   if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
   return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
 }
-let phonePad = null;
+let /** @type {ReturnType<typeof PhonePad.host> | null} */ phonePad = null;
 let phonePadLoading = false, phonePadGeneration = 0;
 let recoveryOwner = null;
 const recoveryNote = document.createElement("p"), newPhoneCode = document.createElement("button");
