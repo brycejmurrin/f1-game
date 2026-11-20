@@ -142,6 +142,9 @@ test.describe("shipped defaults", () => {
     if (s.bootAdapterWhy == null && s.hasAdapter) {
       expect(s.backend, JSON.stringify(s)).toBe("three");
       expect(s.fallbackWhy, JSON.stringify(s)).toBeNull();
+    } else if (s.bootAdapterWhy != null && /no answer in 4 s/.test(s.bootAdapterWhy)) {
+      // A slow adapter is not an absent one: the unset default still tries TLX, which binds or names its refusal.
+      expect(s.backend === "three" || s.fallbackWhy != null, JSON.stringify(s)).toBe(true);
     } else if (s.bootAdapterWhy != null) {
       expect(s.backend, JSON.stringify(s)).toBeUndefined();
     }

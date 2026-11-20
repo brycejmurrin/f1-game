@@ -27,8 +27,12 @@
  *      is the gate's `retest` row (PR #5485), not this file's.
  *   4. Default GL (llvmpipe) and APEX_FAIL_ON_FLAKY on (a retried pass fails the shard; AGENTS.md rule 9).
  *   5. The spec is covered whole: the file as one unit, or every piece j/k of one k.
- *   6. NO run on this head whose group contains the spec is anything but that: a failed, cancelled, still-running
- *      or re-run (attempt > 1) group run of it refuses it, even beside a green one (a pass after a red is a retry).
+ *   6. NO run on this head AND this base whose group contains the spec is anything but that: a failed, cancelled,
+ *      still-running or re-run (attempt > 1) group run of it refuses it, even beside a green one (a pass after a red
+ *      is a retry). The base is read from that run's plan records (written before any spec ran); a non-green run
+ *      whose every job's plan names this head and ANOTHER base (or none) tested a different merge pair and does not
+ *      taint (#5871: #5491 af41faed stayed red on a `ui` red from an older base beside green same-base reruns). A run
+ *      whose base cannot be read (no jobs, a missing, doubled or unreadable plan, a mixed base) still taints.
  * Anything else, including every lookup failure, is accept=false: the verdict stays the red it was.
  *
  * Who writes, who reads, what a liar would forge: the record is a check-run annotation the GitHub Actions app writes
@@ -138,12 +142,25 @@ export function decide(q) {
   const taint = new Map();   // spec -> why it is refused (a still-running run sets `live`: main() may wait for it)
   const units = new Map();   // run id -> units it proved
   const notes = [];
+  // The base a non-green run tested, from its jobs' plan records: "other" only when every job has exactly one
+  // readable plan on this head and none of them names q.base; anything unreadable is "unknown" (it taints).
+  const otherBase = (id) => {
+    const jobs = q.jobsOf(id);
+    if (!Array.isArray(jobs) || !jobs.length) return false;
+    for (const j of jobs) {
+      const plans = (q.annotationsOf(String(j.id)) || []).filter((a) => a && a.title === GROUP_PLAN_TITLE);
+      const plan = plans.length === 1 ? parseGroupRecord(plans[0].message) : null;
+      if (!plan || plan.head !== q.head || plan.base === q.base) return false;
+    }
+    return true;
+  };
   for (const r of mine) {
     const id = String(r.id);
     const t = parseRunTitle(r.display_title || r.name);
     const clean = r.status === "completed" && r.conclusion === "success" && Number(r.run_attempt) === 1;   // a missing attempt is not "first"
     const specs = t ? q.groupSpecs(t.group) : null;
     const state = `${r.status}/${r.conclusion || "-"}, attempt ${r.run_attempt ?? "?"}`;
+    if (!clean && otherBase(id)) { notes.push(`run ${id} is ${state} on another base (not this run's pair)`); continue; }
     if (!clean && r.status !== "completed" && (!specs || dropped.some((s) => specs.includes(s)))) live = true;
     if (!clean) {
       // A red, cancelled, live or re-run group run of a dropped spec refuses it. Unknown contents refuse them all.

@@ -40,7 +40,7 @@ test("query params: captions-only, row count and scale clamp; anything else fall
   const o = (q) => j(Render.options(q));
   assert.equal(o("?only=captions").only, "captions");
   assert.equal(o("?only=tower").only, "");
-  assert.deepEqual([o("?rows=5").rows, o("?rows=0").rows, o("?rows=50").rows, o("?rows=x").rows, o("").rows], [5, 20, 20, 20, 20]);
+  assert.deepEqual([o("?rows=5").rows, o("?rows=0").rows, o("?rows=50").rows, o("?rows=x").rows, o("").rows], [5, 22, 22, 22, 22]);
   assert.deepEqual([o("?scale=1.5").scale, o("?scale=0.1").scale, o("?scale=9").scale, o("?scale=nope").scale], [1.5, 0.5, 2, 1]);
   const html = source("overlay.html");
   const renderSrc = source("js/overlay/render.js");
@@ -54,6 +54,19 @@ test("query params: captions-only, row count and scale clamp; anything else fall
   assert.equal(setsOnly, true);
   assert.equal(setsScale, true);
   assert.equal(hidesRows, true, "rows past ?rows= stay hidden");
+});
+
+test("#5885: the tower fits the whole 22-car field, the player's P22 row included", () => {
+  const dom = makeDom();
+  const { Render, Feed } = load({ document: dom.document });
+  const { root } = overlayRoot(dom);
+  const painter = Render.create(root, {});
+  const ranked = Array.from({ length: 22 }, (_, i) => ({ code: "C" + (i + 1), pos: i + 1, you: i === 21 }));
+  painter.paint(Feed.frame({ seq: 1, state: "race", ranked }));
+  assert.equal(painter.rows.filter((r) => !r.el.hidden).length, 22);
+  assert.equal(painter.rows[21].el.dataset.you, "1");
+  const towerPx = Number((/\.ov-tower \{[^}]*height: (\d+)px/.exec(source("overlay.html")) || [])[1]);
+  assert.equal(towerPx, 22 * 34, "22 rows of 34 px");
 });
 
 test("every team plate meets 4.5:1, and so does the overlay's own text", () => {

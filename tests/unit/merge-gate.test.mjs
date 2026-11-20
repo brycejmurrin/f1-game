@@ -821,7 +821,13 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
   assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
   assert.deepEqual(jobsWhere(usesSecret), ["post", "train"], "LAND_TOKEN lives in post and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
-  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train"], "only the read-only legs and the train check out or run code");
+  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train-screen", "train"], "only the read-only legs and the train check out or run code");
+  // The train screen (#5864) runs the fold's own scripts (gen:check, the ratchets), so it is read-only like land-gate;
+  // the build reads its verdict artifact as data and only ever runs the deploy branch's merge-train.mjs.
+  const screen = LAND.jobs["train-screen"];
+  assert.ok(Object.values(screen.permissions).every((v) => v === "read"), "the screen's token is read-only");
+  assert.deepEqual(LAND.jobs.train.needs, "train-screen");
+  assert.equal(LAND.jobs.train.steps.find((st) => /actions\/download-artifact@/.test(st.uses || ""))?.with?.name, "train-screen");
   // The merge train holds LAND_TOKEN, so it runs only the DEPLOY branch's gate closure (protected paths): no PR
   // checkout, no install, one node script. Car heads are fetched as git objects and folded with merge-tree.
   const train = LAND.jobs.train;

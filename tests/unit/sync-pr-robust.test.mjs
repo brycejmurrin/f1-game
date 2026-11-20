@@ -195,7 +195,7 @@ test("syncRefusal (#5425): tip-red refuses even with --force-clean-behind; only 
   assert.equal(syncRefusal(tipRed, { ontoRedTip: true }), null);
   assert.equal(syncRefusal({ ok: true, verdict: "no" })?.code, 4);
   assert.equal(syncRefusal({ ok: true, verdict: "no" }, { forceCleanBehind: true }), null);
-  for (const verdict of ["conflict", "stale-red", "retest-refused"]) assert.equal(syncRefusal({ ok: true, verdict }), null, verdict);
+  for (const verdict of ["conflict", "union-conflict", "stale-red", "retest-refused"]) assert.equal(syncRefusal({ ok: true, verdict }), null, verdict);
   assert.equal(syncRefusal({ ok: false, error: "fetch failed" }), null, "undecided: continue as before");
   assert.equal(KNOWN_FLAGS.filter((f) => f === "--onto-red-tip").length, 1);
 });

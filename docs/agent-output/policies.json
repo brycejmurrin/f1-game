@@ -526,6 +526,11 @@
       "presentation": "native",
       "preserve": "Caller-readable kind; do not prepend prose"
     },
+    "tools/ci/child-health.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every DEAD child and every PARK/RELAUNCH/NONE row with its cause and reset; exit 1 when a PR has a dead owner; read-only"
+    },
     "tools/ci/ci-coverage.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -565,6 +570,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, untrusted-data label on local logs; reads only (no send verbs). Never expose credentials."
+    },
+    "tools/ci/closing-refs.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "every offending line verbatim (PR, line number, keyword ref, quoted body line) and the = closing-refs verdict; exit 1 on a ref that would close an open PR, 3 when it cannot judge"
     },
     "tools/ci/coverage-merge.mjs": {
       "action": "keep-native",

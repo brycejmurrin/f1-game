@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/title-fx.js";
@@ -340,4 +341,22 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/title-fx\.js"\]/);
+});
+
+test("MOTION: REDUCED backstop transitions paint only, never geometry (#5812)", () => {
+  // On the initial `transition-property: all`, the backstop's 0.01ms started a transition on every geometry change,
+  // which paints its START value until the next frame: a fit or measure after a class flip read the previous box.
+  const backstop = cssRules(CSS).find((r) => r.decls.has("transition-duration")
+    && r.selector.startsWith(':root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *'));
+  assert.ok(backstop, "the menu reduced-motion backstop rule");
+  const raw = backstop.decls.get("transition-property") || "";
+  const props = raw.replace("!important", "").split(",").map((p) => p.trim());
+  const GEOMETRY = new Set(["all", "width", "height", "min-height", "max-height", "top", "left", "right", "bottom",
+    "inset", "margin", "margin-top", "padding", "zoom", "transform", "translate", "scale", "font-size",
+    "grid-template-rows", "grid-template-columns", "flex-basis"]);
+  assert.deepEqual({
+    important: raw.trim().endsWith("!important"), // a later-layer `transition:` shorthand must not put geometry back
+    geometry: props.filter((p) => GEOMETRY.has(p)),
+    paint: ["opacity", "color", "background-color"].filter((p) => props.indexOf(p) < 0),
+  }, { important: true, geometry: [], paint: [] }, "geometry is instant under MOTION: REDUCED; paint keeps its reduced transition");
 });

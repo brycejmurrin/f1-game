@@ -1,0 +1,1 @@
+Improved: an AI team's wing level is now worth about a second a lap, not four to six. High-wing teams no longer start every weekend far ahead and low-wing teams no longer sit at the back for it; the order comes from car tier and driver skill. Your own car's wing trade is unchanged.

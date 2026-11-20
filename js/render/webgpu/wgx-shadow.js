@@ -43,7 +43,7 @@ const WGXShadow = (function () {
     const shadowLVPData = new Float32Array(16);
     const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
     const _shadowDynOff = [0];
-    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0;
+    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0, _shadowOverflowWarned = false;
     let _pendingShadowEnc = null, _shadowFlushed = 0;
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
     let _carShadowArmed = false, _carArms = 0, _carBoxScale = 1;
@@ -193,7 +193,11 @@ const WGXShadow = (function () {
         _shadowFlushed * SHADOW_MODEL_F32_STRIDE,
         (_shadowSlot - _shadowFlushed) * SHADOW_MODEL_F32_STRIDE);
       _shadowFlushed = _shadowSlot;
-      if (_shadowOverflow) Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
+      // Once per overflow EPISODE (frames in a row that overflow), not at the end of every pass (#5699 row 22).
+      if (_shadowOverflow && !_shadowOverflowWarned) {
+        _shadowOverflowWarned = true;
+        Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
+      }
     }
     // One encoder for all of a frame's shadow passes; a Begin resumes the
     // pending encoder. Spill guard: if the frame submit never ran (a capture
@@ -233,6 +237,7 @@ const WGXShadow = (function () {
     function _frameSubmitList(mainEnc) {
       const sh = _pendingShadowEnc;
       _pendingShadowEnc = null;
+      if (!_shadowOverflow) _shadowOverflowWarned = false;   // a clean frame ends the episode
       _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
       return sh ? [sh.finish(), mainEnc.finish()] : [mainEnc.finish()];
     }
