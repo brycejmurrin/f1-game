@@ -36,6 +36,7 @@ const FEATURES = Object.freeze({
   mirrorHi: 1, ssaoHi: 1, raysHi: 1, superSample: 1, liveryHi: 1, meshHi: 1,
   csm: 2, lampShadows: 2, traa: 2, gtao: 2, ssgi: 2, ssrHi: 2, hdrOut: 2, lightsHi: 2, skyAtmo: 2,
   matDetail: 2, packHd: 2, envAll: 2, heroCar: 2, crowd3d: 2, treesHi: 2, kerbProfile: 2, farTerrain: 2, density: 2,
+  carSurf: 2, propsHi: 2, garageHi: 2, crewHi: 2,
   dof: 3, motionBlur: 3, ss2x: 3,   // level 3 is CINEMA: EXTREME while setCinema(true) (replay / photo / garage)
 });
 const SHED_ORDER = Object.freeze(["lightsHi", "raysHi", "ssaoHi", "gtao", "ssrHi", "superSample", "ssgi"]);
