@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal, gateMergeRefusal, unionTextConflicts } from "../../tools/ci/needs-sync.mjs";
+import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal, gateMergeRefusal, unionTextConflicts, mergeCrossing } from "../../tools/ci/needs-sync.mjs";
 
 const T0 = "2026-10-16T08:00:00Z", T1 = "2026-10-16T09:00:00Z";
 
@@ -32,7 +32,8 @@ test("decideSync: a stray `distance` fact changes nothing (the verdict went with
   assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
 });
 test("exit codes and verdict line", () => {
-  assert.deepEqual(VERDICTS, ["conflict", "union-conflict", "stale-red", "retest-refused", "gate-refused", "tip-red", "no"]);
+  assert.deepEqual(VERDICTS, ["conflict", "union-conflict", "stale-red", "retest-refused", "gate-refused", "tip-crossed", "tip-red", "no"]);
+  assert.equal(exitCode({ ok: true, verdict: "tip-crossed" }), 0, "tip-crossed is a sync");
   assert.equal(exitCode({ ok: true, verdict: "gate-refused" }), 0, "gate-refused is a sync");
   assert.equal(exitCode({ ok: true, verdict: "union-conflict" }), 0, "union-conflict is a sync");
   assert.equal(exitCode({ ok: true, verdict: "retest-refused" }), 0, "retest-refused is a sync");
@@ -404,4 +405,66 @@ test("unionTextConflicts: a union path deleted on one side counts; a merge-base 
   assert.match(bad.error, /merge-base failed: boom/);
   const del = (args) => (args[0] === "rev-parse" && args.at(-1).startsWith("deploy:") ? { code: 1, out: "", err: "" } : rg(args));
   assert.deepEqual(unionTextConflicts("deploy", "pr", del), { paths: ["LOG.md"] });
+});
+
+// tip-crossed: a green draft behind a tip that moved a tree-wide number (#5975 re-seeded eagerCodeBytes; #5972, #5985,
+// #5959, #5952 then failed merge-gate's ratchets row on the merge). No gate status needed: a draft never gets one.
+const RAT_OVER = "over a ratchet on the merge result: ratchets.mjs: tree eagerCodeBytes 4018947 (ceiling 4018312)";
+const crossedMerge = { ok: true, evidence: "merges clean onto 1a2b3c4d; gen:check and scenery catalog build 0", tip: "1a2b3c4d", ratchets: { ok: false, evidence: RAT_OVER }, retest: null };
+const cleanMerge = { ok: true, evidence: "merges clean onto 1a2b3c4d; gen:check and scenery catalog build 0", tip: "1a2b3c4d", ratchets: { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" }, retest: null };
+
+test("mergeCrossing: merge-gate's gen / ratchets rows of one local merge; an unreadable merge is no crossing", () => {
+  assert.deepEqual(mergeCrossing(crossedMerge), { rows: ["ratchets"], evidence: RAT_OVER });
+  assert.deepEqual(mergeCrossing(cleanMerge), { rows: [], evidence: "" });
+  assert.deepEqual(mergeCrossing({ ok: false, evidence: "gen:check fails on the merge onto 1a2b3c4d: x", tip: "1a2b3c4d" }),
+    { rows: ["gen"], evidence: "gen:check fails on the merge onto 1a2b3c4d: x" }, "ratchets behind a gen FAIL is not evaluated");
+  assert.deepEqual(mergeCrossing({ ok: false, evidence: "fetch x failed: boom", tip: "", error: true }), { error: "fetch x failed: boom" });
+  assert.deepEqual(mergeCrossing(null), { error: "no merge result" });
+});
+test("decideSync: a crossing merge on a green head = tip-crossed, after every other verdict", () => {
+  const base = { behind: true, conflict: false, ci: "success", runStartedAt: T1, tipNewestAt: T0, merge: { rows: ["ratchets"], evidence: RAT_OVER } };
+  const d = decideSync(base);
+  assert.equal(d.verdict, "tip-crossed");
+  assert.equal(d.why, `a local merge onto the tip fails merge-gate's ratchets=FAIL (${RAT_OVER}): the tip moved under this green head; sync and push, so its CI tests the combination, then fix what it shows`);
+  assert.equal(decideSync({ ...base, merge: { rows: [], evidence: "" } }).verdict, "no");
+  assert.equal(decideSync({ ...base, merge: null }).verdict, "no");
+  assert.equal(decideSync({ ...base, ci: "in_progress" }).verdict, "no", "a green head only");
+  assert.equal(decideSync({ ...base, behind: false }).verdict, "no");
+  assert.equal(decideSync({ ...base, conflict: true }).verdict, "conflict");
+  assert.equal(decideSync({ ...base, tip: { state: "code-red", evidence: "x" } }).verdict, "tip-red");
+  assert.equal(decideSync({ ...base, gate: { refused: true, rows: ["ratchets"] } }).verdict, "gate-refused");
+});
+test("needsSync: a green draft whose local merge crosses a ratchet = tip-crossed, exit 0 (no gate status)", () => {
+  const calls = [];
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2100-01-01T00:00:00Z", () => []),
+    mergeCheck: (a) => { calls.push(a); return crossedMerge; } });
+  assert.equal(v.verdict, "tip-crossed");
+  assert.deepEqual(v.merge, { rows: ["ratchets"], evidence: RAT_OVER });
+  assert.equal(exitCode(v), 0);
+  assert.equal(verdictLine(v), "= sync needed: tip-crossed");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].head, v.head); assert.equal(calls[0].headRef, "pr"); assert.equal(calls[0].ciAt, null, "no retest row");
+});
+test("needsSync: a clean local merge stays no (clean-behind is not a reason)", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2100-01-01T00:00:00Z", () => []), mergeCheck: () => cleanMerge });
+  assert.equal(v.verdict, "no");
+  assert.equal(exitCode(v), 1);
+});
+test("needsSync: an unreadable local merge is no sync verdict (fail safe) and names why", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2100-01-01T00:00:00Z", () => []),
+    mergeCheck: () => ({ ok: false, evidence: "worktree add failed: boom", tip: "1a2b3c4d", error: true }) });
+  assert.equal(v.verdict, "no");
+  assert.equal(exitCode(v), 1);
+  assert.equal(v.merge, null);
+  assert.equal(v.note, "the local merge onto the tip is unreadable (worktree add failed: boom): tip-crossed cannot be detected");
+});
+test("needsSync: the local merge runs only on a green head nothing else decided, never offline or unasked", () => {
+  let n = 0;
+  const mergeCheck = () => { n++; return crossedMerge; };
+  const rg = () => alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"]));
+  assert.equal(needsSync("pr", { fetch: false, offline: true, readGit: rg(), mergeCheck }).verdict, "no");
+  assert.equal(needsSync("pr", { fetch: false, readGit: rg(), request: greenApi("2100-01-01T00:00:00Z", () => [gate(RATCHETS_FAIL)]), mergeCheck }).verdict, "gate-refused");
+  assert.equal(needsSync("pr", { fetch: false, readGit: alias(repo(["f.txt", "x\n"], ["f.txt", "y\n"])), request: greenApi("2100-01-01T00:00:00Z", () => []), mergeCheck }).verdict, "conflict");
+  assert.equal(n, 0);
+  assert.equal(needsSync("pr", { fetch: false, readGit: rg(), request: greenApi("2100-01-01T00:00:00Z", () => []) }).verdict, "no", "pr-board's call: no mergeCheck");
 });
