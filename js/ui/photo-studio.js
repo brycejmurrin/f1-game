@@ -44,13 +44,10 @@ async function library(action, value) {
       req.onsuccess = () => {
         if (action !== "save") { result = req.result; return; }
         try {
-          const photos = req.result.filter((p) => p.id !== value.id).concat(value)
-            .sort((a, b) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
-          const keep = photos.slice(0, LIMIT);
-          for (const old of photos.slice(LIMIT)) if (old.id !== value.id) store.delete(old.id);
-          if (keep.some((p) => p.id === value.id)) {
-            const put = store.put(value); put.onsuccess = () => { result = put.result; };
-          }
+          const others = req.result.filter((p) => p.id !== value.id)
+            .sort((a, b) => (+b.at || 0) - (+a.at || 0) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+          for (const old of others.slice(LIMIT - 1)) store.delete(old.id);
+          const put = store.put(value); put.onsuccess = () => { result = put.result; };
         } catch (e) { failure = e; tx.abort(); }
       };
       tx.oncomplete = () => resolve(result);
