@@ -3833,7 +3833,7 @@ const MAX_EAGER_SCRIPTS = 313;
 const MAX_EAGER_BYTES = 8_017_936;
 ```
 
-**Raise, 2026-11-19 — `eagerBytes` +3,894, re-snapped to +3,166 on 2026-11-20 (fragment `claude--ai-pace-calibration-5330.json`).**
+**Raise, 2026-11-19 — `eagerBytes` +3,894, re-snapped to +3,166 on 2026-11-20, then +2,980 when #5948 and #6009 were combined in (fragment `claude--ai-pace-calibration-5330.json`).**
 Cause: #5686 (#5330), so AI solo pace follows team tier and then driver skill. It adds `aiErs`,
 `paceTrim`, `laneClear` and `slowHazard` to the eager `js/physics/ai-drive.js`, plus their call sites in
 `js/game.js`.
