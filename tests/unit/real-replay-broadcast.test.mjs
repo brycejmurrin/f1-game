@@ -444,3 +444,30 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
   assert.equal(one.fights.length, 1, "20 m at 50 m/s is a battle");
   assert.deepEqual(eight.fights, one.fights, "the same two cars give the same battles at rate 1 and rate 8");
 });
+
+// Hunt #5694 B9: on a non-reel replay with the camera on AUTO, a seek past the
+// followed car's DNF left the picture on the parked car until the next event
+// or SHOT_MAX_S.
+test("WATCH AUTO: a seek past the followed car's DNF moves the picture to a running car", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx);
+    const { script } = scriptIn(g);
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 400), 16: line(-22, 48, 1, -5, 400), 18: line(-30, 45, -1, -5, 60) } };
+    RR.launch(script, { seat: "LEC", watch: true, camera: "auto", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    g.apex.go();
+    g.step(10);
+    const code18 = script.drivers.find((d) => d.num === 18).code;
+    RR.replay().follow(code18);
+    assert.equal(RR.status().replay.follow, code18);
+    assert.equal(RR.status().replay.broadcast.manual, false, "AUTO still directs");
+    RR.replay().seek(120);   // car 18's data ended at 60 s: parked
+    const follow = RR.status().replay.follow;
+    assert.notEqual(follow, code18, "off the retired car at once");
+    const running = [63, 16].map((n) => script.drivers.find((d) => d.num === n).code);
+    assert.ok(running.some((code) => code === follow), "onto a running car: " + follow);
+  } finally { g.close(); }
+});
