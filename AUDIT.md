@@ -654,3 +654,18 @@ Six separate commits, each verified in Chromium before and after:
 Ready but **not applied**, pending the owner's decision: locking the team for a season with progress and
 storing the season's own seat (finding 4; patch proven: 5 points stayed with the player, and a single race
 in another car no longer moves the season seat), and rejecting a career driver code already on the grid.
+
+### Fixes 33–35 — collisions (addendum A15, and two new)
+
+Three commits in `js/physics/collide.js`, verified by executing the real module and in stepped races:
+
+- **33** the AI-shoves-player cap is budgeted per contact across all resolution passes: gain at 20 vs
+  50 m/s +4.79 → +2.93 m/s, swept 0 vs 70 +6.33 → +2.93 (cap 2.93).
+- **34** **new** — the cap was skipped entirely when the player's car was yawed more than about 20°
+  (after a spin): +8.77 m/s from one hit, 11–14 m/s one-frame jumps in a race. Now capped: 12.74 → 2.93.
+- **35** **new** — a push could teleport a car through the pit wall into the pit lane (4 of 7 staged
+  setups; the car then drove the pit lane at up to 155 km/h). Now 0 of 7.
+
+Energy checks after all three: 40,000 random pile-ups, no NaN, no kinetic-energy gain. Proposed but **not
+applied**: letting the player complete a side-by-side pass with light wheel contact instead of being pushed
+back (the sub-audit flags it as a design call: the player could then lean on an AI).
