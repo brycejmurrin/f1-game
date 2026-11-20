@@ -192,6 +192,16 @@ const TLX = (function () {
   function liteTier(webgl2, phone) { return labOn("tlxLite") && !!webgl2 && !!phone ? LITE : null; }
   // LAB DPR cap (phone perf hunt 2026-11-10): ?lab=dpr2 or ?lab=dpr3 replaces the tier's cap; no lab returns it unchanged.
   function labDprCap(base) { return labOn("dpr3") ? 3 : (labOn("dpr2") ? 2 : base); }
+  // The device-pixel-ratio cap create() sizes the present buffer with (#5222). The tier's own cap (lite 1.25,
+  // mobileTier 1.5, else 2); RESOLUTION MAX's boost may only RAISE it, to at most 3 (resize() still takes the lower of
+  // this and window.devicePixelRatio, so MAX means the device's own DPR); the URL lab above replaces both; a `ceil`
+  // (the crash sentinel's capDpr) only lowers. Pure, so tests evaluate it with exact values.
+  function dprCapFor(lite, mobileTier, boost, ceil) {
+    if (lite) return ceil >= 1 && ceil < lite.dprCap ? ceil : lite.dprCap;
+    const base = mobileTier ? 1.5 : 2, b = Math.min(+boost || 0, 3);
+    const cap = labDprCap(b > base ? b : base);
+    return ceil >= 1 && ceil < cap ? ceil : cap;
+  }
   // Per present, on the caller's opts (pinSoftwareRaceShed's precedent): idempotent, so a reused opts is safe.
   function liteOpts(o) {
     if (!o) return o;
@@ -1279,11 +1289,20 @@ const TLX = (function () {
       function getPresentSize(out) { const o = out || {}; o.width = presentW || W; o.height = presentH || H; return o; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
-      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)
-      // LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL only, one boot, no storage key) replaces the cap, so what a sharper
-      // phone picture costs per frame can be measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep
-      // (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md). No lab: the tier's cap, unchanged.
-      if (!_lite) DPR_CAP = labDprCap(DPR_CAP);
+      // A phone is ALWAYS mobileTier (glx-facade.js), so its cap is 1.5 unless RESOLUTION MAX asks for more
+      // (setDprBoost, below; PIXEL-TRUTH-HUNT-2026-11-09.md F1, #5222). LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL
+      // only, one boot, no storage key) replaces the cap, so what a sharper phone picture costs per frame can be
+      // measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md).
+      let _dprBoost = 0, _dprCeil = 0;   // RESOLUTION MAX's request; capDpr's ceiling (0 = none)
+      let DPR_CAP = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+      function reCapDpr() {
+        const c = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+        if (c === DPR_CAP) return false;
+        DPR_CAP = c; resizeNow(); return true;
+      }
+      // ?lab=postSubmit (URL only, one boot, no storage key: D-027): the post chain submits its passes' command buffers
+      // in one call (tlx-post.js SUBMIT HOLD, vendor PATCHES.md §21). OFF until a phone A/B; __tlx.postSubmit(on) flips it for the session.
+      let _postSubmitOn = labOn("postSubmit");
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -1470,6 +1489,7 @@ const TLX = (function () {
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
+              postSubmitHold: function () { return _postSubmitOn; },
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -2198,13 +2218,13 @@ const TLX = (function () {
         if (_chunkPrimeNow && slot === 0 && _chunkMerge && chunkedSys.mergeVisible) _primeMergeSlot(rec, order);
         const mat = rec.mat;
         // The mirror (slot 1) under a draw-distance cap culls a record's CELLS, not its merged blocks (tlx-chunked.js
-        // fineCells). Fewer than two cells, or a record the merge never takes, falls through to the blocks;
+        // fineCells), down to a single cell. A record the merge never takes falls through to the blocks;
         // apex26.tlxChunkMerge=0 (a draw per chunk) turns it off with the merge.
         if (slot === 1 && cd > 0 && _chunkMerge && chunkedSys.fineCells
             && !(mat && (mat.transparent || mat.depthWrite === false)) && !(rec.al < 1)) {
           const fine = chunkedSys.fineCells(rec.chunked);
           const fn = fine ? chunkedSys.cull(fine, vp, eye, cd, fog) : 0;
-          const fg = fn > 1 ? chunkedSys.mergeVisible(fine, fn, slot) : null;
+          const fg = fn > 0 ? chunkedSys.mergeVisible(fine, fn, slot) : null;
           if (fg) { acquireMesh(fg, rec.m, rec.mat, rec).renderOrder = order; return fn; }
           if (fine && fn === 0) return 0;
         }
@@ -3777,6 +3797,7 @@ const TLX = (function () {
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
+        _warmStages.sky = Math.round(performance.now() - _tStage); _tStage = performance.now();   // its own row: it was counted inside "mirror"
         _warmStages.mirror = null;
         if (wantMirrorWarm()) {
           await warmMirrorStage(usePost, useTag);
@@ -3867,7 +3888,7 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+              sky: _warmStages.sky, mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
             _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
             try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
@@ -5200,8 +5221,16 @@ const TLX = (function () {
         // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
         capDpr(n) {
           if (!(n >= 1) || n >= DPR_CAP) return false;
-          DPR_CAP = n; resizeNow(); return true;
+          _dprCeil = n; return reCapDpr();
         },
+        // RESOLUTION MAX (js/ui/scale.js) asks for the device's own DPR (3); every other RESOLUTION and PerfGov's
+        // budget shed pass 0. Raises the cap only above the tier's; capDpr's ceiling still wins. True = the cap moved.
+        setDprBoost(n) {
+          const v = n > 0 ? Math.min(+n, 3) : 0;
+          if (v === _dprBoost) return false;
+          _dprBoost = v; return reCapDpr();
+        },
+        getDprBoost() { return _dprBoost; },
         setSpatialUpscale, getSpatialUpscale,
         getPresentSize,
         get width() { return W; },
@@ -6897,6 +6926,7 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
+          postSubmit(on) { if (on !== undefined) _postSubmitOn = !!on; return _postSubmitOn; },   // the ?lab=postSubmit arm, live, this session only
           roadSplit(on) {   // persists: a reload keeps the A/B arm (apex26.tlxRoadSplit)
             if (on !== undefined) {
               _roadSplitOn = !!on;
@@ -7325,7 +7355,7 @@ const TLX = (function () {
     return s < 2 ? 0 : s;
   }
 
-  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts, labDprCap };
+  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts, labDprCap, dprCapFor };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;

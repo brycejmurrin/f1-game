@@ -1319,6 +1319,27 @@ test("appearance import rejects malformed bags and enums and clamps profile cont
   assert.equal(saved[0].values.lookCareer.density, "auto"); assert.equal(saved[0].values.career, undefined);
 });
 
+test("PORTRAIT & LANDSCAPE (#4529): SEPARATE round-trips exactly; SHARED exports nothing; a #4897 v:1 or junk is skipped", () => {
+  const separate = { v: 2, mode: "separate", live: "wide", park: { uiScale: 100, lookGarage: { pw: 70, ph: 60 } } };
+  const a = boot({ appearance: true, disk: { "apex26.appearanceShapes": JSON.stringify(separate) } });
+  for (const mode of ["all", "changes"]) {
+    const file = a.collect(mode), b = boot({ appearance: true });
+    assert.deepEqual(file.settings.appearance.appearanceShapes, separate, mode);
+    assert.equal(b.loadSettings(file).skipped, 0);
+    assert.deepEqual(JSON.parse(b.disk.get("apex26.appearanceShapes")), separate);
+  }
+  const shared = boot({ appearance: true });
+  assert.equal(shared.collect("all").settings.appearance.appearanceShapes, null, "SHARED is the shipped null");
+  assert.equal("appearanceShapes" in (shared.collect("changes").settings.appearance || {}), false);
+  const b = boot({ appearance: true });
+  const file = (v) => ({ format: b.SettingsExport.FORMAT, settings: { appearance: { appearanceShapes: v } } });
+  assert.equal(b.loadSettings(file({ v: 1, split: true, live: "tall", park: { uiScale: 100 } })).skipped, 1);
+  assert.equal(b.loadSettings(file({ v: 2, mode: "shared" })).skipped, 1);
+  assert.equal(b.disk.has("apex26.appearanceShapes"), false);
+  b.loadSettings(file({ v: 2, mode: "separate", live: "sideways", park: [1] }));
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.appearanceShapes")), { v: 2, mode: "separate", live: null, park: null });
+});
+
 // ── THE CAREER FILE ──────────────────────────────────────────────────────────
 
 const CAREER_SAVE = {

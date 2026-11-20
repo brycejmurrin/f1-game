@@ -145,6 +145,15 @@ test("protect-files.py: generated files (derived list), generated blocks, packag
     assert.equal(r.stderr, `BLOCKED: ${f} is a guard (a .claude/allow-* hatch, a hook, settings, .githooks, tools/hooks, .mcp.json or a host's hook config): a subagent never writes one (AGENTS.md rule 10). Report the change for the parent.\n`);
   }
   assert.equal(pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, ".claude/allow-protected"), content: "" } }).status, 0, "the main session creates its hatch");
+  // #5849: a MAIN session's guard edit goes through the hatch too (no silent in-place hook edit after a refusal)
+  for (const f of [".claude/hooks/github-mcp-guard.sh", ".claude/settings.json", ".claude/settings.local.json", ".claude/allow-context-cap", ".githooks/pre-commit", "tools/hooks/readonly-bash.sh", ".mcp.json"]) {
+    const r = pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, f), content: "" } });
+    assert.equal(r.status, 2, `main session must not write ${f} without the hatch`);
+    assert.equal(r.stderr, `BLOCKED: ${f} is a guard (a hook, settings, a .claude/allow-* hatch, .githooks, tools/hooks, .mcp.json or a host's hook config) — `
+      + "a main session edits one only for an assigned change, which ships in a PR with Bryce's own config-ok; editing a guard to lift a refusal is the same act as retrying it. "
+      + `If this edit was explicitly assigned, the MAIN session runs: touch ${path.join(ROOT, ".claude/allow-protected")} , retries, and removes it after.\n`);
+  }
+  for (const f of [".claude/rules/claude-config.md", ".claude/skills/steward/SKILL.md", ".claude/agents/worker.md"]) assert.equal(pf(edit(f)).status, 0, `${f} is not a guard`);
   assert.equal(pf({ tool_name: "Bash", tool_input: { command: "echo x > version.json" } }).status, 0, "Bash is bash-guard's business");
   const junk = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: "junk", encoding: "utf8" });
   assert.equal(junk.status, 2, "fail closed");
@@ -179,6 +188,14 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     assert.equal(JSON.parse(other.stdout).hookSpecificOutput.additionalContext,
       `protect-files: .claude/allow-protected is ACTIVE in ${dir} — no rule applied to notes.md.${tail}`, "every guarded call announces the hatch");
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
+    // #5849 both sides: under the hatch the main session's guard edit passes and is announced; a subagent's never does
+    const guard = (extra = {}) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")],
+      { input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: path.join(dir, ".claude/settings.json"), content: "{}" }, ...extra }), encoding: "utf8" });
+    const g = guard();
+    assert.equal(g.status, 0, g.stderr);
+    assert.equal(JSON.parse(g.stdout).hookSpecificOutput.additionalContext,
+      `protect-files: .claude/allow-protected is ACTIVE in ${dir} — it lifted: .claude/settings.json is a guard (a hook, settings, a .claude/allow-* hatch, .githooks, tools/hooks, .mcp.json or a host's hook config).${tail}`);
+    assert.equal(guard({ agent_id: "a1" }).status, 2, "the hatch never lifts the guard rule for a subagent");
     // A tree from before ON_DEMAND_PATHS (an older branch's worktree edited from a newer checkout) has no such list:
     // that is "no on-demand file", not an unreadable list, so the other rules still hold there (2026-11-11, #5427).
     const gpSrc = fs.readFileSync(path.join(ROOT, "tools/lib/generated-paths.mjs"), "utf8");

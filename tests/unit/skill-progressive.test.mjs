@@ -442,6 +442,13 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   const explore = frontmatter(fs.readFileSync(path.join(AGENTS, "Explore.md"), "utf8"));
   assert.equal(explore.effort, "medium", "Explore: effort: medium");
   assert.equal(explore.omitClaudeMd, true, "Explore: the built-in starts without CLAUDE.md, so the override does too");
+  // Every read-only reporter starts without CLAUDE.md/AGENTS.md (~2.3k tokens a spawn; docs/notes/HARNESS-SETTINGS-2026-10-26.md):
+  // its card restates what it relies on. The two cards that edit code keep the rules.
+  for (const file of fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md")) {
+    const fm = frontmatter(fs.readFileSync(path.join(AGENTS, file), "utf8"));
+    const writer = file === "worker.md" || file === "track-surveyor.md";
+    assert.equal(fm.omitClaudeMd === true, !writer, `${file}: omitClaudeMd ${writer ? "must stay off a card that edits code" : "belongs on a read-only reporter"}`);
+  }
   const phys = fs.readFileSync(path.join(AGENTS, "physics-contract-auditor.md"), "utf8");
   assert.match(phys, /vstd-lint/);
   assert.match(phys, /AI-only/);

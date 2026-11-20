@@ -99,3 +99,45 @@ test("SettingsExport mounts at the gate, queued after SaveHealth as at eval (#47
   assert.ok(!shell.includes('src="js/ui/settings-export-body.js'),
     "the body is LAZY_SAVES_DATA: it lands after boot, so SaveHealth's section is always mounted first");
 });
+
+// Row 1 part 3: the three DCL initialisers left after #5477 (screen-looks search
+// descriptors, the METRICS rows, the RENDERER fold). Each Settings-only half
+// waits for the gate; METRICS keeps its hotkeys in the DCL task.
+const PART3 = [
+  { file: "js/perf/metrics-overlay.js", half: "METRICS rows + fold", marker: { id: "pm-hud-details" } },
+  { file: "js/perf/renderer-picker.js", half: "RENDERER picker + RENDERER fold", marker: { id: "pm-renderer" } },
+];
+for (const c of PART3) {
+  test(`${c.file}: ${c.half} wait for the settings-lazy gate, then run (#4798)`, () => {
+    const { at, atDcl, flushed, dclCount } = boot(c.file);
+    assert.ok(dclCount >= 1, "an interactive document waits for DOMContentLoaded");
+    assert.equal(has(at, c.marker), false, "not at eval");
+    assert.equal(has(atDcl, c.marker), false, "not in the DOMContentLoaded task");
+    assert.equal(has(flushed, c.marker), true, "runs when the gate flushes");
+  });
+}
+
+test("js/perf/metrics-overlay.js: the ` / F9 hotkey binds in the DCL task, before the gate (#4798)", () => {
+  const winListeners = [];
+  const window = { matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener: (t) => winListeners.push(t) };
+  let atDcl = null;
+  const { dclCount } = boot("js/perf/metrics-overlay.js", {
+    window,
+    SettingsNav: { lazy: () => { atDcl = winListeners.slice(); }, onEnter() {}, onLeave() {} },
+  });
+  assert.ok(dclCount >= 1);
+  assert.ok(atDcl && atDcl.includes("keydown"), "keydown is bound before the rows are queued");
+});
+
+test("js/ui/screen-looks.js: the search descriptors register at the gate, not in the DCL task (#4798)", () => {
+  const registered = [], queue = [];
+  let atGate = null;
+  boot("js/ui/screen-looks.js", {
+    SettingsSearch: { register: (id) => registered.push(id) },
+    SettingsNav: { lazy: (fn) => { atGate = registered.slice(); queue.push(fn); }, onEnter() {}, onLeave() {} },
+  });
+  assert.ok(atGate, "the DCL task queues work on the gate");
+  assert.deepEqual(atGate, [], "nothing registered before the gate");
+  for (const fn of queue.splice(0)) fn();
+  assert.deepEqual(registered, ["screen-looks"], "registers once, when the gate flushes");
+});

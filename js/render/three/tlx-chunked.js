@@ -628,7 +628,8 @@
     // cached geometry and does not touch the index buffer.
     function mergeVisible(mesh, n, slot) {
       const vis = _visList;
-      if (!(n > 1) || !mesh || !mesh.chunks) return null;
+      // A lone chunk draws on its own geometry; a lone CELL (fineCells: mesh.attrs) has no geometry to draw on.
+      if (!mesh || !mesh.chunks || !(n > 1 || (n === 1 && mesh.attrs))) return null;
       const slots = mesh._tlxMv || (mesh._tlxMv = []);
       const si = slot | 0;
       let s = slots[si];

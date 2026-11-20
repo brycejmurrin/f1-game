@@ -584,6 +584,8 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     cssCol: () => "#fff",
     fmtTime: (value) => value.toFixed(3),
     daily: { isActive: () => false, current: () => null },
+    // game.js armConfirm's contract: the first press arms, the second runs the action (#5672).
+    armConfirm: (btn, text, action) => { if (!btn._armed) { btn._armed = true; btn.textContent = text; return false; } btn._armed = false; action(); return true; },
   };
   const api = vm.runInContext("GameResultsSheet", ctx).create(G);
   api.buildTTResults();
@@ -619,6 +621,8 @@ test("CLEAR GHOST rebuilds the sheet inside TopModal.keepFocus on the results ro
   const scopes = [];
   const TopModal = { keepFocus(scope, fn) { scopes.push(scope); fn(); } };
   const h = resultsHarness({ ghost: fixture, extra: { TopModal } });
+  h.dom.byId("res-ghost-clear").onclick();
+  assert.equal(scopes.length, 0, "the first tap only arms CLEAR GHOST");
   h.dom.byId("res-ghost-clear").onclick();
   assert.equal(scopes.length, 1);
   assert.equal(scopes[0], h.G.els.results, "focus is kept within #results across the rebuild");
@@ -824,7 +828,7 @@ test("TT records find historical wear classes without crossing other settings", 
   const ctx = vm.createContext({ G, Ghost, InputGhost, PhysicsConsts: { REVISION: 7 },
     GhostShare: { hasGuest: () => !!guestContext, guest: () => ({ context: guestContext }),
       contextNotice(a, b) { compared.push([a, b]); return "comparison"; } },
-    Quali: { medalFor: () => null },
+    Quali: { medalFor: () => null, MEDAL_RANK: { bronze: 1, silver: 2, gold: 3 } },
     GameStore: { ttBoard: (id, key) => board.get(key) || [],
       ttBoardAdd(id, entry) { board.set(entry.context, [entry]); } } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-phys.js"), "utf8"), ctx, { filename: absSrc("js/race/session-phys.js") });

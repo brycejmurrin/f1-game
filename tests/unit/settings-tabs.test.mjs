@@ -233,6 +233,27 @@ test("Back reveal follows reflow until interaction, navigation, focus change or 
   }
 });
 
+// hunt2 ui-menus: missing #pm-settings-body during a restore reflow must not
+// throw (that left the four window capture listeners hanging).
+test("Back reveal survives a missing pm-settings-body without leaking window listeners", () => {
+  const h = boot({ ensure: () => Promise.resolve(true), stub: false });
+  let resize, disconnected = false; const listeners = new Map();
+  h.ctx.ResizeObserver = class { constructor(fn) { resize = fn; } observe() {} disconnect() { disconnected = true; } };
+  h.ctx.window.addEventListener = (type, fn) => listeners.set(type, fn);
+  h.ctx.window.removeEventListener = type => listeners.delete(type);
+  const door = h.dom.byId("pm-advanced"); let scrolls = 0;
+  door.scrollIntoView = () => scrolls++;
+  h.dom.byId("pm-open-controls").onclick(); door.onclick(); h.nav.back();
+  assert.equal(listeners.size, 4);
+  const realGet = h.dom.document.getElementById.bind(h.dom.document);
+  h.dom.document.getElementById = (id) => (id === "pm-settings-body" ? null : realGet(id));
+  assert.doesNotThrow(() => resize());
+  assert.equal(scrolls, 1, "scrollIntoView still runs after the null body guard");
+  listeners.get("pointerdown")();
+  assert.equal(disconnected, true);
+  assert.equal(listeners.size, 0, "stopRestore still unhooks after a missing body");
+});
+
 // #4798 settings-lazy gate: row wiring queued at DCL runs on the first enter / pointerdown / keydown / idle, once, in order.
 function lazyWorld(readyState) {
   const listeners = new Map(), idle = [];

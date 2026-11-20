@@ -115,10 +115,26 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   // 3. An agent's label on a routine-only diff passes, and says so.
   assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
     { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
-  // ci.yml decides what green means: protected (Bryce, 2026-11-11 "Protect ci.yml").
-  assert.equal(configVerdict([".github/workflows/ci.yml", "js/a.js"], L, [agent(T1)]).ok, false, "an agent's label on ci.yml is refused");
-  assert.match(configVerdict([".github/workflows/ci.yml"], L, [agent(T1)]).evidence, /protected path\(s\) \.github\/workflows\/ci\.yml/);
-  assert.equal(configVerdict([".github/workflows/ci.yml"], L, [ev("config-ok", T1)]).ok, true, "his own tap on ci.yml passes");
+  // D-034 (Bryce 2026-11-18 ~10:33Z "Shrink the list"): ci.yml, pick-tests and preflip-probe are ROUTINE, superseding
+  // the 2026-11-11 "Protect ci.yml" call; still config paths, so they still need a config-ok, but an agent's counts.
+  for (const p of [".github/workflows/ci.yml", "tools/ci/pick-tests.mjs", "tools/ci/preflip-probe.mjs"]) {
+    assert.equal(isConfigPath(p), true, `${p} is still a config path`);
+    assert.equal(isProtectedConfigPath(p), false, `${p} is routine (D-034)`);
+    assert.deepEqual(configVerdict([p], L, [agent(T1)]),
+      { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers ${p}` });
+    assert.equal(configVerdict([p], [], []).ok, false, `${p} with no config-ok at all still fails`);
+  }
+  // The kept set, exactly: the gate's own modules, land.yml, every host's hooks and settings.
+  for (const p of ["tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", "tools/ci/lib/deploy-tip.mjs", "tools/ci/ready-gate.mjs",
+    "tools/ci/github-api.mjs", "tools/ci/github-token.mjs", "tools/gen/gen-test-groups.mjs", "tools/lib/changed-files.mjs",
+    "tools/lib/cli-args.mjs", "tools/lib/gate-receipt.mjs", "tools/lib/work-tree-id.mjs", ".github/workflows/land.yml",
+    ".claude/hooks/bash-guard.sh", ".claude/settings.json", ".claude/settings.local.json", "tools/hooks/readonly-bash.sh",
+    ".githooks/pre-commit", ".cursor/hooks.json", ".codex/hooks.json"]) {
+    assert.equal(isProtectedConfigPath(p), true, `${p} stays protected (D-034)`);
+    assert.match(configVerdict([p], L, [agent(T1)]).evidence, new RegExp(`^needs config-ok from brycejmurrin himself: .* protected path\\(s\\) ${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+  }
+  for (const p of ["tools/ci/dispatch.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
+    assert.equal(isProtectedConfigPath(p), false, `${p} is routine`);
   for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
     assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
   // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
@@ -805,7 +821,13 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
   assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
   assert.deepEqual(jobsWhere(usesSecret), ["post", "train"], "LAND_TOKEN lives in post and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
-  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train"], "only the read-only legs and the train check out or run code");
+  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train-screen", "train"], "only the read-only legs and the train check out or run code");
+  // The train screen (#5864) runs the fold's own scripts (gen:check, the ratchets), so it is read-only like land-gate;
+  // the build reads its verdict artifact as data and only ever runs the deploy branch's merge-train.mjs.
+  const screen = LAND.jobs["train-screen"];
+  assert.ok(Object.values(screen.permissions).every((v) => v === "read"), "the screen's token is read-only");
+  assert.deepEqual(LAND.jobs.train.needs, "train-screen");
+  assert.equal(LAND.jobs.train.steps.find((st) => /actions\/download-artifact@/.test(st.uses || ""))?.with?.name, "train-screen");
   // The merge train holds LAND_TOKEN, so it runs only the DEPLOY branch's gate closure (protected paths): no PR
   // checkout, no install, one node script. Car heads are fetched as git objects and folded with merge-tree.
   const train = LAND.jobs.train;

@@ -121,7 +121,7 @@ Diff these seams, in order:
    `ATLAS_PRESETS.generated`, `SCALES`). If GLX/WGX look right it is not this.
 
 Parity gates (all static): `tests/unit/assets-pack.test.mjs` (MAT_LAYERS /
-`uMatTexScale` / manifest ids; the unpinned literals are listed in §MAT layers — inspect GLX/TLX/WGX
+`uMatTexScale` / manifest ids; every such literal is pinned by `tests/unit/assets-pack.test.mjs` (the MAT-layer test) — inspect GLX/TLX/WGX
 together when changing the MAT count), the canary tests
 above and `webgpu-lifecycle.test.mjs` (WGX `textureSample` uniform-CF).
 Per-backend pixel truth is BROWSER-ONLY: `matTex(0)` vs `matTex(1)` per

@@ -480,11 +480,37 @@ export function sharedUiSpecs(files) {
   return hit ? SHARED_UI_LAYER.specs.map((spec) => ({ spec, module: hit })) : [];
 }
 
-/** Every spec to name for a diff, with why: standalone loaders then the shared UI layer (deduped by spec). */
+// AN ASSET DIFF (audit 2026-11-09 W31, #5334): RULES send every assets/ path to `hooks` (the baked pack loader),
+// so an assets/sfx/ edit never ran audio-smoke.spec.js, the one spec that asserts the engine sample is fetched.
+// A spec whose source names `assets/<dir>/` (as a path or as an escaped regex) is named for a changed file there.
+const ASSET_DIR = /^assets\/([^/]+)\//;
+
+/** Specs whose source names the assets/ subdirectory of a changed file. @returns {{spec:string,module:string}[]} */
+export function assetSpecs(files, opts = {}) {
+  const dirs = new Map();
+  for (const f of files) { const m = ASSET_DIR.exec(f); if (m && !dirs.has(m[1])) dirs.set(m[1], f); }
+  if (!dirs.size) return [];
+  const dir = opts.specsDir || path.join(ROOT, "tests/specs");
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".spec.js")).sort(); } catch (_) { return []; }
+  const read = opts.read || ((n) => fs.readFileSync(path.join(dir, n), "utf8"));
+  const out = [];
+  for (const n of names) {
+    let text = "";
+    try { text = read(n); } catch (_) { continue; }
+    for (const [d, f] of dirs) {
+      if (text.includes(`assets/${d}/`) || text.includes(`assets\\/${d}\\/`)) out.push({ spec: `tests/specs/${n}`, module: f });
+    }
+  }
+  return out;
+}
+
+/** Every spec to name for a diff, with why: standalone loaders, the shared UI layer, then asset readers (deduped by spec). */
 export function extraSpecs(files, opts = {}) {
   const seen = new Map();
   for (const r of standaloneSpecs(files, opts)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "loads-module-standalone" });
   for (const r of sharedUiSpecs(files)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "shared-ui-layer" });
+  for (const r of assetSpecs(files, opts)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "names-asset-dir" });
   const selected = new Set(opts.selected || []);
   return [...seen.values()]
     .filter((r) => fs.existsSync(path.join(opts.root || ROOT, r.spec)) || opts.read)

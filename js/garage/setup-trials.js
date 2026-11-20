@@ -20,9 +20,22 @@ const SetupTrials = (() => {
     }
     return issues;
   }
+  // RK: the setup to restore when a reload lands mid-trial (#5879).
+  const RK = "setupTrialRecover";
+  const forget = st => { try { if (st.get(RK, null) != null) st.set(RK, undefined); } catch (_) { /* */ } };
+  function recover(st) {
+    let rec; try { rec = !run && st.get(RK, null); } catch (_) { return false; }
+    if (!rec) return false;
+    if (typeof rec.teamId !== "string" || !rec.before || !rec.owned) return forget(st), false;
+    if (SetupTune.keyFor(rec.teamId) !== rec.key) return false;
+    const ok = same(SetupTune.get(rec.teamId), rec.owned);
+    if (ok) SetupTune.set(rec.teamId, rec.before);
+    return forget(st), ok;
+  }
   function create(o) {
     cancel();
     if (!o || typeof o.launch !== "function") return false;
+    recover(o.store);
     run = { id: ++sequence, teamId: o.teamId, store: o.store, launch: o.launch, refresh: o.refresh, cancelRuntime: o.cancelRuntime,
       before: SetupTune.get(o.teamId), baseline: copy(o.baseline), candidate: copy(o.candidateNow ? o.candidateNow() : o.candidate), receipts: [], pending: null,
       owned: null, revision: null, context: null, busy: false };
@@ -32,11 +45,11 @@ const SetupTrials = (() => {
   function cancel() {
     const r = run;
     if (!r) return false;
-    // Cancel the owned session before restoring the mechanical sheet. The callback
-    // must refuse a newer session; it runs while the launch lease is still current.
+    // Cancel the owned session (lease still current; it refuses a newer one) before restoring.
     if (r.cancelRuntime) r.cancelRuntime();
     run = null;
     if (owns(r)) { SetupTune.set(r.teamId, r.before); if (r.refresh) r.refresh(); }
+    forget(r.store);
     notify(); return true;
   }
   async function attempt(arm) {
@@ -45,6 +58,7 @@ const SetupTrials = (() => {
     if (r.owned && !owns(r)) { r.reason = "Mechanical setup changed outside this comparison. Cancel and start again."; notify(); return false; }
     r.busy = true; const tune = arm === "candidate" ? r.candidate : r.baseline;
     r.owned = SetupTune.set(r.teamId, tune); r.revision = r.store.keyRevision ? r.store.keyRevision(SetupTune.keyFor(r.teamId)) : null;
+    try { r.store.set(RK, { teamId: r.teamId, key: SetupTune.keyFor(r.teamId), before: r.before, owned: r.owned }); } catch (_) { /* */ }
     notify();
     let result;
     try { result = await r.launch({ teamId: r.teamId, tune: copy(tune), mode: "launch", isCurrent: () => run === r && owns(r) }); }
@@ -122,6 +136,7 @@ const SetupTrials = (() => {
     const ui = { section: box, refresh: paint, dispose() { if (observer) observer.disconnect(); listeners.delete(paint); box.remove(); pauseMounts.delete(G); } }; pauseMounts.set(G, ui); return ui;
   }
   function mount(host, o) {
+    if (o && recover(o.store) && o.refresh) o.refresh();
     const box = document.createElement("section"); box.className = "player-tool-panel";
     const title = document.createElement("h3"); title.className = "sel-label"; title.textContent = "MEASURE A SETUP · UNSCORED LAUNCH";
     const status = document.createElement("p"); status.className = "adv-help"; status.setAttribute("role", "status");
@@ -141,5 +156,6 @@ const SetupTrials = (() => {
     box.append(title, status, rows); host.appendChild(box); listeners.add(paint); paint();
     return { dispose() { listeners.delete(paint); box.remove(); } };
   }
-  return Object.freeze({ create, cancel, attempt, observe, record, invalidate, summary, contextIssues, mount, mountPause, active: () => !!run });
+  if (typeof GameStore === "object" && typeof setTimeout === "function") setTimeout(() => recover(GameStore.store));
+  return Object.freeze({ create, cancel, attempt, observe, record, invalidate, summary, contextIssues, mount, mountPause, recover, active: () => !!run });
 })();

@@ -697,8 +697,9 @@ test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the build files", () => {
   for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/race/real-replay.js", "js/camera/flyby-seq.js"]) {
     assert.ok(!(MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must not move with track-build`);
   }
-  // real-replay left FULL with the real-race family (#4978 row 6: LAZY_REAL_RACE behind the RealRace stub).
-  for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/camera/flyby-seq.js"]) {
+  // real-replay left FULL with the real-race family (#4978 row 6: LAZY_REAL_RACE behind the RealRace stub), and the
+  // coach body with the race session (#4748: LAZY_RACE_SESSION behind the FULL DrivingCoach façade).
+  for (const f of ["js/race/driving-coach-boot.js", "js/race/race-insights.js", "js/camera/flyby-seq.js"]) {
     assert.ok(MANIFEST.FULL.includes(f), `${f} must stay FULL (not moved with track-build)`);
   }
   assert.ok((MANIFEST.LAZY_REAL_RACE || []).includes("js/race/real-replay.js"), "real-replay is LAZY_REAL_RACE");

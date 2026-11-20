@@ -96,17 +96,21 @@ const SettingsNav = (function () {
   enterFns.push(flushLazy);
 
   // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
-  // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
+  // loads on the first APPEARANCE enter, or on a SEPARATE orientation swap (AppearanceStudio, #4529);
+  // a failed load logs and the next call retries. presets() resolves true once LayoutPresets exists.
   let presetsLoad = null;
   const presetsLoaded = new Set();
-  enterFns.push((id) => {
+  function presets() {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
-    if (id !== "appearance" || presetsLoad || typeof LayoutPresets !== "undefined" || !R || !R.LAZY_UI_PRESETS
-        || typeof ScriptLoader === "undefined") return;
-    const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); };
+    if (typeof LayoutPresets !== "undefined") return Promise.resolve(true);
+    if (presetsLoad) return presetsLoad;
+    if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
+    const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
     presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
-      .then((ok) => { if (!ok || typeof LayoutPresets === "undefined") fail(); }, fail);
-  });
+      .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
+    return presetsLoad;
+  }
+  enterFns.push((id) => { if (id === "appearance") presets(); });
 
   function panels() {
     return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
@@ -150,7 +154,11 @@ const SettingsNav = (function () {
         const observer = new ResizeObserver(() => {
           if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
           // The sheet can change WIDTH between pages (a phone at 70 %): the saved offset only fits the settled one (#5358).
-          if (scroll != null) document.getElementById("pm-settings-body").scrollTop = scroll;
+          // Null-guard: a missing body must not throw — that would skip stop() and leave the window capture listeners.
+          if (scroll != null) {
+            const body = document.getElementById("pm-settings-body");
+            if (body) body.scrollTop = scroll;
+          }
           el.scrollIntoView({ block: "nearest" });
         });
         const events = ["pointerdown", "keydown", "wheel", "touchstart"];
@@ -383,7 +391,7 @@ const SettingsNav = (function () {
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
-    lazy, flushLazy,
+    lazy, flushLazy, presets,
   };
 })();
 Object.freeze(SettingsNav);
