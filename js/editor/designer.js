@@ -1225,9 +1225,12 @@ const TrackDesigner = (function () {
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
   }
-  /** The `apex26.track` file envelope for the current design (what EXPORT writes). */
+  /** The `apex26.track` file envelope for the current design (what EXPORT writes).
+   *  Gated like SHARE / CARD: a RED design must not leave the machine as a file. */
   async function exportEnvelope() {
     if (!design || !design.pts.length) return null;
+    if (previewT || !verdict) runPreview();
+    if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before exporting", true); return null; }
     const d = copy(design);
     const code = await TrackCodec.encode(d);
     if (!code) return null;
@@ -1236,7 +1239,7 @@ const TrackDesigner = (function () {
   }
   async function exportFile() {
     const env = await exportEnvelope();
-    if (!env) { message("Nothing to export yet", true); return false; }
+    if (!env) { if (!verdict || verdict.ok) message("Nothing to export yet", true); return false; }
     const name = fileStem(env.design) + ".apextrack.json";
     const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
     try {
@@ -1650,7 +1653,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind,
+      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind, view: cv ? cv.view() : null,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],
@@ -1896,16 +1899,31 @@ const TrackDesigner = (function () {
     if (f) for (const q of design.hwZones || []) if (rangesOverlap(f[0], f[1], q.s0, q.s1)) hw = Math.min(hw, q.hw);
     return hw;
   }
-  /** Narrow the selected span to half-width hw (5 m … the base): one hwZone,
-   *  replacing any it overlaps; the base width clears it. The engine only ever
+  /** The parts of zone z outside the lap range [s0, s1) (wrap-aware): 0, 1 or 2
+   *  zones with z's hw and ease. The full lap {0, 1} leaves the range's complement. */
+  function zoneOutside(z, s0, s1) {
+    if (z.s0 === 0 && z.s1 === 1) return [Object.assign({}, z, { s0: s1, s1: s0 })];
+    // Unrolled on the line from z.s0; each kept end is one of the four given
+    // fractions, stored as-is (wrap01's +1 would shift the low bits).
+    const w = TrackZones.wrap01, ze = z.s0 + w(z.s1 - z.s0), out = [];
+    for (const k of [-1, 0, 1]) {
+      const c0 = s1 + k, c1 = c0 + 1 - w(s1 - s0);
+      const a = z.s0 >= c0 ? z.s0 : s1, b = ze <= c1 ? z.s1 : s0;
+      if (Math.min(ze, c1) - Math.max(z.s0, c0) > ZONE_EPS) out.push(Object.assign({}, z, { s0: a, s1: b }));
+    }
+    return out;
+  }
+  /** Set the selected span to half-width hw (5 m … the base): one hwZone. A zone
+   *  it overlaps keeps the road outside the span (a full-lap narrowing stays on
+   *  the rest of the lap); the base width clears the span. The engine only ever
    *  narrows (def.js applyHwZones keeps the smaller), so the base is the top. */
   function setSpanWidth(hw) {
     if (!hasSpan()) { message("Select a span first: tap a point, then shift-tap a second (or tap a row under TURNS)", true); return false; }
     const LIM = CustomTracks.LIMITS, base = design.baseHW;
     hw = Math.round(Math.min(base, Math.max(LIM.hwMin, Number.isFinite(+hw) ? +hw : base)) * 10) / 10;
     const [s0, s1] = spanFracs(), had = design.hwZones || [];
-    const keep = had.filter((z) => !rangesOverlap(s0, s1, z.s0, z.s1));
-    if (hw !== base && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " width zones at most — set one back to the base width first", true); return false; }
+    const keep = had.flatMap((z) => rangesOverlap(s0, s1, z.s0, z.s1) ? zoneOutside(z, s0, s1) : [z]);
+    if (keep.length + (hw !== base ? 1 : 0) > LIM.zones) { message("A circuit keeps " + LIM.zones + " width zones at most — set one back to the base width first", true); return false; }
     // The taper: no steeper than 1 m of half-width per 20 m (×1.5), never under the engine's 0.025 default.
     const Lb = verdict && verdict.tr ? verdict.tr.total : S.polyLen(design.pts);
     const ease = Math.round(Math.min(0.2, Math.max(0.005, Math.max(0.025, 1.5 * 20 * Math.abs(hw - base) / Lb))) * 1000) / 1000;
@@ -2438,6 +2456,7 @@ const TrackDesigner = (function () {
     if (!r.ok) return false;
     const idx = custom.select(r.id);
     if (idx < 0) { message("That circuit is not in the list any more", true); return false; }
+    if (at !== sel) span = -1;                         // a drive from another point leaves the range behind (#5743 D3)
     sel = at;
     const s = builtS(at), back = { id: r.id, sel: at, span, s };
     if (custom.armReturn) custom.armReturn(back);

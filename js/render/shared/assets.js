@@ -2,15 +2,17 @@
 "use strict";
 
 const Assets = (function () {
-  // Pack URLs carry no ?v= cache-bust (index.html's version guard only rewrites
-  // the shell's own script/link tags), so these fetches use DEFAULT caching
-  // rather than force-cache: force-cache would serve a stale pack out of the
-  // HTTP cache indefinitely, and a rebaked pack would never reach anyone who
-  // had already loaded the old one. sw.js serves assets/pack/ NETWORK-FIRST
-  // (cache only as the offline / slow fallback), so normal revalidation is
-  // what makes a rebake land — from the first boot after the deploy.
+  // Pack URLs carry no ?v= (the version guard rewrites only the shell tags), so
+  // fetches use DEFAULT caching: force-cache would keep a stale pack forever.
+  // sw.js serves the pack network-first, so a rebake lands on the next boot. The
+  // manifest is asked under the PAGE build (`?b=<n>`, #5629), which sw.js answers
+  // stale-first (why: sw.js isBuildKeyedManifest). No build: bare URL.
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
+  function _manifestUrl() {
+    const b = typeof window !== "undefined" && window ? Number(window.__APEX_BUILD) : 0;
+    return Number.isSafeInteger(b) && b > 0 ? MANIFEST + "?b=" + b : MANIFEST;
+  }
   const MAT_LAYERS = 17;                 // MAT.FLAT(0) … MAT.ASPHALT(16)
 
   let _gfx = null;
@@ -91,7 +93,7 @@ const Assets = (function () {
 
   async function _fetchManifest(generation) {
     try {
-      const j = await _request(MANIFEST, "json");
+      const j = await _request(_manifestUrl(), "json");
       if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
@@ -415,14 +417,10 @@ const Assets = (function () {
   // readPixelsAsync does), then ONE fenceSync + gl.flush() marks the GPU work;
   // clientWaitSync is polled off a timer and, once the fence has signalled,
   // getBufferSubData copies each buffer into `data` — a copy that no longer
-  // waits on the GPU. One buffer PER LAYER is not style: Chromium keeps a
-  // single-use "shadow copy" per READ-usage buffer that the fence fills and
-  // the first getBufferSubData consumes (gles2_implementation.cc MapBufferRange
-  // + readback_buffer_shadow_tracker.cc); a second read of the same buffer
-  // falls back to a blocking round trip with "performance warning: READ-usage
-  // buffer was read back without waiting on a fence" — measured in-container:
-  // 12 warnings and a 3× slower copy with one shared buffer at slot offsets,
-  // none with one per layer (perf hunt 4, lane WGX). The uploads happen
+  // waits on the GPU. One buffer PER LAYER because Chromium's per-buffer READ
+  // shadow copy is single-use (readback_buffer_shadow_tracker.cc): a shared
+  // buffer read again blocks ("READ-usage buffer was read back without waiting
+  // on a fence"; measured: 12 warnings, 3× slower copy). The uploads happen
   // synchronously INSIDE this call, so a caller may close its ImageBitmaps the
   // moment it returns (assets.js does).
   //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
@@ -650,7 +648,22 @@ const Assets = (function () {
     return true;
   }
 
+  // Reload the material tier the GRAPHICS preset wants, off track only (#5561); a forced tier stays.
+  let _pinned = false;
+  function followQuality() {
+    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high")) return false;
+    const mats = _manifest && _manifest.materials;
+    const want = (_phoneLowPreset() || _lowDataLink()) && mats && mats.low ? "low" : "high";
+    if (want === _tier) return false;
+    Log.info("assets", "pack tier " + _tier + " -> " + want);
+    if (_gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
+    _uploaded = false; _tier = null; _bytes = 0; _loadPromise = null;
+    load();
+    return true;
+  }
+
   async function _load(opts, generation) {
+    _pinned = !!opts.tier;
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
     if (generation !== _loadGeneration) return false;
@@ -699,7 +712,7 @@ const Assets = (function () {
         normalP = _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration)
           .then((v) => v, (error) => { if (error === DECODE_CANCELED) throw error; return null; });
       }
-      const quietNormal = () => { if (normalP) normalP.then(() => {}, () => {}); };
+      const quietNormal = () => { if (normalP) normalP.then(_releaseStrip, () => {}); };
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
       // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
@@ -904,10 +917,10 @@ const Assets = (function () {
     return _packIndex;
   }
   function rememberPack(m) {
-    if (!m || !m.models) return;
-    const models = {};
-    for (const id in m.models) {
-      const rec = m.models[id];
+    if (!m) return;
+    const models = {}, live = m.models || {};
+    for (const id in live) {
+      const rec = live[id];
       if (!rec || typeof rec.file !== "string" || !/^[0-9a-f]{32}$/.test(rec.md5 || "")) continue;
       models[id] = { file: rec.file, md5: rec.md5 };
     }
@@ -1082,7 +1095,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
+  return { init, supported, manifest, load, retry, followQuality, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 

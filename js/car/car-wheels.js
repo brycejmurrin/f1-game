@@ -58,11 +58,11 @@ const CarWheels = (function () {
   // Available on the first garage visit, before the race-session bundle loads.
   // Fitted mesh layers are built once; all rolling and steering use transforms.
   function createGarage(gfx) {
-    let key = "", meshes = null;
+    let key = "", meshes = null, matRef = null;
     const local = new Float32Array(16), world = new Float32Array(16);
     function release() {
       if (meshes && gfx.freeMesh) for (const mesh of meshes) gfx.freeMesh(mesh);
-      meshes = null; key = "";
+      meshes = null; key = ""; matRef = null;
     }
     function prepare(next, liv, tiers) {
       if (meshes && key === next) return;
@@ -85,7 +85,8 @@ const CarWheels = (function () {
     const opts = { doubleSided: true };
     function draw(base, distance, steer, material) {
       if (!meshes) return;
-      Object.setPrototypeOf(opts, material);
+      // Same mat every turntable frame: re-link only on change (a re-link deopts V8).
+      if (material !== matRef) { Object.setPrototypeOf(opts, material || null); matRef = material; }
       // angle = distance / R (same as integrating v/R·dt along the path).
       const spin = (distance || 0) / WHEEL_R, cp = Math.cos(spin), sp = Math.sin(spin);
       for (let axle = 0; axle < 2; axle++) for (let side = -1; side <= 1; side += 2) {

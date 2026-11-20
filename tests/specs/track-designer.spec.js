@@ -325,11 +325,16 @@ test.describe("Track designer", () => {
       TrackDesigner.startFrom("monza").then(result => { window.__tdPendingResult = result; });
     });
     await request;
+    // Aim with the map canvas's OWN view, once its size has settled: "Loading…" shows in .td-msg
+    // (`:empty` hides it), the foot reflows and the canvas resizes without re-fitting, so a scale
+    // re-derived from the new rect could miss the grip and turn the press into a pan (#5937).
+    await expect.poll(() => page.evaluate(() => {
+      const v = TrackDesigner.state().view, r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
+      return !!v && v.w === Math.max(1, Math.round(r.width)) && v.h === Math.max(1, Math.round(r.height));
+    })).toBe(true);
     const at = await page.evaluate(() => {
-      const p = TrackDesigner.state().design.pts, r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
-      const x0 = Math.min(...p.map(q => q[0])), x1 = Math.max(...p.map(q => q[0])), z0 = Math.min(...p.map(q => q[1])), z1 = Math.max(...p.map(q => q[1]));
-      const scale = Math.min(Math.round(r.width) / Math.max(60, x1 - x0), Math.round(r.height) / Math.max(60, z1 - z0)) * 0.82;
-      return { x: r.x + Math.round(r.width) / 2 + (p[4][0] - (x0 + x1) / 2) * scale, y: r.y + Math.round(r.height) / 2 + (p[4][1] - (z0 + z1) / 2) * scale };
+      const s = TrackDesigner.state(), v = s.view, p = s.design.pts[4], r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
+      return { x: r.x + (p[0] - v.cx) * v.scale + v.w / 2, y: r.y + (p[1] - v.cz) * v.scale + v.h / 2 };
     });
     await page.mouse.move(at.x, at.y); await page.mouse.down();
     await page.mouse.move(at.x + 30, at.y - 15, { steps: 4 });

@@ -261,6 +261,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/check/boot-wall.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes) for the eager* tree ratchets; no CLI output"
+    },
     "tools/check/brake-cue-calibrate.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -521,6 +526,11 @@
       "presentation": "native",
       "preserve": "Caller-readable kind; do not prepend prose"
     },
+    "tools/ci/child-health.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every DEAD child and every PARK/RELAUNCH/NONE row with its cause and reset; exit 1 when a PR has a dead owner; read-only"
+    },
     "tools/ci/ci-coverage.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -560,6 +570,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, untrusted-data label on local logs; reads only (no send verbs). Never expose credentials."
+    },
+    "tools/ci/closing-refs.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "every offending line verbatim (PR, line number, keyword ref, quoted body line) and the = closing-refs verdict; exit 1 on a ref that would close an open PR, 3 when it cannot judge"
     },
     "tools/ci/coverage-merge.mjs": {
       "action": "keep-native",
@@ -666,6 +681,11 @@
       "presentation": "native",
       "preserve": "Library: byOwner / isDecisionComment / ownerSet verdicts and the paginated event and comment readers; no CLI output"
     },
+    "tools/ci/lib/tip-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: runTipGate / tipView verdicts (state, tip sha, failed test names, evidence) for merge-gate's base row; no CLI output"
+    },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -675,6 +695,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Every row's verdict and evidence; the gated head and tip; passed/refused/unknown exit distinct; the receipt path"
+    },
+    "tools/ci/merge-train.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every car and dropped PR with its reason; the bisect cap, tip and train head; the final = merge-train line"
     },
     "tools/ci/needs-sync.mjs": {
       "action": "keep-native",
@@ -760,6 +785,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus apply; protected/open refs; partial failures and unarchived kept refs"
+    },
+    "tools/ci/pool-share.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Read-only census; the closing = pool-share line; API failure exit 3"
     },
     "tools/ci/queue-depth.mjs": {
       "action": "keep-native",
@@ -1385,6 +1415,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Skip reasons, angular units, thresholds and full JSON rows."
+    },
+    "tools/gfx/sharpness-ab.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Evidence class (software pixels), each arm's buffer size and the per-crop metrics; never read a sheet as what a phone shows."
     },
     "tools/gfx/ssr-probe.mjs": {
       "action": "artifact-first",
@@ -2535,6 +2570,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c7"
+    },
+    "tools/track/footprint-rejected.cjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Every NEW and STALE row with its circuit and modelGroup id, and the exact --json baseline map."
     },
     "tools/track/footprint-support.cjs": {
       "action": "no-direct-output",

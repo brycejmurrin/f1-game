@@ -54,16 +54,6 @@ const GLTF = (function () {
     ];
   }
 
-  // Transform a point [x,y,z] by a column-major mat4 (w=1, perspective divide).
-  function mPoint(m, p) {
-    const x = p[0], y = p[1], z = p[2];
-    const w = m[3] * x + m[7] * y + m[11] * z + m[15] || 1;
-    return [
-      (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
-      (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
-      (m[2] * x + m[6] * y + m[10] * z + m[14]) / w,
-    ];
-  }
 
   // Sign of the upper-left 3x3 determinant: negative for a MIRRORED node (an
   // odd number of negative scale axes — a modeller's "mirror" modifier, or a
@@ -115,6 +105,9 @@ const GLTF = (function () {
     throw new Error("GLTF: no base64 decoder available (need atob or Buffer)");
   }
 
+  // Extensions toMesh reads (it may appear in extensionsRequired).
+  const SUPPORTED_EXT = ["KHR_mesh_quantization"];
+
   function parseGLB(arrayBuffer) {
     if (!arrayBuffer || !(arrayBuffer instanceof ArrayBuffer)) {
       throw new Error("GLTF.parseGLB: expected an ArrayBuffer");
@@ -149,6 +142,10 @@ const GLTF = (function () {
     }
 
     if (!json) throw new Error("GLTF: GLB has no JSON chunk");
+    // glTF 2.0 §3.12: a loader that does not support a required extension must
+    // fail the load (a meshopt-compressed import would otherwise read packed bytes as raw).
+    const unsupported = (json.extensionsRequired || []).filter((e) => !SUPPORTED_EXT.includes(e));
+    if (unsupported.length) throw new Error("GLTF: required extension not supported: " + unsupported.join(", "));
     if (json.asset && json.asset.version && !String(json.asset.version).startsWith("2")) {
       throw new Error("GLTF: asset version " + json.asset.version + " unsupported (need 2.x)");
     }
@@ -160,7 +157,9 @@ const GLTF = (function () {
     const buf = json.buffers && json.buffers[index];   // no buffers[] at all → same named error, not a bare TypeError
     if (!buf) throw new Error("GLTF: missing buffer " + index);
     if (buf.uri === undefined) {
-      // embedded BIN chunk
+      // embedded BIN chunk. glTF 2.0 §4.4.3.3: only buffers[0] may refer to it;
+      // a later uri-less buffer is an extension's (e.g. meshopt's fallback), not BIN.
+      if (index !== 0) throw new Error("GLTF: buffer " + index + " has no uri and only buffer 0 may use the BIN chunk");
       if (!bin) throw new Error("GLTF: buffer " + index + " references BIN chunk but none present");
       return bin;
     }
@@ -414,7 +413,7 @@ const GLTF = (function () {
           if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
             throw new Error("GLTF: invalid POSITION accessor");
           }
-          // mPoint, inlined: a 40k-vert import was spending the stall on one
+          // The mat4 point transform (w=1, perspective divide), inlined: a 40k-vert import was spending the stall on one
           // short-lived array per vertex after the boxed accessor was gone.
           const pw = m3 * px + m7 * py + m11 * pz + m15 || 1;
           const inv = scale / pw;

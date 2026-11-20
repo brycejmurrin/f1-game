@@ -22,7 +22,8 @@ function line(src, head) {
   return src.slice(at, src.indexOf("\n", at));
 }
 const LITE_LINE = line(TLX_SRC, "const _lite = liteTier(");
-const DPR_LINE = line(TLX_SRC, "let DPR_CAP = ");
+const DPR_STATE_LINE = line(TLX_SRC, "let _dprBoost = 0, _dprCeil = 0;");
+const DPR_LINE = DPR_STATE_LINE + "\n" + line(TLX_SRC, "let DPR_CAP = ");
 const PRESENT_LINE = line(TLX_SRC, "if (_lite) liteOpts(opts);");
 
 function boot(search) {
@@ -45,7 +46,7 @@ function compute(search, { webgpu = false, mobileTier = true, phoneHw = true, op
   const ctx = boot(search);
   ctx.renderer = { backend: webgpu ? { isWebGPUBackend: true } : { isWebGLBackend: true } };
   ctx.mobileTier = mobileTier; ctx._phoneHw = phoneHw; ctx.opts = opts;
-  ctx.liteTier = ctx.TLX.liteTier; ctx.liteOpts = ctx.TLX.liteOpts;
+  ctx.liteTier = ctx.TLX.liteTier; ctx.liteOpts = ctx.TLX.liteOpts; ctx.dprCapFor = ctx.TLX.dprCapFor;
   vm.runInContext(LITE_LINE + "\n" + DPR_LINE + "\n" + PRESENT_LINE +
     "\nglobalThis.__out = { lite: !!_lite, dpr: DPR_CAP, sun: TLXShaders.sunMapSize({ isMobile: mobileTier || _phoneHw," +
     " mobileTier, softwareGL: false, sunSize: _lite ? _lite.sunSize : 0 }), opts };", ctx,
@@ -115,14 +116,13 @@ test("sunMapSize keeps the pre-B8 rule exactly: only isMobile picks 1024 (a forc
 });
 
 // ?lab=dpr2 / ?lab=dpr3 (phone perf hunt 2026-11-10): the lab that lets a phone and live-frame-census --sweep draw
-// above the 1.5 mobile cap. create()'s own line is run against the shipped labDprCap.
-const LAB_DPR_LINE = line(TLX_SRC, "if (!_lite) DPR_CAP = labDprCap(DPR_CAP);");
+// above the 1.5 mobile cap. create()'s own cap lines are run against the shipped dprCapFor (which applies labDprCap).
 function labCap(search, { mobileTier = true, webgpu = true } = {}) {
   const ctx = boot(search);
   ctx.renderer = { backend: webgpu ? { isWebGPUBackend: true } : { isWebGLBackend: true } };
   ctx.mobileTier = mobileTier; ctx._phoneHw = true;
-  ctx.liteTier = ctx.TLX.liteTier; ctx.labDprCap = ctx.TLX.labDprCap;
-  vm.runInContext(LITE_LINE + "\n" + DPR_LINE + "\n" + LAB_DPR_LINE + "\nglobalThis.__cap = DPR_CAP;", ctx, { filename: absSrc("tests/unit/tlx-lite-lab.test.mjs") });
+  ctx.liteTier = ctx.TLX.liteTier; ctx.dprCapFor = ctx.TLX.dprCapFor;
+  vm.runInContext(LITE_LINE + "\n" + DPR_LINE + "\nglobalThis.__cap = DPR_CAP;", ctx, { filename: absSrc("tests/unit/tlx-lite-lab.test.mjs") });
   return ctx.__cap;
 }
 

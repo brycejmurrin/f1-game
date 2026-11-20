@@ -53,6 +53,24 @@ function rectsInPage(ids) {
   return { rects: out, page: [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight] };
 }
 
+/** In-page: resolve once the compared boxes and body density are unchanged for `frames` frames (cap 600). */
+function quietInPage({ ids, frames }) {
+  return new Promise((done) => {
+    let last = "", stable = 0, n = 0;
+    const tick = () => {
+      n++;
+      const key = document.body.dataset.density + "|" + ids.map((id) => {
+        const el = document.getElementById(id), r = el && el.getBoundingClientRect();
+        return r ? [r.left, r.top, r.width, r.height, getComputedStyle(el).fontSize, el.dataset.density].join(",") : "-";
+      }).join(";");
+      if (key === last) { if (++stable >= frames) return done(n); } else { stable = 0; last = key; }
+      if (n > 600) return done(-n);
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
 /** In-page (#5578): every title door whose label or icon does NOT follow the door's font-size in the same frame. The row
  *  tier measures labels the moment a size lands; a transition on an inherited font-size hands it the previous one. */
 function labelLagInPage() {
@@ -92,11 +110,19 @@ async function measure(browser, baseURL, entries) {
     for (const s of MENUS) {
       await load();
       await s.open(page);
-      await page.waitForTimeout(500);
+      // Paint gate: the first compared id has a real box (replaces a fixed 500 ms sleep).
+      await page.waitForFunction((id) => {
+        const el = document.getElementById(id);
+        const r = el && el.getBoundingClientRect();
+        return !!(r && r.width > 0 && r.height > 0);
+      }, s.ids[0], { polling: 50, timeout: BOOT });
       // The title's row tier reads label widths, so it is only final once the web fonts are in and the fit is quiet.
       // The 5-row, 264 px title against 7 rows, 362 px (CI runs 43764591144, 43963990479) was not this wait: under
       // MOTION REDUCED a label lagged its door's font-size by a frame (#5578, css/responsive.css); `lag` holds that.
       if (s.id === "title") { await page.waitForFunction(() => document.fonts.status === "loaded", null, { polling: 100, timeout: BOOT }); await page.evaluate(settleInPage, 12); }
+      // Every other sheet is only final once its fit is quiet too (Pages 44573978727: sheet-shape settles density after the
+      // screen shows, and the paint gate alone sampled #dlg-racesettings mid-fit, in either direction).
+      else await page.evaluate(quietInPage, { ids: s.ids, frames: 6 });
       out[s.id] = await page.evaluate(rectsInPage, s.ids);
       if (s.id === "title") out.lag = await page.evaluate(labelLagInPage);
       if (s.id === "garage") out.done = await page.evaluate(() => document.getElementById("cs-done").getBoundingClientRect().height);
@@ -108,11 +134,21 @@ async function measure(browser, baseURL, entries) {
     await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 90000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); window.__apex.freeze(true); });
     await page.waitForSelector("#hud:not([hidden])");
-    await page.waitForTimeout(800);
+    // Pedals painted (replaces a fixed 800 ms sleep after #hud).
+    await page.waitForFunction((id) => {
+      const el = document.getElementById(id);
+      const r = el && el.getBoundingClientRect();
+      return !!(r && r.width > 0);
+    }, HUD_IDS[0], { polling: 50, timeout: BOOT });
     out.hud = await page.evaluate(rectsInPage, HUD_IDS);
     await page.evaluate(() => document.getElementById("pausebtn").click());
     await page.waitForSelector("#pausemenu:not([hidden])");
-    await page.waitForTimeout(500);
+    // RESUME painted (replaces a fixed 500 ms sleep after #pausemenu).
+    await page.waitForFunction((id) => {
+      const el = document.getElementById(id);
+      const r = el && el.getBoundingClientRect();
+      return !!(r && r.width > 0);
+    }, PAUSE_IDS[0], { polling: 50, timeout: BOOT });
     out.pause = await page.evaluate(rectsInPage, PAUSE_IDS);
   } finally { await context.close().catch(() => {}); }
   return out;

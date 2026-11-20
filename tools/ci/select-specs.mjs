@@ -89,6 +89,15 @@ export const LANES = 24;
 export const SMALL_RUN_LEGS = 2;
 export const NO_LANE = -1;
 
+/** A MERGE TRAIN SKIPS THE LANES (PR #5809, orchestrator 2026-11-18 22:17Z): a `train/*` head
+ *  (tools/ci/merge-train.mjs TRAIN_PREFIX) is an ordinary `pull_request` run, so its 40-odd legs were
+ *  queued in the shared PR lanes (train #5804: 42 legs pending 2.7 h behind 717). Every train leg gets
+ *  NO_LANE, i.e. a group of its own per leg, so a train pays only the runner queue, as the lane comment in
+ *  ci.yml always said. Read from GITHUB_HEAD_REF (set on pull_request events only); main() passes it. */
+export function trainHead(env = process.env) {
+  return String(env.GITHUB_HEAD_REF || "").startsWith("train/");
+}
+
 /** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
  *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
  *  queued every ready PR while the high ones idled. Rotating the start spreads
@@ -861,7 +870,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  cache key (two "Unable to reserve cache") and uploaded three artifacts
  *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
  *  `selected-<i>`, and a final pass suffixes any repeat. */
-export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase()) {
+export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase(), train = false) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
@@ -977,7 +986,7 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     seen.set(j.name, n);
     if (n > 1) j.name = `${j.name}-${n}`;
   }
-  if (out.length <= SMALL_RUN_LEGS) for (const j of out) j.lane = NO_LANE;
+  if (train || out.length <= SMALL_RUN_LEGS) for (const j of out) j.lane = NO_LANE;
   // The budgeted `selected-<i>` jobs first: the ones a reader looks for.
   const isSel = (j) => j.name.startsWith("selected-");
   return out.sort((a, b) => (isSel(a) === isSel(b) ? 0 : isSel(a) ? -1 : 1));
@@ -1715,6 +1724,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
+  if (trainHead()) for (const j of r.shards) j.lane = NO_LANE; // a merge train never queues in the PR lanes (PR #5809)
   r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed);
   // AGENTS.md rule 3's pre-push floor is ONE spec. Name it only when the diff evidences one (edited, failed before,
   // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.

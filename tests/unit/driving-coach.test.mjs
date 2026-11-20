@@ -44,7 +44,9 @@ function fixture({ realInsights = false } = {}) {
     PhysicsConsts: { BRAKE: 22, REVISION: 'test' }
   });
   if (realInsights) vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
-  vm.runInContext(readFileSync(new URL('../../js/race/driving-coach.js', import.meta.url), 'utf8'), ctx);
+  // Shell order (#4748): the FULL façade, then the LAZY_RACE_SESSION body it creates.
+  for (const f of ['driving-coach-boot.js', 'driving-coach.js'])
+    vm.runInContext(readFileSync(new URL('../../js/race/' + f, import.meta.url), 'utf8'), ctx);
   const coach = vm.runInContext('DrivingCoach', ctx).create(G);
   const tick = (seconds, fields = {}) => {
     Object.assign(c, fields);

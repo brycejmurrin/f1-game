@@ -308,6 +308,36 @@ test("a normal decode failure keeps the albedo upload and closes its bitmaps", a
   assert.equal(maps[0].normal, null);
 });
 
+// Hunt 2026-11-18 (2) row 9 (#5699): the albedo upload fails while the normal strip is still decoding. Its bitmaps
+// land after the catch ran _discardLoad(albedo, normal = null): they must still be closed.
+test("an albedo upload failure closes the normal strip's bitmaps when they land", async () => {
+  const bitmaps = [];
+  let releaseNormal;
+  const normalGate = new Promise((r) => { releaseNormal = r; });
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 16, normal: url.endsWith("n.png") }) };
+    },
+    async createImageBitmap(blob) {
+      if (blob.normal) await normalGate;
+      const b = { normal: !!blob.normal, closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      return b;
+    },
+  });
+  assets.init({ createTextureArray() { return null; }, setMaterialMaps() {} });
+  assert.equal(await assets.load(), false);
+  assert.equal(assets.state().error, "albedo-upload");
+  releaseNormal();
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+  const normals = bitmaps.filter((b) => b.normal);
+  assert.ok(normals.length > 0, "the normal strip decoded after the failure");
+  assert.deepEqual(normals.map((b) => b.closed), normals.map(() => 1), "every late normal bitmap closed exactly once");
+  assert.deepEqual(bitmaps.filter((b) => !b.normal).map((b) => b.closed), [1], "albedo closed by _discardLoad");
+});
+
 test("unload during parallel downloads rejects the stale generation before any decode", async () => {
   const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
   let decodes = 0, uploads = 0;
@@ -1975,6 +2005,74 @@ test("#5555: a pack load that ran out its transfer deadline retries on the low t
   assert.equal(flaky.assets.state().tier, "high");
 });
 
+// #5561: the pack tier follows a GRAPHICS preset change, but the re-upload only happens off track. The real
+// GfxQuality and the real Assets in one context; the page is a fake body (data-race), #pausemenu and observer.
+test("#5561: a preset change swaps the pack tier in a menu, waits for the pause card while driving, and never reloads a matching tier", async () => {
+  const vm = require("node:vm");
+  const manifest = { materials: { size: 4, albedo: "hi.png", layers: [{ mat: 1, scale: 1 }],
+    low: { size: 2, albedo: "lo.png", layers: [{ mat: 1, scale: 1 }] } } };
+  const urls = [], sizes = [], maps = [], observers = [];
+  const body = { dataset: {} }, pm = { hidden: true };
+  const sandbox = { AbortController, setTimeout, clearTimeout, GLX: { isMobile: true },
+    document: { readyState: "complete", body, getElementById: (id) => (id === "pausemenu" ? pm : null) },
+    MutationObserver: class { constructor(cb) { this.cb = cb; this.live = true; observers.push(this); } observe() {} disconnect() { this.live = false; } },
+    async fetch(url) {
+      if (String(url).endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+      urls.push(String(url).replace(/^.*\/|\?.*$/g, ""));
+      return { ok: true, blob: async () => ({ size: 1 }) };
+    },
+    async createImageBitmap() { return { close() {} }; } };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  for (const f of ["js/perf/quality-preset.js", "js/render/shared/assets.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sandbox, { filename: absSrc(f) });
+  const Q = vm.runInContext("GfxQuality", sandbox), assets = sandbox.Assets;
+  assets.init({ isMobile: true, createTextureArray: (size) => { sizes.push(size); return {}; }, setMaterialMaps: (m) => maps.push(m ? "set" : "clear") });
+  const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+  const fire = () => observers.filter((o) => o.live).forEach((o) => o.cb());
+
+  Q.set("low");
+  assert.equal(await assets.load(), true);
+  assert.equal(assets.state().tier, "low", "a phone that boots on GRAPHICS: LOW takes 128 px");
+
+  // 1. In a menu (no race): the change reloads at once.
+  Q.set("medium"); await settle();
+  assert.equal(assets.state().tier, "high");
+  assert.deepEqual(urls, ["lo.png", "hi.png"]);
+  assert.deepEqual(sizes, [2, 4]);
+  assert.deepEqual(maps, ["set", "clear", "set"], "the old arrays are dropped before the new tier uploads");
+
+  // 2. Same tier (MEDIUM -> HIGH are both 256 px): no reload.
+  Q.set("high"); await settle();
+  assert.deepEqual(urls, ["lo.png", "hi.png"]);
+  assert.equal(maps.length, 3);
+
+  // 3. Driving (race on, pause card hidden): deferred, then applied when the pause card opens.
+  body.dataset.race = "1";
+  Q.set("low"); await settle();
+  assert.equal(assets.state().tier, "high", "nothing is swapped on a driven frame");
+  assert.equal(urls.length, 2);
+  pm.hidden = false; fire(); await settle();
+  assert.equal(assets.state().tier, "low", "the pause card applies the waiting change");
+  assert.deepEqual(urls, ["lo.png", "hi.png", "lo.png"]);
+  assert.equal(observers.filter((o) => o.live).length, 0, "the watch ends once applied");
+
+  // Changed while driving and never paused: applied when the race ends.
+  pm.hidden = true;
+  Q.set("medium"); await settle();
+  assert.equal(assets.state().tier, "low");
+  fire(); await settle();
+  assert.equal(assets.state().tier, "low", "still driving: an unrelated attribute change applies nothing");
+  delete body.dataset.race; fire(); await settle();
+  assert.equal(assets.state().tier, "high");
+
+  // A forced tier (the slow-link retry, __apex.assetLoad(tier)) is not undone by the preset.
+  assets.unload();
+  assert.equal(await assets.load({ tier: "low" }), true);
+  assert.equal(assets.followQuality(), false);
+  assert.equal(assets.state().tier, "low");
+});
+
 test("shared model fetch and body deadlines settle stalled work and permit both readiness routes to retry", async () => {
   for (const phase of ["fetch", "body"]) for (const source of [undefined, 'bakedModel("box")']) {
     const clock = assetRequestClock(), stalled = deferredAssetDownload();
@@ -2515,7 +2613,7 @@ test("GLX material ownership preserves reused textures and releases aliases once
 // against a live manifest so dead keys / stale md5s cannot linger.
 // ---------------------------------------------------------------------------
 const ROLE_INDEX_PATH = path.join(ROOT, "data", "packs", "model-index.json");
-const { pruneRememberedIndex, rememberPayload, diffRoleIndex } =
+const { diffRoleIndex } =
   await import(pathToFileURL(path.join(ROOT, "js/assets/pack-index.mjs")).href);
 
 function sceneryPlacedModelIds() {
@@ -2536,11 +2634,24 @@ function sceneryPlacedModelIds() {
   return ids;
 }
 
-test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", () => {
+async function rememberedAfter(stored, live) {
+  const store = stored === undefined ? {} : { "apex26.packIndex": JSON.stringify(stored) };
+  const assets = assetLoader({
+    localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
+    fetch: async () => ({ ok: true, json: async () => live }),
+  });
+  assert.deepEqual(await assets.manifest(), live);
+  return JSON.parse(store["apex26.packIndex"] || "null");
+}
+
+test("the shipped rememberPack prunes dead keys, stale md5s and junk fields from apex26.packIndex", async () => {
   const live = {
     models: {
-      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      keep: { file: "models/keep.bin", md5: "a".repeat(32), verts: 3 },
       renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+      noMd5: { file: "models/x.bin" },
+      badMd5: { file: "models/y.bin", md5: "zz" },
+      noFile: { md5: "f".repeat(32) },
     },
   };
   const remembered = {
@@ -2554,28 +2665,25 @@ test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", ()
       bad: { file: "models/keep.bin", md5: "not-an-md5" },
     },
   };
-  assert.deepEqual(pruneRememberedIndex(remembered, live), {
-    models: { keep: { file: "models/keep.bin", md5: "a".repeat(32) } },
-  });
-  assert.deepEqual(pruneRememberedIndex(null, live), { models: {} });
-  assert.deepEqual(pruneRememberedIndex(remembered, null), { models: {} });
+  const expect = { models: {
+    keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+    renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+  } };
+  assert.deepEqual(await rememberedAfter(remembered, live), expect, "only the live manifest's content-addressed rows survive");
+  assert.deepEqual(await rememberedAfter(undefined, live), expect, "a first visit stores the same rows");
 });
 
-test("rememberPayload keeps only content-addressed model rows", () => {
-  const live = {
-    models: {
-      ok: { file: "models/ok.bin", md5: "e".repeat(32), verts: 3 },
-      noMd5: { file: "models/x.bin" },
-      badMd5: { file: "models/y.bin", md5: "zz" },
-    },
-  };
-  assert.deepEqual(rememberPayload(live), {
-    models: { ok: { file: "models/ok.bin", md5: "e".repeat(32) } },
-  });
-  assert.deepEqual(
-    pruneRememberedIndex(rememberPayload(live), live).models.ok,
-    live.models.ok && { file: live.models.ok.file, md5: live.models.ok.md5 },
-  );
+test("a manifest with no models empties the remembered index instead of keeping the last pack's guesses", async () => {
+  const remembered = { models: { gone: { file: "models/gone.bin", md5: "c".repeat(32) } } };
+  assert.deepEqual(await rememberedAfter(remembered, { version: 2 }), { models: {} });
+  assert.deepEqual(await rememberedAfter(remembered, { models: null }), { models: {} });
+});
+
+test("diffRoleIndex reads a null manifest or index as empty, never throws", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  assert.deepEqual(diffRoleIndex(idx, null), { indexOnly: ["a", "b"], liveOnly: [], badRole: ["b:bogus"] });
+  assert.deepEqual(diffRoleIndex(null, { models: { c: {} } }), { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex({}, {}), { indexOnly: [], liveOnly: [], badRole: [] });
 });
 
 test("data/packs/model-index.json covers every committed model key once",
@@ -2663,4 +2771,19 @@ test("resizeBilinear clamps to the edge when upscaling: no negative weights, no 
   assert.equal(big[(7 * 7 - 1) * 4], 0);
   // Downscaling is unchanged (no sample falls outside the source).
   assert.deepEqual([...resizeBilinear(px(0, 100, 200, 255), 4, 1, 2, 1)].filter((_, i) => i % 4 === 0), [50, 228]);
+});
+
+// #5629: sw.js answers the manifest from the cache at once only under the PAGE's
+// build key, so the loader must send the shell's own build, and nothing else.
+test("the manifest is asked for under the page's build, bare without one", async () => {
+  for (const [build, want] of [[1695, "assets/pack/manifest.json?b=1695"], [0, "assets/pack/manifest.json"], ["x", "assets/pack/manifest.json"]]) {
+    const requests = [];
+    const assets = assetLoader({
+      __APEX_BUILD: build,
+      async fetch(url) { requests.push(url); return { ok: true, json: async () => ({}) }; },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    await assets.load();
+    assert.equal(requests[0], want);
+  }
 });

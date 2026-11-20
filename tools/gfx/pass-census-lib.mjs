@@ -85,6 +85,23 @@ export function compareParkBaseline(baseline, key, cell) {
   return { status: diffs.length ? "diff" : "ok", diffs };
 }
 
+/** The adapter every committed park was measured on (perf-census-webgpu.yml, #5450): the --collect default. */
+export const PARK_ADAPTER = "perf-census-webgpu.yml on ubuntu-latest; adapterInfo vendor google, architecture swiftshader (software WebGPU)";
+
+/** #5535: a park that no longer matches the tree is either a regression or a STALE baseline (a merged change moved
+ *  what the frame draws and nobody re-collected). The compare cannot tell which, so a diff is reported as its own
+ *  failure that names both readings, the park's provenance, the measured numbers and the one regeneration command,
+ *  never a bare "diff" line a reader takes for noise. Returns "" when the compare is ok. `run`/`sha`: this run. */
+export function staleParkNotice(baseline, key, cmp, { run, sha } = {}) {
+  if (!cmp || cmp.status !== "diff") return "";
+  const src = (baseline && baseline.source) || {};
+  const at = (src.sha ? String(src.sha).slice(0, 10) : "?") + " (run " + (src.run || "?") + ")";
+  return `STALE PARK OR REGRESSION ${key}: this tree draws differently from the park collected at ${at}: `
+    + cmp.diffs.join("; ") + ". A regression: fix the change. An intended change (or one already merged on the tip): "
+    + "regenerate, never hand-edit: download this run's perf-census-webgpu artifact to DIR, then "
+    + `node tools/gfx/pass-census-lib.mjs --collect DIR --run ${run || "<run id>"} --sha ${sha || "<sha>"} > tests/data/pass-census-park.json`;
+}
+
 /** Build a baseline from pass-census --park JSONs ({ summary: { park: { key, cell } } }). Two files with one key must agree. */
 export function collectBaseline(files, source) {
   const cells = {}, conflicts = [];
@@ -105,13 +122,13 @@ function main(argv) {
   const arg = (n) => { const i = argv.indexOf(n); return i < 0 ? null : argv[i + 1]; };
   const dir = arg("--collect");
   if (!dir || argv.includes("--help") || argv.includes("-h")) {
-    console.log("usage: node tools/gfx/pass-census-lib.mjs --collect DIR --run RUN_ID --sha SHA\n  prints the baseline JSON built from every pass-census --park --json file in DIR; exit 1 when two files disagree on one cell");
+    console.log("usage: node tools/gfx/pass-census-lib.mjs --collect DIR --run RUN_ID --sha SHA [--adapter TEXT]\n  prints the baseline JSON built from every pass-census --park --json file in DIR; exit 1 when two files disagree on one cell");
     return dir ? 0 : 2;
   }
   const files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort().map((name) => {
     try { return { name, json: JSON.parse(readFileSync(join(dir, name), "utf8")) }; } catch (_) { return { name, json: null }; }
   });
-  const { baseline, conflicts } = collectBaseline(files, { run: arg("--run"), sha: arg("--sha"), adapter: arg("--adapter") || "Mesa lavapipe (software WebGPU)" });
+  const { baseline, conflicts } = collectBaseline(files, { run: arg("--run"), sha: arg("--sha"), adapter: arg("--adapter") || PARK_ADAPTER });
   console.log(JSON.stringify(baseline, null, 1));
   for (const c of conflicts) console.error("pass-census-lib: two files disagree on cell " + c);
   return conflicts.length ? 1 : 0;

@@ -42,7 +42,7 @@ that is what makes low pace more forgiving.
 (`axEstTarget` is `ACCEL * PACE * …`), so an acceleration compared against a
 hard-coded number is pace-sensitive in precisely the way a speed is. It is
 written as the divisor (`a / max(PACE, 0.05)`) rather than `vStd`'s
-`VMAX / vTop()` round trip, so at pace 5 it is the identity to the bit. This
+`VMAX / vTop()` round trip, so at PACE 1 (notch 14) it is the identity to the bit. This
 shape is easy to miss because the lint only sees `.speed`: A16's launch-smoke
 defect was reached sideways, by flagging the speed window on the same line.
 
@@ -202,8 +202,8 @@ teammate carries the player's saved build instead. A car that still
 has no resolved setup falls back to 0.5 via `aeroLoadOf`. `AiDrive.houseStyle`
 reads `team.stats` (career `tdev` via `Career.teamStats` baked as `c.houseStats`),
 then seat 0 attacks / seat 1 holds; `ordersMul` stops #2 diving #1 and lets #1
-through. AI corner `vLim` now scales with that same `aeroLoad` (±8 % at the
-catalog ends); harvest/overcharge maps shift `wantBoost`; hold cars mix less
+through. AI corner `vLim` scales with that same `aeroLoad` (±`AI_WING_GRIP`/2,
+±2.75 % at the catalog ends; it was ±8 % before #5791); harvest/overcharge maps shift `wantBoost`; hold cars mix less
 racing line and may keep Z-mode. Player `mods.braking` now reaches `axEstTarget`
 so garage brakes spend the friction ellipse. Measured end to end:
 
@@ -224,6 +224,12 @@ accel down; ±5 % clamp), and are exactly 1.0 at the works sheet.
 The big-wing car has the LOWEST base top speed and the biggest gain from opening,
 so X-mode partly buys back the straight-line speed the wing costs — which is the
 real trade, and the reason the two ends are worth choosing between.
+That is the PLAYER's trade: the base top-speed cost is the aero part's
+`mods.speed`, and AI cars carry no part mods. So an AI car's X-mode reads the
+NEUTRAL wing (`xLoadOf` in `js/race/pace-math.js`: `human === false` → 0.5), and
+its wing buys only the `AI_WING_GRIP` corner share, sized so the same car alone at
+Monza is about 1 s a lap quicker at wing 1 than at wing 0 (it was 5.9 s, the
+whole field 4-6 s wide from wing alone; #5791, Bryce's `decision: b`).
 `physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
 and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
@@ -260,7 +266,11 @@ per circuit and the standard ECU refuses to rotate the wings outside one, so
 `AeroZones.create(G).build()` (`js/physics/aero-zones.js`, wired into game.js as
 `aeroZ`) scans each built track for contiguous runs under `X_ZONE_K`
 and keeps those longer than `X_STRAIGHT_T × X_ZONE_VREF` (210 m — the rule's
-three seconds at racing speed). Zones are measured against a FIXED reference
+three seconds at racing speed). On a circuit with an FIA turn-pair table
+(`AERO_ZONE_TURNS`) a zone is instead every such run between the two apexes
+MERGED into one span, so it also covers the curved gaps between them: the
+`X_ZONE_K` bound holds for each run, not for the whole zone (Albert Park
+T8–T9: a bend of r ≈ 92 m inside the zone, #5783 K1). Zones are measured against a FIXED reference
 speed, never the car's, because they are a property of the circuit and the
 OVERALL SPEED slider must not redraw them. A circuit whose longest straight
 misses the minimum gets **no zones and no active aero** — that is MONACO, and
@@ -502,7 +512,7 @@ field, not the gap to the player.
 | mode | behaviour |
 |---|---|
 | `scripted` (default) | No live boost from how far the player is ahead. Fair racing driven by car/driver data — Pure / Black Rock race-scripted intent ([Pure Advantage](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai), [GI: rubber banding](https://www.gamesindustry.biz/rubber-banding-is-not-fair-and-not-fun-black-rock)). |
-| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead (and not a lap clear), AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and once lapped. Melder / Game AI Pro ch.42. |
+| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead by less than half a lap, AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and at half a lap or more behind (`gap < total * 0.5`; not only once lapped). Melder / Game AI Pro ch.42. |
 
 `DIFF.band` magnitudes stay frozen; catch-up reuses them. AI-only benches
 (`ai-pace` / `ai-field` / `ai-line`) have no human, so the band never fires
@@ -846,6 +856,18 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   | easy   | 3.5   | 0.020 → 0.040 (median, n=15)     | ~1.8 → ~3.6 |
   | normal | 1.8   | 0.020 → 0.040 (median, n=5)      | ~1.7 → ~3.3 |
   | hard   | 1.0   | 0.020 → 0.020 (byte-identical run) | ~1.6 → ~1.6 (unchanged) |
+
+  **Re-measured 2026-11-18 (#5783 JD1): the rates in this table are stale.**
+  `node tools/check/ai-field.mjs --diff hard --seconds 240 --runs 2` (Monza, 21
+  AI cars, wear off) prints `0.159 [0.099–0.218] per car per 100 s` at HARD,
+  about 8× the 0.020 above; a full 22-car 3-lap Monza race with lap 1 excluded
+  gave 0.103 (hard) and 0.177 (normal). So "under one mistake for the whole
+  field" no longer describes any level: expect roughly 8–15 rolled mistakes a
+  3-lap race at HARD on Monza, more where there are more braking zones (the
+  roll is per braking zone: Monaco 33 with lap 1 included). The ladder's order
+  (easy ≥ normal ≥ hard) still holds. A rolled mistake cost the car 0–0.12 s on
+  that lap in those runs, so the player does not see one. Which commit moved
+  the rate was not traced.
 
   At n=5 the "mistakes" count per run is a small integer (0–4), so the MEDIAN
   is too coarse to resolve a shift reliably at that sample: EASY at 5 runs
@@ -1280,6 +1302,15 @@ player's `driverDelta` from own-state only (`vLat`, yaw rate, speed, `muF`)
 behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
 asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
 identity.
+
+**The Flyby hero car** (`js/camera/flyby-seq.js` `driveHero`, ~:932) is a classified exception in the
+**broadcast-only** channel, not a table row, because it reads the racing line (`TrackLine.at`,
+`DrivingLine.speedAt`) and no curvature (the no-ghosts check would reject the row): during the pre-race
+Flyby, while the loading screen is up in the menu state (`js/race/start-lights.js` hands it `G.cars` only
+then, via `setHeroCars`), it POSES the hero car on the line at the filmed corner (`placeHero` writes its
+drawn position and speed) and `restoreHero()` puts the saved state back when the cars are handed back. No
+force or steer input is read or written; no driving happens in that state. Flagged by the 2026-11-18
+physics-contract audit (#5716).
 
 **Localized rain** (`js/race/rain-cells.js`, read by `js/race/weather-arc.js`
 `wetnessAt`) is a classified exception in the **surface** channel, not a

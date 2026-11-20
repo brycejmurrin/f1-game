@@ -855,3 +855,122 @@ jobs:
               say "::warning::#$n: could not dispatch the re-gate"
             fi
           done 3< <(printf '%s\n' "$lands")
+
+  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 10 (TRAIN_MAX) green `land` PRs whose own trusted rows pass (open, hold,
+  # plan, ci, config, raise) are merged onto the deploy tip with merge commits on a `train/*` branch, opened as an
+  # ordinary PR with `land` + `train`; that PR then lands through the same CI → `gate` → arm route as any other, and
+  # each car's head reaching the deploy branch marks the car merged. merge-gate reads a train's config and raise rows
+  # from its cars after proving the head is exactly the clean fold of their heads onto a deploy-branch commit. One
+  # train is open at a time; a red train is closed and the next one takes half its cars (bisect). Runs with the sweep
+  # (schedule, or a dispatch with stale=true) and after each Pages train on the deploy branch (a train just landed).
+  # TRUST: checks out the deploy branch only; car heads are FETCHED as git objects and combined with merge-tree /
+  # commit-tree (no worktree, no hooks, no npm, no PR code), so LAND_TOKEN never meets PR code; the per-car
+  # ratchets that need PR code ran in `train-screen` above, and only its verdict file (data) reaches this job. LAND_TOKEN pushes the
+  # train branch and opens the PR, so `pull_request` CI runs on it ("events triggered by the GITHUB_TOKEN will not
+  # create a new workflow run", header TOKEN); without it the job does nothing. `dispatch:merge-pause` pauses it.
+  # TRAIN SCREEN (#5864): trains #5840 and #5862 closed red on their gate because cars that were each red ALONE on the
+  # tip (ratchets the tip had snapped down after the cars' own gates ran) boarded on their trusted rows. This job folds
+  # the next train's candidates onto the tip and runs merge-gate's ratchetsOnMerge on each cumulative fold, which runs
+  # the merge result's own scripts: so, like land-gate, a read-only token, no secret, no cache. Its verdict file leaves
+  # as an artifact the build reads as DATA (merge-train.mjs readScreen): a forged file can only keep a car out or let
+  # one ride that the train's own gate then measures, as before. A train still open: the file says skip.
+  train-screen:
+    name: merge train screen
+    if: >-
+      github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
+      || (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy to GitHub Pages'
+          && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: land-train-screen
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      checks: read
+      actions: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEPLOY_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: merge-train --screen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          code=0; out=$(node tools/ci/merge-train.mjs --screen --out screen/screen.json 2>&1) || code=$?
+          echo "$out"
+          # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
+          printf '### merge train screen\n\n```\n%s\n```\n' "$out" >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: train-screen
+          path: screen/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  train:
+    name: merge train
+    needs: train-screen
+    # always(): a failed screen still lets the build close a finished train; with no verdict file it opens none.
+    if: >-
+      always() && (github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
+      || (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy to GitHub Pages'
+          && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: land-train
+      cancel-in-progress: false
+    environment:
+      name: land
+      deployment: false
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEPLOY_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true   # no artifact: --build refuses to open a train (no valid screen verdict)
+        with:
+          name: train-screen
+          path: screen/
+      - name: merge-train --build
+        env:
+          LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
+        run: |
+          set -uo pipefail
+          say() { echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          if [ -z "$LAND_TOKEN" ]; then say "::warning::merge train skipped: LAND_TOKEN is not set (a GITHUB_TOKEN PR starts no CI)"; exit 0; fi
+          export GH_TOKEN="$LAND_TOKEN"
+          paused=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || paused=unreadable
+          if [ "$paused" != false ]; then say "merge train skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
+          # The push credential rides in git's environment config, never argv or .git/config.
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$LAND_TOKEN" | base64 -w0)"; export GIT_CONFIG_VALUE_0
+          echo "::add-mask::$GIT_CONFIG_VALUE_0"
+          code=0; out=$(node tools/ci/merge-train.mjs --build --screen-file screen/screen.json 2>&1) || code=$?
+          echo "$out"
+          # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
+          printf '### merge train\n\n```\n%s\n```\n' "$out" >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"

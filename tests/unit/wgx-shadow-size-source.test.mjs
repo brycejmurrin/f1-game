@@ -58,3 +58,28 @@ test("GLX shader gate comments do not cite drifted absolute line numbers", () =>
   assert.equal(aoGate, true, "AO still gated on uStrength > 0");
   assert.equal(lampShNote, true, "lampSh two-readers note kept without a line number");
 });
+
+// #5699 row 22: the ring-overflow warning fired at the end of EVERY shadow pass (1-3 a frame) while the overflow
+// persisted. Now once per episode: frames in a row that overflow warn once; a clean frame re-arms it.
+test("WGX shadow ring overflow warns once per episode, re-armed by a clean frame (#5699 row 22)", async () => {
+  const { fnSource } = await import("../helpers/fn-source.mjs");
+  const src = read("js/render/webgpu/wgx-shadow.js");
+  const h = new Function(`"use strict";
+    let _shadowSlot = 0, _shadowFlushed = 0, _shadowOverflow = 0, _shadowOverflowWarned = false, _pendingShadowEnc = null, warns = 0;
+    const SHADOW_MODEL_STRIDE = 256, SHADOW_MODEL_F32_STRIDE = 64, shadowModelUBO = {}, shadowModelRing = new Float32Array(64);
+    const core = { device: { queue: { writeBuffer() {} } } };
+    const Log = { warn: () => { warns++; } };
+    ${fnSource(src, "function _flushShadowModelUBO(")}
+    ${fnSource(src, "function _frameSubmitList(")}
+    const mainEnc = { finish: () => ({}) };
+    return {
+      pass(over) { _shadowSlot++; if (over) _shadowOverflow += over; _flushShadowModelUBO(); },
+      submit() { _frameSubmitList(mainEnc); },
+      warns: () => warns,
+    };`)();
+  for (let f = 0; f < 3; f++) { h.pass(2); h.pass(0); h.pass(1); h.submit(); }
+  assert.equal(h.warns(), 1, "three overflowing frames, three passes each: one warning");
+  h.pass(0); h.submit();
+  h.pass(4); h.pass(0); h.submit();
+  assert.equal(h.warns(), 2, "a clean frame ends the episode; the next overflow warns again");
+});

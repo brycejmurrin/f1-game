@@ -1394,27 +1394,6 @@ function fitPass(canon, scale, btnScale, placedSectors) {
           if (zClear > 0) capBot = Math.min(capBot, zClear);
         }
       }
-      // PORTRAIT PHONE: the ladder buttons are position:fixed, so #hud-dock's
-      // flex width never budgets the cluster. Cap --hud-z-bot so GEAR clears
-      // the AERO/OT column (390×844 @150%: gearbox×btn-aero, HUD Desk 2026-10-07).
-      // Landscape keeps the dock flex bar; this path is a no-op there.
-      // Read discs via the dock trees (no dynamic getElementById — ratchet).
-      if (typeof window !== "undefined" && window.matchMedia
-          && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
-        let leftEdge = 0, rightEdge = vpW();
-        const mid = vpW() / 2;
-        for (const el of dockButtons()) {   // the cached [dockL…, dockR…] list, not a query per pass (#3108)
-          if (!el || el.hidden) continue;
-          const r = el.getBoundingClientRect();
-          if (!(r.width && r.height)) continue;
-          const cx = (r.left + r.right) / 2;
-          if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
-          else leftEdge = Math.max(leftEdge, r.right);
-        }
-        // `bottom` is zoom-invariant (span / currentCSSZoom); room is screen px.
-        const room = rightEdge - leftEdge - 2 * FIT_AIR;
-        if (room > 0) capBot = Math.min(capBot, room / bottom);
-      }
     }
     const barW = barR && barR.width ? barR.width : vpW();
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
@@ -1484,9 +1463,24 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       }
       let sabPx = 0;
       try { sabPx = parseFloat(getComputedStyle(root).getPropertyValue("--sab")) || 0; } catch (_) { /* */ }
-      const avail = vpH() - sabPx - ceilY;
-      const denom = 112 + stackR.height / zNowP + 48;
-      if (avail > 0 && denom > 0) capPortrait = avail / denom;
+      // #5061 BUTTON SIZE: the stack and TYRES stand on the steer row, between the side buttons (1 px air).
+      const mid = vpW() / 2, phoneBtns = document.body.classList.contains("steer-buttons") && vpW() < 744;
+      let lo = mid, hi = mid, row = 0, capSide = Infinity;
+      for (const c of _hudBottom.children) {
+        const r = c && !c.hidden && !manualHud(c) ? layoutRect(c) : null;
+        if (r && r.width) { lo = Math.min(lo, r.left); hi = Math.max(hi, r.right); }
+      }
+      for (const el of dockButtons()) {
+        const r = el && !el.hidden ? el.getBoundingClientRect() : null;
+        if (!r || !r.width) continue;
+        if (phoneBtns && el.classList.contains("steerbtn")) row = Math.max(row, vpH() - sabPx - r.top + 12);
+        if (r.top >= stackR.bottom - 1) continue;   // under the stack, not beside it
+        if (r.left > mid) { if (hi > mid) capSide = Math.min(capSide, (r.left - mid - 1) * zNowP / (hi - mid)); }
+        else if (lo < mid) capSide = Math.min(capSide, (mid - r.right - 1) * zNowP / (mid - lo));
+      }
+      const avail = vpH() - sabPx - ceilY, stackH = stackR.height / zNowP;
+      if (avail > 0) capPortrait = Math.min(avail / (112 + stackH + 48), row ? (avail - row) / (stackH + 48) : Infinity);
+      if (capSide > 0) capPortrait = Math.min(capPortrait, capSide);
     }
   }
   capBot = Math.min(capBot, capPortrait);
@@ -1529,11 +1523,11 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
   // The steer cap rides WITH the shared one (set()'s test): absent together, else explicit (never a fall-back
-  // to --hud-z-dock). A changed steer zoom refits once so TYRES / LIMITS read the new dock top.
+  // to --hud-z-dock). New PAINTED zoom (min()-ed) refits TYRES/LIMITS once.
   const wantDock = Math.max(btnFloor, btnScale), zSteer = Math.round(Math.min(wantDock, Math.max(DOCK_MIN_Z, capDockS)) * 1000) / 1000;
   if (capDock < wantDock) root.style.setProperty("--hud-z-dock-l", String(zSteer));
   else root.style.removeProperty("--hud-z-dock-l");
-  if (Math.abs(zSteer - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
+  if (Math.abs(Math.min(zSteer, wantDock) - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
@@ -1872,15 +1866,15 @@ function updateHud(force, dtMs) {
   syncAlong();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
-  // contains it (see the ranked build in game.js).
+  // contains it (game.js ranked build).
   // POS IS A RACE READOUT. In qualifying `cars` is the player alone (game.js
   // trims the field to one flying lap, and the model grids the rest only when
   // it ends), so it read "1/1"; in PRACTICE the rank is road order with
   // nothing at stake. Both say what the session is instead, like TT.
   const sess = sessionOf(timeTrial);
   hText(els.pos, sess === "tt" ? "TT" : player.retired ? "DNF" : sess === "quali" ? "Q"
-    : sess === "practice" ? "PRAC" : (player.rank || "-") + "/" + cars.length);
-  // Position change: acknowledge an overtake (either way) for ~0.6 s.
+    : sess === "practice" ? "PRAC" : (player.rank || player.gridPos || "-") + "/" + cars.length);
+  // Countdown: the grid slot. Overtake flash ~0.6 s.
   const rank = sess !== "race" || player.retired ? 0 : (player.rank || 0);
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
@@ -1986,7 +1980,7 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active()));
+    if (els.workBtn) { hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active())); hText(els.workBtn, G.timeTrial ? "END TIME TRIAL" : "WORK ON CAR"); }   // #5789
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.

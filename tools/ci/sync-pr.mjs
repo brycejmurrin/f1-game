@@ -92,6 +92,17 @@ export function syncRefusal(v, { forceCleanBehind = false, ontoRedTip = false } 
   return null;
 }
 
+/** Loud warning when --force-clean-behind overrides a needs-sync `no`. Pure. Agents must sync only for
+ *  conflict|union-conflict|stale-red|retest-refused (or a CONFLICTING PR); clean-behind is not a reason. */
+export function forceCleanBehindWarning(v) {
+  if (!v?.ok || v.verdict !== "no") return null;
+  return [
+    "WARNING: --force-clean-behind overrides needs-sync `no` — clean-behind is NOT a reason to sync.",
+    "WARNING: Sync only when needs-sync.mjs says conflict|union-conflict|stale-red|retest-refused (or the PR is CONFLICTING).",
+    "WARNING: Drop --force-clean-behind unless you have an explicit owner grant to sync anyway.",
+  ];
+}
+
 /** No fetch or verification may follow a waiter that failed, was refused, or timed out. */
 export function waitForLoad(waitMin, { load = () => os.loadavg()[0], run = spawnSync, report = log } = {}) {
   const current = load();
@@ -122,6 +133,16 @@ export function runStage(st, cwd = ROOT) {
 export const VERIFY_MODES = ["none", "fast", "full"];
 /** Per-stage ceilings: well inside a 30-min background task each. */
 const STAGE_TIMEOUT_MS = { "tooling-fast": 20 * 60e3, node: 15 * 60e3, "verify-track": 5 * 60e3 };
+
+/** Structural guards stage required before `--push` (tooling-fast alone left Structural CI red). Pure. */
+export function pushGuardsStage() {
+  return {
+    name: "Structural guards",
+    cmd: "npm",
+    args: ["run", "test:guards"],
+    timeoutMs: STAGE_TIMEOUT_MS["tooling-fast"],
+  };
+}
 
 /**
  * The verify stages, in order. Pure.
@@ -168,12 +189,14 @@ export const USAGE = [
     "usage: node tools/ci/sync-pr.mjs <branch> [--plan] [--push] [--verify=none|fast|full] [--resume [--from=<stage>]]",
     "  <branch>  the PR's own head branch, e.g. claude/ui-consistency-2026-09-15",
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
-    "  --push    on a clean verify, push the result to origin/<branch> (default: leaves it on a local sync-pr-<branch> branch for review);",
+    "  --push    on a clean verify, run Structural guards (npm run test:guards) then push to origin/<branch>",
+    "            (default: leaves it on a local sync-pr-<branch> branch for review); refuses the push if guards fail;",
     "            checks that origin/<branch> has not moved before pushing; no queue-depth push hold",
     "  --verify  fast (default): tooling-fast --changed --jobs=3 + the node suites node-plan.mjs needs, both scoped to the paths the MERGE decided",
     "            (changed on both sides, regenerated or hand-resolved); the branch's whole diff when HEAD is not a sync merge;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
-    "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
+    "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it;",
+    "            when overriding `no`, prints a loud WARNING — sync only for conflict|union-conflict|stale-red|retest-refused)",
     "  --onto-red-tip  sync although needs-sync.mjs says `tip-red` (the deploy tip is red on code): the fixer's own branch only (exit 5 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
     "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 9, max 590 s) for loadavg < 2.8, 0 refuses at once",
@@ -262,10 +285,15 @@ export async function main() {
   if (!resume) {
     // AGENTS.md "sync only when you must": ask the predicate before any merge or push.
     const v = needsSync(branch, { fetch: false });
-    const refusal = syncRefusal(v, { forceCleanBehind: flag("--force-clean-behind"), ontoRedTip: flag("--onto-red-tip") });
+    const forceClean = flag("--force-clean-behind");
+    const refusal = syncRefusal(v, { forceCleanBehind: forceClean, ontoRedTip: flag("--onto-red-tip") });
     if (v.ok) log(`${verdictLine(v)} (${v.why})`);
     else log(`needs-sync could not decide (${v.error}); continuing`);
     if (refusal) { log(`REFUSED: ${refusal.why}`); return refusal.code; }
+    if (forceClean) {
+      const warn = forceCleanBehindWarning(v);
+      if (warn) for (const line of warn) log(line);
+    }
   }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
@@ -332,6 +360,14 @@ export async function main() {
     log(`WARNING: origin/${branch} moved during this run (${headAtStart.slice(0, 9)} → now); re-run sync-pr to merge the new commits${flag("--push") ? "" : " before publishing"}`);
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
+    // Structural guards before any push: --verify=fast alone skipped them and left Structural CI red.
+    const guards = pushGuardsStage();
+    const guardsCode = runStage(guards);
+    if (guardsCode !== 0) {
+      log(`STOPPED: Structural guards ${guardsCode === 124 ? `timed out after ${Math.round(guards.timeoutMs / 60000)} min` : `failed (exit ${guardsCode})`} — nothing pushed; fix, then re-run with --push`);
+      log(returnTo(startedOn, localBranch).line);
+      return 1;
+    }
     // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a
     // verified sync publishes at once. Re-fetch first: another session may have pushed a base merge to this branch.
     git(["fetch", "--no-tags", REMOTE, branch]);
@@ -346,7 +382,7 @@ export async function main() {
     log(back.line);
     if (back.ok) git(["branch", "-D", localBranch]);
   } else {
-    log(`verified on ${localBranch} — review, then publish with: ${pushCmd}`);
+    log(`verified on ${localBranch} — review, then publish with: ${pushCmd} (or re-run with --push, which runs Structural guards first)`);
   }
   return 0;
 }

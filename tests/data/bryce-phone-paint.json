@@ -139,7 +139,7 @@
       },
       "settings": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -292,7 +292,7 @@
       },
       "settings": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -445,7 +445,7 @@
       },
       "settings": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0

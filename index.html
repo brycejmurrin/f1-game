@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-XeiMgVBBIOohpDMAxzjosnyJNSt/NUAkqds6MEH5AnM=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -131,19 +131,19 @@
 <link rel="stylesheet" href="css/responsive.css?v=dev">
 <link rel="stylesheet" href="css/menu-destinations.css?v=dev">
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print">
-<link rel="stylesheet" href="css/career.css?v=dev" media="print">
-<link rel="stylesheet" href="css/data.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career.css?v=dev" media="print" data-route="career career-offers career-guide career-history quali results standings">
+<link rel="stylesheet" href="css/data.css?v=dev" media="print" data-route="datahub track-detail trackdesigner results spotifypanel">
 <link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print">
 <link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print">
-<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print" data-route="career results ceremony-podium">
+<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print" data-route="carsetup customize">
+<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print" data-route="photo-studio">
 <link rel="stylesheet" href="css/experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/editor.css?v=dev" media="print">
+<link rel="stylesheet" href="css/editor.css?v=dev" media="print" data-route="trackdesigner">
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
 <link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <link rel="stylesheet" href="css/helmet-visor.css?v=dev" media="print">
-<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
+<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]:not([data-route])'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -1034,7 +1034,7 @@
               <li>Apex 26 &middot; CC0 &middot; 6 model items in the asset pack</li>
             </ul>
           </details>
-          <p class="adv-help" data-help="keep">Full licence texts ship beside each component (the links above) and in THIRD-PARTY-NOTICES in the project&rsquo;s repository.</p>
+          <p class="adv-help" data-help="keep">Full licence texts ship beside each component (the links above) and in THIRD-PARTY-NOTICES, in the project&rsquo;s repository and inside the desktop and Android apps. The Android app also includes Capacitor 8.6.2 (MIT), Capacitor Filesystem 8.1.5 (MIT) and Capacitor Share 8.0.2 (MIT).</p>
           <!-- /@gen-notices:credits -->
         </section>
 
@@ -3448,7 +3448,7 @@
         <dt>SEASON</dt>
         <dd>Race the calendar in order. Championship progress is saved between visits. SEASON SETUP picks the rounds, qualifying and sprint weekends; STANDINGS on the title menu shows the table.</dd>
         <dt>TIME TRIAL</dt>
-        <dd>Drive solo for your fastest lap against a ghost of your best one. Your track record is saved and shown on the circuit list. DAILY TIME TRIAL sets one circuit and conditions a day, the same for every player, and keeps your best and your streak.</dd>
+        <dd>Drive solo for your fastest lap against a ghost of your best one. Your track record is saved and shown on the circuit list. DAILY TIME TRIAL sets one circuit and conditions for each day of your local date, and keeps your best and your streak.</dd>
         <dt>CAREER</dt>
         <dd>Sign for a team as a DRIVER or run your own in MY TEAM. Qualify, race, earn prize money and develop the car. Each mode has three save slots and its own guide under CAREER MODES.</dd>
         <dt>QUALIFYING</dt>
@@ -3683,7 +3683,7 @@
   <div id="garrival-inner" class="sheet">
     <div id="ga-head"><h2>GARAGE ENTER &amp; LEAVE</h2></div>
     <div id="ga-rows" class="pane">
-      <p class="adv-help">Three sequences: PIT STOP (WORK ON CAR brings the car in), RACE START (the drive-out every RACE! opens on) and AFTER THE RACE (your next garage visit brings the car home, flavoured by how the race ended). Reduced motion skips the arrivals and removes camera sway. PREVIEW plays any of them here, even with animations off: pause, scrub or step it frame by frame (Space, arrow keys), LOOP it, or EDIT to hold the frame, JUMP TO a phase (the ticks under the scrub) and change a setting on it; Escape stops it.</p>
+      <p class="adv-help">Four moments: RACE START (the drive-out every RACE! opens on), PIT IN (WORK ON CAR brings the car in), PIT OUT (DONE sends it back out) and RACE END (your next garage visit brings the car home, flavoured by how the race ended), each with its own switch under PLAY ANIMATIONS. Reduced motion skips the arrivals and removes camera sway. PREVIEW plays any of them here, even with animations off: pause, scrub or step it frame by frame (Space, arrow keys), LOOP it, or EDIT to hold the frame, JUMP TO a phase (the ticks under the scrub) and change a setting on it; Escape stops it.</p>
       <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ANIMATIONS</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
       <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
         <select id="ga-speed"><option value="0.5">SLOW · 0.5×</option><option value="1" selected>NORMAL · 1×</option><option value="2">FAST · 2×</option></select>
@@ -3905,7 +3905,7 @@
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/input-ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-insights.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/driving-coach-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/consts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/knobs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/track-lights.js?v=dev"></script>
@@ -4085,7 +4085,6 @@
 <script defer crossorigin="anonymous" src="js/share/share-card-data.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/share/share-card-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/share/share-card.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/share/share-card-chips.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>
@@ -4098,7 +4097,6 @@
 <script defer crossorigin="anonymous" src="js/race/quali-net.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/quali-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>

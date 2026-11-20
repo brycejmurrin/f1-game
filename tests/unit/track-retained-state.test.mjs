@@ -103,3 +103,36 @@ test('a player build frees the prop/glass/water CPU geometry; the dev surface ke
   finally{ T.setKeepGeometry(false); }
   assert.ok(player.roadGeo&&player.terrainGeo,'road/terrain stay (groundY needs them)');
 });
+
+// Hunt 2026-11-18 (2) row 2: TLX (chunkedTrackCoords:false) never chunks the road, so its plain road mesh is final.
+// The drop used to wait for a roadChunked that cannot exist there, and every TLX session kept both ribbons' channels.
+test('TLX-shaped gfx drops ribbon channels once terrain is chunked; the plain road is final there',()=>{
+  const T=buildContext(null,{quiet:true});
+  const gfx={chunkedTrackCoords:false,createMesh(g){return {verts:g.pos.length/3};},
+    createChunkedMesh(){return {chunks:[{}]};}};
+  const tr=T.build(T.LIST.find(d=>d.id==='monza'),{gfx,retainGraph:false,chunkRibbons:true});
+  assert.equal(tr.meshes.roadChunked,null,'TLX road stays a plain mesh');
+  assert.ok(tr.meshes.road && tr.meshes.terrainChunked && tr.meshes.terrainChunked.chunks.length===1);
+  assert.equal(tr._ribbonCpuDropped,true);
+  for(const name of ['road','terrain']){
+    const geo=tr[name+'Geo'];
+    for(const k of ['nrm','col','mat']) assert.equal(geo[k],null,`${name}.${k} released`);
+    assert.ok(geo.pos instanceof Float64Array && geo.idx instanceof Uint32Array,`${name} pos+idx kept for debris/groundY`);
+  }
+  assert.equal(tr.roadGeo.trk,null);
+  assert.equal(typeof T.terrainY(tr,tr.terrainGeo.pos[0],tr.terrainGeo.pos[2]),'number');
+});
+
+test('TLX-shaped LOW build keeps channels until the late terrain chunk, then drops',()=>{
+  const T=buildContext(null,{quiet:true});
+  const gfx={chunkedTrackCoords:false,createMesh(g){return {verts:g.pos.length/3};},
+    createChunkedMesh(g){assert.ok(g.nrm&&g.nrm.length,'late terrain upload has normals');return {chunks:[{}]};}};
+  const tr=T.build(T.LIST.find(d=>d.id==='monza'),{gfx,retainGraph:false,chunkRibbons:false});
+  assert.ok(!tr._ribbonCpuDropped,'terrain may still be chunked when quality recovers');
+  assert.ok(Array.isArray(tr.terrainGeo.nrm));
+  tr.meshes.terrainChunked=gfx.createChunkedMesh(tr.terrainGeo);
+  T.dropRibbonCpuIfReady(tr);
+  assert.equal(tr._ribbonCpuDropped,true);
+  assert.equal(tr.terrainGeo.nrm,null);
+  assert.equal(tr.roadGeo.nrm,null);
+});

@@ -120,7 +120,6 @@ const TrackPit = (function () {
   const wrap = (v, L) => ((v % L) + L) % L;
   const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
-  /** Resolve a def's pit choices: side, mode, limit and the band set. */
   // Architectural dressing only: normalized along the BUILT garage row, not
   // scenery/start fractions. Invalid recipes leave the ordinary complex intact.
   // Heights clear the existing upper roof (9.23 m including its alternating lift).
@@ -147,6 +146,7 @@ const TrackPit = (function () {
     return result;
   }
 
+  /** Resolve a def's pit choices: side, mode, limit and the band set. */
   function resolve(def) {
     const p = (def && def.pit) || {};
     const street = !!(def && def.street);
@@ -178,8 +178,6 @@ const TrackPit = (function () {
     };
   }
 
-  /** The limiter window: how far before the line it opens, how far after it
-   *  closes. `curvature(track, s)` is injected so this file owns no spline. */
   /** How far the road stays straight from arc `s0` in direction `dir`
    *  (±1), up to `max`; `max` itself without a curvature function. */
   function straightRun(track, curvature, s0, dir, max) {
@@ -192,6 +190,8 @@ const TrackPit = (function () {
     return d;
   }
 
+  /** The limiter window: how far before the line it opens, how far after it
+   *  closes. `curvature(track, s)` is injected so this file owns no spline. */
   function window(track, curvature) {
     const L = track.total;
     if (!(L > 0)) return { entryM: ENTRY_MAX, exitM: EXIT_M };
@@ -241,7 +241,7 @@ const TrackPit = (function () {
         Math.max(EXIT_ROAD_MIN, straightRun(track, curvature, wrap(eM, L), 1, EXIT_ROAD)));
     };
     const entryRoad0 = Math.min(ENTRY_ROAD, Math.max(ROAD_MIN, (L / 3 - (entryM + exitM)) * 0.4),
-      Math.max(ROAD_MIN, straightRun(track, curvature, wrap(-entryM, L), -1, ENTRY_ROAD)));
+      Math.max(ENTRY_ROAD_MIN, straightRun(track, curvature, wrap(-entryM, L), -1, ENTRY_ROAD)));
     const span = (12 - 1) * PITCH;
     const budgetFor = (eM) => {
       const grow = Math.min(WALL_GROW, entryRoad0 * 0.5, roadFor(eM) * 0.5);

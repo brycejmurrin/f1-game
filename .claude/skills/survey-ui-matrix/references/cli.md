@@ -1,6 +1,7 @@
 # UI-matrix CLIs: commands, flags, axes, which tool
 
-Every call below is parent-only, `--help` included for layout-audit/fit-audit (SKILL.md §Gotchas).
+No hook matches these CLIs by name. A subagent runs only `--help`/`--list`/`--plan`; a launching run throws from
+`launchChromium` under `APEX_SUBAGENT` (`tools/lib/harness.mjs`) and is parent-only (AGENTS.md rule 10).
 
 ## Contents
 - layout-audit commands
@@ -15,7 +16,7 @@ Every call below is parent-only, `--help` included for layout-audit/fit-audit (S
 ```sh
 # NO BROWSER (exits before any launch; still parent-only): --help, --list, --report, --diff
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (counts are in its output)
+node tools/ui/layout-audit.mjs --list            # the whole screens × viewports catalog (no counts; ignores --screens/--viewports)
 # BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live;
 #   at >= 3 reap your own Chrome (AGENTS.md rule 7), wait once, else report the cells unmeasured):
 node tools/ui/layout-audit.mjs --survey          # title-path screens + shots (npm run ui:survey): NOT Bryce's cell, NOT every screen
@@ -27,7 +28,7 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 ```
 
 `apex_ui_mission_plan` is NOT a matrix planner: it takes a named player mission (first-race,
-customize-car, return-settings) and writes one explorer replay scenario. Use it only for a guided flow;
+customize-car, return-settings, settings-persistence: `tools/ui/explorer/catalog.mjs`) and writes one explorer replay scenario. Use it only for a guided flow;
 plan the matrix with `--list`.
 
 ## Flags
@@ -73,7 +74,7 @@ truncation and tap targets on longer labels before translating real locales.
 | `fit-audit.mjs` | type/spacing floors (`--sizes=`, `--scale=`; no exit code) |
 | `menu-fit.mjs` | `--safe=` notch insets only (deprecated otherwise) |
 | `reach-score.mjs` | offline (no browser): two-thumb reach zone of each screen's primary, tap share per zone, dead space, from `--dom` dumps or an inspection (`--in DIR --svg`) |
-| `test:baseline` | CI group `baseline` (`menu-baseline.spec.js` PNGs, identity); on a pushed branch `node tools/ci/remote-group.mjs baseline` |
+| `test:baseline` | CI group `baseline` (`menu-baseline.spec.js` PNGs, identity); the nightly `baseline-trial` job runs it, no PR run does; a whole-group dispatch is Bryce's opt-in |
 | `flows.mjs` | interaction FLOWS, not layout: door/Escape, double-tap bleed, focus, Back, persistence, search, rotation, D-pad; `--diff=<old flows.json>` exits 1 on a pass → fail |
 
 ## menu-mock: the fastest look at the menus

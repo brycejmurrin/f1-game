@@ -199,3 +199,51 @@ test('an old cancelled camera start cannot hide or stop the newer scan panel', a
   assert.equal(dom.scan.textContent, 'CANCEL SCAN'); assert.equal(oldStops, 1); assert.equal(newStops, 0);
   ctl.cancel(); assert.equal(newStops, 1);
 });
+test('WHEEL LAYOUT (#5801): presets and per-key picks move the face keys between grips, persist, and mirror', () => {
+  const h = boot(), L = vm.runInContext('PhonePadPage', h.ctx);
+  const box = () => { const e = element(); e.appendChild = (c) => { if (c.parent) c.parent.children.splice(c.parent.children.indexOf(c), 1); e.children.push(c); c.parent = e; }; return e; };
+  assert.deepEqual(plain(L.normaliseLayout({ zone: { overtake: 'R', boost: 'X' }, swap: 'yes' })).zone.boost, 'C', 'an unknown zone is the face');
+  assert.equal(L.layoutPreset({ zone: { overtake: 'R', boost: 'R', aero: 'R' } }), 'right');
+  assert.equal(L.layoutPreset({ zone: { radio: 'L' } }), 'custom');
+  const saved = {}, store = { getItem: (k) => saved[k] ?? null, setItem: (k, v) => { saved[k] = v; } };
+  const mk = () => {
+    const keys = Object.fromEntries(L.LAYOUT_KEYS.map((k) => [k, element()])), home = box();
+    for (const k of L.LAYOUT_KEYS) home.appendChild(keys[k]);
+    const presets = ['classic', 'right', 'left', 'mirror'].map((p) => { const e = element(); e.dataset.preset = p; return e; });
+    const dom = { body: element(), keys, home, grips: { L: box(), R: box() }, sheet: element(), open: element(), done: element(), rows: box(),
+      swapBtn: element(), presets, doc: { createElement: () => box() } };
+    return { dom, api: L.layout(dom, { store }) };
+  };
+  const ids = (dom, el) => el.children.map((c) => L.LAYOUT_KEYS.find((k) => dom.keys[k] === c));
+  const a = mk();
+  assert.equal(a.dom.rows.children.length, 8, 'one pick row per face key');
+  emit(a.dom.presets[1], 'click');
+  assert.deepEqual([ids(a.dom, a.dom.grips.R), ids(a.dom, a.dom.home).length, a.dom.presets[1]['aria-pressed'], JSON.parse(saved['apex26.padLayout']).zone.aero],
+    [['overtake', 'boost', 'aero'], 5, 'true', 'R'], 'RIGHT THUMB: OT/BOOST/AERO by the pedals, saved');
+  emit(a.dom.rows.children[4].children[1], 'click');   // RADIO → LEFT
+  assert.deepEqual([ids(a.dom, a.dom.grips.L), a.dom.presets[1]['aria-pressed'], a.api.get().zone.radio], [['radio'], 'false', 'L'], 'a per-key pick makes it CUSTOM');
+  emit(a.dom.swapBtn, 'click');
+  assert.deepEqual([a.dom.body.dataset.swap, ids(a.dom, a.dom.grips.L), ids(a.dom, a.dom.grips.R)], ['1', ['overtake', 'boost', 'aero'], ['radio']],
+    'MIRRORED: the pedal grip is on the left, so the keys that sit right go to the paddle grip');
+  const b = mk();
+  assert.deepEqual([b.api.get(), b.dom.body.dataset.swap, ids(b.dom, b.dom.grips.L)], [a.api.get(), '1', ['overtake', 'boost', 'aero']], 'a reload restores the saved layout');
+  emit(b.dom.open, 'click'); assert.equal(b.dom.sheet.hidden, false); emit(b.dom.done, 'click'); assert.equal(b.dom.sheet.hidden, true);
+  const phoneBtn = element(); phoneBtn.dataset.preset = 'phone';
+  // PHONE STYLE: tall BRAKE | GAS side by side, OT/BOOST/AERO in a column beside them.
+  const e2 = (() => { const keys = Object.fromEntries(L.LAYOUT_KEYS.map((k) => [k, element()])), home = box(); for (const k of L.LAYOUT_KEYS) home.appendChild(keys[k]);
+    const dom = { body: element(), keys, home, grips: { L: box(), R: box() }, presets: [phoneBtn], pedalsBtn: element(), stripBtn: element() };
+    return { dom, api: L.layout(dom, { store }) }; })();
+  emit(phoneBtn, 'click');
+  assert.deepEqual([e2.dom.body.dataset.pedals, e2.dom.body.dataset.strip, ids(e2.dom, e2.dom.grips.R), e2.dom.pedalsBtn['aria-pressed'], L.layoutPreset(e2.api.get())],
+    ['side', 'column', ['overtake', 'boost', 'aero'], 'true', 'phone'], 'PHONE STYLE');
+  emit(e2.dom.stripBtn, 'click');
+  assert.deepEqual([e2.dom.body.dataset.strip, L.layoutPreset(e2.api.get()), plain(L.normaliseLayout({ pedals: 'x', strip: 1 })).pedals], ['row', 'custom', 'stack'], 'a toggle edits one field; junk normalises');
+});
+test('MOVE & SIZE (#5801): placements normalise, keep the 44px touch floor, and a preset clears them', () => {
+  const h = boot(), L = vm.runInContext('PhonePadPage', h.ctx);
+  assert.deepEqual(plain(L.normaliseLayout({ place: { gas: { x: -7.1234, y: 300, s: 999 }, brake: { x: 0, y: 0, s: 100 }, 'bad id!': { x: 5 } } }).place),
+    { gas: { x: -7.1, y: 90, s: 250 } }, 'clamped, rounded, a no-op or junk id dropped');
+  assert.deepEqual([L.minScale(88, 200, 100), L.minScale(176, 300, 200), L.minScale(400, 400, 100)], [50, 50, 40], 'a 44px floor on the shorter side, never under 40%');
+  assert.equal(L.layoutPreset({ zone: {}, place: { gas: { x: 4, y: 0, s: 100 } } }), 'custom', 'a moved control is CUSTOM');
+  assert.deepEqual(plain(L.LAYOUT_PRESETS.phone.place), {}, 'presets carry no placements, so picking one puts every control back');
+});

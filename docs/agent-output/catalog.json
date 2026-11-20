@@ -386,6 +386,11 @@
       ]
     },
     {
+      "path": "tools/check/boot-wall.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/check/brake-cue-calibrate.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -784,6 +789,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/child-health.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/ci-coverage.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -843,6 +857,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/closing-refs.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/ci/coverage-merge.mjs",
@@ -996,6 +1016,14 @@
       "outputPolicy": "keep-native"
     },
     {
+      "path": "tools/ci/lib/tip-gate.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1015,13 +1043,24 @@
       ]
     },
     {
+      "path": "tools/ci/merge-train.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/needs-sync.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
-        "--json"
+        "--json",
+        "--quiet"
       ]
     },
     {
@@ -1102,6 +1141,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/pool-share.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/ci/pr-board.mjs",
@@ -2157,6 +2205,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/gfx/sharpness-ab.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/gfx/ssr-probe.mjs",
@@ -3650,6 +3704,15 @@
       "path": "tools/track/float-baseline.json",
       "classification": "data",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/footprint-rejected.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/track/footprint-support.cjs",

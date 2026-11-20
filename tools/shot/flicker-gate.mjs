@@ -134,6 +134,18 @@ export const SITES = [
   },
 ];
 
+const FLICKER_HELP = `flicker-gate — rendered z-fighting gate (full notes: the header of tools/shot/flicker-gate.mjs)
+
+  node tools/shot/flicker-gate.mjs [--site <id> ...] [--backend webgl2|three|webgpu] [--root <tree>]
+    [--out DIR] [--png] [--a3] [--no-settle] [--list]
+  --site <id>     repeatable; default every site (--list prints the table, no browser)
+  --backend       webgl2 = GLX (default), three = TLX, webgpu = WGX
+  --root <tree>   serve another checkout (positive control)
+  --out DIR       output dir for flicker-gate.json; --png adds each site's A frame and fight mask
+  --a3            diagnostic third still (A2 vs A3) and the A-vs-A2 diff PNG
+  --no-settle     no extra settle rounds when A != A2
+Exit 1 when any site fails its ceiling, errors, or no site could be measured.`;
+
 function parseArgs(argv) {
   const o = { sites: [], backend: "webgl2", root: ROOT, out: join(ROOT, "artifacts", "flicker-gate"), png: false, list: false, settle: true, width: 960, height: 540 };
   for (let i = 0; i < argv.length; i++) {
@@ -312,7 +324,7 @@ export function chooseSites(wanted, sites = SITES) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  if (opts.help) { console.log("see the header of tools/shot/flicker-gate.mjs"); return 0; }
+  if (opts.help) { console.log(FLICKER_HELP); return 0; }
   const chosen = chooseSites(opts.sites);
   const unknown = opts.sites.filter((id) => !SITES.some((s) => s.id === id));
   if (unknown.length) throw new Error(`unknown --site ${unknown.join(", ")}; known: ${SITES.map((s) => s.id).join(", ")}`);

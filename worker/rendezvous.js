@@ -240,6 +240,14 @@ export default {
       return json({ error: "method" }, 405, { allow: "GET, POST, OPTIONS" });
     }
 
+    // Rate-limit GET/POST before path matching. Junk `/v3/r/...` and legacy
+    // `/r/...` probes used to skip the limiter (404/426 returned first) and
+    // still burned Worker request quota on the Free plan; DO naming stays
+    // behind the match below.
+    if (!rateAllowed(request)) {
+      return json({ error: "rate_limited" }, 429, { "retry-after": "60" });
+    }
+
     const url = new URL(request.url);
     // Legacy routes reveal the encryption secret to the operator. Never serve
     // or create them, even for a stale client. The new route contains only a
@@ -248,9 +256,6 @@ export default {
     const m = url.pathname.match(/^\/v3\/r\/([0-9a-f]{64})\/(offer|answer)$/);
     if (!m) return json({ error: "not_found" }, 404);
     const [, roomId, slot] = m;
-    if (!rateAllowed(request)) {
-      return json({ error: "rate_limited" }, 429, { "retry-after": "60" });
-    }
 
     // Prefix the namespace too: old six-character rooms are never reused.
     const id = env.ROOM.idFromName("v3:" + roomId);
