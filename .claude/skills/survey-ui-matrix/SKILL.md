@@ -36,7 +36,7 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 
 1. **Plan the matrix** (no browser, parent-only): `node tools/ui/layout-audit.mjs --list`, and cross-check
    the screen roots in `index.html` against `SCREENS` ([setup.md](references/setup.md) §Enumerate).
-2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 first): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
+2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 on the PRE-edit tree: `git stash` or a worktree at the base sha): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
 3. **Bryce's cell first**, pictures AND DOM, as ONE background task (AGENTS.md rule 4), after
    `mkdir -p artifacts/logs`:
    `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*' --shots --dom > artifacts/logs/layout-audit-844.log 2>&1`.

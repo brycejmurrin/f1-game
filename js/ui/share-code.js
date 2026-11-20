@@ -9,8 +9,7 @@
 const ShareCode = (function () {
   const LAST_KEY = "lastSession";
   const UNDO_KEY = "shareUndo";
-  // The settings GARAGE FILE door's per-team cap (settings-export.js GARAGE_LIVERIES_MAX).
-  // A link never trims the player's own list to fit it: at the cap it refuses (6-F1).
+  // Per-team cap (settings-export.js GARAGE_LIVERIES_MAX); at the cap a link refuses (6-F1).
   const LIVERY_CAP = 32;
   const MAX_CODE_CHARS = 32 * 1024;
   const MAX_DECODED_BYTES = 64 * 1024;
@@ -19,8 +18,7 @@ const ShareCode = (function () {
     setup: { magic: "APXS1", kind: "setup" },
     livery: { magic: "APXL1", kind: "livery" },
     daily: { magic: "APXD1", kind: "daily" },
-    // A share card's QR: circuit, day and a target time, in a short dotted form
-    // (`APXC1.l.<track>~<yyyymmdd|->~<ms|->`) so the whole link stays under 120 chars.
+    // Share-card QR `APXC1.l.<track>~<yyyymmdd|->~<ms|->`: the link stays under 120 chars.
     lap: { magic: "APXC1", kind: "lap" },
   });
   const MAGIC_OF = Object.freeze(Object.fromEntries(
@@ -271,8 +269,7 @@ const ShareCode = (function () {
       if (decoded.livery) {
         const stored = store.get(customKey, []);
         const arr = Array.isArray(stored) ? stored : [];
-        // A suffix is not provenance (another player may own `default_imported`): a collision
-        // replaces an earlier import only for identical paint, else it takes the next free id.
+        // A catalog id collision replaces an earlier import only for identical paint; else a fresh id.
         const incoming = CustomLiveries.normalizeImported(decoded.team, [decoded.livery], decoded.livery.id);
         const catalogCollision = incoming.repaired > 0;
         let replaceId = catalogCollision ? null : decoded.livery.id;
@@ -283,8 +280,7 @@ const ShareCode = (function () {
           if (same) { replaceId = same.id; selectedId = same.id; }
         }
         const kept = replaceId == null ? arr.slice() : arr.filter((l) => !l || l.id !== replaceId);
-        // Re-sharing a livery the player already has replaces it in place; a NEW one
-        // at the cap is refused before anything is written — never trim their list.
+        // A re-share replaces in place; a NEW livery at the cap is refused, never trimming the list.
         if (kept.length === arr.length && arr.length >= LIVERY_CAP) {
           return { ok: false, kind: "livery", reason: "livery-full", team: decoded.team };
         }
@@ -300,7 +296,7 @@ const ShareCode = (function () {
       }
       selectedId = CustomLiveries.coherentImportedSelection(
         decoded.team, next || store.get(customKey, []), selectedId);
-      // Select the livery that was actually stored (a crafted code could name another id).
+      // Select the stored livery (a crafted code could name another id).
       values["livery." + decoded.team] = selectedId;
       const failed = importValues(store, decoded, values);
       if (failed) return failed;
@@ -309,7 +305,7 @@ const ShareCode = (function () {
       return { ok: true, kind: "livery", team: decoded.team };
     }
     if (decoded.kind === "lap") {
-      // Stage only: today's card opens the Daily, else free play (record() would reset the streak).
+      // Stage only: today's Daily, else free play; never a past day (record() resets the streak).
       if (decoded.day && decoded.day === h.today) { if (typeof h.openDaily === "function") h.openDaily(decoded); }
       else if (typeof h.openTrack === "function") h.openTrack(decoded);
       return { ok: true, kind: "lap", track: decoded.track, day: decoded.day || null, time: decoded.time || null };
@@ -321,8 +317,7 @@ const ShareCode = (function () {
     return CORRUPT;
   }
 
-  // One-deep undo for the last setup/livery code: the keys it is about to overwrite,
-  // with their previous values (null = absent: undo removes it via store.set(k, undefined)).
+  // One-deep undo of the last setup/livery code: overwritten keys and prior values (null = absent).
   function durableSet(store, key, value) {
     try { return store.set(key, value) === true; }
     catch (_) { return false; }
@@ -330,9 +325,9 @@ const ShareCode = (function () {
   function restoreValues(store, rec) {
     let complete = true;
     for (const k of rec.keys) {
-      if (!/^(setup|livery|livery\.custom)\.[a-z0-9_-]+$/.test(String(k))) continue;
+      if (!/^(?:(?:setup|livery(?:\.custom)?)\.|careerSetup\.[a-z0-9_-]+\.\d+\.)[a-z0-9_-]+$/.test(String(k))) continue;
       const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
-      // Try every key even after a failure; the recovery record stays for a retry.
+      // Try every key; on a failure the record stays for a retry.
       if (!durableSet(store, k, v == null ? undefined : v)) complete = false;
     }
     return complete;
@@ -340,8 +335,7 @@ const ShareCode = (function () {
   function importValues(store, decoded, values) {
     const keys = Object.keys(values);
     const prev = {};
-    // What the player STORED, not get()'s shipped GarageDefaults fallback: undoing
-    // over a default must leave the key absent, not pin the default (#2191).
+    // What the player STORED, not get()'s default fallback: undo must not pin a default (#2191).
     for (const k of keys) {
       const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
       prev[k] = v === undefined ? null : v;
@@ -351,22 +345,19 @@ const ShareCode = (function () {
     const failed = (reason) => ({ ok: false, kind: decoded.kind, team: decoded.team, reason });
     if (oldUndo && oldUndo.pending === true) return failed("recovery-pending");
     if (!durableSet(store, UNDO_KEY, rec)) {
-      // GameStore caches refused writes (and SAVE RETRY can replay them). Put
-      // the existing recovery record back before returning without an import.
+      // GameStore caches refused writes (SAVE RETRY replays them): put the old record back.
       durableSet(store, UNDO_KEY, oldUndo);
       return failed("undo-save-failed");
     }
     for (const k of keys) {
       if (!durableSet(store, k, values[k])) {
-        // Restore session values too: a quota failure must not look loaded.
-        // If rollback is also refused, the durable backup survives reload.
+        // A quota failure must not look loaded; a refused rollback keeps the durable backup.
         restoreValues(store, rec);
         return failed("import-save-failed");
       }
     }
     if (!durableSet(store, UNDO_KEY, Object.assign({}, rec, { pending: false }))) {
-      // The durable record is still pending. Restore its cached value as well,
-      // so a new import cannot replace the only copy of the original values.
+      // Still pending: restore the cached record so no import replaces the only originals.
       durableSet(store, UNDO_KEY, rec);
       restoreValues(store, rec);
       return failed("import-save-failed");
@@ -385,8 +376,7 @@ const ShareCode = (function () {
     }
     if (!restoreValues(store, pending)) return { ok: false, kind: "undo", reason: "undo-restore-failed" };
     if (!durableSet(store, UNDO_KEY, undefined)) {
-      // Failed removal also evicts GameStore's cached record: reinstate it so
-      // UNDO can retry in this session as well as after a reload.
+      // A failed removal evicts the cached record: reinstate it so UNDO can retry.
       durableSet(store, UNDO_KEY, pending);
       return { ok: false, kind: "undo", reason: "undo-cleanup-failed" };
     }
@@ -431,8 +421,7 @@ const ShareCode = (function () {
     return result;
   }
 
-  // CONTINUE re-opens the FREE circuit picker, so only free play's flow is kept or
-  // restored: a season round has SEASON's door and a career round CAREER's (6-F3).
+  // CONTINUE re-opens the FREE picker: only free play's flow is kept (season/career have own doors, 6-F3).
   const FREE_FLOW = "gp";
   function recordSession(store, snap) {
     if (!store || !snap || typeof snap.trackId !== "string" || !snap.trackId) return false;

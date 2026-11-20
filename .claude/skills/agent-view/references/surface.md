@@ -126,7 +126,7 @@ rest: 23.08 m/s full, 12.87 at 0.5, 0 at 0). `act(input, dt, n)` applies it for 
 ticks; `rollout({policy})` calls your policy repeatedly.
 
 ```
-race("monza"); go(); jump(0.008, 70)   // Monza T1 — ~frac 0.008, ~70 m/s entry
+race("monza"); go(); jump(0.09, 70)    // ~45 m before Monza T1 (turns[0] = 0.0962), ~70 m/s entry
                                       // STAGE FIRST — without this every read
                                       //   below returns PlayerNotPlacedError
 objective()                       // once — what winning is
@@ -161,8 +161,10 @@ const policy = w => {
 **Why `CAP` carries the policy.** `apexSpeedKph`/`suggestBrakeM` assume more grip
 than default parts have, and corner-relative braking — however early — cannot
 rescue an entry the preceding straight already over-fed. Without the governor the
-same policy gets rescued within 5-40 s on Monza's fast corners; with it, a
-measured lap completes. So **fix entry speed before anything else**: until it is
+same policy gets rescued within 5-40 s on Monza's fast corners; with it, the lap
+completes for distance, but its track-limit cuts (`world().ego.penalties`) can still delete the
+time: a cut sets `incidentInvalidLap` and `lastLap`/`best` stay null, so check the cut count
+before quoting a lap or sector time. So **fix entry speed before anything else**: until it is
 right, turn-in does nothing, the car washes wide and beaches, and the off-track
 crawl above is all that stops it stalling there for the rest of the interval.
 Once laps complete, raise `CAP`, then add a small feed-forward toward `nc.dir`

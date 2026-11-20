@@ -563,7 +563,7 @@ test("coach and practice keep their own channel and priority, and practice is it
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];
   assert.match(pri, /practice: 2/);
   assert.match(pri, /coach: 1/, "a coach tip still yields to everything else");
-  for (const file of ["js/race/race-insights.js", "js/race/driving-coach.js"])
+  for (const file of ["js/race/race-insights.js", "js/race/driving-coach.js", "js/race/driving-coach-boot.js"])
     assert.doesNotMatch(read(file), /G\.announce\([^)]*"info"\)/, file + " routes its messages to the practice tier");
 });
 
@@ -1116,7 +1116,7 @@ function dockHarness(btn, opts = {}) {
   const pv = (k) => root.style.getPropertyValue(k);
   const want = Math.max(0.82, btn);
   const zR = +pv("--hud-z-dock") || want, zL = +pv("--hud-z-dock-l") || zR, zBot = +pv("--hud-z-bot") || 1;
-  return { pv, zR, zL, zBot, W, H, want };
+  return { pv, zR, zL, zBot, W, H, want, dom, tick: b.tick };
 }
 
 test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap; the pedals keep theirs", () => {
@@ -1145,6 +1145,26 @@ test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap
   const owner = dockHarness(2.45), max = dockHarness(3);
   assert.ok(owner.zL > 1.5 && owner.zL <= 2.45, `the owner's 245 % still paints steer arrows well past the pedals (${owner.zL})`);
   assert.equal(max.zL, owner.zL, `300 % stops at the same bar-width budget (${max.zL})`);
+});
+
+/* A SETTLED STEER CAP STAYS SETTLED (#4274 perf re-verify, 2026-11-18). The owner's BUTTON SIZE paints the dock
+ * at 1.4325: past the pedal cap (1.175), so the steer dock writes --hud-z-dock-l, rounded to 3 places (1.433). The
+ * change test compared that rounded write with the PAINTED zoom, min(1.433, 1.4325) = 1.4325, saw 5e-4 and re-opened
+ * the full fit on every 10 Hz HUD tick for the whole race (844x390 TLX, 4x CPU throttle: ~18 ms/frame of
+ * querySelectorAll + rect reads). Both sides are now the painted value: once written, the steer cap is a no-op. */
+test("BUTTON SIZE 143 %: a settled steer cap does not re-open the full fit on every HUD tick", () => {
+  const fits = (btn) => {
+    const h = dockHarness(btn);
+    const doc = h.dom.document, q = doc.querySelectorAll.bind(doc);
+    let n = 0;
+    doc.querySelectorAll = (sel) => { if (sel === "[data-hl]") n++; return q(sel); };
+    for (let i = 0; i < 20; i++) h.tick();
+    doc.querySelectorAll = q;
+    return { n, zL: h.pv("--hud-z-dock-l"), zR: h.pv("--hud-z-dock") };
+  };
+  const owner = fits(1.4325), round = fits(1.5);
+  assert.deepEqual(owner, { n: 0, zL: "1.433", zR: "1.175" }, "1.4325: caps written once, then 20 ticks run no full fit");
+  assert.deepEqual(round, { n: 0, zL: "1.5", zR: "1.175" }, "1.5 (exact at 3 places) was already settled");
 });
 
 test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait keeps the shared cap", () => {

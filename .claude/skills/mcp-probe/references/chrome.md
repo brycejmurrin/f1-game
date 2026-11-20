@@ -9,6 +9,7 @@
 ## Contents
 
 - Chrome DevTools MCP — live 3D / __apex debugging
+- pageId and frame hooks
 
 ## Chrome DevTools MCP — live 3D / __apex debugging
 
@@ -192,3 +193,13 @@ from `node tools/ci/pick-tests.mjs`, the PR's own CI runs the browser shard
 (no local spec runs, AGENTS.md rule 5; a whole group, `remote-group.mjs`, is Bryce's opt-in).
 
 ---
+
+## pageId and frame hooks
+
+The pinned chrome-devtools-mcp routes by page: `navigate_page`, `evaluate_script`, `list_console_messages`,
+`take_heapsnapshot`, `performance_start_trace` and the other page-scoped tools take a `pageId`. Get it from `new_page`
+or `list_pages` first and pass it on every call.
+
+Frame stutter, before a trace: `__apex.perf({on:true,reset:true})`, play, then `__apex.perf()` (per-subsystem
+p50/p95/p99 spans and LoAF), `__apex.frametimeBench("reset"|"snapshot")` and `__apex.renderScale().frameTimes`
+(`docs/DEBUG-HOOKS.md`). `world()` holds no frame-time data.

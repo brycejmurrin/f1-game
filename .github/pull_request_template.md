@@ -37,7 +37,7 @@ The last Plan item keeps that shape: ready-gate ignores an item that starts `lan
      outside the fence. A hold is the `hold` label on the PR, not a line here. -->
 ```handoff
 head: <sha>
-owner: <host>:<session or agent id>
+owner: <host>:<session or agent id> until <ISO UTC, ≤ 4 h ahead: skill steward §Lane 3>
 next: <the one next step>
 ```
 
