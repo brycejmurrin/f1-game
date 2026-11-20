@@ -803,8 +803,7 @@ var GameAudio = (function () {
    * DEVICE_REBUILD_MAX slot.
    */
   function resumeIfNeeded(gestureEv) {
-    if (!ctx || document.hidden) return;
-    if (mutedSuspended && !isEnabled) return;   // muted on purpose: a tap must not wake the render thread
+    if (!ctx || document.hidden || !isEnabled) return;
     const isGesture = isActivationGesture(gestureEv);
     if (isGesture) soundtrack.retryStreamUnlock();
     if (isGesture && deviceRebuildPending) {

@@ -334,11 +334,8 @@ function load() {
   // but NOT for a season this build could not read whole: a circuit id it does
   // not know (a stale cached shell, a renamed circuit) shrank the calendar, and
   // writing that back erased the circuit for good, or blanked a finished season.
-  // LOSSY MEANS AN UNKNOWN CIRCUIT ID, nothing else. `season !== copy` is also
-  // true when resume() fell back to restart() for a round out of range, and that
-  // clean rebuilt season was then refused by every later save ("unknown circuit")
-  // although this build knew every id. A collapsed duplicate only counts when the
-  // save was repaired in place (the restart() config is not the stored one).
+  // A bad round alone restarts cleanly. Protect unknown IDs and a repaired
+  // calendar that collapsed duplicates.
   const lossy = !!raw && rawIds != null && (knownIds(rawIds).length !== rawIds.length
     || (season === copy && season.config.trackIds.length !== rawIds.length));
   lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
@@ -349,16 +346,16 @@ function load() {
   if (raw && !lossy) save(season, { migration: true });
   return season;
 }
+function refuseLossyWrite() {
+  Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
+  return (lastSave = { ok: false, durable: false, reason: "unknown circuit" });
+}
 function save(season, options) {
   if (!season || typeof season !== "object") {
     lastSave = { ok: false, durable: false, reason: "invalid" };
     return lastSave;
   }
-  if (lossySeasons.has(season)) {
-    lastSave = { ok: false, durable: false, reason: "unknown circuit" };
-    Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
-    return lastSave;
-  }
+  if (lossySeasons.has(season)) return refuseLossyWrite();
   const now = currentRevision();
   if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
     seasonConflict = true;
@@ -376,6 +373,8 @@ function save(season, options) {
   return lastSave;
 }
 function clear() {
+  // The last known circuit may precede another round in the stored calendar.
+  if (lossySeasons.has(activeSeason)) return refuseLossyWrite();
   const now = currentRevision();
   if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
     seasonConflict = true;

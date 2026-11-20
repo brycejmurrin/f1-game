@@ -148,10 +148,8 @@ if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
 if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
-// Graphics context loss: GLX may reload with lighter settings, or game.js may
-// quit to the menu mid-start. Stash apex26.ctxLostNotice before either path;
-// consume it once here so the title explains the hitch instead of looking like
-// a silent kick to the menu.
+// At boot, only a persisted reset explains a reload. In-page recovery
+// calls showCtxLostNotice directly even if session storage is unavailable.
 const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
 const CTX_LOST_NEED_RELOAD_KEY = "apex26.ctxLostNeedReload";
 const CTX_LOST_EXHAUSTED_KEY = "apex26.ctxLostExhausted";
@@ -180,10 +178,10 @@ if (!ctxLostNotice) {
   dismiss.textContent = "DISMISS";
   dismiss.setAttribute("aria-expanded", "true");
   ctxLostNotice.append(title, detail, retry, dismiss);
-  document.body.appendChild(ctxLostNotice);
+  els.overlay.appendChild(ctxLostNotice);
   // Match #save-warning placement when overlays.css has no dedicated rule yet.
   Object.assign(ctxLostNotice.style, {
-    position: "fixed", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
+    position: "fixed", zoom: "normal", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
     transform: "translateX(-50%)", width: "min(48rem, calc(100vw - 16px))", display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "8px", padding: "8px",
     border: "1px solid rgba(255, 209, 128, 0.72)", borderRadius: "8px",
@@ -207,13 +205,14 @@ const hideCtxLostNotice = () => {
   }
   ctxLostSpoken = false;
 };
-const showCtxLostNotice = () => {
+const showCtxLostNotice = (onlyIfStashed = false) => {
+  if (!ctxLostNotice || G.state !== "menu") return;
   let pending = false;
   try {
     pending = sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1";
     if (pending) sessionStorage.removeItem(CTX_LOST_NOTICE_KEY);
-  } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
-  if (!pending || !ctxLostNotice || G.state !== "menu") return;
+  } catch (_) { /* no persisted notice */ }
+  if (onlyIfStashed && !pending) return;
   ctxLostNotice.hidden = false;
   let exhausted = false;
   try { exhausted = sessionStorage.getItem(CTX_LOST_EXHAUSTED_KEY) === "1"; } catch (_) { /* blocked storage */ }
@@ -272,7 +271,7 @@ const bindCtxLostNoticeOnMenuExit = () => {
   }
 };
 bindCtxLostNoticeOnMenuExit();
-showCtxLostNotice();
+showCtxLostNotice(true);
 
 /** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
 const restoreMenuAfterGraphicsReset = () => {
