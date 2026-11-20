@@ -20,7 +20,7 @@ test("manifest keeps results-sheet.js and quali-sheet.js lazy and results-boot.j
     { boot: m.FULL.includes("js/ui/results-boot.js"), sheet: m.FULL.includes("js/ui/results-sheet.js"),
       chips: m.FULL.includes("js/share/share-card-chips.js"), quali: m.FULL.includes("js/ui/quali-sheet.js"), lazy: m.LAZY_RESULTS_SHEET },
     { boot: true, sheet: false, chips: false, quali: false,
-      lazy: ["js/share/share-card-chips.js", "js/ui/results-sheet.js", "js/ui/quali-sheet.js"] },
+      lazy: ["js/share/share-card-data.js", "js/share/share-card-layout.js", "js/share/share-card.js", "js/share/share-card-chips.js", "js/ui/results-sheet.js", "js/ui/quali-sheet.js"] },
   );
 });
 

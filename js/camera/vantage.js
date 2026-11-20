@@ -348,6 +348,17 @@ function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
   if (!isFinite(spd)) spd = 0;
   if (!isFinite(x)) x = 0;
+  // A non-finite arc used to run the whole solve (sample → NaN into cvA → NaN eye)
+  // and only then hit the hold at the end. Hold up front so pooled samples stay
+  // clean and a hitch that fed NaN cannot spend a frame of trig on garbage.
+  if (!isFinite(s)) {
+    if (!_nanWarned) { _nanWarned = true; Log.warn("game", "GameCams.vantage: non-finite pose in mode " + mode + ", holding the last good one"); }
+    _vantEye[0] = _goodEye[0]; _vantEye[1] = _goodEye[1]; _vantEye[2] = _goodEye[2];
+    _vantTgt[0] = _goodTgt[0]; _vantTgt[1] = _goodTgt[1]; _vantTgt[2] = _goodTgt[2];
+    _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = _goodFov; _vantOut.fovBoost = 0; _vantOut.cut = false;
+    publishListenerBasis(mode, _vantEye, _vantTgt);
+    return _vantOut;
+  }
   // The PLAYER's look-back key and free-look glance steer only the player's own camera: a solve
   // without `att` (the PiP inset) or flagged `noLook` (the TV director's shots) must not spin.
   const localLook = !!extra.att && !extra.noLook;

@@ -40,6 +40,7 @@ import {
 } from "../lib/harness.mjs";
 
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
+import { loadAllModels } from "../shot/capture-fallbacks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -1534,9 +1535,7 @@ async function main() {
 
     await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });
-    await page.evaluate(async () => {
-      if (typeof Assets !== "undefined" && Assets.loadModels) { try { await Assets.loadModels(); } catch (_) { /* pack optional */ } }
-    });
+    await loadAllModels(page);
     let cpuCdp = null;
     if (opts.cpuProfile > 0) {
       // Armed BEFORE race(): the stall under test is the race start itself,
