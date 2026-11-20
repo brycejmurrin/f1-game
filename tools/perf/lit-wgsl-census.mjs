@@ -21,6 +21,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadAllModels } from "../shot/capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha = (s) => createHash("sha256").update(s).digest("hex").slice(0, 16);
@@ -140,7 +141,7 @@ async function capture(o) {
     });
     await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });
-    await page.evaluate(async () => { try { await Assets.loadModels(); } catch (_) { /* pack optional */ } });
+    await loadAllModels(page);
     await page.evaluate(({ id, tod, weather }) => { __apex.race(id, tod, weather); __apex.go(); },
       { id: o.track || "monza", tod: o.tod || "day", weather: o.weather || "dry" });
     // Settle: the lit programs are built during race entry and on the first frames; wait until no new module
