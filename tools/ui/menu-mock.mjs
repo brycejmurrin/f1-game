@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // menu-mock.mjs — every menu / sheet on BLACK with the 3D off: labelled boxes, numbers per screen, a cell cache, ~1 s a shot.
-// @doc Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache.
+// @doc Menu layout shots (SCREENS x VIEWPORTS), 3D off: boxes, tap/overflow/text numbers, cell cache.
 // @skill survey-ui-matrix
 //
 //   node tools/ui/menu-mock.mjs                                                    # title,settings,racesettings,results,quali,pause @ the play-shape phone
@@ -13,10 +13,10 @@
 //   --format png|jpeg  --no-boxes  --no-cache  --min-tap N (default: body --tap on touch, WCAG 24 on pointer; tools/ui/tap-floor.mjs)  --min-font 10  --out artifacts/menu-mock/<stamp>
 //   --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)  --list  --json  --help
 //
-// WHY IT IS FAST. layout-audit --gallery already boots once per viewport; this boots once per POINTER
+// Native iPhone 15 shots boot once per phone window at its own DPR. Other cells boot once per POINTER
 // SHAPE (hasTouch x isMobile are fixed at context creation, the viewport is not): the viewport and the
 // safe-area insets change in place on the same page, the 3D stays off (__apex.headless + #game hidden),
-// the capture is JPEG-able at device scale 1, and a cell whose definition AND js/ css/ index.html are
+// the capture is JPEG-able, and a cell whose definition AND js/ css/ index.html are
 // unchanged is served from artifacts/ui-mock-cache without opening the screen at all.
 //
 // WHAT IT MEASURES (per cell, inside the screen's root): controls below the tap floor, controls painted
@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 import { drawBoxes, captureShot, contactSheet, inputsHash, cellCache } from "../lib/ui-mock-core.mjs";
-import { SCREENS, VIEWPORTS, pickScreens, pickViewports } from "./menu-screens.mjs";
+import { SCREENS, VIEWPORTS, pickScreens, pickViewports, seedOwnerProfile } from "./menu-screens.mjs";
 import { bootPage, resetToTitle, waitScreenReady, applyInsets } from "./menu-capture.mjs";
 import { chromiumArgs } from "../shot/hud-survey.mjs";
 import { ensureTapFloor, TAP_RULE_VERSION } from "./tap-floor.mjs";
@@ -36,7 +36,7 @@ import { ensureTapFloor, TAP_RULE_VERSION } from "./tap-floor.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--screens", "--viewports", "--format", "--no-boxes", "--no-cache", "--min-tap", "--min-font", "--out", "--gl", "--list", "--json", "--help"];
 export const DEFAULT_SCREENS = "title,settings,racesettings,results,quali,pause";
-export const DEFAULT_VIEWPORTS = "ios-iphone-landscape-844";
+export const DEFAULT_VIEWPORTS = "ios-iphone-landscape";
 // Mode / session screens last: each one leaves a race, a covering layer, or a body class
 // behind it. Order matches layout-audit's gallery (race-bound last).
 const LAST = ["photostudio", "lightingtuner", "cameratuner", "flybyeditor", "lightingtunerfly", "photocontrols", "loading", "hud", "pause", "results"];
@@ -167,7 +167,7 @@ async function main() {
   const byGroup = new Map();
   for (const c of cells) {
     const vp = VIEWPORTS.find((v) => v[0] === c.viewport);
-    const g = groupKey(vp[1]);
+    const g = vp[4]?.iphone15 ? vp[0] : groupKey(vp[1]);
     if (!byGroup.has(g)) byGroup.set(g, []);
     byGroup.get(g).push({ ...c, vp });
   }
@@ -182,9 +182,10 @@ async function main() {
       const getBoot = async () => {
         if (booted) return booted;
         const tb = Date.now();
-        const [, o] = mine[0].vp;
-        const ctx = await browser.newContext({ hasTouch: !!o.hasTouch, isMobile: !!o.isMobile, userAgent: o.userAgent, deviceScaleFactor: 1, colorScheme: "dark",
-          viewport: o.viewport || { width: 1280, height: 800 } });
+        const entry = mine[0].vp;
+        const [, o] = entry;
+        const ctx = await browser.newContext({ ...o, deviceScaleFactor: entry[4]?.iphone15 ? o.deviceScaleFactor : 1, colorScheme: "dark" });
+        await seedOwnerProfile(ctx, entry);
         const page = await ctx.newPage();
         const errs = [];
         page.on("pageerror", (e) => errs.push(String(e && e.message || e).slice(0, 200)));
@@ -197,7 +198,7 @@ async function main() {
       };
       for (const cell of mine) {
         const t1 = Date.now();
-        const key = cache.key({ screen: cell.screen, viewport: cell.viewport, boxes, fmt, minFont, tapFlag, tapRule: TAP_RULE_VERSION });
+        const key = cache.key({ screen: cell.screen, viewport: cell.viewport, phone: cell.vp[4]?.iphone15 ? cell.vp[1] : null, boxes, fmt, minFont, tapFlag, tapRule: TAP_RULE_VERSION });
         const hit = cache.get(key);
         if (hit) {
           const file = path.join(out, cell.id + ext);
@@ -214,7 +215,7 @@ async function main() {
         const row = { id: cell.id, screen: cell.screen, viewport: cell.viewport, error: null };
         try {
           const v = o.viewport || { width: 1280, height: 800 };
-          await page.setViewportSize({ width: v.width, height: v.height });
+          if (!cell.vp[4]?.iphone15) await page.setViewportSize({ width: v.width, height: v.height });
           await page.evaluate(leaveToMenu);
           await page.waitForFunction(() => window.__apex.info().state === "menu", null, { polling: 100, timeout: 10000 });
           await resetToTitle(page, srv.url, true);

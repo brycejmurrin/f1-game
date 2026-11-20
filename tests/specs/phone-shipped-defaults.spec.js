@@ -21,6 +21,7 @@
 //
 // Two contexts on his phone (tools/lib/bryce-phone.mjs: descriptor + CDP env() insets): one clean, one seeded with
 // the export the way a boot reads it. Rects are getBoundingClientRect; a box may differ by 1 px (zoom rounding).
+import { rotateIPhone15 } from "../helpers/iphone15.mjs";
 import { test, expect } from "@playwright/test";
 import { OWNER_EXPORT, openBrycePhone, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
 import { settleInPage } from "../helpers/title-fit.mjs";
@@ -85,7 +86,7 @@ function labelLagInPage() {
 }
 
 async function bootPhone(browser, baseURL, entries) {
-  const { context, page, preset } = await openBrycePhone(browser, { window: "standalone", dpr: 1, profile: false });
+  const { context, page, cdp, preset } = await openBrycePhone(browser, { window: "standalone", dpr: 1, profile: false });
   await context.addInitScript((e) => {
     window.__TEST_MODE = true;
     try {
@@ -99,7 +100,7 @@ async function bootPhone(browser, baseURL, entries) {
     await page.waitForFunction(() => window.__apex && window.__apex.race && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT });
     await page.evaluate(() => window.__apex.headless(true));   // geometry, not frames
   };
-  return { context, page, preset, load };
+  return { context, page, cdp, preset, load };
 }
 
 /** Every screen's boxes for one profile. */
@@ -191,11 +192,10 @@ test.describe("a clean phone profile paints what the owner's 2026-11-10 export p
 });
 
 test("the title Button Style setting survives rotation and reload", async ({ browser, baseURL }) => {
-  const { context, page, load } = await bootPhone(browser, baseURL, {});
-  const landscape = { width: 852, height: 393 }, portrait = { width: 393, height: 852 };
-  const rotate = async (viewport) => {
-    await page.setViewportSize(viewport);
-    await expect(page.locator("body")).toHaveAttribute("data-shape", viewport.width > viewport.height ? "wide" : "tall");
+  const { context, page, cdp, load } = await bootPhone(browser, baseURL, {});
+  const rotate = async (orientation) => {
+    await rotateIPhone15(page, cdp, orientation);
+    await expect(page.locator("body")).toHaveAttribute("data-shape", orientation === "standalone" ? "wide" : "tall");
   };
   const paint = () => page.locator("#mb-career, #mb-race, #mb-settings").evaluateAll(buttons =>
     buttons.map(button => {
@@ -218,28 +218,28 @@ test("the title Button Style setting survives rotation and reload", async ({ bro
   try {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await load();
-    await rotate(landscape);
+    await rotate("standalone");
     await expect(page.locator("#mb-race")).toHaveCSS("font-style", "italic");
     const racing = await paint();
-    await rotate(portrait);
+    await rotate("portrait");
     await expect(page.locator("#mb-race")).toHaveCSS("font-style", "normal");
     const flat = await paint();
 
     await choose("auto", "racing");
     await expect.poll(paint).toEqual(racing);
-    await rotate(landscape);
+    await rotate("standalone");
     await expect.poll(paint).toEqual(racing);
 
     await choose("racing", "flat");
     await expect.poll(paint).toEqual(flat);
     await load();
     await expect.poll(paint).toEqual(flat);
-    await rotate(portrait);
+    await rotate("portrait");
     await expect.poll(paint).toEqual(flat);
 
     await choose("flat", "auto");
     await expect.poll(paint).toEqual(flat);
-    await rotate(landscape);
+    await rotate("standalone");
     await expect.poll(paint).toEqual(racing);
   } finally { await context.close(); }
 });

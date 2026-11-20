@@ -3,7 +3,7 @@
 Unofficial 3D F1 fan game: three.js on WebGPU (its WebGL2 backend where WebGPU is absent) by default, a hand-written
 WebGL2 renderer as fallback. No build step, no frameworks: IIFE modules loaded by `<script>` tags, static files on
 GitHub Pages. `CLAUDE.md` imports this file; Cursor and Codex load it directly (`.cursor/rules/apex-shared.mdc`,
-`.codex/config.toml`). Everything not needed on every turn is a link. Agent-written drafts: Bryce's word wins.
+`.codex/config.toml`). Agent-written drafts: Bryce's word wins.
 
 ## The loop — every change, in order
 ```sh
@@ -75,8 +75,7 @@ generated picker roster `js/track/circuit-meta.js`; a circuit's full def hydrate
 
 ## Critical conventions
 Code conventions load with the files they govern (`.claude/rules/`, by `paths:`). Regenerable output goes in
-`artifacts/` or `scratch/`, never `/tmp`. Times are Pacific. Bryce plays on a phone: UI reports reproduce at 844×390
-landscape, touch first.
+`artifacts/` or `scratch/`, never `/tmp`. Times are Pacific. iPhone 15 reference: 852×393 CSS px landscape, 3×. See `tests/data/phone-windows.json` for all windows.
 
 ## Physics
 Full reference `docs/PHYSICS.md`. `PACE` is a ground-speed scale, not a cap: compare speeds through

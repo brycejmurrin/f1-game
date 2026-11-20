@@ -1,4 +1,5 @@
 // @ts-check
+import { CONTRACT_WINDOWS } from "../helpers/iphone15.mjs";
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
@@ -706,8 +707,8 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
 });
 
 // ── UI contract cells (#5153 gap 11, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.7) ──
-// The hub in the owner's three windows — A the iOS Home Screen app (852x393, insets 59/21/59),
-// C the Safari tab (852x283), D the spec phone (844x390) — seeded from Bryce's own export, whose
+// The hub in three contract windows — A the iOS Home Screen app (852x393, insets 59/21/59),
+// C the legacy toolbar stress case (852x283), D the spec phone (844x390) — seeded from Bryce's own export, whose
 // career DENSITY is ROOMY. Measured before the fix (docs/notes/UI-PR-D-MEASURE-2026-11-06.md):
 // ROOMY turned the sheet normal, which paired it at 657 own px (a 73-115 px left pane) and at
 // 552 left no scroller at all. On a phone-sized window ROOMY is a request the box clamps: the
@@ -718,11 +719,6 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
 // painted px now (probe 2026-11-16, 0.7 | 1.09): foot 56 | 58.2; head 62.5 | 94.8; body 243.5 in A (218.5 normal).
 // the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
 const LEGACY_PROFILE = readProfile("legacy");
-const CONTRACT_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
-  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
-];
 for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — " + win.name, () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("ROOMY is clamped: compact, stacked, one scroller, the foot on screen", async ({ page }) => {

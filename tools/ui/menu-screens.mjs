@@ -6,9 +6,7 @@ import { CliArgError } from "../lib/cli-args.mjs";
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
 import { brycePhone, seedStoreInPage } from "../lib/bryce-phone.mjs";
-import fs from "node:fs";
-// The owner's phone windows: ONE record (#5218), read by bryce-phone.mjs and tests/helpers/title-fit.mjs too.
-const PW = JSON.parse(fs.readFileSync(new URL("../../tests/data/phone-windows.json", import.meta.url), "utf8")).windows;
+const comparisonPhone = brycePhone({ window: "w844", profile: false });
 const ins = (w) => ({ t: w.insets.top, r: w.insets.right, b: w.insets.bottom, l: w.insets.left });
 
 const require = createRequire(import.meta.url);
@@ -28,37 +26,25 @@ async function openVisualTuner(p, tunerId, timeout = 15000) {
 }
 
 export const VIEWPORTS = [
-  // DPR overrides below are fast geometry probes, not native phone raster captures.
-  // The 4th element is the SAFE-AREA INSET to inject (see applyInsets): Chromium
-  // reports env(safe-area-inset-*) as 0 under device emulation, so a notch has
-  // to be simulated or it is never tested at all. iPhone 15 Pro, measured:
-  // 59/34 top/bottom upright; on its side the notch moves to the LEADING edge.
-  ["ios-iphone-portrait",   { ...devices["iPhone 15 Pro"], viewport: { width: 393, height: 852 }, screen: { width: 393, height: 852 }, deviceScaleFactor: 2 },
-    "full-screen portrait geometry; browser toolbar excluded", { t: 59, r: 0, b: 34, l: 0 }],
-  ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], viewport: { width: PW.standalone.width, height: PW.standalone.height }, screen: { width: 852, height: 393 }, deviceScaleFactor: 2 },
-    "the shape the game is PLAYED in — 343px of height for everything",
-    ins(PW.standalone)],
-  // The device descriptor's 393px is the FULL-SCREEN/PWA height. The Safari tab is
-  // the window MEASURED on Bryce's iPhone (852x368, #5218; this cell was a guessed
-  // 852x344 "collapsed toolbar" before). Both from tests/data/phone-windows.json.
-  ["ios-iphone-landscape-safari", { ...devices["iPhone 15 Pro landscape"],
-      deviceScaleFactor: 2, viewport: { width: PW.safari.width, height: PW.safari.height }, screen: { width: 852, height: 393 } },
-    "landscape Safari tab — the window measured on the owner's iPhone",
-    ins(PW.safari)],
+  // Native-density iPhone 15 captures. The measured Safari viewport is shorter than its screen.
+  ...[["ios-iphone-portrait", "portrait"], ["ios-iphone-landscape", "standalone"], ["ios-iphone-landscape-safari", "safari"]].map(([name, window]) => {
+    const p = brycePhone({ window, profile: false });
+    return [name, p.contextOptions, p.verified, ins(p), { iphone15: true }];
+  }),
   // iPhone 12-14 and most Android phones in landscape: 844x390 full screen. The
   // 852x368 / 852x393 cells above straddle it but never land ON it, and a
   // title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here
   // (found by hand in Chrome DevTools emulation, 2026-10-05).
-  ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: { width: PW.w844.width, height: PW.w844.height }, screen: { width: 844, height: 390 } },
+  ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: comparisonPhone.viewport, screen: comparisonPhone.contextOptions.screen },
     "iPhone 13 full-screen geometry, 844x390 CSS; browser toolbar excluded",
-    ins(PW.w844)],
+    ins(comparisonPhone)],
   // THE OWNER'S PHONE (tools/lib/bryce-phone.mjs, issue #5262). Named `bryce-*` so an `ios-*` glob never picks them
   // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 70 %),
   // and layout-audit sets real env() insets and prints the PAINTED sizes (tools/lib/paint-floor.mjs).
-  ...["standalone", "safari"].map((w) => {
-    const p = brycePhone({ window: w, dpr: 2, profile: false });
-    return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w === "standalone" ? "Home Screen app" : "Safari tab"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
-      { t: p.insets.top, r: p.insets.right, b: p.insets.bottom, l: p.insets.left }, { bryce: w }];
+  ...["standalone", "portrait", "safari"].map((w) => {
+    const p = brycePhone({ window: w, profile: false });
+    return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w === "safari" ? "Safari tab" : "Home Screen app"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
+      ins(p), { iphone15: true, bryce: w }];
   }),
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
@@ -661,7 +647,7 @@ export function pickViewports(all, patternArg) {
 export async function seedOwnerProfile(ctx, vpEntry) {
   const mark = vpEntry && vpEntry[4];
   if (!mark || !mark.bryce) return null;
-  const preset = brycePhone({ window: mark.bryce, dpr: 2 });
+  const preset = brycePhone({ window: mark.bryce });
   await ctx.addInitScript(seedStoreInPage, preset.localStorage);
   return preset;
 }

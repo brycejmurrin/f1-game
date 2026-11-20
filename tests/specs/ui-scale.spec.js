@@ -22,13 +22,13 @@
 // is 399px at 130 %" goes stale the moment the type scale is retuned, which is
 // exactly what the component restructure is about to do. Every check here is
 // relative or a containment test.
+import { LANDSCAPE, PORTRAIT } from "../helpers/iphone15.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 // Explicit phone cells use a coherent mobile identity; DPR 1 intentionally limits raster cost.
-const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
 // 50 is SCALE_MIN; 100 is what ships; 115 stays because three defects confirmed
 // on 2026-08-08 were invisible at 100% and present at 115% (garage overlapping
 // the camera bar by 61px — measured -8 / +61 / +130 / +222 at 100/115/130/150).
@@ -181,7 +181,7 @@ const PROBE = (rootSel) => {
 // column rendered 398.5px wide at UI SIZE 130 % (17.5px off the right edge) and
 // 459.8px at 150 % (78.8px off), while its CSS width sat unchanged at 306.5px
 // the whole time. A landscape-only matrix cannot see a portrait-only branch.
-const SHAPES = [["landscape", LANDSCAPE], ["portrait", { width: 393, height: 852 }]];
+const SHAPES = [["landscape", LANDSCAPE], ["portrait", PORTRAIT]];
 
 test.describe("UI scale", () => {
   test.use({ hasTouch: true });
@@ -1466,7 +1466,7 @@ test.describe("Race setup adaptive task", () => {
       await expect(weatherHelp).toBeVisible();
 
       const cells = [
-        { width: 852, height: 393, scale: 109 },
+        { ...LANDSCAPE, scale: 109 },
         { width: 390, height: 844, scale: 109 },
         { width: 390, height: 844, scale: 150 },
         { width: 390, height: 844, scale: 200 },
@@ -1673,7 +1673,7 @@ test.describe("Race setup adaptive task", () => {
 });
 
 test.describe("Custom Home width on touch", () => {
-  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }) });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("a narrow saved Home stack stays bounded and actionable after rotation", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1708,9 +1708,9 @@ test.describe("Custom Home width on touch", () => {
 
     const observations = [];
     for (const [index, viewport] of [
-      { width: 852, height: 393 },
-      { width: 393, height: 852 },
-      { width: 852, height: 393 },
+      LANDSCAPE,
+      PORTRAIT,
+      LANDSCAPE,
     ].entries()) {
       await page.setViewportSize(viewport);
       await page.evaluate(() => window.dispatchEvent(new Event("orientationchange")));
@@ -1767,7 +1767,7 @@ test.describe("Custom Home width on touch", () => {
 
 test.describe("Factory Home on touch", () => {
   // Keep finite transitions disabled while measuring the layout contract.
-  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }), reducedMotion: "reduce" });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }), reducedMotion: "reduce" });
 
   test("default Home separates landscape regions and keeps destinations readable through enlargement", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1792,13 +1792,13 @@ test.describe("Factory Home on touch", () => {
     }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 0.7 });   // 852x393 is a phone: it ships UI SIZE 70 % (#5358)
 
     const cells = [
-      { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-      { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
-      { width: 852, height: 393, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { ...LANDSCAPE, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { ...LANDSCAPE, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
+      { ...LANDSCAPE, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
       { width: 1280, height: 590, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
       { width: 667, height: 320, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-      { width: 393, height: 852, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-      { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
+      { ...PORTRAIT, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { ...LANDSCAPE, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
     ];
     for (const [index, cell] of cells.entries()) {
       await page.setViewportSize({ width: cell.width, height: cell.height });
@@ -1908,7 +1908,7 @@ test.describe("Factory Home on touch", () => {
       await page.screenshot({ path: testInfo.outputPath(`factory-home-${index}.png`) });
       observations.push({ cell, geometry, destinations, settled });
     }
-    await page.setViewportSize({ width: 852, height: 393 });
+    await page.setViewportSize(LANDSCAPE);
     await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 0, right: 0, bottom: 0, left: 0 } });
     await page.evaluate(() => { __apex.uiScale(109); AppearanceOpts.setTextSize("large"); TitleLayout.reset(); });
     await inspectSettled(page, { root: "#overlay" });

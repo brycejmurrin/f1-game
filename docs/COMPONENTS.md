@@ -434,12 +434,21 @@ Chrome DevTools MCP without calling `headless` at all.
 
 ### The viewports, and what each one is for
 
-These are shapes a display can be, not devices people own. Each exists because
-some branch turns on or off at it.
+The standard **iPhone 15** is the reference for owner screenshots. At the default display scale, one logical CSS pixel spans three native pixels on each axis (DPR 3). Use logical dimensions for layout, safe-area insets and browser viewport settings. A full-screen capture at device scale produces the native PNG dimensions below. [Apple iPhone 15 specifications](https://support.apple.com/en-us/111831) · [iPhone 15 viewport and pixel ratio](https://www.webmobilefirst.com/en/devices/apple-iphone-15-2023/)
+
+| iPhone 15 capture | Layout viewport (CSS px) | Screenshot (native px at 3×) |
+|---|---:|---:|
+| Full-screen portrait | 393 × 852 | 1179 × 2556 |
+| Full-screen landscape | 852 × 393 | 2556 × 1179 |
+| Landscape Safari tab, owner measurement | 852 × 368 | 2556 × 1104 (page content only) |
+
+Safari chrome can change the available page height. Its measured 368 CSS px applies to the tab state captured in issue #5218. The physical display is the same in all three cases. Read the shared window record for the insets and their measurement status. [Phone window profiles](../tests/data/phone-windows.json) · [Capture commands](AGENT-SURFACE.md#the-owners-phone-one-preset-2026-11-10)
+
+The broader viewport matrix covers other device sizes and layout breakpoints.
 
 | viewport | why it is in the matrix |
 |---|---|
-| `ios-iphone-portrait` 393x852 | the phone as most people hold it |
+| `ios-iphone-portrait` 393x852 | standard iPhone 15 in portrait |
 | `ios-iphone-landscape` 852x393 | the shape the game is PLAYED in — 343px of sheet height for everything |
 | `ios-iphone-landscape-safari` 852x368 | landscape Safari tab, the window measured on the owner's iPhone (#5218; it was a guessed 852x344 "collapsed toolbar" cell). The device descriptor's 393px is the FULL-SCREEN/PWA height; sizes come from `tests/data/phone-windows.json` |
 | `ios-iphone-landscape-844` 844x390 | iPhone 12-14 and common Android phones in landscape, full screen. The 852x368 / 852x393 cells never land on it; a title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here |

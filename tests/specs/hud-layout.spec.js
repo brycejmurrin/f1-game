@@ -13,15 +13,21 @@
 // Safe-area insets are injected rather than emulated: headless Chromium reports
 // env(safe-area-inset-*) as 0, so a notched phone is otherwise untestable, and
 // the notch is exactly where a 59px inset eats the width these rules assume.
+import { LANDSCAPE } from "../helpers/iphone15.mjs";
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { awaitApexBoot } from "../helpers/await-track-build.js";
 import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
 
+function notchedView(name, { width, height, insets }) {
+  return { name, w: width, h: height, sal: insets.left, sar: insets.right, sat: insets.top, sab: insets.bottom };
+}
+const notchedLandscape = notchedView("notched-landscape", BRYCE_WINDOWS.standalone);
 const VIEWS = [
-  // iPhone 15 Pro landscape: 59px of notch either side, 21px home indicator.
-  { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
-  { name: "notched-portrait", w: 393, h: 852, sal: 0, sar: 0, sat: 59, sab: 34 },
+  // iPhone 15 landscape: 59px of notch either side, 21px home indicator.
+  notchedLandscape,
+  notchedView("notched-portrait", BRYCE_WINDOWS.portrait),
   // iPhone SE: the smallest screen still in service, and the tightest fit.
   { name: "small-landscape", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
   { name: "small-portrait", w: 375, h: 667, sal: 0, sar: 0, sat: 0, sab: 0 },
@@ -599,9 +605,9 @@ for (const c of [
 ]) {
   test.describe(c.name, () => {
     test.setTimeout(300_000);
-    test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+    test.use({ viewport: LANDSCAPE, hasTouch: true });
     test("no HUD element sits on another, and none leaves the safe area", async ({ page }) => {
-      const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+      const v = notchedLandscape;
       await race(page, "buttons", false, v, { profile: c.profile, cam: c.cam });
       const r = await measure(page, CTRL, [...HUD, ...HUD_LANDSCAPE_ONLY], v.w, v.h, v);
       const dump2 = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash, unsafe: r.unsafe, diagnostics: r.diagnostics });
@@ -633,9 +639,9 @@ for (const c of [
 // Before the fix it was 0.4 against ~1.
 test.describe("minimal profile", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("hiding the sector box does not shrink every other cluster", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { profile: "minimal" });
     const zoomNow = () => page.evaluate(() => {
       const r = document.documentElement;
@@ -679,7 +685,7 @@ test.describe("minimal profile", () => {
   // therefore the profile's doing. (Its two neighbours above pass a cam for the
   // same reason — this one was simply missed.)
   test("drops the analysis widgets and keeps what you drive by", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { profile: "minimal", cam: "chase" });
     const r = await page.evaluate(() => {
       const w = (sel) => {
@@ -702,7 +708,7 @@ test.describe("minimal profile", () => {
 
 test.describe("HUD editing drafts and explicit recovery", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
 
   const bootDefaults = async page => {
     await page.goto("/");
@@ -767,7 +773,7 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       return input;
     };
     for (const [index, cell] of [
-      { width: 852, height: 393, scale: 109, x: "125.5", y: "-90.25" },
+      { ...LANDSCAPE, scale: 109, x: "125.5", y: "-90.25" },
       { width: 667, height: 320, scale: 150, x: "-175.25", y: "125.5" },
     ].entries()) {
       await page.setViewportSize({ width: cell.width, height: cell.height });
@@ -864,9 +870,9 @@ test.describe("HUD editing drafts and explicit recovery", () => {
 // directions — and MAP/GAPS, which have their own controls, must survive it.
 test.describe("metrics layout", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("COMPACT drops both metric halves and leaves MAP and GAPS alone", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { layout: "compact" });
     const r = await page.evaluate(() => {
       // Solo fixture: both gap lines are "". Empty-collapse (css/hud.css) hides
@@ -907,9 +913,9 @@ test.describe("metrics layout", () => {
 // with BOOST/OT and overlapped the pedal discs (steer-touch fix, 2026-10-07).
 test.describe("buttons steer high HUD scale", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("sector plate clears BOOST and OT (notched landscape, ~140%)", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { hudScale: 140, btnScale: 140 });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
@@ -1017,7 +1023,7 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
 // own width and hold one size across ticks; manual overlap is now permitted.
 test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("keeps its width and does not resize across ticks", async ({ page }) => {
     // The SHIPPED look (no PIN_PREVIOUS_LOOK): its text size is what makes the filled plate wider than 48 px.
     await page.goto("/");
@@ -1531,9 +1537,9 @@ for (const v of [
 
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("clears the touch dock when a warning shows", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v);
     const r = await page.evaluate(() => {
       const el = document.getElementById("hud-limits");
@@ -1654,9 +1660,9 @@ test.describe("desktop", () => {
 // only (not the PR fast tier) — say so in the PR body when this case lands.
 test.describe("fitHud zoom determinism", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("two fits publish the same zTop and #minimap zoom matches it", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v);
     await page.evaluate(() => {
       if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(200);
