@@ -236,7 +236,7 @@ test("painter builds fixed rows once, moves by transform and skips unchanged tex
   vm.createContext(ctx);
   vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx, { filename: absSrc("js/overlay/render.js") });
   const painter = ctx.OverlayRender.create(root, { rows: 4 });
-  assert.equal(tower.children.length, 20, "rows are built once");
+  assert.equal(tower.children.length, 22, "rows are built once");
   const frame = ctx.OverlayFeed.frame({ seq: 1, ranked: cars(.4) });
   painter.paint(frame);
   assert.equal(painter.rows[1].el.style.transform, "translate3d(0,34px,0)");

@@ -264,7 +264,7 @@
     "tools/check/boot-wall.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes) for the eager* tree ratchets; no CLI output"
+      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes, stripped code bytes) for the eager* tree ratchets; CLI prints one JSON line, or with --growth [--days=N] the wall's change over N days (the weekly report)"
     },
     "tools/check/brake-cue-calibrate.mjs": {
       "action": "keep-native",
@@ -394,6 +394,11 @@
     "tools/check/player-dyn.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
+    "tools/check/quali-calibrate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
       "preserve": "@c1"
     },
     "tools/check/quick-validate.mjs": {
@@ -526,6 +531,11 @@
       "presentation": "native",
       "preserve": "Caller-readable kind; do not prepend prose"
     },
+    "tools/ci/child-health.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every DEAD child and every PARK/RELAUNCH/NONE row with its cause and reset; exit 1 when a PR has a dead owner; read-only"
+    },
     "tools/ci/ci-coverage.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -565,6 +575,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, untrusted-data label on local logs; reads only (no send verbs). Never expose credentials."
+    },
+    "tools/ci/closing-refs.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "every offending line verbatim (PR, line number, keyword ref, quoted body line) and the = closing-refs verdict; exit 1 on a ref that would close an open PR, 3 when it cannot judge"
     },
     "tools/ci/coverage-merge.mjs": {
       "action": "keep-native",
@@ -775,6 +790,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus apply; protected/open refs; partial failures and unarchived kept refs"
+    },
+    "tools/ci/pool-share.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Read-only census; the closing = pool-share line; API failure exit 3"
     },
     "tools/ci/queue-depth.mjs": {
       "action": "keep-native",
@@ -1196,6 +1216,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/gen-quali-calib.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/gen/gen-shell.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1401,6 +1426,11 @@
       "presentation": "shared-levels",
       "preserve": "Skip reasons, angular units, thresholds and full JSON rows."
     },
+    "tools/gfx/sharpness-ab.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Evidence class (software pixels), each arm's buffer size and the per-crop metrics; never read a sheet as what a phone shows."
+    },
     "tools/gfx/ssr-probe.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -1582,6 +1612,11 @@
       "preserve": "@c3"
     },
     "tools/lib/impact-map.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/js-strip.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -2260,6 +2295,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
+    },
+    "tools/shot/capture-fallbacks.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The one capture-state line beside each image: every active software-renderer fallback, the tlxForceHw set, the extra models and parity true/false; the whole-pack prefetch line."
     },
     "tools/shot/capture-gallery.mjs": {
       "action": "keep-native",

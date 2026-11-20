@@ -102,11 +102,11 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
   }
 });
 
-function load() {
+function load(opts = {}) {
   const season = ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"]
     .map((id) => ({ id, name: id.toUpperCase() }));
   const ctx = vm.createContext({
-    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    Math, JSON, Object, Array, String, Number, Date: opts.Date || Date, isNaN, isFinite, console,
     Tracks: { LIST: season.concat([{ id: "kyalami", name: "KYALAMI" }]), SEASON: season },
   });
   seedLog(ctx);
@@ -262,6 +262,29 @@ test("the streak counts the player's local days: LA 3 pm then 6 pm the next day 
   }
 });
 
+// #5887 (audit A6): a lap with the device clock a year ahead set streak.last to that day and pruned
+// the history before it; back on the real date, `day > last` never held again and the streak froze.
+test("a streak left by a clock set ahead moves again once the clock is back", () => {
+  let now = "2027-11-20T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  d.open("2027-11-20"); d.record(80);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2027-11-20" });
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(81);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-11-21" }, "the real day takes the streak back");
+  assert.equal(d.data().days["2027-11-20"], undefined, "the future day is pruned");
+  now = "2026-11-22T12:00:00";
+  d.open("2026-11-22"); d.record(82);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" }, "and counts on from there");
+  // One day ahead is a time-zone hop, not a bad clock: a lap on the earlier local day leaves it.
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(80);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" });
+  assert.equal(d.data().days["2026-11-22"].best, 82);
+  d.stop();
+});
+
 test("record() persists its returned entry before notifying streak badges", () => {
   const { d, G, ctx } = load();
   const day = "2026-09-03", events = [];
@@ -400,4 +423,30 @@ test("stop() resumes the sim stream where the Daily found it (G.simSeed(seed, st
   d.stop();
   assert.equal(seed, 777);
   assert.equal(stream, 123456, "the stream is back where race 1 left it");
+});
+
+// #5821: the share-card stack rides LAZY_RESULTS_SHEET (off the boot wall). Daily shareCard() loads that
+// group through GameResults.ensureLoaded before painting, instead of throwing "unavailable" at the title.
+test("shareCard() loads the lazy share-card group before rendering, and the stack is off the boot wall", async () => {
+  const { d, ctx } = load();
+  const delivered = [];
+  let loads = 0;
+  ctx.GameResults = { ensureLoaded: () => {
+    loads++;
+    ctx.ShareCardData = { fromDaily: () => ({ link: null }) };
+    ctx.ShareCard = { render: () => Promise.resolve({ type: "image/png" }), deliver: (blob, name) => { delivered.push(name); return Promise.resolve("shared"); } };
+    return Promise.resolve(true);
+  } };
+  assert.equal(await d.shareCard("gold"), "shared");
+  assert.equal(loads, 1, "the results-sheet group was loaded once");
+  assert.equal(delivered[0].startsWith("apex26-daily-"), true, delivered[0]);
+  await d.shareCard("gold");
+  assert.equal(loads, 1, "a second share does not reload");
+  const manifest = (await import("../../tools/manifest.cjs")).default;
+  const { eagerScriptsOf } = await import("../../tools/check/boot-wall.mjs");
+  const lazy = new Set(manifest.LAZY_RESULTS_SHEET), wall = new Set(eagerScriptsOf(readFileSync(join(ROOT, "index.html"), "utf8")));
+  for (const f of ["js/share/share-card-data.js", "js/share/share-card-layout.js", "js/share/share-card.js"]) {
+    assert.equal(lazy.has(f), true, f + " rides LAZY_RESULTS_SHEET");
+    assert.equal(wall.has(f), false, f + " has no boot <script> tag");
+  }
 });

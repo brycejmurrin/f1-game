@@ -17,7 +17,7 @@ const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 const isGarageData = (f) => /^js\/garage\/|^js\/data\/garage-/.test(f);   // incl. the optional authored entrance motion
 const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
 const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
-// LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
+// LAZY_RACE_SESSION — pit / radio / coach / reliability (~380 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
 const RACE_SESSION_FILES = ApexRoster.LAZY_RACE_SESSION || [];
@@ -46,6 +46,7 @@ const RACE_SESSION_READY = {
   "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
+  "js/race/driving-coach.js": () => typeof DrivingCoachBody !== "undefined",   // the DrivingCoach façade creates it on its next call
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
 // idiom): a retry loads only the rest. The hook runs once, on the transition to complete.
@@ -176,10 +177,8 @@ const SCENERY_DIR = ApexRoster.SCENERY_DIR;
 function sceneryResident(id) {
   return !!(window.TrackScenery && window.TrackScenery[id]);
 }
-// Memoised on the in-flight PROMISE (the ensureDataHub idiom below): several
-// callers ask for the same circuit before sceneryResident() goes true and
-// would each inject their own copy (28-58 KB, up to four times). Cleared on
-// settle so a dropped fetch retries.
+// Memoised on the in-flight PROMISE: callers asking before sceneryResident() goes true
+// would each inject a copy (28-58 KB, up to 4x). Cleared on settle so a drop retries.
 const _sceneryLoads = new Map();
 // Also wait for THIS circuit's baked models (Assets.modelsReady, capped at
 // 4 s): prop placement is synchronous, so a build that ran before the models
@@ -190,7 +189,7 @@ const _sceneryLoads = new Map();
 function sceneryModels(def) {
   if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
   const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
-  return Assets.modelsReady(0, fn ? String(fn) : "");
+  return Assets.modelsReady(0, typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, window.TrackScenery) : fn ? String(fn) : "");
 }
 // One fetch of the closure, shared by every caller in flight. The loader RESOLVES
 // false on an error (offline, a CDN 404, a refused stale-build request), so the
@@ -362,9 +361,7 @@ function ensureRealRace() {
   return realRaceLoad;
 }
 
-// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
-// inject the bundle twice, and the second tap has to await the first load
-// rather than call DataHub.open() while hub.js is still in flight.
+// Memoised on the PROMISE: a second DATA tap awaits the first load, never a 2nd inject or an early open().
 let dataHubLoad = null;
 const DATA_HUB_RETRY_MS = [400, 1200];
 function dataHubRetryDelay(attempt) {
@@ -372,20 +369,25 @@ function dataHubRetryDelay(attempt) {
   if (!ms) return Promise.resolve();
   return new Promise((r) => setTimeout(r, ms));
 }
-function ensureDataHub() {
-  if (dataHubLoad) return dataHubLoad;
+// #5764: STILL LOADING… at ScriptLoader's slow mark, to every tap; a stall is not retried.
+let dataHubSlow = [];   // the load's onSlow taps; true once it stalled
+function ensureDataHub(opts) {
+  const cb = opts && opts.onSlow;
+  if (dataHubLoad) { if (cb) { if (dataHubSlow === true) cb(); else dataHubSlow.push(cb); } return dataHubLoad; }
+  dataHubSlow = cb ? [cb] : [];
+  const markSlow = () => { const cbs = dataHubSlow; if (cbs !== true) { dataHubSlow = true; cbs.forEach((f) => f()); } };
   dataHubLoad = (async () => {
     const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) await dataHubRetryDelay(attempt);
       // WATCH & DRIVE launches RealRace: its engine lands with the hub, never after a tap.
       const [complete, realOk] = await Promise.all([loadBackendScripts(DATA_FILES, DATA_EDGES, {
-        strict: true, loaded: dataScriptsLoaded,
+        strict: true, loaded: dataScriptsLoaded, onSlow: markSlow,
         ready: (src) => DATA_READY[src] && DATA_READY[src](),
         cacheBust: attempt > 0 ? attempt : 0,
       }), ensureRealRace()]);
       if (!complete || !realOk) {
-        if (attempt < maxAttempts - 1) continue;
+        if (attempt < maxAttempts - 1 && dataHubSlow !== true) continue;
         Log.warn("data", "the data hub bundle did not load — DATA stays closed");
         dataHubLoad = null;
         return false;
@@ -403,12 +405,8 @@ function ensureDataHub() {
   return dataHubLoad;
 }
 
-// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
-// player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
-// wanted: js/agent/apex.js reads NetTransport / NetSession / NetSnapshot and 22
-// netLobby methods directly and drives the multiplayer specs, so tying the two
-// together keeps every test and dev session behaving exactly as before and
-// confines this change to players, who load neither.
+// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack: loaded by VS FRIEND and, at
+// boot, with the agent surface (js/agent/apex.js reads the net globals and drives the specs).
 const NET_FILES = ApexRoster.LAZY_NET;
 const NET_EDGES = ApexRoster.LAZY_NET_EDGES;
 let netLoad = null;
@@ -448,9 +446,7 @@ function ensureNet() {
     // A failed group may leave a binding in its temporal dead zone, where even
     // typeof throws: only probe the globals after a complete load.
     if (!complete || typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
-      // inject() resolves on error, so this is the only place a miss shows.
-      // Keep the stubs (the game stays playable solo) and null the memo so a
-      // second attempt can succeed rather than latching for the session.
+      // The only place a miss shows: keep the stubs (solo stays playable), null the memo to retry.
       Log.warn("net", "the multiplayer bundle did not load — VS FRIEND unavailable");
       netLoad = null;
       return false;

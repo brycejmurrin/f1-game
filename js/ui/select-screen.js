@@ -630,10 +630,7 @@ function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
   for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
-  // A divider introduces the RUN of tiles that follows it (Tracks.LIST interleaves
-  // the groups, so one group owns several dividers): show it only while a tile in
-  // ITS run survives. Testing the whole group left every SEASON divider standing
-  // as an orphan whenever any season circuit matched ("spa" also finds Spain).
+  // A divider shows while ITS run of tiles, not its group, has a match ("spa" finds Spain).
   for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
     let live = false;
     for (let el = head.nextElementSibling; el && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
@@ -643,6 +640,9 @@ function applyTrackSearch(value) {
   }
   const empty = document.getElementById("sel-track-empty");
   if (empty) empty.hidden = rows.some((row) => !row.hidden);
+  // A hidden active circuit still raced (#5889): take the first match.
+  const on = rows.find((r) => r.classList.contains("active"));
+  if (trackQuery && (!on || on.hidden)) rows.find((r) => !r.hidden)?.click();
   ScrollFadeRefresh();
 }
 
@@ -1236,6 +1236,14 @@ function previewMapsCached(t) {
 function previewPathReady(t) {
   return !!(t && !t._metaOnly && t.path && t.path.pts && t.path.pts.length);
 }
+// Hydrate a meta stub, then rerun fn on the same pick. The catch keeps a failed
+// load off index.html's "Promise rejection" overlay.
+function whenCircuit(t, fn) {
+  if (previewPathReady(t) || !G.ensureCircuit) return;
+  const idx = G.trackIdx;
+  G.ensureCircuit(idx).then(() => { if (G.trackIdx === idx && previewPathReady(Tracks.LIST[idx])) fn(); })
+    .catch((e) => Log.warn("track", "could not load circuit " + idx + ": " + ((e && e.message) || e)));
+}
 function fillPreviewMeta(t, crns, dir, elev, dz) {
   const turns = crns && crns.length;
   const km = t.lengthKm || 0;
@@ -1269,20 +1277,33 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
-/** The outline's slot inside the hero: 62 % of its width, ~60 % of its height —
-    capped at the map button's CONTENT box, which the phone card (css/select.css,
-    compact + wide) pads so the lower-third numbers band stays clear of the
-    outline (#5153 gap 13). */
+/** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
+    button's content box (padded to the free band by fitPreviewMapBand, #5656). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
   const btn = map && map.parentElement;
-  if (compact && btn && btn.clientHeight > 0) {
+  if (btn && btn.clientHeight > 0) {
+    fitPreviewMapBand(btn);
     const bs = getComputedStyle(btn);
     const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
     if (room > 0) slotH = Math.min(slotH, room);
   }
   return { slotW: hero.clientWidth * 0.62, slotH };
+}
+/** Pad the map button to the free band, centred; k = UI SIZE zoom. */
+function fitPreviewMapBand(btn) {
+  const br = btn.getBoundingClientRect();
+  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
+  const k = br.height / btn.offsetHeight;
+  const over = [];
+  for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
+    if (e) over.push(e.getBoundingClientRect());
+  }
+  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
+  btn.style.alignItems = "center";
+  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
+  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
 }
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
@@ -1372,16 +1393,7 @@ function updateTrackPreview() {
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
   // Meta stubs have no path — hydrate LAZY_CIRCUIT then redraw (caption paints now).
-  if (t._metaOnly || !(t.path && t.path.pts && t.path.pts.length)) {
-    if (G.ensureCircuit) {
-      const idx = G.trackIdx;
-      // ensureCircuit rejects when the circuit payload fails to load; unhandled,
-      // index.html paints that as a full-screen "Promise rejection" overlay.
-      G.ensureCircuit(idx).then(() => {
-        if (G.trackIdx === idx) updateTrackPreview();
-      }).catch((e) => Log.warn("track", "preview could not load circuit " + idx + ": " + ((e && e.message) || e)));
-    }
-  }
+  whenCircuit(t, updateTrackPreview);
   // Caption ON the still: flag, name, grand prix. No TrackMaps — never hitch.
   const flagEl = document.getElementById("sel-preview-flag");
   if (flagEl) {
@@ -1476,11 +1488,11 @@ function openTrackDetail() {
   if (!t) return;
   const modal = document.getElementById("track-detail");
   if (!modal) return;
+  // A meta stub reads "0 turns", blank map: repaint when it lands (#5890).
+  whenCircuit(t, () => { if (!modal.hidden) openTrackDetail(); });
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
-  // The canvas labels are part of the modal's accessible reading order. Keep
-  // them tied to the selected circuit rather than making every map sound like
-  // the same generic diagram when a player moves between tracks.
+  // Canvas labels name this circuit, so each map reads distinctly to a screen reader.
   const mapCanvas = document.getElementById("track-detail-canvas");
   if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
   const elevCanvas = document.getElementById("track-detail-elev");
@@ -1528,9 +1540,8 @@ function openTrackDetail() {
     paintFav();
   }
 
-  // Legend is built once (like FAVOURITE) so the shell does not pay five
-  // extra nodes. Fast/medium/slow/hairpin reuse tdc-* colour; Sector is the
-  // grey S2 stroke that the 9px canvas key never named.
+  // Legend built once (like FAVOURITE), not in the shell. Fast/medium/slow/hairpin
+  // reuse tdc-* colour; Sector is the grey S2 stroke the canvas key never named.
   const wrap = document.getElementById("track-detail-canvas-wrap");
   let legend = document.getElementById("track-detail-legend");
   if (!legend && wrap) {
@@ -1695,6 +1706,21 @@ function calendarIdSet(cal) {
   for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
   return ids.size ? ids : null;
 }
+/** Preview free band (#5656), pure: overlays in `box`'s upper half push the
+    top down, lower half pull the bottom up; empty/outside ones are ignored.
+    Returns top/bottom insets plus `margin`. */
+function previewMapBand(box, over, margin) {
+  const mid = (box.top + box.bottom) / 2;
+  let top = box.top, bot = box.bottom;
+  for (const r of over || []) {
+    if (!r || !(r.bottom > r.top) || !(r.right > r.left)) continue;
+    if (r.bottom <= box.top || r.top >= box.bottom || r.right <= box.left || r.left >= box.right) continue;
+    if ((r.top + r.bottom) / 2 < mid) top = Math.max(top, r.bottom);
+    else bot = Math.min(bot, r.top);
+  }
+  const m = Math.max(0, +margin || 0);
+  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+}
 /** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {
   if (!t) return null;
@@ -1703,6 +1729,6 @@ function calendarGroup(t, ids) {
   return t.classic ? "classic" : "season";
 }
 
-return { create, calendarIdSet, calendarGroup };
+return { create, calendarIdSet, calendarGroup, previewMapBand };
 })();
 Object.freeze(Menus);

@@ -352,7 +352,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
 | `session-phys.js` | `SessionPhys` | tag | SESSION PHYS (SessionPhys): the physics keys a comparable session records, shared by SessionRecords and setup trials. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
-| `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
+| `driving-coach-boot.js` | `DrivingCoach` | tag | DRIVING COACH boot façade (FULL, #4748). game.js still makes `DrivingCoach.create(G)` at eval, calls update / retry / practiceActive every frame of a race,… |
 | `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
@@ -398,6 +398,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 | `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
 | `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
+| `driving-coach.js` | `DrivingCoachBody` | LAZY_RACE_SESSION | Read-only driving feedback and explicitly unscored solo practice: the BODY (DrivingCoachBody, LAZY_RACE_SESSION, #4748). |
 | `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race-pace.js` | `RealRacePace` | LAZY_REAL_RACE | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
 | `real-race.js` | `RealRaceBody` | LAZY_REAL_RACE | REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands)… |
@@ -649,15 +650,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
 | `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button. |
 
-**`js/share/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
-| `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
-| `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
-| `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
-
 **`js/render/glx/shaders/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -705,6 +697,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
 | `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
+| `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 
 **`js/agent/`**
@@ -760,6 +753,15 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
+
+**`js/share/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `share-card-data.js` | `ShareCardData` | LAZY_RESULTS_SHEET | pure, JSON-safe data models for exported result cards. |
+| `share-card-layout.js` | `ShareCardLayout` | LAZY_RESULTS_SHEET | pure card layout: model + spec + text metric -> paint ops. |
+| `share-card.js` | `ShareCard` | LAZY_RESULTS_SHEET | canvas painter, PNG encoder and Web Share/download delivery. |
+| `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
 <!-- /@gen-arch:modules -->
 
 ---

@@ -24,7 +24,8 @@ function background() {
 function setBackground(value) {
   if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 240000)) return false;
   try {
-    if (value) localStorage.setItem(KEY, value); else localStorage.removeItem(KEY);
+    const S = GameStore.store;   // raw lane: setRoomy's quota sweep, failedKeys (#5023)
+    if (!(value ? S.rawSet(KEY, value) : S.rawDel(KEY))) return false;
     window.dispatchEvent(new CustomEvent("apex26:photo-background", { detail: { available: !!value } }));
     return true;
   } catch (_) { return false; }
@@ -162,8 +163,7 @@ function create(G, deps) {
     mk("p", { className: "adv-help", textContent: "Your car in the garage or on the circuit. Your Home scene stays as it is." })]);
   // CONDITIONS: the SESSION's time of day and weather through the lighting tuner's own seam (G.setTimeOfDay /
   // G.weather → Atmosphere.applyRaceSettings). A preview only: open() records what the session had, RESET and
-  // every close put it back, so a photo never leaks into a race, a career or a result (the race is paused and the
-  // Home car is a fresh borrowed one while the studio is open).
+  // every close put it back, so a photo never leaks into a race, a career or a result.
   const cond = { tod: null, wx: null, arc: null, touched: false };
   const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); }, id);
   const setTod = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.setTimeOfDay(v); };

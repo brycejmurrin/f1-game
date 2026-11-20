@@ -35,6 +35,10 @@ const VOICE_CACHE = CACHE_PREFIX + "voice";
 const VOICE_KEEP_IDS = 6;
 // A navigation / version.json fetch races this before the cache answers.
 const NAV_RACE_MS = 3000;
+// A plain shell navigation that HAS a cached shell stops waiting for the network here: on a link that does not
+// answer, an installed app opened to 3 s of nothing. The shell's own version guard still reloads onto a newer build
+// when version.json comes through. With no cached shell (the first launch) the full race above still applies.
+const SHELL_RACE_MS = 1000;
 // A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
 // a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
 const BUST_WAIT_MS = 15000;
@@ -400,6 +404,7 @@ async function precacheAssetLists() {
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
+    "js/render/three/tlx-mem.js",
     "js/render/three/tlx.js",
     // LAZY_RACE — race payload every race needs
     "js/data/garage-entrance-motion.js",
@@ -433,6 +438,7 @@ async function precacheAssetLists() {
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
     "js/race/retired-card.js",
+    "js/race/driving-coach.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -664,6 +670,9 @@ async function precacheAssetLists() {
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
+    "js/share/share-card-data.js",
+    "js/share/share-card-layout.js",
+    "js/share/share-card.js",
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",
     "js/ui/quali-sheet.js",
@@ -828,7 +837,7 @@ const CARRY_POOL = 4;
 function isCarriedRuntime(url) {
   if (url.origin !== self.location.origin) return false;
   const p = url.pathname;
-  if (p.includes("/assets/voice/")) return false;
+  if (p.includes("/assets/voice/") || isBuildKeyedManifest(url)) return false;
   return p.includes("/assets/") || p.includes("/vendor/");
 }
 async function carryEntry(cache, req, old) {
@@ -977,7 +986,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
@@ -1136,7 +1145,9 @@ async function pruneVoiceCache(cache) {
   const keep = new Set([...last].sort((a, b) => b[1] - a[1]).slice(0, VOICE_KEEP_IDS).map((e) => e[0]));
   await Promise.all(keys.filter((r) => !keep.has(voiceIdOf(r))).map((r) => cache.delete(r)));
 }
-function packNetworkFirst(event, req, fixedCache) {
+// `staleFirst` (the build-keyed pack manifest, isBuildKeyedManifest): a cached
+// copy answers at once and the network revalidates behind it.
+function packNetworkFirst(event, req, fixedCache, staleFirst) {
   let cacheWrite = Promise.resolve();
   const network = fetch(req).then((res) => {
     if (res && res.ok) {
@@ -1162,6 +1173,7 @@ function packNetworkFirst(event, req, fixedCache) {
     const cached = fixedCache
       ? caches.match(req, { cacheName: fixedCache }).then((hit) => hit || matchPreferCurrent(req))
       : matchPreferCurrent(req);
+    if (staleFirst) { const early = await cached; if (early) return early; }
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
     try {
       const res = await Promise.race([network, timeout]);
@@ -1182,6 +1194,19 @@ const PACK_HASHED = /^\?h=[0-9a-f]{32}$/;
 function isHashedPackRequest(url) {
   return PACK_HASHED.test(url.search) && url.pathname.includes("/assets/pack/") &&
     !url.pathname.endsWith("/manifest.json");
+}
+// THE PACK MANIFEST UNDER THE PAGE'S BUILD (#5629): assets.js asks for
+// `assets/pack/manifest.json?b=<shell build>`. One deploy ships one manifest, so
+// a copy cached under that key was this build's (or, when the fetch crossed a
+// deploy, the newer one, which network-first served as well): it answers at
+// once and the network revalidates behind it, instead of a stalled link holding
+// the pack — and the models waiting on it — for NAV_RACE_MS. The key is the
+// shell's build, not this worker's memoised version.json read, so a worker that
+// outlived a deploy cannot hand the new shell the old layer index. A new build
+// asks a new key, so the key is never carried into the next generation.
+const PACK_BUILD_KEY = /^\?b=[1-9][0-9]{0,9}$/;
+function isBuildKeyedManifest(url) {
+  return PACK_BUILD_KEY.test(url.search) && url.pathname.endsWith("/assets/pack/manifest.json");
 }
 function packCacheFirst(event, req) {
   let cacheWrite = Promise.resolve();
@@ -1316,7 +1341,18 @@ self.addEventListener("fetch", (event) => {
       const failFast = online && (isVersion || (isShellBust && !bustShell));
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
-        const res = await Promise.race([network, timeout]);
+        let res;
+        if (req.mode === "navigate" && !isShellBust && isShellDocument(url)) {
+          const early = new Promise((resolve) => setTimeout(() => resolve(undefined), SHELL_RACE_MS));
+          res = await Promise.race([network, early]);
+          if (res === undefined) {
+            const bare = new URL(url.href);
+            bare.search = ""; bare.hash = "";
+            const shell = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(bare.href)) || (await matchPreferCurrent("index.html"));
+            if (shell) return shell;
+            res = await Promise.race([network, timeout]);
+          }
+        } else res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
         if (res == null && failFast) return Response.error();
       } catch (_) {
@@ -1356,7 +1392,7 @@ self.addEventListener("fetch", (event) => {
   // so cache-first. The manifest that names the hashes stays network-first.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
     if (isHashedPackRequest(url)) packCacheFirst(event, req);
-    else packNetworkFirst(event, req);
+    else packNetworkFirst(event, req, null, isBuildKeyedManifest(url));
     return;
   }
 

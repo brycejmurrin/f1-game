@@ -103,8 +103,13 @@ export const TREE_METRICS = {
   // docs/notes/BUDGET-RATCHETS-2026-11-19.md): each PR re-measured them on its own old tip, so two fixers'
   // numbers went stale against each other. Here a lowering is the branch's own fragment delta and a raise is
   // Bryce's `ratchet-raise` (merge-gate raise row).
+  // eagerCodeBytes (2026-11-20, Bryce's B+D, docs/notes/RATCHET-REVIEW-2026-11-20.md) replaced eagerBytes: the
+  // wall with comments and spare whitespace stripped (tools/lib/js-strip.mjs), because Pages ships minified code and
+  // a comment trim saved a player nothing. Its entry carries `absorb`: a branch's own growth up to that many bytes is
+  // the commit hook's fragment, no label; past it the raise is Bryce's `ratchet-raise` as before.
   eagerScripts: async () => (await import("./boot-wall.mjs")).wallNow().scripts,
-  eagerBytes: async () => (await import("./boot-wall.mjs")).wallNow().bytes,
+  eagerCodeBytes: async () => (await import("./boot-wall.mjs")).wallNow().codeBytes,
+  eagerBytes: async () => (await import("./boot-wall.mjs")).wallNow().bytes,   // retired (RETIRED_TREE)
   implicitAsserts: async () => {
     const { audit } = await import("../ci/assert-audit.mjs");
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;
@@ -331,7 +336,25 @@ export async function pinVerdict(name, { env = process.env, data = load() } = {}
     ok: row.over <= baseOver, looseOk: row.slack <= slackMax || baseLoose };
 }
 
-/** A ceiling entry is a bare number, or {ceiling, slack} when its guard is tighter. */
+/** Tree metrics retired for a successor: deleting one is the planned switch, not a guard removed (compareToBase's
+ *  GONE row). merge-gate's raise row still names the removal, so the switching PR carries Bryce's `ratchet-raise`. */
+export const RETIRED_TREE = Object.freeze({ eagerBytes: "eagerCodeBytes" });
+
+/** The successor a deleted tree metric was retired for, when `tree` (the current ceilings) carries it; else null. PURE. */
+export function retiredFor(metric, tree) {
+  const next = Object.hasOwn(RETIRED_TREE, metric) ? RETIRED_TREE[metric] : null;
+  return next && Object.hasOwn(tree || {}, next) ? next : null;
+}
+
+/** An entry's `absorb` (bytes or counts a branch may add without a label), 0 when it grants none. Throws on a bad
+ *  value: a NaN absorb would compare false and silently grant nothing, or everything. */
+export function absorbOf(raw, label = "entry") {
+  if (typeof raw !== "object" || !raw || raw.absorb === undefined) return 0;
+  if (!(Number.isFinite(raw.absorb) && raw.absorb >= 0)) throw new Error(`${label}: absorb ${raw.absorb} is not a finite number >= 0`);
+  return raw.absorb;
+}
+
+/** A ceiling entry is a bare number, or {ceiling, slack[, absorb]} when its guard is tighter. */
 function entry(raw, label) {
   const ceiling = typeof raw === "number" ? raw : raw?.ceiling;
   if (typeof ceiling !== "number") throw new Error(`${label}: no ceiling`);
@@ -345,10 +368,11 @@ function entry(raw, label) {
   // slackRule names the rule this entry is held to, for the LOOSE message: an
   // explicit `slack` is its own rule, never the default it tightens.
   const rule = `max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${dflt}`;
-  if (typeof raw === "number") return { ceiling, slackMax: dflt, slackRule: rule };
-  if (raw.slack === undefined) return { ceiling, slackMax: dflt, slackRule: rule };
+  if (typeof raw === "number") return { ceiling, slackMax: dflt, slackRule: rule, absorb: 0 };
+  const absorb = absorbOf(raw, label);
+  if (raw.slack === undefined) return { ceiling, slackMax: dflt, slackRule: rule, absorb };
   if (raw.slack > dflt) throw new Error(`${label}: slack ${raw.slack} is looser than the default ${dflt} — an entry may tighten the rule, never widen it`);
-  return { ceiling, slackMax: raw.slack, slackRule: `the entry's own slack ${raw.slack}${raw.slack === 0 ? " (exact)" : ""}` };
+  return { ceiling, slackMax: raw.slack, slackRule: `the entry's own slack ${raw.slack}${raw.slack === 0 ? " (exact)" : ""}`, absorb };
 }
 
 /** One LOOSE row as a line: the slack it has and the rule it is held to. */
@@ -599,8 +623,8 @@ export async function measure(data = load()) {
     const fn = Object.hasOwn(TREE_METRICS, metric) ? TREE_METRICS[metric] : null;
     if (!fn) throw new Error(`tree: unknown metric "${metric}" (known: ${Object.keys(TREE_METRICS).join(", ")})`);
     const value = await fn();
-    const { ceiling, slackMax, slackRule } = entry(raw, `tree ${metric}`);
-    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule, tree: true });
+    const { ceiling, slackMax, slackRule, absorb } = entry(raw, `tree ${metric}`);
+    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule, tree: true, ...(absorb ? { absorb } : {}) });
   }
   return rows;
 }
@@ -727,6 +751,9 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
   if (r.missing) return "the file is missing";
   // Giving back part of this branch's own tree lowering is not a raise (attributeTree).
   if (r.tree && r.ownFrag < 0 && r.over <= -r.ownFrag) return null;
+  // The entry's absorb (eagerCodeBytes, B+D): the branch's own growth from its merge base, not the tip's, up to it.
+  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth) && r.ownGrowth <= r.absorb) return null;
+  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth)) return `the branch grows it by ${r.ownGrowth}, past its ${r.absorb} absorb — lazy-load it, or raise it as a fragment under Bryce's ratchet-raise`;
   if (r.tree) return "a tree-wide metric is shrink-only — never auto-raised";
   if (!AUTO_RAISE_METRICS.has(r.metric)) return `${r.metric} is not a line count — never auto-raised`;
   if (r.slackMax === 0) return "its entry carries slack 0 (exact) — never auto-raised";
@@ -734,11 +761,25 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
   return null;
 }
 
+/** Set `ownGrowth` (value minus the value at the merge base) on each over tree row whose entry has an absorb and
+ *  whose metric tree-counts AT_REF can measure at a ref. A row it cannot measure keeps no ownGrowth and blocks as
+ *  before. Mutates and returns `rows`. */
+export async function ownGrowth(rows, { base = mergeBase(), at } = {}) {
+  for (const r of rows) {
+    if (!(r.tree && r.absorb > 0) || !base) continue;
+    at ||= (await import("./tree-counts.mjs")).AT_REF;
+    if (!Object.hasOwn(at, r.metric)) continue;
+    try { r.ownGrowth = r.value - await at[r.metric](base); } catch { /* base unreadable: no absorb */ }
+  }
+  return rows;
+}
+
 export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), branch } = {}) {
   // On a topic branch the fragment (FRAG_DIR) takes the change; the deploy
   // branch or a detached HEAD snaps the absolutes as before.
   const name = fragmentName(branch === undefined ? currentBranch() : branch);
   const v = verdict(await attributeTree(await relativize(await measure(data), { data }), { name }));
+  await ownGrowth(v.over);
   const big = v.over.map((r) => ({ ...r, reason: autoRaiseBlockReason(r, maxRaise) })).filter((r) => r.reason);
   if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
   if (!v.over.length && !v.loose.length) return { ok: true, raised: [], lowered: [], blocked: [] };
@@ -780,6 +821,9 @@ export function diffRatchets(base, current) {
       const sb = explicitSlack(bagBase[metric]), sn = explicitSlack(raw);
       // (a base slack that was the default cannot be loosened; a ceiling that moves rescales it)
       if (sb !== null && (sn === null || sn > sb)) rows.push({ file, metric, base: sb, now: sn, delta: sn === null ? null : sn - sb, kind: "loosen" });
+      // A wider absorb hands out room the same way (B+D): its first grant is a "new" entry, and widening it later is a loosen.
+      const ab = absorbOf(bagBase[metric], `${file} ${metric}`), an = absorbOf(raw, `${file} ${metric}`);
+      if (an > ab) rows.push({ file, metric, base: ab, now: an, delta: an - ab, kind: "loosen", what: "absorb" });
     }
     for (const metric of Object.keys(bagBase || {})) if (!bagNow || !(metric in bagNow))
       rows.push({ file, metric, base: ceilingOf(bagBase[metric]), now: null, delta: null, kind: "gone" });
@@ -842,6 +886,31 @@ export function sourceGrowth(ref, file, metric) {
   return b - a;
 }
 
+export const HISTORY_REL = "docs/notes/CEILING-HISTORY.md";
+
+/** The docs/notes/CEILING-HISTORY.md entry a raise past the absorb needs (#5845): `--base` refuses the raise
+ *  without one, so `--update --fragment` prints it and the `--base` refusal names its shape. PURE.
+ *  rows: [{file, metric, base, now}]; the placeholders stay in angle brackets for the author to fill. */
+export function historyEntry({ date = pacificDate(), pr = "<n>", branch = "<branch>", reason = "<why>", rows = [], fragment = null } = {}) {
+  const lines = [`## ${date} — PR #${pr} (${branch}): ${reason}`, ""];
+  for (const r of rows) {
+    const d = r.now - r.base;
+    lines.push(`\`${r.file} ${r.metric}\` ${r.base} → **${r.now}** (${d >= 0 ? "+" : ""}${d}). Deliberate raise past the absorb: <what grew and why>.`);
+  }
+  if (fragment) lines.push(`Fragment: \`${fragment.replace(/^tests\/data\//, "")}\`.`);
+  return lines.join("\n");
+}
+
+/** Today in the project's time zone (AGENTS.md: times are Pacific), YYYY-MM-DD. */
+export function pacificDate(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+/** The cure an exact (slack 0) ceiling's failure names (#5845): the tip moves it with zero slack, so a worker
+ *  that measured against its merge base negotiates bytes that are not its own. */
+export const EXACT_CURE = "exact ceiling (slack 0): measure against the TIP (sync-pr when behind), not the merge base; "
+  + "a count that fell: node tools/check/ratchets.mjs --update --lower-only --absolute";
+
 /** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
  *  deleted entry whose file still exists, blocks like a raise past the absorb
  *  (15-F10). Raises are warnings (GitHub `::warning::` annotations on CI, plain
@@ -865,6 +934,12 @@ export function compareToBase(ref, {
   let fatal = 0;   // rows that still fail the PR run
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
+    // A tree raise inside its entry's absorb (B+D: eagerCodeBytes) is the commit hook's own fragment, no reason needed.
+    const absorb = r.file === "(tree)" ? absorbOf(base.tree?.[r.metric], where) : 0;
+    if (r.kind === "raise" && absorb > 0 && r.delta <= absorb) {
+      print(`RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta}) — inside its ${absorb} absorb (the branch's own growth; no label)`);
+      continue;
+    }
     if (r.kind === "raise") {
       let over = r.delta > maxRaise;
       let growth = null;
@@ -883,7 +958,8 @@ export function compareToBase(ref, {
         if (!advisory && !reasoned) fatal++;
       }
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : reasoned ? " (reason recorded in docs/notes/CEILING-HISTORY.md)" : "")
+        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : reasoned ? ` (reason recorded in ${HISTORY_REL})`
+          : ` — add an entry to ${HISTORY_REL} in the same push, shaped: ${historyEntry({ rows: [r] }).split("\n").filter(Boolean).join(" ⏎ ")}`)
         : (r.delta > maxRaise && growth !== null
           ? ` — catch-up (source ${r.metric} grew ${growth} ≤ ${maxRaise}; ceiling tracks already-landed size)`
           : ""));
@@ -893,13 +969,17 @@ export function compareToBase(ref, {
     else if (r.kind === "loosen") {
       blocked++;
       if (!advisory) fatal++;
-      const msg = `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
+      const msg = (r.what === "absorb"
+        ? `LOOSEN ${where}: absorb ${r.base} -> ${r.now} — a wider absorb hands out room; this needs a reason in the PR`
+        : `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR`) + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
       print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
     } else {
       // A deleted entry for a file/metric that still exists removes a guard; one whose
       // file is gone (or a whole tree metric dropped with its tool) is a normal cleanup.
-      const guardRemoved = r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file));
-      if (guardRemoved) {
+      const successor = r.file === "(tree)" ? retiredFor(r.metric, current.tree) : null;
+      const guardRemoved = !successor && (r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file)));
+      if (successor && !guardRemoved) print(`GONE   ${where}: was ${r.base} — retired for tree ${successor} (RETIRED_TREE)`);
+      else if (guardRemoved) {
         blocked++;
         if (!advisory) fatal++;
         const msg = `GONE   ${where}: was ${r.base} — the entry was deleted but ${r.file === "(tree)" ? "it is a tree metric" : "the file still exists"}; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
@@ -978,7 +1058,13 @@ async function main() {
     if (asFragment && (dryRun || lowerOnly)) { console.error("--fragment goes with --update only"); process.exitCode = 2; return; }
     if (asFragment && !reason) { console.error('--fragment raises a ceiling deliberately: pass --reason="<why>" and repeat it in the commit message'); process.exitCode = 2; return; }
     const { rows, fragment, scoped } = asFragment ? { rows: await updateFragment(load()), fragment: null } : await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
-    if (asFragment) console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
+    if (asFragment) {
+      console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
+      const raised = rows.filter((r) => r.value > r.ceiling).map((r) => ({ file: r.file, metric: r.metric, base: r.ceiling, now: r.value }));
+      const name = fragmentName(currentBranch());
+      if (raised.length) console.log(`ratchets --update --fragment: \`--base\` refuses a raise past the absorb without a ${HISTORY_REL} entry; append this one (fill the <…>) and commit it with the fragment, in the same push:\n\n`
+        + historyEntry({ branch: currentBranch() || "<branch>", reason, rows: raised, fragment: name ? `${FRAG_REL}/${name}` : null }) + "\n");
+    }
     const receipt = updateReceipt(rows, { lowerOnly });
     if (argv.includes("--json")) console.log(JSON.stringify({ ok: receipt.missing.length === 0, dryRun, lowerOnly, ...receipt }, null, 2));
     else {
@@ -1009,7 +1095,7 @@ async function main() {
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
-    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update --fragment --reason="<why>") and say why in the commit`);
+    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update --fragment --reason="<why>") and say why in the commit${x.slackMax === 0 ? ` — ${EXACT_CURE}` : ""}`);
     process.exitCode = r.ok ? 0 : 1;
     return;
   }
@@ -1028,7 +1114,7 @@ async function main() {
     console.log(process.env.GITHUB_ACTIONS === "true" ? `::warning file=tests/data/ratchets.json,title=ratchet inherited::${msg}` : msg);
   }
   for (const r of v.loose) {
-    const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update --lower-only`
+    const msg = `LOOSE  ${looseLine(r)} — ` + (r.slackMax === 0 ? EXACT_CURE : "lower it: node tools/check/ratchets.mjs --update --lower-only")
       + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
     console.log(v.looseAdvisory && process.env.GITHUB_ACTIONS === "true"
       ? `::warning file=tests/data/ratchets.json,title=ratchet loose::${msg}` : msg);

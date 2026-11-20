@@ -308,6 +308,32 @@ test("one tree per spot", () => {
     assert.equal(emitted[repeat], 0, `${repeat}: a second tree on a planted spot is one tree drawn twice`);
 });
 
+test("a pine the guards refuse holds no spot: a neighbour 0.5 m away still stands (#5699 row 18)", () => {
+  // pine() reserved its TREE_GAP spot BEFORE the onTrack crown guard returned, so a suppressed pine blocked every
+  // neighbour within 1 m. A 40 m pine 5 m off the edge (its 9 m crown reaches the road) is refused; a 4 m pine
+  // 0.5 m further out must plant exactly as it does on an empty stretch.
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const env = vmContext();
+  const base = env.Tracks.LIST.find((d) => d.id === "bahrain");
+  const emitted = {};
+  const FOL = [0.2, 0.4, 0.2];
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      const k = Math.round(api.n * 0.3);
+      const run = (what, fn) => { const from = env.mark(); fn(); emitted[what] = env.prims.length - from; };
+      run("tall", () => api.pine(k, 1, 5, 40, FOL));
+      run("short", () => api.pine(k, 1, 5.5, 4, FOL));
+      run("short again", () => api.pine(k, 1, 5.5, 4, FOL));
+      run("control", () => api.pine((k + 60) % api.n, 1, 5.5, 4, FOL));
+    },
+  });
+  env.release(env.Tracks.build(def, {}));
+  assert.equal(emitted.tall, 0, "the 40 m crown reaches the road: suppressed");
+  assert.equal(emitted.short, emitted.control, "the neighbour plants as on an empty stretch");
+  assert.ok(emitted.short > 0);
+  assert.equal(emitted["short again"], 0, "a pine that LANDED does reserve its spot");
+});
+
 test("a facade draws no rail on its bottom face", () => {
   // The rail at i=0 sits exactly on the section's base, so on every stacked
   // massing it lands in the plane of the rail on the section below.

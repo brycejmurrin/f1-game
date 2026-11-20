@@ -1,0 +1,1 @@
+New: SETTINGS › APPEARANCE › GARAGE: PANEL WIDTH now goes down to 60 % (it used to stop at 100 %, so it could only grow), and a new PANEL HEIGHT (40–100 %) shortens the garage panel. Both work in portrait, so on a phone held upright you can shrink the setup panel and see the car (#4529).

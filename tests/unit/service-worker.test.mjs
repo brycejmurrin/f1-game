@@ -742,6 +742,44 @@ test("a cache-bust navigation never falls back to the generic cached shell", asy
 });
 
 // A SPENT ?b= (no newer than the cached shell) is an ordinary query navigation.
+// THE SHELL RACE IS 1 s ONLY WHERE A CACHED SHELL CAN ANSWER. A plain navigation with a cached shell stops waiting
+// for a silent host at SHELL_RACE_MS; with no cached shell, and for the `?b=` bust and version.json, the waits are
+// the ones above. The harness fires only the 1000 ms timer at once, so a branch that still needed 3 s would take 3 s.
+const SHELL_RACE_MS = Number(/const SHELL_RACE_MS = (\d+);/.exec(SW_SOURCE)?.[1]);
+const lateShell = (ms, body) => () => new Promise((resolve) => setTimeout(() => resolve(new Response(body, { status: 200 })), ms));
+test("a plain navigation with a cached shell stops waiting for the network at SHELL_RACE_MS", async () => {
+  assert.equal(SHELL_RACE_MS, 1000);
+  const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true }, fetchImpl: () => new Promise(() => {}) });
+  harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })]]));
+  const t0 = Date.now();
+  const res = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await res.text(), "precached shell");
+  assert.ok(Date.now() - t0 < 1500, "answered at the shell race, not the 3 s navigation race");
+});
+test("a network that answers inside the shell race still wins over the cached shell", async () => {
+  const harness = createHarness({ navigator: { onLine: true }, fetchImpl: lateShell(30, "network shell") });
+  harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })]]));
+  const res = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await res.text(), "network shell");
+});
+test("with no cached shell the navigation keeps waiting past the shell race for the network", async () => {
+  const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true }, fetchImpl: lateShell(150, "first shell") });
+  const res = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await res.text(), "first shell", "the first launch has nothing cached: the late network answer is the page");
+});
+test("the shell race does not apply to a ?b= bust or to version.json", async () => {
+  const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true },
+    fetchImpl: (req) => lateShell(150, /version\.json/.test(req.url || req) ? '{"build":400}' : "new shell")() });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+    [`${ORIGIN}/version.json`, new Response('{"build":1}', { status: 200 })],
+  ]));
+  const bust = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` }).responsePromise;
+  assert.equal(await bust.text(), "new shell", "a bust never takes the stale shell early");
+  const version = await harness.fetchEvent({ method: "GET", mode: "cors", url: `${ORIGIN}/version.json?_=1` }).responsePromise;
+  assert.equal(await version.text(), '{"build":400}', "version.json still waits for the true latest build");
+});
+
 // Every update reload (boot guard, UPDATE READY) lands on `?b=<build>`; a tab
 // restored or bookmarked there was failed outright offline and on a slow link
 // — the browser's error page instead of the precached shell, forever.
@@ -1369,6 +1407,35 @@ test("a slow pack fetch loses the race to a cached copy, and its late answer is 
   release(new Response('{"new":true}', { status: 200 }));
   await Promise.all(ev.lifetimes);
   assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/assets/pack/manifest.json`).text(), '{"new":true}');
+});
+
+// #5629: the manifest under the page's build (`?b=<n>`) answers from the cache at
+// once and revalidates behind it; a bare or malformed key keeps the network race.
+test("a build-keyed pack manifest answers from the cache at once and revalidates behind it", async () => {
+  let release;
+  const late = new Promise((r) => { release = r; });
+  const url = `${ORIGIN}/assets/pack/manifest.json?b=321`;
+  const h = packHarness({ net: () => late });
+  h.stores.get("apex26-320").set(url, new Response('{"cached":true}', { status: 200 }));
+  const ev = h.fetchEvent(new Request(url));
+  let settled = false;
+  ev.responsePromise.then(() => { settled = true; });
+  for (let i = 0; i < 20 && !settled; i++) await new Promise(setImmediate);
+  assert.equal(settled, true, "no NAV_RACE_MS wait behind a stalled link");
+  assert.equal(await (await ev.responsePromise).text(), '{"cached":true}');
+  release(new Response('{"new":true}', { status: 200 }));
+  await Promise.all(ev.lifetimes);
+  assert.equal(await h.stores.get("apex26-321").get(url).text(), '{"new":true}', "the revalidated copy is cached under THIS build");
+});
+
+test("a build-keyed manifest with no cached copy waits for the network; a malformed key keeps the race", async () => {
+  const h = packHarness({ net: async () => new Response('{"new":true}', { status: 200 }) });
+  const miss = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json?b=321`));
+  assert.equal(await (await miss.responsePromise).text(), '{"new":true}');
+  const bad = `${ORIGIN}/assets/pack/manifest.json?b=0`;
+  h.stores.get("apex26-320").set(bad, new Response('{"old":true}', { status: 200 }));
+  const ev = h.fetchEvent(new Request(bad));
+  assert.equal(await (await ev.responsePromise).text(), '{"new":true}', "?b=0 is not a build: network first");
 });
 
 test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed)", async () => {
@@ -2218,6 +2285,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
     [`${ORIGIN}/vendor/three-0.187.0/three.core.min.js`]: ["three-core", {}],       // install reuses, no download
     [`${ORIGIN}/assets/voice/a.bin`]: ["voice", { ETag: '"v"' }],                   // VOICE_CACHE's class: not carried
     [`${ORIGIN}/js/ui/hud.js?v=aaaaaaaaaaaa`]: ["old", {}],                            // a ?v= key nobody lists: not carried
+    [`${ORIGIN}/assets/pack/manifest.json?b=320`]: ["man-320", { ETag: '"m"' }],      // the old build's key (#5629): not carried
   };
   const base = installFetch();
   const asked = [];
@@ -2253,6 +2321,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
   assert.equal(await text("assets/sfx/removed.mp3"), undefined, "a file the deploy removed is dropped");
   assert.equal(await text("assets/voice/a.bin"), undefined, "voices are VOICE_CACHE's");
   assert.equal(await text("js/ui/hud.js?v=aaaaaaaaaaaa"), undefined, "unlisted ?v= keys are not carried");
+  assert.equal(await text("assets/pack/manifest.json?b=320"), undefined, "a build-keyed manifest stays with its build (#5629)");
   assert.ok(!asked.includes("/vendor/three-0.187.0/three.core.min.js"), "no download for a path-pinned file already on the device");
 });
 
