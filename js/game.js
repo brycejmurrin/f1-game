@@ -720,16 +720,15 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
   || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
-// BLUE FLAGS for the player (AI yields via AiDrive.letPassCase): sustained
-// hold-up while being lapped → warning, then +5 s (js/race/sporting-regs.js;
-// ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
+// BLUE FLAGS, player only (AI: AiDrive.letPassCase): held up while lapped → warn, then +5 s
+// (sporting-regs.js; ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
 const blueWatch = SportingRegs.createBlueFlagWatch(stricken);
+function notePenaltyWhy(c, why) { if (!c.penaltyWhy) c.penaltyWhy = why; else if (c.penaltyWhy.indexOf(why) < 0) c.penaltyWhy += "; " + why; }
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
-  player.penalty += ev.sec;
-  // The results countdown may already be running (the player just finished):
-  // re-read it so a time penalty that reorders the finish is served first.
+  player.penalty += ev.sec; notePenaltyWhy(player, "overtaking under caution");
+  // Restart a running results countdown: the penalty may reorder the finish.
   resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
@@ -738,8 +737,7 @@ function blueFlagCall(ev) {
   if (!ev || !player) return;
   Log.info("game", "Blue flag " + ev.type + (ev.code ? " code=" + ev.code : "") + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap);
   if (ev.type === "warn") { announce("BLUE FLAG WARNING", 2, "penalty-warn"); return; }
-  player.penalty += ev.sec;
-  resultT = 0;
+  player.penalty += ev.sec; notePenaltyWhy(player, "ignoring blue flags"); resultT = 0;
   announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
@@ -5663,7 +5661,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
         if (c.isPlayer) { announce("LAP INVALIDATED", 1.2, "penalty-warn"); if (soundOn) GameAudio.offtrack(); }
       } else if (c.cutWarn >= 4) {
         c.penalty += 5; Log[c.isPlayer ? "info" : "debug"]("game", "Penalty track-limits car=" + c.code + " +5s total=" + c.penalty + "s lap=" + c.lap);
-        if (!c.penaltyWhy) c.penaltyWhy = "track limits"; else if (c.penaltyWhy.indexOf("track limits") < 0) c.penaltyWhy += "; track limits";   // the results sheet's reason (was null)
+        notePenaltyWhy(c, "track limits");
         if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit"); if (soundOn) GameAudio.penalty(); }
       } else if (c.isPlayer) {
         announce("TRACK LIMITS " + c.cutWarn + "/4" + (c.cutWarn === 3 ? " — BLACK & WHITE FLAG" : ""), 1.2, "penalty-warn");
