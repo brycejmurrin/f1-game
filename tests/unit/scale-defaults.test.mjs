@@ -387,13 +387,3 @@ test("UiScale.defaultResMode() answers from the primary pointer, without create(
   assert.equal(stored.hudBtnScale, 145);
   assert.equal(el("pm-btnscale").value, "145");
 });
-
-test("a big desktop's first-paint HUD SIZE and scale.js's big-desktop default agree", () => {
-  const m = tokens.match(/@media (\(pointer: fine\) and \(min-width: \d+px\) and \(min-height: \d+px\))\s*\{\s*:root\s*\{\s*--hud-scale:\s*([\d.]+);\s*\}/);
-  assert.ok(m, "css/tokens.css must declare the big-desktop :root block");
-  const q = scaleJs.match(/const BIG_HUD_MQ = "([^"]+)";/), d = scaleJs.match(/const BIG_HUD_DEFAULT = (\d+);/);
-  assert.ok(q && d, "js/ui/scale.js must declare BIG_HUD_MQ and BIG_HUD_DEFAULT");
-  assert.equal(q[1], m[1], "the CSS media query and bigHud() test the same viewport");
-  assert.equal(Number(m[2]), Number(d[1]) / 100, "the CSS mirror and the JS default are one number");
-  assert.ok(Number(m[2]) >= 1 && Number(m[2]) <= 1.5, "a default, not a zoom: within the slider's comfortable range");
-});

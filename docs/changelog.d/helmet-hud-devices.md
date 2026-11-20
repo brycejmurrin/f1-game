@@ -1,3 +1,0 @@
-Improved: On a big desktop screen (mouse or trackpad, a window of at least 1600 × 960) the race HUD now starts at HUD SIZE 125 %, so its text no longer paints at 14 px on a 16-inch laptop; a HUD SIZE you set yourself still wins.
-Fixed: A HUD piece you placed with MOVE & SIZE no longer paints under the iPhone's notch or off the edge of a smaller screen; it keeps your position and spacing everywhere else, and if pulling it in would cover PAUSE, the camera button or a touch button it steps just below it.
-Improved: Under the helmet camera on a desktop, GEAR, SPEED and ERS now sit together as one stack left of the steering wheel instead of spread across the bottom of the screen.
