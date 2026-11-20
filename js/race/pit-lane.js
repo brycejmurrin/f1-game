@@ -81,6 +81,14 @@ var PitLane = (function () {
 
     // A lane exists wherever wear does — there is no geometry to have room for.
     function enabled() { return !!(z() && G.tyres && G.tyres.on()); }
+    /** THE LANE ITSELF (#5789): open wherever stops are, and in a TIME TRIAL, whose wear is off — the limiter, the
+     *  cue and the box, with no strategy, service or compound rule (those stay on enabled()). */
+    const tt = () => !!G.timeTrial;
+    // wear-off TT: no service (a TT with wear on stops as a race does)
+    const ttStop = () => tt() && !enabled();
+    function laneOpen() { return enabled() || !!(z() && tt()); }
+    /** How long a Time Trial holds the car in its box: the stop plus time to tap END TIME TRIAL (#5789). */
+    const TT_DECIDE_S = 4;
 
     /** The speed cap inside the lane, in m/s at the CURRENT pace scale. */
     function limit() {
@@ -334,7 +342,7 @@ var PitLane = (function () {
       return r;
     }
     function cueOf(c) {
-      if (!enabled() || !c || !c.local || c.retired || c.finished) return null;
+      if (!laneOpen() || !c || !c.local || c.retired || c.finished) return null;
       const st = c.pitState || "none";
       if (st === "box") return { phase: "box", text: "STOP", dist: 0, frac: 1 };
       if (st === "lane") {
@@ -397,7 +405,7 @@ var PitLane = (function () {
         // …AND WHAT WILL BE FITTED. The stop is booked by a gesture, and a
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
-        const next = nextFor(c);
+        const next = ttStop() ? null : nextFor(c);
         // "BOX BOX" as the engineer says it (see the note in engineer.js): the
         // repeat is the call, and it reads as a radio instruction rather than
         // as a label on the screen.
@@ -513,7 +521,7 @@ var PitLane = (function () {
     }
 
     function arm(c, on) {
-      if (!c || !enabled()) return false;
+      if (!c || !laneOpen()) return false;
       c.pitArmed = on == null ? !c.pitArmed : !!on;
       // The place the stop was called from: what it cost is said at the release.
       // DISARMING DROPS IT, because the stop it was stamped for is off and the
@@ -833,7 +841,7 @@ var PitLane = (function () {
      *  and eleven boxes that are not theirs answer it worse than one that is. */
     function boxUniform() {
       const zz = z(), t = G.track, car = G.player;
-      if (!enabled() || !zz || !t || !car) return null;
+      if (!laneOpen() || !zz || !t || !car) return null;
       if (t.pit && !t.pit.painted) return null;
       _boxU[0] = boxThroughFor(car, zz, t.total); _boxU[1] = BOX_TOL * 0.75;
       return _boxU;   // pooled: read by the frame's uniform upload within the same frame, never retained
@@ -847,7 +855,7 @@ var PitLane = (function () {
      *  does a track built without a model. */
     function laneUniform() {
       const zz = z(), t = G.track;
-      if (!enabled() || !zz || !t) return null;
+      if (!laneOpen() || !zz || !t) return null;
       if (t.pit && !t.pit.painted) return null;
       _laneU[0] = zz.sIn; _laneU[1] = zz.lenM; _laneU[2] = zz.side; _laneU[3] = t.total;
       return _laneU;   // pooled (see boxUniform)
@@ -868,7 +876,7 @@ var PitLane = (function () {
     function commitNow(c) {
       c.pitCommitT = 0; c.pitCommitted = true;
       arm(c, true);
-      const next = nextFor(c);
+      const next = ttStop() ? null : nextFor(c);
       if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
     }
     function update(c, dt) {
@@ -880,7 +888,7 @@ var PitLane = (function () {
       // Disabling tyre wear closes the pit feature, but a car already owned by
       // its state machine must first be released. Returning with `box`/`lane`
       // intact leaves game.js applying zero speed/the limiter forever.
-      if (!enabled()) { clearArm(c); c.pitNext = null; return; }
+      if (!laneOpen()) { clearArm(c); c.pitNext = null; return; }
       const st = c.pitState || "none";
       // think() guards ARMING on the last lap / a flagged leader, but an AI that
       // armed on lap L-1 and missed its entry (it comes in next time round) was
@@ -941,13 +949,14 @@ var PitLane = (function () {
         // at latch: fitting at latch made the compound stripe change before
         // anything moved, so the axle slide read as "no tyre swap". Ensure a
         // fit still lands before release if the hold is cut short.
-        if (!c.pitFitted) {
+        if (!c.pitFitted && !ttStop()) {
           const a = stopAnim(c);
           if (a.u >= 0.50) { serviceCar(c); c.pitFitted = true; }
         }
         c.pitT = (c.pitT || 0) - dt;
         if (c.pitT <= 0) {
-          if (!c.pitFitted) { serviceCar(c); c.pitFitted = true; }
+          if (!c.pitFitted && !ttStop()) serviceCar(c);
+          c.pitFitted = true;
           c.pitState = "out"; c.pitT = 0; release(c, zz);
         }
         return;
@@ -982,6 +991,7 @@ var PitLane = (function () {
       }
       // Called the stop and reached the window: the limiter is on from here.
       c.pitState = "lane";
+      if (tt() && c.human) c.incidentInvalidLap = true;   // a lap run through the pit lane is no flying lap (#5789)
       // WAIT YOUR TURN. Teammates SHARE a box — the row is one bay per team, by
       // design — so two cars of one team stopping on the same lap aim at the
       // same patch of tarmac, and the second drove into the first. Measured on
@@ -1004,7 +1014,7 @@ var PitLane = (function () {
         Tracks.sample(G.track, c.s, _smp);
         if (!boxSquare(c, _smp, zz.side)) return;
         c.pitState = "box";
-        c.pitT = zz.boxS;
+        c.pitT = zz.boxS + (ttStop() ? TT_DECIDE_S : 0);
         c.pitArmed = false;
         c.pitStops = (c.pitStops || 0) + 1;
         // The set is fitted mid-hold (see the box branch above) so the wheels

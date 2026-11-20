@@ -1,7 +1,7 @@
 {
   "_note": "measured triangle counts; regenerate with: node tests/unit/car-wing-foil.test.mjs --update",
   "body": 5968,
-  "cockpit": 1579,
+  "cockpit": 1603,
   "worstDriver": {
     "num": 1,
     "tris": 7006

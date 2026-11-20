@@ -112,7 +112,16 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
     timer = setTimer(() => stop('transfer-timeout'), h.timeoutMs);
     return { promise, cancel: () => stop('cancelled') };
   };
-  await timed('route', () => context.route('**/*', handler));
+  // The last context route is the one that sends Chromium Fetch.disable. That
+  // command does not settle while a request this schedule already paused is
+  // still open: the build worker's warm fetches, or the build-keyed pack
+  // manifest when its idle kick overlaps the schedule (#5629). A route that
+  // matches nothing stays installed, so unroute only drops this handler.
+  const anchor = () => false;
+  await timed('route', async () => {
+    await context.route(anchor, () => {});
+    await context.route('**/*', handler);
+  });
   return {
     events, calls,
     hold(input) {

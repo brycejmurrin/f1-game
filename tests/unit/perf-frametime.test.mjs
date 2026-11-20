@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compareToBaseline, envOf, readPageEnv, summariseFrameMs, REGRESSION, ENV_KEYS } from "../helpers/perf-frametime.mjs";
+import { compareToBaseline, envOf, readPageEnv, runnerCpu, summariseFrameMs, REGRESSION, ENV_KEYS } from "../helpers/perf-frametime.mjs";
 
-const ENV = envOf({ renderer: "webgl2", api: "webgl2", adapter: "SwiftShader", browser: "chromium", browserVersion: "140.0.7339.16", viewport: { width: 844, height: 390, dpr: 1 } });
+const ENV = envOf({ renderer: "webgl2", api: "webgl2", adapter: "SwiftShader", browser: "chromium", browserVersion: "140.0.7339.16", viewport: { width: 844, height: 390, dpr: 1 }, cpu: "AMD EPYC 7763 64-Core Processor x4" });
 
 test("summariseFrameMs computes percentiles on a synthetic run", () => {
   const samples = Array.from({ length: 120 }, (_, i) => 16 + (i % 5));
@@ -25,10 +25,10 @@ test("compareToBaseline flags only large regressions", () => {
   assert.ok(REGRESSION.p95Ratio > 1);
 });
 
-test("a run on another renderer, adapter, browser or viewport is not comparable: neither a pass nor a fail (#3665)", () => {
+test("a run on another renderer, adapter, browser, viewport or runner CPU is not comparable: neither a pass nor a fail (#3665)", () => {
   const baseline = { env: ENV, metrics: { p50: 20, p95: 28, p99: 35, longTasks: 2, heapUsedMB: 100 } };
   const slow = { p50: 60, p95: 80, p99: 90, longTasks: 30, heapUsedMB: 200 };
-  for (const [k, v] of [["renderer", "three"], ["api", "webgpu"], ["adapter", "Apple M2"], ["browser", "webkit 18"], ["viewport", "1280x720@2"]]) {
+  for (const [k, v] of [["renderer", "three"], ["api", "webgpu"], ["adapter", "Apple M2"], ["browser", "webkit 18"], ["viewport", "1280x720@2"], ["cpu", "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz x4"]]) {
     const r = compareToBaseline(slow, baseline, { ...ENV, [k]: v });
     assert.equal(r.outcome, "not-comparable", k);
     assert.deepEqual(r.regressions, [], `${k}: no regression verdict across machines`);
@@ -42,6 +42,19 @@ test("a run on another renderer, adapter, browser or viewport is not comparable:
   assert.deepEqual(Object.keys(ENV), ENV_KEYS);
   assert.equal(ENV.browser, "chromium 140", "browser compares by name and major version");
   assert.equal(ENV.viewport, "844x390@1");
+});
+
+// #5903: the same sha read p50 1.84x in one runner VM and green in another; llvmpipe's frame cost is the CPU's.
+test("runnerCpu names the host CPU model and logical core count; no model is unknown, not a match", () => {
+  assert.equal(runnerCpu([{ model: "AMD EPYC  7763 64-Core Processor " }, { model: "x" }, { model: "x" }, { model: "x" }]),
+    "AMD EPYC 7763 64-Core Processor x4");
+  assert.equal(runnerCpu([]), null);
+  assert.equal(runnerCpu([{ model: "" }]), null);
+  // A baseline blessed before #5903 records no cpu: unknown compares nothing until it is re-blessed.
+  const old = { env: { ...ENV, cpu: undefined }, metrics: { p50: 20, p95: 28, p99: 35 } };
+  const r = compareToBaseline({ p50: 40, p95: 56, p99: 70 }, old, ENV);
+  assert.equal(r.outcome, "not-comparable");
+  assert.deepEqual(r.mismatches, ["cpu: the baseline records none"]);
 });
 
 // #5732 decision A: the page env read must record the BOUND backend's api. It read a bare `gfx`, which is not a

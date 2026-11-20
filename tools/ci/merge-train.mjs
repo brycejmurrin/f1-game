@@ -20,7 +20,9 @@
 // open, hold, plan, ci, base, gen, ratchets and retest are the train's own, measured on its head and merge result.
 //
 //   node tools/ci/merge-train.mjs --plan [--max <n>]     dry run: print the next train from live state, write nothing
-//   node tools/ci/merge-train.mjs --build [--max <n>]    land.yml `train` job: close a finished train, open the next
+//   node tools/ci/merge-train.mjs --screen --out <f>     land.yml `train-screen` job: each car's merge-result ratchets
+//   node tools/ci/merge-train.mjs --build [--screen-file <f>] [--max <n>]   land.yml `train` job: close a finished
+//                                                        train, open the next from the cars the screen found green
 //
 // Bisect on red (trainHistory): a closed, unmerged train of n cars caps the next train at floor(n/2) cars, so the
 // suspect set halves each round; a car that was alone in a red train is left out until its head changes. A train
@@ -29,6 +31,7 @@
 //
 // Exit: 0 done (or nothing to do), 1 usage, API or git error.
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY, REPO } from "./github-api.mjs";
@@ -142,7 +145,7 @@ export const carMessage = (c, owner = REPO.split("/")[0]) => `Merge pull request
 
 /** Fold the car heads onto `base` in order: one clean merge commit each, a conflicting car is dropped. Writes only
  *  git objects (merge-tree + commit-tree): no worktree, no checkout, no hooks, no PR code. */
-export function foldCars({ base, cars, cwd = ROOT, git = gitIn(cwd), max = TRAIN_MAX, env = {} }) {
+export function foldCars({ base, cars, cwd = ROOT, git = gitIn(cwd), max = TRAIN_MAX, env = {}, accept = null }) {
   let cur = base;
   const kept = [], dropped = [];
   const cenv = { ...process.env, GIT_AUTHOR_NAME: "merge-train", GIT_AUTHOR_EMAIL: "merge-train@users.noreply.github.com",
@@ -158,6 +161,10 @@ export function foldCars({ base, cars, cwd = ROOT, git = gitIn(cwd), max = TRAIN
       continue;
     }
     const tree = String(mt.stdout).split("\n")[0].trim();
+    // The screen (screenFold on the tokenless screen job, screenAccept on the build): a car whose merge turns the fold
+    // red is left out and the fold stays where it was, so the next car is measured without it.
+    const a = accept ? accept({ car: c, tree, parent: cur, kept: kept.length }) : { ok: true };
+    if (!a?.ok) { dropped.push({ pr: c.pr, why: String(a?.why || "refused by the screen") }); continue; }
     const ct = git(["commit-tree", tree, "-p", cur, "-p", c.head, "-m", carMessage(c)], { env: cenv });
     if (ct.status !== 0) return { error: `commit-tree for #${c.pr} failed: ${String(ct.stderr || "").trim()}` };
     cur = ct.stdout.trim();
@@ -209,6 +216,82 @@ export function trainRow({ manifest, head, headRef, tip, verify, carGate, carPul
     : { ok: true, evidence: `${pure.why}; every car passes open, hold, plan, ci, config and raise on its own` };
 }
 
+// ---- the screen: each car's merge-result ratchets, before the train is built ------------------------------
+
+/* WHY (#5864, trains #5840 and #5862, 2026-11-19): a car's trusted rows say nothing about its merge onto the CURRENT
+ * tip. #5862's cars #5668, #5679 and #5730 were each red ALONE on the train's base (eagerBytes +147 and +2057 against
+ * the exact ceiling the tip snapped down after their own gates ran, a hud.js lowering delta written against an older
+ * ceiling, assertPins +1), so the train closed red on its gate and the bisect halved the next one. Measuring needs PR
+ * code (the ratchets run the merge result's own scripts), and LAND_TOKEN never meets PR code. So land.yml's
+ * `train-screen` job (read-only token, no secret, like land-gate) runs `--screen`: the same fold, with merge-gate's
+ * ratchetsOnMerge on each cumulative fold, and writes the verdicts as data. The build reads them (readScreen,
+ * screenAccept): a forged file can only leave cars out; the train's own gate still measures everything. */
+
+/** Screen wall-clock budget: a car the budget did not reach is "not screened" and waits for the next run. */
+export const SCREEN_BUDGET_MS = 12 * 60_000;
+const SCREEN_WHY_MAX = 200;
+/** A verdict's why as plain one-line text: it lands in the train PR body beside the manifest marker. Pure. */
+const plainWhy = (w) => String(w ?? "").replace(/[<>`\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, SCREEN_WHY_MAX);
+
+/** Parse a screen file's text. `{tip, skip?, cars:[{pr, head, ok, why}]}`, or null when it is not a valid screen. Pure. */
+export function readScreen(text) {
+  let j;
+  try { j = JSON.parse(String(text ?? "")); } catch { return null; }
+  const tip = String(j?.tip || "").toLowerCase();
+  if (j?.skip) return { tip: SHA.test(tip) ? tip : "", skip: plainWhy(j.skip) || "skipped", cars: [] };
+  if (!SHA.test(tip) || !Array.isArray(j.cars)) return null;
+  const cars = [];
+  for (const c of j.cars) {
+    const pr = Number(c?.pr), head = String(c?.head || "").toLowerCase();
+    if (!Number.isInteger(pr) || pr < 1 || !SHA.test(head) || typeof c.ok !== "boolean") return null;
+    cars.push({ pr, head, ok: c.ok, why: plainWhy(c.why) });
+  }
+  return { tip, skip: "", cars };
+}
+
+/** The build's accept: only a car the screen measured green at this very head rides. Pure. */
+export function screenAccept(screen) {
+  const by = new Map((screen?.cars || []).map((c) => [`${c.pr}@${c.head}`, c]));
+  return ({ car }) => {
+    const v = by.get(`${car.pr}@${car.head}`);
+    if (!v) return { ok: false, why: "not screened at this head (the next train run screens it)" };
+    return v.ok ? { ok: true } : { ok: false, why: `red alone on the fold (screen on ${screen.tip.slice(0, 8)}): ${v.why || "over a ratchet"}` };
+  };
+}
+
+/** The screen job's accept: materialise each candidate fold in ONE throw-away worktree whose HEAD is the tip (so the
+ *  pin counters judge the growth the fold adds, as the gate's own row does) and run `check` (merge-gate
+ *  ratchetsOnMerge) there. Records every verdict in `out`. → { accept, cleanup }. */
+export function screenFold({ tip, cwd = ROOT, git = gitIn(cwd), check, prepare = null, out = [], now = Date.now, budgetMs = SCREEN_BUDGET_MS, fsx = fs }) {
+  const wt = path.join(cwd, "artifacts", "merge-train", "screen-wt");
+  const started = now();
+  let ready = null;
+  const cleanup = () => { git(["worktree", "remove", "--force", wt]); git(["worktree", "prune"]); fsx.rmSync(wt, { recursive: true, force: true }); };
+  const setup = () => {
+    cleanup();
+    const add = git(["worktree", "add", "--detach", wt, tip]);
+    if (add.status !== 0) return `worktree add failed: ${String(add.stderr || "").trim().split("\n")[0]}`;
+    try { fsx.symlinkSync(path.join(cwd, "node_modules"), path.join(wt, "node_modules")); } catch { /* exists */ }
+    return "";
+  };
+  const accept = ({ car, tree }) => {
+    const record = (ok, why) => { out.push({ pr: car.pr, head: car.head, ok, why: plainWhy(why) }); return { ok, why }; };
+    if (now() - started > budgetMs) return { ok: false, why: "not screened (screen time budget spent)" };
+    if (ready === null) ready = setup();
+    if (ready) return record(false, `screen: ${ready}`);
+    const rt = git(["read-tree", "-u", "--reset", tree], { cwd: wt });
+    if (rt.status !== 0) return record(false, `screen: read-tree failed: ${String(rt.stderr || "").trim().split("\n")[0]}`);
+    git(["clean", "-fdqx", "-e", "node_modules"], { cwd: wt });
+    // The built files (BUILT_PATHS: circuit-meta.js & co.) are not in the tree: gen:check builds them, as the gate's
+    // gen row does before its ratchets (without it every car read red on a missing js/track/circuit-meta.js).
+    const p = prepare ? prepare({ cwd: wt }) : { ok: true };
+    if (!p?.ok) return record(false, p?.evidence || "gen:check fails on the fold");
+    const r = check({ cwd: wt });
+    return record(Boolean(r?.ok), r?.ok ? "" : r?.evidence || "over a ratchet");
+  };
+  return { accept, cleanup };
+}
+
 // ---- live state (--plan / --build) ----------------------------------------------------------------------
 
 function listPulls(request, state) {
@@ -228,7 +311,7 @@ const gateState = (sha, request) => {
 };
 
 /** The next train from live state. Reads GitHub and fetches car heads into `cwd`; writes only git objects. */
-export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, now = Date.now(), log = () => {} } = {}) {
+export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, now = Date.now(), log = () => {}, acceptFor = null } = {}) {
   const { evaluate } = await import("./merge-gate.mjs");
   const open = listPulls(request, "open");
   if (open.error) return { error: `open PRs: ${open.error}` };
@@ -258,7 +341,7 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
     git(["fetch", "--quiet", "--no-tags", "origin", `+refs/pull/${c.pr}/head:refs/remotes/origin/pr/${c.pr}`]);
     ready.push(c);
   }
-  const fold = foldCars({ base: tip, cars: ready, cwd, git, max: hist.cap });
+  const fold = foldCars({ base: tip, cars: ready, cwd, git, max: hist.cap, accept: acceptFor ? acceptFor(tip) : null });
   if (fold.error) return { error: fold.error };
   const min = hist.cap >= 2 ? 2 : 1;
   return { tip, cap: hist.cap, running: running.map((p) => p.number), cars: fold.cars, head: fold.head, dropped: [...fold.dropped, ...skipped], enough: fold.cars.length >= min };
@@ -300,16 +383,23 @@ export function redOnRedTip(d, tip) {
   return { ...d, outcome: "stale", tipRed: true, why: `${d.why}, while the deploy tip was red (${String(tip.evidence || "code-red").slice(0, 300)}): not the cars' red, no bisect` };
 }
 
-const USAGE = `usage: node tools/ci/merge-train.mjs --plan|--build [--max <n>]
+const USAGE = `usage: node tools/ci/merge-train.mjs --plan|--screen --out <file>|--build [--screen-file <file>] [--max <n>]
   --plan   print the next train from live GitHub state (cars, dropped with why, bisect cap); writes nothing but git objects
+  --screen land.yml's train-screen job (read-only token): fold the next train's candidates onto the tip, run merge-gate's
+           ratchetsOnMerge on each cumulative fold (PR code), write the per-car verdicts to <file>
+  --screen-file  with --build: only cars that file measured green at their head ride; a missing or invalid file
+           opens no train (exit 1). Without the flag the build is unscreened.
   --build  land.yml's train job: close a finished train (red or stale), else push train/<stamp> and open its PR with
            \`land\` + \`${TRAIN_LABEL}\` (needs GH_TOKEN = LAND_TOKEN so CI runs on it). One open train at a time.`;
 
 export async function main(argv, { request = api, cwd = ROOT, log = console.log, now = Date.now(), tipCheck = runTipGate } = {}) {
-  if (argv.includes("--help") || argv.includes("-h") || !(argv.includes("--plan") || argv.includes("--build"))) { log(USAGE); return argv.includes("--help") || argv.includes("-h") ? 0 : 1; }
+  if (argv.includes("--help") || argv.includes("-h") || !(argv.includes("--plan") || argv.includes("--build") || argv.includes("--screen"))) { log(USAGE); return argv.includes("--help") || argv.includes("-h") ? 0 : 1; }
   const i = argv.indexOf("--max");
   const max = i >= 0 ? Math.max(1, Math.min(10, Number(argv[i + 1]) || TRAIN_MAX)) : TRAIN_MAX;
   const build = argv.includes("--build");
+  const argOf = (k) => { const j = argv.indexOf(k); return j >= 0 ? argv[j + 1] || "" : null; };
+  if (argv.includes("--screen") && !build) return screenMain({ argv, out: argOf("--out"), request, cwd, log, now, max });
+  const screenFile = argOf("--screen-file");
   if (build) {
     const open = listPulls(request, "open");
     if (open.error) { log(`= merge-train error — ${open.error}`); return 1; }
@@ -343,7 +433,15 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
       log(`= merge-train closed #${t.number} (${d.outcome}): ${d.why}`);
     }
   }
-  const plan = await planTrain({ request, cwd, max, now, log: build ? log : () => {} });
+  let screen = null;
+  if (build && screenFile !== null) {
+    let text = null;
+    try { text = fs.readFileSync(screenFile, "utf8"); } catch { /* missing: refused below */ }
+    screen = readScreen(text);
+    if (!screen) { log(`= merge-train error — no valid screen verdict at ${screenFile || "(no path)"} (the train-screen job failed?): no train opened`); return 1; }
+    if (screen.skip) { log(`= merge-train idle — the screen skipped (${screen.skip}); the next run screens and builds`); return 0; }
+  }
+  const plan = await planTrain({ request, cwd, max, now, log: build ? log : () => {}, acceptFor: screen ? () => screenAccept(screen) : null });
   if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
   for (const d of plan.dropped) log(`  - #${d.pr}: ${d.why}`);
   const line = `cars=${plan.cars.map((c) => `#${c.pr}`).join(",") || "none"} cap=${plan.cap} tip=${plan.tip.slice(0, 12)} head=${plan.head.slice(0, 12)}`;
@@ -358,6 +456,33 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
   const lab = request(`issues/${pr.json.number}/labels`, { method: "POST", body: { labels: ["land", TRAIN_LABEL] } });
   if (lab.error) { log(`= merge-train error — labels on #${pr.json.number}: ${lab.error}`); return 1; }
   log(`= merge-train opened #${pr.json.number} — ${line}`);
+  return 0;
+}
+
+/** `--screen`: the train-screen job. Skips (writes `{skip}`) while a train is open: the build closes it first and the
+ *  next run screens. `check` defaults to merge-gate's ratchetsOnMerge, `gen` to gen:check (both run the fold's own scripts). Exit 0 with a file written, 1 on an error. */
+export async function screenMain({ out, request = api, cwd = ROOT, log = console.log, now = Date.now(), max = TRAIN_MAX, check = null, gen = null, clock = Date.now }) {
+  if (!out) { log(USAGE); return 1; }
+  const write = (j) => { fs.mkdirSync(path.dirname(path.resolve(cwd, out)), { recursive: true }); fs.writeFileSync(path.resolve(cwd, out), `${JSON.stringify(j)}\n`); };
+  const open = listPulls(request, "open");
+  if (open.error) { log(`= merge-train error — ${open.error}`); return 1; }
+  const trains = open.rows.filter((p) => String(p.head?.ref || "").startsWith(TRAIN_PREFIX)).map((p) => p.number);
+  if (trains.length) { write({ skip: `train #${trains.join(",")} is open` }); log(`= merge-train screen skipped — train #${trains.join(",")} is open`); return 0; }
+  const gate = check ? null : await import("./merge-gate.mjs");
+  const ratchets = check || gate.ratchetsOnMerge;
+  const prepare = gen || (gate ? ({ cwd: wt }) => {
+    const r = spawnSync("npm", ["run", "-s", "gen:check"], { cwd: wt, env: gate.untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+    const tail = `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-2).join(" | ");
+    return r.status === 0 ? { ok: true } : { ok: false, evidence: `gen:check fails on the fold: ${tail || `exit ${r.status}`}` };
+  } : null);
+  const verdicts = [];
+  let sf = null;
+  const plan = await planTrain({ request, cwd, max, now, log, acceptFor: (tip) => (sf = screenFold({ tip, cwd, check: ratchets, prepare, out: verdicts, now: clock })).accept });
+  sf?.cleanup();
+  if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
+  write({ tip: plan.tip, cars: verdicts });
+  for (const v of verdicts) log(`  ${v.ok ? "ok  " : "RED "} #${v.pr} ${v.head.slice(0, 8)}${v.ok ? "" : `: ${v.why}`}`);
+  log(`= merge-train screen — ${verdicts.filter((v) => v.ok).length} of ${verdicts.length} car(s) green on the fold onto ${plan.tip.slice(0, 12)}; cars=${plan.cars.map((c) => `#${c.pr}`).join(",") || "none"}`);
   return 0;
 }
 

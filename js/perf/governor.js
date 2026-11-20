@@ -234,13 +234,7 @@ function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 // Why: docs/GOVERNOR-RATIONALE.md §gov-21.
 function sentinelResume() {
-  // A CLIMB CANNOT BE ON PROBATION ACROSS TIME NOBODY MEASURED. `_sinceUp`
-  // ages only inside tick(), which never runs while the tab is hidden, so a
-  // climb accepted before a ten-minute background stint came back reading as
-  // seconds old — and the first cut after the resume then charged it the full
-  // doubling penalty for load the climb was never tested against. That is the
-  // same reasoning that keeps this function from resetting the EMAs: a tab
-  // return is not evidence. Drop the probation instead of charging it.
+  // Why: docs/GOVERNOR-RATIONALE.md §gov-40.
   _sinceUp = -1;
   if (!_gfx || !_gfx.isMobile) return;
   GameStore.store.rawSet(SENT_ACTIVE, "1");
@@ -281,13 +275,7 @@ function cleanRace() {
   }
 }
 
-// Re-derive the crash floor from the strike counter. When it DROPS, _perfTier
-// may be sitting on the OLD one (init() seeds it there, and the degrade branch
-// steps from _floorTier(), so it absorbs whatever floor was live when it fired).
-// Release it to the new CRASH floor and let the governor re-earn any shed from
-// its own measurements. Not _floorTier(): that folds in the GRAPHICS preset, so
-// one strike paid down on MEDIUM (2 > 2 is false) left autoTier() pinned at the
-// old floor for the session (#3294). tier() still applies the preset at read time.
+// Why: docs/GOVERNOR-RATIONALE.md §gov-41.
 function _setCrashFloor() {
   const prev = _perfTierFloor;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
@@ -463,6 +451,7 @@ function tick(dtMs, drawn) {
   if (ev <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (ev > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
+    if (_shedDprBoost()) { _degradeArm = 0; return; }
     // Why: docs/GOVERNOR-RATIONALE.md §gov-29.
     let stepped = false;
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
@@ -536,8 +525,17 @@ function driftRenderRate() {
   if (!st.mobile || st.mode !== "auto") return false;
   return RenderRate.setMode("45");
 }
+// Why: docs/GOVERNOR-RATIONALE.md §gov-39.
+function _shedDprBoost() {
+  if (!_gfx || typeof _gfx.getDprBoost !== "function" || !(_gfx.getDprBoost() > 0)) return false;
+  if (!_gfx.setDprBoost(0)) return false;
+  _govCool = 30; _downHold = _chargeCut();
+  Log.warn("gfx", "RESOLUTION MAX: frame budget missed, DPR boost off (back to the tier's cap)");
+  return true;
+}
 function driftStep() {
   if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;   // mid-verify or cooling: ask again next window
+  if (_shedDprBoost()) return true;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   if (_autoRes && cur > 0.5 && !_scaleFutile && _gfx.setRenderScale(cur - 0.1)) {
     _scaleCap = cur; _armCapProbe(); _govCool = 30; _downHold = _chargeCut(); _scaleMoves++;
