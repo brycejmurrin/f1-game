@@ -826,7 +826,8 @@ const Tracks = (function () {
     const m = track && track.meshes;
     if (!m) return false;
     const ch = m[which + "Chunked"];
-    return !!(ch && ch.chunks && ch.chunks.length);
+    if (ch && ch.chunks && ch.chunks.length) return true;
+    return which === "road" && !!m.road && !!track._gfx && track._gfx.chunkedTrackCoords === false;
   }
   function dropRibbonCpuIfReady(track, opts) {
     if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || (opts && opts.retainRibbonCpu) || keepGeometry) return;

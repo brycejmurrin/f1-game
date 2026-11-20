@@ -214,6 +214,65 @@ const TLX = (function () {
   }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
+  // three r185.1+ WebGPUAttributeUtils creates every GPUBuffer with mappedAtCreation:true, then
+  // getMappedRange()+unmap(). Dawn's client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
+  // upload exhausts it and EVERY later createBuffer (even 24 B) throws (mcp-probe 2026-08-18; same class as
+  // WGX _mkBuffer / PlayCanvas #6676). The shim rewrites those creates to unmapped + queue.writeBuffer;
+  // readback (mapAsync) is unchanged — those buffers are not mappedAtCreation. It costs a JS
+  // `new ArrayBuffer(size)` staging copy per buffer (a heap peak at track load), so it is EAGER only on a
+  // software adapter or a headless run; a real GPU (the iPhone) keeps the native mapped path and the shim
+  // latches on for that device only once a native mapped create throws. Returns the mode it set:
+  // "shim" (eager), "native" (armed, not yet latched) or the device's existing mode.
+  function installMappedShim(dev, eager) {
+    if (!dev || typeof dev.createBuffer !== "function") return null;
+    if (dev.__apexWriteBuf) return dev.__apexWriteBuf;
+    const origCreate = dev.createBuffer.bind(dev);
+    const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
+      ? GPUBufferUsage.COPY_DST : 0x0008;
+    let on = !!eager;
+    function shimmed(desc) {
+      const size = desc.size | 0;
+      const buf = origCreate({
+        size,
+        usage: (desc.usage | COPY_DST),
+        label: desc.label,
+      });
+      let staging = new ArrayBuffer(size);
+      const parts = [];
+      buf.getMappedRange = function (offset, mapSize) {
+        const o = offset | 0;
+        const n = mapSize == null ? (size - o) : (mapSize | 0);
+        if (o === 0 && n === size) return staging;
+        const part = new ArrayBuffer(n);
+        parts.push({ o, part });
+        return part;
+      };
+      buf.unmap = function () {
+        try {
+          for (let i = 0; i < parts.length; i++) {
+            const p = parts[i];
+            new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
+          }
+          if (staging && size) dev.queue.writeBuffer(buf, 0, staging);
+        } catch (_) { /* one failed upload must not take down present() */ }
+        staging = null;
+        parts.length = 0;
+      };
+      return buf;
+    }
+    dev.createBuffer = function (desc) {
+      if (!desc || !desc.mappedAtCreation) return origCreate(desc);
+      if (on) return shimmed(desc);
+      try { return origCreate(desc); } catch (_) {
+        on = true;                       // the mapping pool is gone: every later mapped create takes the shim
+        dev.__apexWriteBuf = "latched";
+        return shimmed(desc);
+      }
+    };
+    dev.__apexWriteBuf = on ? "shim" : "native";
+    return dev.__apexWriteBuf;
+  }
+
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
     // three renderer before the GLX fallback: same page when #game was never
@@ -517,6 +576,7 @@ const TLX = (function () {
       let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       let _softSubmittedGen = 0, _softShownGen = 0;
+      let _softDarkRun = 0;   // consecutive near-black reads (#5699 row 15)
       const _softPresentWaiters = [];
       // awaitSoftPresent(ms, "frame") on a headed canvas (GLX's M15 contract): no
       // preserveDrawingBuffer, so SAVE SCREENSHOT must read in the task that
@@ -631,52 +691,12 @@ const TLX = (function () {
           try { disposeKeepingContext(renderer); } catch (_) { /* best-effort */ }
           throw e;
         }
-        // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
-        // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
-        // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
-        // upload exhausts it and EVERY later createBuffer (even 24 B) throws
-        // (mcp-probe 2026-08-18; same class as WGX _mkBuffer / PlayCanvas #6676).
-        // Rewrite those creates to unmapped + queue.writeBuffer. Readback
-        // (mapAsync) is unchanged — those buffers are not mappedAtCreation.
+        // mappedAtCreation shim (installMappedShim, above create): eager only where it was needed — a
+        // software adapter or a headless run. A real GPU keeps three's native mapped path until a mapped
+        // create throws (hunt 2026-11-18 (2) row 1: the iPhone paid a full JS staging copy per buffer).
         if (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) {
           const _dev = renderer.backend.device;
-          if (!_dev.__apexWriteBuf && typeof _dev.createBuffer === "function") {
-            const _origCreate = _dev.createBuffer.bind(_dev);
-            const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
-              ? GPUBufferUsage.COPY_DST : 0x0008;
-            _dev.createBuffer = function (desc) {
-              if (!desc || !desc.mappedAtCreation) return _origCreate(desc);
-              const size = desc.size | 0;
-              const buf = _origCreate({
-                size,
-                usage: (desc.usage | COPY_DST),
-                label: desc.label,
-              });
-              let staging = new ArrayBuffer(size);
-              const parts = [];
-              buf.getMappedRange = function (offset, mapSize) {
-                const o = offset | 0;
-                const n = mapSize == null ? (size - o) : (mapSize | 0);
-                if (o === 0 && n === size) return staging;
-                const part = new ArrayBuffer(n);
-                parts.push({ o, part });
-                return part;
-              };
-              buf.unmap = function () {
-                try {
-                  for (let i = 0; i < parts.length; i++) {
-                    const p = parts[i];
-                    new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
-                  }
-                  if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
-                } catch (_) { /* one failed upload must not take down present() */ }
-                staging = null;
-                parts.length = 0;
-              };
-              return buf;
-            };
-            _dev.__apexWriteBuf = true;
-          }
+          installMappedShim(_dev, _softAdapter || _headless);
           // GPU ERROR CAPTURE — the instrument this backend never had. WGX has
           // hooked onuncapturederror since it shipped; TLX hooked nothing, so
           // Dawn could reject work on every frame and say it to nobody. That is
@@ -1462,6 +1482,7 @@ const TLX = (function () {
       // post chain; white fallback would polish porous verges again. Retain it
       // through temporary overload shedding to avoid render-target churn.
       // The old tlxTagLess A/B override is incompatible with this requirement.
+      // _wantTag is the rule's one seam (tlx-hunt3 R3 drives it); it answers true today.
       function _wantTag() {
         return true;
       }
@@ -2144,6 +2165,7 @@ const TLX = (function () {
             if (k !== undefined) {
               const v = matCache.get(k);
               matCache.delete(k);
+              if (k.endsWith("|fx")) _fxKeys.delete(k.slice(0, -3));   // its memoised fx key goes with it (#5699 row 14)
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
               _matEvict++;
@@ -4121,8 +4143,27 @@ const TLX = (function () {
       const PIPE_PIN_CAP = 512;
       const _pinnedPipes = new Set();
       let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
+      // AT THE CAP, THE OLDEST PIN NOTHING ELSE HOLDS MAKES ROOM (#5699 row 5). Pins were never released, so after a
+      // few tracks the set filled with freed materials' pipelines and the CURRENT world's went unpinned. Only a
+      // pipeline whose sole use is the pin (usedTimes 1: no live RenderObject) is released, exactly as three's
+      // Pipelines.delete would have at its last holder; below the cap nothing changes.
+      function unpinIdle(P) {
+        for (const q of _pinnedPipes) {
+          if (q.usedTimes > 1) continue;
+          _pinnedPipes.delete(q);
+          q.usedTimes--; q.vertexProgram.usedTimes--; q.fragmentProgram.usedTimes--;
+          if (P && typeof P._releasePipeline === "function" && q.usedTimes === 0) P._releasePipeline(q);
+          if (P && typeof P._releaseProgram === "function") {
+            if (q.vertexProgram.usedTimes === 0) P._releaseProgram(q.vertexProgram);
+            if (q.fragmentProgram.usedTimes === 0) P._releaseProgram(q.fragmentProgram);
+          }
+          return true;
+        }
+        return false;
+      }
       function pinPipe(p) {
-        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        if (!p || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        if (_pinnedPipes.size >= PIPE_PIN_CAP && !unpinIdle(renderer && renderer._pipelines)) return;
         p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
         _pinnedPipes.add(p);
       }
@@ -4229,7 +4270,8 @@ const TLX = (function () {
         try { if (m.parent === instRoot) _instRemove(m); else if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
         if (_warmPending && !_ownershipFreeDepth) {
-          if (!_dropQueue.some((entry) => entry.mesh === m)) {
+          if (!m.__tlxQueued) {   // a flag, not _dropQueue.some(): that scan made a warm's drops O(n^2) (#5699 row 10)
+            m.__tlxQueued = true;
             _dropQueue.push({ mesh: m, ownedGeometry, freedGeo: ownedGeometry || m.geometry });
           }
           return;
@@ -4249,6 +4291,7 @@ const TLX = (function () {
       function flushDropped(force) {
         if ((!force && _warmPending) || !_dropQueue.length) return;
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
+        for (const entry of _dropQueue) entry.mesh.__tlxQueued = false;
         _dropQueue.length = 0;
       }
       // Track switch while a program/mirror warm is in flight: dropWrapper queues
@@ -4304,6 +4347,7 @@ const TLX = (function () {
           const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
           if (!fg || !freedGeos.has(fg)) continue;
           _dropQueue.splice(i, 1);
+          if (e.mesh) e.mesh.__tlxQueued = false;
           ownershipDropQueued(e.mesh, e.ownedGeometry, fg);
         }
         let w = 0;
@@ -4701,7 +4745,7 @@ const TLX = (function () {
         for (let i = 0; i < n; i++) {
           if (!images[i] || have.has(i)) continue;
           const r = fill2dLayer(c2d, size, images[i], i, data);
-          if (r < 0) return filled;
+          if (r < 0) return 0;          // no 2d context: a partial pack is no pack (see below) — Assets retries
           filled += r;
         }
         // A partially readable pack is not a usable pack.  Returning a
@@ -4978,7 +5022,10 @@ const TLX = (function () {
               _softImg = _displayCtx.createImageData(w, h);
             }
             const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
-            if (maxPx >= 8) {
+            // A near-black read is held back (a warming RT), but a scene that IS black must present too: after
+            // three in a row it is shown, or awaitSoftPresent waited out its 15 s (#5699 row 15).
+            if (maxPx >= 8 || ++_softDarkRun >= 3) {
+              _softDarkRun = 0;
               _displayCtx.putImageData(_softImg, 0, 0);
               _softShownGen = req.gen;
               _softBlitNotify();
@@ -5755,23 +5802,33 @@ const TLX = (function () {
             _restoreEnvFrame();
             return;
           }
+          // A throw while pooling the face (acquireMesh) must not leave _envActive latched: mirrorBegin refuses
+          // while it is set, so the mirror stayed dark until a later clean envFaceEnd (hunt 2026-11-18 (2) row 11).
           _poolBatch++;
           _kidsBegin(_kidsEnv);
-          _instStamp++;
-          for (let i = 0; i < drawList.n; i++) {
-            const rec = drawList[i];
-            if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
-            if (rec.chunked) {
-              // A 64px blurred cube cannot resolve the city. Hardware now
-              // skips chunked/city on probe faces the way software already
-              // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
-              if (softContent("chunked") || !chunkedSys) continue;
-              continue;
+          try {
+            _instStamp++;
+            for (let i = 0; i < drawList.n; i++) {
+              const rec = drawList[i];
+              if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
+              if (rec.chunked) {
+                // A 64px blurred cube cannot resolve the city. Hardware now
+                // skips chunked/city on probe faces the way software already
+                // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
+                // Both arms skip today; the softContent("chunked") arm stays as the
+                // tlxForceHw=chunked override seam (gfx-backend-canary pins it).
+                if (softContent("chunked") || !chunkedSys) continue;
+                continue;
+              }
+              acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
+            _poolShow();
+            _hideUndrawnInstanced();
+          } catch (e) {
+            _envActive = false;
+            _restoreEnvFrame();
+            throw e;
           }
-          _poolShow();
-          _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
           // Per-FACE window. The old cycle-wide compare (face 0 .. face 5 is
@@ -6046,7 +6103,10 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
-            // Fixed targets: the canvas is present-sized whatever the render scale (W x H is the logical rect).
+            // Read what the canvas holds: fixed targets AND the spatial upscale (wantSpatialUpscale, no fixed targets)
+            // size it presentW x presentH whatever the render scale, so W x H cropped the Photo (#5699 row 12).
+            const bw = gl.drawingBufferWidth | 0, bh = gl.drawingBufferHeight | 0;
+            if (bw > 0 && bh > 0) return readGlCapture(gl, bw, bh);
             return fixedActive() ? readGlCapture(gl, presentW, presentH) : readGlCapture(gl, W, H);
           }
           const rt = _captureRT();
