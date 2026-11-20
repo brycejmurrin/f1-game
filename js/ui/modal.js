@@ -127,9 +127,8 @@ window.TopModal = (function () {
      ON `document` AND NOT `window`, DELIBERATELY. An inner disclosure has to be
      able to claim Escape before its screen does — the GARAGE's camera panel is
      the case: Escape there shuts the panel, not the GARAGE. That handler is on
-     document/capture too (js/game.js) and registers at script-eval time, i.e.
-     before this one, so it runs first and marks the event handled. A listener
-     on `window` would beat it and there would be no way back.
+     `window`/capture (js/garage/setup-camera.js), so it runs first and marks
+     the event handled; one here on `window` would race it.
 
      Stopping propagation is the point, not a side effect: it is what keeps the
      key from also reaching the pause switch in js/input/input.js, which is on

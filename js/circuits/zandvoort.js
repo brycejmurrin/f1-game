@@ -24,7 +24,7 @@
     // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // Scenery / exclusions / boards are racing-from-THIS line (pits at 0,
-    // Tarzan runoff ~0.04, Hugenholtz stand 0.135, Luyendyk 0.915 — T14
+    // Tarzan runoff ~0.04, Hugenholtz stand 0.205, Luyendyk 0.915 — T14
     // apex is 0.9105). Do not add sceneryStartFrac: 0.3275 there adds
     // _sceneryShift and parks the pit complex on the Hunserug/Scheivlak
     // stretch (the same shift once put 19° of bank on those sweeps).
