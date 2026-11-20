@@ -3,7 +3,7 @@
 // Usage: node tools/ui/probe-sheets-contract.mjs [A,C,D] [owner|full] [out.json]. Cells per the UI contract note (PR #5154) §2.
 import { chromium } from "playwright";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { brycePhone, readProfile } from "../lib/bryce-phone.mjs";
 
 const EXPORT = readProfile("legacy");
@@ -229,7 +229,8 @@ async function main() {
     await ctx.close();
   }
   await browser.close();
-  const outPath = process.argv[4] || fileURLToPath(new URL("../../artifacts/pr-d-probe.json", import.meta.url));
+  const outPath = process.argv[4] || path.resolve(import.meta.dirname, "../../artifacts/pr-d-probe.json");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
   console.log("wrote", outPath);
 }
