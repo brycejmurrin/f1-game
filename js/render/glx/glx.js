@@ -993,6 +993,9 @@ const GLXBackend = (function () {
   // With apex26.spatialUpscale=1 and scale < 1, the canvas is FULL present size
   // (css×dpr) and SGSR1 reconstructs the missing pixels (UPSCALING-2026-09 §6).
   let renderScale = 1;
+  // RESOLUTION MAX (js/ui/scale.js setDprBoost): 0, or the DPR asked for (at most 3). It only RAISES the tier's cap
+  // below; resize() still takes the lower of the cap and window.devicePixelRatio. TLX's twin: tlx.js dprCapFor.
+  let _dprBoost = 0;
   let presentW = 0, presentH = 0;
   let spatialUpscale = false;
   try {
@@ -1037,7 +1040,8 @@ const GLXBackend = (function () {
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
-    const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
+    // RESOLUTION MAX's _dprBoost (setDprBoost) only RAISES that cap, and never above the device's own DPR.
+    const dpr = Math.min(window.devicePixelRatio || 1, Math.max(MOBILE_TIER ? 1.5 : 2, _dprBoost));
     const css = cssSize();
     const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
@@ -1088,6 +1092,16 @@ const GLXBackend = (function () {
     return true;
   }
   function getRenderScale() { return renderScale; }
+  // RESOLUTION MAX asks for the device's own DPR; every other RESOLUTION and PerfGov's budget shed pass 0.
+  // True = the boost changed (TLX answers "the cap moved"; GLX has no capDpr ceiling, so the two agree here).
+  function setDprBoost(n) {
+    const v = n > 0 ? Math.min(+n, 3) : 0;
+    if (v === _dprBoost) return false;
+    _dprBoost = v;
+    if (gl) resize();
+    return true;
+  }
+  function getDprBoost() { return _dprBoost; }
 
   function toF32(a) {
     return a instanceof Float32Array ? a : new Float32Array(a);
@@ -2864,7 +2878,7 @@ const GLXBackend = (function () {
     lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx, armed: SHD.lampArmed }),
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
-    setRenderScale, getRenderScale,
+    setRenderScale, getRenderScale, setDprBoost, getDprBoost,
     setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
     // supported + on); gpuTimer() reads state. gpuMs() returns the most recent

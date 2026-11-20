@@ -137,7 +137,7 @@ const DailyChallenge = (function () {
       const e = context ? day && day.classes && day.classes[context] : day;
       const best = e && e.best != null ? e.best : undefined;
       const medal = best != null && typeof Quali !== "undefined" && G.referencePole
-        ? Quali.medalFor(best, G.referencePole()) : null;
+        ? Quali.medalFor(best, G.referencePole("medal")) : null;
       return { day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
         best, medal, streak: liveStreak(), class: p.class || "standard" };
     }

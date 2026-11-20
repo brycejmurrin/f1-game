@@ -440,8 +440,9 @@ test("the reference pole runs the weather's tyre: the field's grip in wet and ra
     const grip = T.weatherGrip(tread, w);
     assert.equal(grip, WET[wx][tread], wx + ": that tyre's cell of WET_GRIP");
     ref[wx] = G.referencePole();
-    // The medal target is QUALI_TRIM (0.92, module-local) x the top car's integrated lap (carLap's `raw`); the field's
-    // carLap adds the qualifying centre and the circuit's calibration, which the medals deliberately do not (#5786).
+    // referencePole is QUALI_TRIM (0.92, module-local) x the top car's integrated lap (carLap's `raw`): the lap pit
+    // loss and the real-race replay scale are measured against. Since Bryce's decision C (2026-11-20) it is no longer
+    // the MEDAL target (referencePole("medal"), next test), and it keeps this value so race behaviour does not move.
     const lap = (gr) => 0.92 * quali.carLap(top, G.track, gr, true);
     assert.ok(Math.abs(ref[wx] - lap(grip)) < 1e-9, wx + ": the top car's flying lap on the weather's tyre (" + ref[wx] + " vs " + lap(grip) + ")");
     if (wx === "dry") assert.ok(Math.abs(ref.dry - lap(G.gripMult())) < 1e-9, "dry: the slick column is the same lap");
@@ -451,6 +452,38 @@ test("the reference pole runs the weather's tyre: the field's grip in wet and ra
   assert.ok(ref.wet < ref.dry * 1.02 && ref.rain < ref.dry * 1.02,
     `…but the right tyre keeps it within 2 % of the dry lap (dry ${ref.dry.toFixed(2)}, wet ${ref.wet.toFixed(2)}, rain ${ref.rain.toFixed(2)})`);
   await g.race("monza", "day", "dry");
+});
+
+// Audit item 73, Bryce's decision C (2026-11-20): the time-trial and daily MEDAL target is the field's own calibrated
+// model (QUALI_CENTRE x calibFor x the integrated lap), so gold sits 1.4-1.8 % under the AI's simulated pole on every
+// circuit; on referencePole's fixed 0.92 it was 0.930 (Imola) to 0.974 (Silverstone) of that pole. Pit loss and the
+// real-race replay scale (real-race.test.mjs seeds K off referencePole) keep referencePole, so no race moves.
+test("medals read the calibrated referencePole(\"medal\"); pit loss keeps the QUALI_TRIM pole (decision C, audit 73)", async () => {
+  const G = g.G, sb = g.sandbox, T = sb.TyreModel;
+  const top = { tierV: sb.Teams.TIER_V[0], skill: 1 };
+  for (const wx of ["dry", "rain"]) {
+    await g.race("monza", "day", wx);
+    const quali = sb.Quali.create(G), w = G.trackWetness();
+    const grip = T.weatherGrip(T.treadFor(G.raceWeather, w), w);
+    const medal = G.referencePole("medal"), cal = quali.carLap(top, G.track, grip);
+    assert.ok(Math.abs(medal - cal) < 1e-9, wx + ": the top car's calibrated flying lap on the weather's tyre (" + medal + " vs " + cal + ")");
+    const ai = Math.min(...quali.preview(0).filter((r) => r.t > 0).map((r) => r.t));
+    const k = medal / ai;
+    assert.ok(k > 0.975 && k < 0.99, wx + ": gold " + medal.toFixed(2) + " s is 1-2.5 % under the AI pole " + ai.toFixed(2) + " s (" + k.toFixed(3) + ")");
+    assert.equal(sb.Quali.medalFor(ai * 1.005, medal), "silver", wx + ": half a per cent off the AI pole is a medal");
+  }
+  await g.race("monza", "day", "dry");
+  const prev = G.raceTyreWear;
+  G.tyres.setLevel("real");
+  const { referencePole } = G;
+  try {
+    const loss = () => G.pits.planFor(0.5, false, 20).pitLossLaps;
+    const base = loss();
+    G.referencePole = (k) => (k === "medal" ? 1 : referencePole(k));
+    assert.equal(loss(), base, "the medal target does not price a pit stop");
+    G.referencePole = (k) => (k === "medal" ? referencePole(k) : 2 * referencePole(k));
+    assert.ok(loss() < base * 0.6, "pit loss is measured against the QUALI_TRIM pole");
+  } finally { G.referencePole = referencePole; G.tyres.setLevel(prev === "off" || !prev ? "off" : prev); }
 });
 
 // ── CHANGEABLE (MIXED) conditions ─────────────────────────────────────────────
