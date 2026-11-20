@@ -7950,7 +7950,8 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
         "tests/unit/source-integrity.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "renderPosOf": [
         "tests/unit/field-lod.test.mjs"
@@ -8267,8 +8268,7 @@
         "tests/unit/tools-runnable-cli.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
         "tests/unit/validation-cli-sync-pr.test.mjs",
-        "tests/unit/vm-filename-lint.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/vm-filename-lint.test.mjs"
       ]
     },
     "js/garage/arrival-rows.js": {
@@ -9406,7 +9406,8 @@
         "tests/unit/throttle-latch.test.mjs"
       ],
       "setKeyMap": [
-        "tests/unit/input-bindings.test.mjs"
+        "tests/unit/input-bindings.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "setPadBinding": [
         "tests/unit/controller-profiles.test.mjs",
@@ -9416,7 +9417,8 @@
         "tests/unit/input-bindings.test.mjs"
       ],
       "setPadMap": [
-        "tests/unit/input-bindings.test.mjs"
+        "tests/unit/input-bindings.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "*": [
         "tests/unit/a11y-opts.test.mjs",
@@ -9695,6 +9697,9 @@
       "padRestStore": [
         "tests/unit/controller-profiles.test.mjs"
       ],
+      "parkedPadPreview": [
+        "tests/unit/controller-profiles.test.mjs"
+      ],
       "pickPad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
@@ -9866,6 +9871,7 @@
         "tests/specs/touch-buttons.spec.js",
         "tests/specs/touch-steer.spec.js",
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
@@ -15169,6 +15175,9 @@
       "restoreBase": [
         "tests/unit/weather-arc-plan.test.mjs"
       ],
+      "setTimeOfDay": [
+        "tests/unit/weather-arc-plan.test.mjs"
+      ],
       "setWeatherLive": [
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
@@ -16405,7 +16414,6 @@
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "releaseMirror": [
-        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "resize": [
@@ -16890,6 +16898,7 @@
       ],
       "pushRec": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -16959,6 +16968,7 @@
       ],
       "resetRecs": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -17069,7 +17079,6 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/validation-cli-check.test.mjs"
@@ -17145,6 +17154,9 @@
       "setLampBake": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "setLampGrid": [
+        "tests/unit/lamp-chunks.test.mjs"
+      ],
       "setMaterialMaps": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -17158,6 +17170,7 @@
       ],
       "updateFrame": [
         "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
@@ -17165,7 +17178,6 @@
         "tests/unit/car-materials.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/lamp-bake.test.mjs",
-        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/perf-governor.test.mjs",
