@@ -179,9 +179,10 @@ const PhonePad = (function () {
       if (txt != null) n.textContent = txt;
       return n;
     };
-    const box = mk("div", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
+    const top = typeof doc.createElement("dialog").showModal === "function";
+    const box = mk(top ? "dialog" : "div", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
       display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", boxSizing: "border-box",
-      background: "rgba(0,0,0,0.6)" });
+      background: "rgba(0,0,0,0.6)", width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", margin: "0", border: "0" });
     box.id = "phonepad-confirm";
     box.setAttribute("role", "alertdialog");
     box.setAttribute("aria-modal", "true");
@@ -213,6 +214,12 @@ const PhonePad = (function () {
     card.appendChild(h); card.appendChild(p); card.appendChild(row);
     box.appendChild(card);
     doc.body.appendChild(box);
+    if (top) {
+      box.addEventListener("cancel", (e) => { e.preventDefault(); finish(false); });
+      const raise = () => { if (done || !box.isConnected) return; try { if (box.open) box.close(); box.showModal(); } catch (e) {  } };
+      raise();
+      setTimeout(raise, 0);
+    }
     return { result, dismiss: () => finish(false) };
   }
 
