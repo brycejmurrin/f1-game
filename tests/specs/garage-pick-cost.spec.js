@@ -113,14 +113,19 @@ test.describe("garage livery pick cost", () => {
     const settleHiRes = () => page.waitForFunction(() => CarDraw.instance().decalBytes().hiPending === 0,   // eslint-disable-line no-undef
       null, { polling: 100, timeout: 30_000 });
     const rows = [];
-    for (let i = 1; i <= PICKS; i++) {
+    // i = -1 and 0 are UNCOUNTED warm-up picks (card PICKS + 1, which the swatch wait above guarantees). The
+    // sheet's first open can paint while the faces are still loading, so nothing is cached and pick 1 repainted
+    // all 113 cards (#5985 draft CI, selected-1: cardPaints 113, cardReused 0). Two, not one: after the first,
+    // its own livery's small fold card is still unpainted and would cost pick 1 a second paint. With the fonts
+    // in, every counted pick then measures the cache, the steady state a player's later picks see.
+    for (let i = -1; i <= PICKS; i++) {
       const before = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
       // Fonts settle first, and the click goes in the SAME task as the check: LiveryTex.paintSwatch / swatchCanvas
       // bypass both caches while document.fonts.status is "loading" (a lockup in the fallback face must not stick),
       // and that bypass counts nothing. The previous pick's deferred 2048 atlas can start a face the cards never
       // used (canvas ctx.font), still in flight on a slow runner: #5726 run 44693184227 selected-2 read pick 2 as
       // {cardPaints:0, cardBlits:0, cardReused:0} with the rebuild done. Bounded: the faces are local files.
-      const fonts = await page.evaluate(async (k) => {
+      const fonts = await page.evaluate(async ([k, n1]) => {
         const t0 = performance.now();
         while (document.fonts && document.fonts.status !== "loaded") {
           if (performance.now() - t0 > 30_000) break;
@@ -128,10 +133,10 @@ test.describe("garage livery pick cost", () => {
         }
         const st = document.fonts ? document.fonts.status : "none";
         if (st !== "loaded" && st !== "none") return st;
-        window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k];
+        window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k > 0 ? k : n1];
         window.__pickOf[s.closest("[data-cs-livery]").dataset.csLivery] = k; s.click();
         return st;
-      }, i);
+      }, [i, PICKS + 1]);
       expect(fonts, `pick ${i}: web fonts still loading after 30 s, so the card caches are bypassed`).not.toBe("loading");
       // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas, then the
       // product's own settle signal: no deferred 2048 still queued (car-draw decalBytes().hiPending). A fixed
@@ -139,6 +144,7 @@ test.describe("garage livery pick cost", () => {
       await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 8 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
       await settleHiRes();
       const after = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
+      if (i <= 0) continue;
       rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits, cardReused: after.reused - before.reused,
         windowBuilds: after.car3dBuilds - before.car3dBuilds,
         reuploads: after.reuploads - before.reuploads });
