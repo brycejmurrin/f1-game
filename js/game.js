@@ -4592,7 +4592,7 @@ function render(dt) {
       }
       if (_out) continue;
     }
-    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));
+    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2, fovY));
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       skids.stamp(_groundMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
@@ -4714,7 +4714,7 @@ function render(dt) {
         drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, carDraw.livOf(pt).bodyStyle), cm && cm.mirror));
       }
     }
-    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2));
+    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2, fovY));
   }
   CarMesh.flushTailGlows();
   carDraw.flushDecals(night);

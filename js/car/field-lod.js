@@ -56,8 +56,8 @@ const FieldLod = (function () {
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
-  function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
-  function castsShadow(dist2) { return !on || dist2 < sq(T.SHADOW_CAST_M); }
+  function flame(dist2, fovY) { return !on || dist2 * lensK2(fovY) < sq(T.FLAME_M); }
+  function castsShadow(dist2, fovY) { return !on || dist2 * lensK2(fovY) < sq(T.SHADOW_CAST_M); }
   function mirrorCap() { return on ? T.MIRROR_CARS : Infinity; }
   function nearest(dist2s, n, cap, keep, force) {
     for (let i = 0; i < n; i++) keep[i] = 0;
