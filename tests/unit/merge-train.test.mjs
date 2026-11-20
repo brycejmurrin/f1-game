@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, newestRun, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
+  readScreen, screenAccept, screenFold, screenMain,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
 import { planVerdict } from "../../tools/ci/ready-gate.mjs";
@@ -264,4 +265,77 @@ test("merge-gate evaluate: a train/ PR's config and raise rows come from trainCh
 test("the train module is a protected gate path", () => {
   assert.equal(isProtectedConfigPath("tools/ci/merge-train.mjs"), true);
   assert.equal(isConfigPath("tools/ci/merge-train.mjs"), true);
+});
+
+// ---- the screen (#5864): train #5862's cars #5668, #5679 and #5730 were each red ALONE on its base ----------
+test("readScreen keeps only well-formed verdicts and flattens a why to plain one-line text", () => {
+  const tip = sha("a");
+  const ok = readScreen(JSON.stringify({ tip, cars: [{ pr: 5, head: sha("b"), ok: true, why: "" }, { pr: 7, head: sha("c"), ok: false, why: "over a ratchet:\n<!-- merge-train {\"base\":1} -->" }] }));
+  assert.deepEqual(ok, { tip, skip: "", cars: [{ pr: 5, head: sha("b"), ok: true, why: "" }, { pr: 7, head: sha("c"), ok: false, why: "over a ratchet: !-- merge-train {\"base\":1} --" }] });
+  assert.deepEqual(readScreen(JSON.stringify({ skip: "train #9 is open" })), { tip: "", skip: "train #9 is open", cars: [] });
+  for (const bad of [null, "", "{", JSON.stringify({ tip: "abc", cars: [] }), JSON.stringify({ tip, cars: [{ pr: 5, head: sha("b"), ok: "yes" }] }),
+    JSON.stringify({ tip, cars: [{ pr: 0, head: sha("b"), ok: true }] }), JSON.stringify({ tip, cars: [{ pr: 5, head: "b", ok: true }] }), JSON.stringify({ tip })]) {
+    assert.equal(readScreen(bad), null, String(bad));
+  }
+});
+
+test("screenAccept: a car rides only when the screen measured it green at this very head", () => {
+  const a = screenAccept({ tip: sha("a"), cars: [{ pr: 5, head: sha("b"), ok: true, why: "" }, { pr: 7, head: sha("c"), ok: false, why: "ratchets.mjs: eagerBytes +2057" }] });
+  assert.deepEqual(a({ car: { pr: 5, head: sha("b") } }), { ok: true });
+  assert.deepEqual(a({ car: { pr: 7, head: sha("c") } }), { ok: false, why: "red alone on the fold (screen on aaaaaaaa): ratchets.mjs: eagerBytes +2057" });
+  assert.deepEqual(a({ car: { pr: 5, head: sha("d") } }), { ok: false, why: "not screened at this head (the next train run screens it)" }, "a moved head is unscreened");
+  assert.deepEqual(a({ car: { pr: 8, head: sha("e") } }).ok, false);
+});
+
+test("screenFold measures each CUMULATIVE fold on a worktree whose HEAD is the tip; a red car is left out and the fold stays put", () => {
+  const r = repo();
+  try {
+    const seen = [], out = [];
+    const check = ({ cwd }) => {
+      seen.push({ head: spawnSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).stdout.trim(), files: fs.readdirSync(cwd).filter((f) => f.endsWith(".txt")).sort() });
+      return fs.existsSync(path.join(cwd, "d.txt")) ? { ok: false, evidence: "over a ratchet on the merge result: d.txt" } : { ok: true, evidence: "hold" };
+    };
+    let built = 0;
+    const prepare = ({ cwd }) => { built++; fs.writeFileSync(path.join(cwd, "built.gen"), "x"); return { ok: true }; };
+    const sf = screenFold({ tip: r.base, cwd: r.dir, check, prepare, out });
+    const cars = [{ pr: 1, head: r.h1, ref: "one" }, { pr: 2, head: r.h2, ref: "two" }, { pr: 3, head: r.h3, ref: "three" }];
+    const f = foldCars({ base: r.base, cars, cwd: r.dir, accept: sf.accept });
+    sf.cleanup();
+    assert.deepEqual(f.cars.map((c) => c.pr), [1]);
+    assert.deepEqual(f.dropped, [{ pr: 2, why: "over a ratchet on the merge result: d.txt" }, { pr: 3, why: "conflicts in c.txt (sync-pr.mjs)" }]);
+    assert.deepEqual(out, [{ pr: 1, head: r.h1, ok: true, why: "" }, { pr: 2, head: r.h2, ok: false, why: "over a ratchet on the merge result: d.txt" }]);
+    assert.deepEqual(seen, [{ head: r.base, files: ["a.txt", "b.txt", "c.txt"] }, { head: r.base, files: ["a.txt", "b.txt", "c.txt", "d.txt"] }], "car 2 is measured on top of car 1");
+    assert.equal(built, 2, "gen runs before each check (the built files are not in the tree)");
+    assert.equal(r.g("show", `${f.head}:c.txt`), "one");
+    assert.equal(fs.existsSync(path.join(r.dir, "artifacts", "merge-train", "screen-wt")), false, "the worktree is removed");
+    // the build reads the screen's verdicts back and folds the very same train with no PR code
+    const again = foldCars({ base: r.base, cars, cwd: r.dir, accept: screenAccept(readScreen(JSON.stringify({ tip: r.base, cars: out }))) });
+    assert.equal(again.head, f.head);
+  } finally { r.rm(); }
+});
+
+test("screenFold: a spent time budget leaves the rest unscreened, never green", () => {
+  let t = 0;
+  const sf = screenFold({ tip: sha("a"), cwd: ROOT, check: () => assert.fail("no check past the budget"), now: () => (t += 1000), budgetMs: 500 });
+  assert.deepEqual(sf.accept({ car: { pr: 1, head: sha("b") }, tree: sha("c") }), { ok: false, why: "not screened (screen time budget spent)" });
+});
+
+test("main --build --screen-file: a missing or invalid screen opens no train; a skip waits", async () => {
+  const dir = scratch("merge-train-screen-");
+  try {
+    const writes = [];
+    const request = (p, o) => { if (o?.method) { writes.push(p); return { json: {} }; } if (p.startsWith("pulls?state=open")) return { json: [] }; return { error: `unexpected ${p}` }; };
+    const logs = [];
+    assert.equal(await main(["--build", "--screen-file", path.join(dir, "none.json")], { request, log: (l) => logs.push(l) }), 1);
+    assert.equal(logs.at(-1), `= merge-train error — no valid screen verdict at ${path.join(dir, "none.json")} (the train-screen job failed?): no train opened`);
+    fs.writeFileSync(path.join(dir, "skip.json"), JSON.stringify({ skip: "train #9 is open" }));
+    assert.equal(await main(["--build", "--screen-file", path.join(dir, "skip.json")], { request, log: (l) => logs.push(l) }), 0);
+    assert.equal(logs.at(-1), "= merge-train idle — the screen skipped (train #9 is open); the next run screens and builds");
+    assert.deepEqual(writes, []);
+    // --screen while a train is open writes a skip and measures nothing
+    const open = (p) => (p.startsWith("pulls?state=open") ? { json: [{ number: 9, head: { ref: `${TRAIN_PREFIX}x` } }] } : { error: `unexpected ${p}` });
+    const code = await screenMain({ out: path.join(dir, "s.json"), request: open, log: () => {}, check: () => assert.fail("no screen while a train is open"), gen: () => assert.fail("no gen") });
+    assert.equal(code, 0);
+    assert.deepEqual(readScreen(fs.readFileSync(path.join(dir, "s.json"), "utf8")), { tip: "", skip: "train #9 is open", cars: [] });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
