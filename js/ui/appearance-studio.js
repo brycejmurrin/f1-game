@@ -9,7 +9,7 @@ const AppearanceStudio = (function () {
     uiTheme: ["dark", "light", "system"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
     hudAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"], textSize: ["normal", "large", "larger"],
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["auto", "reduce", "off"],
-    titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"],
+    titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"], titleButtonStyle: ["auto", "racing", "flat"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
     hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
     hudMapVis: ["auto", "on", "off"], hudGapsVis: ["auto", "on", "off"], hudMirror: ["auto", "on", "off"],
@@ -23,7 +23,7 @@ const AppearanceStudio = (function () {
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
     textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
-    titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
+    titleIntro: "full", menuWash: "full", titleArt: "on", titleButtonStyle: "auto", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
@@ -34,9 +34,9 @@ const AppearanceStudio = (function () {
   // Cosmetic presets must not replace readability, comfort, unit, size or layout
   // preferences (#5058): a preset value never names one of these keys, and a
   // screen look the preset names is merged into the current one, not replaced.
-  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim"]);
+  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleButtonStyle", "titleLayout", "pauseLayout", "pauseSide", "pauseDim"]);
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
-  const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
+  const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleButtonStyle", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
     hud: ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
@@ -350,6 +350,7 @@ const AppearanceStudio = (function () {
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
       { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
+      { id: "title-button-style", label: "Title button style", page: "appearance", target: "pm-titlebuttonstyle-sel", aliases: "main menu home racing flat auto portrait landscape" },
       { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system colour color" },
       { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
       { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },

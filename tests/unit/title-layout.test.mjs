@@ -494,10 +494,10 @@ test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; REDUCE MOTIO
   assert.match(readCssSource("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
 });
 
-test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three looks are shipped", () => {
-  const looks = { intro: "full", wash: "full", art: "on" };
+test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's appearance settings are shipped", () => {
+  const looks = { intro: "full", wash: "full", art: "on", style: "auto" };
   const subs = [];
-  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, onChange: (fn) => subs.push(fn) };
+  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, buttonStyle: () => looks.style, onChange: (fn) => subs.push(fn) };
   const { dom, M } = boot({}, { fx });
   const sum = dom.byId("pm-titlescreen-sum");
   assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
@@ -507,17 +507,17 @@ test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three lo
   assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", "a layout slider");
   dom.byId("pm-tl-reset").click();
   assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED", "RESET ALL");
-  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"]]) {
+  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"], ["style", "racing"]]) {
     looks[k] = v; subs[0]();
     assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", `${k} ${v}`);
     assert.equal(M.screenShipped(), false);
-    looks[k] = { intro: "full", wash: "full", art: "on" }[k]; subs[0]();
+    looks[k] = { intro: "full", wash: "full", art: "on", style: "auto" }[k]; subs[0]();
     assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
   }
   const custom = boot({ titleLayout: { v: 2, tall: { side: "swap" } } }, { fx });
   assert.equal(custom.dom.byId("pm-titlescreen-sum").textContent, "TITLE SCREEN · CUSTOM", "painted at build, either shape counts");
   const tfx = read("js/ui/title-fx.js");
-  for (const f of ["setIntro", "setWash", "setArt"])
+  for (const f of ["setIntro", "setWash", "setArt", "setButtonStyle"])
     assert.match(tfx, new RegExp(`function ${f}\\(v\\) \\{[^}]*changed\\(\\);`), `${f} tells the listeners`);
   assert.doesNotMatch(tfx.match(/function set\(v\) \{[^}]*\}/)[0], /changed\(\)/, "MOTION is not a title-screen knob");
 });

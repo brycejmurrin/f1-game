@@ -173,6 +173,18 @@ test("Colour Vision profiles, reset and Undo update the actual owner, palette an
   studio.undo(); assertMode("tritan");
 });
 
+test("title button style follows Home profiles and undo across a screen reset", () => {
+  const { studio, values } = load({ titleButtonStyle: "flat" });
+  studio.saveProfile("Flat");
+  studio.reset("screen"); assert.equal(values.titleButtonStyle, "auto");
+  studio.undo(); assert.equal(values.titleButtonStyle, "flat");
+  studio.applySnapshot({ ...studio.snapshot(), titleButtonStyle: "racing" });
+  studio.applyPreset("broadcast"); assert.equal(values.titleButtonStyle, "racing");
+  studio.loadProfile("profile-1", "screen"); assert.equal(values.titleButtonStyle, "flat");
+  assert.equal(studio.normalizeSnapshot({}).titleButtonStyle, "auto");
+  assert.equal(studio.normalizeSnapshot({ titleButtonStyle: "unknown" }).titleButtonStyle, "auto");
+});
+
 test("profile restore, Undo and reset repaint mounted title and pause controls without duplicating them", () => {
   const { studio, dom } = loadWithControls();
   const snapshot = studio.snapshot(); snapshot.titleLayout = { btns: { x: 18, size: 130 }, layout: "stack", side: "swap" };

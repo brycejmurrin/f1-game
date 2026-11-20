@@ -405,11 +405,11 @@ const TitleLayout = (function () {
   };
   const NAMES = { size: "SIZE", width: "WIDTH", x: "LEFT / RIGHT", y: "UP / DOWN" };
 
-  /** The whole title screen shipped: this layout AND TitleFx's three looks
+  /** The whole title screen shipped: this layout AND TitleFx's appearance settings
    *  (TitleFx loads first; MOTION is global, so it does not count here). */
   function screenShipped() {
     const fx = typeof TitleFx !== "undefined" ? TitleFx : null;
-    return layoutShipped() && (!fx || (fx.introMode() === "full" && fx.washMode() === "full" && fx.artMode() === "on"));
+    return layoutShipped() && (!fx || (fx.introMode() === "full" && fx.washMode() === "full" && fx.artMode() === "on" && fx.buttonStyle() === "auto"));
   }
   /** APPEARANCE › TITLE SCREEN's closed summary (the shell's #pm-titlescreen-sum). */
   function paintScreenSum() {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-yWP7gQ/BtIzJLFRJXGDCOCS/f5Blh5KqsDnrQWISnbk=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-lS8WIdY3PEJ0LGhsovtTDmiUfz0YJWd+6m9w6q7q3nQ=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -585,11 +585,12 @@
     // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
     // Help text (js/ui/appearance-opts.js): apex26.menuHelp ("off").
     // Unset, or the shipped answer, writes nothing.
-    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
+    var mv = null, ti = null, mw = null, ta = null, ts = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
     try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
+    try { ts = JSON.parse(localStorage.getItem("apex26.titleButtonStyle")); } catch (e) { /* unset */ }
     try { pl = JSON.parse(localStorage.getItem("apex26.pauseLayout")); } catch (e) { /* unset */ }
     try { ps = JSON.parse(localStorage.getItem("apex26.pauseSide")); } catch (e) { /* unset */ }
     try { pd = JSON.parse(localStorage.getItem("apex26.pauseDim")); } catch (e) { /* unset */ }
@@ -614,6 +615,7 @@
       if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
+      if (ts === "flat" || ts === "racing") document.documentElement.dataset.titleButtonStyle = ts;
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
     try {

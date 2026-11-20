@@ -189,3 +189,57 @@ test.describe("a clean phone profile paints what the owner's 2026-11-10 export p
     expect(clean.done, "garage DONE keeps the 44 px tap floor on a clean profile (his BUTTON HEIGHT 80 paints 35)").toBeGreaterThanOrEqual(44);
   });
 });
+
+test("the title Button Style setting survives rotation and reload", async ({ browser, baseURL }) => {
+  const { context, page, load } = await bootPhone(browser, baseURL, {});
+  const landscape = { width: 852, height: 393 }, portrait = { width: 393, height: 852 };
+  const rotate = async (viewport) => {
+    await page.setViewportSize(viewport);
+    await expect(page.locator("body")).toHaveAttribute("data-shape", viewport.width > viewport.height ? "wide" : "tall");
+  };
+  const paint = () => page.locator("#mb-career, #mb-race, #mb-settings").evaluateAll(buttons =>
+    buttons.map(button => {
+      const css = getComputedStyle(button);
+      return { id: button.id, fill: css.backgroundColor, image: css.backgroundImage, ink: css.color, font: css.fontStyle, transform: css.transform };
+    }));
+  const choose = async (current, next) => {
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-appearance").tap();
+    const fold = page.locator("#pm-titlescreen");
+    if (await fold.getAttribute("open") === null) await fold.locator("summary").first().tap();
+    const selector = fold.getByRole("combobox", { name: "BUTTON STYLE", exact: true });
+    await expect(selector).toHaveValue(current);
+    await selector.selectOption(next);
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-settings-close").tap();
+    await expect(page.locator("#mb-race")).toBeVisible();
+  };
+
+  try {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await load();
+    await rotate(landscape);
+    await expect(page.locator("#mb-race")).toHaveCSS("font-style", "italic");
+    const racing = await paint();
+    await rotate(portrait);
+    await expect(page.locator("#mb-race")).toHaveCSS("font-style", "normal");
+    const flat = await paint();
+
+    await choose("auto", "racing");
+    await expect.poll(paint).toEqual(racing);
+    await rotate(landscape);
+    await expect.poll(paint).toEqual(racing);
+
+    await choose("racing", "flat");
+    await expect.poll(paint).toEqual(flat);
+    await load();
+    await expect.poll(paint).toEqual(flat);
+    await rotate(portrait);
+    await expect.poll(paint).toEqual(flat);
+
+    await choose("flat", "auto");
+    await expect.poll(paint).toEqual(flat);
+    await rotate(landscape);
+    await expect.poll(paint).toEqual(racing);
+  } finally { await context.close(); }
+});
