@@ -116,7 +116,7 @@ const Onboard = (function () {
       if (cool > 0) cool = Math.max(0, cool - (dt || 0));
       if (cool > 0) return false;
       const p = G.player;
-      if (!p || G.announceBusy) return false;
+      if (!p || p.finished || p.retired || G.announceBusy) return false;
       if (!(shown & BIT.brake)) {
         const bc = typeof BrakeCue !== "undefined" && BrakeCue.debug ? BrakeCue.debug() : null;
         if (bc && bc.on && bc.urgency > 0.35) return fire("brake");
