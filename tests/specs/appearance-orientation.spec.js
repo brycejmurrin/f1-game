@@ -135,7 +135,13 @@ for (const touch of [false, true]) {
       await activate(page.getByRole("button", { name: "Open Career", exact: true }));
       await activate(entry);
       const region = page.locator("#screen-arranger").getByLabel("Region");
-      expect(await page.locator("#screen-arranger").evaluate(el => el.parentElement === document.body), "the layout editor is a <body> child (css-has-scope)").toBe(true);
+      expect(await page.locator("#screen-arranger").evaluate(el => {
+        // menu-a11y-audit's checks, on the live dialog: a <body> child, named by its title, Escape names a real Cancel.
+        const door = document.getElementById(el.getAttribute("data-esc-close") || "");
+        const title = document.getElementById(el.getAttribute("aria-labelledby") || "");
+        return { tag: el.tagName, bodyChild: el.parentElement === document.body, titled: !!title && el.contains(title) && !!title.textContent.trim(),
+          door: !!door && el.contains(door) && door.tagName === "BUTTON" && door.textContent.trim() === "Cancel" };
+      }), "the layout editor is a named <body> dialog whose Escape door is its Cancel button").toEqual({ tag: "DIALOG", bodyChild: true, titled: true, door: true });
       await region.selectOption("navigation");
       const initial = await layout();
       const panel = page.locator("#screen-arranger .arrange-tools");

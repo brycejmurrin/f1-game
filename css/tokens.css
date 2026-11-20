@@ -803,8 +803,13 @@ body:not(.desktop) {
 :root[data-menu-accent="violet"] { --red: #7a5cff; }
 :root[data-menu-accent="lime"]   { --red: #b7e11b; }
 
-:root[data-ui-theme="endurance"] { --bg: #081511; --carbon: #16342b; --text: #fbf8e9; }
-:root[data-ui-theme="drafting"] { --bg: #0b192b; --carbon: #192e45; --text: #eef7ff; }
+:root {
+  /* ENDURANCE / DRAFTING palettes: one home for the values; css/screen-arranger.css scopes them onto the HUD. */
+  --endurance-bg: #081511; --endurance-carbon: #16342b; --endurance-text: #fbf8e9; --endurance-dim: #c3d8ca; --endurance-line: #738e80;
+  --drafting-bg: #0b192b; --drafting-carbon: #192e45; --drafting-text: #eef7ff; --drafting-dim: #bfd4e9; --drafting-line: #7895ac;
+}
+:root[data-ui-theme="endurance"] { --bg: var(--endurance-bg); --carbon: var(--endurance-carbon); --text: var(--endurance-text); }
+:root[data-ui-theme="drafting"] { --bg: var(--drafting-bg); --carbon: var(--drafting-carbon); --text: var(--drafting-text); }
 /* ---- APPEARANCE: light / system theme ----------------------------------
    Light rewrites the surface ladder; SYSTEM follows the OS preference. */
 :root[data-ui-theme="light"] {

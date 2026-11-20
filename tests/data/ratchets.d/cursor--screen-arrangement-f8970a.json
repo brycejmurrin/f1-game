@@ -1,14 +1,11 @@
 {
   "tree": {
-    "assertPins": 9,
-    "assertPinsAll": 9,
     "cssClasses": 5,
-    "dynamicIdReads": 3,
+    "dynamicIdReads": 2,
     "eagerCodeBytes": -2475,
     "eagerScripts": -1,
-    "rawColor": 13,
-    "rawColorDistinct": 13,
-    "shellNodes": 1,
-    "vmSrcLoads": 1
+    "rawColor": 3,
+    "rawColorDistinct": 3,
+    "shellNodes": 1
   }
 }

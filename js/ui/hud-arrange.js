@@ -98,7 +98,7 @@ const HudArrange = (() => {
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
     let move, bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
     let expanded = false, coarse = false;
-    const moveControls = [], history = [];
+    const moveControls = [], sizeControls = [], history = [];
     let initial, visibilityDraft = {}, undo;
     function visibility(id) {
       const state = HudLayout.visibility(id);
@@ -194,14 +194,17 @@ const HudArrange = (() => {
       for (const control of moveControls) { control.hidden = true; bar.appendChild(control); }
       bar.appendChild(nameEl);
       bar.appendChild(hintEl);
-      bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
-      bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
+      const smaller = mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"), larger = mk("+", "Larger", () => size(1), "hud-arrange-larger");
+      bar.appendChild(smaller);
+      bar.appendChild(larger);
       const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
       recover.setAttribute("aria-describedby", "hud-arrange-hint");
       // The one long label wraps to two 11 px lines inside its 44 px box instead of widening the strip.
       recover.style.whiteSpace = "normal"; recover.style.width = "72px"; recover.style.fontSize = "11px"; recover.style.padding = "0 4px";
       bar.appendChild(recover);
-      bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); remember(); HudLayout.resetEl(selected, context.set, context.profile, true); after(); } }, "hud-arrange-reset"));
+      const reset = mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); remember(); HudLayout.resetEl(selected, context.set, context.profile, true); after(); } }, "hud-arrange-reset");
+      bar.appendChild(reset);
+      sizeControls.push(smaller, larger, recover, reset);
       visibilityRow = document.createElement("label");
       // No visible "VISIBILITY" caption: the select names itself (aria-label) and paints SHOW / HIDE / AUTO.
       visibilityRow.style.cssText = "display:flex;flex:none;align-items:center;";
@@ -270,7 +273,7 @@ const HudArrange = (() => {
       }
       for (const control of moveControls) control.hidden = !expanded;
       move.setAttribute("aria-expanded", String(expanded));
-      for (const id of ["hud-arrange-smaller", "hud-arrange-larger", "hud-arrange-recover", "hud-arrange-reset"]) $(id).hidden = !expanded;
+      for (const el of sizeControls) el.hidden = !expanded;
       undo.hidden = visibilityRow.hidden = !expanded;
       if (!expanded) nameEl.hidden = hintEl.hidden = true;
       placeBar(rects || rectsNow());

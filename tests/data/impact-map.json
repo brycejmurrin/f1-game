@@ -19937,9 +19937,6 @@
       "flush": [
         "tests/unit/layout-presets.test.mjs"
       ],
-      "move": [
-        "tests/unit/menu-a11y-audit.test.mjs"
-      ],
       "open": [
         "tests/unit/title-layout.test.mjs"
       ],

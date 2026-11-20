@@ -553,13 +553,8 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
   };
   assert.equal(/role="main"[^>]*aria-label="Title menu"/.test(openTag("overlay") || ""), true, "#overlay is the titled main landmark");
   for (const id of loadLayerIds()) {
-    if (id === "screen-arranger") {
-      const editor = read("js/ui/screen-arranger.js");
-      assert.match(editor, /el\("dialog", "screen-arranger"\)/);
-      assert.match(editor, /setAttribute\("aria-labelledby", "screen-arranger-title"\)/);
-      assert.match(editor, /heading\.id = "screen-arranger-title"/);
-      continue;
-    }
+    // Built on demand: tests/specs/appearance-orientation.spec.js checks the live dialog's name and its Escape door.
+    if (id === "screen-arranger") continue;
     if (SKIP[id]) continue;
     const tag = openTag(id);
     assert.ok(tag, `#${id} is in index.html`);
@@ -597,12 +592,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   const NO_DOOR = { overlay: "the title has nothing to go back to", "rotate-device": "CSS-gated blocker; Escape falls through to pause" };
   assert.ok(loadLayerIds().includes("loading"), "#loading is in UiLayers.LAYER_IDS so Escape/anyOpen see it");
   for (const id of loadLayerIds()) {
-    if (id === "screen-arranger") {
-      const editor = read("js/ui/screen-arranger.js");
-      assert.match(editor, /setAttribute\("data-esc-close", "screen-arranger-cancel"\)/);
-      assert.match(editor, /button\(actions, "Cancel", \(\) => finish\(false\)\).id = "screen-arranger-cancel"/);
-      continue;
-    }
+    if (id === "screen-arranger") continue;   // the live dialog's door: appearance-orientation.spec.js
     if (id === "hud-arrange-bar") {
       assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
       assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);

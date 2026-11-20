@@ -242,24 +242,24 @@ body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hid
   --font-ui: system-ui, sans-serif;
 }
 :root[data-ui-theme="endurance"] :is(#hud, #announce, #game-metrics) {
-  --bg: #081511;
-  --carbon: #16342b;
-  --text: #fbf8e9;
+  --bg: var(--endurance-bg);
+  --carbon: var(--endurance-carbon);
+  --text: var(--endurance-text);
 }
 :root[data-ui-theme="drafting"] :is(#hud, #announce, #game-metrics) {
-  --bg: #0b192b;
-  --carbon: #192e45;
-  --text: #eef7ff;
+  --bg: var(--drafting-bg);
+  --carbon: var(--drafting-carbon);
+  --text: var(--drafting-text);
 }
 :root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])),
 :root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
-  --dim: #c3d8ca;
-  --plate-line: #738e80;
+  --dim: var(--endurance-dim);
+  --plate-line: var(--endurance-line);
 }
 :root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])),
 :root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
-  --dim: #bfd4e9;
-  --plate-line: #7895ac;
+  --dim: var(--drafting-dim);
+  --plate-line: var(--drafting-line);
 }
 }
 

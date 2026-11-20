@@ -670,10 +670,10 @@ test("region preview uses viewport coordinates at UI zoom and keeps width indepe
   const { model, sheets, store } = bootPlacement();
   model.apply("garage", { panel: { x: -4, y: 2, width: 50, height: 40, scale: 1.25 } });
   const [sheet] = sheets;
-  assert.match(sheet.textContent, /translate:-2vw 1vh/);
-  assert.match(sheet.textContent, /width:25vw/);
-  assert.match(sheet.textContent, /height:20vh/);
-  assert.match(sheet.textContent, /scale:1.25/);
+  // The painted declarations, parsed: the values the region renders with, not the stylesheet's spelling.
+  const decls = Object.fromEntries(sheet.textContent.split(/[;{}]/).map(part => part.trim())
+    .filter(part => part.includes(":") && !part.includes(" {")).map(part => [part.slice(0, part.indexOf(":")).trim(), part.slice(part.indexOf(":") + 1).replace(/\s*!important$/, "").trim()]));
+  assert.deepEqual([decls.translate, decls.width, decls.height, decls.scale], ["-2vw 1vh", "25vw", "20vh", "1.25"]);
   assert.equal(store.value, undefined);
   model.restore("garage");
   assert.equal(sheets.size, 0);
