@@ -824,7 +824,9 @@
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/redbull-orbit-clear.test.mjs",
+        "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -934,7 +936,9 @@
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/redbull-orbit-clear.test.mjs",
+        "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -1046,7 +1050,9 @@
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
+        "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -1565,6 +1571,7 @@
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
@@ -4867,7 +4874,7 @@
     {
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/ui/hud-layout.js",

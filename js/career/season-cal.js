@@ -575,6 +575,30 @@ function netPts(season, id) {
   return sum;
 }
 
+// #5877: points follow the player. `you` is the seat holding their tally; a new seat moves it
+// there and parks that seat's AI; a save without `you` adopts the current seat (no point lost).
+const PARK = ":parked";
+const SEAT_MAPS = ["pts", "roundPts", "finishes", "driverCodes"];
+function moveId(season, from, to) {
+  for (const k of SEAT_MAPS) {
+    const m = season[k];
+    if (!m || typeof m !== "object") continue;
+    if (from in m) m[to] = m[from];
+    delete m[from];
+  }
+  if (season.lastFl === from) season.lastFl = to;
+}
+function seatPlayer(season, seatId) {
+  if (!season || typeof seatId !== "string" || !seatId) return false;
+  const was = typeof season.you === "string" && season.you ? season.you : null;
+  season.you = seatId;
+  if (!was || was === seatId) return false;
+  moveId(season, seatId, seatId + PARK);
+  moveId(season, was, seatId);
+  moveId(season, was + PARK, was);
+  return true;
+}
+
 function rank(season, a, b) {
   const d = netPts(season, b) - netPts(season, a);
   if (d) return d;
@@ -732,7 +756,7 @@ return {
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
-  award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
+  award, scored, rank, rankTeams, netPts, drawRound, luckSeed, seatPlayer,
   presetIds, preset, shuffled, gpName, legacyIds,
 };
 })();

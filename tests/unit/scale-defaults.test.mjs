@@ -140,8 +140,8 @@ test("--hud-scale carries no blanket touch bump, and the old size stays reachabl
 // UiScale.create(G) run for real in node:vm over stub elements: the slider
 // writes --hud-panel-a on <html> only once moved, clamps to 20-100, and its
 // revert clears it — the same contract as BUTTON OPACITY beside it.
-function bootScale(stored = {}) {
-  const rootStyle = new Map();
+function bootScale(stored = {}, { caps } = {}) {
+  const rootStyle = new Map(caps ? [["--hud-cap", caps]] : []);
   const els = new Map();
   const el = (id) => {
     if (!els.has(id)) {
@@ -167,8 +167,8 @@ function bootScale(stored = {}) {
     PerfGov: { setAutoRes() {} },
     requestAnimationFrame: () => 0,
     window: { matchMedia: () => ({ matches: false }) },
-    document: { documentElement: { style: {
-      setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k),
+    document: { body: caps ? { classList: { contains: (c) => c === "in-race" } } : undefined, documentElement: { style: {
+      setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k), getPropertyValue: (k) => rootStyle.get(k) ?? "",
     } } },
   });
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
@@ -386,4 +386,78 @@ test("UiScale.defaultResMode() answers from the primary pointer, without create(
   api.applyBtnScale();
   assert.equal(stored.hudBtnScale, 145);
   assert.equal(el("pm-btnscale").value, "145");
+});
+
+// #5256 option D (Bryce, `decision: top band D`, 2026-11-18T09:07Z): the tower and the gear row size independently, and
+// moving one slider never resizes the other. HUD SIZE paints each band at min(slider, its cap); when BUTTON SIZE moves
+// while the gear row is held under HUD SIZE, apex26.hudBotKeep remembers that row's size so freed room never grows it.
+// Caps are "top bot pedals steer steerKeep btnFloor": the owner cell's 852x393 tower 112 %, gear row 101 % (HUD SIZE 155 /
+// BUTTON SIZE 245 test profile, the options comment on #5256, 2026-11-11T21:03Z).
+const OWNER_CAPS = "1.12 1.01 2.5 2.6 2.4 0.82";
+test("#5256 D: a BUTTON SIZE move keeps the held gear row's size; a HUD SIZE move lets it go", () => {
+  const { el, api, stored, rootStyle } = bootScale({ hudScale: 155, hudBtnScale: 245 }, { caps: OWNER_CAPS });
+  assert.equal(el("pm-hudscale").value, "112", "HUD SIZE reads what the larger band paints");
+  assert.equal(el("pm-hudscale-v").textContent, "112% · bottom row 101% · max", "and names the held gear row");
+  assert.equal(rootStyle.has("--hud-bot-keep"), false, "nothing kept before a BUTTON SIZE move");
+  el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.deepEqual({ ...stored.hudBotKeep }, { hud: 112, bot: 101 }, "the gear row's painted size, against HUD SIZE's number");
+  assert.equal(stored.hudScale, 112, "HUD SIZE is pinned to what it painted (pinPainted)");
+  assert.equal(rootStyle.get("--hud-bot-keep"), "1.01", "fitHud caps the bottom band at it");
+  // A later caps read (the dock shrank, room freed) does not refresh the keep: it is the size the player had.
+  rootStyle.set("--hud-cap", "1.12 1.12 2.5 2.6 2.4 0.82");
+  el("pm-btnscale").oninput({ target: { value: "120" } });
+  assert.deepEqual({ ...stored.hudBotKeep }, { hud: 112, bot: 101 }, "a second BUTTON SIZE move keeps the first size");
+  assert.equal(rootStyle.get("--hud-bot-keep"), "1.01");
+  // It survives a reload.
+  assert.equal(bootScale({ ...stored }, { caps: OWNER_CAPS }).rootStyle.get("--hud-bot-keep"), "1.01", "kept across a reload");
+  // HUD SIZE moving is the player choosing both rows' number again.
+  el("pm-hudscale").oninput({ target: { value: "100" } });
+  assert.equal("hudBotKeep" in stored, false, "a HUD SIZE move clears it");
+  assert.equal(rootStyle.has("--hud-bot-keep"), false);
+  // Any other route that changes HUD SIZE (a profile restore, __apex.hudScale) voids a stale keep.
+  const b = bootScale({ hudScale: 155, hudBtnScale: 245 }, { caps: OWNER_CAPS });
+  b.el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.equal(b.rootStyle.get("--hud-bot-keep"), "1.01");
+  b.api.setScale("hudScale", "--hud-scale", 90);
+  assert.equal(b.rootStyle.has("--hud-bot-keep"), false, "a keep taken at 112 % does not hold HUD SIZE 90");
+});
+
+test("#5256 D: nothing is kept when the gear row is not held, HUD SIZE is unset, or outside a race", () => {
+  const fits = bootScale({ hudScale: 100, hudBtnScale: 245 }, { caps: "1.12 1.2 2.5 2.6 2.4 0.82" });
+  fits.el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.equal("hudBotKeep" in fits.stored, false, "both rows paint HUD SIZE's 100 %: nothing to remember");
+  // Bryce's own export (tests/data/settings-live-export-2026-11-10.json): "uiScale": 70, "hudBtnScale": 143.25, hudScale
+  // unset. The options comment says the remembered size never triggers for him; this is that line.
+  const live = JSON.parse(read("tests/data/settings-live-export-2026-11-10.json"));
+  const mine = live.settings.display;
+  assert.equal(mine.hudBtnScale, 143.25, "his BUTTON SIZE");
+  assert.equal(mine.hudScale ?? null, null, "his HUD SIZE is unset");
+  const his = bootScale({ hudBtnScale: mine.hudBtnScale, uiScale: mine.uiScale }, { caps: OWNER_CAPS });
+  his.el("pm-btnscale").oninput({ target: { value: "160" } });
+  assert.equal("hudBotKeep" in his.stored, false, "an unset HUD SIZE follows the fit: no keep");
+  const menu = bootScale({ hudScale: 155, hudBtnScale: 245 });
+  menu.el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.equal("hudBotKeep" in menu.stored, false, "no caps outside a race: nothing measured, nothing kept");
+});
+
+
+// ui-scale.spec cell D (CI runs on #5682 heads 30012f87 and 1eee6031): right after the first HUD SIZE move a fit read
+// mid-reflow published the tower's cap at ~1.17, so the row's range read [70, 117], and the next read [70, 119]. A range
+// the player has moved on never widens under the thumb; it only narrows until the window, BUTTON SIZE or the race changes.
+test("#5256 D: a HUD SIZE range never widens after a move, until its layout key changes", () => {
+  const { el, rootStyle } = bootScale({ hudScale: 119, hudBtnScale: 245 }, { caps: "1.184 1.122 1.25 2.611 2.544 0.82" });
+  const range = () => [+el("pm-hudscale").min, +el("pm-hudscale").max];
+  assert.deepEqual(range(), [70, 119], "untouched: the settled tower cap");
+  rootStyle.set("--hud-cap", "1.17 1.122 1.25 2.611 2.544 0.82");   // the mid-reflow read
+  el("pm-hudscale").oninput({ target: { value: "70" } });
+  assert.deepEqual(range(), [70, 117], "the move shows what the fit published");
+  rootStyle.set("--hud-cap", "1.184 1.122 1.25 2.611 2.544 0.82");  // the settled read
+  el("pm-hudscale").oninput({ target: { value: "81.75" } });
+  assert.deepEqual(range(), [70, 117], "a later reflow does not widen the range the slider showed");
+  rootStyle.set("--hud-cap", "1.15 1.122 1.25 2.611 2.544 0.82");
+  el("pm-hudscale").oninput({ target: { value: "90" } });
+  assert.deepEqual(range(), [70, 115], "it still narrows: the slider never offers a size that cannot paint");
+  rootStyle.set("--hud-cap", "1.184 1.122 1.25 2.611 2.544 0.82");
+  el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.deepEqual(range(), [70, 119], "a BUTTON SIZE move is a new layout: the range is read afresh");
 });

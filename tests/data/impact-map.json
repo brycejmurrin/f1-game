@@ -1480,7 +1480,8 @@
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-layout-hidden.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs"
       ]
     },
     "js/camera/cam-picker.js": {
@@ -5013,6 +5014,9 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
+      "seatPlayer": [
+        "tests/unit/season-cal.test.mjs"
+      ],
       "setConfig": [
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-season-tab.test.mjs",
@@ -7671,6 +7675,7 @@
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
       "endRace": [
@@ -7980,6 +7985,7 @@
         "tests/specs/touch-pedals.spec.js",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
       "sheetRelease": [
@@ -8083,6 +8089,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
@@ -18805,7 +18812,8 @@
       "apply": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-arrange.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs"
       ],
       "applyPreset": [
         "tests/unit/hud-layout.test.mjs"
@@ -18830,6 +18838,15 @@
       ],
       "isShipped": [
         "tests/unit/hud-layout.test.mjs"
+      ],
+      "keepClear": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
+      ],
+      "keepUser": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
+      ],
+      "maxRect": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
       ],
       "migrate": [
         "tests/unit/hud-layout.test.mjs"
@@ -18959,6 +18976,9 @@
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/input-hud-properties.test.mjs"
       ],
+      "gapClock": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
+      ],
       "gapDecimals": [
         "tests/unit/hud-gap-decimals.test.mjs"
       ],
@@ -18980,14 +19000,17 @@
       ],
       "push": [
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
       ],
       "reset": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "sample": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "sectorTimingKind": [
@@ -19011,6 +19034,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
@@ -19050,6 +19074,7 @@
         "tests/unit/hud-relative.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
@@ -19085,6 +19110,7 @@
         "tests/unit/hud-strategy.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/pit-lane.test.mjs"
       ],
@@ -19199,6 +19225,9 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "resolveMetricsLayout": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "syncComputedRootVars": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
       "syncHudCamClasses": [
@@ -20084,7 +20113,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "value": [
-        "tests/specs/career-season.spec.js"
+        "tests/specs/career-season.spec.js",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "wire": [
         "tests/unit/async-lifecycle.test.mjs",
