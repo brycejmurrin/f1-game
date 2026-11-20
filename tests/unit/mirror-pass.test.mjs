@@ -199,6 +199,36 @@ test("a rear-ranked mirror keeps eight lamps plus its tail-lights", () => {
   assert.equal((h.frame.lights.length / 15) | 0, full + 1, "the main list is restored after the pass");
 });
 
+test("the phone mirror ranks the unculled lamp list and preserves all tail-lights", () => {
+  const h = boot({ mode: "on", mobile: true, rankLights: true });
+  const lamp = (z) => [0, 1, z, 1, 0.9, 0.7, 40, 0, -1, 0, 0.5, 0.2, 0, 0, 1];
+  const positions = [2, 90, 20, 50, 80, 40, 60, 30, 70, 95];
+  h.FL.setFrameLights(h.frame, { _lights: positions.flatMap(lamp) }, h.G.cars, [0, 1, 100], 1, [0, 0, 1], true);
+  assert.equal(h.FL.viewLights(h.frame, [0, 1, 100], [0, 0, -1]), null, "all baked lamps fit the forward budget");
+
+  const forward = h.frame.lights;
+  const tails = [lamp(3), lamp(4)];
+  forward.push(...tails.flat());
+  h.frame.tailStart = positions.length;
+  h.frame.tailCount = tails.length;
+  const original = Array.from(forward);
+  let rear;
+  const begin = h.gfx.mirrorBegin;
+  h.gfx.mirrorBegin = (frame, w, height) => {
+    rear = Array.from(frame.lights);
+    return begin(frame, w, height);
+  };
+  h.render();
+
+  assert.deepEqual(rear.slice(0, 8 * 15).filter((_, i) => i % 15 === 2), [95, 90, 80, 70, 60, 50, 40, 30]);
+  assert.deepEqual(rear.slice(8 * 15), tails.flat());
+  assert.deepEqual(h.calls.find((c) => c[0] === "world").slice(6), [10, 8, 2]);
+  assert.equal(h.frame.lights, forward);
+  assert.deepEqual(Array.from(forward), original);
+  assert.equal(h.frame.tailStart, positions.length);
+  assert.equal(h.frame.tailCount, tails.length);
+});
+
 test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a third)", () => {
   const cases = [[{ tier: 0 }, "full", 800, 228], [{ mobile: true }, "lite", 480, 137],
     [{ tier: 3 }, "low", 200, 57], [{ tier: 4 }, "min", 160, 46]];

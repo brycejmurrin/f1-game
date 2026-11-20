@@ -81,6 +81,17 @@ test("textures: material arrays by layer with mips, float data, a canvas livery;
   assert.deepEqual([c.biggest.kind, c.biggest.layers, c.biggest.mips], ["materialArray", 17, 11]);
 });
 
+test("released canvas sources and closed pooled bitmaps keep the GPU allocation's dimensions", () => {
+  const canvas = new THREE.Texture({ width: 1, height: 1 });
+  Object.assign(canvas, { __tlxPoolW: 512, __tlxPoolH: 640 });
+  const bitmap = new THREE.Texture({ width: 0, height: 0 });
+  Object.assign(bitmap, { __tlxPoolW: 2048, __tlxPoolH: 2560 });
+  const c = memCensus(tlx([canvas, bitmap]));
+  assert.equal(c.count, 2);
+  assert.equal(c.byKind.content2D, chain(512, 640, 4) + chain(2048, 2560, 4));
+  assert.deepEqual([c.biggest.w, c.biggest.h, c.biggest.mips], [2048, 2560, 12]);
+});
+
 test("a texture reached twice (through its target and on its own) is counted once", () => {
   const rt = new THREE.RenderTarget(100, 50, { depthBuffer: false });
   const c = memCensus(tlx([rt, rt.texture]));

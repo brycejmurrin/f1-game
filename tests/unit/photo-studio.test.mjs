@@ -308,15 +308,34 @@ test("#3656: a live view below native resolution captures at renderScale 1, then
   assert.equal(await b.api.capture(), false);
   assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5);
 });
-test("software presentation is awaited while raw pixels are captured before compositing", async () => {
-  const b = boot(); let present;
+test("valid raw pixels finish capture even while software presentation is pending", async () => {
+  const b = boot(); let rejectPresent;
   b.G.gfx.softPresent = () => true;
   b.G.gfx.invalidateSoftPresent = () => b.order.push("invalidate");
-  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((resolve) => { present = resolve; }); };
+  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((_, reject) => { rejectPresent = reject; }); };
   b.api.open(); const pending = b.api.capture();
   assert.deepEqual(b.order.slice(-4), ["invalidate", "wait", "draw", "read"]);
-  assert.equal(b.canvasOps.length, 0, "composition waits for the presentation result"); present(); await pending;
+  const early = await Promise.race([pending, new Promise((resolve) => setImmediate(() => resolve("pending")))]);
+  rejectPresent(new Error("2D blit timed out"));
+  assert.equal(await pending, true);
+  assert.equal(early, true);
+  assert.deepEqual(b.canvasOps[0], ["pixels", 123]);
   assert.equal(b.order.at(-1), "read");
+});
+test("failed raw readback waits for the software canvas before copying it", async () => {
+  const b = boot(), soft = b.dom.byId("game-soft");
+  let present;
+  soft.width = 160; soft.height = 90;
+  b.G.gfx.softPresent = () => true;
+  b.G.gfx.awaitSoftPresent = () => new Promise((resolve) => { present = resolve; });
+  b.G.gfx.capturePixels = () => Promise.reject(new Error("No readback target"));
+  b.api.open();
+  const pending = b.api.capture();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(b.canvasOps.length, 0);
+  present();
+  assert.equal(await pending, true);
+  assert.equal(b.canvasOps[0][0], "draw");
 });
 test("a backend without readback falls back to an immediate canvas copy", async () => {
   const b = boot(); b.G.canvas.width = 160; b.G.canvas.height = 90;
@@ -506,6 +525,17 @@ test("saving repairs a previously oversized library in the same transaction", as
   b.api.open(); await b.api.capture(); await b.api.savePhoto();
   assert.equal(idb.rows.size, 6); assert.equal(idb.writes, 1);
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-4", "old-5", "old-6", "old-7", "old-8"]);
+});
+test("a save after the device clock goes backward is committed and remains the newest photo", async () => {
+  const future = Date.now() + 60_000;
+  const idb = photoDb(seededPhotos(6).map((row) => ({ ...row, at: future + row.at })));
+  const b = boot({ indexedDB: idb });
+  b.api.open({ metadata: { title: "After clock adjustment" } });
+  await b.api.capture(); await b.api.savePhoto();
+  assert.equal(idb.rows.size, 6);
+  assert.equal(idb.rows.has("old-0"), false);
+  assert.equal((await b.api.album())[0].title, "After clock adjustment");
+  assert.match(b.dom.byId("ps-message").textContent, /Saved to My Photos/);
 });
 test("save remains busy and unannounced until the write transaction commits", async () => {
   const idb = photoDb(seededPhotos(6)), b = boot({ indexedDB: idb });

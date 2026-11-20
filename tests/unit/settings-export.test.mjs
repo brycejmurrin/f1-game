@@ -547,6 +547,32 @@ test("SAVE ALL from a desktop does not pin desktop defaults on a phone", () => {
   assert.equal(phone.collect("all").settings.display.resMode, null, "the phone keeps its own resolution default");
 });
 
+test("SAVE ALL restores unpinned adaptive settings for the same device class", () => {
+  const source = boot({ mobile: true });
+  const target = boot({ mobile: true, disk: {
+    "apex26.resMode": JSON.stringify("high"), "apex26.gfxPreset": JSON.stringify("high"), "apex26.buildWorker": "0",
+  } });
+  const file = source.collect("all");
+  assert.equal(file.settings.display.resMode, null);
+  assert.equal(file.settings.display.gfxPreset, null);
+  assert.equal(file.settings.display.buildWorker, null);
+  assert.equal(target.loadSettings(file).failed, 0);
+  for (const k of ["resMode", "gfxPreset", "buildWorker"]) assert.equal(target.disk.has(`apex26.${k}`), false, k);
+});
+
+test("adaptive pins survive cross-device, unknown-device and CHANGED imports", () => {
+  const source = boot({ mobile: true });
+  const all = source.collect("all");
+  const changes = source.collect("changes");
+  assert.equal(changes.settings.display?.resMode, undefined);
+  const disk = { "apex26.resMode": JSON.stringify("high"), "apex26.gfxPreset": JSON.stringify("high"), "apex26.buildWorker": "0" };
+  for (const file of [{ ...all, device: { desktop: true } }, { ...all, device: undefined }, changes, { ...all, mode: "changes" }]) {
+    const target = boot({ mobile: true, disk });
+    assert.equal(target.loadSettings(file).failed, 0);
+    for (const [key, value] of Object.entries(disk)) assert.equal(target.disk.get(key), value, key);
+  }
+});
+
 // UI hunt 3: a device-picked BUILD IN BACKGROUND was pinned ON by an ALL file,
 // and an unset JSON row was restored as the literal "null".
 test("SAVE ALL keeps unset rows unset on the target: no pinned auto-pick, no literal null", () => {

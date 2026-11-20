@@ -230,8 +230,12 @@ test("install rejects when an essential runtime asset cannot be cached", async (
 test("install tolerates optional asset failures and waits for essential writes before skipping", async () => {
   const heldPut = deferred();
   let held = false;
+  const ordinary = installFetch({ failOptional: true });
   const harness = createHarness({
-    fetchImpl: installFetch({ failOptional: true }),
+    fetchImpl: async (request, init) =>
+      requestKey(request).includes("/assets/pack/manifest.json?b=")
+        ? new Response("pack unavailable", { status: 503 })
+        : ordinary(request, init),
     putImpl: async (_name, request) => {
       if (!held && requestKey(request).includes("js/game.js")) {
         held = true;
@@ -251,6 +255,7 @@ test("install tolerates optional asset failures and waits for essential writes b
   const current = harness.stores.get("apex26-321");
   assert.equal(current.has(`${ORIGIN}/js/game.js?v=321`), true);
   assert.equal(current.has(`${ORIGIN}/assets/icon.png`), false);
+  assert.equal(current.has(`${ORIGIN}/assets/pack/manifest.json?b=321`), false);
 });
 
 test("GLX fallback is required and deferred scripts use the runtime build pin", async () => {
@@ -1400,6 +1405,28 @@ test("a build-keyed manifest with no cached copy waits for the network; a malfor
   assert.equal(await (await ev.responsePromise).text(), '{"new":true}', "?b=0 is not a build: network first");
 });
 
+test("pack cache misses verify the body before returning or caching it", async () => {
+  const bytes = Buffer.from(Array.from({ length: 120 }, (_, i) => i));
+  const hash = createHash("md5").update(bytes).digest("hex");
+  const url = `${ORIGIN}/assets/pack/strip.png?h=${hash}`;
+  let body = Buffer.from("new deploy's different file");
+  let fetches = 0;
+  const h = packHarness({ net: async () => { fetches++; return new Response(body); } });
+  const wrong = h.fetchEvent(new Request(url));
+  assert.equal((await wrong.responsePromise).type, "error");
+  await Promise.all(wrong.lifetimes);
+  assert.equal([...h.stores.values()].some((cache) => cache.has(url)), false);
+
+  body = bytes;
+  const correct = h.fetchEvent(new Request(url));
+  assert.deepEqual(Buffer.from(await (await correct.responsePromise).arrayBuffer()), bytes);
+  await Promise.all(correct.lifetimes);
+  assert.ok(h.stores.get("apex26-321").has(url));
+  const cached = h.fetchEvent(new Request(url));
+  assert.deepEqual(Buffer.from(await (await cached.responsePromise).arrayBuffer()), bytes);
+  assert.equal(fetches, 2, "a verified cached response needs no additional fetch");
+});
+
 test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed)", async () => {
   let fetched = 0;
   const h = packHarness({ net: async () => { fetched++; return new Response("net", { status: 200 }); } });
@@ -2235,10 +2262,13 @@ test("essential preload URLs get one verified admission while optional-only hint
 // island lived only in the generation that first fetched them; the next deploy's install never
 // carried them and activate swept the only copy (offline: gone; online: re-downloaded).
 test("install carries runtime entries into the new generation, revalidated, and the sweep keeps them (#5007)", async () => {
-  const H1 = "a".repeat(32), H2 = "b".repeat(32);
+  const md5 = (body) => createHash("md5").update(body).digest("hex");
+  const H1 = md5("pack-x"), H2 = md5("pack-y-old");
+  const poisonedKey = `assets/pack/z.ktx2?h=${md5("pack-z-old")}`;
   const seed = {
     [`${ORIGIN}/assets/pack/x.ktx2?h=${H1}`]: ["pack-x", { ETag: '"px"' }],          // unchanged → 304
     [`${ORIGIN}/assets/pack/y.ktx2?h=${H2}`]: ["pack-y-old", { ETag: '"py1"' }],      // rebaked → 200 → dropped
+    [`${ORIGIN}/${poisonedKey}`]: ["pack-z-new", { ETag: '"pz"' }],                          // wrong bytes under old hash
     [`${ORIGIN}/assets/sfx/f1_engine.mp3`]: ["engine", { "Last-Modified": "Mon, 02 Nov 2026 00:00:00 GMT" }],
     [`${ORIGIN}/assets/sfx/changed.mp3`]: ["old-sfx", { ETag: '"c1"' }],             // changed → fresh body
     [`${ORIGIN}/assets/sfx/crowd.mp3`]: ["crowd", { ETag: '"cr"' }],                 // 200 with the same ETag → unchanged
@@ -2251,12 +2281,20 @@ test("install carries runtime entries into the new generation, revalidated, and 
   };
   const base = installFetch();
   const asked = [];
+  let offline = false;
   const fetchImpl = async (request, init) => {
+    if (offline) throw new TypeError("offline");
     const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
     const h = (init && init.headers) || {};
     if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/vendor/three-")) asked.push(url.pathname + url.search);
     if (url.pathname === "/assets/pack/x.ktx2") return new Response(null, { status: h["If-None-Match"] === '"px"' ? 304 : 500 });
     if (url.pathname === "/assets/pack/y.ktx2") return new Response("pack-y-new", { status: 200, headers: { ETag: '"py2"' } });
+    if (url.pathname === "/assets/pack/z.ktx2") return new Response(null, { status: 304 });
+    if (url.pathname === "/assets/pack/manifest.json") {
+      assert.equal(url.search, "?b=321");
+      assert.equal(init.cache, "no-store");
+      return new Response(JSON.stringify({ stripHash: H1 }));
+    }
     if (url.pathname === "/assets/sfx/f1_engine.mp3") return new Response(null, { status: h["If-Modified-Since"] ? 304 : 500 });
     if (url.pathname === "/assets/sfx/changed.mp3") return new Response("new-sfx", { status: 200, headers: { ETag: '"c2"' } });
     if (url.pathname === "/assets/sfx/crowd.mp3") return new Response("crowd-again", { status: 200, headers: { ETag: '"cr"' } });
@@ -2280,11 +2318,19 @@ test("install carries runtime entries into the new generation, revalidated, and 
   assert.equal(await text("assets/sfx/changed.mp3"), "new-sfx", "a changed bare file is stored fresh");
   assert.equal(await text("assets/sfx/crowd.mp3"), "crowd", "a 200 with the stored ETag counts as unchanged");
   assert.equal(await text(`assets/pack/y.ktx2?h=${H2}`), undefined, "a ?h= key whose file changed is dropped, never refilled with other bytes");
+  assert.equal(await text(poisonedKey), undefined, "previously poisoned bytes cannot carry, even with a matching validator");
   assert.equal(await text("assets/sfx/removed.mp3"), undefined, "a file the deploy removed is dropped");
   assert.equal(await text("assets/voice/a.bin"), undefined, "voices are VOICE_CACHE's");
   assert.equal(await text("js/ui/hud.js?v=aaaaaaaaaaaa"), undefined, "unlisted ?v= keys are not carried");
   assert.equal(await text("assets/pack/manifest.json?b=320"), undefined, "a build-keyed manifest stays with its build (#5629)");
   assert.ok(!asked.includes("/vendor/three-0.187.0/three.core.min.js"), "no download for a path-pinned file already on the device");
+  assert.equal(asked.filter((url) => url === "/assets/pack/manifest.json?b=321").length, 1);
+  offline = true;
+  const manifest = harness.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json?b=321`));
+  assert.deepEqual(await (await manifest.responsePromise).json(), { stripHash: H1 });
+  await Promise.all(manifest.lifetimes);
+  const strip = harness.fetchEvent(new Request(`${ORIGIN}/assets/pack/x.ktx2?h=${H1}`));
+  assert.equal(await (await strip.responsePromise).text(), "pack-x");
 });
 
 // ── W24 row 4: the version.json kill switch ──

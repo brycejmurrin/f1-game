@@ -53,13 +53,12 @@ async function library(action, value) {
         // transactions on the same store serialize across tabs; an await here
         // would let this transaction become inactive and lose that isolation.
         try {
-          const photos = req.result.filter((p) => p.id !== value.id).concat(value)
+          const photos = req.result.filter((p) => p.id !== value.id)
             .sort((a, b) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
-          const keep = photos.slice(0, LIMIT);
-          for (const old of photos.slice(LIMIT)) if (old.id !== value.id) store.delete(old.id);
-          if (keep.some((p) => p.id === value.id)) {
-            const put = store.put(value); put.onsuccess = () => { result = put.result; };
-          }
+          // Commit order decides which photos to keep, even if the device clock moved backward.
+          const at = photos.length ? Math.max(value.at, photos[0].at + 1) : value.at;
+          for (const old of photos.slice(LIMIT - 1)) store.delete(old.id);
+          const put = store.put({ ...value, at }); put.onsuccess = () => { result = put.result; };
         } catch (e) { failure = e; tx.abort(); }
       };
       tx.oncomplete = () => resolve(result);
@@ -573,7 +572,9 @@ function create(G, deps) {
   async function frame() {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
-    const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? gfx.awaitSoftPresent(15000) : null;
+    // Observe the display blit immediately. Its result matters only if the
+    // capture needs to copy the software canvas.
+    const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
     if (deps.renderFrame) deps.renderFrame();
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
@@ -588,25 +589,26 @@ function create(G, deps) {
         reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
       }, CAPTURE_MS); });
       read = Promise.race([read, late]).finally(() => clearTimeout(capTimer));
-      // Observe both immediately, even when one rejects before the other is
-      // ready. The raw pixels are captured now; software presentation may finish later.
-      const [presented, captured] = await Promise.allSettled([pending || Promise.resolve(), read]);
-      if (presented.status === "rejected") throw presented.reason;
-      if (captured.status === "fulfilled") pixels = captured.value;
-      else if (captured.reason && captured.reason.timedOut) throw captured.reason;
-      else {
+      try { pixels = await read; }
+      catch (reason) {
+        if (reason && reason.timedOut) throw reason;
         // Native WebGPU canvases can compose directly even when a backend has
         // no readback render target. Draw and copy in this same task instead.
-        Log.warn("ui", "backend readback unavailable; copying the scene canvas", captured.reason);
+        Log.warn("ui", "backend readback unavailable; copying the scene canvas", reason);
       }
-    } else if (pending) await pending;
+    }
+    if (!(pixels && pixels.data && pixels.width && pixels.height)) pixels = null;
+    if (!pixels && pending) {
+      const [presented] = await pending;
+      if (presented.status === "rejected") throw presented.reason;
+    }
     if (!pixels && !pending && deps.renderFrame) {
       // Repaint immediately before a native canvas copy; no await may come
       // between this draw and drawImage below.
       deps.renderFrame();
     }
     const canvas = mk("canvas");
-    if (pixels && pixels.data && pixels.width && pixels.height) {
+    if (pixels) {
       canvas.width = pixels.width; canvas.height = pixels.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Image composition is unavailable");

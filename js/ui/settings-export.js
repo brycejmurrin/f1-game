@@ -622,6 +622,7 @@ function applySettings(file, G) {
   // is treated as the other kind on a page that knows its own: pinning its resolution and renderer here is
   // the #5005 failure (#5743 S4).
   const crossDevice = typeof here === "boolean" && (typeof there !== "boolean" || here !== there);
+  const restoreAdaptiveDefaults = file.mode === "all" && typeof here === "boolean" && here === there;
   const writes = [];
   let skipped = 0;
   for (const row of SPEC) {
@@ -634,7 +635,11 @@ function applySettings(file, G) {
     if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) { if (g[row.k] !== null) skipped++; continue; }
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
-    if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
+    if (v === null && row.perDevice) {
+      // An ALL backup from the same device class records that this preference was unpinned.
+      if (restoreAdaptiveDefaults) writes.push([row, null]);
+      continue;
+    }
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
     if ((!row.freeShape && !typeOk(v, def, row)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
