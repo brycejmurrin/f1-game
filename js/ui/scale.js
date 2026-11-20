@@ -9,7 +9,10 @@
 const UiScale = (() => {
   // The primary-pointer test every touch default below keys off. Module level so
   // defaultResMode() answers without a create(G) (SettingsExport's SPEC row).
-  const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
+  function media(query) {
+    try { return window.matchMedia?.(query); } catch (_) { return null; }
+  }
+  const coarseUi = () => !!media("(pointer: coarse)")?.matches;
   // Foldable hinge stamp: html[data-fold="horizontal"|"vertical"] from the viewport-segments
   // queries. The width tier html[data-layout] that sat beside it until 2026-11-07 is gone (UI
   // contract 2026-11-06 gap 20): it called an 852/844 landscape phone "tablet" and nothing in
@@ -78,9 +81,7 @@ const UiScale = (() => {
     // on build 997, where --tap sat at `calc(44px * 1)` at every setting until this
     // moved to documentElement.
     //
-    // NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
-    // in the stylesheet stands and a phone is correct on its FIRST paint rather
-    // than from whenever this module runs.
+    // An unset scale follows the stylesheet media queries from the first paint.
     const SCALE_MIN = 40;
     const SCALE_MAX = 200;
     // BUTTON SIZE alone goes on to 300 %: at 200 % the dock was still small in the hand on a
@@ -109,15 +110,20 @@ const UiScale = (() => {
     // these; a stored one is never rewritten by a new default.
     const PHONE_UI_DEFAULT = 70;
     const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
-    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : (phoneUi() ? PHONE_UI_DEFAULT : 109)) : 100);
+    const roomyDesktop = media("(pointer: fine) and (min-width: 1600px) and (min-height: 900px)");
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
     };
     // Button size is an independent preference, including when unset.
-    const scaleDefaultFor = (k) => (k === "hudBtnScale"
-      ? 100 * (coarseUi() ? BTN_DEFAULT : 1)
-      : scaleDefault(k));
+    function scaleDefaultFor(k) {
+      if (k === "hudBtnScale") return coarseUi() ? 100 * BTN_DEFAULT : 100;
+      if (k === "uiScale") {
+        if (coarseUi()) return phoneUi() ? PHONE_UI_DEFAULT : 109;
+        return roomyDesktop?.matches ? 115 : 100;
+      }
+      return 100;
+    }
     const scalePct = (k) => {
       const v = store.get(k, null);
       return typeof v === "number" ? scaleSnap(v, k) : scaleDefaultFor(k);
@@ -265,6 +271,7 @@ const UiScale = (() => {
     applyUiScale();
     applyHudScale();
     applyBtnScale();
+    roomyDesktop?.addEventListener?.("change", applyUiRow);
     syncLayout();
     // Resize events fire per frame during a drag/rotation: coalesce syncLayout to one run per animation frame.
     let layoutRaf = 0;

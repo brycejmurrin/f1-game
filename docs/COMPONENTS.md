@@ -444,6 +444,12 @@ The standard **iPhone 15** is the reference for owner screenshots. At the defaul
 
 Safari chrome can change the available page height. Its measured 368 CSS px applies to the tab state captured in issue #5218. The physical display is the same in all three cases. Read the shared window record for the insets and their measurement status. [Phone window profiles](../tests/data/phone-windows.json) · [Capture commands](AGENT-SURFACE.md#the-owners-phone-one-preset-2026-11-10)
 
+The **16-inch MacBook Pro (2024, M4 Pro or M4 Max)** has a 3456 × 2234 panel. Its default Retina setting gives a logical desktop of 1728 × 1117. At 100% browser zoom the full-display reference uses 1728 × 1117 CSS pixels at DPR 2 and produces a 3456 × 2234 PNG. In a normal window, browser chrome, macOS controls and the window size affect the available space. To reproduce a specific window, record `window.innerWidth`, `window.innerHeight` and `window.devicePixelRatio` on the device. [Apple display specifications](https://support.apple.com/en-us/121554) · [Default logical resolution for Mac16,7](https://theapplewiki.com/wiki/Mac16,7)
+
+At this size, Settings → Appearance defaults UI SIZE to 115%. The same default applies to any fine-pointer viewport at least 1600 × 900 CSS pixels. Smaller desktop windows use 100%. A saved size applies across window sizes, and resetting UI SIZE restores the viewport default.
+
+Capture the title at the full-display reference with `node tools/ui/layout-audit.mjs --screen=title --viewport=desktop-macbook-pro-16-m4 --out=artifacts/layout-audit/macbook`. The PNG measures the composited page. The game's Three.js canvas can use a lower internal rendering resolution depending on graphics settings.
+
 The broader viewport matrix covers other device sizes and layout breakpoints.
 
 | viewport | why it is in the matrix |
@@ -456,6 +462,7 @@ The broader viewport matrix covers other device sizes and layout breakpoints.
 | `ios-ipad-landscape` 1194x834 | the two-column case at its smallest |
 | `desktop-1280x800` | a small laptop |
 | `desktop-1440x900` | the common desktop |
+| `desktop-macbook-pro-16-m4` | 1728 × 1117 CSS px at 2×, full-display Retina capture |
 | `desktop-1920x1080` | full screen on a 1080p monitor |
 | `desktop-windowed-1920x937` | the same monitor with browser chrome — 143px less, and browser chrome is why a "desktop" can land on a phone branch |
 | `desktop-narrow-860x560` | a small window, or a maximised one at 125% zoom; below the 900x600 large-screen gate |

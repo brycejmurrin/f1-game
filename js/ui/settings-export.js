@@ -95,12 +95,12 @@ const SPEC = [
   { k: "sndLayers", lane: "json", group: "audio", def: () => engineTable("layerDefaults"), table: true, src: "js/audio/engine.js LAYER_DEF" },
   // DISPLAY (js/ui/scale.js, js/perf/quality-preset.js, js/perf/renderer-picker.js)
   // UNSET is the default here, and it is not the same number on every device:
-  // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
-  // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
+  // css/tokens.css owns the responsive numbers on first paint, and
+  // js/ui/scale.js mirrors them in the sliders. null is
   // the honest default to report — a stored number is the change.
-  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; 109% on touch, 70% on a phone)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, 70 ui on a phone, scale.js scaleDefault)" },
-  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
+  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null follows viewport: 115% on fine-pointer windows at least 1600×900 CSS px, 70% on phones, 109% on other touch screens, 100% otherwise)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%)" },
+  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 125% on coarse pointers, 100% otherwise)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },

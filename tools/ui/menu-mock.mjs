@@ -167,7 +167,7 @@ async function main() {
   const byGroup = new Map();
   for (const c of cells) {
     const vp = VIEWPORTS.find((v) => v[0] === c.viewport);
-    const g = vp[4]?.iphone15 ? vp[0] : groupKey(vp[1]);
+    const g = vp[4]?.nativeDensity ? vp[0] : groupKey(vp[1]);
     if (!byGroup.has(g)) byGroup.set(g, []);
     byGroup.get(g).push({ ...c, vp });
   }
@@ -184,7 +184,7 @@ async function main() {
         const tb = Date.now();
         const entry = mine[0].vp;
         const [, o] = entry;
-        const ctx = await browser.newContext({ ...o, deviceScaleFactor: entry[4]?.iphone15 ? o.deviceScaleFactor : 1, colorScheme: "dark" });
+        const ctx = await browser.newContext({ ...o, deviceScaleFactor: entry[4]?.nativeDensity ? o.deviceScaleFactor : 1, colorScheme: "dark" });
         await seedOwnerProfile(ctx, entry);
         const page = await ctx.newPage();
         const errs = [];
@@ -198,7 +198,7 @@ async function main() {
       };
       for (const cell of mine) {
         const t1 = Date.now();
-        const key = cache.key({ screen: cell.screen, viewport: cell.viewport, phone: cell.vp[4]?.iphone15 ? cell.vp[1] : null, boxes, fmt, minFont, tapFlag, tapRule: TAP_RULE_VERSION });
+        const key = cache.key({ screen: cell.screen, viewport: cell.viewport, device: cell.vp[4]?.nativeDensity ? cell.vp[1] : null, boxes, fmt, minFont, tapFlag, tapRule: TAP_RULE_VERSION });
         const hit = cache.get(key);
         if (hit) {
           const file = path.join(out, cell.id + ext);
@@ -215,7 +215,7 @@ async function main() {
         const row = { id: cell.id, screen: cell.screen, viewport: cell.viewport, error: null };
         try {
           const v = o.viewport || { width: 1280, height: 800 };
-          if (!cell.vp[4]?.iphone15) await page.setViewportSize({ width: v.width, height: v.height });
+          if (!cell.vp[4]?.nativeDensity) await page.setViewportSize({ width: v.width, height: v.height });
           await page.evaluate(leaveToMenu);
           await page.waitForFunction(() => window.__apex.info().state === "menu", null, { polling: 100, timeout: 10000 });
           await resetToTitle(page, srv.url, true);

@@ -71,12 +71,9 @@ test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
   assert.ok(jsRatio, "independent button default exists");
   assert.equal(Number(ratio[1]), Number(jsRatio[1]));
 
-  const jsDefaults = scaleJs.match(/scaleDefault = \(k\) => \(coarseUi\(\) \? \(k === "hudScale" \? (\d+) : \(phoneUi\(\) \? PHONE_UI_DEFAULT : (\d+)\)\) : 100\)/);
-  assert.ok(jsDefaults, "js/ui/scale.js must declare the coarse scaleDefault pair");
-  assert.equal(Number(jsDefaults[1]) / 100, Number(css["--hud-scale"]),
-    "--hud-scale and scale.js's hudScale default must agree");
-  assert.equal(Number(jsDefaults[2]) / 100, Number(css["--ui-scale"]),
-    "--ui-scale and scale.js's ui default must agree");
+  const tablet = bootScale({}, { innerWidth: 1024, innerHeight: 768, matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) });
+  assert.equal(Number(tablet.el("pm-hudscale").value), Number(css["--hud-scale"]) * 100);
+  assert.equal(Number(tablet.el("pm-uiscale").value) / 100, Number(css["--ui-scale"]));
 });
 
 test("a phone's first-paint UI SIZE and scale.js's phone default agree (#5358)", () => {
@@ -140,7 +137,7 @@ test("--hud-scale carries no blanket touch bump, and the old size stays reachabl
 // UiScale.create(G) run for real in node:vm over stub elements: the slider
 // writes --hud-panel-a on <html> only once moved, clamps to 20-100, and its
 // revert clears it — the same contract as BUTTON OPACITY beside it.
-function bootScale(stored = {}) {
+function bootScale(stored = {}, viewport = { matchMedia: () => ({ matches: false }) }) {
   const rootStyle = new Map();
   const els = new Map();
   const el = (id) => {
@@ -166,7 +163,7 @@ function bootScale(stored = {}) {
     SettingRow: { wire() {}, paint() {}, labels: (v) => v.map((x) => [x, x]) },
     PerfGov: { setAutoRes() {} },
     requestAnimationFrame: () => 0,
-    window: { matchMedia: () => ({ matches: false }) },
+    window: viewport,
     document: { documentElement: { style: {
       setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k),
     } } },
@@ -175,6 +172,33 @@ function bootScale(stored = {}) {
   const api = vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: {}, updateTrackPreview() {} });
   return { api, el, rootStyle, stored };
 }
+
+test("roomy desktop menus follow the viewport until UI SIZE is set and resume on reset", () => {
+  const query = "(pointer: fine) and (min-width: 1600px) and (min-height: 900px)";
+  const block = tokens.split("@media " + query)[1]?.split("}")[0];
+  assert.match(block || "", /--ui-scale: 1\.15;/);
+  let onChange;
+  const desktop = { matches: true, addEventListener(event, cb) { if (event === "change") onChange = cb; } };
+  const viewport = { matchMedia: (q) => q === query ? desktop : { matches: false } };
+  const { api, el, rootStyle, stored } = bootScale({}, viewport);
+  const label = () => el("pm-uiscale-v").textContent;
+  assert.equal(label(), "115%");
+  assert.equal(rootStyle.has("--ui-scale"), false);
+  assert.equal(el("pm-hudscale").value, "100");
+  assert.equal(el("pm-btnscale").value, "100");
+  desktop.matches = false;
+  onChange();
+  assert.equal(label(), "100%");
+  api.setScale("uiScale", "--ui-scale", 120);
+  desktop.matches = true;
+  onChange();
+  assert.equal(label(), "120%");
+  assert.equal(rootStyle.get("--ui-scale"), "1.2");
+  el("pm-uiscale-r").onclick({ preventDefault() {}, stopPropagation() {} });
+  assert.equal(stored.uiScale, undefined);
+  assert.equal(rootStyle.has("--ui-scale"), false);
+  assert.equal(label(), "115%");
+});
 
 test("PANEL OPACITY: unset writes nothing; the slider clamps to 20-100 and reverts", () => {
   const { el, rootStyle, stored } = bootScale();

@@ -29,7 +29,7 @@ export const VIEWPORTS = [
   // Native-density iPhone 15 captures. The measured Safari viewport is shorter than its screen.
   ...[["ios-iphone-portrait", "portrait"], ["ios-iphone-landscape", "standalone"], ["ios-iphone-landscape-safari", "safari"]].map(([name, window]) => {
     const p = brycePhone({ window, profile: false });
-    return [name, p.contextOptions, p.verified, ins(p), { iphone15: true }];
+    return [name, p.contextOptions, p.verified, ins(p), { nativeDensity: true }];
   }),
   // iPhone 12-14 and most Android phones in landscape: 844x390 full screen. The
   // 852x368 / 852x393 cells above straddle it but never land ON it, and a
@@ -44,7 +44,7 @@ export const VIEWPORTS = [
   ...["standalone", "portrait", "safari"].map((w) => {
     const p = brycePhone({ window: w, profile: false });
     return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w === "safari" ? "Safari tab" : "Home Screen app"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
-      ins(p), { iphone15: true, bryce: w }];
+      ins(p), { nativeDensity: true, bryce: w }];
   }),
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
@@ -54,6 +54,9 @@ export const VIEWPORTS = [
     "a small laptop"],
   ["desktop-1440x900",      { viewport: { width: 1440, height: 900 } },
     "the common desktop"],
+  ["desktop-macbook-pro-16-m4", {
+    viewport: { width: 1728, height: 1117 }, screen: { width: 1728, height: 1117 }, deviceScaleFactor: 2,
+  }, "16-inch MacBook Pro (2024, M4 Pro/Max), full display at default Retina scale", undefined, { nativeDensity: true }],
   ["desktop-1920x1080",     { viewport: { width: 1920, height: 1080 } },
     "full screen on a 1080p monitor"],
   ["desktop-windowed-1920x937", { viewport: { width: 1920, height: 937 } },

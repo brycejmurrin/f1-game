@@ -633,6 +633,16 @@ test("full-screen catalog cells stay full-screen when Playwright's browser-chrom
   }
 });
 
+test("16-inch M4 MacBook gallery uses default Retina screen geometry and native-density captures", async () => {
+  const { VIEWPORTS } = await import('../../tools/ui/menu-screens.mjs');
+  const [, options, , , capture] = VIEWPORTS.find(([name]) => name === 'desktop-macbook-pro-16-m4');
+  assert.deepEqual(options.viewport, { width: 1728, height: 1117 });
+  assert.deepEqual(options.screen, options.viewport);
+  assert.equal(options.deviceScaleFactor, 2);
+  assert.equal(capture.nativeDensity, true);
+  assert.ok(!options.hasTouch && !options.isMobile);
+});
+
 test("replay emits native taps for mobile profiles and clicks for desktop", async () => {
   const calls = [];
   const page = { locator: () => ({ tap: async () => calls.push('tap'), click: async () => calls.push('click') }) };

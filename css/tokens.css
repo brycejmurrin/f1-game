@@ -745,6 +745,10 @@ body:not(.desktop) {
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
 }
+/* Roomy desktop menus, mirrored by the UI SIZE row in js/ui/scale.js. */
+@media (pointer: fine) and (min-width: 1600px) and (min-height: 900px) {
+  :root { --ui-scale: 1.15; }
+}
 /* Why: docs/notes/TOKENS-RATIONALE.md §R7. */
 @media (pointer: coarse) {
   /* Fixed touch-control default; HUD SIZE does not move this axis. */
