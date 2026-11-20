@@ -1635,6 +1635,7 @@
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
@@ -5053,6 +5054,11 @@
       "path": "js/ui/setting-row.js",
       "global": "SettingRow",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/settings-export-body.js",
+      "global": "SettingsExportBody",
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/settings-export.js",
