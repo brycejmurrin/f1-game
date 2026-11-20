@@ -1366,14 +1366,14 @@ const HudLayout = (function () {
   }
 
   // #4798 gate: build only
-  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); }
+  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); if (typeof Input !== "undefined") Input.onPointerKindChange(() => setTimeout(apply, 0)); }
   apply();
   _pub = true;
   if (doc) {
     const atGate = (fn) => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(fn) : fn());
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", () => init(atGate), { once: true });
     else if (doc.readyState === "complete") init();
-    else init((fn) => doc.addEventListener("DOMContentLoaded", () => atGate(fn), { once: true }));
+    else init((fn) => doc.addEventListener("DOMContentLoaded", () => { apply(); atGate(fn); }, { once: true }));
   }
 
   // Public surface: PACK_AIR + packPhoneRects for the unit packer; KEY / LIM /
