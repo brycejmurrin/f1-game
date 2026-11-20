@@ -755,6 +755,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -804,6 +805,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
@@ -864,6 +866,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -912,6 +915,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
@@ -1009,6 +1013,7 @@
         "tests/unit/agent-view-vm.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -1034,6 +1039,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
@@ -4585,17 +4591,17 @@
     {
       "path": "js/share/share-card-data.js",
       "global": "ShareCardData",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-layout.js",
       "global": "ShareCardLayout",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card.js",
       "global": "ShareCard",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/track/build-client.js",

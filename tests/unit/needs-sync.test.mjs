@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal } from "../../tools/ci/needs-sync.mjs";
+import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal, gateMergeRefusal, unionTextConflicts } from "../../tools/ci/needs-sync.mjs";
 
 const T0 = "2026-10-16T08:00:00Z", T1 = "2026-10-16T09:00:00Z";
 
@@ -32,7 +32,9 @@ test("decideSync: a stray `distance` fact changes nothing (the verdict went with
   assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
 });
 test("exit codes and verdict line", () => {
-  assert.deepEqual(VERDICTS, ["conflict", "stale-red", "retest-refused", "tip-red", "no"]);
+  assert.deepEqual(VERDICTS, ["conflict", "union-conflict", "stale-red", "retest-refused", "gate-refused", "tip-red", "no"]);
+  assert.equal(exitCode({ ok: true, verdict: "gate-refused" }), 0, "gate-refused is a sync");
+  assert.equal(exitCode({ ok: true, verdict: "union-conflict" }), 0, "union-conflict is a sync");
   assert.equal(exitCode({ ok: true, verdict: "retest-refused" }), 0, "retest-refused is a sync");
   assert.equal(exitCode({ ok: true, verdict: "tip-red" }), 1, "tip-red is not a sync");
   assert.equal(exitCode({ ok: true, verdict: "conflict" }), 0);
@@ -176,6 +178,7 @@ const retriedRun = { id: 11, path: ".github/workflows/ci.yml", status: "complete
 const attemptsApi = (byAttempt, calls = []) => (p) => {
   if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [] } }; // the deploy tip: no run, not red
   if (p.startsWith("commits/")) return { json: [] }; // the head's statuses: no `gate` status (#5554)
+  if (p.startsWith("actions/runs/11/jobs")) return { json: { jobs: [] } }; // the recorded-base read (#5832): no tooling A job
   calls.push(p);
   if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [retriedRun] } };
   const m = p.match(/^actions\/runs\/11\/attempts\/(\d+)\/jobs\?per_page=100&page=1$/);
@@ -224,7 +227,8 @@ test("decideSync: a retest refusal with tip merges left = retest-refused; none l
   const d = decideSync({ ...base, retest: { refused: true, tipMerges: 2, commits: ["fffc8268aaaaaaaa", "0123456789abcdef"] } });
   assert.deepEqual(d, { verdict: "retest-refused", why: "the gate's retest row refused this head and 2 tip merge(s) since its CI run remain (fffc8268, 01234567): sync and push, so a fresh CI run tests this combination" });
   assert.deepEqual(decideSync({ ...base, retest: { refused: true, tipMerges: 0, commits: [] } }),
-    { verdict: "no", why: "behind with no conflict (the gate's retest row refused this head, but no tip merge since its CI run remains: a sync cannot help): clean-behind is not a reason" });
+    { verdict: "retest-refused", why: "the gate's retest row refused this head and the head is still behind the tip it was re-tested on: sync and push, so a fresh CI run tests this combination" },
+    "#5832: a retest FAIL on a head that is still behind is a sync, whatever this clone's window counts");
   assert.equal(decideSync({ ...base, retest: { refused: false, evidence: "" } }).why, "behind with no conflict (ci success): clean-behind is not a reason");
   assert.equal(decideSync({ ...base, retest: null }).verdict, "no");
   const refused = { refused: true, tipMerges: 1, commits: ["fffc8268"] };
@@ -258,21 +262,146 @@ test("needsSync (b): retest FAIL recorded on an OLDER head only = no", () => {
   assert.equal(v.why, "behind with no conflict (ci success): clean-behind is not a reason");
   assert.deepEqual(v.retest, { refused: false, evidence: "" });
 });
-test("needsSync (c): retest FAIL but the tip has not moved since the head's CI run = no (a sync cannot help)", () => {
+test("needsSync (c): retest FAIL, the window counts no tip merge, but the head is behind = retest-refused (#5832)", () => {
   const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2100-01-01T00:00:00Z", () => [gate(REFUSED)]) });
-  assert.equal(v.verdict, "no");
-  assert.equal(v.why, "behind with no conflict (the gate's retest row refused this head, but no tip merge since its CI run remains: a sync cannot help): clean-behind is not a reason");
+  assert.equal(v.verdict, "retest-refused");
+  assert.equal(v.why, "the gate's retest row refused this head and the head is still behind the tip it was re-tested on: sync and push, so a fresh CI run tests this combination");
   assert.deepEqual(v.retest, { refused: true, evidence: REFUSED, tipMerges: 0, commits: [] });
-  assert.equal(exitCode(v), 1);
+  assert.equal(exitCode(v), 0);
 });
 test("needsSync: an unreadable gate status is a note, never a sync; a head that is not green reads no status", () => {
   const rg = () => alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"]));
   const api = greenApi("2000-01-01T00:00:00Z", () => [gate(REFUSED)]);
   const v = needsSync("pr", { fetch: false, readGit: rg(), request: (p) => (p.startsWith("commits/") ? { error: "HTTP 502" } : api(p)) });
   assert.equal(v.verdict, "no");
-  assert.equal(v.note, "gate status unreadable (HTTP 502): retest-refused cannot be detected");
+  assert.equal(v.note, "gate status unreadable (HTTP 502): retest-refused and gate-refused cannot be detected");
   const calls = [];
   const red = needsSync("pr", { fetch: false, readGit: rg(), request: (p) => { calls.push(p); return p.startsWith("commits/") ? { json: [gate(REFUSED)] } : { json: { workflow_runs: [] } }; } });
   assert.equal(red.verdict, "no");
   assert.equal(calls.filter((p) => p.startsWith("commits/")).length, 0);
+});
+
+// #5832 (1): the run's merge ref sat on an OLDER tip although every tip commit predates the run (PR #5795, run
+// 44481046227: merged onto e9f93c47 while the tip was already dec94440). The recorded base, not the clock, decides.
+const guardsJob = { id: 501, name: "ci / Structural guards (tooling A)" };
+const redApi = (base, startedAt = "2100-01-01T00:00:00Z") => (p) => {
+  if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [{ id: 9, path: ".github/workflows/ci.yml", status: "completed", conclusion: "failure", run_attempt: 1, created_at: startedAt, run_started_at: startedAt }] } };
+  if (p.startsWith("actions/runs/9/jobs")) return { json: { jobs: [guardsJob] } };
+  if (p.startsWith("check-runs/501/annotations")) return { json: base ? [{ title: "apex-guards", message: `mode=changed base=${base}` }] : [] };
+  return { json: { workflow_runs: [], jobs: [] } };
+};
+test("decideSync: red, the tip commit older than the run, but the run merged onto an older base = stale-red", () => {
+  const f = { behind: true, conflict: false, ci: "failure", runStartedAt: T1, tipNewestAt: T0 };
+  assert.equal(decideSync(f).verdict, "no", "the clock alone says not moved");
+  assert.deepEqual(decideSync({ ...f, ciBase: "e9f93c47ee2bcf19aa11fadd4067022f09d71a16", baseMoved: true, baseMoves: 1 }),
+    { verdict: "stale-red", why: "ci.yml is red on the head and the run merged onto e9f93c47, not the current tip (1 tip commit(s) past that base)" });
+  assert.equal(decideSync({ ...f, ciBase: "e9f93c47ee2bcf19aa11fadd4067022f09d71a16", baseMoved: false, baseMoves: 0 }).verdict, "no");
+});
+test("needsSync: red head whose recorded base is behind the tip = stale-red, exit 0; recorded base = tip = no", () => {
+  const rg = alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"]));
+  const oldBase = rg(["rev-parse", "origin/pr^"]).out, tipSha = rg(["rev-parse", "origin/deploy"]).out;
+  const v = needsSync("pr", { fetch: false, readGit: rg, request: redApi(oldBase) });
+  assert.equal(v.verdict, "stale-red");
+  assert.equal(v.ciBase, oldBase);
+  assert.equal(v.baseMoved, true);
+  assert.equal(v.why, `ci.yml is red on the head and the run merged onto ${oldBase.slice(0, 8)}, not the current tip (1 tip commit(s) past that base)`);
+  assert.equal(exitCode(v), 0);
+  const same = needsSync("pr", { fetch: false, readGit: rg, request: redApi(tipSha) });
+  assert.equal(same.verdict, "no", "the run already tested the current tip: the red is the branch's own");
+  assert.equal(same.baseMoved, false);
+  const none = needsSync("pr", { fetch: false, readGit: rg, request: redApi("") });
+  assert.equal(none.verdict, "no", "no record: judged by time, as before");
+  const gone = needsSync("pr", { fetch: false, readGit: rg, request: redApi("1".repeat(40)) });
+  assert.equal(gone.verdict, "no");
+  assert.ok(String(gone.note).includes("recorded base 11111111 is not in this clone: judged by time only"), gone.note);
+});
+
+// #5832 (2): the gate's own gen / ratchets rows. Live shape: land.yml cuts the summary line at 140 chars.
+const GEN_FAIL = "= merge-gate refused — open=ok hold=ok plan=ok ci=ok base=ok config=ok raise=ok gen=FAIL ratchets=FAIL retest=FAIL pr=#5683 sha=0cbc46d1";
+const RATCHETS_FAIL = "= merge-gate refused — open=ok hold=ok plan=ok ci=ok base=ok config=ok raise=ok gen=ok ratchets=FAIL retest=ok pr=#5778 sha=0cbc46d1";
+test("gateMergeRefusal: the FAILed merge rows of a bot refusal with open and ci ok; anything else is none", () => {
+  assert.deepEqual(gateMergeRefusal([gate(GEN_FAIL)]), { refused: true, rows: ["gen", "ratchets", "retest"], evidence: GEN_FAIL });
+  assert.deepEqual(gateMergeRefusal([gate(RATCHETS_FAIL)]).rows, ["ratchets"]);
+  assert.deepEqual(gateMergeRefusal([gate(REFUSED)]).rows, ["retest"]);
+  assert.equal(gateMergeRefusal([gate(GEN_FAIL.replace("open=ok", "open=FAIL"))]).refused, false, "a draft leaves the merge rows not evaluated");
+  assert.equal(gateMergeRefusal([gate(GEN_FAIL.replace("ci=ok", "ci=FAIL"))]).refused, false);
+  assert.equal(gateMergeRefusal([gate(GEN_FAIL, { creator: { login: "someone" } })]).refused, false);
+  assert.equal(gateMergeRefusal([gate(GEN_FAIL.replace("refused", "waiting"), { state: "pending" }), gate(GEN_FAIL)]).refused, false, "the newest gate status only");
+  for (const none of [[], null, undefined]) assert.deepEqual(gateMergeRefusal(none), { refused: false, rows: [], evidence: "" });
+});
+test("decideSync: a gen or ratchets FAIL = gate-refused (behind, no conflict, tip not red)", () => {
+  const base = { behind: true, conflict: false, ci: "success", runStartedAt: T1, tipNewestAt: T0 };
+  assert.deepEqual(decideSync({ ...base, gate: { refused: true, rows: ["gen", "ratchets", "retest"] } }),
+    { verdict: "gate-refused", why: "the gate refused this head on gen=FAIL ratchets=FAIL (the merge onto the tip): sync and push, so this head's CI tests the combination, then fix what it shows" });
+  assert.equal(decideSync({ ...base, gate: { refused: true, rows: ["retest"] } }).verdict, "no", "retest alone is the retest-refused path");
+  assert.equal(decideSync({ ...base, behind: false, gate: { refused: true, rows: ["gen"] } }).verdict, "no");
+  assert.equal(decideSync({ ...base, conflict: true, gate: { refused: true, rows: ["gen"] } }).verdict, "conflict");
+  assert.equal(decideSync({ ...base, tip: { state: "code-red", evidence: "x" }, gate: { refused: true, rows: ["gen"] } }).verdict, "tip-red");
+});
+test("needsSync: a green head the gate refused on gen / ratchets = gate-refused, exit 0 (#5683, #5778 shapes)", () => {
+  for (const [d, rows] of [[GEN_FAIL, ["gen", "ratchets", "retest"]], [RATCHETS_FAIL, ["ratchets"]]]) {
+    const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2100-01-01T00:00:00Z", () => [gate(d)]) });
+    assert.equal(v.verdict, "gate-refused", d);
+    assert.deepEqual(v.gate.rows, rows);
+    assert.equal(exitCode(v), 0);
+    assert.equal(verdictLine(v), "= sync needed: gate-refused");
+  }
+});
+
+// #5922: a merge=union path both sides appended to. git's union driver merges it (merge-tree clean); GitHub merges
+// it as text, reports the PR dirty and never merges it, so needs-sync must name it.
+function unionRepo(tipLog, prLog, { attr = "LOG.md merge=union\n", prOther = null } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "needs-sync-union-"));
+  const g = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  const w = (f, t) => fs.writeFileSync(path.join(dir, f), t);
+  g("init", "-q", "-b", "deploy"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+  w(".gitattributes", attr); w("LOG.md", "# log\n- one\n"); w("f.txt", "base\n"); g("add", "."); g("commit", "-qm", "base");
+  g("checkout", "-qb", "pr"); if (prLog !== null) w("LOG.md", prLog); if (prOther) w(prOther[0], prOther[1]); g("add", "."); g("commit", "-qm", "pr");
+  g("checkout", "-q", "deploy"); if (tipLog !== null) w("LOG.md", tipLog); else w("f.txt", "tip\n"); g("add", "."); g("commit", "-qm", "tip");
+  g("update-ref", "refs/remotes/origin/deploy", "deploy"); g("update-ref", "refs/remotes/origin/pr", "pr");
+  return (args) => { const r = spawnSync("git", args, { cwd: dir, encoding: "utf8" }); return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() }; };
+}
+const BASE_LOG = "# log\n- one\n";
+
+test("decideSync: union-conflict sits after conflict and before stale-red; tip-red still wins", () => {
+  const u = { behind: true, conflict: false, unionConflicts: ["docs/notes/CEILING-HISTORY.md"], ci: "success" };
+  assert.equal(decideSync(u).verdict, "union-conflict");
+  assert.match(decideSync(u).why, /CEILING-HISTORY\.md conflict as text/);
+  assert.equal(decideSync({ ...u, conflict: true }).verdict, "conflict");
+  assert.equal(decideSync({ ...u, ci: "failure", runStartedAt: T0, tipNewestAt: T1 }).verdict, "union-conflict");
+  assert.equal(decideSync({ ...u, tip: { state: "code-red", evidence: "pages red" } }).verdict, "tip-red");
+  assert.equal(decideSync({ ...u, behind: false }).verdict, "no");
+  assert.equal(decideSync({ ...u, unionConflicts: [] }).verdict, "no");
+});
+
+test("needsSync: both sides append to a union file = union-conflict, exit 0 (merge-tree alone says clean)", () => {
+  const rg = alias(unionRepo(BASE_LOG + "- tip\n", BASE_LOG + "- pr\n"));
+  const v = needsSync("pr", { fetch: false, offline: true, readGit: rg });
+  assert.equal(v.ok, true, v.error);
+  assert.equal(v.conflict, false, "the union driver merges it");
+  assert.deepEqual(v.unionConflicts, ["LOG.md"]);
+  assert.equal(v.verdict, "union-conflict");
+  assert.equal(exitCode(v), 0);
+});
+
+test("needsSync: a union file changed on one side only, or edits that merge as text, stay no", () => {
+  const one = needsSync("pr", { fetch: false, offline: true, readGit: alias(unionRepo(null, BASE_LOG + "- pr\n")) });
+  assert.deepEqual([one.verdict, one.unionConflicts], ["no", []]);
+  const apart = needsSync("pr", { fetch: false, offline: true, readGit: alias(unionRepo("# LOG\n- one\n", BASE_LOG + "- pr\n")) });
+  assert.deepEqual([apart.verdict, apart.unionConflicts], ["no", []], "non-overlapping hunks merge as text too");
+});
+
+test("needsSync: the same both-sides append on a path without merge=union is a plain conflict", () => {
+  const v = needsSync("pr", { fetch: false, offline: true, readGit: alias(unionRepo(BASE_LOG + "- tip\n", BASE_LOG + "- pr\n", { attr: "# none\n" })) });
+  assert.equal(v.verdict, "conflict");
+});
+
+test("unionTextConflicts: a union path deleted on one side counts; a merge-base failure is an error, not a verdict", () => {
+  const rg = unionRepo(BASE_LOG + "- tip\n", BASE_LOG + "- pr\n");
+  assert.deepEqual(unionTextConflicts("deploy", "pr", rg), { paths: ["LOG.md"] });
+  const bad = unionTextConflicts("deploy", "pr", () => ({ code: 1, out: "", err: "boom" }));
+  assert.deepEqual(bad.paths, []);
+  assert.match(bad.error, /merge-base failed: boom/);
+  const del = (args) => (args[0] === "rev-parse" && args.at(-1).startsWith("deploy:") ? { code: 1, out: "", err: "" } : rg(args));
+  assert.deepEqual(unionTextConflicts("deploy", "pr", del), { paths: ["LOG.md"] });
 });

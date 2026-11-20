@@ -438,7 +438,10 @@ const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSli
 // OFF, not LOW: the fold summary and the DRIVING HELP row must name the same
 // state. "LOW is off" in the How to Play copy was the old compromise; the row
 // then said LOW while AIDS · OFF painted red for the same notch.
-const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH" };
+// OFF means OFF: only notch 1 has helpFromSlider === 0. Notches 2-3 (the FINE
+// slider in ADVANCED) steer the car from the road's curvature at 0.08 / 0.16,
+// so they read CUSTOM, never OFF (#5783 J1).
+const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH", custom: "CUSTOM" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 // "STEER OFF" (not "LINE OFF"): the setting is STEER ASSIST — Race Settings owns
 // the visual DRIVING LINE. Fold tokens must match the live help/line bands.
@@ -446,14 +449,14 @@ const LINE_FOLD = { off: "STEER OFF", corner: "CORNERS", full: "FULL", custom: "
 // The three FEEL / AIDS setting rows (js/ui/setting-row.js). CUSTOM is a shown
 // but unpickable option: the state the ADVANCED sliders leave behind.
 const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);
-const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]);
+const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]).concat([["custom", HELP_LABEL.custom, true]]);
 // CUSTOM is display-only (like FEEL's CUSTOM): PUSH notches (-5..-1) and any
 // non-named PULL value must not fold into CORNERS, or a later LINE STEERING
 // sync can write PULL 3 over a deliberate PUSH.
 const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]];
 function helpBand() {
   const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
-  return dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
+  return dh <= 1 ? "low" : dh <= 3 ? "custom" : dh <= 7 ? "med" : "high";
 }
 function lineBand() {
   const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
@@ -880,6 +883,7 @@ function applySteerLevel(name) {
 }
 SettingRow.wire("pm-feel", { values: FEEL_VALUES, read: () => matchSteerLevel() || "custom", write: applySteerLevel });
 SettingRow.wire("pm-helplevel", { values: HELP_VALUES, read: helpBand, write: (n) => {
+  if (HELP_LEVELS[n] == null) return;   // CUSTOM is display-only
   store.set("drivingHelp", HELP_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 } });

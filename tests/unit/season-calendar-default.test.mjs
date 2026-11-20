@@ -259,7 +259,7 @@ test("a stored career's money and salaries are clamped to what play can produce"
   const { MONEY_MAX, SALARY_MAX } = SaveMigrate.LIMITS;
   const c = oldCareer(1);
   c.money = 1e308;
-  c.offers = [{ team: "haas", seat: 0, years: 1, salary: 1e300 }];
+  c.offers = [{ teamId: "haas", seat: 0, years: 1, salary: 1e300 }];
   c.deal.salary = -9;
   const m = SaveMigrate.migrateCareer(c);
   assert.equal(m.money, MONEY_MAX);

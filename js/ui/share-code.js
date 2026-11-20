@@ -18,7 +18,7 @@ const ShareCode = (function () {
     setup: { magic: "APXS1", kind: "setup" },
     livery: { magic: "APXL1", kind: "livery" },
     daily: { magic: "APXD1", kind: "daily" },
-    // Share-card QR `APXC1.l.<track>~<yyyymmdd|->~<ms|->`: the link stays under 120 chars.
+    // Share-card QR `APXC1.l.<track>~<yyyymmdd|->~<ms|->`: links stay under 120 chars.
     lap: { magic: "APXC1", kind: "lap" },
   });
   const MAGIC_OF = Object.freeze(Object.fromEntries(
@@ -171,10 +171,12 @@ const ShareCode = (function () {
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLDC]1\./.test(input)) return input.replace(/\s+/g, "");
-    const match = input.match(/(?:^|[#&])share=([^&]+)/);
-    if (!match) return null;
-    try { input = decodeURIComponent(match[1]); }
+    if (!/^APX[SLDC]1\./.test(input)) {
+      const match = input.match(/(?:^|[#&])share=([^&]+)/);
+      if (!match) return null;
+      input = match[1];
+    }
+    try { input = decodeURIComponent(input); }
     catch (_) { return null; }
     return input.replace(/\s+/g, "");
   }
@@ -229,6 +231,7 @@ const ShareCode = (function () {
       if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
+      if (result.kind === "daily" && result.expired) return "That daily challenge has ended — here is today's.";
       if (result.kind === "daily") return "Daily challenge — " + (result.trackName || result.track).toUpperCase() + ".";
       if (result.kind === "lap") return "Lap challenge — " + trackLabel(result.track) + (result.time ? " · BEAT " + clock(result.time) : "") + ".";
     }
@@ -311,7 +314,7 @@ const ShareCode = (function () {
     }
     if (decoded.kind === "daily") {
       if (typeof h.openDaily === "function") h.openDaily(decoded);
-      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track };
+      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track, expired: !!(h.today && decoded.day !== h.today) };
     }
     return CORRUPT;
   }
