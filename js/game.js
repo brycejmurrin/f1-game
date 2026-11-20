@@ -686,7 +686,7 @@ const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(buil
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 let pendingFinishQuit = false;
-const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
+const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (+ net, first)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
 const _gridIdleOpts = { soundOn: false, wet: false, step: true };
@@ -4688,7 +4688,7 @@ function update(dt) {
   // off the table and the countdown stands.
   if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
   else if (resultT === 0) {
-    postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
+    postFinish.net = session === "race" && netPlay.active(); postFinish.solo = session === "race" && !postFinish.net && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
