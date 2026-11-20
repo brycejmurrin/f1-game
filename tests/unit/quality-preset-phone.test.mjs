@@ -43,7 +43,9 @@ test("capId / maxId: phones never keep ULTRA; desktop does", () => {
   const Q = loadQuality();
   assert.equal(Q.PHONE_MAX_ID, "high");
   assert.equal(Q.maxId(true), "high");
-  assert.equal(Q.maxId(false), "ultra");
+  assert.equal(Q.maxId(false), "extreme");
+  assert.equal(Q.capId("extreme", false), "extreme");
+  assert.equal(Q.capId("extreme", true), "high");
   assert.equal(Q.capId("ultra", true), "high");
   assert.equal(Q.capId("high", true), "high");
   assert.equal(Q.capId("medium", true), "medium");
@@ -147,4 +149,40 @@ test("phone ULTRA row is disabled with the NOT ON PHONES note", () => {
   delete globalThis.localStorage;
   delete globalThis.document;
   delete globalThis.PerfGov;
+});
+
+// DESKTOP DETAIL SEAM: detail() is a boot-time level, feature() gates every extra, the governor's
+// setShed() drops extras from the end of SHED_ORDER, and apex26.gfxx.<name> forces one off / on.
+test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and the per-feature override", () => {
+  const boot = (preset, mobile, raw = {}) => {
+    const store = { get: (k, d) => (k === "gfxPreset" ? preset : d), raw: (k) => (k in raw ? raw[k] : null), set() {}, rawSet() {} };
+    const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+    return vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: !!mobile }, Log: { info() {} } },
+      { filename: absSrc("js/perf/quality-preset.js") });
+  };
+  const hi = boot("high"), ul = boot("ultra"), ex = boot("extreme"), ph = boot("extreme", true);
+  assert.deepEqual([hi.detail(), ul.detail(), ex.detail(), ph.detail()], [0, 1, 2, 0]);
+  for (const name of Object.keys(ex.FEATURES)) assert.equal(hi.feature(name), false, `${name} is off on HIGH`);
+  for (const name of Object.keys(ex.FEATURES)) assert.equal(ph.feature(name), false, `${name} is off on a phone`);
+  assert.equal(ul.feature("mirrorHi"), true);
+  assert.equal(ul.feature("csm"), false);
+  assert.equal(ex.feature("csm"), true);
+  assert.equal(ex.feature("nope"), false);
+  assert.equal(ex.feature("dof"), false, "CINEMA extras wait for setCinema");
+  ex.setCinema(true);
+  assert.equal(ex.feature("dof"), true);
+  ul.setCinema(true);
+  assert.equal(ul.feature("dof"), false, "CINEMA needs EXTREME");
+  const last = ex.SHED_ORDER[ex.SHED_ORDER.length - 1], first = ex.SHED_ORDER[0];
+  assert.equal(ex.feature(last), true);
+  ex.setShed(1);
+  assert.equal(ex.feature(last), false, "the last extra sheds first");
+  assert.equal(ex.feature(first), true);
+  ex.setShed(99);
+  assert.equal(ex.shed(), ex.SHED_ORDER.length);
+  assert.equal(ex.feature(first), false);
+  assert.equal(ex.feature("csm"), true, "an extra outside SHED_ORDER never sheds");
+  for (const name of ex.SHED_ORDER) assert.ok(ex.FEATURES[name], `${name} is a feature`);
+  assert.equal(boot("high", false, { "apex26.gfxx.csm": "1" }).feature("csm"), true);
+  assert.equal(boot("extreme", false, { "apex26.gfxx.csm": "0" }).feature("csm"), false);
 });

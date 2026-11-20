@@ -25,7 +25,42 @@ const PRESETS = [
   { id: "medium", label: "MEDIUM", tier: 2, mobileHigh: false },
   { id: "high",   label: "HIGH",   tier: 0, mobileHigh: false },
   { id: "ultra",  label: "ULTRA",  tier: 0, mobileHigh: true  },
+  { id: "extreme", label: "EXTREME", tier: 0, mobileHigh: true },
 ];
+// DESKTOP DETAIL (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): 0 = HIGH and below, and every phone; 1 = ULTRA;
+// 2 = EXTREME. A BOOT-TIME value (the flip reloads). FEATURES maps each extra to the level that turns it on;
+// apex26.gfxx.<name> = 0 / 1 forces one off / on (A/B), and the governor sheds extras from the END of SHED_ORDER
+// before it touches tier 1. Every consumer asks feature(name) and keeps today's path when it answers false.
+const DETAIL = { ultra: 1, extreme: 2 };
+const FEATURES = Object.freeze({
+  mirrorHi: 1, ssaoHi: 1, raysHi: 1, superSample: 1, liveryHi: 1, meshHi: 1,
+  csm: 2, lampShadows: 2, traa: 2, gtao: 2, ssgi: 2, ssrHi: 2, hdrOut: 2, lightsHi: 2, skyAtmo: 2,
+  matDetail: 2, packHd: 2, envAll: 2, heroCar: 2, crowd3d: 2, treesHi: 2, kerbProfile: 2, farTerrain: 2, density: 2,
+  dof: 3, motionBlur: 3, ss2x: 3,   // level 3 is CINEMA: EXTREME while setCinema(true) (replay / photo / garage)
+});
+const SHED_ORDER = Object.freeze(["lightsHi", "raysHi", "ssaoHi", "gtao", "ssrHi", "superSample", "ssgi"]);
+let _detail = -1, _shed = 0, _cinema = false;
+function detail() {
+  if (_detail >= 0) return _detail;
+  let d = 0;
+  try {
+    const st = gstore();
+    if (st && !(typeof GLX !== "undefined" && GLX.isMobile)) d = DETAIL[st.get("gfxPreset", null)] || 0;
+  } catch (_) { d = 0; }
+  return (_detail = d);
+}
+function feature(name) {
+  const need = FEATURES[name];
+  if (!need) return false;
+  try { const o = gstore() && gstore().raw("apex26.gfxx." + name); if (o === "0") return false; if (o === "1") return true; } catch (_) { /* no override */ }
+  const have = detail() + (_cinema && detail() >= 2 ? 1 : 0);
+  if (have < need) return false;
+  const i = SHED_ORDER.indexOf(name);
+  return i < 0 || i < SHED_ORDER.length - _shed;
+}
+// The governor's upper ladder: n extras shed (0..SHED_ORDER.length), last in SHED_ORDER first.
+function setShed(n) { _shed = Math.max(0, Math.min(SHED_ORDER.length, n | 0)); return _shed; }
+function setCinema(on) { _cinema = !!on; return _cinema; }
 const PHONE_MAX_ID = "high";
 const PHONE_ULTRA_NOTE = " — NOT ON PHONES";
 const PHONE_CAP_TITLE = "ULTRA is capped on phones (BrowserStack 2026-10-21: ~24 fps avg on iPhone 15). HIGH is the phone ceiling.";
@@ -55,7 +90,7 @@ function current() { return presetById(curId) || PRESETS[2]; }
 
 // Phone-class devices (GLX.isMobile / touch UA) never boot the ULTRA memory
 // tier. HIGH shares the tier-0 floor without flipping apex26.gfxHigh.
-function maxId(mobile) { return mobile ? PHONE_MAX_ID : "ultra"; }
+function maxId(mobile) { return mobile ? PHONE_MAX_ID : "extreme"; }
 
 function capId(id, mobile) {
   const p = presetById(id);
@@ -136,7 +171,7 @@ function label() { return `GRAPHICS: ${current().label}`; }
 function gfxValues(note) {
   return PRESETS.map((p) => {
     let text = p.label;
-    const phoneBlocked = isMobile && p.id === "ultra";
+    const phoneBlocked = isMobile && p.mobileHigh;
     if (phoneBlocked) text += PHONE_ULTRA_NOTE;
     if (note && p.id === curId) text += note;
     return phoneBlocked ? [p.id, text, true] : [p.id, text];
@@ -199,7 +234,7 @@ function set(id, opts = {}) {
   try { if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply(); } catch (_) { /* pre-boot: the first apply() resolves it */ }
   // ULTRA's boot-time detail: crossing it on a DESKTOP needs a reload too
   try { syncPack(); } catch (_) { /* optional pack */ }
-  const needsReload = syncBootTier() || (!isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
+  const needsReload = syncBootTier() || (!isMobile && !!prev && prev.id !== p.id && (prev.mobileHigh || p.mobileHigh));
   paintGfx(needsReload ? " — RELOADING…" : "");
   if (needsReload && !opts.noReload) {
     // In a race the preset is already live; the boot-tier half waits for the
@@ -212,7 +247,7 @@ function set(id, opts = {}) {
 
 function cycle() {
   // Skip phone-blocked ULTRA so the one-button fallback matches SettingRow.
-  const live = PRESETS.filter((p) => !(isMobile && p.id === "ultra"));
+  const live = PRESETS.filter((p) => !(isMobile && p.mobileHigh));
   const i = live.findIndex((p) => p.id === curId);
   return set(live[(i + 1) % live.length].id);
 }
@@ -273,6 +308,7 @@ if (typeof document !== "undefined") {
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
+  detail, feature, setShed, setCinema, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();
 Object.freeze(GfxQuality);

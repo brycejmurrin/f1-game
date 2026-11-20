@@ -4679,6 +4679,8 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
     "a raw (unencoded) 'ultra' — a probe's --ls or an older writer — still reads as ULTRA");
   assert.equal(msaaFor({}), 2,
     "unset = the desktop default HIGH = capped");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("extreme") }), 4,
+    "EXTREME is capped at ULTRA on GLX, never below it");
   assert.equal(msaaFor({ "apex26.gfxHigh": "1" }), 4,
     "the legacy phone key is honoured only when the preset was never stored");
   assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
@@ -4686,7 +4688,7 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
   // WGX makes the same decision at module scope; pin that it decodes too.
   const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
-  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
+  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| _p === "extreme" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
     "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
 });
 

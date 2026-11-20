@@ -289,7 +289,7 @@ const TLX = (function () {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
       let _ultra = false;   // desktop ULTRA detail
-      try { _ultra = !isMobile && GameStore.store.get("gfxPreset", null) === "ultra"; } catch (_) { /* HIGH */ }
+      try { _ultra = GfxQuality.detail() > 0; } catch (_) { /* HIGH */ }
 
       // PHONES GET TLX WHEN THEY PICK IT. three retains the CPU copy of every
       // geometry attribute (71.5 MB / 5,665 buffers vs GLX 17.8 MB / 253) and
@@ -7411,7 +7411,7 @@ const TLX = (function () {
     try {
       let p = localStorage.getItem("apex26.gfxPreset");
       try { p = JSON.parse(p); } catch (_) { /* not JSON: compare the raw string */ }
-      ultra = p === "ultra" || (p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+      ultra = p === "ultra" || p === "extreme" || (p == null && localStorage.getItem("apex26.gfxHigh") === "1");
     } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
     if (!ultra && s > 2) s = 2;
     return s < 2 ? 0 : s;

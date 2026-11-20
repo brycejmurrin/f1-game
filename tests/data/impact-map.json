@@ -11692,8 +11692,15 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs"
       ],
+      "detail": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "feature": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
@@ -11704,6 +11711,12 @@
       ],
       "maxId": [
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "setCinema": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "setShed": [
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "*": [

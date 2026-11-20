@@ -623,12 +623,15 @@ test("drawAeroFlaps resolves the livery once per car, and a warm flap-set hit bu
 // DESKTOP ULTRA: every cut sits twice as far out; any other preset, and a phone, keep the table.
 test("GRAPHICS: ULTRA on a desktop doubles the rival LOD reach; HIGH and a phone ULTRA do not", () => {
   const boot = (preset, mobile) => {
-    const ctx = vm.createContext({ Math, Object, Infinity, GLX: { isMobile: !!mobile } });
+    const store = { get: (k, d) => (k === "gfxPreset" ? preset : d), raw: () => null };
+    const ctx = vm.createContext({ Math, Object, Infinity, GLX: { isMobile: !!mobile }, GameStore: { store }, Log: { info() {} } });
+    vm.runInContext(read("js/perf/quality-preset.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/quality-preset.js") });
     vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/car/field-lod.js") });
-    ctx.FieldLod.init({ get: (k, d) => (k === "gfxPreset" ? preset : d) });
+    ctx.FieldLod.init(store);
     return ctx.FieldLod;
   };
   const hi = boot("high"), ul = boot("ultra"), ph = boot("ultra", true);
+  assert.equal(boot("extreme").mirrorCap(), 12, "EXTREME keeps the ULTRA reach");
   assert.equal(ph.mirrorCap(), 6, "a phone never takes the desktop detail set");
   assert.equal(ph.tier(80 * 80), 1);
   const at = (m) => m * m;
