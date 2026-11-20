@@ -30,6 +30,9 @@ const PINNED_KEYS = ["apex26.gfxBackend", "apex26.tyreWear", "apex26.wind", "ape
 // Each test boots TLX and builds a circuit on software GL: the peers on the
 // race fixture (hud-layout, results-flow) declare the same budget.
 test.setTimeout(300_000);
+// #5599: one Chromium per test (fixtures.js `ownBrowser`). A race test closed at its results screen left this file's
+// next boot frozen ~70 s on CI behind the shared browser's GPU process (pit stop after the garage race, twice).
+test.use({ ownBrowser: true });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
