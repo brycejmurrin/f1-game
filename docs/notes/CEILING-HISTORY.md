@@ -1,6 +1,18 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
 
+## 2026-11-19 — PR #5971 (claude/lsp-tool-fixes-1120): apex-lsp factory typing and the G hand-off (#5964, #5965)
+
+`(tree) eagerBytes` 7972011 → **7974642** (+2631). Deliberate raise past the absorb: 54 comment-only
+`/** @type {ReturnType<typeof M.create> | null} */` annotations on null-initialised factory variables in eager
+files (+2,027; member reads on them resolve 0/626 → 610/626 for apex-lsp, docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md),
+and the one game.js line that hands `G` to `VisorOptics.bind` and getters to `RaceEntryProfile.bindGame` (+604):
+their `typeof G` reads never saw game.js's IIFE-local const. Bryce chose to keep the comments (`decision: A` on #5971,
+2026-11-20 07:58Z) and applied `ratchet-raise`.
+`js/game.js codeLines` 5417 → **5418** (+1). Deliberate raise past the absorb: the bind line above.
+`js/game.js lines` 9594 → **9595** (+1). Deliberate raise past the absorb: the bind line above.
+Fragment: `ratchets.d/claude--lsp-tool-fixes-1120.json`.
+
 ## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
 
 `(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.
