@@ -614,3 +614,23 @@ overlay left up → dismissed.
   2 s, 1044 of 1796 → 0. The relative tower is off by default and on in the broadcast HUD profile.
 
 The same review read the other fix commits and found them sound; details are in its report.
+
+## Fix log, continued (third and fourth waves)
+
+### Fix 25 — visor reflections render for normal players (addendum A27)
+
+`js/fx/visor-optics.js`, `js/game.js`: the game hands `VisorOptics` a scene source directly
+(`VisorOptics.setSource`) instead of the visor reading it through the test API. Verified in a
+production-like page (https origin, `navigator.webdriver` hidden, no test API), Bahrain, helmet camera:
+shown false / 0 paints / canvas hidden → shown true / 7 paints / 8 glints / canvas visible.
+
+### Fix 26 — visor bloom and glare follow the lighting tune (new)
+
+`js/fx/visor-optics.js` `readKnobs` read the lighting tune through the test API too, so production was stuck
+at the defaults. It now reads `LightKnobs.LT`. Verified in the same page: low and high glare/bloom settings
+give lamp strength 0.72 and 1.2.
+
+Proposed but **not applied**: clearing the renderer boot canary when a hung start never claimed the canvas
+(A28, patch in the sub-audit's notes). It stops a slow first load from retiring the three.js renderer, but
+a machine whose GPU driver hangs would then wait 15 s on every boot instead of being retired after two —
+a trade-off for the owner.
