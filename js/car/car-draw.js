@@ -294,6 +294,7 @@ const CarDraw = (function () {
         if (mates) for (const [n, key] of mates) if (extra.seats.get(n)) _seatData.set(key, extra.seats.get(n));
         for (const k of _seatData.keys()) if (_seatData.size > SEAT_DATA_MAX) _seatData.delete(k);
       }
+      if (_pbKind === 1) data._casterOnly = true;   // TLX: depth-only, position + index
       const mesh = G.gfx.createMesh(data);
       // Only the existing covered warm may prepare the partner. Failed/unavailable
       // partners simply retain the detailed body; no CPU geometry is retained.
@@ -1460,9 +1461,11 @@ const CarDraw = (function () {
     // left a hollow, wheelless half-car on the road.
     function buildPendingCockpitShadow() {
       const team = _cbTeam, liv = deps.resolveLivery(team);
-      return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+      const geom = Car3D.build(liv.c1, liv.c2,
         { livery: liv, teamId: team.id, silhouette: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
-          parts: _cbParts }));
+          parts: _cbParts });
+      geom._casterOnly = true;   // a caster, unlike the lit shared rival body
+      return G.gfx.createMesh(geom);
     }
     function cockpitKey(team, car, visualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
