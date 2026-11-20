@@ -216,6 +216,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/physics-oracle.mjs** | Golden physics traces (VM): raw-double per-step player state + track queries for the apex-26 TypeScript port gate. | tune-physics |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
+| **check/quali-calibrate.mjs** | Qualifying calibration (VM): drives the clear-air AI field per circuit, writes `tests/data/quali-calibration.json`. | race-weekend |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
@@ -261,6 +262,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
 | **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |
 | **gen/gen-output-surface.mjs** | Generates the agent output catalog from tools, npm scripts and configured MCP routes; --check detects drift. | agent-config |
+| **gen/gen-quali-calib.mjs** | Regenerates the qualifying factors in `js/race/quali-model.js` from `tests/data/quali-calibration.json`; `--check`. | race-weekend |
 | **gen/gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
 | **gen/gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
 | **gen/gen-test-groups.mjs** | Regenerates package.json's `test:*` scripts from tests/groups.json; `--check`. | check-changes |
