@@ -2,6 +2,10 @@
 
 Kind: investigation · Re-measure-by: 2026-12-20
 
+Decision: **B + D**, Bryce via the orchestrator session (session_01BEw9UHmq8je5APtVk54ssF, AskUserQuestion
+2026-11-20 07:49Z: "B+D: count shipped bytes, ask only above 5 KB (Recommended)"). The implementation is a separate PR
+under his own `config-ok`.
+
 Ask (Bryce, 2026-11-20 ~07:42Z, relayed by orchestrator session_01BEw9UHmq8je5APtVk54ssF): "Investigate the reason for
 our rachet and consider removing or redesign or how to help by removing comments etc".
 
