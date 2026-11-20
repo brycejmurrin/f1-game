@@ -1489,7 +1489,7 @@ const TRACK_WORKER_EXTRA = [
 
 // controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
 // <script> subset, in order: the signalling + transport half of js/net, the
-// shared roll math, and the pad module. No game, no renderer, no store.
+// shared roll math, the pad module, and persistent screen arrangement.
 const CONTROLLER = [
   "js/core/log.js",
   "js/core/dev-flags.js",
@@ -1507,6 +1507,11 @@ const CONTROLLER = [
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
+  "js/career/save-migrate.js",
+  "js/core/store.js",
+  "js/ui/screen-regions.js",
+  "js/ui/screen-placement.js",
+  "js/ui/screen-arranger.js",
 ];
 // Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
 // the data hub these are a real graph (rendezvous needs nostr, handshake needs
