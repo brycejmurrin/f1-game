@@ -23,11 +23,17 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `github-mcp-guard.sh` refuses any other list); never `gh`.
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
-   (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
-   NEWEST adoption comment wins (stand down if a newer one appears), the opposite of issue claims. Before the first
-   write, read `pulls/<n>/commits` and the last comments: a commit or comment under 2 h old means the owner is
-   alive, whatever the brief says, so comment and wait instead of pushing. Name the head sha you adopt in the
-   comment, and re-read the head before every push: if someone else moved it, stand down.
+   (hand-started: do both yourself). Work from the Hand-off block and the Plan. On a PR the NEWEST adoption comment
+   wins (stand down if a newer one appears), the opposite of issue claims. **Ownership is a lease:** the Hand-off line
+   reads `owner: <host>:<session> until <ISO UTC>`, at most 4 h ahead, renewed at every push and Hand-off refresh.
+   Adopt only when the lease has lapsed AND `get_session` on the owner does not read `working`, or the owner handed
+   back (`owner: none`, comment `releases PR #<n>`); a split is a release, then an adopt. A PR with no until-time is
+   judged as before: a commit or comment under 2 h old means the owner is alive. Name the head sha you adopt in the
+   comment, set your own lease, and re-read the head before every push: if someone else moved it, stand down.
+   **Park:** a PR waiting on Bryce (`needs-decision`) or on another PR (`blocked`) is parked; the owner refreshes the
+   Hand-off (`next:` names the wait) and may end its turn: the lease holds while the label stays, up to 24 h past its
+   until-time (`pr-board.mjs` LEASE reads `live | parked | lapsed`). Sync a PR only as its live owner, as the last
+   step before `land`; sweeps skip parked PRs.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
 5. **Cap.** The brief's `STOP AT` (`start+<N>k` is a budget above your first turn's context; the worker brief

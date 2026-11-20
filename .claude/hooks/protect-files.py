@@ -18,9 +18,11 @@ Rules, read from the hook payload on stdin, all on the REPO-RELATIVE path of the
      version.json, sw.js, js/roster.js, tools/gen/gen-shell.mjs, package.json, package-lock.json, playwright.config.js.
   3. A SUBAGENT (the payload's agent_id) never writes a guard: the .claude/allow-* hatches, .claude/hooks/,
      .claude/settings*.json, .githooks/, tools/hooks/, .mcp.json, .cursor/hooks*, .codex/hooks*.
+  4. A MAIN session writes a guard only under the hatch (#5849): an in-place hook edit after a refusal is a retry.
+     `.claude/allow-protected` itself stays creatable.
 
 The hatch for a deliberately ASSIGNED edit: the MAIN session creates an untracked `.claude/allow-protected`, retries,
-and removes it after. It lifts rules 1 and 2 for the main session only, and while it exists every guarded call says
+and removes it after. It lifts rules 1, 2 and 4 for the main session only, and while it exists every guarded call says
 so (additionalContext) and the SessionStart line names it. Bash writes are judged by bash-guard.py for subagents
 only; `npm run gen:check` in test:guards and CI is the backstop. A seatbelt against accidents, not a boundary.
 Exit 2 refuses with the reason on stderr; an unreadable payload is a refusal (fail closed).
@@ -212,6 +214,13 @@ def block(msg):
     fail(msg + " If this edit was explicitly assigned, the MAIN session runs: touch "
          + os.path.join(root, ".claude/allow-protected") + " , retries, and removes it after.")
 
+
+# Rule 4 (#5849): a MAIN session edits a guard only through the hatch, so an in-place hook or settings edit after a
+# refusal is never silent; the hatch itself stays creatable, or there would be no way in.
+if not IN_SUBAGENT and GUARD.match(rel) and rel != ".claude/allow-protected":
+    block("%s is a guard (a hook, settings, a .claude/allow-* hatch, .githooks, tools/hooks, .mcp.json or a host's hook "
+          "config) — a main session edits one only for an assigned change, which ships in a PR with Bryce's own "
+          "config-ok; editing a guard to lift a refusal is the same act as retrying it." % rel)
 
 try:
     whole, blocks = generated(root) if APEX_TREE else ({}, {"index.html", "sw.js"})   # the shell's known block files

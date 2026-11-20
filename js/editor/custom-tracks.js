@@ -640,20 +640,18 @@ const CustomTracks = (function () {
         if (generation === hashGeneration && location.hash === hash && !racing()) loseLink(hash);
         return false;
       }
-      // A malformed fragment (`%E0%A4%A`) must not throw past here: the strip
-      // below would never run and every hashchange would re-throw.
+      // A malformed fragment (`%E0%A4%A`) must not throw: the strip below would never run.
       let code = null;
       try { code = TrackCodec.fromHash(hash); } catch (_) { code = null; }
       const r = code ? await TrackCodec.decode(code) : { ok: false, reason: "malformed" };
-      // A race that started while we awaited must keep the fragment for a later
-      // title return — same ownership check as the pre-await gate above.
+      // A race that started while we awaited keeps the fragment (the pre-await gate).
       if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
         Log.info("track", "share link deferred: racing after decode");
         return null;
       }
       if (generation !== hashGeneration || location.hash !== hash) return false;
       try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(hash)); } catch (_) { /* a sandboxed page */ }
-      if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
+      if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); say("THAT TRACK LINK IS INCOMPLETE OR CORRUPT"); return false; }
       Log.info("track", "share link opened " + r.id);
       TrackDesigner.open({ design: r.design, shared: true });
       return true;
