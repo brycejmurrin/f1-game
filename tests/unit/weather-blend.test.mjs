@@ -309,8 +309,14 @@ function walk(b, track, tod, from, to, fps) {
   const frames = [snapLt()];   // frames[i][j] = knob DEFS[j] at frame i
   G.raceWeather = to; atmo.applyRaceSettings(true);
   frames.push(snapLt());
-  for (let t = 0; t < atmo.WX_BLEND_S + 1; t += 1 / fps) { atmo.tick(1 / fps); frames.push(snapLt()); }
-  return { frames, lightsKept: G.track._lights === lights };
+  // The held lamp knobs land at the fade's end (#5990): judge "kept" on the last
+  // frame still inside the fade, and hand back that frame's knobs too.
+  let lightsKept = true, held = frames[1];
+  for (let t = 0; t < atmo.WX_BLEND_S + 1; t += 1 / fps) {
+    atmo.tick(1 / fps); frames.push(snapLt());
+    if (atmo.wxBlend()) { lightsKept = G.track._lights === lights; held = frames[frames.length - 1]; }
+  }
+  return { frames, lightsKept, held };
 }
 
 test("a weather-arc flip walks every knob monotonically across the 25 s window, and no 60 fps frame moves keyMul > 10 %", () => {
@@ -324,14 +330,18 @@ test("a weather-arc flip walks every knob monotonically across the 25 s window, 
     // 4 fps is enough for the shape (monotonic, held, landed): the fade is a pure
     // function of t, so the frame rate only samples it. The 10 % bound is checked
     // at 60 fps below, on the steepest keyMul ratio this sweep finds.
-    const { frames, lightsKept } = walk(b, track, tod, from, to, 4);
+    const { frames, lightsKept, held } = walk(b, track, tod, from, to, 4);
     const tag = `${track}|${tod} ${from}->${to}`;
     assert.ok(lightsKept, `${tag}: the flip nulled track._lights (a lamp rebuild + re-bake mid-race)`);
     cut.G.track.def.id = track; cut.G.raceTimeOfDay = tod; cut.G.raceWeather = to; cut.atmo.applyRaceSettings();
     const first = frames[0], last = frames[frames.length - 1];
     for (let j = 0; j < b.DEFS.length; j++) {
       const d = b.DEFS[j], id = d.id, a = first[j], z = last[j];
-      if (HELD(d)) { if (z !== a) assert.fail(`${tag}: held knob ${id} moved ${a} -> ${z}`); continue; }
+      if (HELD(d)) {
+        if (held[j] !== a) assert.fail(`${tag}: held knob ${id} moved mid-fade ${a} -> ${held[j]}`);
+        if (z !== cut.LT[id]) assert.fail(`${tag}: held knob ${id} ended on ${z}, not the ${to} preset's ${cut.LT[id]}`);
+        continue;
+      }
       if (z !== cut.LT[id]) assert.fail(`${tag}: ${id} landed on ${z}, not the ${to} preset's ${cut.LT[id]}`);
       if (a === z) { if (!frames.every((f) => f[j] === a)) assert.fail(`${tag}: ${id} wandered`); continue; }
       moved++;
