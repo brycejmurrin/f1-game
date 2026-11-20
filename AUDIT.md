@@ -669,3 +669,29 @@ Three commits in `js/physics/collide.js`, verified by executing the real module 
 Energy checks after all three: 40,000 random pile-ups, no NaN, no kinetic-energy gain. Proposed but **not
 applied**: letting the player complete a side-by-side pass with light wheel contact instead of being pushed
 back (the sub-audit flags it as a design call: the player could then lean on an AI).
+
+### Fixes 36–42 — practice bests, performance governor, AI and stopped cars
+
+- **36** `js/race/race-insights.js` — race-practice drill bests were all stored under one key (the key was
+  built from a value that is null outside time trial), so Monaco overwrote Bahrain's best and announced NEW
+  BEST. Now keyed per circuit and setup. Before: one shared entry; after: `bahrain 8.24`, `monaco 7.32`.
+- **37** `js/perf/governor.js` (finding 11) — the frame-time floor may not rise above 20 ms while a detail
+  tier can still be shed. Real module driven with synthetic traces: CPU-bound 30 ms ended at tier 0 / 30 fps
+  before, tier 4 / 60 fps after; a slowdown tiers cannot fix tries them once and gives up (no flapping);
+  steady 60/120 Hz and GPU-bound traces unchanged. **Simulation only — the 20 ms constant needs tuning on
+  real hardware.**
+- **38** `js/perf/governor.js` — on phones the reduced-detail latch now clears at the start of a race, with
+  one retry per race. Light second race: tier 2 latched → tier 0.
+- **39–41** `js/game.js`, `js/physics/ai-drive.js`, `js/physics/collide.js` (finding 6) — AI cars now avoid
+  a car stopped on track in corners as well as on straights: stopped live cars go on the hazard list
+  retired cars use, the pass side is chosen once from where the AI car is, and yielding to another AI no
+  longer pins a car onto the hazard. Player parked at six spots on three circuits, 250 s each: contacts with
+  the player 183 → 10, AI rescue teleports 122 → 2, longest AI stuck 87.9 s → 5.6 s. Residual: Monaco 0.64
+  (9 contacts) where a car gets wedged between the stopped car and the wall.
+- **42** `js/game.js` (A23) — the 60 s stationary-retirement timer also runs under yellow and VSC. Car
+  stopped on the Bahrain straight with cautions on: 60 s of green racing past it before, 0.2 s after.
+
+Proposed by sub-audits and **held as design calls**: forcing calm wind in time trial (wind changes lap times
+by ~0.15 s but is not part of the record key; the patch removes wind from time trial and the daily
+challenge), and scoring the braking drill as distance normalised to 200 km/h (the raw score can be farmed by
+braking from 22 km/h; the patch hides existing braking bests).
