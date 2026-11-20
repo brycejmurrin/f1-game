@@ -85,6 +85,8 @@ const Input = (function () {
   // toggles as the fix, between HOLD and full AUTO. `throttleLatch` is the mode,
   // `throttleLatched` the state it keeps.
   let throttleLatch = false, throttleLatched = false;
+  // PEDAL SLIDE (#5996): "instant" | "ease", read by hold-buttons.js slideEase.
+  let pedalSlide = "instant";
   let padThrottle = false;
   let padBrake = false;
   let padThrottleVal = 0;
@@ -1406,6 +1408,7 @@ const Input = (function () {
   const holdButtons = InputHoldButtons.create({
     clamp,
     beforeReleaseAll(keepLatch) { if (!keepLatch) { throttleLatched = false; paintLatch(); } },
+    slideEase: () => pedalSlide === "ease",
   });
   const { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease } = holdButtons;
 
@@ -2303,8 +2306,8 @@ const Input = (function () {
       // latch outright rather than toggling it (see holdReleaseAll).
       if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
       else btnThrottle = v;
-    }, function (l) { btnThrottleVal = l; }, { sibling: "btn-brake" });
-    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { sibling: "btn-throttle" });
+    }, function (l) { btnThrottleVal = l; }, { sibling: "btn-brake", easeIn: true });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { sibling: "btn-throttle", easeIn: true });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -2606,6 +2609,8 @@ const Input = (function () {
     triggerRumbleSupported,
     vibrate,
     hapticsSupported,
+    setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
+    pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
     setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),
