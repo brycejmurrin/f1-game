@@ -584,3 +584,18 @@ test("THROTTLE = LATCH: sliding off a latched GAS keeps the latch, and BRAKE sti
   lift("btn-brake");
   assert.deepEqual([btn().throttle, btn().brake], [true, false]);
 });
+
+test("clean-room 14: a controller that vanishes without a disconnect event drops the GAS / LOOK BACK latch", () => {
+  const { Input, sb, pad, poll, button } = bootPad();
+  Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
+  button(7, true); button(11, true); poll(); poll();
+  button(7, false); button(11, false); poll();
+  assert.equal(Input.throttleLevel(), 1, "latched on");
+  sb.navigator.getGamepads = () => [];                    // silent drop: no gamepaddisconnected
+  poll();
+  sb.navigator.getGamepads = () => [pad];                 // back, idle
+  poll(); poll();
+  assert.equal(Input.throttle(), false, "no GAS with nothing pressed");
+  assert.equal(Input.throttleLevel(), 0);
+  assert.equal(Input.lookingBack(), false);
+});
