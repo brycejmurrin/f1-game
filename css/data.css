@@ -1055,9 +1055,10 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
   }
   #quali .sheet:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
 }
-#quali .sheet:not([data-shape="tall"]) .res-row {
+#quali .sheet:not([data-shape="tall"]):not([data-density="compact"]) .res-row {
   padding-block: calc(var(--gap) * 0.2);
   min-height: max(var(--chip-h), calc(36px / var(--ui-scale)));
+  align-items: center;
 }
 @media (max-height: 519px) and (min-aspect-ratio: 1/1) {
   body[data-shape="wide"] #ios-install:not([hidden]) {
