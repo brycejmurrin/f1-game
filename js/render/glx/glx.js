@@ -196,6 +196,7 @@ const GLXBackend = (function () {
   // god-ray scratch, which moved to js/render/glx/post.js with present().
   // Four vec4s match shaders/glsl-lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
   const MAX_LIGHTS = LightBudget.MAX;   // eval-time read: tools/manifest.cjs HARD_EDGES (light-budget.js first)
+  let litSlots = MAX_LIGHTS;   // the lit loop's LIVE slots (init fits it to the GPU)
   // ONE interleaved scratch, stride 16 floats (4 vec4s) per light — matches
   // uLight[] in shaders/glsl-lit.js so a chunk uploads in a single uniform4fv.
   const _luL = new Float32Array(MAX_LIGHTS * 16);
@@ -561,6 +562,8 @@ const GLXBackend = (function () {
     return checkLink(prog);
   }
 
+  const litFsFor = (n) => LIT_FS.replace(/const int MAX_LIGHTS = \d+;/, "const int MAX_LIGHTS = " + (n | 0) + ";");
+
   function locs(prog, names) {
     const u = {};
     for (const n of names) u[n] = gl.getUniformLocation(prog, n);
@@ -569,7 +572,7 @@ const GLXBackend = (function () {
 
   function init(canvasEl) {
     canvas = canvasEl;
-    LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
+    LightBudget.setSlots(litSlots = MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
     watchCanvasSize();
     // HeadlessChrome's CDP / Playwright page screenshots race the cleared backbuffer
     // without preserveDrawingBuffer — and even with it, SwiftShader often never
@@ -750,22 +753,20 @@ const GLXBackend = (function () {
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 
-    // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is ~279 vec4 rows
-    // (uLight 192 + uMatTexScale 17 + three mat4 + nine vec3 + ~47 scalars),
-    // above the GLES 3.0 floor of 224 that shaders/glsl-lit.js still cites. Apple
-    // and desktop drivers report 1024+, so iPhone links; an Adreno at the
-    // floor does not, and until now the only symptom was init() returning
-    // false with a 100 KB shader dumped to the console. Say the two numbers
-    // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 288;   // +uRain, +uSpecKnee (2026-10-01), +uCarFinish (2026-10-20)
+    // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is 292 vec4 rows (a row
+    // per scalar; glx-light-fit.test.mjs recounts it), above the GLES 3.0 floor
+    // of 224: Apple and desktop report 1024+, many Androids under 261. The light
+    // loop shrinks to fit (4 rows a light, 31 at 224) instead of failing (#5990).
+    const LIT_FS_ROWS = 292;
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
-      if (rows && rows < LIT_FS_ROWS) {
-        Log.warn("gfx", "GLX: MAX_FRAGMENT_UNIFORM_VECTORS " + rows + " < the lit shader's ~" + LIT_FS_ROWS + " rows — expect the lit program to fail to link on this GPU");
+      litSlots = LightBudget.fitSlots(rows, LIT_FS_ROWS, 4);
+      if (litSlots < MAX_LIGHTS) {
+        Log.warn("gfx", "GLX: MAX_FRAGMENT_UNIFORM_VECTORS " + rows + " < the lit shader's ~" + LIT_FS_ROWS + " rows — lit lights cut to " + litSlots);
       }
-    } catch (_) { /* a caps read must never cost the boot */ }
+    } catch (_) { litSlots = MAX_LIGHTS; /* a caps read must never cost the boot */ }
     beginLinks();   // the eight core programs compile as one parallel batch
-    litProg = link(LIT_VS, LIT_FS);
+    litProg = link(LIT_VS, litFsFor(litSlots));
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
@@ -777,6 +778,8 @@ const GLXBackend = (function () {
     const _bad = resolveLinks(), _ok = (p) => (p && !_bad.has(p) ? p : null);
     litProg = _ok(litProg); skyProg = _ok(skyProg); shadowProg = _ok(shadowProg); markProg = _ok(markProg);
     markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
+    if (!litProg && litSlots > LightBudget.LITE) litProg = link(LIT_VS, litFsFor(litSlots = LightBudget.LITE));   // drivers pack differently: one retry
+    LightBudget.setSlots(litSlots);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
       "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
@@ -1994,8 +1997,8 @@ const GLXBackend = (function () {
   // Tail lights are reserved FIRST (there are at most 5, and a car beside you
   // matters more than the 32nd-nearest lamp), then static lamps fill what's left.
   function uploadLightSet(L, idx, n, L2, o2, n2) {
-    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
-    const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
+    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, litSlots) : 0;
+    const nStatic = L ? Math.max(0, Math.min(litSlots - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
     // MEASURED BEFORE WRITING (docs/PERF-FINDINGS.md §2e's rule): vegas night,
     // full field in a pack, 111 uploads a frame against 53.7 distinct VALUES —
@@ -2012,16 +2015,9 @@ const GLXBackend = (function () {
       const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
                          : ((idx ? idx[i] : i) * 15);
       const i4 = i * 16;
-      // NO PER-CHUNK DIMMER HERE, and do not reintroduce one. The knob was once
-      // a brightness multiplier applied at this point; setFrameLights now scales
-      // the baked set exactly like the culled one, so this had already been
-      // reduced to a guaranteed identity (see the retirement note at the
-      // _lampScale assignment site, removed with it). What survived the
-      // retirement was the machinery: a per-lamp `inFrameTail` test — four
-      // comparisons for every lamp of every chunk of every chunked mesh, five
-      // times a frame — feeding a scale that was provably 1, and three
-      // multiplies by it. The knob's real jobs are enabling per-chunk sets and
-      // setting their cap via capFor; neither is a factor on rgb.
+      // NO PER-CHUNK DIMMER HERE, and do not reintroduce one: setFrameLights
+      // scales the baked set like the culled one, so a factor here was a proven
+      // identity paid per lamp per chunk. The knob only enables sets and caps them.
       L4[i4] = src[o]; L4[i4 + 1] = src[o + 1]; L4[i4 + 2] = src[o + 2]; L4[i4 + 3] = src[o + 6];
       L4[i4 + 4] = src[o + 3]; L4[i4 + 5] = src[o + 4]; L4[i4 + 6] = src[o + 5]; L4[i4 + 7] = src[o + 12];
       L4[i4 + 8] = src[o + 7]; L4[i4 + 9] = src[o + 8]; L4[i4 + 10] = src[o + 9]; L4[i4 + 11] = src[o + 10];
@@ -2852,7 +2848,7 @@ const GLXBackend = (function () {
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => PST.hdrOk(),
-    maxLights: () => MAX_LIGHTS,   // lit-shader light slots (LightBudget.slots() mirrors it)
+    maxLights: () => litSlots,   // lit-shader light slots (LightBudget.slots() mirrors it)
     // Debug introspection for the dynamic car shadow map (used by tests/tools).
     // `armed` is the frame-live gate the LIT uniform reads; `arms` is a lifetime
     // counter that stays true straight through a strobe, which is exactly why the

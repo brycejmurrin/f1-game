@@ -27,6 +27,13 @@ const LightBudget = (function () {
   }
   function slots() { return _slots; }
 
-  return { MAX, MOBILE, LITE, CHUNK, MIRROR, TAIL_RESERVE, setSlots, slots };
+  // Most slots (`per` uniform rows each) whose block, `atMax` rows at MAX, fits
+  // the device's `lim`; MAX when it fits or reads 0, never under LITE (#5990).
+  function fitSlots(lim, atMax, per) {
+    lim |= 0;
+    return lim <= 0 || lim >= atMax ? MAX : Math.max(LITE, Math.min(MAX, Math.floor((lim - atMax) / per) + MAX));
+  }
+
+  return { MAX, MOBILE, LITE, CHUNK, MIRROR, TAIL_RESERVE, setSlots, slots, fitSlots };
 })();
 Object.freeze(LightBudget);
