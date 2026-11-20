@@ -1,6 +1,6 @@
 # A `cancelled` run, and syncing with the base
 
-Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict`, `union-conflict`, `stale-red`, `retest-refused` or `gate-refused`.
+Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict`, `union-conflict`, `stale-red`, `retest-refused`, `gate-refused` or `tip-crossed`.
 
 ## `cancelled`: read the jobs, not the conclusion
 
@@ -21,7 +21,7 @@ A PR that ends `cancelled` twice with zero failures:
 ## When to sync
 
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
-(`= sync needed: conflict | union-conflict | stale-red | retest-refused | gate-refused | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
+(`= sync needed: conflict | union-conflict | stale-red | retest-refused | gate-refused | tip-crossed | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
 the deploy tip is red on code, so a sync would import the red; the gate's `base` row holds merges until the fix lands,
 #5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`. A newest run that ended `cancelled`
 after at least one job concluded `failure`, or green only on `run_attempt` > 1 after an earlier attempt had a red job
@@ -41,7 +41,15 @@ that row first). A head still behind the tip is a sync even when this clone's wi
 
 `gate-refused` (#5832): the head is green and its newest `gate` status (open and ci ok) failed `gen` or `ratchets`:
 the merge onto the tip does not regenerate cleanly or breaks a tree-wide ceiling. Sync, then fix what the new CI
-run shows. The row re-runs only the unit
+run shows.
+
+`tip-crossed`: the head is green and behind with no conflict, and needs-sync's own throw-away merge onto the tip
+(merge-gate's `localMergeGenCheck`, the same `gen` and `ratchets` rows) fails one: the tip moved a tree-wide number
+under the head (an exact `eagerCodeBytes` re-seed, #5975). It needs no `gate` status, so a draft reaches it.
+`sync-pr` runs for it, no force flag; then fix what the new CI run shows. An unreadable merge stays `no` and says
+so; `pr-board` skips the merge (it runs `gen:check`), so ask `needs-sync` itself. `--no-merge-check` skips it.
+
+The `retest` row re-runs only the unit
 files BOTH the newer tip merges and the PR select, plus the touched `tests/unit` files (#5597), so "too broad to re-test
 at merge" now means the two sides really share that much; one PR's own wide selection no longer refuses it.
 

@@ -32,7 +32,7 @@ const Gfx = (function () {
   // One alternate-init generation owns access to the canvas. Revocation is
   // synchronous even when a browser adapter/init promise cannot be cancelled.
   function createInitOwner(canvas) {
-    let active = true, claimed = false;
+    let active = true, claimed = false, importing = false;
     const canvasLease = new Proxy(canvas, {
       get(target, key) {
         if (key === "__element") return target;   // ResizeObserver rejects a Proxy: CanvasCssSize observes the real element
@@ -47,7 +47,9 @@ const Gfx = (function () {
       },
       set(target, key, value) { if (!active) return true; return Reflect.set(target, key, value, target); },
     });
+    // importing: a vendor module still downloading; a timeout then is no strike (#5942).
     return { canvas: canvasLease, get active() { return active; }, get claimed() { return claimed; },
+      get importing() { return importing; }, importing_(on) { importing = !!on; },
       abort() { active = false; }, check() { if (!active) throw new Error("Renderer initialization cancelled"); } };
   }
   // A backend that resolved after its init owner was revoked (boot timeout) is never handed back:
