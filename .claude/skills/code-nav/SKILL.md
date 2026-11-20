@@ -24,6 +24,11 @@ use `node tools/mcp/lsp-mcp.mjs` with the table's commands (the `tools/mcp/lsp-m
 wrapper runs the same thing, but a reporter subagent's read-only hook refuses it); do not rebuild the
 server or change global host configuration to perform a lookup.
 
+In Claude Code `.mcp.json` marks apex-lsp `alwaysLoad`, so its `lsp_*` tools arrive loaded. A host that
+still lists them as deferred names loads them once with ToolSearch
+`select:mcp__apex-lsp__lsp_definition,mcp__apex-lsp__lsp_references,mcp__apex-lsp__lsp_callers,mcp__apex-lsp__lsp_diagnostics`
+(measured 2026-11-20: 0 lsp calls in 13 workers, none of which loaded them).
+
 ## Which call
 
 For output levels and saved-result retrieval, follow the
