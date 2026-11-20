@@ -232,8 +232,10 @@ window.TopModal = (function () {
     opener.delete(layer);
     const top = window.UiLayers && window.UiLayers.top ? window.UiLayers.top() : null;
     if (!connected(back) || !usable(back)) {
+      // Focus still on the closing layer counts as lost: it is about to be blurred to <body>.
+      const lost = !a || a === document.body || layer.contains(a);
       const mem = top && lastFocus.get(top);
-      if ((!a || a === document.body) && connected(mem) && top.contains(mem) && usable(mem)) focusQuiet(mem);
+      if (lost && connected(mem) && top.contains(mem) && usable(mem)) focusQuiet(mem);
       return;
     }
     if (a && a !== document.body && !layer.contains(a)) return;
