@@ -438,7 +438,7 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
 }, true);
 
-function applyTrackSearch(value) {
+function applyTrackSearch(value, pick) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
   for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
@@ -451,7 +451,7 @@ function applyTrackSearch(value) {
   }
   const empty = document.getElementById("sel-track-empty");
   if (empty) empty.hidden = rows.some((row) => !row.hidden);
-  if (trackQuery) {
+  if (pick && trackQuery) {
     const active = rows.find((row) => row.classList.contains("active"));
     if (!active || active.hidden) { const first = rows.find((row) => !row.hidden); if (first) first.click(); }
   }
@@ -557,6 +557,7 @@ function trackFilterBar() {
     b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => {
       e.stopPropagation();
+      trackQuery = "";
       G.daily.select();
       leavePracticePick();
       setTrackFilter("all", false, true);
@@ -570,7 +571,7 @@ function trackFilterBar() {
   search.placeholder = "Search circuit";
   search.setAttribute("aria-label", "Search circuits");
   search.autocomplete = "off";
-  search.oninput = () => applyTrackSearch(search.value);
+  search.oninput = () => applyTrackSearch(search.value, true);
   bar.appendChild(search);
   return bar;
 }
