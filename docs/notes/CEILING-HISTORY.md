@@ -13,8 +13,9 @@ cache lookups on every boot. Fragment: `tests/data/ratchets.d/claude--perf-asset
 
 ## 2026-11-20 — boot wall counts stripped code (Bryce's B+D, D-036)
 
-`(tree) eagerBytes` 7,972,011 (raw source) is **retired** for `(tree) eagerCodeBytes` **4,035,289** (`slack: 0`,
-`absorb: 5000`), measured on tip `d35f2e29`: the same 309 eager scripts with comments and spare whitespace stripped by
+`(tree) eagerBytes` 7,972,011 (raw source) is **retired** for `(tree) eagerCodeBytes` **4,037,486** (`slack: 0`,
+`absorb: 5000`), first measured on tip `d35f2e29` at 4,035,289 and re-seeded at 4,037,486 on the PR's sync merge with
+tip `6555994c` (#5786, #5782 and #5902 had grown eager code meanwhile): the same 309 eager scripts with comments and spare whitespace stripped by
 `tools/lib/js-strip.mjs` (terser, which Pages ships, reads 3,325,036; the gap is unmangled local names). Comments
 were 2,847,130 B (35.7 %) of the old count. A branch's own growth up to 5000 B is the commit hook's fragment with no
 label; past it, `ratchet-raise` as before. Open fragments' `eagerBytes` deltas are inert from here (applyFragments
