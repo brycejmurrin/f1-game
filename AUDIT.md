@@ -757,3 +757,91 @@ applied. The defect itself (A-series: Back during the ceremony leaves the game) 
   game; wiring it in as-is would put the Singapore night camera inside a catch fence.
 - The boot warning "[scenery] bahrain: suppressed … floodMast=149" is a false alarm from the garage's
   windowed build.
+
+### Fixes 54–72 — results, photos, radio, touch, phone pairing, track designer, saves, keyboard
+
+Each re-run by me before and after unless marked.
+
+- **54** `js/ui/results-sheet.js` (A31) — results announcements piled up from races quit while the sheet
+  was hidden: announced VER, NOR, LEC, HAM → HAM only.
+- **55** `js/ui/photo-studio.js` — **new** — a saved photo was silently dropped (while the game said
+  "Saved to My Photos") when the six stored photos carried later dates. Now stored, oldest evicted.
+- **56** `js/ui/results-story.js`, `js/ui/podium-beat.js` — "P10 · 1 points" → "1 point" (pattern checked
+  in node, not in the page).
+- **57** `js/race/engineer.js` — **new** — "MANAGE THE TYRES — 6 LAPS TO THE FLAG" three seconds into a
+  5-lap race; the lap-0 call is gone.
+- **58** `js/audio/announcer-recorded.js` — **new** — the recorded announcer (on by default) never spoke
+  the circuit-length line: 0 of 48 → 48 of 48 in node against one pack's clips.
+- **59** `js/ui/onboard.js` — first-race tips could fire after the chequered flag. One-line guard,
+  **checked by reading only**; my run did not reproduce the sub-audit's sighting.
+- **60** `js/ui/dock-layout.js` — **new** — moved touch-control groups went off screen when LEFT-HANDED
+  was switched on (arrows at x 793–959 on a 740 px screen → 376–543) and sat ~25% further out at race
+  start (left edge 243 px → 197 px).
+- **61** `js/input/input.js` — **new** — a resting second finger stole the steering: 7 flips in 20
+  one-pixel moves → 0.
+- **62** `js/input/phone-pad.js` — **new** — the phone-controller ALLOW / REJECT card was drawn underneath
+  an open Settings dialog; a tap on ALLOW opened Accessibility instead. Verified with two pages paired
+  over real WebRTC: ALLOW works first tap.
+- **63** `js/editor/stamps.js` — **new** — inserting a SHAPE stamp tied a knot in the loop in 53 of 53
+  tries for every shape → straight 7, corner 3, hairpin 29, chicane 2, s-bend 2.
+- **64–65** `js/editor/fixes.js` — FIX ALL left Silverstone (start) and Korea (fold) red; all 52 START
+  FROM templates are now OK after FIX ALL.
+- **66** `js/editor/designer.js` — **new** — Ctrl+Z during a point drag lost the undo.
+- **67** `js/editor/canvas.js` — **new** — resizing or rotating mid-edit left the circuit cut off
+  (checked by screenshot at 390x844).
+- **68** `js/editor/workspace.js` — "CHECKS · 1 WARNINGS" → "1 WARNING".
+- **69** `js/core/store.js` — **new** — after the backup database (IndexedDB) was lost once, saves not
+  rewritten stayed without a backup while save-health said the mirror was fine. Delete the database and
+  reload: 2 of 6 keys backed up → all; then clear main storage: 4 keys lost → none.
+- **70** `js/ui/settings-export.js` — **new** — a season, licence badges and daily history could not be
+  backed up without a career. SAVE CAREER FILE now carries them: export/wipe/import restored 0 → 3.
+- **71** `js/ui/modal.js` — **new** — when Tab wraps inside a screen the focused control could be far
+  off screen (200% zoom: 1 race-settings stop off screen → 0). Fix 47 still holds.
+- **72** `js/ui/results-sheet.js` — the 22 tyre-stint disclosures were all named "TYRE STINTS"; each now
+  names its driver (**checked by reading only**).
+- Tooling: `tools/csp-hashes.mjs` reports stale inline-script hashes per page (the cause of fix 1).
+
+**Tried and reverted** (did not hold in my re-run, or I could not verify them):
+
+- Engineer position calls that point the wrong way ("YES! P5" after losing a place): the proposed patch
+  left the same wrong call at the same moment in my Bahrain run (1 of 21 before and after). Defect open.
+- Commentary calling a pass that was already reversed: 0 contradicted calls in my runs with and without
+  the patch, so no evidence either way.
+
+**Correction to finding 17 / A30 (load size).** "792 requests / 13.6 MB" and "buttons inert until 35 s"
+were measured on 127.0.0.1 with Python's HTTP/1.0 server, where the test-only agent surface also loads.
+A sub-audit re-measured with GitHub-Pages-like headers (HTTP/2, gzip) on a non-localhost address: 453
+requests, 4.2 MB transferred, title usable at 3.3 s unthrottled and 15.9 s on Slow 4G (2,158 KB before
+the title is usable). The "fetched four times" duplicate fetches were HTTP-cache hits, not downloads.
+The remaining point stands in weaker form: on slow links the title waits on bytes; 69 eager scripts
+(about 170 KB gzip) run nothing before the title and could move into the existing lazy bundles (measured
+15.9 → 14.4 s), which needs a per-global callers check and was not attempted.
+
+**Open findings from the last reports, not patched:**
+
+- **Friend races:** one player who never finishes keeps everyone on track for 360 s per lap (30 minutes
+  in a 5-lap race); the 75 s post-finish cap only applies offline (`js/race/race-control.js:15-32`).
+  Measured with two pages over real WebRTC. Needs a decision on the cap length.
+- **Friend races:** after the host leaves, the guest can be awarded a FASTEST LAP badge it did not earn
+  (seen once; cause read, not instrumented).
+- **WebGL2 fallback on Android:** the lit shader needs about 288 uniform rows and roughly 43% of Android
+  devices allow fewer than 261, so the fallback ends in "graphics unavailable". A patch (24 lights when
+  the limit is low) exists but a real link failure cannot be reproduced here.
+- **Camera tuner:** MOTION BLUR and SPEED LINES sliders do nothing on any renderer (`setComfortFx` is
+  never defined).
+- **Lighting:** after a mid-race weather change the lamp-shape knobs never move to the new weather's
+  values; a global lighting profile is hidden and wiped by RESET on any one circuit; COPY VALUES output
+  cannot be pasted back.
+- **Radio:** with the recorded radio voice on, whole groups of lines are silently skipped (no speech
+  fallback); 168 recorded clips are source-code fragments (641 KB); "A BIG ACCIDENT" is announced for
+  retirements with no accident; 93 of 202 longest radio lines lose a line at 844x390.
+- **Saves:** `seasonCfg`, `circuitMastery`, `ghost.v1`, `onboarded`, `pitTaught` and custom circuits are
+  in no SAVES & DATA export; two incompatible career file formats share one screen; the schema
+  registry's validators are never run.
+- **Multiplayer relays:** two of seven default relays are dead (503 / "No space left on device"). A
+  patch swapping in two others exists; adding hosts is a trust choice.
+- **CSP:** `overlay.html`, `cockpit-view.html` and `bench.html` have no policy; index and controller
+  policies can be tightened (patches exist, tested on menus and one race but not Spotify, OBS or XR).
+- **Touch:** sliding off a pedal to ease it jumps to the opposite control at full strength (patch held:
+  it makes a quick slide to brake need ~40 px more travel); tilt steering weakens as the phone leans back.
+- **Accessibility:** race announcements run at about 22 per minute with no verbosity setting.
