@@ -94,7 +94,7 @@ var AudioPanel = (() => {
       setAttr(el, "aria-valuetext", percent + " of default mix");
     }
     let radioOn = store.get("radioVoice", false);
-    let radioVol = store.get("volRadio", RADIO_MIX);
+    let radioVol = store.get("volRadio", 0.8);   // RADIO_MIX: SettingsDefaults has no volRadio row
     const FOCUS_VALUES = [[0, "STANDARD"], [4, "4 dB"], [8, "8 dB"], [12, "12 dB"]];
     const focusNow = () => {
       const value = !GameAudio._stub && GameAudio.getRadioFocusDb ? GameAudio.getRadioFocusDb() : store.get("radioFocusDb", 0);
@@ -608,7 +608,7 @@ var AudioPanel = (() => {
         if (!battlePreview.ready()) {
           battlePreview.prepare(); battleNote("Preparing the tones. Press the sample again in a moment."); return;
         }
-        const volume = 0.3 * Math.max(0, Math.min(1, +store.get("volRadio", RADIO_MIX) || 0));
+        const volume = 0.3 * Math.max(0, Math.min(1, +store.get("volRadio", 0.8) || 0));
         if (battlePreview.play(key, volume)) battleNote(key.replace(":", " ") + ".");
         else battleNote("The sample could not play. Check sound and voice volume.");
       };

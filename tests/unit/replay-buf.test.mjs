@@ -453,7 +453,7 @@ async function bootSoloRaceForScrubAudio() {
     Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
       set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
   };
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); trapCreate(sb); } });
+  const g = await createGame({ carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { fa = installFakeAudio(sb); trapCreate(sb); } });   // sound ships off (#5977)
   const sb = g.sandbox;
   sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
   await vmSettle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);

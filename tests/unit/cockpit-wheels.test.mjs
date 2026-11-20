@@ -312,7 +312,7 @@ test("the rig's remaining wiring: roll damping, per-fascia LEDs, caches, and the
     "body.cockpit-cam (which hides the HUD gear/speed) needs a wheel with a screen — in COCKPIT only: HELMET is the visor HUD (js/camera/cam-groups.js)");
   assert.match(ms, /CockpitOpts\.onWheel\(refreshCamBtn\);/, "a mid-race change re-evaluates it");
   const exp = read("js/ui/settings-export.js");
-  for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],
+  for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"'], ["cockpitSeat", "fwd", '"std", "low", "high", "fwd"'],
     ["cockpitInterior", "team", '"carbon", "team", "suede", "ribbed", "classic"']])
     assert.ok(exp.includes(`k: "${k}", lane: "raw", group: "camera", def: "${def}"`) && exp.includes(`oneOf: [${one}]`), `${k} is exported and imported`);
   assert.ok(exp.includes('oneOf: ["0", "slim", "1", "thick", "fairing"]'), "cockpitHalo accepts the sizes and faired style");

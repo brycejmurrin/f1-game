@@ -401,10 +401,10 @@ test("silverstone night dry→wet blends city skyglow, moon and the stamped knob
   const glowLum = (g) => (g ? g[0] + g[1] + g[2] : 0);
   const dryGlow = glowLum(b.G.frameSky.cityGlow);
   const wetGlow = glowLum(cut.G.frameSky.cityGlow);
-  // Dry endpoint is the Silverstone pass-2 skyglow override (2.35), not the
-  // fleet *|night|dry 0.55; wet still inherits *|night|wet 0.88.
-  assert.ok(Math.abs(stampDry.cityGlowMul - 2.35) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
-    "endpoints use silverstone|night|dry cityGlow + *|night|wet stamps");
+  // The owner-export presets (#5977) dropped Silverstone's pass-2 skyglow override (2.35): the dry
+  // endpoint is the fleet *|night|dry 0.55; wet still inherits *|night|wet 0.88.
+  assert.ok(Math.abs(stampDry.cityGlowMul - 0.55) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
+    "endpoints use *|night|dry + *|night|wet cityGlow stamps");
   b.G.raceWeather = "wet";
   b.atmo.applyRaceSettings(true);
   const at = (s) => {
