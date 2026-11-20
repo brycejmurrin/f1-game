@@ -201,8 +201,12 @@ on:
   # PR and the deploy gate (the pages.yml train) the smoke job runs
   # smoke.spec.js in ONE shard (~3 min); a deploy-branch push and a draft PR
   # are the fast tier and do not run it.
+  # 16:17 UTC (2026-11-20, was 04:17): GitHub starts this cron 6.8-9.1 h late
+  # (median 8.4 h, 15 nights), so 04:17 ran at 11-13 UTC, the queue's busiest
+  # hours; 16:17 lands the start at 23-01:30 UTC, the quiet window
+  # (docs/notes/CI-CRON-DELAY-2026-11-20.md). The minute stays off the hour.
   schedule:
-    - cron: "17 4 * * *"
+    - cron: "17 16 * * *"
   workflow_dispatch:
     inputs:
       # Any browser group from package.json on the 4-shard matrix (default =
@@ -2297,6 +2301,10 @@ jobs:
           # diff (2026-11-03) routed ~70 and ran 26 legs (1 selected, 6 spill, 19 oversize) with this at 0,
           # 24 with the default 11. A draft mode that names the rest as not-run instead is a follow-up.
           OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '0' || '' }}
+          # THE NIGHTLY'S OVER-BUDGET POOL (2026-11-20): 12 jobs' worth on `schedule` only (select-specs
+          # NIGHTLY_OVER_BUDGET_SHARDS; at the default 9 the day's union diff dropped 2 routed specs and the verdict
+          # redded three nights running). Every other event keeps MAX_OVER_BUDGET_SHARDS.
+          OVER_BUDGET_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # THE PLAN RECORD (#5426). Every run's plan, as one `apex-selected` annotation (plan key, dropped count, base
       # sha), so a later ready flip on the same head can ask what this run's legs proved.

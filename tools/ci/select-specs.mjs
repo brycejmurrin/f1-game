@@ -336,6 +336,13 @@ export const MAX_SPILL_SHARDS = 8;
 // change (whole-suite route, tip 7ad0ee9) DROPPED new-hooks.spec.js (540 s/test) with
 // the pool full at 8. Measured with MAX_SPILL_SHARDS 8: over-budget 8 -> 1 dropped, 9 -> 0.
 export const MAX_OVER_BUDGET_SHARDS = 9;
+// THE NIGHTLY'S POOL (2026-11-20). The schedule run routes a day's union diff (reason=infra: near the whole
+// suite), and at 9 the pool was full: nightly 44739348355 (322c63a3) DROPPED perf-boost-press-pipelines and
+// race-cycle-memory and its verdict went red with no test failing (three red nightlies, 11-18..11-20). Measured on
+// tip a671f12b with the bot/spec-timings overlay, `--files tests/helpers/fixtures.js` (the whole-suite route) at
+// 60 min / 12 overflow: 9 -> 1 dropped (quali, 3148 s run), 11 -> 0 (3608 s of 3960). 12 = 4320 s, ~20 % headroom.
+// ci.yml passes it ONLY on `schedule` (OVER_BUDGET_SHARDS); PR, train and dispatch plans keep MAX_OVER_BUDGET_SHARDS.
+export const NIGHTLY_OVER_BUDGET_SHARDS = 12;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
@@ -1697,7 +1704,8 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
     : (standalone.includes(f) || imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
   // The plan's APEX_CIRCUITS (circuits, below): a registry spec is billed for the cases it will register.
-  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst,
+  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS,
+    overBudgetShards: opts.overBudgetShards ?? MAX_OVER_BUDGET_SHARDS, staleFirst: !!opts.staleFirst,
     scope: circ.scoped ? circ.ids : null };
   let cut = fit(candidates, budgetMin, fitOpts);
   // THE FLOOR: infra and partial diffs always carry it; any other non-docs diff
@@ -1738,7 +1746,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
-  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--over-budget-shards N] [--failed-from file] [--stale-first] [--json]";
   if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   const fl = argv.indexOf("--files");
   const files = fl >= 0 && argv[fl + 1] ? argv[fl + 1].split(",").map((f) => f.trim()).filter(Boolean) : undefined;
@@ -1757,7 +1765,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const oi = argv.indexOf("--overflow-shards");
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
-  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first"), files });
+  const ui = argv.indexOf("--over-budget-shards");
+  const overBudgetShards = ui >= 0 && Number.isInteger(Number(argv[ui + 1])) ? Number(argv[ui + 1]) : undefined;
+  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, overBudgetShards, staleFirst: argv.includes("--stale-first"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);

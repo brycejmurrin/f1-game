@@ -124,6 +124,11 @@
   #status.bad { color: var(--text); font-weight: 600; }
   #status.bad::before { content: ""; display: inline-block; width: .55em; height: .55em; margin-right: .5em; border-radius: 50%; background: var(--red); vertical-align: .08em; }
   body.linked #pair { display: none; }
+  /* AWAITING (the link is open, the game has not admitted this phone yet): the pairing
+     screen stays, minus its inputs — only the heading and the status ("tap ALLOW on
+     the game's screen") — so no wheel or pad is shown that the game is ignoring.
+     The first dash makes it body.linked, in the surface the game's screen wants. */
+  body.awaiting #pair-copy > p, body.awaiting #scan-box, body.awaiting #pair-act > :not(#status) { display: none; }
   /* TWO WRAPPERS, ONE COLUMN until the phone lies down: #pair-copy (the
      heading, the instructions, the camera view) and #pair-act (the controls)
      dissolve into #pair's column, and `order` keeps the camera view under
