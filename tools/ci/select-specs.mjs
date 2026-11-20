@@ -1614,6 +1614,7 @@ const SHEET_LAYOUT = ["tests/specs/ui-resize.spec.js"];
 const TITLE_LAYOUT = ["tests/specs/title-fit.spec.js"];
 const GARAGE_LAYOUT = ["tests/specs/garage-aero.spec.js"];
 export const CSS_LAYOUT_SPECS = [
+  [/^css\/screen-arranger\.css$/, ["tests/specs/appearance-orientation.spec.js"]],
   [/^css\/(hud|touch-controls|helmet-visor|fonts-hud)\.css$/, HUD_LAYOUT],
   [/^css\/(dialogs|dialog-platform|overlays|settings|settings-controls)\.css$/, SHEET_LAYOUT],
   [/^css\/(title|menus|menu-destinations)\.css$/, TITLE_LAYOUT],
