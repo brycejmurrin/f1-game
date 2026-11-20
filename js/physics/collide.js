@@ -395,6 +395,16 @@ const Collide = (() => {
       return _ct;
     }
 
+    const _puntFrom = [], _puntTo = [], _puntJ = [];
+    let _puntN = 0;
+    function puntShare(from, to, jImp, capJ) {
+      let k = 0;
+      while (k < _puntN && (_puntFrom[k] !== from || _puntTo[k] !== to)) k++;
+      if (k === _puntN) { _puntFrom[k] = from; _puntTo[k] = to; _puntJ[k] = 0; _puntN++; }
+      const give = Math.max(0, Math.min(jImp, capJ - _puntJ[k]));
+      _puntJ[k] += give;
+      return give;
+    }
     function _colResolvePair(a, b, last, rubScrub) {
       if (incidentSim.owns(a) || incidentSim.owns(b)) return;
       if (a.finished && b.finished) return;
@@ -427,13 +437,13 @@ const Collide = (() => {
             const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
             const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
-            const capV = AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05);
+            const capJ = (1 + e) * AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05) / iSum;
             if (sgn >= 0) {
               if (iB) b.speed = floorFwd(b, b.speed - iB * jImp);
-              if (iA) a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
+              if (iA) a.speed += iA * (a.human ? puntShare(b, a, jImp, capJ) : jImp);
             } else {
               if (iA) a.speed = floorFwd(a, a.speed - iA * jImp);
-              if (iB) b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
+              if (iB) b.speed += iB * (b.human ? puntShare(a, b, jImp, capJ) : jImp);
             }
           }
           if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }
@@ -531,6 +541,8 @@ const Collide = (() => {
           }
         }
       }
+      for (let k = 0; k < _puntN; k++) _puntFrom[k] = _puntTo[k] = null;
+      _puntN = 0;
       if (useBuckets) {
         if (_colShifted) nB = _colFillBuckets(ranked);
         _colForBucketPairs(nB, _colSepCB);
