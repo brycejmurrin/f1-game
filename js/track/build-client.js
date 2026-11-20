@@ -295,7 +295,7 @@ const TrackBuildClient = (function () {
     const S = typeof TrackScenery !== "undefined" ? TrackScenery : null;
     const fn = def && (def.scenery || (S && S[def.id]));
     const got = new Set(Array.isArray(have) ? have : []);
-    return Assets.modelIds(fn ? String(fn) : "").filter((id) => Assets.modelSync(id) && !got.has(id));
+    return Assets.modelIds(typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, S) : fn ? String(fn) : "").filter((id) => Assets.modelSync(id) && !got.has(id));
   }
 
   // The worker's track, made real: every recorded upload runs against `gfx` in
