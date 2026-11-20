@@ -264,9 +264,11 @@ const DataRealRace = (function () {
       const go = (tr) => {
         if (myGen !== bodyGen || (slot && slot.isConnected === false)) return false;
         if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
-        startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);
-        return launchRace(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        const ok = launchRace(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        // Only a launch that happened moves JUMP IN's lap: a refused one leaves the picked lap and its labels (hunt #5694 B6).
+        if (ok) startLap = fromLap;
+        return ok;
       };
       if (traceFits(traces, script)) return go(traces);
       return loadTraces(script, slot, go);
@@ -483,6 +485,9 @@ const DataRealRace = (function () {
       const refresh = el("button", "dh-pill", "REFRESH THIS SESSION"); refresh.type = "button";
       const status = el("p", null, ""); status.setAttribute("role", "status");
       refresh.onclick = () => {
+        // A positions download in flight belongs to the script being replaced:
+        // drop its ~20 queued /location requests as CANCEL DOWNLOAD does (hunt #5694 B7).
+        if (loading) { requestGen++; loading = null; queuedGo = null; F1API.cancelAll(); updateReplayRow(); }
         const generation = bodyGen; refresh.disabled = true; status.textContent = "Refreshing timing…";
         scriptFor(script.sessionKey, true, () => generation === bodyGen && slot.isConnected !== false && (!isOpen || isOpen())).then((next) => {
           if (generation !== bodyGen || slot.isConnected === false || (isOpen && !isOpen())) return;

@@ -635,6 +635,9 @@ function release() {
   // release(). Null every pool car and drop the selection list.
   for (let i = 0; i < _tlPool.length; i++) _tlPool[i].c = null;
   _tlSel.length = 0;
+  // Flicker hash table grows with the largest lamp offset this session; drop it
+  // on track switch so a dense night circuit does not keep ~N×4 bytes forever.
+  _hshC = new Float32Array(0);
 }
 /** THE MIRROR'S LAMPS. frame.lights is ranked for the FORWARD camera, and that
  *  ranking pushes lamps behind it down the list (lampBehindBias) — exactly the

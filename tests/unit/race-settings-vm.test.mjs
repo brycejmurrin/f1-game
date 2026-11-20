@@ -440,9 +440,12 @@ test("the reference pole runs the weather's tyre: the field's grip in wet and ra
     const grip = T.weatherGrip(tread, w);
     assert.equal(grip, WET[wx][tread], wx + ": that tyre's cell of WET_GRIP");
     ref[wx] = G.referencePole();
-    assert.equal(ref[wx], quali.carLap(top, G.track, grip), wx + ": the top car's flying lap on the weather's tyre");
-    if (wx === "dry") assert.equal(ref.dry, quali.carLap(top, G.track, G.gripMult()), "dry: the slick column is the same lap");
-    else assert.ok(ref[wx] < quali.carLap(top, G.track, G.gripMult()), wx + ": faster than the slick-column lap no car drives");
+    // The medal target is QUALI_TRIM (0.92, module-local) x the top car's integrated lap (carLap's `raw`); the field's
+    // carLap adds the qualifying centre and the circuit's calibration, which the medals deliberately do not (#5786).
+    const lap = (gr) => 0.92 * quali.carLap(top, G.track, gr, true);
+    assert.ok(Math.abs(ref[wx] - lap(grip)) < 1e-9, wx + ": the top car's flying lap on the weather's tyre (" + ref[wx] + " vs " + lap(grip) + ")");
+    if (wx === "dry") assert.ok(Math.abs(ref.dry - lap(G.gripMult())) < 1e-9, "dry: the slick column is the same lap");
+    else assert.ok(ref[wx] < lap(G.gripMult()), wx + ": faster than the slick-column lap no car drives");
   }
   assert.ok(ref.wet > ref.dry && ref.rain > ref.dry, "a wet road still costs time");
   assert.ok(ref.wet < ref.dry * 1.02 && ref.rain < ref.dry * 1.02,

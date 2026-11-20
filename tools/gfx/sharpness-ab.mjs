@@ -20,6 +20,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { launchChromium, startStaticServer, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV, WEBGPU_CENSUS_ARM, adapterMismatch, readWebgpuAdapter, sleep } from "../lib/harness.mjs";
+import { loadAllModels } from "../shot/capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const cmd = process.argv[2];
@@ -46,7 +47,7 @@ try {
   }, opt.ls);
   await page.goto(srv.url + "index.html" + opt.query, { waitUntil: "domcontentloaded", timeout: 90000 });
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 120000 });
-  await page.evaluate(async () => { if (typeof Assets !== "undefined" && Assets.loadModels) { try { await Assets.loadModels(); } catch (_) { /* optional */ } } });
+  await loadAllModels(page);
   log("apex live");
   const adapter = await readWebgpuAdapter(page), bad = adapterMismatch(adapter);   // #5450: filed under the adapter it ran on, or not at all
   if (bad) throw new Error(`this tool runs the ${WEBGPU_CENSUS_ARM} arm: ${bad}`);

@@ -413,16 +413,22 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     expect(await page.evaluate(codes)).toHaveLength(22);
 
     await page.locator("#q-sim").click();
+    const qOrder = await page.evaluate(codes);
+    const qPos = await page.evaluate(() => [...document.querySelectorAll("#q-table .res-row")].findIndex((r) => r.classList.contains("you")) + 1);
+    expect(qPos).toBeGreaterThan(0);
     await page.locator("#q-go").click();
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60_000 });
 
     const out = await page.evaluate(() => ({
       pos: window.__apex.timing().pos,
-      field: window.__apex.fieldState().length,
+      grid: window.__apex.fieldState().map((c) => c.code),
     }));
-    expect(out.field).toBe(22);
-    // The whole point: the start slot is earned, not the hard-coded P12.
-    expect(out.pos).not.toBe(12);
+    expect(out.grid).toHaveLength(22);
+    // The whole point: the start slot is earned. It used to read "not the hard-coded P12", which held only
+    // while a simulated lap could not land there; since #5786 a simulated lap sits mid-grid, and P12 is a
+    // slot you can earn. So: the grid IS the session's order, car for car, and the player is where they qualified.
+    expect(out.grid).toEqual(qOrder);
+    expect(out.pos).toBe(qPos);
   });
 
   test("a championship forces it on, and says so rather than hiding it", async ({ page }) => {
