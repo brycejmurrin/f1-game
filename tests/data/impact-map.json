@@ -5822,6 +5822,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rain-cells.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -15077,10 +15078,18 @@
     },
     "js/race/tv-graphics.js": {
       "create": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "diff": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
+      ],
+      "status": [
+        "tests/unit/real-race-lazy.test.mjs"
+      ],
+      "stop": [
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "tick": [
         "tests/unit/overlay-feed.test.mjs"

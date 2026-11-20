@@ -684,6 +684,7 @@ async function precacheAssetLists() {
     "js/perf/bench-run.js",
     "js/perf/metrics-panel.js",
     // LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)
+    "js/race/tv-graphics.js",
     "js/ui/watch-transport.js",
     "js/race/real-replay.js",
     "js/race/real-race-pace.js",

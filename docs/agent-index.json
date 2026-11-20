@@ -4326,7 +4326,7 @@
     {
       "path": "js/race/tv-graphics.js",
       "global": "TvGraphics",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/weather-arc.js",
