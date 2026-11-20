@@ -571,6 +571,11 @@
       "presentation": "native",
       "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, untrusted-data label on local logs; reads only (no send verbs). Never expose credentials."
     },
+    "tools/ci/closing-refs.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "every offending line verbatim (PR, line number, keyword ref, quoted body line) and the = closing-refs verdict; exit 1 on a ref that would close an open PR, 3 when it cannot judge"
+    },
     "tools/ci/coverage-merge.mjs": {
       "action": "keep-native",
       "presentation": "native",

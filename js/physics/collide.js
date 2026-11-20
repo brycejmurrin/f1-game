@@ -286,6 +286,11 @@ const Collide = (() => {
   _lim.laneMin = 0.5; _lim.laneMin = 0;   // born Double, like _traf
 
   function create(G, collideFx, ownsPose = () => false) {
+    // Contact SEVERITY reads closing speed on the pace-normalised scale, anchored at the
+    // shipped slider default so a default-pace hit scores exactly what it always did: the
+    // same shunt at OVERALL SPEED min/max used to score 0.36 / 1.0 (wall strikes: #4947).
+    const sevRef = Math.pow(1.06, -3);   // paceFromSlider(PACE_DEF), js/input/steer-tuning.js (the default-pace literals in collide-severity-pace.test.mjs hold it)
+    const sevV = (v) => v * (sevRef / Math.max(G.PACE, 0.05));
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;
     const incidentSim = IncidentSim;   // static owns()/notifyCar() — one instance per page
@@ -366,7 +371,7 @@ const Collide = (() => {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
         // First pass per pair carries the severity (the last had none, or was skipped by the early break)
-        if (firstPairFx(a, b)) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
+        if (firstPairFx(a, b)) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
         if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
@@ -635,7 +640,7 @@ const Collide = (() => {
           // touching with no correction left to apply — re-fired audio, shake
           // and hit-stop every frame and banked a career `hits` count of ~14 in
           // five seconds of contact that the solver had already resolved.
-          if (firstPairFx(a, b)) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
+          if (firstPairFx(a, b)) collideFx(a, b, sevV(Math.abs(aSp - bSp)) * 0.02 + 0.18);
         }
       } else {
         // rear-end: separate along the track and nudge speeds together (gentle,
@@ -691,7 +696,7 @@ const Collide = (() => {
           // gate never saw relV > 0 and a 73 m/s shunt fired no FX, debris or
           // incident candidate (live debugger, 2026-10-16).
           const fx = firstPairFx(a, b);
-          if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+          if (fx) collideFx(a, b, clamp(sevV(relV) * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
           if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           // Incident sim (R3/C3 + C1): a hard closing contact queues a
