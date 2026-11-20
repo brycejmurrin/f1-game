@@ -367,19 +367,35 @@ body #overlay #menu-buttons #menu-secondary > .bigbtn {
 @media (pointer: fine) and (orientation: landscape) and (min-width: 1000px) and (min-height: 520px) {
   :root:not([data-title-button-style="flat"]) #menu-buttons { --home-flat: initial; }
   :root:not([data-title-layout]) body[data-shape="wide"] #overlay {
-    grid-template-columns: minmax(0, 38rem) minmax(0, 48rem);
-    padding-inline: max(var(--safe-l), 4vw) max(var(--safe-r), 4vw);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 47vw);
+    padding-inline: max(var(--safe-l), 6.5vw) max(var(--safe-r), 7.5vw);
     justify-content: center;
     column-gap: clamp(2rem, 4vw, 6rem);
   }
   :root:not([data-title-layout]) body[data-shape="wide"] #overlay #menu-brand {
-    align-self: start; align-items: flex-start; text-align: start;
-    margin-top: 5svh; background: transparent;
+    align-self: start; justify-self: start; align-items: flex-start; text-align: start;
+    padding-inline: 0; width: 100%; margin-top: 5svh; background: transparent;
   }
   :root:not([data-title-layout]) body[data-shape="wide"] #overlay #menu-buttons {
-    --hrow: clamp(44px, 7.8svh, 88px);
+    --hrow: max(44px, 9svh);
+    --home-label: clamp(var(--fs-4), 1.85vw, 2.25rem);
     width: 100%; justify-self: stretch; align-self: center;
   }
+  :root:not([data-title-layout]) #overlay #menu-buttons .bigbtn { font-size: var(--home-label); }
+  :root:not([data-title-layout]) #overlay #menu-buttons :is(#menu-secondary, #menu-create) > .bigbtn {
+    font-size: max(var(--fs-micro), calc(var(--home-label) * .84)); min-height: var(--hrow);
+  }
+  :root:not([data-title-layout]) #overlay #menu-buttons #mb-career { min-height: var(--hrow); }
+  :root:not([data-title-layout]) body[data-shape="wide"] #overlay #title {
+    font-size: calc(6.5 * var(--vwz));
+  }
+  :root:not([data-title-layout]) body[data-shape="wide"] #overlay #tc-frame {
+    transform: translate(68px, 222px) scale(.78);
+  }
+  body[data-shape="wide"] #overlay:is([data-home-scene="static"], [data-home-scene="photo"]:not([style*="data:image"])) {
+    background: radial-gradient(95% 85% at 49% 0% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 30%), transparent), transparent 73%), var(--bg);
+  }
+  body[data-shape="wide"] #overlay[data-home-scene="photo"]:not([style*="data:image"])::before { content: none; }
   body #overlay #menu-buttons :is(#menu-primary, #mb-garage) .mb-sub { display: none; }
   body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) { min-height: var(--hrow); }
 }
