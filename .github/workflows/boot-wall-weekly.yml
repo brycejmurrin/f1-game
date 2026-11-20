@@ -1,0 +1,47 @@
+name: Boot wall weekly
+
+# The weekly growth report of Bryce's B+D decision (2026-11-20 07:49Z,
+# docs/notes/RATCHET-REVIEW-2026-11-20.md). A branch's own eager growth up to
+# the eagerCodeBytes `absorb` (5000 B) is now the commit hook's fragment with
+# no label, so many small raises could add up unseen. This prints the boot
+# wall's change over the last 7 days on the deploy branch (eagerCodeBytes,
+# eagerScripts and the raw source bytes) to the run's summary. Read-only.
+# tools/check/boot-wall.mjs `growth` does the measuring (wallAt reads each blob
+# once through `git cat-file --batch`; a blob:none clone fetches only the ~310
+# eager scripts at the two commits).
+# Syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+# (on.schedule cron is UTC and runs from the default branch).
+
+on:
+  schedule:
+    - cron: "41 15 * * 1"   # Mondays 15:41 UTC (07:41 Pacific)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days back to compare"
+        required: false
+        default: "7"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false   # read-only job
+          fetch-depth: 0               # the commit 7 days back must be in the clone
+          filter: blob:none
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Report
+        env:
+          DAYS: ${{ inputs.days }}
+        run: |
+          node tools/check/boot-wall.mjs --growth --days="${DAYS:-7}" | tee "$RUNNER_TEMP/boot-wall.md"
+          cat "$RUNNER_TEMP/boot-wall.md" >> "$GITHUB_STEP_SUMMARY"
