@@ -176,6 +176,7 @@ const WGX = (function () {
     const initActive = () => !initOwner || initOwner.active;
     if (!initActive()) return null;
     if (typeof navigator === "undefined" || !navigator.gpu) return null;
+    _gpuErrors = 0; _gpuFirstMsg = null;
     if (!_Chunks || !_Chunks.LIT || !_Chunks.SKY || !_Chunks.BLIT || !_Chunks.SHADOW) {
       _fail("wgsl-chunks missing");
       return null;

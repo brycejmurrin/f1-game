@@ -118,8 +118,9 @@ const ShareCardLayout = (function () {
       ops.push(textOp("medal", model.hero.medal, w / 2, Math.round(h * 0.66), w - pad * 2, Math.round(h * 0.045), 22, color, "center", measure));
     }
     if (!rows.length && !plot && model.hero && model.hero.streak) {
+      const streakW = w - pad * 2 - (model.link ? qrSize + Math.round(pad * 0.5) : 0);
       ops.push(textOp("streak", "STREAK " + model.hero.streak, pad, h - footerH - pad * 0.7,
-        w - pad * 2, Math.round(h * 0.035), 20, PALETTE.text, "left", measure));
+        Math.max(20, streakW), Math.round(h * 0.035), 20, PALETTE.text, "left", measure));
     }
     if (model.link) {
       ops.push({ op: "qr", id: "qr", x: w - pad - qrSize, y: h - footerH - pad * 0.45 - qrSize,

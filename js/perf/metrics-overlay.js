@@ -400,6 +400,12 @@ const up = (list) => list.map((v) => [v, String(v).toUpperCase()]);
 function initUI() {
   try { Log.info("game", "GameMetrics.initUI"); } catch (_) {  }
   if (typeof document === "undefined") return;
+  initKeys();
+  const gate = typeof SettingsNav !== "undefined" && SettingsNav.lazy;
+  if (gate) SettingsNav.lazy(() => { initRows(); buildSubmenu(); }); else initRows();
+}
+
+function initRows() {
   const anchor = document.getElementById("pm-hud-details")
     || document.getElementById("pm-hidehud");
   const host = anchor && anchor.parentNode;
@@ -449,7 +455,9 @@ function initUI() {
     );
     insertAfter(host, ins, _logLvlBtn);
   }
+}
 
+function initKeys() {
   if (typeof window !== "undefined" && !_keysBound) {
     _keysBound = true;
     window.addEventListener("keydown", (e) => {
@@ -496,7 +504,7 @@ function initUI() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState === "loading")
+  if (document.readyState !== "complete")
     document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();
 }

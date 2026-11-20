@@ -106,6 +106,26 @@ function inRace() {
   } catch (_) { return false; }
 }
 
+let packObs = null;
+function driving() {
+  if (!inRace()) return false;
+  try { const pm = document.getElementById("pausemenu"); return !(pm && !pm.hidden); } catch (_) { return true; }
+}
+function syncPack() {
+  if (typeof Assets === "undefined" || !Assets.followQuality) return false;
+  if (!driving()) {
+    if (packObs) { packObs.disconnect(); packObs = null; }
+    return Assets.followQuality();
+  }
+  if (!packObs && typeof MutationObserver === "function") {
+    packObs = new MutationObserver(() => { syncPack(); });
+    const pm = document.getElementById("pausemenu");
+    if (pm) packObs.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
+    packObs.observe(document.body, { attributes: true, attributeFilter: ["data-race"] });
+  }
+  return false;
+}
+
 function reloadSoon() {
   try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {  }
   setTimeout(() => { try { location.reload(); } catch (_) {  } }, RELOAD_DELAY_MS);
@@ -123,6 +143,7 @@ function set(id, opts = {}) {
   if (st) st.set("gfxPreset", curId);
   applyLive();
   try { if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply(); } catch (_) {  }
+  try { syncPack(); } catch (_) {  }
   const needsReload = syncBootTier() || (!isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
   paintGfx(needsReload ? " — RELOADING…" : "");
   if (needsReload && !opts.noReload) {
@@ -175,7 +196,7 @@ if (typeof document !== "undefined") {
 }
 
 return {
-  init, set, cycle, current: () => current().id, defaultId,
+  init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
 };
 })();

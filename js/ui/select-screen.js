@@ -895,6 +895,12 @@ function previewMapsCached(t) {
 function previewPathReady(t) {
   return !!(t && !t._metaOnly && t.path && t.path.pts && t.path.pts.length);
 }
+function whenCircuit(t, fn) {
+  if (previewPathReady(t) || !G.ensureCircuit) return;
+  const idx = G.trackIdx;
+  G.ensureCircuit(idx).then(() => { if (G.trackIdx === idx && previewPathReady(Tracks.LIST[idx])) fn(); })
+    .catch((e) => Log.warn("track", "could not load circuit " + idx + ": " + ((e && e.message) || e)));
+}
 function fillPreviewMeta(t, crns, dir, elev, dz) {
   const turns = crns && crns.length;
   const km = t.lengthKm || 0;
@@ -928,12 +934,26 @@ function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
   const btn = map && map.parentElement;
-  if (compact && btn && btn.clientHeight > 0) {
+  if (btn && btn.clientHeight > 0) {
+    fitPreviewMapBand(btn);
     const bs = getComputedStyle(btn);
     const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
     if (room > 0) slotH = Math.min(slotH, room);
   }
   return { slotW: hero.clientWidth * 0.62, slotH };
+}
+function fitPreviewMapBand(btn) {
+  const br = btn.getBoundingClientRect();
+  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
+  const k = br.height / btn.offsetHeight;
+  const over = [];
+  for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
+    if (e) over.push(e.getBoundingClientRect());
+  }
+  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
+  btn.style.alignItems = "center";
+  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
+  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
 }
 function sizePreviewMapBox(t) {
   if (!els.selPreviewMap || !t) return;
@@ -1019,14 +1039,7 @@ function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
-  if (t._metaOnly || !(t.path && t.path.pts && t.path.pts.length)) {
-    if (G.ensureCircuit) {
-      const idx = G.trackIdx;
-      G.ensureCircuit(idx).then(() => {
-        if (G.trackIdx === idx) updateTrackPreview();
-      }).catch((e) => Log.warn("track", "preview could not load circuit " + idx + ": " + ((e && e.message) || e)));
-    }
-  }
+  whenCircuit(t, updateTrackPreview);
   const flagEl = document.getElementById("sel-preview-flag");
   if (flagEl) {
     flagEl.innerHTML = Flags.svg(t.country);
@@ -1116,12 +1129,7 @@ function openTrackDetail() {
   if (!t) return;
   const modal = document.getElementById("track-detail");
   if (!modal) return;
-  if (!previewPathReady(t) && G.ensureCircuit) {
-    const idx = G.trackIdx;
-    G.ensureCircuit(idx).then(() => {
-      if (G.trackIdx === idx && !modal.hidden && previewPathReady(Tracks.LIST[idx])) openTrackDetail();
-    }).catch((e) => Log.warn("track", "circuit detail could not load circuit " + idx + ": " + ((e && e.message) || e)));
-  }
+  whenCircuit(t, () => { if (!modal.hidden) openTrackDetail(); });
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
   const mapCanvas = document.getElementById("track-detail-canvas");
@@ -1283,6 +1291,18 @@ function calendarIdSet(cal) {
   for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
   return ids.size ? ids : null;
 }
+function previewMapBand(box, over, margin) {
+  const mid = (box.top + box.bottom) / 2;
+  let top = box.top, bot = box.bottom;
+  for (const r of over || []) {
+    if (!r || !(r.bottom > r.top) || !(r.right > r.left)) continue;
+    if (r.bottom <= box.top || r.top >= box.bottom || r.right <= box.left || r.left >= box.right) continue;
+    if ((r.top + r.bottom) / 2 < mid) top = Math.max(top, r.bottom);
+    else bot = Math.min(bot, r.top);
+  }
+  const m = Math.max(0, +margin || 0);
+  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+}
 function calendarGroup(t, ids) {
   if (!t) return null;
   if (t.custom) return "custom";
@@ -1290,6 +1310,6 @@ function calendarGroup(t, ids) {
   return t.classic ? "classic" : "season";
 }
 
-return { create, calendarIdSet, calendarGroup };
+return { create, calendarIdSet, calendarGroup, previewMapBand };
 })();
 Object.freeze(Menus);

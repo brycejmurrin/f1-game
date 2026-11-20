@@ -27,7 +27,7 @@ const WGXShadow = (function () {
     const shadowLVPData = new Float32Array(16);
     const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
     const _shadowDynOff = [0];
-    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0;
+    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0, _shadowOverflowWarned = false;
     let _pendingShadowEnc = null, _shadowFlushed = 0;
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
     let _carShadowArmed = false, _carArms = 0, _carBoxScale = 1;
@@ -152,7 +152,10 @@ const WGXShadow = (function () {
         _shadowFlushed * SHADOW_MODEL_F32_STRIDE,
         (_shadowSlot - _shadowFlushed) * SHADOW_MODEL_F32_STRIDE);
       _shadowFlushed = _shadowSlot;
-      if (_shadowOverflow) Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
+      if (_shadowOverflow && !_shadowOverflowWarned) {
+        _shadowOverflowWarned = true;
+        Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
+      }
     }
     let _smPass = null, _smSlot = -1;
     function _shadowEncoderBegin() {
@@ -167,6 +170,7 @@ const WGXShadow = (function () {
     function _frameSubmitList(mainEnc) {
       const sh = _pendingShadowEnc;
       _pendingShadowEnc = null;
+      if (!_shadowOverflow) _shadowOverflowWarned = false;
       _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
       return sh ? [sh.finish(), mainEnc.finish()] : [mainEnc.finish()];
     }

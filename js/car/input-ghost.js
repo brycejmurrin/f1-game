@@ -371,7 +371,7 @@ const InputGhost = (function () {
       };
       requestIdleCallback(idle);
     }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS + 2000);
     else write();
   }
 

@@ -4,7 +4,7 @@
   place-items: end center;
   grid-template-rows: minmax(0, 1fr);
   align-items: unsafe end;
-  pointer-events: auto; 
+  pointer-events: auto;
   background: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%);
 }
 #ld-card {
@@ -76,7 +76,7 @@
   z-index: 0;
   height: max(0px, calc((100vh - 100vw / 2.35) / 2));
   height: max(0px, calc((100svh - 100vw / 2.35) / 2));
-  background: #000; 
+  background: #000;
   pointer-events: none;
 }
 #loading::before { top: 0; }
@@ -102,7 +102,7 @@
 :root[data-motion="reduce"] #loading::after { content: none; }
 #ld-wordmark {
   margin: 0 0 var(--gap);
-  font-size: clamp(var(--fs-6), 3.4vw, calc(2 * var(--fs-6))); 
+  font-size: clamp(var(--fs-6), 3.4vw, calc(2 * var(--fs-6)));
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-2);
   color: var(--text);
@@ -188,4 +188,4 @@ body.in-race #xr-enter[aria-pressed="false"] { display: none; }
 }
 #xr-enter[hidden] { display: none !important; }
 #ld-fail { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: var(--gap); pointer-events: auto; }
-} 
+}

@@ -31,6 +31,7 @@ const Particles = (function () {
   let _kWind = NaN, _kRainSpd = NaN, _kOp = NaN, _kShW = NaN, _kShL = NaN, _kDir = NaN;
   const RAIN_CELL_M = 2;
   let _statUpload = 0, _statExpand = 0, _statSkip = 0, _statAlphaExpand = 0, _statAddExpand = 0;
+  let _prime = false;
 
   function init(gfx) {
     Log.info("game", "Particles.init");
@@ -48,16 +49,24 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
+    _rainN = 0; _rainOn = false; _rainLastShown = 0; _rainFed = false;
+    _lastRainLive = false; _rainEyeOk = false; _rainAcc = 0;
+    _rox = _roy = _roz = null; _rspd = _rlen = _ralpha = null;
+    _rainCellX = _rainCellY = _rainCellZ = 0x7fffffff;
+    _kTone = -1; _kShown = -1; _kSpdQ = -1;
+    _kSpdS = _kLenS = _kWind = _kRainSpd = _kOp = _kShW = _kShL = _kDir = NaN;
     _vertA = new Float32Array(MAX * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
+    _prime = false;
   }
 
   function clear() {
     _sprK = 0; _sprThr = Infinity; _n = 0; _flN = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
     _rainFed = false; _lastRainLive = false; _rainAcc = 0;
+    _prime = false;
   }
   function count() { return _n; }
   function capacity() { return MAX; }
@@ -272,7 +281,6 @@ const Particles = (function () {
     }
   }
 
-  let _prime = false;
   function armPrime() { _prime = true; }
   function draw() {
     _draw();
@@ -521,6 +529,7 @@ const Particles = (function () {
       const halfW = 0.014 + dist * 0.0022;
       const a = _ralpha[i] * alphaMul * _clamp01((dist - 0.4) / 1.6);
       if (a <= 0.004) continue;
+      if (p + FLOATS_PER > out.length) break;
       const cx = ex + tx, cy = ey + ty, cz = ez + tz;
       for (let v = 0; v < 12; v += 2) {
         const kx = _CORNERS[v], ky = _CORNERS[v + 1];

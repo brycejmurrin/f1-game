@@ -202,15 +202,18 @@ window.SheetShape = (function () {
   function watchVisibility() {
     if (typeof MutationObserver !== "function") return;
     new MutationObserver((muts) => {
+      let landed = false;
       for (const m of muts) {
+        if (m.attributeName === "media") { landed = landed || m.target.media === "all"; continue; }
         if (m.attributeName !== "hidden" || m.target.hidden) continue;
         const nodes = m.target.querySelectorAll(MANAGED);
         const els = [];
         for (let i = 0; i < nodes.length; i++) els.push(nodes[i]);
         classifyAll(measureAll(els));
       }
+      if (landed) reclassify();
     }).observe(document.documentElement,
-      { attributes: true, attributeFilter: ["hidden"], subtree: true });
+      { attributes: true, attributeFilter: ["hidden", "media"], subtree: true });
   }
 
   function classifyBody() {

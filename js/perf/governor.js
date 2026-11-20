@@ -272,6 +272,7 @@ function tick(dtMs, drawn) {
   if (ev <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (ev > degradeAt + boundOver) {
+    if (_shedDprBoost()) { _degradeArm = 0; return; }
     let stepped = false;
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {
@@ -320,8 +321,16 @@ function driftRenderRate() {
   if (!st.mobile || st.mode !== "auto") return false;
   return RenderRate.setMode("45");
 }
+function _shedDprBoost() {
+  if (!_gfx || typeof _gfx.getDprBoost !== "function" || !(_gfx.getDprBoost() > 0)) return false;
+  if (!_gfx.setDprBoost(0)) return false;
+  _govCool = 30; _downHold = _chargeCut();
+  Log.warn("gfx", "RESOLUTION MAX: frame budget missed, DPR boost off (back to the tier's cap)");
+  return true;
+}
 function driftStep() {
   if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;
+  if (_shedDprBoost()) return true;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   if (_autoRes && cur > 0.5 && !_scaleFutile && _gfx.setRenderScale(cur - 0.1)) {
     _scaleCap = cur; _armCapProbe(); _govCool = 30; _downHold = _chargeCut(); _scaleMoves++;

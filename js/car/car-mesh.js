@@ -362,6 +362,13 @@ function getSpinDisc() {
   return spinDiscMesh;
 }
 
+function _capCache(map, max) {
+  while (map.size > max) {
+    const k = map.keys().next().value, v = map.get(k);
+    map.delete(k);
+    for (const m of Array.isArray(v) ? v : [v]) if (m && _gfx.freeMesh) _gfx.freeMesh(m);
+  }
+}
 const _compoundRings = new Map();
   function getCompoundRing(col) {
     const key = colKey3(col);
@@ -382,6 +389,7 @@ const _compoundRings = new Map();
     }
     m = _gfx.createMesh(out);
     _compoundRings.set(key, m);
+    _capCache(_compoundRings, 64);
     return m;
   }
 
@@ -430,12 +438,7 @@ function getCrewMesh(col) {
   m._crewPeople = CREW_PEOPLE;
   m._crewVerts = out.pos.length / 3;
   _crewMeshes.set(key, m);
-  if (_crewMeshes.size > CREW_CACHE_MAX) {
-    const old = _crewMeshes.keys().next().value;
-    const om = _crewMeshes.get(old);
-    _crewMeshes.delete(old);
-    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
-  }
+  _capCache(_crewMeshes, CREW_CACHE_MAX);
   return m;
 }
 
@@ -446,12 +449,15 @@ function _flatQuadData(w, h, col) {
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);
   return out;
 }
-const _exhaustMeshes = {};
+const _exhaustMeshes = new Map();
 function getExhaustFlame(color) {
   const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
-  const key = R.join(",");
-  if (_exhaustMeshes[key]) return _exhaustMeshes[key];
-  return (_exhaustMeshes[key] = _gfx.createMesh(_flatQuadData(0.035, 0.030, R)));
+  const key = colKey3(R);
+  let m = _exhaustMeshes.get(key);
+  if (m) return m;
+  _exhaustMeshes.set(key, m = _gfx.createMesh(_flatQuadData(0.035, 0.030, R)));
+  _capCache(_exhaustMeshes, 32);
+  return m;
 }
 let boostMesh = null;
 function getBoostFlame() {
@@ -582,7 +588,7 @@ function getMirrorFallback(quads, night) {
   const key = night ? 1 : 0;
   let slot = _mirrorFbMeshes.get(quads);
   if (slot && slot[key]) return slot[key];
-  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); }
+  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); _capCache(_mirrorFbMeshes, 32); }
   const band = night ? _FB_NIGHT : _FB_DAY;
   const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = band.TOP, MID = band.MID, BOT = band.BOT;
   const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -616,6 +622,7 @@ function getMirrorGlass(quads) {
     m = _gfx.createTexMesh(out);
   }
   _mirrorGlassMeshes.set(quads, m);
+  _capCache(_mirrorGlassMeshes, 32);
   return m;
 }
 const _SEG7 = [

@@ -3,6 +3,7 @@ const CACHE_PREFIX = "apex26-";
 const VOICE_CACHE = CACHE_PREFIX + "voice";
 const VOICE_KEEP_IDS = 6;
 const NAV_RACE_MS = 3000;
+const SHELL_RACE_MS = 1000;
 const BUST_WAIT_MS = 15000;
 const OPTIONAL_ASSET_MS = 4000;
 const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
@@ -229,6 +230,7 @@ async function precacheAssetLists() {
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
+    "js/render/three/tlx-mem.js",
     "js/render/three/tlx.js",
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",
@@ -260,6 +262,7 @@ async function precacheAssetLists() {
     "js/race/ceremony.js",
     "js/race/stopped-cars.js",
     "js/race/retired-card.js",
+    "js/race/driving-coach.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
@@ -480,6 +483,7 @@ async function precacheAssetLists() {
     "js/ui/layout-presets.js",
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",
+    "js/ui/quali-sheet.js",
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
@@ -576,7 +580,7 @@ const CARRY_POOL = 4;
 function isCarriedRuntime(url) {
   if (url.origin !== self.location.origin) return false;
   const p = url.pathname;
-  if (p.includes("/assets/voice/")) return false;
+  if (p.includes("/assets/voice/") || isBuildKeyedManifest(url)) return false;
   return p.includes("/assets/") || p.includes("/vendor/");
 }
 async function carryEntry(cache, req, old) {
@@ -685,7 +689,7 @@ self.addEventListener("install", (event) => {
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     invalidateCacheOrder();
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport)\.js$|^js\/share\/share-card-chips\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
@@ -801,7 +805,7 @@ async function pruneVoiceCache(cache) {
   const keep = new Set([...last].sort((a, b) => b[1] - a[1]).slice(0, VOICE_KEEP_IDS).map((e) => e[0]));
   await Promise.all(keys.filter((r) => !keep.has(voiceIdOf(r))).map((r) => cache.delete(r)));
 }
-function packNetworkFirst(event, req, fixedCache) {
+function packNetworkFirst(event, req, fixedCache, staleFirst) {
   let cacheWrite = Promise.resolve();
   const network = fetch(req).then((res) => {
     if (res && res.ok) {
@@ -824,6 +828,7 @@ function packNetworkFirst(event, req, fixedCache) {
     const cached = fixedCache
       ? caches.match(req, { cacheName: fixedCache }).then((hit) => hit || matchPreferCurrent(req))
       : matchPreferCurrent(req);
+    if (staleFirst) { const early = await cached; if (early) return early; }
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
     try {
       const res = await Promise.race([network, timeout]);
@@ -839,6 +844,10 @@ const PACK_HASHED = /^\?h=[0-9a-f]{32}$/;
 function isHashedPackRequest(url) {
   return PACK_HASHED.test(url.search) && url.pathname.includes("/assets/pack/") &&
     !url.pathname.endsWith("/manifest.json");
+}
+const PACK_BUILD_KEY = /^\?b=[1-9][0-9]{0,9}$/;
+function isBuildKeyedManifest(url) {
+  return PACK_BUILD_KEY.test(url.search) && url.pathname.endsWith("/assets/pack/manifest.json");
 }
 function packCacheFirst(event, req) {
   let cacheWrite = Promise.resolve();
@@ -902,7 +911,18 @@ self.addEventListener("fetch", (event) => {
       const failFast = online && (isVersion || (isShellBust && !bustShell));
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
-        const res = await Promise.race([network, timeout]);
+        let res;
+        if (req.mode === "navigate" && !isShellBust && isShellDocument(url)) {
+          const early = new Promise((resolve) => setTimeout(() => resolve(undefined), SHELL_RACE_MS));
+          res = await Promise.race([network, early]);
+          if (res === undefined) {
+            const bare = new URL(url.href);
+            bare.search = ""; bare.hash = "";
+            const shell = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(bare.href)) || (await matchPreferCurrent("index.html"));
+            if (shell) return shell;
+            res = await Promise.race([network, timeout]);
+          }
+        } else res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
         if (res == null && failFast && !isShellBust) return Response.error();
       } catch (_) {
@@ -924,7 +944,7 @@ self.addEventListener("fetch", (event) => {
 
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
     if (isHashedPackRequest(url)) packCacheFirst(event, req);
-    else packNetworkFirst(event, req);
+    else packNetworkFirst(event, req, null, isBuildKeyedManifest(url));
     return;
   }
 

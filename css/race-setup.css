@@ -308,9 +308,20 @@
   height: max(var(--chip-h), 1.6em);
   min-height: max(var(--chip-h), 1.6em);
   line-height: 1.3;
-  flex-basis: 7rem;
-  width: 7rem;
-  padding-inline: calc(var(--gap) * 0.3);
+  flex: 0 0 7.25rem;
+  flex-basis: 7.25rem;
+  width: 7.25rem;
+  max-width: 7.25rem;
+  box-sizing: border-box;
+  padding-inline: calc(var(--gap) * 0.25);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #race-settings > .sheet { --page-at: 280px; }
+  #rs-presets > .preset-btn small { display: none; }
+  #rs-presets > .preset-btn { min-height: var(--chip-h); padding-block: calc(var(--gap) * 0.25); }
+  #rs-body { row-gap: calc(var(--gap) * 0.25); }
 }
 
 

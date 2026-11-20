@@ -1,43 +1,9 @@
-/*
- * Apex 26 — IN-BROWSER material baker (dev tool, loaded on demand).
- *
- * Pulls real CC0 PBR scans from Poly Haven, composites them into the 17-layer
- * filmstrips js/render/assets.js expects, uploads them live so you can see the
- * result immediately, and downloads the finished PNGs so they can be committed.
- *
- * WHY THIS EXISTS. The offline baker (tools/gen/assets.mjs) needs a shell and
- * network. Two things made that a dead end in practice:
- *   - the authoring sandbox's egress proxy 403s every asset CDN, and
- *   - the person doing the tuning may only have a DevTools console.
- * Probed live from a browser: api.polyhaven.com allows CORS, dl.polyhaven.org
- * allows cross-origin canvas READS (so getImageData does not taint), and
- * ambientCG blocks both. That makes Poly Haven the one source a browser can
- * actually bake from, and makes this file the only working route to real
- * scanned materials for a shell-less setup.
- *
- * NOT part of the game. It lives under assets/ (which the Pages workflow stages)
- * rather than js/ (whose every file must appear in tools/manifest.cjs and in a
- * <script> tag). index.html never references it, so it costs nothing at runtime
- * and is fetched only when you ask for it:
- *
- *   var s=document.createElement('script'); s.src='assets/pack/webbake.js'; document.head.appendChild(s)
- *
- * Then:
- *   WebBake.list()                     // suggested Poly Haven id per MAT slot
- *   await WebBake.run()                // bake the defaults, upload, download PNGs
- *   await WebBake.run({16:'asphalt_track'}, {size:512, download:false})
- *
- * "use strict" IIFE assigning one global, same as every other file here.
- */
 "use strict";
 
 const WebBake = (function () {
   const API = "https://api.polyhaven.com";
-  const LAYERS = 17;                       // MAT.FLAT(0) … MAT.ASPHALT(16)
+  const LAYERS = 17;
 
-  // MAT id -> a Poly Haven asset that reads as that material. Chosen from the
-  // live catalogue; every one is CC0. GLASS(3), FLAG(15) and FLAT(0) are
-  // deliberately absent — see tools/gen/assets.mjs SCALES for why.
   const DEFAULTS = {
     1:  "concrete_panels",        2:  "red_brick",
     4:  "corrugated_iron",        5:  "wood_planks",
@@ -48,8 +14,6 @@ const WebBake = (function () {
     14: "rusty_metal",            16: "asphalt_track",
   };
 
-  // World metres per tile — MUST match tools/gen/assets.mjs SCALES, or a browser
-  // bake and an offline bake of the same material would tile differently.
   const SCALES = {
     1: 5.5, 2: 2.8, 4: 2.8, 5: 2.8, 6: 4.0, 7: 1.8, 8: 11.0,
     9: 4.5, 10: 8.0, 11: 7.0, 12: 2.6, 13: 3.5, 14: 2.5, 16: 3.5,
@@ -62,11 +26,6 @@ const WebBake = (function () {
   const NAMES_TO_MAT = Object.fromEntries(Object.entries(NAMES).map(([k, v]) => [v, +k]));
   const log = (...a) => console.log("[webbake]", ...a);
 
-  // Keyword to fall back on when a slot's preferred asset id does not exist.
-  // The ids in DEFAULTS were picked by hand and a wrong guess simply 404s, so
-  // rather than leaving that slot procedural the baker searches the live
-  // catalogue for the keyword and tries the first few hits. That is what turns
-  // a hand-written table into something self-healing.
   const FALLBACK = {
     1: "concrete_panels", 2: "red_brick", 4: "corrugated_iron", 5: "wood_planks",
     6: "leafy", 7: "fabric", 8: "sand", 9: "grass", 10: "rock_ground",
@@ -82,9 +41,6 @@ const WebBake = (function () {
     return _catalogue;
   }
 
-  // ── ZIP (STORE, no compression) ────────────────────────────────────────────
-  // PNGs are already deflated, so storing them costs nothing and this needs no
-  // library. One file back beats three.
   const CRC_T = (() => {
     const t = new Int32Array(256);
     for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c; }
@@ -95,7 +51,7 @@ const WebBake = (function () {
     for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
     return (c ^ -1) >>> 0;
   }
-  function zip(files) {                    // files: [{name, data:Uint8Array}]
+  function zip(files) {
     const enc = new TextEncoder();
     const parts = [], central = [];
     let offset = 0;
@@ -104,8 +60,8 @@ const WebBake = (function () {
       const lh = new Uint8Array(30 + name.length);
       const dv = new DataView(lh.buffer);
       dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 0, true);
-      dv.setUint16(8, 0, true);                                   // method 0 = store
-      dv.setUint16(10, 0, true); dv.setUint16(12, 0x21, true);    // fixed DOS time/date
+      dv.setUint16(8, 0, true);
+      dv.setUint16(10, 0, true); dv.setUint16(12, 0x21, true);
       dv.setUint32(14, crc, true); dv.setUint32(18, len, true); dv.setUint32(22, len, true);
       dv.setUint16(26, name.length, true); dv.setUint16(28, 0, true);
       lh.set(name, 30);
@@ -132,10 +88,6 @@ const WebBake = (function () {
     return new Blob([...parts, ...central, end], { type: "application/zip" });
   }
 
-  // ── Poly Haven file resolution ─────────────────────────────────────────────
-  // Verified shape: body[MAP][RES][FORMAT] = {size, md5, url}.
-  // nor_gl NOT nor_dx — DirectX has an inverted green channel and would invert
-  // every bump in the game. `arm` packs AO/roughness/metalness into RGB.
   function pick(body, map, res, fmt) {
     const m = body && body[map];
     if (!m) return null;
@@ -160,16 +112,12 @@ const WebBake = (function () {
     return { c, x: c.getContext("2d", { willReadFrequently: true }) };
   }
 
-  // Draw an ImageBitmap scaled to size×size and read it back.
   function rasterise(img, size, s) {
     s.x.clearRect(0, 0, size, size);
     s.x.drawImage(img, 0, 0, size, size);
     return s.x.getImageData(0, 0, size, size).data;
   }
 
-  // ── one material layer ─────────────────────────────────────────────────────
-  // Returns {albedo: ImageData, normal: ImageData} in the packing the shader
-  // reads: albedo = RGB reflectance + A roughness, normal = RG tangent + B AO.
   async function layer(phId, size, s) {
     const res = await fetch(`${API}/files/${encodeURIComponent(phId)}`);
     if (!res.ok) throw new Error(`files/${phId} -> HTTP ${res.status}`);
@@ -183,15 +131,6 @@ const WebBake = (function () {
     const nrm = uNorm ? rasterise(await bitmap(uNorm), size, s) : null;
     const arm = uArm ? rasterise(await bitmap(uArm), size, s) : null;
 
-    // NORMALISE THE ALBEDO TO ITS OWN MEAN. This is the step that makes a real
-    // scan usable here at all. The shader multiplies: albedo * tex.rgb * 2.0,
-    // which is a no-op only for a map centred on 0.5. A scan is absolute
-    // reflectance — asphalt sits near 0.12 — so feeding it in raw would
-    // multiply every surface by ~0.24 and crush the whole game to black.
-    // Dividing by the mean turns the scan into a pure VARIATION map: the
-    // per-track tarmac tint, racing-line rubber wear and per-vertex grain all
-    // survive, and only the scan's detail is added. It is also what makes one
-    // material's brightness independent of which scan you happened to pick.
     let mr = 0, mg = 0, mb = 0;
     for (let i = 0; i < dif.length; i += 4) { mr += dif[i]; mg += dif[i + 1]; mb += dif[i + 2]; }
     const px = dif.length / 4;
@@ -200,21 +139,18 @@ const WebBake = (function () {
     const alb = new ImageData(size, size);
     const nor = new ImageData(size, size);
     for (let i = 0; i < dif.length; i += 4) {
-      // 128 = the shader's neutral point (128/255 * 2 ≈ 1.0).
       alb.data[i]     = Math.min(255, dif[i]     / mr * 128);
       alb.data[i + 1] = Math.min(255, dif[i + 1] / mg * 128);
       alb.data[i + 2] = Math.min(255, dif[i + 2] / mb * 128);
-      // ARM: R = ambient occlusion, G = roughness, B = metalness.
-      alb.data[i + 3] = arm ? arm[i + 1] : 220;          // roughness
-      nor.data[i]     = nrm ? nrm[i]     : 128;          // tangent normal x
-      nor.data[i + 1] = nrm ? nrm[i + 1] : 128;          // tangent normal y
-      nor.data[i + 2] = arm ? arm[i]     : 255;          // AO
+      alb.data[i + 3] = arm ? arm[i + 1] : 220;
+      nor.data[i]     = nrm ? nrm[i]     : 128;
+      nor.data[i + 1] = nrm ? nrm[i + 1] : 128;
+      nor.data[i + 2] = arm ? arm[i]     : 255;
       nor.data[i + 3] = 255;
     }
     return { albedo: alb, normal: nor, source: `polyhaven:${phId}` };
   }
 
-  // ── the whole pack ─────────────────────────────────────────────────────────
   async function run(overrides, opts) {
     const o = opts || {};
     const size = o.size || 512;
@@ -224,7 +160,6 @@ const WebBake = (function () {
     const albStrip = scratch(size); albStrip.c.width = size; albStrip.c.height = size * LAYERS;
     const norStrip = scratch(size); norStrip.c.width = size; norStrip.c.height = size * LAYERS;
     const aX = albStrip.c.getContext("2d"), nX = norStrip.c.getContext("2d");
-    // Neutral fill so an un-baked slot is a no-op if it is ever sampled.
     aX.fillStyle = "rgb(128,128,128)"; aX.fillRect(0, 0, size, size * LAYERS);
     nX.fillStyle = "rgb(128,128,255)"; nX.fillRect(0, 0, size, size * LAYERS);
 
@@ -244,15 +179,12 @@ const WebBake = (function () {
         try {
           L = await layer(id, size, s);
         } catch (first) {
-          // The preferred id does not exist (they are hand-picked, so a wrong
-          // guess just 404s). Search the live catalogue and try the best hits
-          // rather than dropping the slot to procedural.
           const q = FALLBACK[mat];
           if (!q) throw first;
           const hits = (await catalogue()).filter((k) => k.toLowerCase().includes(q));
           log(`  ${id} unavailable — trying ${hits.slice(0, 3).join(", ") || "(no match)"}`);
           for (const alt of hits.slice(0, 3)) {
-            try { L = await layer(alt, size, s); want[key] = alt; break; } catch (_) { /* next */ }
+            try { L = await layer(alt, size, s); want[key] = alt; break; } catch (_) {  }
           }
           if (!L) throw first;
         }
@@ -264,8 +196,6 @@ const WebBake = (function () {
         credits.push({ kind: "material", id: NAMES[mat].toLowerCase(), mat,
                        author: "Poly Haven contributors", licence: "CC0", source: L.source });
       } catch (e) {
-        // One unavailable asset must not sink the bake — that slot simply keeps
-        // its procedural look, which is a valid state everywhere downstream.
         failed.push(`${NAMES[mat]}: ${e.message}`);
         console.warn("[webbake]", NAMES[mat], "skipped —", e.message);
       }
@@ -276,7 +206,6 @@ const WebBake = (function () {
     if (failed.length) log("skipped:", failed);
     if (!ok) { log("nothing baked — aborting"); return null; }
 
-    // Live upload, so the result is on screen before anything is downloaded.
     let state = null;
     if (o.upload !== false && typeof Assets !== "undefined" && Assets.adopt) {
       state = Assets.adopt(size, albImgs, norImgs, scales);
@@ -306,7 +235,6 @@ const WebBake = (function () {
       normal: await toBlob(norStrip.c),
     };
     if (o.download !== false) {
-      // One ZIP rather than three loose downloads — Safari prompts per file.
       const enc = new TextEncoder();
       const files = [
         { name: manifest.materials.albedo, data: new Uint8Array(await blobs.albedo.arrayBuffer()) },
@@ -318,8 +246,6 @@ const WebBake = (function () {
       dl(bundle, `apex-pack-${size}.zip`);
       const kb = (n) => (n / 1024).toFixed(0) + " KB";
       log("SIZES —", files.map((f) => `${f.name} ${kb(f.data.length)}`).join(" | "));
-      // The offline gate caps a committed pack at 8 MB; say so here rather than
-      // let it fail after the hand-off.
       const total = files.reduce((n, f) => n + f.data.length, 0);
       log(`TOTAL ${kb(total)} — budget 8192 KB` + (total > 8 * 1024 * 1024 ? "  ** OVER **" : "  (ok)"));
       log(`downloaded apex-pack-${size}.zip`);
@@ -337,13 +263,10 @@ const WebBake = (function () {
 
   function toBlob(canvas) {
     return canvas.convertToBlob
-      ? canvas.convertToBlob({ type: "image/png" })                            // OffscreenCanvas
+      ? canvas.convertToBlob({ type: "image/png" })
       : new Promise((r) => canvas.toBlob(r, "image/png"));
   }
 
-  // Attribution roll. CC0 imposes no duty, but crediting the people whose scans
-  // are in the game is right, and Poly Haven's API terms ask for the credit line
-  // when you build on the live API — which this file does.
   function creditsMd(manifest) {
     const rows = manifest.credits.map((c) =>
       `| ${c.kind} | ${c.id} | ${c.author} | ${c.licence} | ${c.source} |`).join("\n");
@@ -352,29 +275,10 @@ const WebBake = (function () {
            `| kind | id | author | licence | source |\n|---|---|---|---|---|\n${rows}\n`;
   }
 
-  // ── 3D models ──────────────────────────────────────────────────────────────
-  //
-  // Same transport as the materials (api.polyhaven.com + dl.polyhaven.org, both
-  // CORS-open), but one format problem in the way: js/render/gltf.js is GLB-only
-  // and explicitly refuses external .bin URIs, while Poly Haven ships .gltf with
-  // a sidecar .bin. So we re-pack the two into a GLB in memory and hand that to
-  // the game's OWN loader — if it survives GLTF.toMesh here it will survive it
-  // at runtime, and the two can never disagree about what is supported.
-  //
-  // WHAT IS LOST: textures. The lit path is vertex-colour only (no UV channel
-  // anywhere), so a photoscanned prop arrives as flat baseColorFactor and will
-  // usually look WORSE than the procedural geometry it replaces. Models whose
-  // colour lives in a flat palette rather than a texture (the low-poly CC0
-  // packs) are the ones worth importing. modelReport() below prints what you
-  // need to judge that before committing anything.
 
-  // Re-pack a .gltf + .bin pair into a GLB buffer.
   function toGLB(json, bin) {
     const j = JSON.parse(JSON.stringify(json));
-    // The GLB spec requires buffer 0 to have no uri — it IS the BIN chunk.
     if (j.buffers && j.buffers[0]) { delete j.buffers[0].uri; j.buffers[0].byteLength = bin.byteLength; }
-    // Images referencing external files cannot survive; drop them rather than
-    // emit a GLB that points at nothing. Materials keep their baseColorFactor.
     if (j.images) delete j.images;
     if (j.textures) delete j.textures;
     if (j.materials) for (const m of j.materials) {
@@ -402,8 +306,6 @@ const WebBake = (function () {
     return out;
   }
 
-  // Fetch a Poly Haven model, re-pack it, and run it through the game's loader.
-  // Returns {mesh, report} without downloading anything — inspect first.
   async function modelReport(phId, opts) {
     const o = opts || {};
     const res = await fetch(`${API}/files/${encodeURIComponent(phId)}`);
@@ -416,7 +318,6 @@ const WebBake = (function () {
     if (!entry || !entry.url) throw new Error(`${phId}: no gltf at ${resKey}`);
 
     const gj = await (await fetch(entry.url)).json();
-    // The sidecar .bin is listed in `include`, keyed by its relative path.
     const binKey = Object.keys(entry.include || {}).find((k) => k.endsWith(".bin"));
     if (!binKey) throw new Error(`${phId}: gltf has no .bin in include`);
     const bin = await (await fetch(entry.include[binKey].url)).arrayBuffer();
@@ -436,9 +337,6 @@ const WebBake = (function () {
       id: phId, res: resKey, verts, tris,
       sizeMetres: [+(mxx - mnx).toFixed(2), +(mxy - mny).toFixed(2), +(mxz - mnz).toFixed(2)],
       bytesAX26: 20 + verts * 40 + mesh.idx.length * 4,
-      // Vegas already carries ~1.8M prop verts. A prop placed 20x around a
-      // circuit multiplies by 20 — that is the number that decides whether an
-      // asset is usable, not the download size.
       vertsIfPlaced20x: verts * 20,
       hadTextures: !!(gj.images && gj.images.length),
       verdict: verts * 20 > 300000 ? "TOO HEAVY for repeated placement"
@@ -452,9 +350,6 @@ const WebBake = (function () {
     return { mesh, report, glb };
   }
 
-  // Bake a model to the game's AX26 vertex format and download it, ready to be
-  // committed into assets/pack/models/ and placed with api.bakedModel().
-  // Layout mirrors js/render/assets.js _parseModel exactly.
   async function model(phId, matName, opts) {
     const o = opts || {};
     const { mesh, report } = await modelReport(phId, o);
@@ -463,7 +358,7 @@ const WebBake = (function () {
     const nv = mesh.pos.length / 3, ni = mesh.idx.length;
     const buf = new ArrayBuffer(20 + nv * 36 + nv * 4 + ni * 4);
     const dv = new DataView(buf), u8 = new Uint8Array(buf);
-    u8[0] = 0x41; u8[1] = 0x58; u8[2] = 0x32; u8[3] = 0x36;      // "AX26"
+    u8[0] = 0x41; u8[1] = 0x58; u8[2] = 0x32; u8[3] = 0x36;
     dv.setUint32(4, 1, true); dv.setUint32(8, nv, true);
     dv.setUint32(12, ni, true); dv.setUint32(16, 0, true);
     let off = 20;
@@ -481,15 +376,6 @@ const WebBake = (function () {
   }
 
 
-  // Survey the whole model library WITHOUT downloading any geometry. The .bin
-  // size is listed in the gltf entry's `include` map, and for a static mesh it
-  // is essentially all vertex data — so it estimates complexity from one JSON
-  // call per asset instead of tens of megabytes of buffers.
-  //
-  // ~44 bytes/vertex is the usual glTF static-mesh footprint (position 12 +
-  // normal 12 + uv 8 + indices ~12 amortised). Rough on purpose: the decision
-  // it feeds is "plausible or hopeless", not a budget to two significant
-  // figures — modelReport() downloads and measures exactly, for the shortlist.
   async function modelScan(q) {
     const ids = await models(q, true);
     const rows = [];
@@ -515,13 +401,10 @@ const WebBake = (function () {
     }
     rows.sort((a, b) => (a.estVerts || 1e9) - (b.estVerts || 1e9));
     console.table(rows);
-    // Textured bytes matter as a WARNING, not a cost: we drop them, so a model
-    // carrying a lot of texture is one whose look lives where we cannot follow.
     log("textured models lose all texture detail — the lit path is vertex-colour only");
     return rows;
   }
 
-  // What models does Poly Haven actually publish?
   async function models(q, quiet) {
     const r = await fetch(`${API}/assets?type=models`);
     const j = await r.json();
@@ -538,8 +421,6 @@ const WebBake = (function () {
     return rows;
   }
 
-  // Search the live catalogue, so a bad default can be replaced without leaving
-  // the console: WebBake.search("asphalt") -> ids you can pass to run().
   async function search(q) {
     const r = await fetch(`${API}/assets?type=textures`);
     const j = await r.json();

@@ -845,3 +845,23 @@ The remaining point stands in weaker form: on slow links the title waits on byte
 - **Touch:** sliding off a pedal to ease it jumps to the opposite control at full strength (patch held:
   it makes a quick slide to brake need ~40 px more travel); tilt steering weakens as the phone leans back.
 - **Accessibility:** race announcements run at about 22 per minute with no verbosity setting.
+
+## Base refresh — deploy tip 6555994c (2026-11-20)
+
+The branch now contains the current deploy code. A new clean-room snapshot of deploy tip `6555994c`
+(same recipe as the first: no documents, tests, tools or CI; comments stripped with a token-preserving
+strip; `js/track/circuit-meta.js` generated) was committed on top of the first snapshot and merged in, so
+every fix above that deploy has not yet taken is still applied here.
+
+Ten files conflicted where deploy had ported or rewritten one of these fixes; in each I took deploy's
+version, except:
+
+- `js/ui/select-screen.js` — kept the corrected search auto-select (deploy still had the version that
+  breaks TODAY'S CHALLENGE with a search typed).
+- `js/ui/results-story.js` — deploy's new line plus the "1 point" singular.
+
+Dropped in favour of deploy's code: fix 11 (`css/settings.css`, deploy sets `--sheet-w: 1020px`), to be
+re-tested. The CSP hashes were recomputed with `tools/csp-hashes.mjs --write` (stripping comments from
+inline scripts changes them). After the merge every script parses, and the game boots and steps a race at
+Monza with no page or console errors. File and line references in the sections above are from before
+this refresh.

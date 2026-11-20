@@ -26,6 +26,7 @@ window.PhysicsConsts = {
   LOAD_SENS: 0.10,
 
   DOWNFORCE: 0.65,
+  AI_WING_GRIP: 0.055,
 
   X_VMAX_GAIN_LO: 0.055,
   X_VMAX_GAIN_HI: 0.155,

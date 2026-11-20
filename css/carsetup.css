@@ -388,6 +388,9 @@
   box-shadow: var(--edge);
 }
 .cs-opt.locked .cs-opt-name { color: var(--dim); }
+.cs-opt.locked { flex-wrap: wrap; }
+.cs-opt.locked .cs-opt-main { flex: 1 1 16ch; }
+.cs-opt.locked .cs-opt-cost.research { margin-inline-start: auto; }
 .cs-opt.locked .cs-opt-dot { border-style: dashed; border-color: var(--plate-line); }
 .cs-opt-cost.research {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3);
@@ -636,7 +639,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   #cs-budget-row { flex: 1 1 200px; min-width: 0; flex-wrap: wrap; row-gap: 4px; }
   #cs-budget-bar { flex: 0 0 100%; order: 2; }
   #cs-budget { white-space: normal; overflow: visible; flex: 1 1 100%; }
-  #cs-stats-inner { flex: 1 1 100%; order: 3; } 
+  #cs-stats-inner { flex: 1 1 100%; order: 3; }
 
 }
 
@@ -1051,10 +1054,26 @@ body[data-ga-bars]::after { bottom: 0; }
 
 
 :root[data-look-garage-pw] #carsetup {
-  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 320px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, clamp(min(410px, calc(420px * var(--look-garage-pw, 1))), calc((var(--safe-w) - 320px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
 }
 :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
-  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 420px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, clamp(min(410px, calc(420px * var(--look-garage-pw, 1))), calc((var(--safe-w) - 420px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+}
+:root[data-look-garage-ph] #carsetup #cs-inner {
+  max-height: calc(100% * var(--look-garage-ph, 1));
+}
+@media (orientation: portrait) {
+  :root[data-look-garage-ph] #carsetup #cs-inner {
+    max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));
+  }
+  :root[data-look-garage-pw] #carsetup #cs-inner {
+    width: calc(100% * min(var(--look-garage-pw, 1), 1));
+    justify-self: end;
+  }
+  :root[data-look-garage-pw][data-look-garage-side="left"] #carsetup #cs-inner { justify-self: start; }
+}
+@media (orientation: portrait) and (max-height: 740px) {
+  :root[data-look-garage-ph] #carsetup #cs-inner { max-height: calc(100% * var(--look-garage-ph, 1)); }
 }
 
 :root[data-look-garage-side="left"] #carsetup { place-items: stretch start; }
@@ -1101,11 +1120,11 @@ body[data-ga-bars]::after { bottom: 0; }
     --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), 520px));
   }
   :root[data-look-garage-pw] #carsetup {
-    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 640px / var(--ui-scale)), calc(560px * var(--look-garage-pw, 1))));
+    --cs-sheet-w: min(100%, clamp(min(410px, calc(560px * var(--look-garage-pw, 1))), calc(100 * var(--vwz) - 640px / var(--ui-scale)), calc(560px * var(--look-garage-pw, 1))));
   }
   :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
-    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), calc(520px * var(--look-garage-pw, 1))));
+    --cs-sheet-w: min(100%, clamp(min(410px, calc(520px * var(--look-garage-pw, 1))), calc(100 * var(--vwz) - 720px / var(--ui-scale)), calc(520px * var(--look-garage-pw, 1))));
   }
 }
 
-} 
+}

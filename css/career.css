@@ -103,7 +103,7 @@
 }
 
 @media (pointer: fine), ((min-width: 600px) and (min-height: 600px)) {
-  :root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; } 
+  :root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }
 }
 :root[data-look-career-layout="stacked"] #cr-inner { --pair-at: 99999px; }
 
@@ -698,4 +698,4 @@ body[data-density="compact"][data-shape="wide"] #results .sheet[data-density="co
 #quali .sheet[data-density="compact"] #q-foot #q-go { flex: 1 1 auto; }
 #quali.q-done .sheet[data-density="compact"] #q-foot #q-go { grid-column: 1 / -1; }
 #quali.q-done .sheet[data-density="compact"] #q-foot #q-back { grid-column: 1 / -1; }
-} 
+}

@@ -165,7 +165,6 @@ const XrBoot = (function () {
   function bindInner(api) {
     if (_bound || typeof XrSession === "undefined") return;
     _tickBody = api && api.tickBody;
-    _windowRaf = api && api.windowTick;
     _boundGfx = api && api.gfx;
     _getCamMode = api && api.getCamMode;
     _setCamMode = api && api.setCamMode;
@@ -194,7 +193,7 @@ const XrBoot = (function () {
       onEnd: () => {
         _loopByXr = false;
         restoreSavedCam();
-        chainWindowRaf(_windowRaf);
+        chainWindowRaf();
       },
       onFrame: (time) => {
         if (_loopByXr && typeof _tickBody === "function") _tickBody(time);
@@ -210,7 +209,7 @@ const XrBoot = (function () {
 
   function bind(api) {
     _bindApi = api;
-    if (api && typeof api.windowTick === "function") _windowRaf = api.windowTick;
+    _windowRaf = api && api.windowTick;
     if (typeof XrSession === "undefined") return;
     bindInner(api);
   }

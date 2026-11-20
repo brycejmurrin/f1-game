@@ -176,7 +176,7 @@
 #pmsettings:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) #pmsettings-inner > .sheet-foot {
   min-height: var(--tap);
 }
-#pmsettings-inner:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) {
+#pmsettings-inner:not([data-shape="tall"]):has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) {
   --sheet-w: min(calc(var(--tap) * 25), calc(100 * var(--vwz) - var(--pad)));
   max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad)));
 }

@@ -3,6 +3,10 @@
 const Assets = (function () {
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
+  function _manifestUrl() {
+    const b = typeof window !== "undefined" && window ? Number(window.__APEX_BUILD) : 0;
+    return Number.isSafeInteger(b) && b > 0 ? MANIFEST + "?b=" + b : MANIFEST;
+  }
   const MAT_LAYERS = 17;
 
   let _gfx = null;
@@ -70,7 +74,7 @@ const Assets = (function () {
 
   async function _fetchManifest(generation) {
     try {
-      const j = await _request(MANIFEST, "json");
+      const j = await _request(_manifestUrl(), "json");
       if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
@@ -482,7 +486,21 @@ const Assets = (function () {
     return true;
   }
 
+  let _pinned = false;
+  function followQuality() {
+    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high")) return false;
+    const mats = _manifest && _manifest.materials;
+    const want = (_phoneLowPreset() || _lowDataLink()) && mats && mats.low ? "low" : "high";
+    if (want === _tier) return false;
+    Log.info("assets", "pack tier " + _tier + " -> " + want);
+    if (_gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
+    _uploaded = false; _tier = null; _bytes = 0; _loadPromise = null;
+    load();
+    return true;
+  }
+
   async function _load(opts, generation) {
+    _pinned = !!opts.tier;
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
     if (generation !== _loadGeneration) return false;
@@ -523,7 +541,7 @@ const Assets = (function () {
         normalP = _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration)
           .then((v) => v, (error) => { if (error === DECODE_CANCELED) throw error; return null; });
       }
-      const quietNormal = () => { if (normalP) normalP.then(() => {}, () => {}); };
+      const quietNormal = () => { if (normalP) normalP.then(_releaseStrip, () => {}); };
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
       if (albedoTex.ready && !(await albedoTex.ready)) { quietNormal(); throw new Error("albedo-upload"); }
@@ -808,7 +826,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
+  return { init, supported, manifest, load, retry, followQuality, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 

@@ -32,7 +32,7 @@ const SceneryStands = (function () {
         const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
         swing = Math.max(swing, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
       }
-      if (!(cMin < Infinity)) return { seg: 0, b: [a.r, a.u, a.t] };
+      if (!(cMin < Infinity)) return { seg: 0, off: null, b: [a.r, a.u, a.t] };
       let κ = 0;
       if (kn.length >= 2) {
         const prev = kn[1], next = kn[0];
@@ -42,10 +42,40 @@ const SceneryStands = (function () {
         κ = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
       }
       const κ0 = κ / Math.max(0.05, 1 + κ * xAnchor);
-      const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 - κ0 * lat));
-      const c = Math.min(cMin, curveCap);
-      if (!(c > 1.0)) return { seg: 0, b: [a.r, a.u, a.t] };
-      const l = (c - halfW * swing) - (1 - factor) * Math.min(c, 2);
+      const arc = 1 - κ0 * lat;
+      let folded = true;
+      if (nbr.length >= 2) {
+        const fx = nbr[0][0] - nbr[1][0], fy = nbr[0][1] - nbr[1][1], fz = nbr[0][2] - nbr[1][2];
+        const dt = (fx * a.t[0] + fy * a.t[1] + fz * a.t[2]), fl = Math.hypot(fx, fy, fz) || 1;
+        folded = (arc > 1 ? Math.abs(dt) : dt) < 0.5 * fl;
+      }
+      const chordAimed = nbr.length >= 2 && Math.abs(κ * spacing) < 0.55;
+      const curveCap = chordAimed && !folded && arc >= 0.9 ? Infinity : spacing * Math.max(0.15, Math.min(1.85, arc));
+      const JOINT_OVERLAP = 0.8;
+      let c, off = null, swingCut = halfW * swing;
+      if (chordAimed && !folded && arc >= 0.9) {
+        const prev = kn[1], next = kn[0];
+        let lMin = Infinity, lMax = 0;
+        for (const e of [0, -halfW, halfW]) {
+          const pp = at(prev, latFromAnchor + e), pn = at(next, latFromAnchor + e);
+          const le = Math.hypot(pn[0] - pp[0], pn[1] - pp[1], pn[2] - pp[2]) / 2;
+          lMin = Math.min(lMin, le); lMax = Math.max(lMax, le);
+        }
+        c = Math.min(lMax, lMin + JOINT_OVERLAP, curveCap);
+        const pp = at(prev, latFromAnchor), pn = at(next, latFromAnchor);
+        const raw = [(pp[0] + pn[0] - 2 * p[0]) / 4, (pp[1] + pn[1] - 2 * p[1]) / 4, (pp[2] + pn[2] - 2 * p[2]) / 4];
+        const SAGITTA_SNAP = 0.10;
+        const cx = pn[0] - pp[0], cy = pn[1] - pp[1], cz = pn[2] - pp[2], cl = Math.hypot(cx, cy, cz) || 1;
+        const along = (raw[0] * cx + raw[1] * cy + raw[2] * cz) / cl;
+        const slide = [cx / cl * along, cy / cl * along, cz / cl * along];
+        const side3 = [raw[0] - slide[0], raw[1] - slide[1], raw[2] - slide[2]];
+        off = Math.hypot(side3[0], side3[1], side3[2]) < SAGITTA_SNAP ? slide : raw;
+        swingCut = 0;
+      } else {
+        c = Math.min(cMin, curveCap);
+      }
+      if (!(c > 1.0)) return { seg: 0, off: null, b: [a.r, a.u, a.t] };
+      const l = (c - swingCut) - (1 - factor) * Math.min(c, 2);
       let t = a.t;
       if (nbr.length >= 2 && Math.abs(κ * spacing) < 0.55) {
         let tx = nbr[0][0] - nbr[1][0], ty = nbr[0][1] - nbr[1][1], tz = nbr[0][2] - nbr[1][2];
@@ -64,10 +94,11 @@ const SceneryStands = (function () {
       let u = [uu[0] / ul, uu[1] / ul, uu[2] / ul];
       if (u[0] * a.u[0] + u[1] * a.u[1] + u[2] * a.u[2] < 0) {
         u = [-u[0], -u[1], -u[2]];
-        return { seg: l < 1.0 ? 0 : l, b: [[-r[0], -r[1], -r[2]], u, t] };
+        return { seg: l < 1.0 ? 0 : l, off, b: [[-r[0], -r[1], -r[2]], u, t] };
       }
-      return { seg: l < 1.0 ? 0 : l, b: [r, u, t] };
+      return { seg: l < 1.0 ? 0 : l, off, b: [r, u, t] };
     };
+    const tierAt = (pt, ct) => (ct && ct.off ? vadd(pt, ct.off, 1) : pt);
     let bandSeq = 0;
     const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
       if (len <= 0.5) return;
@@ -121,7 +152,7 @@ const SceneryStands = (function () {
         const mid = curveTier(a, kn, side * depth / 2, setback / 2, 0.98, spacing, side, gap, k);
         const seg = mid.seg, b = mid.b;
         if (seg <= 0) return;
-        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+        if (rejBox(tierAt(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2), mid),
                    [depth, topH, seg], b)) return;
         const backLat = side * (rows - 0.5) * setback;
         out._mat = timber ? MAT.WOOD : MAT.METAL;
@@ -134,15 +165,15 @@ const SceneryStands = (function () {
         if (topH > 2.5 && Math.abs(backLat) > 1.2) {
           const braceCol = [frameCol[0] * 0.9, frameCol[1] * 0.9, frameCol[2] * 0.92];
           for (const sgn of [-1, 1]) {
-            const midP = vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45);
+            const midP = tierAt(vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45), mid);
             addBox(out, vadd(midP, b[2], sgn * seg * 0.42),
                    [Math.abs(backLat) * 0.95, 0.10, 0.10], braceCol, b);
           }
         }
         for (let r = 0; r < rows; r++) {
           const lat = side * r * setback, y = lift + 0.6 + r * rise;
-          const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
           const row = curveTier(a, kn, lat, setback / 2, 0.98, spacing, side, gap, k);
+          const rc = tierAt(vadd(vadd(a.c, a.r, lat), a.u, y), row.seg ? row : mid);
           const rs = row.seg || seg, rb = row.b;
           out._mat = timber ? MAT.WOOD : MAT.METAL;
           addBox(out, rc, [setback * 1.05, 0.16, rs], plankCol, rb);
@@ -153,8 +184,9 @@ const SceneryStands = (function () {
         }
         if (opts.rail !== false) {
           out._mat = timber ? MAT.WOOD : MAT.METAL;
-          addBox(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.55),
-                 [0.18, 0.16, seg], frameCol, b);
+          const rail = curveTier(a, kn, backLat, 0.09, 0.98, spacing, side, gap, k);
+          addBox(out, tierAt(vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.55), rail.seg ? rail : mid),
+                 [0.18, 0.16, rail.seg || seg], frameCol, rail.seg ? rail.b : b);
         }
         out._mat = 0;
       }, `bleacher|${side}|${gap}|${rows}|${rise}|${setback}|${lift}|${step}`);
@@ -184,12 +216,12 @@ const SceneryStands = (function () {
         const mid = curveTier(a, kn, side * depth / 2, setback / 2, 0.98, spacing, side, gap, k);
         const seg = mid.seg, b = mid.b;
         if (seg <= 0) { bay++; return; }
-        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+        if (rejBox(tierAt(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2), mid),
                    [depth, topH, seg], b)) { bay++; return; }
         for (let r = 0; r < rows; r++) {
           const lat = side * r * setback, y = 1.2 + r * rise;
-          const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
           const row = curveTier(a, kn, lat, setback / 2, 0.98, spacing, side, gap, k);
+          const rc = tierAt(vadd(vadd(a.c, a.r, lat), a.u, y), row.seg ? row : mid);
           const rs = row.seg || seg, rb = row.b;
           out._mat = MAT.WOOD;
           addBox(out, rc, [setback * 1.02, 0.18, rs], deck, rb);
@@ -205,8 +237,9 @@ const SceneryStands = (function () {
         out._mat = MAT.METAL;
         const backLat = side * (rows - 0.5) * setback;
         addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.13, topH + 1.6, tube, 5, b);
-        addBox(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.9),
-               [0.11, 0.11, seg], tube, b);
+        const rail = curveTier(a, kn, backLat, 0.06, 0.98, spacing, side, gap, k);
+        addBox(out, tierAt(vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.9), rail.seg ? rail : mid),
+               [0.11, 0.11, rail.seg || seg], tube, rail.seg ? rail.b : b);
         addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45),
                [Math.abs(backLat) + 0.6, 0.13, 0.13], tube, b);
         if (opts.awning) {
@@ -214,7 +247,7 @@ const SceneryStands = (function () {
             : [[0.88, 0.86, 0.82], [0.80, 0.26, 0.22]];
           addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 1.4), 0.10, 2.6, tube, 5, b);
           out._mat = MAT.FABRIC;
-          addBox(out, vadd(vadd(a.c, a.r, backLat * 0.45), a.u, topH + 3.6),
+          addBox(out, tierAt(vadd(vadd(a.c, a.r, backLat * 0.45), a.u, topH + 3.6), mid),
                  [Math.abs(backLat) + 1.6, 0.22, seg], aw[bay % aw.length], b);
         }
         out._mat = 0;
@@ -241,22 +274,22 @@ const SceneryStands = (function () {
         const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
         const rowAt = (back) => {
           const ct = curveTier(a, kn, back, dep / 2, 0.98, spacing, side, gap, k);
-          return ct.seg < 1.2 ? { seg: 0, b: ct.b } : ct;
+          return ct.seg < 1.2 ? { seg: 0, off: null, b: ct.b } : ct;
         };
         const mid = rowAt(side * depth / 2);
         if (mid.seg <= 0) return;
-        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+        if (rejBox(tierAt(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2), mid),
                    [depth, topH, mid.seg], mid.b)) return;
         out._mat = MAT.CONCRETE;
         if (opts.retainer !== false) {
           const ret = rowAt(0);
-          addBox(out, vadd(a.c, a.u, 1.0), [0.9, 2.2, ret.seg || mid.seg], concAlt, ret.b);
+          addBox(out, tierAt(vadd(a.c, a.u, 1.0), ret.seg ? ret : mid), [0.9, 2.2, ret.seg || mid.seg], concAlt, ret.b);
         }
         for (let r = 0; r < rows; r++) {
           const back = side * (1.0 + r * dep), up = 1.4 + r * rise;
-          const tc = vadd(vadd(a.c, a.r, back), a.u, up);
           const row = rowAt(back);
           if (row.seg <= 0) continue;
+          const tc = tierAt(vadd(vadd(a.c, a.r, back), a.u, up), row);
           out._mat = MAT.CONCRETE;
           addBox(out, tc, [dep, rise + 0.3, row.seg], r & 1 ? conc : concAlt, row.b);
           crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), row.b, side, dep * 0.6, 1.1, row.seg - 1.6,
@@ -265,10 +298,10 @@ const SceneryStands = (function () {
         const topBack = side * (1.0 + rows * dep);
         const backRow = rowAt(topBack);
         const tbSeg = backRow.seg || mid.seg;
-        const bb = backRow.b;
+        const bb = backRow.b, bShift = backRow.seg ? backRow : mid;
         if (opts.backWall !== false) {
           out._mat = MAT.CONCRETE;
-          const wc = vadd(a.c, a.r, topBack);
+          const wc = tierAt(vadd(a.c, a.r, topBack), bShift);
           let drop = 0;
           if (typeof terrainYAt === "function") {
             for (const o of [-0.5, 0, 0.5]) {
@@ -282,7 +315,7 @@ const SceneryStands = (function () {
         }
         if (opts.cut) {
           out._mat = 0;
-          addPrism(out, vadd(vadd(a.c, a.r, topBack), a.u, topH),
+          addPrism(out, tierAt(vadd(vadd(a.c, a.r, topBack), a.u, topH), bShift),
                    [6, 3.4, tbSeg], opts.cutCol || [0.52, 0.32, 0.22], bb);
         }
         out._mat = 0;
@@ -311,28 +344,28 @@ const SceneryStands = (function () {
           const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + t * tierDepth));
           const row = curveTier(a, kn, 0, tierDepth * 0.465, 0.98, spacing, side, gap + t * tierDepth, k);
           if (row.seg <= 0) continue;
-          const b = row.b;
+          const b = row.b, ac = tierAt(a.c, row);
           seg = row.seg;
           const h = base + t * rise;
-          if (rejBox(vadd(a.c, a.u, h / 2), [tierDepth * 0.93, h, seg], b)) continue;
+          if (rejBox(vadd(ac, a.u, h / 2), [tierDepth * 0.93, h, seg], b)) continue;
           out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
+          addBox(out, vadd(ac, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
                  t % 2 ? shell[0] : shell[1], b);
-          crowdBand(vadd(a.c, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
+          crowdBand(vadd(ac, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
                     opts.crowd, dens, k * 3.1 + t * 31.7 + side * 2.3);
           out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg + 0.5],
+          addBox(out, vadd(ac, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg],
                  fascia, b);
         }
         if (opts.roof && seg > 0) {
           const aR = anchor(k, side, gap + (tiers - 0.5) * tierDepth);
           const knR = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + (tiers - 0.5) * tierDepth));
           const roof = curveTier(aR, knR, 0, tierDepth * 0.65, 0.98, spacing, side, gap + (tiers - 0.5) * tierDepth, k);
-          const bR = roof.b, rSeg = roof.seg || seg;
+          const bR = roof.b, rSeg = roof.seg || seg, rc0 = tierAt(aR.c, roof.seg ? roof : null);
           const ry = base + (tiers - 1) * rise + 2.6;
-          if (!rejBox(vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1], bR)) {
+          if (!rejBox(vadd(rc0, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1], bR)) {
             out._mat = MAT.METAL;
-            addBox(out, vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1],
+            addBox(out, vadd(rc0, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1],
                    opts.roofCol || [0.19, 0.19, 0.23], bR);
           }
         }

@@ -162,13 +162,12 @@ const ShareCode = (function () {
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLDC]1\./.test(input)) {
-      if (input.indexOf("%") >= 0) { try { input = decodeURIComponent(input); } catch (_) {  } }
-      return input.replace(/\s+/g, "");
-    }
+    if (!/^APX[SLDC]1\./.test(input)) {
     const match = input.match(/(?:^|[#&])share=([^&]+)/);
     if (!match) return null;
-    try { input = decodeURIComponent(match[1]); }
+      input = match[1];
+    }
+    try { input = decodeURIComponent(input); }
     catch (_) { return null; }
     return input.replace(/\s+/g, "");
   }
@@ -313,7 +312,7 @@ const ShareCode = (function () {
   function restoreValues(store, rec) {
     let complete = true;
     for (const k of rec.keys) {
-      if (!/^(?:(?:setup|livery|livery\.custom)\.[a-z0-9_-]+|careerSetup\.[a-z0-9_-]+\.\d+\.[a-z0-9_-]+)$/.test(String(k))) continue;
+      if (!/^(?:(?:setup|livery(?:\.custom)?)\.|careerSetup\.[a-z0-9_-]+\.\d+\.)[a-z0-9_-]+$/.test(String(k))) continue;
       const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
       if (!durableSet(store, k, v == null ? undefined : v)) complete = false;
     }

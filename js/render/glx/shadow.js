@@ -72,7 +72,7 @@ const GLXShadow = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, S.mapTex, 0);
       const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       S.carEnabled = false;
       if (ok && !core.IS_MOBILE) {
@@ -90,7 +90,7 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, carShadowFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, S.carTex, 0);
         S.carEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       }
 
       S.lampEnabled = false;
@@ -109,7 +109,7 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, lampShadowFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, S.lampTex, 0);
         S.lampEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       }
 
       S.pcssEnabled = false;
@@ -128,7 +128,7 @@ const GLXShadow = (function () {
           gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, S.blockerTex, 0);
           S.pcssEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
           if (S.pcssEnabled) {
             blockerSampler = gl.createSampler();
             gl.samplerParameteri(blockerSampler, gl.TEXTURE_COMPARE_MODE, gl.NONE);

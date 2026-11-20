@@ -537,6 +537,7 @@ const NetTransport = (function () {
 
   function nostrCourier() {
     if (typeof NetNostr === "undefined" || !NetNostr.available()) return null;
+    if (typeof NetRendezvous !== "undefined" && NetRendezvous.usingPrivateRelay && NetRendezvous.usingPrivateRelay()) return null;
     return {
       offer: (code, sdp, token) => NetNostr.directExchange({ code, send: sdp, token }),
       answer: (code, reply, token, listen) => NetNostr.directExchange({ code, reply, token, listen: !!listen }),

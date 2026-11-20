@@ -82,9 +82,9 @@ const OverlayPublisher = (function () {
       try { field = apex.field(); } catch (_) {  }
       try { info = apex.info(); } catch (_) {  }
       try { sectors = apex.sectorState(); } catch (_) {  }
-      if (field && field.ok === false) field = null;
       if (typeof deps.bridge.peers === "function") deps.bridge.peers();
       if (deps.bridge.takeFresh()) differ.reset();
+      if (field && field.ok === false) return null;
       latest = ++seq;
       const frame = OverlayFeed.frame(input({ seq, field, info, sectors, caption, teams: deps.teams }));
       const patch = differ.next(frame, Date.now());

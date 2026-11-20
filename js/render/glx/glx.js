@@ -408,10 +408,10 @@ const GLXBackend = (function () {
         try {
           var _onVis = function () {
             if (document.hidden) return;
-            document.removeEventListener("visibilitychange", _onVis);
+            document.removeEventListener("visibilitychange", _onVis); canvas.__glxVisReload = false;
             try { location.reload(); } catch (_) {  }
           };
-          document.addEventListener("visibilitychange", _onVis);
+          document.addEventListener("visibilitychange", _onVis); canvas.__glxVisReload = true;
         } catch (_) {  }
         return;
       }
@@ -441,8 +441,8 @@ const GLXBackend = (function () {
       }
     }, false);
     canvas.addEventListener("webglcontextrestored", function () {
-      var n = GfxEscalation.reloadCount();
-      if (n > 2) return;
+      if (document.hidden && canvas.__glxVisReload) return;
+      var n = GfxEscalation.reloadCount(); if (n > 2) return;
       if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) {  }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);

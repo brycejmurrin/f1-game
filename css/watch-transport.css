@@ -11,7 +11,7 @@
   font-variant-numeric: tabular-nums; pointer-events: auto;
 }
 .watch-transport { --tap: 44px; }
-@media (pointer: coarse) { .watch-transport { --tap: 52px; --tap-paint: 52px; } } 
+@media (pointer: coarse) { .watch-transport { --tap: 52px; --tap-paint: 52px; } }
 .watch-transport [data-wt="controls"] { display: flex; align-items: end; gap: calc(var(--gap) * 2 / 3); }
 .watch-transport button, .watch-transport select {
   height: var(--tap); min-width: var(--tap); margin: 0;

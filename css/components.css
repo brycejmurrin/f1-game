@@ -131,7 +131,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
   width: auto; min-width: min(100%, 110px); margin: 0; flex: 1 1 0;
-  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px); 
+  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px);
   padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
 }
 .sheet-foot .bigbtn:only-child {
@@ -349,4 +349,4 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
     min-height: var(--tap-paint); align-content: center; box-sizing: border-box;
   }
 }
-} 
+}

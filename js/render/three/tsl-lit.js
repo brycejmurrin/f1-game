@@ -14,6 +14,7 @@
       abs, max, min, normalize, length, reflect, select, sin, cos,
       dFdx, dFdy, fwidth,
     } = TSL;
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
     const { hash21, vnoise, vnoiseGrad, ignoise } = ctx.chunks;
     const ROAD_NORMAL_V2 = (() => {
       try { return localStorage.getItem("apex26.tlxRoadNormalV2") !== "0"; } catch (_) { return true; }
@@ -424,21 +425,21 @@
       const hc = uv.x, y = uv.y;
       const h = float(0.0).toVar();
       If(mid.equal(1.0), () => {
-        const seam = smoothstep(0.05, 0.0, abs(fract(y.div(1.25)).sub(0.5)).sub(0.46));
+        const seam = smoothstepDown(0.05, 0.0, abs(fract(y.div(1.25)).sub(0.5)).sub(0.46));
         h.assign(vnoise(uv.mul(6.0)).mul(0.6).sub(seam.mul(0.5)));
       }).ElseIf(mid.equal(2.0), () => {
         const ch = 0.20, bl = 0.42, mort = 0.06;
         const row = floor(y.div(ch));
         const off = mod(row, 2.0).mul(0.5 * bl);
         const bx = fract(hc.add(off).div(bl)), by = fract(y.div(ch));
-        const joint = max(smoothstep(mort, 0.0, min(bx, bx.oneMinus()).mul(bl)),
-                          smoothstep(mort, 0.0, min(by, by.oneMinus()).mul(ch)));
+        const joint = max(smoothstepDown(mort, 0.0, min(bx, bx.oneMinus()).mul(bl)),
+                          smoothstepDown(mort, 0.0, min(by, by.oneMinus()).mul(ch)));
         h.assign(joint.oneMinus().mul(0.5)
           .add(vnoise(vec2(floor(hc.add(off).div(bl)), row).mul(4.0)).mul(0.10)));
       }).ElseIf(mid.equal(4.0), () => {
         h.assign(vnoise(vec2(hc.mul(55.0), y.mul(3.0))).mul(0.3));
       }).ElseIf(mid.equal(5.0), () => {
-        const seam = smoothstep(0.05, 0.0, abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46));
+        const seam = smoothstepDown(0.05, 0.0, abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46));
         h.assign(seam.oneMinus().mul(0.4).add(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).mul(0.16)));
       }).ElseIf(mid.equal(6.0), () => {
         h.assign(vnoise(uv.mul(3.2)).mul(0.5).add(vnoise(uv.mul(11.0)).mul(0.3)));
@@ -727,7 +728,7 @@
           If(near.greaterThan(0.0), () => {
             albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
           });
-          const seam = smoothstep(max(float(0.05), fwY125), 0.0,
+          const seam = smoothstepDown(max(float(0.05), fwY125), 0.0,
             abs(fract(y.div(1.25)).sub(0.5)).sub(0.46)).mul(0.14).mul(near);
           albedo.mulAssign(select(wall, seam.oneMinus(), float(1.0)));
           rough.assign(min(1.0, rough.add(far.mul(0.08))));
@@ -737,8 +738,8 @@
           const off = mod(row, 2.0).mul(0.5 * bl);
           const bx = fract(hc.add(off).div(bl)), by = fract(y.div(ch));
           const mortAA = max(float(mort), max(fwHc, fwY));
-          const joint = max(smoothstep(mortAA, 0.0, min(bx, bx.oneMinus()).mul(bl)),
-                            smoothstep(mortAA, 0.0, min(by, by.oneMinus()).mul(ch)));
+          const joint = max(smoothstepDown(mortAA, 0.0, min(bx, bx.oneMinus()).mul(bl)),
+                            smoothstepDown(mortAA, 0.0, min(by, by.oneMinus()).mul(ch)));
           const bh = vnoise(vec2(floor(hc.add(off).div(bl)), row).mul(1.3));
           const brick = albedo.mul(bh.mul(0.42).add(0.82)).mul(vec3(1.06, 0.99, 0.92));
           const mortar = mix(albedo, vec3(0.60, 0.58, 0.55), 0.6);
@@ -748,8 +749,8 @@
           const pw = 1.6, ph = 1.4, mull = 0.11;
           const gx = fract(hc.div(pw)), gy = fract(y.div(ph));
           const mullAA = max(float(mull), max(fwHcPw, fwYPh));
-          const bar = max(smoothstep(mullAA, 0.0, min(gx, gx.oneMinus())),
-                          smoothstep(mullAA, 0.0, min(gy, gy.oneMinus())));
+          const bar = max(smoothstepDown(mullAA, 0.0, min(gx, gx.oneMinus())),
+                          smoothstepDown(mullAA, 0.0, min(gy, gy.oneMinus())));
           albedo.mulAssign(vnoise(vec2(floor(hc.div(pw)), floor(y.div(ph))).mul(1.7)).sub(0.5).mul(0.5).mul(far).add(1.0));
           albedo.assign(mix(albedo, albedo.mul(0.32), bar.mul(near)));
           rough.assign(mix(rough, min(rough, 0.12), near));
@@ -763,7 +764,7 @@
           If(near.greaterThan(0.0), () => {
             albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
           });
-          albedo.mulAssign(smoothstep(max(float(0.05), fwHc035), 0.0,
+          albedo.mulAssign(smoothstepDown(max(float(0.05), fwHc035), 0.0,
             abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46)).mul(0.16).mul(near).oneMinus());
         }).ElseIf(mid.equal(6.0), () => {
           const d = vnoise(wp.xz.mul(2.4).add(wp.y.mul(1.6))).mul(0.6).toVar();
@@ -1590,7 +1591,7 @@
             const fvS = (sin(fvC.mul(70.0).add(sin(objP.z.mul(1.7).add(fvC.mul(9.0))).mul(1.2))).mul(0.5).add(0.5)).toVar();
             const fvBr = (smoothstep(-0.6, 0.2, sin(objP.z.mul(4.0).add(fvC.mul(37.0))))).toVar();
             const fvPer = (float(0.090).div(fnPx)).toVar();
-            const fv = (mix(smoothstep(0.50, 0.80, fvS).mul(fvBr), float(0.30), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
+            const fv = (mix(smoothstep(0.50, 0.80, fvS).mul(fvBr), float(0.30), smoothstepDown(3.0, 1.5, fvPer)).mul(smoothstepDown(1.4, 0.2, objP.z))).toVar();
             const fvGlow = (mix(vec3(0.78, 1.0, 0.30), vec3(0.05, 0.14, 0.0), smoothstep(0.35, 0.75, pvA))
               .mul(vec3(U.ambSky).mul(2.5).add(vec3(U.sunColor).mul(pvSun.mul(0.6))).add(0.15))).toVar();
             color.assign(mix(color, fvGlow, fv));
@@ -1611,7 +1612,7 @@
               .ElseIf(sfN.x.greaterThan(sfN.z), () => { sfUV.assign(vec2(objP.z, objP.y)); });
             const sfR = (smoothstep(0.15, 0.85, sfT).oneMinus().mul(0.62)).toVar();
             const sfW = (max(fnPx.mul(11.0), 0.02)).toVar();
-            const sfDot0 = (smoothstep(sfR.add(sfW), sfR.sub(sfW), length(fract(sfUV.mul(11.0)).sub(0.5)))).toVar();
+            const sfDot0 = (smoothstepDown(sfR.add(sfW), sfR.sub(sfW), length(fract(sfUV.mul(11.0)).sub(0.5)))).toVar();
             const sfDot = (mix(sfDot0, min(sfR.mul(sfR).mul(3.14159), 1.0), smoothstep(0.25, 0.45, sfW))).toVar();
             const sfS = (max(sfDot, smoothstep(0.08, 0.18, sfT).oneMinus())).toVar();
             color.assign(mix(vec3(min(pvLit, 3.0).mul(0.035)), vec3(pvLit).mul(vec3(0.70, 0.72, 0.76)), sfS));
@@ -1658,7 +1659,6 @@
               color.assign(vec3(0.010, 0.010, 0.011).mul(bLit.mul(0.6).add(1.0)).add(vec3(U.ambSky).mul(pvG.mul(0.010))));
             });
           }).ElseIf(finishId.greaterThanEqual(71.0), () => {
-            const aL = pvA;
             const lit = pvLit;
             If(finishId.equal(71.0), () => {
               const tmAlb = (mix(vec3(pvA), albedo, 0.55)).toVar();

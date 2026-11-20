@@ -4,7 +4,7 @@
 #trackdesigner::backdrop { background: none; }
 #trackdesigner[open],
 :root[data-appearance-peek="designer"] #trackdesigner {
-  --td-zoom: calc(var(--ui-scale) * var(--look-designer-size, 1)); 
+  --td-zoom: calc(var(--ui-scale) * var(--look-designer-size, 1));
   display: grid;
   grid-template-rows: auto minmax(auto, 1fr) auto;
   place-items: stretch;
@@ -37,7 +37,7 @@
 .td-stage { grid-column: 1; grid-row: 2; position: relative; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-stage canvas {
   flex: 1 1 auto; min-height: 72px; width: 100%;
-  touch-action: none; 
+  touch-action: none;
   background: var(--surf-1);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
@@ -268,7 +268,7 @@
   }
   .td-stage > .td-chips[data-role="toolbar"] .sel-chip { pointer-events: auto; }
   .td-rail { grid-column: 1; grid-row: 3; min-height: 0; max-height: 100%; }
-  .td-stage .td-hint { display: none; } 
+  .td-stage .td-hint { display: none; }
   .td-stats { display: none; }
   .td-stage > canvas[data-role="profile"] {
     height: max(44px, calc(var(--chip-h) * 1.35));
@@ -558,7 +558,13 @@
 #trackdesigner [aria-label="Designer mode"] { flex: 1; display: flex; flex-wrap: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button { flex: 1 0 auto; white-space: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button::before { content: attr(data-step); color: var(--dim); margin-inline-end: calc(var(--gap) / 3); }
-#trackdesigner .td-rail { scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2); overflow-anchor: none; }
+#trackdesigner .td-rail {
+  scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2);
+  scroll-padding-bottom: calc(var(--tap-paint) + var(--gap));
+  padding-bottom: calc(var(--gap) * 1.5);
+  overflow-anchor: none;
+  box-sizing: border-box;
+}
 #trackdesigner [data-role="mode-bar"] [data-role="context-help"] { flex: none; }
 #trackdesigner .td-stage { container-type: inline-size; container-name: designer-map; }
 @media (min-height: 501px) {
@@ -649,7 +655,7 @@
 #trackdesigner[data-foot="in"] .td-body {
   grid-template-columns: minmax(0, 1fr) minmax(250px, 45%);
   grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: calc(var(--tap) * 5.5); padding-top: 0; 
+  min-height: calc(var(--tap) * 5.5); padding-top: 0;
 }
 #trackdesigner[data-foot="in"] .td-stage { grid-column: 1; grid-row: 1 / span 3; min-height: 0; }
 #trackdesigner[data-foot="in"] [data-role="mode-bar"] { grid-column: 2; grid-row: 1; padding-right: calc(var(--tap) + var(--gap)); gap: 0; }
@@ -679,8 +685,29 @@
 @media (min-width: 761px) and (orientation: landscape) {
   :root[data-look-designer-split] #trackdesigner[data-foot="out"] .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, calc(100% - var(--look-designer-split))); }
 }
-:root[data-look-designer-text="small"] #trackdesigner { --fs-2: 14px; --fs-3: 15px; --fs-4: 16px; --fs-5: 17px; --fs-6: 18px; }
-:root[data-look-designer-text="large"] #trackdesigner { --fs-micro: 16px; --fs-2: 17px; --fs-3: 18px; --fs-4: 20px; --fs-5: 21px; --fs-6: 23px; }
+#trackdesigner {
+  --td-fs-floor: calc(12px / var(--td-zoom));
+  --fs-micro: max(14px, var(--td-fs-floor));
+  --fs-2: max(15px, var(--td-fs-floor));
+  --fs-3: max(16px, var(--td-fs-floor));
+  --fs-4: max(17px, var(--td-fs-floor));
+}
+:root[data-look-designer-text="small"] #trackdesigner {
+  --fs-2: max(14px, var(--td-fs-floor));
+  --fs-3: max(15px, var(--td-fs-floor));
+  --fs-4: max(16px, var(--td-fs-floor));
+  --fs-5: max(17px, var(--td-fs-floor));
+  --fs-6: max(18px, var(--td-fs-floor));
+}
+:root[data-text-size="large"] #trackdesigner,
+:root[data-look-designer-text="large"] #trackdesigner {
+  --fs-micro: max(16px, var(--td-fs-floor));
+  --fs-2: max(17px, var(--td-fs-floor));
+  --fs-3: max(18px, var(--td-fs-floor));
+  --fs-4: max(20px, var(--td-fs-floor));
+  --fs-5: max(21px, var(--td-fs-floor));
+  --fs-6: max(23px, var(--td-fs-floor));
+}
 :root[data-look-designer-profile="short"] #trackdesigner .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 1.6); min-height: var(--tap-paint); }
 :root[data-look-designer-profile="tall"] #trackdesigner .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 3.4); }
 

@@ -114,7 +114,11 @@ const GLXSoft = (function () {
     function _awaitFrame(ms) {
       return new Promise(function (resolve) {
         const w = function () { clearTimeout(t); resolve("frame"); };
-        const t = setTimeout(function () { _frameWaiters.splice(_frameWaiters.indexOf(w), 1); resolve("stale"); }, ms);
+        const t = setTimeout(function () {
+          const i = _frameWaiters.indexOf(w);
+          if (i >= 0) _frameWaiters.splice(i, 1);
+          resolve("stale");
+        }, ms);
         _frameWaiters.push(w);
       });
     }

@@ -198,8 +198,7 @@ const TrackGeom = (function () {
     const zoneAt = (fy, i) => {
       const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;
       if (fr > snowline + 0.04) return MAT.SNOW;
-      if (fr > snowline - 0.16) return MAT.ROCK;
-      if (fr > 0.34) return MAT.ROCK;
+      if (fr > snowline - 0.16 || fr > 0.34) return MAT.ROCK;
       return lowMat;
     };
     const colAt = (fy, i) => {

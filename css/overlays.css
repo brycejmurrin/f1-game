@@ -338,7 +338,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   user-select: all;
 }
 #pm-phonepad-qr-wrap { flex: 0 0 auto; margin: 0; }
-#pm-phonepad-pair #pm-phonepad-qr-wrap canvas { width: min(200px, calc(60 * var(--vwz))); } 
+#pm-phonepad-pair #pm-phonepad-qr-wrap canvas { width: min(200px, calc(60 * var(--vwz))); }
 #vsfriend .vs-qr-wrap, #pm-phonepad-qr-wrap {
   margin: calc(var(--gap) / 3) 0 0;
   display: flex;
@@ -348,9 +348,9 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 }
 #vsfriend .vs-qr-wrap canvas, #pm-phonepad-qr-wrap canvas {
   width: min(320px, calc(82 * var(--vwz)), calc(46 * var(--svhz)));
-  max-width: 100%; 
+  max-width: 100%;
   height: auto;
-  image-rendering: pixelated; 
+  image-rendering: pixelated;
   border-radius: var(--r-sm);
   background: #fff;
 }
@@ -359,7 +359,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   display: flex;
   flex-direction: column;
   gap: calc(var(--gap) * 2 / 3);
-  min-width: 0; 
+  min-width: 0;
   box-sizing: border-box;
 }
 #vsfriend .vs-col > .bigbtn {
@@ -581,7 +581,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   object-fit: cover;
   border-radius: var(--r-md);
   background: #000;
-  transform: scaleX(-1); 
+  transform: scaleX(-1);
 }
 #vsfriend .vs-scan > .bigbtn { width: auto; margin: 0; }
 #vsfriend .vs-raw > summary {
@@ -604,7 +604,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 }
 #vsfriend .vs-status {
   margin: var(--gap) 0 0;
-  min-height: 1.2em; 
+  min-height: 1.2em;
   font-size: var(--fs-micro);
   line-height: 1.35;
   opacity: 0.9;
@@ -681,7 +681,7 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
 
 
 #pausemenu:not([open]) { display: none; }
-#trackdesigner:not([open]) { display: none; } 
+#trackdesigner:not([open]) { display: none; }
 @media (max-height: 400px) {
   #pausemenu #pm-quick-doors {
     --tray-cols: 2;
@@ -718,7 +718,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-settings { grid-area: settings; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); } 
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
@@ -785,10 +785,17 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
 :root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
 :root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
-@media (pointer: coarse) { :root[data-look-race-btn] #race-settings { --tap: max(calc(var(--tap-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); } }
 :root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
 :root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
 :root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+@media (pointer: coarse) {
+  :root[data-look-datahub-btn] #datahub { --tap: max(calc(var(--tap-0) * var(--look-datahub-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-datahub-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-select-btn] #select { --tap: max(calc(var(--tap-0) * var(--look-select-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-select-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-race-btn] #race-settings { --tap: max(calc(var(--tap-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-career-btn] #career { --tap: max(calc(var(--tap-0) * var(--look-career-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-career-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-garage-btn] #carsetup { --tap: max(calc(var(--tap-0) * var(--look-garage-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-garage-btn, 1)), calc(44.2px / var(--ui-scale))); }
+  :root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: max(calc(var(--tap-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); }
+}
 
 :root[data-look-pause-corners="sharp"] #pausemenu,
 :root[data-look-datahub-corners="sharp"] #datahub,
@@ -839,7 +846,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-btn-shape="square"] .touchbtn { border-radius: 12%; }
 :root[data-btn-shape="square"] #hud-dock #grp-steer { border-radius: var(--r-md); }
 
-} 
+}
 
 @layer components {
 .pane-pair {
@@ -911,7 +918,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p2 { top: var(--rr-h); background: color-mix(in oklab, var(--silver) 7%, var(--surf-1)); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p3 { top: calc(2 * var(--rr-h)); background: color-mix(in oklab, var(--bronze) 7%, var(--surf-1)); box-shadow: 0 6px 8px -6px var(--bg); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { top: calc(3 * var(--rr-h)); }
-:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:is(.p1, .p2, .p3) { background: color-mix(in oklab, var(--you) 8%, var(--surf-1)); } 
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:is(.p1, .p2, .p3) { background: color-mix(in oklab, var(--you) 8%, var(--surf-1)); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:has([data-stint-details][open]) { height: auto; position: static; }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"]:is(.p2, .p3):not(.you) { position: static; }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }
@@ -984,7 +991,6 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 #results .res-name [data-stint-text] { white-space: normal; overflow-wrap: anywhere; }
 
 #results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
-:root[data-motion="reduce"] #results :is(*, *::before, *::after) { transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow; }
 #results-table .res-row.you { position: relative; }
 #results-table [data-results-part="ranking"] > .res-row.you { position: sticky; top: 0; bottom: 0; }
 #results-table .res-row.you:has([data-stint-details][open]) { position: relative; }
@@ -1020,4 +1026,4 @@ body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var
   :root[data-tl-edit] #tl-handle::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
 }
 
-} 
+}

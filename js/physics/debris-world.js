@@ -787,8 +787,7 @@ function updatePanels(dt, px, pz) {
     const far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
     if (far || p.restT > (p.broken ? PANEL_REST_DESPAWN_S : PANEL_IDLE_DESPAWN_S)) {
       if (p.joint) {
-        try { world.removeImpulseJoint(p.joint, true); } catch (e) {
- }
+        try { world.removeImpulseJoint(p.joint, true); } catch (e) {  }
         p.joint = null;
       }
       try { world.removeRigidBody(p.body); } catch (e) {  }

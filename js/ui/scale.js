@@ -198,6 +198,7 @@ const UiScale = (() => {
       { id: "low",  label: "LOW",  v: 0.5  },
       { id: "med",  label: "MED",  v: 0.75 },
       { id: "high", label: "HIGH", v: 1.0  },
+      { id: "max",  label: "MAX",  v: 1.0, dpr: 3 },
     ];
     migrateResMode(store, coarseUi());
     let resMode = store.get("resMode", defaultResMode());
@@ -205,6 +206,7 @@ const UiScale = (() => {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
       SettingRow.paint($("pm-res"), m.id);
       const gfx = G.gfx;
+      if (gfx.setDprBoost) gfx.setDprBoost(m.dpr || 0);
       if (m.v != null) { PerfGov.setAutoRes(false); if (gfx.setRenderScale) gfx.setRenderScale(m.v); return; }
       const ceil = coarseUi() ? PHONE_AUTO_CEIL : 1;
       if (PerfGov.setResCeil) PerfGov.setResCeil(ceil);

@@ -10,7 +10,8 @@ var StartLights = (function () {
 
   function countCredit(wallS, dtS, droppedS) {
     const wall = Math.min(CATCHUP_S, wallS > 0 ? wallS : 0);
-    return Math.max(0, wall - (dtS > 0 ? dtS : 0)) + (droppedS > 0 ? droppedS : 0);
+    const drop = droppedS > 0 ? droppedS : 0;
+    return Math.min(CATCHUP_S, Math.max(0, wall - (dtS > 0 ? dtS : 0)) + drop);
   }
 
   function create(G, deps) {

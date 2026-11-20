@@ -1,5 +1,6 @@
 @layer overlays {
 #photo-studio { position: fixed; inset: 0; z-index: 45; background: transparent; pointer-events: none; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
+body.photo-studio-open { background: var(--bg); }
 #ps-panel { --fit-at: 260px; position: absolute; right: calc(var(--safe-r) / var(--sheet-scale, var(--ui-scale))); top: calc(var(--safe-t) / var(--sheet-scale, var(--ui-scale))); width: min(340px, calc(42 * var(--vwz))); height: calc((100svh - var(--safe-t) - var(--safe-b)) / var(--sheet-scale, var(--ui-scale))); max-height: none; pointer-events: auto; }
 #ps-panel[aria-busy="true"] { cursor: progress; }
 #ps-panel[aria-busy="true"]::after {
@@ -88,8 +89,39 @@ body.photo-mode.photo-studio-open .pc-altcol { left: auto; right: calc((var(--ps
 body.photo-mode.photo-studio-open .pc-altcol .pc-btn { width: var(--steer); height: var(--steer); }
 body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(--ps-dock-px) + var(--gap)) / var(--ps-touch-z) + var(--steer) + var(--gap)); }
 @media (max-width: 640px) {
-  #photo-studio { padding-top: 58svh; }
-  #ps-panel { top: auto; bottom: calc(var(--safe-b) / var(--sheet-scale, var(--ui-scale))); width: calc((100vw - var(--safe-l) - var(--safe-r)) / var(--sheet-scale, var(--ui-scale))); height: calc(42svh / var(--sheet-scale, var(--ui-scale))); }
+  #photo-studio {
+    --ps-preview-h: calc(100svh - 42svh - var(--safe-b));
+    padding-top: var(--ps-preview-h);
+    padding-bottom: 0;
+  }
+  #ps-guide {
+    top: calc(var(--ps-preview-h) / 2);
+  }
+  #photo-studio[data-aspect="wide"] #ps-guide {
+    width: min(100vw, calc(177.778 * var(--ps-preview-h) / 100));
+    height: min(var(--ps-preview-h), 56.25vw);
+  }
+  #photo-studio[data-aspect="square"] #ps-guide {
+    width: min(100vw, var(--ps-preview-h));
+    height: min(var(--ps-preview-h), 100vw);
+  }
+  #photo-studio[data-aspect="portrait"] #ps-guide {
+    width: min(100vw, calc(0.8 * var(--ps-preview-h)));
+    height: min(var(--ps-preview-h), 125vw);
+  }
+  #ps-panel {
+    top: auto;
+    bottom: calc(var(--safe-b) / var(--sheet-scale, var(--ui-scale)));
+    width: calc((100vw - var(--safe-l) - var(--safe-r)) / var(--sheet-scale, var(--ui-scale)));
+    height: calc(42svh / var(--sheet-scale, var(--ui-scale)));
+    overflow: visible;
+  }
+  #ps-body {
+    padding-bottom: calc(var(--gap) * 1.5);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   body.photo-studio-open { --ps-touch-z: min(var(--ui-scale), 1); }
   body.photo-mode.photo-studio-open :is(.pc-stickwrap, .pc-altcol) { zoom: var(--ps-touch-z); bottom: calc((42svh + var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-move-wrap { left: calc(var(--safe-l) / var(--ps-touch-z)); }

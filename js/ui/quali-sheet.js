@@ -40,7 +40,9 @@ function create(G) {
       title.textContent = you ? `${name} — P${you.pos}` : name;
     }
     const me = rows.find((r) => r.isPlayer);
-    if (me && me.pos === 1 && me.human && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
+    const drivenPole = !!(me && me.pos === 1 && me.human);
+    if (drivenPole && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
+    else if (!drivenPole) poleNew = false;
     if (poleNew) {
       const card = document.createElement("div"); card.className = "res-personal";
       const head = document.createElement("strong"); head.textContent = I18n.t("results.badgeUnlocked", null, "BADGE UNLOCKED");

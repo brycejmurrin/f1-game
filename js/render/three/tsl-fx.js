@@ -11,6 +11,7 @@
       positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
     } = TSL;
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
 
     function fxMaterial(o) {
       const m = new THREE.MeshBasicNodeMaterial();
@@ -69,8 +70,8 @@
     })();
 
     const markFalloff = (uvv) =>
-      smoothstep(float(1.0), float(0.4), abs(uvv.x))
-        .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
+      smoothstepDown(float(1.0), float(0.4), abs(uvv.x))
+        .mul(smoothstepDown(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
 
     const markMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-mark" }));
     markMat.colorNode = vec3(0.0);

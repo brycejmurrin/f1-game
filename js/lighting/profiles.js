@@ -169,6 +169,7 @@ const LightStore = (() => {
       const d = TUNE_DEFS.find((t) => t.id === id);
       if (!d || typeof v !== "number" || !isFinite(v)) return false;
       v = clamp(v, d.min, d.max);
+      const changed = LT[id] !== v;
       LT[id] = v;
       const k = keyFor(id, key());
       if (k) {
@@ -176,7 +177,7 @@ const LightStore = (() => {
         put(prof, k, d, v);
         if (!Object.keys(prof).length) delete profiles[k];
       }
-      liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
+      if (changed) liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
       return true;
     }
 

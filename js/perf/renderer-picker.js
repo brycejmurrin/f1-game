@@ -861,7 +861,8 @@ function init() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
+  const gated = () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(init) : init());
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", gated, { once: true });
   else init();
 }
 

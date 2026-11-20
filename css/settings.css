@@ -1,12 +1,13 @@
 @layer components {
 #pmsettings {
-  --sheet-w: min(1020px, calc((var(--safe-w) - var(--pad) * 2) / var(--sheet-scale, var(--ui-scale))));
+  --sheet-w: 1020px;
 }
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;
 }
 #pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 620px; }
 #pmsettings-inner > .sheet-head {
   min-width: 0;
   flex-wrap: wrap;
@@ -303,7 +304,7 @@
   border-color: var(--text);
 }
 @media (min-width: 1680px) {
-  #pmsettings { --sheet-w: min(var(--menu-fit-sheet, 1180px), calc(var(--safe-w) - var(--pad) * 2)); }
+  #pmsettings { --sheet-w: min(var(--menu-fit-sheet, 1180px), 100%); }
 }
 .sheet[data-density="compact"] .pm-group-h {
   letter-spacing: var(--ls-4);

@@ -184,6 +184,15 @@ const TrackDef = (function () {
     return pts;
   }
 
-  return { elevationAt, hasRealElevation, fromRaw };
+  const ENGINE_MODELS = Object.freeze({ bakedPines: "pine_lod0" });
+  function scenerySource(def, registry) {
+    const fn = def && (def.scenery || (registry && registry[def.id]));
+    let src = fn ? String(fn) : "";
+    const f = def && def.furniture;
+    if (f) for (const k in ENGINE_MODELS) if (f[k]) src += ' "' + ENGINE_MODELS[k] + '"';
+    return src;
+  }
+
+  return { elevationAt, hasRealElevation, fromRaw, scenerySource, ENGINE_MODELS };
 })();
 Object.freeze(TrackDef);

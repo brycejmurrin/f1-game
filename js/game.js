@@ -403,8 +403,7 @@ function blueFlagCall(ev) {
   if (!ev || !player) return;
   Log.info("game", "Blue flag " + ev.type + (ev.code ? " code=" + ev.code : "") + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap);
   if (ev.type === "warn") { announce("BLUE FLAG WARNING", 2, "penalty-warn"); return; }
-  player.penalty += ev.sec; notePenaltyWhy(player, "ignoring blue flags");
-  resultT = 0;
+  player.penalty += ev.sec; notePenaltyWhy(player, "ignoring blue flags"); resultT = 0;
   announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
@@ -816,8 +815,8 @@ function makeCars() {
     const worksParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const aiSetup = Career.inCareer() && Career.aiSetup && Career.aiSetup(team);
     const factoryParts = aiSetup ? Parts.resolveSetup(aiSetup, team) : worksParts;
-    const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
-      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
+    const catalogPace = aiSetup ? DriverRatings.ladderPace(buildPace(Parts.resolveSetup({ ...factoryParts.setup,
+      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts), team.tier, TIER_V) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     const matePace = ti === teamIdx ? DriverRatings.ladderPace(buildPace(Parts.resolveSetup({ ...savedParts.setup, aero: factoryParts.setup.aero, ers: factoryParts.setup.ers }, team), factoryParts), team.tier, TIER_V) : 1;
     seatsFor(team).forEach((dSeat, di) => {
@@ -2056,7 +2055,7 @@ const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()),
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
-const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
+const { buildResults, buildTTResults, buildStandings, buildChampion, quali: qualiSheet } = GameResults.create(G);
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
 const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
@@ -2113,7 +2112,7 @@ customTeam = CustomTeam.create({
 const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 const careerUi = CareerUI.create(G);
 const seasonUi = SeasonUI.create(G);
-const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
+const quali = Quali.create(G);
 qualiNet = QualiNet.create({
   $, fmtTime, isQuali,
   getPlayer: () => player,
@@ -3389,7 +3388,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
         if (c.isPlayer) { announce("LAP INVALIDATED", 1.2, "penalty-warn"); if (soundOn) GameAudio.offtrack(); }
       } else if (c.cutWarn >= 4) {
         c.penalty += 5; Log[c.isPlayer ? "info" : "debug"]("game", "Penalty track-limits car=" + c.code + " +5s total=" + c.penalty + "s lap=" + c.lap);
-        if (!c.penaltyWhy) c.penaltyWhy = "track limits"; else if (c.penaltyWhy.indexOf("track limits") < 0) c.penaltyWhy += "; track limits";
+        notePenaltyWhy(c, "track limits");
         if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit"); if (soundOn) GameAudio.penalty(); }
       } else if (c.isPlayer) {
         announce("TRACK LIMITS " + c.cutWarn + "/4" + (c.cutWarn === 3 ? " — BLACK & WHITE FLAG" : ""), 1.2, "penalty-warn");
@@ -4908,7 +4907,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;
-    if (state === "count" && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);
+    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);
     _poseAt = now - physAcc * 1000;
   } else _poseAt = null;
@@ -5005,7 +5004,7 @@ $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = fa
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 const openDataHub = (tab) => {
   const visit = titleVisit;
-  return ensureDataHub().then((ok) => {
+  return ensureDataHub({ onSlow: () => { if (state === "menu" && visit === titleVisit) announce("STILL LOADING…", 4, "info"); } }).then((ok) => {
     if (state !== "menu" || visit !== titleVisit) return;
     if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
   });
@@ -5383,7 +5382,9 @@ function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPendin
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; G.endRace(); return true; }
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
-els.workBtn.onclick = openPitWork;
+function endTimeTrialFromBox() { if (!isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return; paused = true; GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
+  openGarage("pit"); setupCam.startPitIn(() => { leaveGarage(); G.endRace(); setTimeout(() => { if ($("carsetup").hidden && !setupPreviewOn) garagePre.release(); }, 0); }); }
+els.workBtn.onclick = () => (isTimeTrial() ? endTimeTrialFromBox() : openPitWork());
 
 function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);

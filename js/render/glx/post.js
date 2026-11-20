@@ -204,7 +204,7 @@ const GLXPost = (function () {
       drop(aaFBO, aaTex); aaTex = null;
       allocW = 0; allocH = 0; aaW = 0; aaH = 0; coverMode = false;
       _uvScaleX = 1; _uvScaleY = 1;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
     function createTargets() {
@@ -396,7 +396,7 @@ const GLXPost = (function () {
         abandonTargets();
         postEnabled = false;
       }
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
     const _INV_COLOR = [gl.COLOR_ATTACHMENT0], _INV_DEFAULT = [gl.COLOR], _INV_DEPTH = [gl.DEPTH_ATTACHMENT];
@@ -467,7 +467,7 @@ const GLXPost = (function () {
         gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height,
           needDepth ? (gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT) : gl.COLOR_BUFFER_BIT, gl.NEAREST);
         if (_invFbo) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       } else if (!needDepth && _invFbo && sceneFBO) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, _INV_DEPTH);
@@ -850,6 +850,7 @@ const GLXPost = (function () {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, Math.floor(Math.log2(Math.max(w, h))));
       gl.bindTexture(gl.TEXTURE_2D, null);
       mirDepthRB = gl.createRenderbuffer();
       gl.bindRenderbuffer(gl.RENDERBUFFER, mirDepthRB);
@@ -860,7 +861,7 @@ const GLXPost = (function () {
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mirTex, 0);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, mirDepthRB);
       const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       if (st !== gl.FRAMEBUFFER_COMPLETE) {
         Log.warn("gfx", "GLX mirror framebuffer incomplete (0x" + st.toString(16) + ") — mirror off");
         mirrorFree(); mirDead = true;

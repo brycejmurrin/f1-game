@@ -247,7 +247,7 @@ const Ghost = (function () {
       };
       requestIdleCallback(idle);
     }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS);
     else write();
   }
   const _flushes = new Set();

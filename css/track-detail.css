@@ -151,4 +151,4 @@ body.cockpit-cam #hud-speed { display: none; }
 body[data-hl-set="cockpit"]:not(.desktop) :is(#hud-energy, #hud-tyre, #hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
 body[data-hl-set="helmet"]:not(.desktop) :is(#hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
 
-} 
+}

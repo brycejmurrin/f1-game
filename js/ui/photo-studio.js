@@ -19,7 +19,8 @@ function background() {
 function setBackground(value) {
   if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 240000)) return false;
   try {
-    if (value) localStorage.setItem(KEY, value); else localStorage.removeItem(KEY);
+    const S = GameStore.store;
+    if (!(value ? S.rawSet(KEY, value) : S.rawDel(KEY))) return false;
     window.dispatchEvent(new CustomEvent("apex26:photo-background", { detail: { available: !!value } }));
     return true;
   } catch (_) { return false; }

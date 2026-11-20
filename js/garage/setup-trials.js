@@ -19,23 +19,16 @@ const SetupTrials = (() => {
     }
     return issues;
   }
-  const RECOVER_KEY = "setupTrialRecover";
-  function remember(r) {
-    try { if (r.store && r.store.set) r.store.set(RECOVER_KEY, { v: 1, teamId: r.teamId, key: SetupTune.keyFor(r.teamId), before: r.before, owned: r.owned }); } catch (_) {  }
-  }
-  function forget(store) {
-    try { if (store && store.set && store.get && store.get(RECOVER_KEY, null) != null) store.set(RECOVER_KEY, undefined); } catch (_) {  }
-  }
-  function recover(store) {
-    if (run || !store || !store.get) return false;
-    let rec = null;
-    try { rec = store.get(RECOVER_KEY, null); } catch (_) { return false; }
-    if (!rec || typeof rec !== "object" || typeof rec.teamId !== "string" || !rec.before || !rec.owned) { if (rec != null) forget(store); return false; }
+  const RK = "setupTrialRecover";
+  const forget = st => { try { if (st.get(RK, null) != null) st.set(RK, undefined); } catch (_) {  } };
+  function recover(st) {
+    let rec; try { rec = !run && st.get(RK, null); } catch (_) { return false; }
+    if (!rec) return false;
+    if (typeof rec.teamId !== "string" || !rec.before || !rec.owned) return forget(st), false;
     if (SetupTune.keyFor(rec.teamId) !== rec.key) return false;
-    const restore = same(SetupTune.get(rec.teamId), rec.owned);
-    if (restore) SetupTune.set(rec.teamId, rec.before);
-    forget(store);
-    return restore;
+    const ok = same(SetupTune.get(rec.teamId), rec.owned);
+    if (ok) SetupTune.set(rec.teamId, rec.before);
+    return forget(st), ok;
   }
   function create(o) {
     cancel();
@@ -62,7 +55,7 @@ const SetupTrials = (() => {
     if (r.owned && !owns(r)) { r.reason = "Mechanical setup changed outside this comparison. Cancel and start again."; notify(); return false; }
     r.busy = true; const tune = arm === "candidate" ? r.candidate : r.baseline;
     r.owned = SetupTune.set(r.teamId, tune); r.revision = r.store.keyRevision ? r.store.keyRevision(SetupTune.keyFor(r.teamId)) : null;
-    remember(r);
+    try { r.store.set(RK, { teamId: r.teamId, key: SetupTune.keyFor(r.teamId), before: r.before, owned: r.owned }); } catch (_) {  }
     notify();
     let result;
     try { result = await r.launch({ teamId: r.teamId, tune: copy(tune), mode: "launch", isCurrent: () => run === r && owns(r) }); }
@@ -157,6 +150,6 @@ const SetupTrials = (() => {
     box.append(title, status, rows); host.appendChild(box); listeners.add(paint); paint();
     return { dispose() { listeners.delete(paint); box.remove(); } };
   }
-  if (typeof GameStore !== "undefined" && GameStore.store && typeof setTimeout === "function") setTimeout(() => { try { recover(GameStore.store); } catch (_) {  } }, 0);
+  if (typeof GameStore === "object" && typeof setTimeout === "function") setTimeout(() => recover(GameStore.store));
   return Object.freeze({ create, cancel, attempt, observe, record, invalidate, summary, contextIssues, mount, mountPause, recover, active: () => !!run });
 })();

@@ -146,6 +146,12 @@ const TLX = (function () {
   }
   function liteTier(webgl2, phone) { return labOn("tlxLite") && !!webgl2 && !!phone ? LITE : null; }
   function labDprCap(base) { return labOn("dpr3") ? 3 : (labOn("dpr2") ? 2 : base); }
+  function dprCapFor(lite, mobileTier, boost, ceil) {
+    if (lite) return ceil >= 1 && ceil < lite.dprCap ? ceil : lite.dprCap;
+    const base = mobileTier ? 1.5 : 2, b = Math.min(+boost || 0, 3);
+    const cap = labDprCap(b > base ? b : base);
+    return ceil >= 1 && ceil < cap ? ceil : cap;
+  }
   function liteOpts(o) {
     if (!o) return o;
     o.ssao = 0; o.contact = 0; o.godray = 0; o.lampVol = 0; o.flareMul = 0;
@@ -154,6 +160,56 @@ const TLX = (function () {
     o.carReflect = 0;
     o.ssrQuality = Math.max(o.ssrQuality | 0, LITE.ssrQuality);
     return o;
+  }
+
+  function installMappedShim(dev, eager) {
+    if (!dev || typeof dev.createBuffer !== "function") return null;
+    if (dev.__apexWriteBuf) return dev.__apexWriteBuf;
+    const origCreate = dev.createBuffer.bind(dev);
+    const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
+      ? GPUBufferUsage.COPY_DST : 0x0008;
+    let on = !!eager;
+    function shimmed(desc) {
+      const size = desc.size | 0;
+      const buf = origCreate({
+        size,
+        usage: (desc.usage | COPY_DST),
+        label: desc.label,
+      });
+      let staging = new ArrayBuffer(size);
+      const parts = [];
+      buf.getMappedRange = function (offset, mapSize) {
+        const o = offset | 0;
+        const n = mapSize == null ? (size - o) : (mapSize | 0);
+        if (o === 0 && n === size) return staging;
+        const part = new ArrayBuffer(n);
+        parts.push({ o, part });
+        return part;
+      };
+      buf.unmap = function () {
+        try {
+          for (let i = 0; i < parts.length; i++) {
+            const p = parts[i];
+            new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
+          }
+          if (staging && size) dev.queue.writeBuffer(buf, 0, staging);
+        } catch (_) {  }
+        staging = null;
+        parts.length = 0;
+      };
+      return buf;
+    }
+    dev.createBuffer = function (desc) {
+      if (!desc || !desc.mappedAtCreation) return origCreate(desc);
+      if (on) return shimmed(desc);
+      try { return origCreate(desc); } catch (_) {
+        on = true;
+        dev.__apexWriteBuf = "latched";
+        return shimmed(desc);
+      }
+    };
+    dev.__apexWriteBuf = on ? "shim" : "native";
+    return dev.__apexWriteBuf;
   }
 
   async function create(canvas, opts) {
@@ -274,6 +330,7 @@ const TLX = (function () {
       let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       let _softSubmittedGen = 0, _softShownGen = 0;
+      let _softDarkRun = 0;
       const _softPresentWaiters = [];
       const _frameWaiters = [];
       const _awaitFrame = (ms) => new Promise((resolve) => {
@@ -323,43 +380,7 @@ const TLX = (function () {
         }
         if (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) {
           const _dev = renderer.backend.device;
-          if (!_dev.__apexWriteBuf && typeof _dev.createBuffer === "function") {
-            const _origCreate = _dev.createBuffer.bind(_dev);
-            const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
-              ? GPUBufferUsage.COPY_DST : 0x0008;
-            _dev.createBuffer = function (desc) {
-              if (!desc || !desc.mappedAtCreation) return _origCreate(desc);
-              const size = desc.size | 0;
-              const buf = _origCreate({
-                size,
-                usage: (desc.usage | COPY_DST),
-                label: desc.label,
-              });
-              let staging = new ArrayBuffer(size);
-              const parts = [];
-              buf.getMappedRange = function (offset, mapSize) {
-                const o = offset | 0;
-                const n = mapSize == null ? (size - o) : (mapSize | 0);
-                if (o === 0 && n === size) return staging;
-                const part = new ArrayBuffer(n);
-                parts.push({ o, part });
-                return part;
-              };
-              buf.unmap = function () {
-                try {
-                  for (let i = 0; i < parts.length; i++) {
-                    const p = parts[i];
-                    new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
-                  }
-                  if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
-                } catch (_) {  }
-                staging = null;
-                parts.length = 0;
-              };
-              return buf;
-            };
-            _dev.__apexWriteBuf = true;
-          }
+          installMappedShim(_dev, _softAdapter || _headless);
           if (!_dev.__apexErrHook) {
             try {
               const onErr = function (ev) {
@@ -669,8 +690,14 @@ const TLX = (function () {
       }
       function getPresentSize(out) { const o = out || {}; o.width = presentW || W; o.height = presentH || H; return o; }
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
-      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);
-      if (!_lite) DPR_CAP = labDprCap(DPR_CAP);
+      let _dprBoost = 0, _dprCeil = 0;
+      let DPR_CAP = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+      function reCapDpr() {
+        const c = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+        if (c === DPR_CAP) return false;
+        DPR_CAP = c; resizeNow(); return true;
+      }
+      let _postSubmitOn = labOn("postSubmit");
 
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
@@ -795,6 +822,7 @@ const TLX = (function () {
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
+              postSubmitHold: function () { return _postSubmitOn; },
               sceneSamples: (_sceneSamples = sceneSamplesFor(renderer, forceWebGL, isMobile)) });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) {  }
@@ -1202,6 +1230,7 @@ const TLX = (function () {
             if (k !== undefined) {
               const v = matCache.get(k);
               matCache.delete(k);
+              if (k.endsWith("|fx")) _fxKeys.delete(k.slice(0, -3));
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
               _matEvict++;
@@ -1254,7 +1283,7 @@ const TLX = (function () {
             && !(mat && (mat.transparent || mat.depthWrite === false)) && !(rec.al < 1)) {
           const fine = chunkedSys.fineCells(rec.chunked);
           const fn = fine ? chunkedSys.cull(fine, vp, eye, cd, fog) : 0;
-          const fg = fn > 1 ? chunkedSys.mergeVisible(fine, fn, slot) : null;
+          const fg = fn > 0 ? chunkedSys.mergeVisible(fine, fn, slot) : null;
           if (fg) { acquireMesh(fg, rec.m, rec.mat, rec).renderOrder = order; return fn; }
           if (fine && fn === 0) return 0;
         }
@@ -2300,6 +2329,7 @@ const TLX = (function () {
         if (casterWarmOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(casterSources()); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
+        _warmStages.sky = Math.round(performance.now() - _tStage); _tStage = performance.now();
         _warmStages.mirror = null;
         if (wantMirrorWarm()) {
           await warmMirrorStage(usePost, useTag);
@@ -2367,7 +2397,7 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+              sky: _warmStages.sky, mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
             _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
             try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) {  }
@@ -2545,8 +2575,23 @@ const TLX = (function () {
       const PIPE_PIN_CAP = 512;
       const _pinnedPipes = new Set();
       let _pinArmed = null;
+      function unpinIdle(P) {
+        for (const q of _pinnedPipes) {
+          if (q.usedTimes > 1) continue;
+          _pinnedPipes.delete(q);
+          q.usedTimes--; q.vertexProgram.usedTimes--; q.fragmentProgram.usedTimes--;
+          if (P && typeof P._releasePipeline === "function" && q.usedTimes === 0) P._releasePipeline(q);
+          if (P && typeof P._releaseProgram === "function") {
+            if (q.vertexProgram.usedTimes === 0) P._releaseProgram(q.vertexProgram);
+            if (q.fragmentProgram.usedTimes === 0) P._releaseProgram(q.fragmentProgram);
+          }
+          return true;
+        }
+        return false;
+      }
       function pinPipe(p) {
-        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;
+        if (!p || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;
+        if (_pinnedPipes.size >= PIPE_PIN_CAP && !unpinIdle(renderer && renderer._pipelines)) return;
         p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
         _pinnedPipes.add(p);
       }
@@ -2606,7 +2651,8 @@ const TLX = (function () {
         try { if (m.parent === instRoot) _instRemove(m); else if (m.parent) m.parent.remove(m); } catch (_) {  }
         m.visible = false;
         if (_warmPending && !_ownershipFreeDepth) {
-          if (!_dropQueue.some((entry) => entry.mesh === m)) {
+          if (!m.__tlxQueued) {
+            m.__tlxQueued = true;
             _dropQueue.push({ mesh: m, ownedGeometry, freedGeo: ownedGeometry || m.geometry });
           }
           return;
@@ -2626,6 +2672,7 @@ const TLX = (function () {
       function flushDropped(force) {
         if ((!force && _warmPending) || !_dropQueue.length) return;
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
+        for (const entry of _dropQueue) entry.mesh.__tlxQueued = false;
         _dropQueue.length = 0;
       }
       function ownershipDropQueued(m, owned, freedGeo) {
@@ -2677,6 +2724,7 @@ const TLX = (function () {
           const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
           if (!fg || !freedGeos.has(fg)) continue;
           _dropQueue.splice(i, 1);
+          if (e.mesh) e.mesh.__tlxQueued = false;
           ownershipDropQueued(e.mesh, e.ownedGeometry, fg);
         }
         let w = 0;
@@ -2918,7 +2966,7 @@ const TLX = (function () {
         for (let i = 0; i < n; i++) {
           if (!images[i] || have.has(i)) continue;
           const r = fill2dLayer(c2d, size, images[i], i, data);
-          if (r < 0) return filled;
+          if (r < 0) return 0;
           filled += r;
         }
         return filled === expected.length ? filled : 0;
@@ -3137,7 +3185,8 @@ const TLX = (function () {
               _softImg = _displayCtx.createImageData(w, h);
             }
             const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
-            if (maxPx >= 8) {
+            if (maxPx >= 8 || ++_softDarkRun >= 3) {
+              _softDarkRun = 0;
               _displayCtx.putImageData(_softImg, 0, 0);
               _softShownGen = req.gen;
               _softBlitNotify();
@@ -3320,8 +3369,14 @@ const TLX = (function () {
         getRenderScale() { return renderScale; },
         capDpr(n) {
           if (!(n >= 1) || n >= DPR_CAP) return false;
-          DPR_CAP = n; resizeNow(); return true;
+          _dprCeil = n; return reCapDpr();
         },
+        setDprBoost(n) {
+          const v = n > 0 ? Math.min(+n, 3) : 0;
+          if (v === _dprBoost) return false;
+          _dprBoost = v; return reCapDpr();
+        },
+        getDprBoost() { return _dprBoost; },
         setSpatialUpscale, getSpatialUpscale,
         getPresentSize,
         get width() { return W; },
@@ -3689,18 +3744,24 @@ const TLX = (function () {
           }
           _poolBatch++;
           _kidsBegin(_kidsEnv);
-          _instStamp++;
-          for (let i = 0; i < drawList.n; i++) {
-            const rec = drawList[i];
-            if (rec.instanced) continue;
-            if (rec.chunked) {
-              if (softContent("chunked") || !chunkedSys) continue;
-              continue;
+          try {
+            _instStamp++;
+            for (let i = 0; i < drawList.n; i++) {
+              const rec = drawList[i];
+              if (rec.instanced) continue;
+              if (rec.chunked) {
+                if (softContent("chunked") || !chunkedSys) continue;
+                continue;
+              }
+              acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
+            _poolShow();
+            _hideUndrawnInstanced();
+          } catch (e) {
+            _envActive = false;
+            _restoreEnvFrame();
+            throw e;
           }
-          _poolShow();
-          _hideUndrawnInstanced();
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
           const _errAtFace = _gpuErrors;
           let faceOk = true;
@@ -3879,6 +3940,8 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
+            const bw = gl.drawingBufferWidth | 0, bh = gl.drawingBufferHeight | 0;
+            if (bw > 0 && bh > 0) return readGlCapture(gl, bw, bh);
             return fixedActive() ? readGlCapture(gl, presentW, presentH) : readGlCapture(gl, W, H);
           }
           const rt = _captureRT();
@@ -4515,6 +4578,7 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
+          postSubmit(on) { if (on !== undefined) _postSubmitOn = !!on; return _postSubmitOn; },
           roadSplit(on) {
             if (on !== undefined) {
               _roadSplitOn = !!on;
@@ -4819,7 +4883,7 @@ const TLX = (function () {
     return s < 2 ? 0 : s;
   }
 
-  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts, labDprCap };
+  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts, labDprCap, dprCapFor };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;

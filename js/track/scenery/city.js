@@ -4,6 +4,8 @@ const SceneryCity = (function () {
   const UNIT_BOX = "unit-box";
   const unitBox = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
   const massBox = (mat) => (rec) => { rec.mat(mat); unitBox(rec); };
+  const matKey = (m) => m ? UNIT_BOX + ":" + m : UNIT_BOX;
+  const matBox = (m) => m ? massBox(m) : unitBox;
 
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
@@ -29,8 +31,11 @@ const SceneryCity = (function () {
       }
       return under >= 2;
     };
-    const detail = (spec, meta, opt) =>
-      sunk(spec.o, [spec.r, spec.u, spec.t], spec.s) ? 0 : ctx.instance(UNIT_BOX, spec, unitBox, meta, opt);
+    const detail = (spec, meta, opt) => {
+      if (sunk(spec.o, [spec.r, spec.u, spec.t], spec.s)) return 0;
+      const m = ((opt && opt.buf) || out)._mat || 0;
+      return ctx.instance(matKey(m), spec, matBox(m), meta, opt);
+    };
 
     const facadeMat = (rgb) => {
       const r = rgb[0], g = rgb[1], b = rgb[2];
@@ -85,9 +90,10 @@ const SceneryCity = (function () {
           const lum = (body[0] + body[1] + body[2]) / 3;
           const bv = lum > 0.4 ? 0.22 : 0.15;
           const bodyTint = [bv, bv, bv * 1.12];
-          const ok = ctx.instance(UNIT_BOX,
+          const nm0 = out._mat || 0;
+          const ok = ctx.instance(matKey(nm0),
             { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: bodyTint },
-            unitBox, { kind: "buildingMass", k, side }) > 0;
+            matBox(nm0), { kind: "buildingMass", k, side }) > 0;
           if (ok === false) return false;
           neonFacade(vadd(p.c, p.u, yBase + sh / 2), b, side, sw, sh, sd, winBase, k * 7.1 + side * 3.3, theme === "street_night" ? 0.85 : 0.32);
           return ok;
@@ -619,6 +625,7 @@ const SceneryCity = (function () {
         ctx.instance(`billboard-post|${h}|${st}|${postCol.join(",")}`,
           { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t },
           (rec) => {
+            rec.mat(0);
             if (st === "monopole" || st === "tower") {
               rec.cyl([0, -0.4, 0], 0.42, h + 0.4, postCol, 8);
               rec.box([0, h + 0.1, 0], [0.9, 0.5, 1.6], postCol);

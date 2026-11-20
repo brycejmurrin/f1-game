@@ -91,12 +91,13 @@ const ScreenLooks = (function () {
     }),
     Object.freeze({
       id: "garage", key: "lookGarage", title: "GARAGE",
-      help: "The garage panel: which side it docks on (the car moves over to the other side), its width, how see-through it is, and the stat bars.",
+      help: "The garage panel: which side it docks on (the car moves over to the other side), its width and height (shrink either to see more of the car, in portrait too), how see-through it is, and the stat bars.",
       target: () => byId("carsetup"),
       knobs: Object.freeze([
         ...core(["density", "btn", "corners", "head"]),
         cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
-        rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
+        rng("pw", "PANEL WIDTH", 60, 150, 5, 100),
+        rng("ph", "PANEL HEIGHT", 40, 100, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
         cyc("stats", "STAT BARS", SHOWHIDE, "show", { phone: "hide" }),
       ]),
@@ -510,7 +511,7 @@ const ScreenLooks = (function () {
   }
 
   function arm() {
-    registerSearch();
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(registerSearch); else registerSearch();
     const panel = byId("pm-panel-appearance");
     if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) {
       SettingsNav.onEnter((id) => { if (id === "appearance") build(); });

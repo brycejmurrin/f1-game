@@ -43,7 +43,8 @@ const DailyChallenge = (function () {
       e.classes[context] = cls;
     }
     if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-    if (!d.streak.last || day > d.streak.last) {
+    const t = new Date(), soon = (t.setDate(t.getDate() + 1), dayKey(t));
+    if (!d.streak.last || day > d.streak.last || d.streak.last > soon) {
       d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
       d.streak.last = day;
     }
@@ -51,7 +52,7 @@ const DailyChallenge = (function () {
     if (Number.isFinite(floor.getTime())) {
       floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
       const cut = floor.toISOString().slice(0, 10);
-      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
+      for (const k of Object.keys(d.days)) if (k < cut || k > soon) delete d.days[k];
     }
     return e;
   }

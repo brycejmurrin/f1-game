@@ -22,6 +22,12 @@
     return Math.max(n | 0, cap);
   }
 
+  function copyRows16(dst, src, n) {
+    const len = n * 16;
+    if (len <= 0) return;
+    if (ArrayBuffer.isView(src)) dst.set(src.length === len ? src : src.subarray(0, len));
+    else for (let i = 0; i < len; i++) dst[i] = src[i];
+  }
   function sunMapSize(ctx) {
     if (ctx.sunSize > 0) return ctx.sunSize | 0;
     return ctx.isMobile ? 1024 : (ctx.softwareGL ? 512 : 2048);
@@ -269,16 +275,12 @@
       batch._shCasterArr = dst;
       const src = culled && batch.packMatrices ? batch.packMatrices : batch.srcMatrices;
       if (src === dst) {  } else if (src && src.length >= n * 16) {
-        for (let i = 0, o = 0; i < n; i++, o += 16) {
-          for (let k = 0; k < 16; k++) dst[o + k] = src[o + k];
-        }
+        copyRows16(dst, src, n);
       } else if (batch.imesh && batch.imesh.instanceMatrix) {
         const isrc = batch.imesh.instanceMatrix.array;
         const copyN = (batch.visible === undefined || batch.visible >= n) ? n
           : (batch.visible | 0);
-        for (let i = 0, o = 0; i < copyN; i++, o += 16) {
-          for (let k = 0; k < 16; k++) dst[o + k] = isrc[o + k];
-        }
+        copyRows16(dst, isrc, copyN);
       } else if (batch.packMatrices) {
         const psrc = batch.packMatrices;
         for (let i = 0; i < n; i++) {
@@ -481,7 +483,8 @@
       } catch (e) {
         try { Log.warn("gfx", "TLX: shadow pass failed —", e); } catch (_) {  }
         if (target === carRT) S.carEnabled = false;
-        else if (target === lampRT || target === lampStaticRT) S.lampEnabled = false;
+        else if (target === lampStaticRT) { lampStaticOn = false; _lampStaticValid = false; }
+        else if (target === lampRT) S.lampEnabled = false;
         else S.enabled = false;
         S.depthPassOn = false;
       } finally { renderer.autoClear = autoClear0; }

@@ -84,7 +84,7 @@
   @media (prefers-reduced-motion: no-preference) {
     :root:not([data-motion="reduce"]):not(:has(> body.desktop)) .screen:not(.dim, #loading) { animation: screen-in var(--dur-1) linear; }
   }
-  #carsetup[aria-busy="true"] { --cs-ghost: color-mix(in oklab, var(--text) 7%, transparent); } 
+  #carsetup[aria-busy="true"] { --cs-ghost: color-mix(in oklab, var(--text) 7%, transparent); }
   #carsetup[aria-busy="true"] #cs-options:empty {
     --cs-row: calc(var(--chip-h) + var(--gap) * 0.5);
     background:

@@ -196,7 +196,7 @@ var RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, flushDecoded: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
+      setPackOn: () => {}, packOn: () => false, prepare: () => {}, soundOn: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
       announcerPackOn: () => false,
@@ -446,7 +446,7 @@ var RadioVoice = (function () {
       gatePoll = setTimeout(poll, 800);
     }
     function ensureVoices() {
-      if (!pack) return;
+      if (!pack || !G.soundOn) return;
       const [lap1, rest] = packsInUse();
       if (pack.ensureStaged) pack.ensureStaged([lap1, rest]);
       else for (const id of lap1.concat(rest)) pack.ensure(id);
@@ -664,6 +664,7 @@ var RadioVoice = (function () {
         if (!packOn) releaseUnused();
       },
       prepare() { armRaceLoadGate(); ensureVoices(); },
+      soundOn() { const ls = G.loadingScreen; if (G.state === "race" || G.state === "count" || (ls && ls.phase && ls.phase())) ensureVoices(); },
       releaseRaceLoadGate: clearRaceLoadGate,
       packOn: () => !!(pack && packOn),
       busy: () => !!(current || pending != null),
