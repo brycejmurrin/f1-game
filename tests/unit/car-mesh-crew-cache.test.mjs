@@ -63,7 +63,7 @@ test("the cache is capped and frees the OLDEST colour's mesh", () => {
   // An evicted colour is rebuilt, not returned freed.
   const again = CarMesh.getCrewMesh(colour(0));
   assert.equal(made.length, N + 1);
-  assert.ok(!freed.includes(again));
+  assert.equal(new Set(freed).has(again), false, "the re-minted colour is live, not freed");
 });
 
 test("no GaragePrims: nothing is built or cached", () => {
@@ -119,6 +119,80 @@ test("colour keys: a hit per array, the same mesh for an equal new array, a rebu
   assert.equal(made.length, 2);
   // The crew kit shares the helper and its key.
   assert.equal(CarMesh.getCrewMesh(col), CarMesh.getCrewMesh([0.1, 0.2, 0.3]));
+});
+
+// Compound sidewall stripes used to share the crew kit's colour key helper but
+// NOT its FIFO cap — a tyre-parts edit session kept every band colour's GPU
+// buffers for the page's life (same defect getCrewMesh already fixed).
+test("compound ring cache is capped and frees the OLDEST colour's mesh", () => {
+  const { CarMesh, made, freed } = load();
+  const N = 200;
+  for (let i = 0; i < N; i++) CarMesh.getCompoundRing(colour(i));
+  assert.equal(made.length, N);
+  const live = made.length - freed.length;
+  assert.ok(live > 0 && live <= 64, `live compound rings ${live} — the cache is not capped`);
+  assert.equal(freed[0], made[0], "FIFO: the first colour is freed first");
+  assert.equal(new Set(freed).size, freed.length, "a mesh was freed twice");
+  CarMesh.getCompoundRing(colour(N - 1));
+  assert.equal(made.length, N, "newest colour stays resident");
+  const again = CarMesh.getCompoundRing(colour(0));
+  assert.equal(made.length, N + 1);
+  assert.equal(new Set(freed).has(again), false, "the re-minted colour is live, not freed");
+});
+
+// Exhaust flame quads: join(",") without toFixed minted a new mesh for every
+// float spelling; the fuel catalog + customs grow an uncapped object. Cap +
+// colKey3 keep one mesh per 0.01 colour and free the rest.
+test("exhaust flame cache reuses a 0.01-equal colour and caps + frees overflow", () => {
+  const { CarMesh, made, freed } = load();
+  const a = CarMesh.getExhaustFlame([2.6, 1.05, 0.25]);
+  assert.equal(CarMesh.getExhaustFlame([2.601, 1.049, 0.252]), a, "colKey3 0.01 resolution");
+  assert.equal(made.length, 1);
+  const N = 80;
+  for (let i = 0; i < N; i++) CarMesh.getExhaustFlame([(i % 100) / 100, Math.floor(i / 100) / 100, 0.4]);
+  const live = made.length - freed.length;
+  assert.ok(live > 0 && live <= 32, `live exhaust flames ${live} — the cache is not capped`);
+  assert.ok(freed.length > 0, "overflow frees GPU meshes");
+  assert.equal(freed[0], made[0], "FIFO: the first exhaust colour is freed first");
+});
+
+// Mirror fallback / glass meshes are keyed by the quads array identity from
+// cockpitMirrorGlass. An uncapped Map kept every scale's GPU buffers forever.
+test("mirror fallback and glass caches are capped and free evicted meshes", () => {
+  const { CarMesh, made, freed, tex } = (() => {
+    const made = [], freed = [], tex = [];
+    const ctx = {
+      Log: { info() {}, warn() {}, error() {} },
+      GaragePrims: { block(out) { out.pos.push(0, 0, 0); out.idx.push(out.idx.length); } },
+    };
+    vm.createContext(ctx);
+    vm.runInContext(RIG, ctx, { filename: absSrc("js/car/cockpit-rig.js") });
+    vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
+    ctx.CarMesh.init({
+      createMesh(d) { const m = { id: made.length, d }; made.push(m); return m; },
+      createTexMesh(d) { const m = { tex: tex.length, d }; tex.push(m); return m; },
+      freeMesh(m) { freed.push(m); },
+    });
+    return { CarMesh: ctx.CarMesh, made, freed, tex };
+  })();
+  const quadsOf = (i) => {
+    const x = 0.5 + i * 0.01;
+    return [
+      [[-x, 0, 0], [-x - 0.1, 0, 0.01], [-x - 0.1, 0.1, 0.01], [-x, 0.1, 0]],
+      [[x, 0, 0], [x + 0.1, 0, 0.01], [x + 0.1, 0.1, 0.01], [x, 0.1, 0]],
+    ];
+  };
+  const N = 80;
+  for (let i = 0; i < N; i++) {
+    const q = quadsOf(i);
+    CarMesh.getMirrorFallback(q, false);
+    CarMesh.getMirrorGlass(q);
+  }
+  const liveMesh = made.length - freed.filter((m) => made.includes(m)).length;
+  const liveTex = tex.length - freed.filter((m) => tex.includes(m)).length;
+  assert.ok(liveMesh > 0 && liveMesh <= 32, `live mirror fallback meshes ${liveMesh}`);
+  assert.ok(liveTex > 0 && liveTex <= 32, `live mirror glass meshes ${liveTex}`);
+  assert.ok(freed.length > 0, "evicted mirror meshes are freed");
 });
 
 function loadReal(opts) {

@@ -2,7 +2,7 @@
 
 Kind: design · Re-measure-by: 2026-12-18
 
-Decision: Bryce, orchestrator chat 2026-11-18 ~10:15Z (relayed in its brief with the time), asked "How do we still have so many open PRs can we somehow merge them" and then picked "Merge train (Recommended)". He tapped `config-ok` on #5731 in person at 11:18:45Z. Its docs/DECISIONS.md row follows in a separate PR, because the D-number queue is held by #5691 and #5736.
+Decision: Bryce, orchestrator chat 2026-11-18 ~10:15Z (relayed in its brief with the time), asked "How do we still have so many open PRs can we somehow merge them" and then picked "Merge train (Recommended)". He tapped `config-ok` on #5731 in person at 11:18:45Z. Its docs/DECISIONS.md row is D-035 (#5742).
 
 Summary: 91 open PRs and 23 at `land` (10:12Z) drained at 4–6 merges an hour: each merge moves the tip and every other `land` PR re-gates or retests. A merge train lands up to 10 green `land` PRs with one CI run and one `gate`. Native merge queue: not available here. Custom train: `tools/ci/merge-train.mjs` and land.yml's `train` job. It needs no ruleset or settings change. Re-measure: merges per hour and train red rate after a week of trains.
 
@@ -50,6 +50,13 @@ that is not a clean merge of the named heads onto a deploy-branch commit refuses
 - Candidates: open, ready, `land`, no `hold`, not a fork, not a train. `priority` goes first, then oldest. A car whose
   own `gate` already reads success is skipped: it arms alone. Each candidate's trusted rows must pass. `base` is
   the train's row, and gen, ratchets and retest are measured on the train.
+- Screen (#5864): trains #5840 and #5862 closed red on the gate because cars that were each red alone on the tip
+  boarded on their trusted rows. land.yml's `train-screen` job (read-only token, no secret) runs
+  `merge-train.mjs --screen`. It makes the same fold and runs merge-gate's `ratchetsOnMerge` on each cumulative
+  fold, so a car that turns the fold red is left out and the fold stays where it was. The build (`--screen-file`)
+  takes only the cars the screen measured green at their head. A missing verdict opens no train, and while a train
+  is open the screen skips. #5862 measured alone: #5668 hud.js codeLines and eagerBytes +147, #5679 eagerBytes
+  +2057, #5730 assertPins +1. The sum, +2204, is the train's eagerBytes overage.
 - Fold onto the tip in order; a conflicting car is left out ("conflicts in … (sync-pr.mjs)") and the next is tried.
   At least 2 cars, unless the bisect cap is 1.
 - One train is open at a time. The builder closes a train when a car moved (`stale`: rebuilt from the current state)

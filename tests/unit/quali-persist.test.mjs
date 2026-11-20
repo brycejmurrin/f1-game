@@ -371,6 +371,28 @@ test("a driven pole's badge is spoken when the sheet opens; no badge, no line", 
   assert.equal(said.length, 1);
 });
 
+// hunt2 ui-menus: SIMULATE / peer rebuild while #quali stays open must drop the
+// badge when the player is no longer on a driven pole (poleNew used to stick).
+test("a rebuild off driven pole clears the BADGE UNLOCKED card while the sheet stays open", () => {
+  let awarded = ["pole"];
+  const globals = {
+    Badges: { onPole: () => awarded, labelOf: () => "POLE SITTER" },
+  };
+  const { sheet, els } = loadSheet({ globals });
+  const table = els.get("q-table");
+  sheet.open([{ pos: 1, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 60, gap: 0 }]);
+  assert.equal(table.children.at(-1).className, "res-personal");
+  awarded = [];   // badge already granted; a same-grid rebuild must keep the card
+  sheet.build([{ pos: 1, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 60, gap: 0 }]);
+  assert.equal(table.children.at(-1).className, "res-personal", "driven pole rebuild keeps the unlock card");
+  sheet.build([
+    { pos: 1, code: "HAM", name: "Lewis", team: "rb", isPlayer: false, human: false, t: 59, gap: 0 },
+    { pos: 2, code: "VER", name: "Max", team: "me", isPlayer: true, human: false, t: 61, gap: 2 },
+  ]);
+  assert.equal(table.children.some((c) => c.className === "res-personal"), false,
+    "SIMULATE / peer rows off driven pole drop the card");
+});
+
 test("the sheet paints quali.rows(): a rival's DRIVEN lap is tagged, the title carries the player's P", () => {
   const { q } = loadQuali({ season: { round: 0 } });
   q.simulate(new Map([["p2", 65.0]]));          // HAM drove it; VER (the player) is modelled

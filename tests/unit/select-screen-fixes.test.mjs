@@ -10,6 +10,7 @@
  *    described the old one. The active tile now stays until another is picked.
  *
  *  - #4671: a re-open re-attaches the cached circuit tiles (re-land).
+ *  - #5889: a search that hides the active circuit selects the first match.
  *  - #5062: CIRCUIT DETAIL drew its elevation strip while the modal was hidden
  *    (zero box), multiplying the buffer by dpr on every open; it now waits for
  *    the post-reveal pass.
@@ -176,6 +177,22 @@ test("circuit search resets on a menu-door reopen but survives returns and in-pl
   h.menus.buildSelect();
   assert.equal(search().value, "", "a menu door opens an unfiltered picker");
   assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => r.dataset.trackIdx), ["0", "1", "2"]);
+});
+
+test("#5889: a search that hides the active circuit selects the first match", () => {
+  const h = boot({}, { trackIdx: 1 });             // Spa active
+  const search = h.dom.byId("sel-track-search");
+  search.value = "monza";
+  search.oninput();
+  assert.equal(h.G.trackIdx, 0, "RACE SETUP must not start the hidden Spa");
+  assert.equal(JSON.parse(h.data.get("trackId")), "monza");
+  assert.equal(h.G.els.selPreviewName.textContent, "Monza", "the preview follows");
+  search.value = "italy";                          // Monza still matches: kept
+  search.oninput();
+  assert.equal(h.G.trackIdx, 0);
+  search.value = "zzz";                            // no match: selection left alone
+  search.oninput();
+  assert.equal(h.G.trackIdx, 0);
 });
 
 test("CLASSICS filter refreshes the hero preview when the active circuit is hidden", () => {

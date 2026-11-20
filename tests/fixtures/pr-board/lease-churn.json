@@ -1,0 +1,31 @@
+{
+  "_note": "pr-board lease + churn fixtures (#5847): PR bodies with a Hand-off owner lease, labels, and adoption comments as GitHub returns them. now = 2026-11-19T12:00:00Z.",
+  "now": "2026-11-19T12:00:00Z",
+  "prs": [
+    { "number": 11, "labels": [], "body": "## Goal\nx\n```handoff\nhead: aaaa\nowner: claude:session_live until 2026-11-19T14:00Z\nnext: push\n```\n",
+      "comments": [ { "created_at": "2026-11-19T10:00:00Z", "body": "adopts PR #11 — claude:session_live (head aaaa)" } ],
+      "expect": { "owner": "claude:session_live", "lease": "live", "adopted": 1, "churn": false } },
+    { "number": 12, "labels": [], "body": "```handoff\nhead: bbbb\nowner: claude:session_old until 2026-11-19T09:00Z\nnext: sync\n```",
+      "comments": [
+        { "created_at": "2026-11-12T10:00:00Z", "body": "adopts PR #12 — claude:session_a" },
+        { "created_at": "2026-11-14T10:00:00Z", "body": "adopts PR #12 — claude:session_b (posted by the dispatcher when it launched the takeover)" },
+        { "created_at": "2026-11-15T10:00:00Z", "body": "adopts PR #12 — claude:session_b" },
+        { "created_at": "2026-11-18T10:00:00Z", "body": "adopts PR #12 — claude:session_old" },
+        { "created_at": "2026-11-18T11:00:00Z", "body": "see adopts PR #12 above (a mention, not an adoption)" },
+        { "created_at": "2026-11-18T12:00:00Z", "body": "adopts PR #99 — claude:session_other" }
+      ],
+      "expect": { "owner": "claude:session_old", "lease": "lapsed", "adopted": 3, "churn": true } },
+    { "number": 13, "labels": [{ "name": "needs-decision" }], "body": "```handoff\nhead: cccc\nowner: claude:session_park until 2026-11-19T08:00Z\nnext: wait for decision\n```",
+      "comments": [],
+      "expect": { "owner": "claude:session_park", "lease": "parked", "adopted": 0, "churn": false } },
+    { "number": 14, "labels": [{ "name": "blocked" }], "body": "```handoff\nhead: dddd\nowner: claude:session_gone until 2026-11-17T08:00Z\nnext: wait on #5829\n```",
+      "comments": [],
+      "expect": { "owner": "claude:session_gone", "lease": "lapsed", "adopted": 0, "churn": false } },
+    { "number": 15, "labels": [], "body": "```handoff\nhead: eeee\nowner: claude:session_legacy\nnext: x\n```",
+      "comments": [],
+      "expect": { "owner": "claude:session_legacy", "lease": "open", "adopted": 0, "churn": false } },
+    { "number": 16, "labels": [], "body": "```handoff\nhead: ffff\nowner: none until 2026-11-19T20:00Z\nnext: handed back\n```",
+      "comments": [],
+      "expect": { "owner": "none", "lease": "none", "adopted": 0, "churn": false } }
+  ]
+}

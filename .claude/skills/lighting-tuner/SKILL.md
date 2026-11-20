@@ -49,7 +49,8 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
    ```sh
    mkdir -p artifacts/tmp
    git diff --name-only origin/claude/f1-game-project-26h3ng > artifacts/tmp/changed.txt
-   node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # run each named node suite
+   node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet               # the local floor (AGENTS.md rule 3): the light-* unit tests
+   node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # the fleet-sweep suite it names (lamp-fixture-anchor for js/lighting/)
    node tools/ci/pick-tests.mjs                                            # names the CI groups
    ```
    `tests/specs/lighting-ab.spec.js` runs in the `gfx` group on CI, never locally (AGENTS.md rule

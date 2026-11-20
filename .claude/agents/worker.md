@@ -29,7 +29,9 @@ run here: do the same work in your worktree and say so (no hook stops a
 (`apex-lsp`, and the parent's `apex-tools`) were started at the main checkout,
 so they read the tree WITHOUT your edits: verify with the `node tools/…` CLIs
 run from your worktree. A fresh worktree has no `node_modules`: symlink the
-parent checkout's after checking its lockfile matches.
+parent checkout's after checking its lockfile matches. It has no built files
+either (`BUILT_PATHS`, e.g. `js/track/circuit-meta.js`): run
+`node tools/gen/ensure-built.mjs` before verifying.
 
 ## Messaging (`SendMessage`; plain text reaches nobody until the report)
 

@@ -795,6 +795,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/child-health.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/ci-coverage.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -1039,6 +1048,7 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--out",
         "--quiet"
       ]
     },
@@ -1130,6 +1140,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/pool-share.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/ci/pr-board.mjs",
@@ -2195,6 +2214,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/gfx/sharpness-ab.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/gfx/ssr-probe.mjs",
@@ -3688,6 +3713,15 @@
       "path": "tools/track/float-baseline.json",
       "classification": "data",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/footprint-rejected.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/track/footprint-support.cjs",

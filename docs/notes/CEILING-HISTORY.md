@@ -12,6 +12,53 @@ generated `@gen-quali-calib` per-circuit factor block) and `js/physics/ai-drive.
 shared `aeroGrip` / `AERO_GRIP_K` helper the model and the AI's lateral and brake reads now
 share). Not taken: a lazy split of the calibration table behind the race-session bundle.
 It is unmeasured. Fragment: `ratchets.d/claude--quali-model-refit-1118.json`.
+## 2026-11-19 — PR #5738 (claude/appearance-shapes-4529): PORTRAIT & LANDSCAPE, garage PANEL HEIGHT
+
+`(tree) eagerBytes` 8,015,949 → **8,018,824** (+2,875 B). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR (needs-decision comment
+7013692231). The growth is #4529's own feature code in four FULL (eager) files, measured on the sync
+merge with tip `734d0a2d`: `js/ui/appearance-studio.js` +1,687 (the orientation watcher, which must
+run at boot to see a settled rotation; on SHARED, the default, it returns at once),
+`js/ui/settings-export.js` +569 (the `appearanceShapes` save/backup row), `js/ui/screen-looks.js`
++340 (PANEL WIDTH 60–150 and the new PANEL HEIGHT knob) and `js/ui/settings-tabs.js` +279
+(`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
+row stay lazy in `js/ui/layout-presets.js`. Fragment:
+`tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
+
+`(tree) eagerBytes` 8,015,949 → **8,017,580** (+1,631 B). Deliberate raise; Bryce chose it with
+`decision: A` on #5576 (2026-11-19T15:08Z), and the tree-wide ceiling still needs his
+`ratchet-raise` label on the PR. The growth is #5561's feature code in two FULL (eager) files,
+measured on the sync merge with tip `734d0a2d` after trimming the PR's own comments to one line
+each: `js/perf/quality-preset.js` +943 (`syncPack` and its pause/race `MutationObserver`, called
+from the eager `GfxQuality.set`) and `js/render/shared/assets.js` +688 (`followQuality` and the
+forced-tier `_pinned` flag). A lazy bundle (option B) was declined: both hook the eager preset
+path. Fragment: `tests/data/ratchets.d/claude--pack-tier-follows-quality-5561.json`.
+
+## 2026-11-19 — PR #5793 (claude/tt-garage-pit-end): TIME TRIAL pit lane and END TIME TRIAL (#5789)
+
+`(tree) eagerBytes` 8015286 → **8016346** (+1060), measured on the merge with tip `dec94440`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is the END TIME TRIAL hook in
+eager files: `js/game.js` `endTimeTrialFromBox` and the WORK ON CAR slot's TT branch,
+`js/garage/setup-camera.js` `startPitIn` (the pit drive-in with a hand-back),
+`js/ui/hud.js` the END TIME TRIAL label, and `js/garage/arrival.js` the SKIP label option. This
+PR's own comments were trimmed first (−242 B). The pit-lane changes live in the lazy
+`js/race/pit-lane.js` and cost no boot bytes. A lazy split would need new seams into
+setup-camera's closure and game.js locals, so it was not taken. Fragment: `ratchets.d/claude--tt-garage-pit-end.json`.
+## 2026-11-19 — PR #5706 (claude/replay-follow-rank-5653): rollback re-lands, replay and share card
+
+`(tree) eagerBytes` 8,015,286 → **8,016,355** (+1,069 B). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. The growth is the PR's own
+re-landed fix code (#5653 step 2) in six FULL (eager) files, measured on the sync merge with tip
+`dec94440`: `js/share/share-card-data.js` +302 and `js/share/share-card-layout.js` +258 (share
+links kept intact, the STREAK line stops short of the QR; both eager because a HARD_EDGES pair has
+`daily-challenge.js` read them at eval), `js/ui/hud-skin.js` +243 (a custom accent's ink reaches
+4.5:1), `js/camera/replay-buf.js` +215 (a NaN pose keeps the previous sample),
+`js/ui/results-story.js` +33 (a classified retiree keeps its podium tile) and
+`js/physics/wall-end-face.js` +18 (reverse travel held at the face). The real-replay, real-race,
+share-card-chips, transport and XR hunks are already lazy. Fragment:
+`ratchets.d/claude--replay-follow-rank-5653.json (folded)`.
 
 ## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
 
