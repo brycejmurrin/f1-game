@@ -2518,7 +2518,7 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
 });
 
 for (const stage of ["hidden", "backoff", "negotiating"]) {
-  test("pagehide preserves the established phone pairing during reconnect: " + stage, async () => {
+  test(`pagehide preserves the established phone pairing during reconnect: ${stage}`, async () => {
     const codes = [];
     let resolveOld;
     const h = wakePad({ swap: async ({ code }) => {

@@ -2554,7 +2554,7 @@ test("a guest that backed out of quali joins the race when the host sends qgo (a
 });
 
 for (const changed of [false, true]) {
-  test("qualifying exit orders QGO after " + (changed ? "changed" : "unchanged") + " queued settings", async () => {
+  test(`qualifying exit orders QGO after ${changed ? "changed" : "unchanged"} queued settings`, async () => {
     const { h, made: [session] } = await guestInQuali();
     let starts = 0, at = performance.now() + 2000, flush;
     h.G.startRace = async () => { starts++; return false; };
