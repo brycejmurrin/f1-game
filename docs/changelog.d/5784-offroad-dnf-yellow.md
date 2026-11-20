@@ -1,0 +1,1 @@
+Improved: Race control: a car that retires and parks in the runoff now shows a local YELLOW in its sector while the marshals recover it (no VSC), so you can see why it vanished; a car stopped on the racing surface still brings out the VSC as before (#5784).

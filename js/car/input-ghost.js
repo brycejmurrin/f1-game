@@ -412,7 +412,8 @@ const InputGhost = (function () {
       };
       requestIdleCallback(idle);
     }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    // No rIC (iOS Safari): as Ghost, 2 s after its write, so a PB lap is two short writes (#5629).
+    else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS + 2000);
     else write();
   }
 

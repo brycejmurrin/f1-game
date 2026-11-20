@@ -396,3 +396,18 @@ it("the garage overlay buttons are one fixed height, whatever BUTTON SIZE, UI SI
   // The look knob still scales the SHEET's buttons; the overlay must not read what it writes.
   assert.match(fs.readFileSync(path.join(REPO, "css/overlays.css"), "utf8"), /:root\[data-look-garage-btn\] #carsetup \{ --tap:[^}]*--chip-h:/);
 });
+
+// #5672: at 844x390, UI 70, a career R&D row was 694-1,177 px tall (text broken letter by letter in 47 px beside a
+// nowrap RESEARCH pill), and the livery editor's literal 44px tabs painted 30.8 px inside the sheet zoom.
+it("locked R&D rows wrap the RESEARCH pill and the livery editor reads var(--tap)", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const cs = cssRules(fs.readFileSync(path.join(REPO, "css/carsetup.css"), "utf8"));
+  const gx = cssRules(fs.readFileSync(path.join(REPO, "css/garage-experience.css"), "utf8"));
+  assert.deepEqual([
+    decl(cs, ".cs-opt.locked", "flex-wrap"),
+    decl(cs, ".cs-opt.locked .cs-opt-main", "flex"),
+    decl(cs, ".cs-opt.locked .cs-opt-cost.research", "margin-inline-start"),
+    decl(gx, '.cs-liv-editor [role="tab"]', "min-height"),
+    decl(gx, ".cs-liv-editor > .cs-liv-ed-btns > button", "min-height"),
+  ], ["wrap", "1 1 16ch", "auto", "var(--tap)", "var(--tap)"]);
+});
