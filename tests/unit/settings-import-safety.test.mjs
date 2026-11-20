@@ -135,13 +135,13 @@ test("#5023: the GARAGE / CREW / LIGHTING look rows offer exactly the ids the ga
 });
 
 test("#5023: a chosen garage look is in SAVE SETTINGS (changes) and comes back on LOAD", () => {
-  const src = boot({ disk: { "apex26.garageLook": "carbon", "apex26.crewLook": "pitstop", "apex26.garageMood": "night" } });
+  const src = boot({ disk: { "apex26.garageLook": "carbon", "apex26.crewLook": "classic", "apex26.garageMood": "night" } });
   const file = src.collect("changes");
-  assert.deepEqual(file.settings.appearance, { garageLook: "carbon", crewLook: "pitstop", garageMood: "night" });
+  assert.deepEqual(file.settings.appearance, { garageLook: "carbon", crewLook: "classic", garageMood: "night" });
   const dst = boot();
   dst.load(file.settings);
   assert.equal(dst.disk.get("apex26.garageLook"), "carbon");
-  assert.equal(dst.disk.get("apex26.crewLook"), "pitstop");
+  assert.equal(dst.disk.get("apex26.crewLook"), "classic");
   assert.equal(dst.disk.get("apex26.garageMood"), "night");
 });
 
@@ -175,9 +175,11 @@ test("Bryce's real phone export loads on a phone with nothing skipped, failed or
   assert.equal(rows, Object.values(file.settings).reduce((n, grp) => n + Object.keys(grp).length, 0));
   assert.equal(back.display.uiScale, 70);
   assert.equal(back.display.hudBtnScale, 143.25);
-  // #5743: the CHANGED list comes back too (exportedAt, device, where and build are per-export context; keys
-  // added after the file was made are not in it).
-  const inFile = (name) => { const [g, k] = name.split("."); return !!(file.settings[g] && Object.prototype.hasOwnProperty.call(file.settings[g], k)); };
-  const again = b.collect("all");
-  assert.deepEqual(again.changed.filter(inFile).sort(), file.changed.filter(inFile).sort());
+  // The imported values round-trip. CHANGED is relative to the current factory profile.
+  const nowDefault = ["appearance.homeScene", "appearance.uiContrast", "audio.sound"];
+  const newlyDifferent = ["appearance.textSize", "audio.music", "audio.volMusic", "audio.volSfx",
+    "camera.cockpitSeat", "camera.helmetVisorColor", "camera.helmetVisorIntensity",
+    "steering.adaptiveButtons", "steering.pace"];
+  const expected = file.changed.filter(k => !nowDefault.includes(k)).concat(newlyDifferent).sort();
+  assert.deepEqual(b.collect("all").changed.sort(), expected);
 });

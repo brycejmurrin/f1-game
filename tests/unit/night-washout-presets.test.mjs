@@ -24,63 +24,18 @@ function presets() {
   return vm.runInContext("window.LightPresets", ctx);
 }
 
-const MAST_RING_FIX = Object.freeze({
-  poolEnergy: 0.85,
-  keyMul: 1,
-  lampRadiusMul: 1.3,
-  beamCore: 0.5,
-  beamCone: 0.5,
-  bleedMul: 0.6,
-  lampTemp: 0,
-});
-
-const MAST_THROW_FIX = Object.freeze({
-  poolEnergy: 0.85,
-  keyMul: 1,
-  lampRadiusMul: 0.85,
-  bounceK: 0.06,
-  beamCore: 0.5,
-  beamCone: 0.5,
-  bleedMul: 0.6,
-  lampTemp: 0,
-});
-
-test("qatar and bahrain keep the shipped flood-mast ring night|dry trim", () => {
+test("night mast and street lamps use the shared dry pools with their local beam settings", () => {
   const P = presets();
-  for (const id of ["qatar", "bahrain"]) {
-    const o = P[`${id}|night|dry`];
-    assert.ok(o, `${id}|night|dry`);
-    for (const [k, v] of Object.entries(MAST_RING_FIX)) {
-      // #2260: Qatar's ring + its own ssrDryNight read brighter than midday (road 0.82);
-      // its pools are trimmed to 0.6 with ssrDryNight 0.05. Bahrain keeps the ring trim.
-      const want = id === "qatar" && k === "poolEnergy" ? 0.6 : v;
-      assert.equal(o[k], want, `${id}|night|dry.${k}`);
-    }
-    if (id === "qatar") assert.equal(o.ssrDryNight, 0.05, "qatar|night|dry.ssrDryNight (#2260)");
+  const knobs = "js/lighting/knobs.js";
+  const defaults = vm.runInNewContext(read(knobs) + ";LightKnobs.LT", { GLX: { isMobile: false } }, { filename: absSrc(knobs) });
+  for (const id of ["qatar", "bahrain", "abudhabi", "madrid", "jeddah"]) {
+    const key = id + "|night|dry";
+    assert.ok(P[key], key);
+    const resolved = { ...defaults, ...P["*"], ...P["*|night|dry"], ...P[key] };
+    for (const [knob, value] of Object.entries({
+      poolEnergy: 0.695, keyMul: 0.52, lampRadiusMul: 0.842, bounceK: 0.06,
+      beamCore: 0.5, beamCone: 0.5, bleedMul: 0.6, lampTemp: 0,
+    })) assert.equal(resolved[knob], value, key + "." + knob);
+    if (id === "qatar") assert.equal(resolved.ssrDryNight, 0.08);
   }
-});
-
-test("abudhabi and madrid pin the tall-mast pool trim (beam + radius + bounce)", () => {
-  const P = presets();
-  for (const id of ["abudhabi", "madrid"]) {
-    const o = P[`${id}|night|dry`];
-    assert.ok(o, `${id}|night|dry`);
-    for (const [k, v] of Object.entries(MAST_THROW_FIX)) {
-      assert.equal(o[k], v, `${id}|night|dry.${k}`);
-    }
-  }
-});
-
-test("jeddah night|dry trims street-lamp cores without the desert ring radius", () => {
-  const P = presets();
-  const o = P["jeddah|night|dry"];
-  assert.ok(o);
-  assert.equal(o.lampTemp, 0);
-  assert.equal(o.keyMul, 1);
-  assert.equal(o.lampRadiusMul, 0.85);
-  assert.equal(o.bounceK, 0.06);
-  assert.equal(o.beamCore, 0.55);
-  assert.equal(o.beamCone, 0.55);
-  assert.equal(o.bleedMul, 0.65);
-  assert.equal(o.poolEnergy, 0.8);
 });

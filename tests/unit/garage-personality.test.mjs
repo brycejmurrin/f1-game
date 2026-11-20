@@ -162,7 +162,7 @@ test("lighting moods: shipped is the identity, every mood finite and distinct, t
   const S = sceneHarness();
   const sum = (rig) => { let e = 0; for (let i = 0; i + 14 < rig.length; i += 15) e += rig[i + 3] + rig[i + 4] + rig[i + 5]; return e; };
   const base = sum(S.live(LIV, 0, { night: false, ambient: false }).slice()), sky = Array.from(S.SKYLIGHT);
-  assert.equal(S.mood(), "shipped");
+  assert.equal(S.mood(), "showroom");
   const seen = new Set();
   for (const id of Object.keys(S.MOODS)) {
     assert.equal(S.mood(id), id);
@@ -175,8 +175,8 @@ test("lighting moods: shipped is the identity, every mood finite and distinct, t
     assert.ok(!seen.has(sig), `${id}: differs from every other mood`); seen.add(sig);
   }
   S.mood("nope");
-  assert.equal(S.mood(), "shipped", "an unknown id falls back to shipped");
-  assert.ok(Math.abs(sum(S.live(LIV, 0, { night: false, ambient: false }).slice()) - base) < 1e-9, "shipped rig restored");
+  assert.equal(S.mood(), "showroom", "an unknown id falls back to showroom");
+  assert.ok(Math.abs(sum(S.live(LIV, 0, { night: false, ambient: false }).slice()) - base) < 1e-9, "showroom rig restored");
   assert.deepEqual(Array.from(S.SKYLIGHT), sky, "skylight restored");
 });
 

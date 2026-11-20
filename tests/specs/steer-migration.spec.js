@@ -231,17 +231,14 @@ test.describe("steering-store schema migration", () => {
   test("v3 leaves a store with no RACE PACE key alone, so the new default applies", async ({ page }) => {
     const schema = await currentSchema(page);
     test.skip(schema < 3, "the pace regrid ships with schema 3");
-    // Lowering a DEFAULT and migrating a stored VALUE are different acts. A
-    // player who never touched the slider has no key, so store.get() hands them
-    // the new default (notch 11 = 0.840) — and writing 11 to disk here would be
-    // indistinguishable from a deliberate choice and would pin them to today's
-    // default forever.
+    // A player who never touched the slider has no key and receives the
+    // current default. Writing a notch here would pin them to that default.
     await seedStore(page, { steerSchema: 2 });
     await boot(page);
 
     expect((await readStore(page, ["pace"])).pace).toBeNull();
     const t = await tuning(page);
-    expect(t.pace).toBeCloseTo(Math.pow(1.06, 11 - 14), 6);
+    expect(t.pace).toBeCloseTo(Math.pow(1.06, 17 - 14), 6);
   });
 
   test("a store already at v3 keeps its RACE PACE notch — the regrid cannot run twice", async ({ page }) => {

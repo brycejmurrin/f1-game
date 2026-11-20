@@ -459,7 +459,7 @@ const VisorOptics = (function () {
   /** The port image on body (--visor-port) for the current size and tint; rebuilt only when either changes. */
   function _port() {
     if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
-    const visor = _opt("visor", "off"), color = _opt("visorColor", "neutral"), strength = _opt("visorIntensity", "light");
+    const visor = _opt("visor", "off"), color = _opt("visorColor", "amber"), strength = _opt("visorIntensity", "medium");
     if (_portKey && _w === _portW && _h === _portH && visor === _portV && color === _portC && strength === _portS) return;   // no per-frame key string
     _portW = _w; _portH = _h; _portV = visor; _portC = color; _portS = strength;
     _portKey = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;

@@ -553,12 +553,11 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 :is(#lt-rows, #ps-lt-rows) .adv-item > input[type="number"] {
   box-sizing: border-box; width: 100%; min-height: var(--tap-min); padding-inline: .2em;
   color: var(--text); background: var(--panel); border: 1px solid var(--plate-line);
-  border-radius: var(--r-sm); font: inherit; font-size: var(--fs-micro);
+  border-radius: var(--r-sm); font: inherit; font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
 }
 @media (pointer: coarse) {
   :is(#lt-rows, #ps-lt-rows) .adv-item > input[type="number"] {
     min-height: max(var(--tap-paint), calc(44.2px / var(--sheet-scale, var(--ui-scale))));
-    font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale))));
   }
 }
 /* ---------- MUSIC & SOUND panel ----------

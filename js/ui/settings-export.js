@@ -23,13 +23,13 @@ const FORMAT = "apex26-settings-v1";
 // noImport exports context without restoring it.
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
-  { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
+  { k: "sound", lane: "json", group: "audio", def: false, src: "js/game.js",
     subsystem: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this" },
   { k: "sfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
   { k: "menuSfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
-  { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
-  { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
-  { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
+  { k: "music", lane: "json", group: "audio", def: false, src: "js/game.js" },
+  { k: "volMusic", lane: "json", group: "audio", def: 0.7, src: "js/audio/panel.js" },
+  { k: "volSfx", lane: "json", group: "audio", def: 0.4, src: "js/audio/panel.js" },
   { k: "battleEarcon", lane: "json", group: "audio", def: false, src: "js/race/race-radio.js" },
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
   { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
@@ -56,7 +56,7 @@ const SPEC = [
   // the honest default to report — a stored number is the change.
   { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null follows viewport: 115% on fine-pointer windows at least 1600×900 CSS px, 70% on phones, 109% on other touch screens, 100% otherwise)" },
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%)" },
-  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 125% on coarse pointers, 100% otherwise)" },
+  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = factory size: phone 143.25, tablet 125, fine pointer 100; displayed as 100%)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
@@ -82,14 +82,14 @@ const SPEC = [
   { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookDesigner", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js TRACK DESIGNER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "layoutPreset", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js LAYOUT PRESET (null = none recorded; the last preset applied — it reads CUSTOM once the knobs above no longer match it)", oneOf: ["shipped", "thumb", "compact", "big"] },
-  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (MED on a touch device)", perDevice: true },
+  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (HIGH on iPhone, AUTO otherwise)", perDevice: true },
   { k: "resSchema", lane: "json", group: "display", def: 1, info: true, src: "js/ui/scale.js RES_SCHEMA (migration version — boot writes the current one, so never a change)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"], perDevice: true },
   { k: "portraitOk", lane: "raw", group: "display", def: "0", src: "js/game.js RACE IN PORTRAIT (\"1\" = race upright, else the rotate blocker)", oneOf: ["0", "1"] },
   { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/post-fx-opts.js (PostFxOpts.debris) + js/physics/debris-world.js create() (only \"1\" is on)" },
-  { k: "gfxSsao", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
+  { k: "gfxSsao", lane: "raw", group: "display", def: () => typeof PostFxOpts !== "undefined" && !PostFxOpts.defaultSsao() ? "0" : "1", perDevice: true, src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
@@ -106,16 +106,16 @@ const SPEC = [
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
-  { k: "hudElements", lane: "json", group: "hud", def: {}, src: "js/ui/hud-elements.js per-element on/off (missing key = on)" },
-  { k: "hudLayout", lane: "json", group: "hud", def: null, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements and older formats use SHIPPED layouts)" },
+  { k: "hudElements", lane: "json", group: "hud", def: () => typeof HudElements !== "undefined" ? HudElements.defaults() : {}, src: "js/ui/hud-elements.js phone and desktop visibility defaults", perDevice: true, whole: true },
+  { k: "hudLayout", lane: "json", group: "hud", def: null, deviceBound: true, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements in saved layouts use automatic placement)" },
   { k: "hudMirror", lane: "json", group: "hud", def: "auto", src: "js/render/shared/mirror-pass.js", oneOf: ["auto", "on", "off"] },
   { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
   { k: "flybyShots", lane: "json", group: "camera", def: null, src: "js/camera/flyby-panel.js FLYBY SHOT EDITOR (null = shipped shots)" },
   { k: "ldCard", lane: "json", group: "camera", def: null, src: "js/ui/loading-screen.js loading card {scale, x, y} (null = shipped)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "helmetVisor", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visor", oneOf: ["off", "clear", "smoke"] },
-  { k: "helmetVisorColor", lane: "raw", group: "camera", def: "neutral", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose"] },
-  { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["light", "medium", "strong"] },
+  { k: "helmetVisorColor", lane: "raw", group: "camera", def: "amber", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose"] },
+  { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "medium", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["light", "medium", "strong"] },
   { k: "helmetVisorRefraction", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visorRefraction", oneOf: ["off", "light", "medium", "strong"] },
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
   { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
@@ -138,7 +138,7 @@ const SPEC = [
   { k: "cockpitHaloFinish", lane: "raw", group: "camera", def: "livery", src: "js/camera/cockpit-finishes.js", oneOf: ["livery", "gloss", "matte", "satin", "carbon", "brushed", "chrome"] },
   { k: "cockpitWheel", lane: "raw", group: "camera", def: "f1", src: "js/camera/cockpit-opts.js CHOICES.wheel", oneOf: ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"] },
   { k: "cockpitBody", lane: "raw", group: "camera", def: "sculpted", src: "js/camera/cockpit-opts.js CHOICES.body", oneOf: ["standard", "sculpted", "wide", "tapered", "stepped"] },
-  { k: "cockpitSeat", lane: "raw", group: "camera", def: "std", src: "js/camera/cockpit-opts.js CHOICES.seat", oneOf: ["std", "low", "high", "fwd"] },
+  { k: "cockpitSeat", lane: "raw", group: "camera", def: "fwd", src: "js/camera/cockpit-opts.js CHOICES.seat", oneOf: ["std", "low", "high", "fwd"] },
   { k: "cockpitInterior", lane: "raw", group: "camera", def: "team", src: "js/camera/cockpit-opts.js CHOICES.interior", oneOf: ["carbon", "team", "suede", "ribbed", "classic"] },
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   { k: "lookBackLatch", lane: "json", group: "camera", def: false, src: "js/camera/feel.js LOOK BACK LATCH (hold vs press-to-latch)" },
@@ -225,9 +225,9 @@ const SPEC = [
   { k: "homeCamera", lane: "json", group: "appearance", def: "side", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
   // GARAGE › GARAGE / CREW / LIGHTING looks (#5023). The readers validate on load too; oneOf mirrors
   // GaragePrims LOOKS, GarageCrew.LOOKS and GarageScene.MOODS (garage bundle is lazy, so the lists are pinned by test).
-  { k: "garageLook", lane: "raw", group: "appearance", def: "stock", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
-  { k: "crewLook", lane: "raw", group: "appearance", def: "classic", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
-  { k: "garageMood", lane: "raw", group: "appearance", def: "shipped", src: "js/garage/scene.js setMood (LIGHTING row)", oneOf: ["shipped", "broadcast", "night", "showroom", "daylight", "inspection", "goldenhour", "endurance", "podium", "rain", "neon"] },
+  { k: "garageLook", lane: "raw", group: "appearance", def: "flood", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
+  { k: "crewLook", lane: "raw", group: "appearance", def: "pitstop", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
+  { k: "garageMood", lane: "raw", group: "appearance", def: "showroom", src: "js/garage/scene.js setMood (LIGHTING row)", oneOf: ["shipped", "broadcast", "night", "showroom", "daylight", "inspection", "goldenhour", "endurance", "podium", "rain", "neon"] },
   // #4529 PORTRAIT & LANDSCAPE: null = SHARED (shipped); SEPARATE = {v:2, mode, live, park}. A v:1 (#4897, reverted) or junk is skipped.
   { k: "appearanceShapes", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js PORTRAIT & LANDSCAPE",
     normalize: (v) => v === null ? null : v && typeof v === "object" && v.v === 2 && v.mode === "separate"
@@ -264,7 +264,7 @@ const SPEC = [
   // PRE-RACE MEMORY. Both unset until used: the race sheet saves a draft only
   // when a solo one-off GP STARTs, and the list exists only once a circuit is
   // starred. Their readers validate every field, so a file cannot poison them.
-  { k: "raceDraft", lane: "json", group: "driving", def: null, src: "js/race/race-settings.js REMEMBER LAST RACE SETUP (null = 3 laps / dry / default; else {laps: \"3\"|\"5\"|\"10\"|\"25\"|\"FULL\", weather, tod, mixed})" },
+  { k: "raceDraft", lane: "json", group: "driving", def: () => typeof RaceSettings !== "undefined" ? RaceSettings.DEFAULT_DRAFT : { weather: "storm", tod: "dusk", mixed: true, laps: "3" }, src: "js/race/race-settings.js solo Grand Prix draft", whole: true, nullable: true },
   { k: "favTracks", lane: "json", group: "driving", def: null, src: "js/ui/select-screen.js FAVOURITE CIRCUITS (null = none; else an array of track ids)" },
   // STEERING (js/input/steer-tuning.js applySteerTuning)
   { k: "preset", lane: "json", group: "steering", def: "standard", src: "js/input/steer-tuning.js",
@@ -278,14 +278,14 @@ const SPEC = [
   { k: "steerLock", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "steerSpeed", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)", perDevice: true },
-  { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js",
+  { k: "adaptiveButtons", lane: "json", group: "steering", def: 6, src: "js/input/steer-tuning.js",
     subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "brakeCue", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js" },
   { k: "gripSteer", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF; own-state cap via js/physics/grip-steer.js)" },
   { k: "audioCues", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (js/audio/driving-cues.js; 1 = OFF)" },
   { k: "drivingHelp", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF)" },
-  { k: "pace", lane: "json", group: "steering", def: 11, src: "js/input/steer-tuning.js PACE_DEF",
-    subsystem: "GROUND-SPEED SCALE for every car: 1.06^(v-14), so notch 11 is 84% of reference and notch 7 is 67% — a 21% slower game" },
+  { k: "pace", lane: "json", group: "steering", def: 17, src: "js/input/steer-tuning.js PACE_DEF",
+    subsystem: "GROUND-SPEED SCALE for every car: engine uses 1.06^(v-14); the slider displays 100% at notch 17" },
   { k: "raceLine", lane: "json", group: "steering", def: 0, src: "js/input/steer-tuning.js" },
   { k: "steerSchema", lane: "json", group: "steering", def: 1, info: true, src: "js/input/steer-tuning.js STEER_SCHEMA (migration version — boot writes the current one, so never a change)" },
   // CONTROLS (js/input/input.js tables, js/ui/key-binds.js)
@@ -367,7 +367,7 @@ function collect(mode, G) {
     // LOW resolution, its touch steering weight) exports as null, so loading
     // the file elsewhere keeps THAT device's default instead of pinning ours.
     let value = has ? stored : (all && row.perDevice ? null : def);
-    if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
+    if (diff && !row.whole && isObj(stored) && isObj(def) && Object.keys(def).length) {
       const d = objDiff(stored, def);
       if (!Object.keys(d).length) diff = false;
       if (!all) value = d;   // CHANGES carries the moved fields; ALL the whole effective value (B·H11 hunt)
@@ -541,6 +541,7 @@ function collectGarage() {
 // allowlist never named being written into the namespace. Nothing outside SPEC
 // (settings) or isGarageKey (garage) is written, whatever the file says.
 function typeOk(v, def, row) {
+  if (v === null && row && row.nullable) return true;  // legacy empty race draft clears its override
   if (row && row.table) return isObj(v);               // an engine table, known or not yet (engineTable)
   // A raw row is a bare string flag: an object or array stored "[object Object]" (#5743 S2).
   if (row && row.lane === "raw" && v !== null && typeof v === "object") return false;

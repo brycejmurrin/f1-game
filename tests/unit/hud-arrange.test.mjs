@@ -174,7 +174,7 @@ function editor(pieceId = "piece", options = {}) {
       return get(id, sn, pn);
     }, commit() { if (!dirty) return false; dirty = false; stats.saves++; return true; }, resetEl() {} };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
-  const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
+  const elements = { phone: () => !!options.phone, isOn: id => on.has(id), setMany(ids, enabled) {
     for (const id of ids) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }
   }, apply() {} };
   const preferences = {}, rows = {};
@@ -185,7 +185,7 @@ function editor(pieceId = "piece", options = {}) {
   const viewport = { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
   const policy = visibilityPolicy(elements, preferences, rows, { window: viewport, root: {},
     getComputedStyle: () => ({ getPropertyValue: key => options.insets?.[key] || '0px' }) });
-  Object.assign(layout, { LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
+  Object.assign(layout, { relativeSize: policy.relativeSize, LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
     screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   const ctx = { document: doc, window: viewport,
@@ -664,6 +664,13 @@ test('editor: recovery flushes a pending gesture and prevents its queued frame u
   assert.deepEqual(e.get('map'), saved); assert.equal(e.writes.length, count);
   const r = e.ids.get('map').getBoundingClientRect();
   assert.ok(r.left >= 4 && r.right <= 996 && r.top >= 4 && r.bottom <= 496, JSON.stringify(r));
+});
+
+test("arrange shows factory-relative and painted sizes when they differ", () => {
+  const e = editor("tower", { phone: true, on: true });
+  e.context("helmet", "standard");
+  e.api.setEditing(true);
+  assert.equal(e.ids.get("hud-arrange-name").textContent, "142.9% · 100% painted");
 });
 
 test('editor: size labels are concise without rounding stored fractional or tiny positive sizes', () => {

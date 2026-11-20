@@ -95,6 +95,8 @@ const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors",
 // "POS cell ink follows its plate" test below switches HC on live to cover it.
 const PIN_PREVIOUS_LOOK = () => {
   try {
+    if (!localStorage.getItem("apex26.hudLayout")) localStorage.setItem("apex26.hudLayout", '{"v":4}');
+    if (!localStorage.getItem("apex26.hudElements")) localStorage.setItem("apex26.hudElements", '{}');
     localStorage.setItem("apex26.textSize", '"normal"');
     localStorage.setItem("apex26.uiContrast", '"off"');
     localStorage.setItem("apex26.homeScene", '"garage"');
@@ -718,7 +720,10 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       coarse: matchMedia("(pointer: coarse)").matches,
       desktop: document.body.classList.contains("desktop"),
       layout: localStorage.getItem("apex26.hudLayout"),
-    }))).toEqual({ coarse: true, desktop: false, layout: null });
+      tower: HudLayout.get("tower", "helmet", "standard").s,
+      speed: HudElements.isOn("speed"),
+      relative: HudElements.isOn("rel"),
+    }))).toEqual({ coarse: true, desktop: false, layout: null, tower: 70, speed: false, relative: true });
   };
   const openDisplay = async page => {
     await page.locator("#pm-settings").tap();
@@ -796,10 +801,11 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       await visibleInput(page.locator("#pm-hl-s"));
       expect(await page.evaluate(() => HudLayout.get("sectors").y)).toBe(Number(cell.y));
       const beforeInvalid = await saved();
+      const previousSize = await page.locator("#pm-hl-s").inputValue();
       const size = await typeDraft("#pm-hl-s", "0");
       await size.press("Tab");
       expect(await saved(), "zero size does not change the committed layout").toBe(beforeInvalid);
-      await expect(size).toHaveValue("100");
+      await expect(size).toHaveValue(previousSize);
     }
     const size = await typeDraft("#pm-hl-s", "30.5");
     await size.press("Tab");

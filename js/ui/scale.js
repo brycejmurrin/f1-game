@@ -7,12 +7,9 @@
 
    Must load BEFORE js/game.js (see index.html / tools/manifest.cjs). */
 const UiScale = (() => {
-  // The primary-pointer test every touch default below keys off. Module level so
-  // defaultResMode() answers without a create(G) (SettingsExport's SPEC row).
   function media(query) {
     try { return window.matchMedia?.(query); } catch (_) { return null; }
   }
-  const coarseUi = () => !!media("(pointer: coarse)")?.matches;
   // Foldable hinge stamp: html[data-fold="horizontal"|"vertical"] from the viewport-segments
   // queries. The width tier html[data-layout] that sat beside it until 2026-11-07 is gone (UI
   // contract 2026-11-06 gap 20): it called an 852/844 landscape phone "tablet" and nothing in
@@ -28,15 +25,10 @@ const UiScale = (() => {
       else delete root.dataset.fold;
     } catch (_) { /* progressive; a missing API leaves the CSS media queries in charge */ }
   }
-  // RESOLUTION's shipped default is AUTO everywhere since #5227 (2026-11-10). On a phone AUTO is
-  // CAPPED at MED's scale (PHONE_AUTO_CEIL): it boots at 0.75, which is what the MED pin drew since
-  // #5166 (959×443 on an 852×393 DPR-3 iPhone under the 1.5 mobile DPR cap; LOW's 639×295 read as
-  // "very pixelated"), and PerfGov's resolution stage may now step below it and back. A pinned MED
-  // left the governor only the feature-shed ladder, and a phone too slow for MED sat at 30 fps for
-  // the race where LOW would have held 60. Only an UNSET key follows this: a stored LOW/MED/HIGH/AUTO
-  // wins, and HIGH is still the way to draw above MED on a phone.
+  // iPhone pairs a full-resolution pin with LOW graphics. AUTO remains adaptive
+  // and caps phone rendering at MED's scale whenever the player chooses it.
   const PHONE_AUTO_CEIL = 0.75;
-  const defaultResMode = () => "auto";
+  const defaultResMode = () => typeof GfxQuality !== "undefined" && GfxQuality.isIPhone() ? "high" : "auto";
   // A stored LOW on a phone from before #5166 is not proof of a choice: LOW WAS the phone default
   // (2026-09-08..11-09) and a settings file saved then carried it as a value (perDevice null only from
   // 2026-10-04), so importing one pinned it; nothing ever recorded "picked". Bryce's export holds
@@ -56,32 +48,9 @@ const UiScale = (() => {
     Log.info("ui", "UiScale.create");
     const { $, els, store } = G;
 
-    // UI SIZE / HUD SIZE / BUTTON SIZE: how big the interface is, as a percentage,
-    // on three independent sliders. Each writes a custom property the stylesheets
-    // consume as a `zoom`:
-    //   --ui-scale       the menus    — .sheet (components.css), #overlay (menus.css)
-    //   --hud-scale      the readouts — the HUD clusters (hud.css)
-    //   --hud-btn-scale  the dock     — the touch controls (overlays.css)
-    //
-    // TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
-    // rest, with time to spare; the HUD is glanced at while driving, and the size
-    // that works there depends on where the phone is mounted and whose eyes are
-    // reading it. They also compete for the same screen, so trading one against the
-    // other is a real choice rather than a compromise to be guessed at centrally.
-    //
-    // SLIDERS RATHER THAN CONSTANTS because this is the thing measurement could not
-    // settle: what reads correctly at arm's length on a phone in motion is not a
-    // question a screenshot answers, and three rounds of picking a number from one
-    // ended with "still too small". The player has the device.
-    //
-    // Written INLINE ON documentElement (<html>), which is where css/tokens.css
-    // declares both properties. That element matters: a custom property is
-    // substituted where it is DECLARED, so a value set on <body> leaves :root's
-    // rules reading :root's own value and the knob silently does nothing — measured
-    // on build 997, where --tap sat at `calc(44px * 1)` at every setting until this
-    // moved to documentElement.
-    //
-    // An unset scale follows the stylesheet media queries from the first paint.
+    // The menus, readouts and touch controls each own a CSS zoom variable.
+    // Write overrides to documentElement, where tokens.css computes dependent
+    // properties. An unset preference follows the media queries at first paint.
     const SCALE_MIN = 40;
     const SCALE_MAX = 200;
     // BUTTON SIZE alone goes on to 300 %: at 200 % the dock was still small in the hand on a
@@ -95,20 +64,12 @@ const UiScale = (() => {
     const HUD_MIN = 70;
     const minFor = (k) => (k === "hudScale" ? HUD_MIN : SCALE_MIN);
     const SCALE_STEP = 0.25;
-    // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
-    // are mirrored here — CSS owns FIRST paint, this owns every write after it,
-    // and the two must not disagree. BUTTON SIZE keeps its own fixed default.
-    // History: 1.4536, then 1.25 (2026-09-14, when --hud-scale still carried a 1.24 bump and
-    // nothing capped the dock; fitHud's caps do that now).
-    // NOT moved to the owner's 143.25 % (#5358): in TILT / DRAG steering the bigger BOOST / OT / AERO
-    // column makes fitHud shrink the readouts to pay for it (852x393: minimap 103 -> 90 px, tower
-    // 371 -> 324) and tests/specs/hud-layout.spec.js stops settling. In BUTTONS steering the only
-    // difference is the steer pad: 90 px here, 103 at his stored 143.25.
+    // Physical defaults mirror css/tokens.css. The controls display each default as 100%.
     const BTN_DEFAULT = 1.25;
-    // A PHONE (touch, short side <= 500 px) ships UI SIZE 70 %, the owner's own setting (#5358):
-    // 109 % painted every menu "way too big" there. A tablet keeps 109. Only an UNSET size reads
-    // these; a stored one is never rewritten by a new default.
+    const PHONE_BTN_DEFAULT = 143.25;
     const PHONE_UI_DEFAULT = 70;
+    const coarsePointer = media("(pointer: coarse)");
+    const coarseUi = () => !!coarsePointer?.matches;
     const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
     const roomyDesktop = media("(pointer: fine) and (min-width: 1600px) and (min-height: 900px)");
     const scaleSnap = (v, k) => {
@@ -117,7 +78,10 @@ const UiScale = (() => {
     };
     // Button size is an independent preference, including when unset.
     function scaleDefaultFor(k) {
-      if (k === "hudBtnScale") return coarseUi() ? 100 * BTN_DEFAULT : 100;
+      if (k === "hudBtnScale") {
+        if (phoneUi()) return PHONE_BTN_DEFAULT;
+        return coarseUi() ? 100 * BTN_DEFAULT : 100;
+      }
       if (k === "uiScale") {
         if (coarseUi()) return phoneUi() ? PHONE_UI_DEFAULT : 109;
         return roomyDesktop?.matches ? 115 : 100;
@@ -128,16 +92,12 @@ const UiScale = (() => {
       const v = store.get(k, null);
       return typeof v === "number" ? scaleSnap(v, k) : scaleDefaultFor(k);
     };
-    const scaleLabel = (pct, k) => {
-      const t = scaleSnap(pct, k);
-      return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
-    };
     // UI SIZE: full top (the row names this sheet's zoom); a phone stops at 50 % (#5452; 70 under #5235).
     const uiSheet = () => $("pm-uiscale")?.closest?.(".sheet") || null;
     const sheetCap = () => { const sh = uiSheet(); return (sh?.getClientRects?.().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
     const fitCaps = () => (document.body?.classList?.contains("in-race") ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
     const cssWas = {};   // prop -> last value written here
-    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi());
+    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi(), scaleDefaultFor(key));
     // Moving one slider pins the OTHER's wish to what it paints: freed room never grows it.
     const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
     const fromSlider = (key, v) => { const r = rowFor(key); return Math.max(r.min, Math.min(r.max, scaleSnap(+v || scaleDefaultFor(key), key))); };
@@ -163,7 +123,10 @@ const UiScale = (() => {
         for (const ms of [250, 1000, 3000]) setTimeout(again, ms);
       }
       const input = $(inputId);
-      if (input) { input.min = String(r.min); input.max = String(r.max); input.value = String(r.value); }
+      if (input) {
+        input.min = String(r.min); input.max = String(r.max); input.value = String(r.value);
+        if (input.ariaValueText !== r.label) input.ariaValueText = r.label;
+      }
       const out = $(`${inputId}-v`); if (out && out.textContent !== r.label) out.textContent = r.label;
       // IS THIS VALUE MINE OR INHERITED? `stored` has always known — null means
       // "following" — and nothing on screen said so, which is the whole bug class
@@ -240,7 +203,11 @@ const UiScale = (() => {
     // UI SIZE zooms the sheet that holds its own slider: applying on every `input` re-zoomed it under the thumb (#5256).
     // The number follows the drag; the zoom lands on release (`change`, which a key step also fires).
     if (uiEl) {
-      uiEl.oninput = (e) => { const out = $("pm-uiscale-v"); if (out) out.textContent = fromSlider("uiScale", e.target.value) + "%"; };
+      uiEl.oninput = (e) => {
+        const label = relativePercent(fromSlider("uiScale", e.target.value), scaleDefaultFor("uiScale"));
+        uiEl.ariaValueText = label;
+        const out = $("pm-uiscale-v"); if (out) out.textContent = label;
+      };
       uiEl.onchange = (e) => { store.set("uiScale", fromSlider("uiScale", e.target.value)); applyUiScale(); };
     }
     const hudEl = $("pm-hudscale");
@@ -272,6 +239,9 @@ const UiScale = (() => {
     applyHudScale();
     applyBtnScale();
     roomyDesktop?.addEventListener?.("change", applyUiRow);
+    const refreshTouchScale = () => { applyUiRow(); applyBtnScale(); };
+    coarsePointer?.addEventListener?.("change", refreshTouchScale);
+    media("(pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px)")?.addEventListener?.("change", refreshTouchScale);
     syncLayout();
     // Resize events fire per frame during a drag/rotation: coalesce syncLayout to one run per animation frame.
     let layoutRaf = 0;
@@ -418,13 +388,15 @@ const UiScale = (() => {
     if (a.length < 6 || a.some((n) => !(n > 0))) return null;
     return { top: a[0], bot: a[1], dock: a[2], steer: a[3], keep: a[4], floor: a[5] };
   }
+  // Keep the range on the storage grid so keyboard steps and legacy endpoints stay exact.
+  const relativePercent = (physical, base) => Math.round(physical * 10000 / base) / 100 + "%";
   /** One size slider's row on THIS window: { min, max, value, label }; the range and value are what paints.
    *  `caps` = parseCaps() in a race, `sheetCap` = the settings sheet's zoom (0 = hidden), `phone` = UI SIZE min 70. */
-  function sizeRow(key, wish, lim, caps, sheetCap, phone) {
+  function sizeRow(key, wish, lim, caps, sheetCap, phone, base = 100) {
     const st = lim.step || 0.25, down = (p) => Math.floor(p / st + 1e-6) * st, up = (p) => Math.ceil(p / st - 1e-6) * st;
     let min = lim.min, max = lim.max, part = "";
     if (key === "uiScale" && phone) min = Math.max(min, UI_PHONE_MIN);
-    const txt = (p) => `${Math.abs(p % 1) < 1e-9 ? String(Math.round(p)) : p.toFixed(1)}%`;
+    const txt = (p) => relativePercent(p, base);
     // Bands paint min(slider, cap), the cap ceiled to 1 % (hud.js set()).
     const band = (z) => (z < 9 ? Math.ceil(z * 100 - 1e-6) : Infinity);
     if (key === "hudScale" && caps) max = Math.max(min, Math.min(max, Math.max(band(caps.top), band(caps.bot))));
@@ -439,9 +411,9 @@ const UiScale = (() => {
     }
     if (key === "hudBtnScale" && caps && caps.dock < 9) {
       const ped = Math.round(Math.max(caps.floor, Math.min(value / 100, caps.dock)) * 100);
-      if (ped < value - 0.5) part = ` · pedals ${ped}%`;
+      if (ped < value - 0.5) part = ` · pedals ${txt(ped)}`;
     }
-    if (key === "uiScale" && sheetCap > 0 && sheetCap * 100 < value - 0.5) part = ` · this menu ${Math.round(sheetCap * 100)}%`;
+    if (key === "uiScale" && sheetCap > 0 && sheetCap * 100 < value - 0.5) part = ` · this menu ${txt(sheetCap * 100)}`;
     return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
   }
   // A phone's UI SIZE FLOOR (#5452, Bryce 2026-11-11: "Down to 50 %"; it was 70 under #5235, which left the slider

@@ -434,10 +434,26 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.equal(all.mode, "all");
   const n = Object.values(all.settings).reduce((a, g) => a + Object.keys(g).length, 0);
   assert.equal(n, SettingsExport.SPEC.length, "every allowlisted key appears once");
-  assert.equal(all.settings.steering.pace, 11);
+  assert.equal(all.settings.steering.pace, 17);
   assert.equal(all.settings.display.gfxPreset, null, "unset per-device default: the loading device keeps its own");
   assert.equal(all.settings.audio.sndTune.gain, 1, "an object default is spelled out");
   assert.deepEqual(all.changed, []);
+});
+
+test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
+  const mobile = true;
+  const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
+  const draft = { weather: "storm", tod: "dusk", mixed: true, laps: "5" };
+  const disk = { "apex26.raceDraft": JSON.stringify(draft), "apex26.hudElements": "{}" };
+  const file = boot({ mobile, globals, disk }).collect("changes");
+  assert.deepEqual(file.settings.driving.raceDraft, draft);
+  assert.deepEqual(file.settings.hud.hudElements, {});
+  const target = boot({ mobile, globals });
+  assert.equal(target.loadSettings(file).ok, true);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.raceDraft")), draft);
+  assert.equal(target.disk.get("apex26.hudElements"), "{}");
+  target.loadSettings({ ...file, settings: { driving: { raceDraft: null } } });
+  assert.equal(target.disk.has("apex26.raceDraft"), false);
 });
 
 test("a changed key carries its value, the default it replaced and the source that owns it", () => {
@@ -456,9 +472,9 @@ test("a changed key carries its value, the default it replaced and the source th
   const f = collect("changes");
   assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneCar", "camera.camTuneGlobal", "camera.camTuneTrack", "camera.cockpitHalo", "camera.motionBlur", "camera.speedLines", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
-  assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
+  assert.equal(f.defaults.audio.volMusic, 0.7, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
-  assert.equal(f.defaults.steering.pace, 11);
+  assert.equal(f.defaults.steering.pace, 17);
   // The halo SHIPS faired; "0" is what counts as a change now.
   assert.equal(f.settings.camera.cockpitHalo, "0", "a raw-lane value stays the string the panel wrote");
   assert.equal(f.defaults.camera.cockpitHalo, "fairing");

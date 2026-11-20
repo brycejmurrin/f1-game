@@ -22,7 +22,7 @@ const PHONES = [
 ];
 const HELD = ["btn-throttle", "btn-brake", "btn-steer-left", "btn-steer-right"];
 const BASE = { "btn-throttle": 76, "btn-brake": 76, "btn-steer-left": 84, "btn-steer-right": 84 };
-const TOUCH_DEFAULT = 1.25;   // css/tokens.css --hud-btn-mult
+const LADDER_SCALE = 1.25;   // base units of the original portrait ladder
 
 /** A portrait race the player chose (RACE IN PORTRAIT), steer BUTTONS, chase camera, HUD frozen. */
 async function portraitRace(page, v, btnScale) {
@@ -81,18 +81,19 @@ for (const v of PHONES) {
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
 
-    test("an untouched slider keeps the shipped ladder; 100 % and 143 % paint exactly slider / 125 of it", async ({ page }) => {
+    test("the default matches the phone export and older explicit values retain their exact size", async ({ page }) => {
       await portraitRace(page, v, null);
       expect(await page.evaluate(() => document.body.classList.contains("steer-buttons"))).toBe(true);
       const unset = await sizes(page);
-      for (const id of HELD) expect(unset[id], `${id} at the untouched slider`).toEqual([BASE[id], BASE[id]]);
+      await setButtonSize(page, 143.25);
+      expect(await sizes(page), "the unset phone paints the exported 143.25% physical size").toEqual(unset);
 
       await setButtonSize(page, 100);
       const at100 = await sizes(page);
       await setButtonSize(page, 143);
       const at143 = await sizes(page);
       for (const id of HELD) {
-        const want100 = BASE[id] * 1 / TOUCH_DEFAULT, want143 = BASE[id] * 1.43 / TOUCH_DEFAULT;
+        const want100 = BASE[id] * 1 / LADDER_SCALE, want143 = BASE[id] * 1.43 / LADDER_SCALE;
         // 1/64 px is Chromium's layout unit: the only slack an exact size can need.
         expect(Math.abs(at100[id][0] - want100), `${id} width at 100 %: ${at100[id][0]} vs ${want100}`).toBeLessThanOrEqual(1 / 64);
         expect(Math.abs(at143[id][0] - want143), `${id} width at 143 %: ${at143[id][0]} vs ${want143}`).toBeLessThanOrEqual(1 / 64);

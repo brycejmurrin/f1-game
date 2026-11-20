@@ -1399,8 +1399,8 @@
       <button id="pm-linemode-jump" type="button" class="adv-more-btn" data-settings-jump="advanced" data-jump-target="pm-line">STEER ASSIST · FINE, in ADVANCED &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">5</b></span>
-        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="5" aria-label="Adaptive buttons"></label>
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
       <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
     </div>
     <div class="adv-item" id="pm-haptics-item">
@@ -1567,11 +1567,11 @@
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
+              <p class="adv-help">100% uses the default size for race speed, position, timing and map readouts. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
               <!-- Independent touch-control preference. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>reset button size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
-              <p class="adv-help">The on-screen pedals, arrows and race buttons. Independent of HUD SIZE; only the screen limits their size.</p>
+              <p class="adv-help">100% uses the default pedal, arrow and race button size for this window. Available space limits the maximum.</p>
               <!-- BUTTON OPACITY. XAG 104 asks for an adjustable backing behind
                    anything read over live gameplay, and the dock sits over a
                    bright, moving 3D scene. Its own 20-100 range, not the size
@@ -1650,7 +1650,7 @@
           <h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h5>
           <label class="tune-row">
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size" aria-describedby="pm-uiscale-help"></label>
-          <p id="pm-uiscale-help" class="adv-help">Scales every menu and settings screen. The race HUD and the touch buttons have their own sizes under DISPLAY › HUD.</p>
+          <p id="pm-uiscale-help" class="adv-help">100% uses the default menu size for this window. The race HUD and the touch buttons have their own sizes under DISPLAY › HUD.</p>
           <div id="pm-textsize" class="set-row" role="group" aria-labelledby="pm-textsize-label">
             <span class="tune-label" id="pm-textsize-label">TEXT SIZE</span>
             <div>
@@ -1772,10 +1772,10 @@
          then closed folds whose summaries carry the live choice. -->
 
 
-    <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
+    <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">100%</b></h3>
     <label class="tune-row">
-      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-describedby="pm-pace-help"></label>
-    <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker.</p>
+      <input id="pm-pace" type="range" min="1" max="19" step="1" value="17" aria-label="Overall speed" aria-valuetext="100%" aria-describedby="pm-pace-help"></label>
+    <p id="pm-pace-help" class="adv-help">Scales how fast you and the AI drive. 100% is the default. A lower setting gives you more time to react.</p>
 
 
 
@@ -1901,7 +1901,7 @@
       <!-- Closed like DISPLAY: the summary is the label and carries ON / source.
            ON/OFF live in the body so a summary tap only opens the fold. -->
       <details id="as-music-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
+        <summary class="adv-more-btn" id="as-music-sum">MUSIC · OFF · ALL</summary>
         <div id="as-music" class="set-row" role="group" aria-labelledby="as-music-label">
           <span class="tune-label" id="as-music-label">MUSIC</span>
           <div>
@@ -1910,8 +1910,8 @@
             <button id="as-music-next" type="button" data-step="1" aria-label="Next music">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">6</b></span>
-          <input id="as-mvol" type="range" min="0" max="10" step="1" value="6" aria-label="Music volume"></label>
+        <label class="tune-row"><span class="tune-label">MUSIC VOLUME · % OF DEFAULT MIX <b id="as-mvol-v">100%</b></span>
+          <input id="as-mvol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="7" aria-label="Music volume"></label>
         <p class="as-note">The soundtrack in the menus and on track. VOLUME sets the music alone; SOURCE picks which songs play.</p>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
              once it is connected; picking another source releases it without
@@ -1945,7 +1945,7 @@
       </details>
 
       <details id="as-sound-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
+        <summary class="adv-more-btn" id="as-sound-sum">SOUND · MUTED</summary>
         <div id="as-sound" class="set-row" role="group" aria-labelledby="as-sound-label">
           <span class="tune-label" id="as-sound-label">SOUND EFFECTS</span>
           <div>
@@ -1954,8 +1954,8 @@
             <button id="as-sound-next" type="button" data-step="1" aria-label="Next sound effects">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME <b id="as-svol-v">2</b></span>
-          <input id="as-svol" type="range" min="0" max="10" step="1" value="2" aria-label="Sound effects volume"></label>
+        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME · % OF DEFAULT MIX <b id="as-svol-v">100%</b></span>
+          <input id="as-svol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="4" aria-label="Sound effects volume"></label>
         <div id="as-ui" class="set-row" role="group" aria-labelledby="as-ui-label">
           <span class="tune-label" id="as-ui-label">MENU SOUNDS</span>
           <div>
@@ -1973,7 +1973,7 @@
            it, and binding it there would look right and then desync the moment
            somebody turned SFX off and left the radio on. -->
       <details id="as-radio-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF</summary>
+        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF · NORMAL · SPOTTER OFF</summary>
         <div id="as-radio" class="set-row" role="group" aria-labelledby="as-radio-label">
           <span class="tune-label" id="as-radio-label">TEAM RADIO</span>
           <div>
@@ -2056,8 +2056,8 @@
             <button id="as-rpreset-next" type="button" data-step="1" aria-label="Next radio sound">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
-          <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
+        <label class="tune-row"><span class="tune-label">VOICE VOLUME · % OF DEFAULT MIX <b id="as-rvol-v">100%</b></span>
+          <input id="as-rvol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
              tail (js/audio/engine.js radioSting). NOT gated on the TEAM RADIO
              switch above and deliberately so: that switch is the SPOKEN radio,
@@ -2092,7 +2092,7 @@
            ships OFF, this talks over a menu and ships ON, and a control that
            greys out with a switch it does not obey is a lie about the wiring. -->
       <details id="as-ann-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · ON</summary>
+        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · MUTED · TV CAMERAS</summary>
         <div id="as-ann" class="set-row" role="group" aria-labelledby="as-ann-label">
           <span class="tune-label" id="as-ann-label">ANNOUNCER</span>
           <div>
@@ -2419,7 +2419,7 @@
            the &#9834; character: U+266A is in none of the bundled fonts, so the
            text glyph fell back to a host font and the phone title baseline
            flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
-      <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
+      <button id="soundbtn" class="minibtn" aria-pressed="false">SOUND OFF</button>
       <!-- Never hidden (css/menus.css). One short line: the full trade-mark sentence
            Formula 1's fan guidelines give (formula1.com/en/toolbar/guidelines.html)
            ran 8 lines in portrait and pushed Home past one screen (390x844: 556px

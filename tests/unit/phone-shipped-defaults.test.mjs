@@ -57,8 +57,7 @@ test("a phone with nothing stored reads the owner's per-screen looks, and stores
     const adaptive = { select: { w: 125, tile: 95 }, race: { w: 120, btn: 90 }, designer: { size: 75 } };
     const expected = EXPORT.appearance[key] ?? adaptive[id];
     for (const [k, v] of Object.entries(expected)) {
-      // Compact phones cannot paint a roomy Career layout. AUTO stays responsive on resize.
-      assert.equal(got[k], id === "career" && k === "density" ? "auto" : v, `${id}.${k}`);
+      assert.equal(got[k], v, `${id}.${k}`);
     }
     assert.equal(M.isShipped(id), true, `${id} is SHIPPED, not CUSTOM`);
   }
@@ -72,17 +71,16 @@ test("a phone with nothing stored reads the owner's per-screen looks, and stores
   assert.equal(html.dataset.lookGarageStats, "hide");
 });
 
-test("seeding the exported panel looks preserves the explicit Career density and matches other phone defaults", () => {
+test("seeding the exported panel looks matches every fresh phone panel", () => {
   const stored = {};
   for (const key of Object.values(LOOK_KEYS)) stored[key] = EXPORT.appearance[key];
   const a = looks("phone"), b = looks("phone", stored);
-  assert.equal(a.M.read("career").density, "auto");
+  assert.equal(a.M.read("career").density, "roomy");
   assert.equal(b.M.read("career").density, "roomy");
-  a.M.set("career", "density", "roomy");
   for (const id of Object.keys(LOOK_KEYS)) assert.deepEqual(plain(a.M.read(id)), plain(b.M.read(id)), id);
   assert.deepEqual(plain(a.html.dataset), plain(b.html.dataset));
   assert.deepEqual(plain(a.html.style._decls), plain(b.html.style._decls));
-  assert.deepEqual(plain(a.data), { lookCareer: { density: "roomy" } });
+  assert.deepEqual(plain(a.data), {});
   assert.deepEqual(b.data, stored, "his stored looks are left exactly as they were");
 });
 

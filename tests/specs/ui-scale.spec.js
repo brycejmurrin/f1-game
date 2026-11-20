@@ -181,6 +181,7 @@ const PROBE = (rootSel) => {
 // column rendered 398.5px wide at UI SIZE 130 % (17.5px off the right edge) and
 // 459.8px at 150 % (78.8px off), while its CSS width sat unchanged at 306.5px
 // the whole time. A landscape-only matrix cannot see a portrait-only branch.
+const relativeLabel = (physical, baseline) => Math.round(physical * 10000 / baseline) / 100 + "%";
 const SHAPES = [["landscape", LANDSCAPE], ["portrait", PORTRAIT]];
 
 test.describe("UI scale", () => {
@@ -364,6 +365,7 @@ test.describe("UI scale", () => {
 
   // Reset restores the independent button default, even after HUD SIZE changes.
   test("BUTTON SIZE uses its own default and can be reset", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
     await boot(page);
     const state = () => page.evaluate(() => {
       const rev = document.getElementById("pm-btnscale-r");
@@ -379,12 +381,14 @@ test.describe("UI scale", () => {
       };
     });
 
-    // Touch defaults to 125%, independently of the readout scale.
+    // Phone controls default to 143.25%, independently of the readout scale.
     await page.evaluate(() => { window.__apex.hudScale(120); window.__apex.btnScale(null); });
     let st = await state();
     expect(st.over, "unset: no override marker").toBe(false);
     expect(st.revertShown, "unset: no revert button").toBe(false);
-    expect(st.btn, "unset: independent touch default").toBe(125);
+    expect(st.btn, "unset: independent touch default").toBe(143.25);
+    await expect(page.locator("#pm-btnscale")).toHaveAttribute("aria-valuetext", "100%");
+    await expect(page.locator("#pm-btnscale-v")).toHaveText("100%");
 
     await page.evaluate(() => window.__apex.btnScale(60));
     st = await state();
@@ -401,19 +405,20 @@ test.describe("UI scale", () => {
     // range input and move the very slider it was meant to reset.
     await page.evaluate(() => document.getElementById("pm-btnscale-r").click());
     st = await state();
-    expect(st.btn, "revert restores the independent touch default").toBe(125);
+    expect(st.btn, "revert restores the independent touch default").toBe(143.25);
     expect(st.over, "and clears its own marker").toBe(false);
     expect(st.revertShown, "and hides itself").toBe(false);
 
     // A later HUD change must leave the reset button size alone.
     await page.evaluate(() => window.__apex.hudScale(90));
-    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(125);
+    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(143.25);
   });
 
   // The mechanism itself. If these two ever start moving together the sliders
   // are back to being one knob, and every fit result above becomes a statement
   // about a size nobody can actually select.
   test("the two scales are independent", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
     await boot(page);
     const read = () => page.evaluate(() => {
       const cs = getComputedStyle(document.documentElement);
@@ -429,19 +434,19 @@ test.describe("UI scale", () => {
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.9" });
 
-    // Buttons are a third independent axis, with a fixed 125% touch default.
+    // Buttons are a third independent axis, with a 143.25% physical phone default.
     const btn = () => page.evaluate(() => window.__apex.btnScale().pct);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "unset, independent touch default").toBe(125);
+    expect(await btn(), "unset, independent touch default").toBe(143.25);
     await page.evaluate(() => window.__apex.hudScale(120));
-    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(125);
+    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(143.25);
     await page.evaluate(() => window.__apex.btnScale(60));
     expect(await btn(), "set, it is its own axis").toBe(60);
     expect(await read(), "and moving it must not move the HUD").toEqual({ ui: "1.5", hud: "1.2" });
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await btn(), "nor does the HUD move it back").toBe(60);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "null restores the button default").toBe(125);
+    expect(await btn(), "null restores the button default").toBe(143.25);
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.
@@ -923,6 +928,7 @@ test.describe("UI scale", () => {
   // slider would show a sane value while the real render used whatever was
   // stored, unbounded.
   test("an out-of-range stored scale clamps the applied CSS property, not just the slider label", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
     // This test referenced `read` from "the two scales are independent" above,
     // a `const` local to THAT test's own callback — plain JS lexical scoping
     // never made it visible here, in any run order, on any worker. Not a
@@ -966,7 +972,7 @@ test.describe("UI scale", () => {
       hudLabel: document.getElementById("pm-hudscale-v").textContent,
     }));
     expect(shown).toEqual({
-      uiInput: String(bounds.max), uiLabel: bounds.max + "%",
+      uiInput: String(bounds.max), uiLabel: Math.round(bounds.max * 10000 / 70) / 100 + "%",
       hudInput: String(bounds.min), hudLabel: bounds.min + "%",
     });
   });
@@ -2013,7 +2019,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
           const st = await sizeRowState(page, row.id);
           expect(st.value, `${v}: the slider holds the value it was given`).toBe(v);
           expect([st.min, st.max], `${v}: the range holds while the slider moves`).toEqual([held.min, held.max]);
-          expect(st.label.startsWith(`${v % 1 ? v.toFixed(1) : v}%`), `${v}: label "${st.label}" leads with the value`).toBe(true);
+          expect(st.label.startsWith(relativeLabel(v, row.key === "hudBtnScale" ? 143.25 : 100)), `${v}: label "${st.label}" leads with the value`).toBe(true);
           seen.push({ v, moves: await widths(page, row.moves), still: await widths(page, row.still) });
         }
         for (let i = 1; i < seen.length; i++) {
@@ -2044,7 +2050,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
       const settled = await page.evaluate(settleLayout, { root: "#pmsettings-inner" });
       expect(settled.stable, "the settings sheet settled: " + (settled.reason || "")).toBe(true);
       const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
-      expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: `${ui.phoneMin}%` });
+      expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: relativeLabel(ui.phoneMin, 70) });
       expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 40 % paints the minimum").toBe(String(ui.phoneMin / 100));
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage on load").toBe(ui.phoneMin);
       // At the minimum: the open panel's token-sized text paints >= 12 px and its controls >= 44 px.
@@ -2073,7 +2079,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         }, { id: ui.id, v });
         const z = Math.round(Math.min(v / 100, ui.sheetZoom) * 100);
         await expect.poll(sheetZoom, `${v} %: the sheet paints min(wish, ${ui.sheetZoom})`).toBeCloseTo(z / 100, 2);
-        await expect(page.locator(`#${ui.id}-v`), `${v} %: the number is the wish, the note is what this sheet paints`).toHaveText(z < v ? `${v}% · this menu ${z}%` : `${v}%`);
+        await expect(page.locator(`#${ui.id}-v`), `${v} %: the number is the wish, the note is what this sheet paints`).toHaveText(z < v ? `${relativeLabel(v, 70)} · this menu ${relativeLabel(z, 70)}` : relativeLabel(v, 70));
         expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale")))).toBe(v);
         expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"))).toBe(String(v / 100));
       }

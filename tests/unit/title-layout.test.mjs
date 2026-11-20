@@ -382,6 +382,14 @@ test("phone sliders expose every width step, Auto and the current orientation's 
   const { dom, M, rotate } = boot({}, { viewport });
   const width = dom.byId("pm-tl-btns-width"), size = dom.byId("pm-tl-btns-size");
   assert.deepEqual([size.value, width.value], ["106", "25"]);
+  for (const part of ["btns", "title", "art"]) {
+    assert.equal(dom.byId("pm-tl-" + part + "-size-v").textContent, "100%");
+    assert.equal(dom.byId("pm-tl-" + part + "-size").getAttribute("aria-valuetext"), "100%");
+  }
+  const art = dom.byId("pm-tl-art-size");
+  art.value = "85"; dom.dispatch(art, { type: "input" }); dom.dispatch(art, { type: "change" });
+  assert.equal(M.current().art.size, 85);
+  assert.equal(art.getAttribute("aria-valuetext"), "98.84%");
   assert.equal(width.getAttribute("aria-describedby"), "pm-tl-width-help");
   assert.match(dom.byId("pm-tl-width-help").textContent, /54% to 80%/);
   assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25");
@@ -399,6 +407,7 @@ test("phone sliders expose every width step, Auto and the current orientation's 
   assert.equal(width.value, "25", "a reset also repaints the focused range");
   rotate("tall");
   assert.deepEqual([size.value, width.value, width.getAttribute("aria-valuetext")], ["105", width.min, "Auto, use automatic width"]);
+  assert.equal(size.getAttribute("aria-valuetext"), "100%");
   rotate("wide");
   assert.equal(width.value, "25");
   short.matches = false;

@@ -83,8 +83,17 @@ var AudioPanel = (() => {
     // ON over silence. OFF by default — the reasons are in radio-voice.js, and
     // the short one is that #announce is already role="status", so a screen
     // reader user hears every card twice if we default this on.
+    const mixGain = (key, fallback) => typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(key)
+      ? SettingsDefaults.get(key) : fallback;
+    const MUSIC_MIX = mixGain("volMusic", 0.7), SFX_MIX = mixGain("volSfx", 0.4), RADIO_MIX = mixGain("volRadio", 0.8);
+    function paintMixVolume(el, readout, gain, mix) {
+      const percent = Math.round(100 * gain / mix) + "%";
+      setValue(el, String(gain * 10));
+      setText(readout, percent);
+      setAttr(el, "aria-valuetext", percent + " of default mix");
+    }
     let radioOn = store.get("radioVoice", false);
-    let radioVol = store.get("volRadio", 0.8);
+    let radioVol = store.get("volRadio", RADIO_MIX);
     const FOCUS_VALUES = [[0, "STANDARD"], [4, "4 dB"], [8, "8 dB"], [12, "12 dB"]];
     const focusNow = () => {
       const value = !GameAudio._stub && GameAudio.getRadioFocusDb ? GameAudio.getRadioFocusDb() : store.get("radioFocusDb", 0);
@@ -174,8 +183,8 @@ var AudioPanel = (() => {
       syncAudioPanel();
     }
 
-    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.6));
-    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
+    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", MUSIC_MIX));
+    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", SFX_MIX));
     let sfxOn = store.get("sfx", true);
     GameAudio.setSfxEnabled(sfxOn);
     // MENU SOUNDS: the button blips only (uiTick/uiSelect/uiReject). Under the
@@ -356,10 +365,8 @@ var AudioPanel = (() => {
       setDisabled($("as-svol"), !sfxLive);
       $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
       $("as-svol").closest(".tune-row").classList.toggle("tune-off", !sfxLive);
-      $("as-mvol").value = String(Math.round(musicVol * 10));
-      setText($("as-mvol-v"), String(Math.round(musicVol * 10)));
-      $("as-svol").value = String(Math.round(sfxVol * 10));
-      setText($("as-svol-v"), String(Math.round(sfxVol * 10)));
+      paintMixVolume($("as-mvol"), $("as-mvol-v"), musicVol, MUSIC_MIX);
+      paintMixVolume($("as-svol"), $("as-svol-v"), sfxVol, SFX_MIX);
       // The radio row explains WHICH of the three reasons it is unusable for,
       // because "greyed out" with no sentence is the worst version of this.
       const radioReady = !!(G.radio && G.radio.available());
@@ -368,8 +375,7 @@ var AudioPanel = (() => {
       SettingRow.disable($("as-radio"), !radioReady);
       setDisabled($("as-rvol"), !G.soundOn);
       $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !G.soundOn);
-      $("as-rvol").value = String(Math.round(radioVol * 10));
-      setText($("as-rvol-v"), String(Math.round(radioVol * 10)));
+      paintMixVolume($("as-rvol"), $("as-rvol-v"), radioVol, RADIO_MIX);
       // SFX, not voice: it rides the sfx bus, so it follows the SFX switch and
       // has nothing to do with whether a voice is installed.
       const fx = GameAudio.radioFxLevel();
@@ -601,7 +607,7 @@ var AudioPanel = (() => {
         if (!battlePreview.ready()) {
           battlePreview.prepare(); battleNote("Preparing the tones. Press the sample again in a moment."); return;
         }
-        const volume = 0.3 * Math.max(0, Math.min(1, +store.get("volRadio", 0.8) || 0));
+        const volume = 0.3 * Math.max(0, Math.min(1, +store.get("volRadio", RADIO_MIX) || 0));
         if (battlePreview.play(key, volume)) battleNote(key.replace(":", " ") + ".");
         else battleNote("The sample could not play. Check sound and voice volume.");
       };
@@ -831,7 +837,7 @@ var AudioPanel = (() => {
     $("as-rvol").oninput = (e) => {
       radioVol = G.radio ? G.radio.setVolume((+e.target.value || 0) / 10) : (+e.target.value || 0) / 10;
       store.set("volRadio", radioVol);
-      setText($("as-rvol-v"), String(Math.round(radioVol * 10)));
+      paintMixVolume($("as-rvol"), $("as-rvol-v"), radioVol, RADIO_MIX);
     };
     SettingRow.wire("as-sound", { values: ONOFF, read: () => (sfxOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setSfx(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSfx(false); } } });
@@ -846,12 +852,12 @@ var AudioPanel = (() => {
     $("as-mvol").oninput = (e) => {
       musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
       store.set("volMusic", musicVol);
-      setText($("as-mvol-v"), String(Math.round(musicVol * 10)));
+      paintMixVolume($("as-mvol"), $("as-mvol-v"), musicVol, MUSIC_MIX);
     };
     $("as-svol").oninput = (e) => {
       sfxVol = GameAudio.setSfxVolume((+e.target.value || 0) / 10);
       store.set("volSfx", sfxVol);
-      setText($("as-svol-v"), String(Math.round(sfxVol * 10)));
+      paintMixVolume($("as-svol"), $("as-svol-v"), sfxVol, SFX_MIX);
     };
     /* ENGINE TONE — profiles, tuner sliders and layer switches over the
        manufacturer voice. The engine owns the clamping and the timbre contract

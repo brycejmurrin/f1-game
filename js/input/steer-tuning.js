@@ -4,7 +4,7 @@
 const SteerTuning = (function () {
   "use strict";
 
-const PACE_MIN = 1, PACE_MAX = 19, PACE_REF = 14, PACE_DEF = 11, PACE_STEP = 1.06;
+const PACE_MIN = 1, PACE_MAX = 19, PACE_REF = 14, PACE_DEF = 17, PACE_STEP = 1.06;
 function paceFromSlider(v)   { return Math.pow(PACE_STEP, v - PACE_REF); }   // 0.469..1.338, v14 = 1.0
 //
 // This is the only code in the game that OVERWRITES a setting the player chose,
@@ -105,8 +105,8 @@ const STEER_MIGRATIONS = [
   // the player's ground speed away without saying anything.
   //
   // A store with NO pace key is left alone on purpose: it has never been chosen,
-  // so the new default (notch 11 = 0.840) applies through st.get() and there is
-  // nothing to migrate. Writing 11 here would be indistinguishable on disk from a
+  // so the current default applies through st.get() and there is nothing to
+  // migrate. Writing a notch here would be indistinguishable on disk from a
   // deliberate choice and would pin that player to today's default forever.
   //
   // steerSmooth is deliberately NOT touched: SMOOTHING keeps its 1..10 notches and
@@ -294,14 +294,15 @@ function speedRefFromSlider(v) { return 15 + (75 - 15) * (v - 1) / 9; } // 15..7
 // tidy round number by accident: it is the reference scale vTop()/vStd() are
 // defined against, several specs pin it, and __apex.setPhysics({pace:1}) must
 // keep meaning what it means. An anchored grid gets that for free.
-// The DEFAULT is notch 11 = 0.840, independent of the grid's shape.
+// The default and the display's 100% are notch 17. The internal anchor stays
+// at notch 14 so every saved notch keeps its original ground speed.
 // PACE_MIN..PACE_STEP and paceFromSlider live at module scope (the import migration below needs them).
 // The readout is a PERCENTAGE OF REFERENCE PACE, and deliberately NOT km/h:
 // dashKph divides PACE back out on purpose, so the dial reads 0 -> ~259 km/h at
 // EVERY setting and a km/h label here would contradict the instrument beside it.
 // A bare notch number is no better — "some sliders I don't even understand" is
-// what a unitless 1..19 buys you. 100 % is the reference, 84 % is the default.
-function paceLabel(v) { return Math.round(paceFromSlider(v) * 100) + "%"; }
+// what a unitless 1..19 buys you.
+function paceLabel(v) { return Math.round(Math.pow(PACE_STEP, v - PACE_DEF) * 100) + "%"; }
 // DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
 // v1 is a true ZERO — the car does exactly, and only, what the driver asks.
 // A floor above zero means the assist always steers part of every corner with
@@ -407,7 +408,7 @@ const PRESETS = {
   // missing keys, and an explicit default must still read as STANDARD.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 5, brakeCue: 1, audioCues: 1, gripSteer: 1 },
+              adaptiveButtons: 6, brakeCue: 1, audioCues: 1, gripSteer: 1 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 4, brakeCue: 4, audioCues: 1, gripSteer: 1 },
@@ -471,6 +472,12 @@ function paintRow(id, v, label) {
   const el = $(id), out = $(id + "-v");
   if (el) el.value = v;
   if (out) out.textContent = label === undefined ? String(v) : label;
+}
+function paintPace(v) {
+  const input = $("pm-pace"), label = paceLabel(v);
+  input.value = v;
+  input.setAttribute("aria-valuetext", label);
+  $("pm-pace-v").textContent = label;
 }
 
 function applyPreset(name) {
@@ -576,9 +583,9 @@ function applySteerTuning() {
   const lock    = clamp(store.get("steerLock",  7), SLIDER_MIN, SLIDER_MAX);
   const spdsteer = clamp(store.get("steerSpeed", 7), SLIDER_MIN, SLIDER_MAX);
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
-  const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
+  const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
-  const adapt   = clamp(store.get("adaptiveButtons", 5), SLIDER_MIN, SLIDER_MAX);
+  const adapt   = clamp(store.get("adaptiveButtons", PRESETS.standard.adaptiveButtons), SLIDER_MIN, SLIDER_MAX);
   // CAR WEIGHT is the ONE slider of the shipped profile that is device-aware,
   // and it is device-aware because it collides with a measurement rather than
   // with a taste. 10 (YAW_INERTIA 1.0) is what they drive on a PHONE, where the
@@ -680,7 +687,7 @@ function applySteerTuning() {
       ? DrivingCues.labelOf(audioCues) : (audioCues <= 1 ? "OFF" : "CUES " + audioCues);
   }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
-  $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
+  paintPace(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
   paintRow("pm-tiltcurve", tiltCurve);
   paintRow("pm-touchcurve", touchCurve);
@@ -778,7 +785,7 @@ $("pm-help").oninput = (e) => {
 };
 $("pm-pace").oninput = (e) => {
   const v = clamp(+e.target.value, PACE_MIN, PACE_MAX); store.set("pace", v);
-  G.PACE = paceFromSlider(v); $("pm-pace-v").textContent = paceLabel(v);
+  G.PACE = paceFromSlider(v); paintPace(v);
 };
 $("pm-line").oninput = (e) => {
   const v = clamp(+e.target.value, LINE_MIN, LINE_MAX); store.set("raceLine", v);
@@ -911,6 +918,6 @@ applySteerTuning();
 return { applySteerTuning };
 }
 
-return { create, migrateValues, STEER_SCHEMA };
+return { create, migrateValues, STEER_SCHEMA, defaultPace: paceFromSlider(PACE_DEF) };
 })();
 Object.freeze(SteerTuning);

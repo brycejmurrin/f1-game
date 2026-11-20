@@ -47,8 +47,10 @@ shape is easy to miss because the lint only sees `.speed`: A16's launch-smoke
 defect was reached sideways, by flagging the speed window on the same line.
 
 **The slider is GEOMETRIC: `pace(n) = 1.06^(n - 14)` over 19 notches**, a uniform
-6 % per notch, defaulting to notch 11 (0.840) with the 1.0 reference exactly
-reachable on notch 14. It used to be piecewise linear with steps of 14-25 % below
+6 % per notch. The display reads `100 × 1.06^(n - 17)` percent rounded to a whole
+number. Notch 17 is the default and shows 100%. Notch 14 still gives the internal
+physics multiplier 1.0, and all saved notches keep their physical speeds.
+The original piecewise-linear grid had steps of 14-25 % below
 the default and 4.8-6 % above, so the half of the slider a player wanting a
 calmer car had to use was the half with no resolution. Pace is a multiplicative
 scale, so a ratio is its natural unit — which is also why the v2→v3 store regrid
@@ -68,7 +70,7 @@ closing-speed margins of 1/2/3 m/s and the 72 m mirror cap in
 are pace-scaled. (4) The speed-scaled yaw damp (`SPEED_YAW_LO`/`HI`, 50/65 m/s in
 `js/physics/player-forces.js`) compares the PACE-scaled world speed with raw
 literals; scaling it is bit-identical at pace 1 but moves three of the four
-characterization scenarios at the default slider (pace 0.84), so it stays as
+characterization scenarios at the original slider default (pace 0.84), so it stays as
 tuned (the verified patch is parked on `handover/bughunt-10.1-speedyawdamp`).
 None of these is a defect to chase; a new reader of any of them
 should treat the raw number as the intended tuning.

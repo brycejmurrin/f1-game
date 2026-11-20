@@ -386,8 +386,8 @@ const TitleLayout = (function () {
     else ScreenLooks.endPeek();
   }
 
-  const pctTxt = (k, n) => {
-    if (k === "size") return n + "%";
+  const pctTxt = (k, n, part) => {
+    if (k === "size") return Math.round(n * 10000 / shipped(shape())[part].size) / 100 + "%";
     if (k === "width") return n ? String(n) + (usesWidthSplit() ? "" : "%") : "AUTO";
     if (!n) return "CENTRE";
     if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
@@ -433,7 +433,7 @@ const TitleLayout = (function () {
 
     body.appendChild(el("p", { className: "adv-help", textContent:
       "Move and size the title screen's buttons, title and car drawing. Landscape and portrait keep a layout each; " +
-      "these controls edit the shape the screen is in now. Hold a slider to see the title screen through this page." }));
+      "100% SIZE is the factory size for that piece in the current orientation. Hold a slider to see the title screen through this page." }));
     const shapeLine = el("p", { id: "pm-tl-shape", className: "adv-help", attrs: { "aria-live": "polite", "data-help": "keep" } });
     body.appendChild(shapeLine);
 
@@ -450,7 +450,7 @@ const TitleLayout = (function () {
         let n = layout[part][k];
         if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, Number(inp.min)); }
         inp.value = String(k === "width" && !n ? min : n);
-        out.textContent = pctTxt(k, n);
+        out.textContent = pctTxt(k, n, part);
         inp.setAttribute("aria-valuetext", k !== "width" ? out.textContent
           : !n ? "Auto, use automatic width"
           : usesWidthSplit() ? n + " on the column split scale" : n + " percent of screen width requested");
@@ -715,7 +715,7 @@ const TitleLayout = (function () {
     const E = ed.els;
     if (!E || !ed.on) return;
     const p = current()[ed.sel];
-    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
+    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + pctTxt("size", Math.max(p.size, sizeMin(ed.sel)), ed.sel) + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
       (ed.sel === "btns" ? " · " + (!p.width ? "AUTO WIDTH"
         : (usesWidthSplit() ? "WIDTH SETTING " : "WIDTH REQUEST ") + pctTxt("width", p.width)) : "");
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";

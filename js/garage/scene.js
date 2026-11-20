@@ -719,7 +719,7 @@ function litRig(src) {
 }
 // ── lighting MOODS (the setup sheet's LIGHTING row) ─────────────────────────
 // "shipped" is the identity — every factor 1, nothing overridden — so the
-// rig is the shipped one unless a mood is chosen: GarageScene.setMood(id) (the
+// base rig remains available alongside the default Showroom mood: GarageScene.setMood(id) (the
 // picker; saves apex26.garageMood), mood(id), or the URL ?garageMood=<id>. Gains scale the rig
 // GROUPS of FIXTURES (key 0-1, fill 2-5, wash 6-9), the team dado uplights
 // and the night gantry; sky/amb/ambG (a number or per-channel rgb) scale the skylight and hemisphere ambient
@@ -788,10 +788,11 @@ const MOODS = {
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
 const _bdBase = BACKDROP.slice();
-let moodId = "shipped", MD = Object.assign({}, MOOD_DEF);
+const DEFAULT_MOOD = "showroom";
+let moodId, MD;
 function mood(id) {
   if (id === undefined) return moodId;
-  const m = MOODS[id] ? id : "shipped";
+  const m = Object.prototype.hasOwnProperty.call(MOODS, id) ? id : DEFAULT_MOOD;
   moodId = m; MD = Object.assign({}, MOOD_DEF, MOODS[m]);
   for (let k = 0; k < 3; k++) {
     const ch = (v) => (Array.isArray(v) ? v[k] : v), am = ch(MD.amb);
@@ -820,9 +821,13 @@ function fixGain(i) { return i < 2 ? MD.key : i < 6 ? MD.fill : MD.wash; }
 function fixTint(i, t) { return (i < 2 ? MD.keyTint : i < 6 ? MD.fillTint : MD.washTint) || t; }
 {
   let id = null;
-  try { id = (typeof location !== "undefined" && new URLSearchParams(location.search).get("garageMood"))
-    || (typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageMood")); } catch (_) { /* storage blocked */ }
-  if (id) mood(id);
+  try {
+    const query = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageMood");
+    id = query || (typeof GameStore !== "undefined" && GameStore.store
+      ? GameStore.store.raw("garageMood")
+      : typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageMood"));
+  } catch (_) { /* storage blocked */ }
+  mood(id || DEFAULT_MOOD);
 }
 // Column-major T * Ry(ay) * Rz(az), written into `out`.
 function mk(out, tx, ty, tz, ay, az) {

@@ -2,7 +2,7 @@
 // Integration coverage for js/ui/scale.js, js/ui/screen-looks.js and js/ui/title-layout.js.
 // Compare a clean phone with the appearance and size settings from the November 20
 // export at the same viewport and safe-area insets. Compare painted boxes within
-// one CSS pixel for rounding. The HUD button size remains a personal preference.
+// one CSS pixel for rounding. Both contexts use the exported phone button size.
 import { rotateIPhone15 } from "../helpers/iphone15.mjs";
 import { test, expect } from "@playwright/test";
 import { openBrycePhone, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
@@ -22,7 +22,7 @@ const MENUS = [
   { id: "designer", open: async (p) => { await p.click("#mb-designer"); await p.waitForSelector("#trackdesigner:not([hidden])"); await p.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen() && !TrackDesigner.state().pending, null, { polling: 100 }); },
     ids: ["td-close", "td-title", "td-tab-design", "td-tab-library", "td-tab-howto"] },
 ];
-const HUD_IDS = ["btn-throttle", "btn-brake", "btn-aero", "pausebtn"];   // not the steer pad: BUTTON 143.25 is his own
+const HUD_IDS = ["btn-throttle", "btn-brake", "btn-aero", "pausebtn"];
 const PAUSE_IDS = ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-recover", "pm-quit"];
 
 /** In-page: painted box of each id as [left, top, width, height, font px], or null when it is not painted. */
@@ -144,7 +144,7 @@ test.describe("a clean phone profile paints what the owner's 2026-11-20 appearan
     const his = await measure(browser, baseURL, storeEntries(ownerStore({ file: EXPORT_FILE }).store));
 
     expect(his.vars, "his export reached the page").toEqual({ ui: "0.7", btn: "1.4325", hud: "1" });
-    expect(clean.vars, "a clean phone ships his UI SIZE; BUTTON stays at the touch default").toEqual({ ui: "0.7", btn: "1.25", hud: "1" });
+    expect(clean.vars, "a clean phone ships the exported UI and button scales").toEqual({ ui: "0.7", btn: "1.4325", hud: "1" });
     expect(clean.stored, "and a clean profile stored none of them: they are defaults, not writes").toEqual([]);
 
     // #5578: the suite runs MOTION REDUCED (playwright.config.js reducedMotion), where the title's doors must still hand

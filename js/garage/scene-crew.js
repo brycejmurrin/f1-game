@@ -26,14 +26,14 @@ const GarageCrew = (function () {
 
   /* Crew LOOKS: alternative crews, picked on the setup sheet's CREW row
    * (GarageCrew.setLook(id), saved as apex26.crewLook).
-   * "classic" (the default) is two mechanics and the lollipop man, standing.
+   * "classic" is two mechanics and the lollipop man, standing.
    * "sculpted" draws GarageCrewMotion articulated guides (no baked look mesh);
    * pitstop / workshop / welcome bake posed figures + props into ONE static
    * mesh in bay metres, plus the lollipop. */
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
   const RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];
-  let look = "classic", lookMesh = null, motionRig = null, serviceRig = null, choreoProps = null;
+  let look = "pitstop", lookMesh = null, motionRig = null, serviceRig = null, choreoProps = null;
   const J0 = { foot: [0.11, 0.05, 0.03], knee: [0.11, 0.50, 0.02], hip: [0.10, 0.92, 0], pelvis: [0, 0.95, 0],
     chest: [0, 1.32, 0], neck: [0, 1.46, 0], head: [0, 1.62, 0], shoulder: [0.22, 1.38, 0],
     elbow: [0.26, 1.10, 0], hand: [0.27, 0.84, 0.03] };
@@ -283,7 +283,12 @@ const GarageCrew = (function () {
   }
   function init(g) {
     if (g !== gfx) { free(); gfx = g; }
-    try { const v = typeof localStorage !== "undefined" && localStorage.getItem("apex26.crewLook"); if (v && LOOKS.includes(v)) look = v; } catch (_) { /* no storage */ }
+    try {
+      const saved = typeof GameStore !== "undefined" && GameStore.store
+        ? GameStore.store.raw("crewLook")
+        : typeof localStorage !== "undefined" && localStorage.getItem("apex26.crewLook");
+      if (LOOKS.includes(saved)) look = saved;
+    } catch (_) { /* no storage */ }
   }
   /** The garage CREW picker (and the dev hook): one of LOOKS, saved; returns the look in force. */
   function setLook(id) {

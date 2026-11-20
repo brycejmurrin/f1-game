@@ -24,7 +24,8 @@ const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 
 let g = null;
 before(async () => {
-  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
+  // Keep the speed-to-steering relationship used for these measured bounds.
+  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
 });
 after(() => { if (g) g.close(); });

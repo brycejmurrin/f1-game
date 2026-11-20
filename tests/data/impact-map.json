@@ -10265,6 +10265,7 @@
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/night-washout-presets.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -10388,6 +10389,7 @@
         "tests/unit/light-store-cond-layer.test.mjs"
       ],
       "reset": [
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -19903,6 +19905,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "reset": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
@@ -20437,6 +20440,7 @@
       ],
       "reset": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],

@@ -229,11 +229,16 @@ const HudArrange = (() => {
       bar.style.transform = "none";
       bar.style.left = slot.l + "px"; bar.style.top = slot.t + "px";
     }
+    function sizeLabel(id, size) {
+      const relative = HudLayout.relativeSize(size, id, context.set, context.profile);
+      const painted = paintedSize(size, elOf(id)?.currentCSSZoom);
+      return relative === painted ? relative + "%" : relative + "% · " + painted + "% painted";
+    }
     function paintBar(clash, message, rects) {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? paintedSize(cur.s, elOf(selected)?.currentCSSZoom) + "%" : "";
+      nameEl.textContent = cur ? sizeLabel(selected, cur.s) : "";
       nameEl.hidden = !cur;
       const visibility = selected && HudLayout.visibility(selected);
       const off = visibility && visibility.value === "off";
@@ -319,7 +324,7 @@ const HudArrange = (() => {
       const p = pending; pending = null;
       if (!p) return;
       const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
-      if (nameEl && e && p.id === selected) nameEl.textContent = paintedSize(e.s, elOf(p.id)?.currentCSSZoom) + "%";
+      if (nameEl && e && p.id === selected) nameEl.textContent = sizeLabel(p.id, e.s);
     }
     function flush() { paint(); HudLayout.commit(); }
     /* Bind queued edits to the layout visible when the gesture started. */

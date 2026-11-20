@@ -101,7 +101,7 @@ function fakeEl() {
   };
 }
 
-function load(stored = {}) {
+function load(stored = {}, phone = false) {
   const written = Object.assign({}, stored);
   const els = {};
   const doc = {
@@ -113,12 +113,39 @@ function load(stored = {}) {
   const ctx = {
     console,
     document: doc,
+    HudElements: { phone: () => phone },
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   return { H: ctx.HudLayout, written, els };
 }
+
+test("standard phone placements apply when fresh, respect explicit empty sets, and reset per camera", () => {
+  const { H, written, els } = load({}, true);
+  assert.equal(H.get("tower", "other").s, 80);
+  assert.equal(H.get("tower", "helmet").s, 70);
+  assert.equal(H.get("tower", "helmet", "minimal").s, 100);
+  assert.equal(H.get("tower", "cockpit").s, 100);
+  assert.equal(els[".hud-top"].hasAttribute("data-hl-v4"), true);
+  assert.equal(H.isShipped(undefined, "all"), true);
+  assert.equal(H.presetOf("other"), "shipped");
+  assert.deepEqual(written, {});
+  H.set("tower", { s: 122 }, "other");
+  assert.equal(H.get("tower", "helmet").s, 70);
+  assert.equal(H.isShipped("other"), false);
+  H.resetEl("tower", "other");
+  assert.equal(H.get("tower", "other").s, 80);
+  assert.equal(written.hudLayout, null);
+
+  const explicit = load({ hudLayout: { v: 4, standard: { other: {}, helmet: {} } } }, true);
+  assert.equal(explicit.H.get("tower", "other").s, 100);
+  assert.equal(explicit.H.isShipped("other"), false);
+  explicit.H.resetSet("other");
+  assert.equal(explicit.H.get("tower", "other").s, 80);
+  assert.equal(explicit.H.get("tower", "helmet").s, 100);
+  assert.equal(load().H.get("tower", "other").s, 100);
+});
 
 test("untouched: nothing stored, no element carries data-hl", () => {
   const { H, written, els } = load();
@@ -1429,7 +1456,7 @@ test("only the unplaced touch broadcast map clears pedals without resizing or sa
 
 // Real SettingRow + HudElements + HudLayout, including the original preference
 // rows. A saved JSON change alone must not masquerade as a live game change.
-function visibilityEditor() {
+function visibilityEditor(phone = false) {
   const dom = makeDom({ readyState: 'loading' }), document = dom.document;
   const lookup = document.getElementById, create = document.createElement;
   document.getElementById = id => dom.has(id) ? lookup(id) : null;
@@ -1446,6 +1473,7 @@ function visibilityEditor() {
   const ctx = { document, GameStore: { store }, setTimeout: fn => timers.push(fn),
     Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } } };
   ctx.window = ctx;
+  if (phone) Object.assign(ctx, { innerWidth: 852, innerHeight: 393, matchMedia: () => ({ matches: true }) });
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/setting-row.js'), 'utf8'), ctx, { filename: absSrc("js/ui/setting-row.js") });
   for (const [id, key, initial] of [['map', 'hudMapVis', 'on'], ['gaps', 'hudGapsVis', 'on'], ['mirror', 'hudMirror', 'auto']]) {
@@ -1460,6 +1488,19 @@ function visibilityEditor() {
   return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes, ctx, dom,
     flush() { while (timers.length) timers.shift()(); } };
 }
+
+test("HUD size readout uses the selected element's factory scale and keeps exact numeric input", () => {
+  const e = visibilityEditor(true);
+  e.choose("pm-hl-set-sel", "helmet");
+  e.choose("pm-hl-el-sel", "tower");
+  const size = e.document.getElementById("pm-hl-s"), readout = size.parentNode.children[0].children[1];
+  assert.equal(size.value, "70");
+  assert.equal(readout.textContent, "100% of default");
+  size.value = "35";
+  e.dom.dispatch(size, { type: "change" });
+  assert.equal(readout.textContent, "50% of default");
+  assert.equal(e.H.get("tower", "helmet").s, 35);
+});
 
 test('numeric HUD drafts stay readable and commit once when moving between fields', () => {
   const e = visibilityEditor(), previews = [];
