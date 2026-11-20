@@ -77,7 +77,7 @@ const RaceInsights = (function () {
         }
       }
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
-      drill = { mode, time: G.raceT, sector: G.sectorIdx, startProg: c.prog, lap: c.lap,
+      drill = { mode, context: contextKey(), time: G.raceT, sector: G.sectorIdx, startProg: c.prog, lap: c.lap,
         changes: 0, side: 0, brakeSeen: false, brakeProg: c.prog, brakeSpeed: 0, slowing: 0, held: 0, turnSeen: false,
         phase: 0, turnRun: 0, straightRun: 0, minSpeed: Infinity, exitSpeed: 0, peakDecel: 0, launchT: null, lapStart: null, lapDone: false,
         place0: placeOf(c), placeNow: placeOf(c), startProg0: c.prog,
@@ -100,8 +100,9 @@ const RaceInsights = (function () {
       for (const o of cars) if (o !== c && !o.retired && (o.prog || 0) > (c.prog || 0)) ahead++;
       return ahead + 1;
     }
-    const masteryKey = (mode, sectorIdx) => {
-      const key = G.records.key() + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
+    const contextKey = () => (G.timeTrial && G.records.key()) || G.records.current();
+    const masteryKey = (mode, sectorIdx, context) => {
+      const key = (context === undefined ? contextKey() : context) + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
       if (mode !== "sector") return key;
       const splits = G.track && G.track.def && G.track.def.sectors || [1 / 3, 2 / 3];
       return key + ":splits:" + JSON.stringify(splits);
@@ -172,7 +173,7 @@ const RaceInsights = (function () {
       boundedPush(attempts[mode] || (attempts[mode] = []), { time: G.raceT, clean: drill.clean, score, text, reason: drill.reason }, 10);
       let improved = false;
       if (drill.clean && mode !== "free") {
-        const entries = masteryEntries(), key = masteryKey(mode, drill.sector);
+        const entries = masteryEntries(), key = masteryKey(mode, drill.sector, drill.context);
         const found = entries.find(e => e.key === key);
         improved = !!(found && Number.isFinite(found.best) && score < found.best);
         const best = found && Number.isFinite(found.best) ? Math.min(found.best, score) : score;
