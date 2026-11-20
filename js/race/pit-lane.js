@@ -86,8 +86,8 @@ var PitLane = (function () {
     const tt = () => !!G.timeTrial;
     // wear-off TT: no service (a TT with wear on stops as a race does)
     const ttStop = () => tt() && !enabled();
-    /** #5878 (decision A): DAMAGE HANDLING with wear off opens the lane for a REPAIR-ONLY stop (Damage
-     *  repairs on the release edge); no tyres are fitted, and strategy stays on enabled(). */
+    /** #5878 (decision A): DAMAGE HANDLING with wear off opens the lane for a REPAIR-ONLY stop (the release
+     *  edge repairs it); no tyres are fitted, and strategy stays on enabled(). */
     const damageOn = () => typeof DamageHandling !== "undefined" && DamageHandling.isEnabled();
     function laneOpen() { return enabled() || !!(z() && (tt() || damageOn())); }
     // A stop that fits no tyres: a wear-off Time Trial or a repair-only stop.
@@ -331,8 +331,7 @@ var PitLane = (function () {
      *  cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
      *  marker on the map and the words on the HUD can never disagree. */
     function worthStopping(c) {
-      if (!c || c.retired || c.finished) return false;
-      if (!enabled()) return laneOpen() && !tt() && damageOn() && typeof Damage !== "undefined" && Damage.state(c).shown;
+      if (!enabled() || !c || c.retired || c.finished) return false;
       const wear = G.tyres.spent(c);
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
