@@ -3812,15 +3812,6 @@ none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_ST
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
 
-## 2026-11-20 — #5997 + #5991: eagerBytes +955
-
-`(tree) eagerBytes` 7951972 → **7952927** (+955). Deliberate
-raise: #5997 adds `ContactGeometry.pitWallX` / `pitWallAim` (eager `js/physics/contact-geometry.js`)
-and one AI-only call in game.js (net zero lines) so non-pitting AI aim clear of the pit / exit wall (pit-window wall
-contacts per 180 s: Mosport 6.75 → 1.25, Mont-Tremblant 11.4 → 4.25, Baku 4.25 → 0.88, 8 seeds);
-#5991 adds a once-per-line log and tally for unrecorded radio lines (eager `js/audio/radio-voice.js`).
-Both compacted before the raise (1712 → 955 bytes). Needs Bryce's `ratchet-raise`.
-
 ## Boot wall — `eagerScripts` / `eagerBytes` (from `tests/unit/boot-load-budget.test.mjs`)
 
 Moved verbatim from the test's `MAX_EAGER_SCRIPTS` / `MAX_EAGER_BYTES` comments on 2026-11-19, when the two ceilings
