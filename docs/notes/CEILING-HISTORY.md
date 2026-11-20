@@ -1,5 +1,15 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-20 — PR #5296 (claude/audit-fix-hud-perf-covers): eagerCodeBytes for the same W22 growth
+
+`(tree) eagerCodeBytes` 4018312 → **4019863** (+1551). The tip retired `eagerBytes` for
+`eagerCodeBytes` (stripped code, #5975), so this branch's `eagerBytes` +1225 fragment
+(the 2026-11-19 entry below) is dropped and replaced by this one. Same code, measured on
+the merge of tip 322c63a3: the W22 stall/readback covers (race-entry-profile, governor,
+loop-health), onboard `resetControls`, css-zoom's ancestor zoom product, tv-graphics and
+broadcast fastest-lap, sporting-regs `blueFlagCar`; no new eager module. Extraction was
+declined for a 142-file combined PR (orchestrator, 2026-11-20 12:59Z, option A).
+
 ## 2026-11-19 — PR #5296 (claude/audit-fix-hud-perf-covers): audit W22/W25/W32 fixes on eager scripts
 
 `(tree) eagerBytes` 8015286 → **8016511** (+1225). Deliberate raise past the absorb; the
