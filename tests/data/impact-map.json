@@ -19822,14 +19822,14 @@
     },
     "js/ui/results-story.js": {
       "render": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/podium-beat.test.mjs"
       ],
       "summary": [
         "tests/unit/career-experience.test.mjs",
         "tests/unit/results-story.test.mjs"
       ],
       "*": [
-        "tests/unit/podium-beat.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ]
     },

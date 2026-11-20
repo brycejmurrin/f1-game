@@ -1426,3 +1426,22 @@ test("storm introductions warn of heavy rain and preserve the existing wet circu
   assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
   assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
 });
+
+// Clean-room audit fix 58: the intro line is "<km> kilometres, <n> corners." but
+// the packs record only "<km> kilometres", so the recorded voice skipped it.
+test("the recorded announcer voices the circuit-length line from the recorded length", () => {
+  const pack = JSON.parse(read("assets/voice/george-announcer.json"));
+  const keys = new Set(JSON.stringify(pack).match(/@line:[^"]+/g));
+  const key = (t) => "@line:" + t.toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
+  const G = { soundOn: true, radio: { recordedVoice: () => "george", volume: () => 0.8, pack: {
+    ensure() {}, ready: () => true, stop() {},
+    plan: (id, text) => keys.has(key(text)) ? { secs: 1 } : null,
+  } } };
+  const sb = vm.createContext({ Promise, Date, setTimeout, clearTimeout, document: { hidden: false } });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
+  const a = sb.RecordedAnnouncer.create(G);
+  const lengths = [...keys].map((k) => /^@line:(\d+\.\d{3}) kilometres$/.exec(k)).filter(Boolean).map((m) => m[1]);
+  const silent = lengths.filter((km) => !(a.readMs([km + " kilometres, 15 corners."]) > 0));
+  // Every recorded length is voiced (the pack holds many); an unrecorded one stays on the card.
+  assert.deepEqual([lengths.length > 10, silent, a.readMs(["9.999 kilometres, 15 corners."])], [true, [], 0]);
+});

@@ -40,7 +40,7 @@ test("replacing the results host disconnects the prior spoken-card observer", ()
   });
   // Absolute filename: tip vmSrcLoads is at ceiling; a missing filename would raise it.
   vm.runInContext(
-    "var saidFor = null, saidWatch = null, saidMo = null, sayMo = null;\n" + SPOKEN + "\n" + SAY,
+    "var saidFor = null, saidWatch = null, saidMo = null, saidPending = null;\n" + SPOKEN + "\n" + SAY,
     ctx,
     { filename: absSrc("js/ui/results-sheet.js") },
   );
@@ -71,7 +71,7 @@ test("a results screen speaks only its own race, however many were quit during t
     disconnect() { this.alive = false; }
   }
   const ctx = vm.createContext({ MutationObserver, LiveRegion: { say(t) { said.push(t); } }, setTimeout: (fn) => fn(), Array, String });
-  vm.runInContext("var saidFor = null, saidWatch = null, saidMo = null, sayMo = null;\n"
+  vm.runInContext("var saidFor = null, saidWatch = null, saidMo = null, saidPending = null;\n"
     + fnSource(SRC, "function spokenText(n) {") + "\n" + fnSource(SRC, "function sayCards(sheet, table, key) {"),
   ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const sheet = { hidden: true };
