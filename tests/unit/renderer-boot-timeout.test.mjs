@@ -88,29 +88,34 @@ test("an XR capability probe that never settles does not hold the boot", async (
   assert.ok(h.warns.some((m) => /XR capability probe gave no answer/.test(m)));
 });
 
-// #5599: a requestAdapter() that never answers (the eval-time kick AND the probe) costs the unset default exactly the
-// probe's 4 s cap, then GLX. No other cap may be needed to finish: the 4000 ms timer is the only one fired here, and
-// the TLX group is never fetched. (CI's ~75 s boots were a main thread the browser blocked, which no timer can cap;
-// the spec-side cure is shipped-defaults.spec.js's own browser per test.)
-test("unset default: a requestAdapter() that never answers binds GLX after the 4 s probe cap alone", async () => {
+// #5599: a requestAdapter() that never answers (the eval-time kick AND the probe) is bounded by caps alone. Since #5699 a
+// slow adapter on the unset default still gets TLX's own try after the probe's 4 s cap; a TLX create() that then hangs
+// too (it would ask the GPU process itself) is cut by the step cap and GLX takes the canvas. Each wait is one armed
+// cap, armed in turn, and none is left live. (CI's ~75 s boots were a main thread the browser blocked, which no timer
+// can cap; the spec-side cure is shipped-defaults.spec.js's own browser per test.)
+test("unset default: a requestAdapter() that never answers reaches GLX on the probe cap, then TLX's step cap", async () => {
   let asks = 0;
-  const h = boot({ stored: null, requestAdapter: () => { asks++; return new Promise(() => {}); }, gfxCreate: async () => { throw new Error("create must not run"); } });
+  const h = boot({ stored: null, requestAdapter: () => { asks++; return new Promise(() => {}); }, gfxCreate: () => new Promise(() => {}) });
   const started = h.rb.start();
   let done = false;
   started.then(() => { done = true; });
   await settle();
   assert.equal(done, false, "premise: start() waits on the probe");
-  assert.deepEqual(h.timers.filter((t) => t.live && t.ms >= 1000).map((t) => t.ms), [4000], "the probe's cap is the only wait armed");
+  const live = () => h.timers.filter((t) => t.live && t.ms >= 1000).map((t) => t.ms);
+  assert.deepEqual(live(), [4000], "the probe's cap is the only wait armed");
   h.fire(4000);
+  await settle();
+  assert.equal(done, false, "TLX gets its own try after the probe cap (#5699)");
+  assert.deepEqual(h.calls, ["tlx.js"], "TLX's group is fetched once, GLX not yet touched");
+  assert.deepEqual(live(), [BOOT_STEP_MS], "the hung create() is bounded by the step cap alone");
+  h.fire(BOOT_STEP_MS);
   const r = await started;
   assert.equal(r.gfx !== null, true, "GLX bound");
   assert.equal(r.bound, false);
-  assert.deepEqual(h.calls, ["GLX.init"], "TLX's group is never fetched; GLX takes the canvas");
-  assert.equal(asks, 1, "the eval-time request is the probe's: the GPU process is asked once");
+  assert.deepEqual(h.calls, ["tlx.js", "GLX.init"], "GLX takes the canvas");
+  assert.equal(asks, 1, "the eval-time request is the probe's: boot asks the GPU process once");
   assert.equal(h.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() gave no answer in 4 s");
-  assert.equal(h.ss.get("apex26.gfxBound"), "webgl2");
-  assert.equal(h.ls.get("apex26.gfxBootBound"), "webgl2");
-  assert.deepEqual(h.timers.filter((t) => t.live && t.ms >= 1000).map((t) => t.ms), [], "no cap left live");
+  assert.deepEqual(live(), [], "no cap left live");
 });
 
 test("steps that settle in time are untouched and leave no live timer", async () => {
