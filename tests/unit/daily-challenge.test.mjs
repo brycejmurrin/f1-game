@@ -301,7 +301,9 @@ test("a streak left by a clock set ahead moves again once the clock is back", ()
   now = "2026-11-21T12:00:00";
   d.open("2026-11-21"); d.record(81);
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-11-21" }, "the real day takes the streak back");
-  assert.equal(d.data().days["2027-11-20"], undefined, "the future day is pruned");
+  // #5943: a future-dated day cannot be told from real days after a clock set back, so it stays (one key);
+  // pruning it by the device's "tomorrow" deleted real history.
+  assert.equal(d.data().days["2027-11-20"].best, 80, "the future-dated day is kept, not pruned by the device clock");
   now = "2026-11-22T12:00:00";
   d.open("2026-11-22"); d.record(82);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" }, "and counts on from there");
@@ -310,6 +312,43 @@ test("a streak left by a clock set ahead moves again once the clock is back", ()
   d.open("2026-11-21"); d.record(80);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" });
   assert.equal(d.data().days["2026-11-22"].best, 82);
+  d.stop();
+});
+
+// #5943: the prune trusted the device clock. A clock set back two days deleted every real day after its
+// "tomorrow"; one set more than HISTORY_DAYS ahead deleted the whole real history.
+test("a clock set back two days, then corrected, loses no real day", () => {
+  let now = "2026-11-18T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  for (const day of ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]) {
+    now = day + "T12:00:00"; d.open(day); d.record(80);
+  }
+  now = "2026-11-18T12:00:00";   // a dead battery: the phone wakes two days in the past
+  d.open("2026-11-18"); d.record(79);
+  for (const day of ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"])
+    assert.ok(d.data().days[day], day + " survives a play with the clock set back");
+  now = "2026-11-21T12:00:00";   // corrected
+  d.open("2026-11-21"); d.record(78);
+  assert.deepEqual(Object.keys(d.data().days).sort(), ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21"]);
+  assert.equal(d.data().days["2026-11-18"].best, 79);
+  d.stop();
+});
+
+test("a clock set far ahead keeps the real history, and the window still prunes", () => {
+  let now = "2026-11-20T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  d.open("2026-08-01"); d.record(80);   // older than the window once the 20th is played
+  d.open("2026-11-19"); d.record(80);
+  d.open("2026-11-20"); d.record(80);
+  assert.equal(d.data().days["2026-08-01"], undefined, "a real day out of the window is pruned");
+  now = "2027-03-01T12:00:00";   // 101 days ahead
+  d.open("2027-03-01"); d.record(80);
+  for (const day of ["2026-11-19", "2026-11-20", "2027-03-01"]) assert.ok(d.data().days[day], day + " kept");
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(80);
+  for (const day of ["2026-11-19", "2026-11-20", "2026-11-21"]) assert.ok(d.data().days[day], day + " kept after the clock is back");
   d.stop();
 });
 
@@ -368,11 +407,13 @@ test("record() keeps a 60-day window of history; the streak is untouched", () =>
   d.open("2026-01-01"); d.record(90);
   d.open("2026-03-01"); d.record(90);    // 59 days later: still inside the window
   assert.ok(d.data().days["2026-01-01"], "a day inside the window was dropped");
-  d.open("2026-03-03"); d.record(90);    // 61 days after the first
-  const days = Object.keys(d.data().days).sort();
-  assert.deepEqual(days, ["2026-03-01", "2026-03-03"]);
+  // #5943: the window counts from the EARLIER of the lap's day and the newest stored day, so a lap on the 3rd
+  // (61 days on) still keeps the 1st, which is 59 days before the newest stored day (Mar 1).
+  d.open("2026-03-03"); d.record(90);
+  assert.ok(d.data().days["2026-01-01"], "the window counts from the newest stored day, not the device's");
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-03-03" });
-  d.open("2026-03-04"); d.record(90);
+  d.open("2026-03-04"); d.record(90);    // now counted from Mar 3: Jan 1 is 61 days out
+  assert.deepEqual(Object.keys(d.data().days).sort(), ["2026-03-01", "2026-03-03", "2026-03-04"]);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-03-04" });
 });
 
