@@ -3341,7 +3341,7 @@
     <div class="sheet-body pane">
       <section id="htp-controls" aria-labelledby="htp-start">
         <h3 id="htp-start" class="pm-group-h">QUICK START</h3>
-        <p>Wait for lights out, accelerate, then brake before turning. Ease off the brake as you steer and add throttle as the car straightens.</p>
+        <p>Wait for lights out, accelerate, then brake before turning. Throttle held as the lights go out is a +5 s FALSE START. Ease off the brake as you steer and add throttle as the car straightens.</p>
         <div id="htp-inputs">
           <details data-input="keyboard" open>
             <summary class="adv-more-btn">KEYBOARD</summary>
@@ -3451,7 +3451,7 @@
         <dt>MUSIC &amp; SOUND</dt>
         <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND. SOURCE picks which songs play; with your own Spotify connected there, OPEN PLAYER shows what is playing and lets you change it.</dd>
         <dt id="htp-modes">RACE</dt>
-        <dd>22 cars by default, five red lights, then lights out. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1. In RACE SETTINGS, GRID sets the starting order and DUEL races one rival instead of the field.</dd>
+        <dd>22 cars by default, five red lights, then lights out; throttle held as they go out is a +5 s FALSE START. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1. In RACE SETTINGS, GRID sets the starting order and DUEL races one rival instead of the field.</dd>
         <dt>SEASON</dt>
         <dd>Race the calendar in order. Championship progress is saved between visits. SEASON SETUP picks the rounds, qualifying and sprint weekends; STANDINGS on the title menu shows the table.</dd>
         <dt>TIME TRIAL</dt>
@@ -3667,7 +3667,7 @@
     <div id="fb-rows" class="pane" role="tabpanel"></div>
     <textarea id="fb-json" readonly hidden aria-label="Exported flyby shot list"></textarea>
     <div class="sheet-foot balanced-row">
-      <button id="fb-reset" title="Throw away every edit, here and saved, and go back to the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
+      <button id="fb-reset" title="Throw away every edit, here and saved, and go back to the shipped DEFAULT shot list.">RESET</button>
       <button id="fb-copy">COPY VALUES</button>
       <button id="fb-close" class="bigbtn" title="Close the editor. Every edit is already saved — the next race flies these shots.">DONE</button>
     </div>
@@ -3841,7 +3841,6 @@
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/shared/puddles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>

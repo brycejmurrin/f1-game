@@ -401,3 +401,29 @@ test("the garage-bay cache holds typed arrays, places them identically, and a ph
   try { c.Tracks.build(def); c.trim(0); assert.equal(Pits.bayCacheSize(), 0, "a phone keeps nothing between builds"); }
   finally { c.sandbox.GLX.mobileTier = false; }
 });
+
+// #5897: the entry-line board printed "PIT LANE 80 km/h" under SPEED UNITS: MPH, beside a HUD cue
+// (pit-lane.js limitText) and a speedo that both read 50. It now speaks the player's unit.
+test("the pit-lane limit board follows SPEED UNITS (km/h by default, MPH when chosen)", () => {
+  const paint = (AppearanceOpts) => {
+    const texts = [];
+    const ctx2d = {
+      clearRect() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
+      fillRect() {}, fillText(s) { texts.push(s); }, measureText: (s) => ({ width: 10 * s.length }),
+      set fillStyle(v) {}, set font(v) {}, set textBaseline(v) {}, set textAlign(v) {}, set globalAlpha(v) {},
+    };
+    const document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d }) };
+    const LiveryTex = { paintTeamMark() {}, inkOn: () => [1, 1, 1] };
+    const P = loadPainter(Object.assign({ document, LiveryTex }, AppearanceOpts ? { AppearanceOpts } : {}));
+    const t = buildOnce(FULL);
+    t.meshes = t.meshes || {};
+    P.upload({ createTexMesh: () => ({}), createTexture: () => ({}) }, t);
+    return texts.filter((s) => s.startsWith("PIT LANE "));
+  };
+  const kmh = paint(null);
+  assert.equal(kmh.length, 1, "the FULL fixture paints its limit board");
+  const kph = Math.round(buildOnce(FULL).pit.limitKph || 80);
+  assert.equal(kmh[0], "PIT LANE " + kph + " km/h");
+  const mph = paint({ unitLabel: () => "MPH", speed: (k) => Math.round(k / 1.609344) });
+  assert.deepEqual(mph, ["PIT LANE " + Math.round(kph / 1.609344) + " MPH"]);
+});
