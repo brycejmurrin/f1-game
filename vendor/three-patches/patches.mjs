@@ -271,6 +271,26 @@ export const PATCHES = [
     }
   ]
 },
+  {
+    id: 21,
+    title: "submit hold — an application may collect command buffers and submit them in one call",
+    file: "build/three.webgpu.js",
+    why: "Every render context ends in its own queue.submit (WebGPUBackend.finishRender through the module's " +
+      "submit() helper), so a post chain of ten full-screen passes is ten submits. WebKit does not coalesce " +
+      "command buffers (bug 311598: 'Recommended practice is 1 command buffer'). While device.apexSubmitHold " +
+      "is an array, submit() appends the finished command buffer to it instead of submitting; the caller " +
+      "(tlx-post.js) clears the member and submits the array, in order, itself. Every submit in the bundle goes " +
+      "through this helper, so command-buffer order is preserved; what the caller must guarantee is that no " +
+      "queue.writeBuffer / writeTexture between two held buffers rewrites data the EARLIER one reads.",
+    upstream: "no issue or PR for batching submits found on dev as of 2026-11-18 (r187 submits per render context)",
+    edits: [
+      {
+        find: "function submit( device, command ) {\n\n\t_commandList[ 0 ] = command;\n",
+        replace: "function submit( device, command ) {\n\n\tconst hold = device.apexSubmitHold;\n\n\tif ( hold !== undefined && hold !== null ) {\n\n\t\thold.push( command );\n\t\treturn;\n\n\t}\n\n\t_commandList[ 0 ] = command;\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

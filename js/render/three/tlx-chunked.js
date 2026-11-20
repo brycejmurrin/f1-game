@@ -99,8 +99,8 @@
   // colour and mat would fall back to Float32 (~23 bytes a vertex on WebGL2 vs
   // the full 40 on WebGPU). But a 3-wide channel fits a 4-wide FORMAT with a
   // zero in w, and WebGPU lets a vertex format carry MORE components than the
-  // shader input reads.
-  // tsl-lit.js keeps reading attribute("color", "vec3"); no TSL changes.
+  // shader input reads. Only the NORMAL widens (snorm16x4, below); colour stays
+  // float32x3 (the measured cost is in packAttrSteps).
   //
   // mat is left alone: it is one scalar, float32 is already the narrowest lane
   // WebGPU offers at 1-wide, and padding it to 4 would COST 12 bytes.
@@ -233,10 +233,14 @@
       const kk = kind || "raw";
       packStats.wideBy[kk] = (packStats.wideBy[kk] || 0) + 1;
       packStats.wideLen[kk] = (packStats.wideLen[kk] || 0) + len;
-      let mx = packStats.wideMax[kk];
-      for (let i = 0; i < len; i++) {
-          if ((i & 8191) === 0) yield; const v = src[i]; if (!(mx >= v)) mx = v; }
-      packStats.wideMax[kk] = mx;
+      // The range max is a diagnostic of WHY a typed channel refused its small type; a kind-less channel (fmt24's
+      // 1- and 3-wide ones) refused nothing, so it skips the full-length scan (hunt 2026-11-18 (2) row 7).
+      if (kind != null) {
+        let mx = packStats.wideMax[kk];
+        for (let i = 0; i < len; i++) {
+            if ((i & 8191) === 0) yield; const v = src[i]; if (!(mx >= v)) mx = v; }
+        packStats.wideMax[kk] = mx;
+      }
       // Out of the small type's range is not the same as needing 32 bits.
       // Colours carry emissive up to 3.4 and MAT ids are not always whole
       // (measured 15.4), but half-float holds both with room to spare and
@@ -628,7 +632,8 @@
     // cached geometry and does not touch the index buffer.
     function mergeVisible(mesh, n, slot) {
       const vis = _visList;
-      if (!(n > 1) || !mesh || !mesh.chunks) return null;
+      // A lone chunk draws on its own geometry; a lone CELL (fineCells: mesh.attrs) has no geometry to draw on.
+      if (!mesh || !mesh.chunks || !(n > 1 || (n === 1 && mesh.attrs))) return null;
       const slots = mesh._tlxMv || (mesh._tlxMv = []);
       const si = slot | 0;
       let s = slots[si];

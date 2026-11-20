@@ -70,6 +70,7 @@ window.PhysicsConsts = {
   // ones sharp. Lateral grip is 1 + DOWNFORCE·(v/VMAX)², so high-speed
   // cornering firms up the way it should.
   DOWNFORCE: 0.65,     // extra grip fraction at VMAX (0 = no wings)
+  AI_WING_GRIP: 0.055,  // AI only: the wing's share of corner grip (docs/PHYSICS.md, #5791)
 
   X_VMAX_GAIN_LO: 0.055,  // top-speed gain at full X-mode, smallest wing
   X_VMAX_GAIN_HI: 0.155,  // ...and the biggest (more drag to shed)
@@ -239,10 +240,12 @@ window.PhysicsConsts = {
   // further from the limit instead of just being slower down the straight.
   // At or below 1.0 by policy: the AI never corners faster than its own grip
   // model says it can.
-  // `err` scales AiDrive.mistakeChance: the base rate is under one mistake for
-  // the WHOLE FIELD over a default 3-lap race
-  // (docs/notes/AI-FIELD-RESEARCH.md), which reads as "the AI never messes
-  // up" — true at every level including hard, where that low rate is
+  // `err` scales AiDrive.mistakeChance. The base rate was measured (2026-09-22,
+  // docs/notes/AI-FIELD-RESEARCH.md) at under one mistake for the WHOLE FIELD
+  // over a default 3-lap race; re-measured 2026-11-18 it is about 8x that at
+  // hard (0.159 per car per 100 s, tools/check/ai-field.mjs; docs/PHYSICS.md,
+  // #5783 JD1), each costing 0-0.12 s a lap, so it still reads as "the AI never
+  // messes up" at every level including hard, where a low rate is
   // deliberate (docs/PHYSICS.md "F1 22's two or three lock-ups a race was
   // what players called too many"). Since W26 the rate is linear in `err`
   // (hard:normal:easy = 1 : 1.8 : 3.5; it was ~err²). The rubber band (`band`, above) must NOT touch `err`:

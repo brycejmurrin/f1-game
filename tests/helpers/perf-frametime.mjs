@@ -2,6 +2,7 @@
  * for tests/specs/perf-frametime.spec.js (SwiftShader frame-cost regression lane).
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,8 +57,21 @@ export function summariseFrameMs(samples) {
 }
 
 /** What a frame time depends on beyond the scenario: two runs that differ in
- *  any of these measure different machines, so a ratio between them is noise. */
-export const ENV_KEYS = ["renderer", "api", "adapter", "browser", "viewport"];
+ *  any of these measure different machines, so a ratio between them is noise.
+ *  `cpu` (#5903): llvmpipe rasterises on the CPU, so the runner's CPU class IS
+ *  the measurement. GitHub hands this lane VMs of two speeds: the same sha
+ *  8bb193ac read p50 1.84x in one VM and green in another, alone and one worker
+ *  each, and the adapter string ("llvmpipe ... 256 bits") is the same on both. */
+export const ENV_KEYS = ["renderer", "api", "adapter", "browser", "viewport", "cpu"];
+
+/** The machine the browser runs on, as "<model> x<logical cores>" (Playwright
+ *  drives a local browser, so the Node host is that machine). Null when the
+ *  platform reports no model. `cpus` is injectable for the unit test. */
+export function runnerCpu(cpus = os.cpus()) {
+  const list = Array.isArray(cpus) ? cpus : [];
+  const model = list.length && typeof list[0].model === "string" ? list[0].model.replace(/\s+/g, " ").trim() : "";
+  return model ? `${model} x${list.length}` : null;
+}
 
 /** The page-side env read, run as `page.evaluate(readPageEnv)`: self-contained
  *  (Playwright ships its source text, so it may not touch this module's scope).
@@ -105,6 +119,7 @@ export function envOf(raw) {
   return {
     renderer: str(r.renderer), api: str(r.api), adapter: str(r.adapter),
     browser: str(r.browser) ? str(r.browser) + (m ? " " + m[1] : "") : null, viewport: vp,
+    cpu: str(r.cpu),
   };
 }
 

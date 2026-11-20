@@ -163,9 +163,9 @@ test("a Home photo uses manual distance and aim while the background retains aut
 
 test("the GARAGE look rules keep the car's floor and stay out of portrait", () => {
   const css = read("css/carsetup.css");
-  // PANEL WIDTH scales the cap only — both variants keep the 410 floor and the car reserve.
+  // PANEL WIDTH scales the cap; the floor is min(410, cap), so >= 100 % keeps the 410 floor and the car reserve (#4529).
   for (const reserve of ["320px", "420px"]) {
-    assert.ok(css.includes(`clamp(410px, calc((var(--safe-w) - ${reserve}) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1)))`),
+    assert.ok(css.includes(`clamp(min(410px, calc(420px * var(--look-garage-pw, 1))), calc((var(--safe-w) - ${reserve}) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1)))`),
       `PANEL WIDTH (${reserve} reserve) must keep the floor and the car's reserve`);
   }
   assert.match(css, /:root\[data-look-garage-side="left"\] #carsetup \{ place-items: stretch start; \}/);
@@ -352,4 +352,26 @@ test('#4923: PANEL WIDTH above 100 % never narrows the ≥1800px sheet below its
   const shipped = Number(block.match(/#carsetup \{\s*--cs-sheet-w:[^;]*, (\d+)px\)\);/)[1]);
   for (const pw of [1.05, 1.1, 1.3]) assert.ok(Number(rule[1]) * pw > shipped, `pw ${pw} must widen past ${shipped}px`);
   assert.ok(css.lastIndexOf(':root[data-look-garage-pw] #carsetup {') > at, 'the ultrawide pw rule must come after the generic one');
+});
+
+// #4529 part 2: PANEL WIDTH shrinks (60-150) and PANEL HEIGHT (40-100) caps the sheet, portrait included,
+// so the portrait garage panel can leave the car visible. The owner's export (PANEL WIDTH 110,
+// tests/data/settings-live-export-2026-11-10.json) must paint exactly as before.
+test("#4529: PANEL WIDTH below 100 % really shrinks; PANEL HEIGHT caps the portrait sheet", () => {
+  const css = read("css/carsetup.css");
+  const clampPx = (lo, v, hi) => Math.max(lo, Math.min(v, hi));
+  const sheet = (pw, own) => clampPx(Math.min(410, 420 * pw), own, 420 * pw);   // the generic rule, own px
+  assert.equal(sheet(1.1, 395), 410, "owner's 110 on an 852x393 phone: the 410 floor still binds");
+  assert.equal(sheet(1, 395), 410);
+  assert.equal(sheet(0.6, 395), 252, "60 % takes the panel under the rail floor");
+  assert.ok(sheet(0.8, 900) < sheet(1, 900), "and narrows a desktop sheet too");
+  // Portrait: the sheet is full width, so only a value under 100 % narrows it; PANEL HEIGHT scales the
+  // shipped 70vh cap there (the other caps are 100 % of the row). Exact rule bodies, read from the portrait block.
+  const flat = css.replace(/\s+/g, " ");
+  const block = "@media (orientation: portrait) { :root[data-look-garage-ph] #carsetup #cs-inner { ";
+  const at = flat.indexOf(block);
+  assert.notEqual(at, -1, "the portrait PANEL HEIGHT block exists");
+  const body = (from, head) => { const i = flat.indexOf(head, from) + head.length; return flat.slice(i, flat.indexOf("}", i)).trim(); };
+  assert.equal(body(at, block), "max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));");
+  assert.equal(body(at, ":root[data-look-garage-pw] #carsetup #cs-inner { "), "width: calc(100% * min(var(--look-garage-pw, 1), 1)); justify-self: end;");
 });

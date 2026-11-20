@@ -33,6 +33,34 @@ test("battle uses Broadcast's strict one-second gate", () => {
   assert.equal(Feed.battle(cars(1.01)), null);
 });
 
+test("battle/rowsFrom refuse invented 0.00 gaps when prog or intervalS is missing/NaN", () => {
+  const Feed = load();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  // One deepEqual covers: no-prog battle, NaN-prog battle, real fight, missing
+  // intervalS, NaN interval/gap, and the prog fallback still used by TV rows.
+  assert.deepEqual({
+    nanBattle: Feed.battle([{ code: "A", prog: NaN, speed: 50 }, { code: "B", prog: NaN, speed: 50 }]),
+    noProgBattle: Feed.battle([{ code: "A", speed: 50 }, { code: "B", speed: 50 }]),
+    real: plain(Feed.battle(cars(.4))),
+    missingInterval: plain(Feed.rowsFrom([
+      { code: "LEC", pos: 1, team: "#e8002d" },
+      { code: "YOU", pos: 2, team: "#fff", gapToLeaderS: 1.5, you: true },
+    ])[1]),
+    nanInterval: plain(Feed.rowsFrom([
+      { code: "LEC", pos: 1, intervalS: 0, gapToLeaderS: 0 },
+      { code: "YOU", pos: 2, intervalS: NaN, gapToLeaderS: NaN },
+    ])[1]),
+    progFallback: Feed.rowsFrom(cars(.4))[1].interval,
+  }, {
+    nanBattle: null,
+    noProgBattle: null,
+    real: { ahead: "LEC", behind: "NOR", gapS: .4 },
+    missingInterval: { pos: 2, code: "YOU", team: "#fff", interval: null, gap: 1.5, tyre: null, pit: false, out: false, you: true },
+    nanInterval: { pos: 2, code: "YOU", team: "", interval: null, gap: null, tyre: null, pit: false, out: false, you: false },
+    progFallback: .4,
+  });
+});
+
 test("a caller's own battle (or null) wins over the progress scan", () => {
   const Feed = load();
   const noProg = [{ code: "LEC", pos: 1 }, { code: "VER", pos: 2 }];
@@ -208,7 +236,7 @@ test("painter builds fixed rows once, moves by transform and skips unchanged tex
   vm.createContext(ctx);
   vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx, { filename: absSrc("js/overlay/render.js") });
   const painter = ctx.OverlayRender.create(root, { rows: 4 });
-  assert.equal(tower.children.length, 20, "rows are built once");
+  assert.equal(tower.children.length, 22, "rows are built once");
   const frame = ctx.OverlayFeed.frame({ seq: 1, ranked: cars(.4) });
   painter.paint(frame);
   assert.equal(painter.rows[1].el.style.transform, "translate3d(0,34px,0)");

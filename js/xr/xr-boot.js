@@ -16,7 +16,7 @@ const XrBoot = (function () {
   let _loopByXr = false;
   let _presentCount = 0;     // stereo submissions in this immersive session
   let _tickBody = null;
-  let _windowRaf = null;       // schedule one window.rAF(tick) — deduped
+  let _windowRaf = null;       // the window tick; bind() sets it, VR or not (recover(), #5875)
   let _windowRequest = null;
   let _windowGeneration = 0;
   let _windowPending = false;  // true while a window tick is queued
@@ -202,7 +202,6 @@ const XrBoot = (function () {
   function bindInner(api) {
     if (_bound || typeof XrSession === "undefined") return;
     _tickBody = api && api.tickBody;
-    _windowRaf = api && api.windowTick;
     _boundGfx = api && api.gfx;
     _getCamMode = api && api.getCamMode;
     _setCamMode = api && api.setCamMode;
@@ -233,8 +232,7 @@ const XrBoot = (function () {
       onEnd: () => {
         _loopByXr = false;
         restoreSavedCam();
-        // Resume exactly one window loop (deduped).
-        chainWindowRaf(_windowRaf);
+        chainWindowRaf(); // one window loop (deduped)
       },
       onFrame: (time) => {
         if (_loopByXr && typeof _tickBody === "function") _tickBody(time);
@@ -255,6 +253,7 @@ const XrBoot = (function () {
 
   function bind(api) {
     _bindApi = api;
+    _windowRaf = api && api.windowTick;
     if (typeof XrSession === "undefined") return;
     bindInner(api);
   }

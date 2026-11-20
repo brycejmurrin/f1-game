@@ -1900,6 +1900,18 @@ test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, els
   assert.match(msgText(b), /Fix the red issues before sharing/);
 });
 
+test("EXPORT refuses a RED design (same gate as SHARE / CARD — no invalid file leaves the machine)", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  assert.ok(await b.D.exportEnvelope(), "a green design still exports");
+  b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
+  assert.equal(b.D.preview().ok, false);
+  assert.equal(await b.D.exportEnvelope(), null);
+  assert.equal(/Fix the red issues before exporting/.test(msgText(b)), true);
+  assert.equal(await b.D.exportFile(), false);
+  assert.equal(await b.D.share(), null, "SHARE stays gated");
+});
+
 test("CARD re-entry: a second shareCard while the first is mid-share is refused (no double download)", async () => {
   const b = bootScreen();
   openGreen(b);
@@ -2162,6 +2174,15 @@ test("3 LOOK: a chip per theme (thirty), dual-colour swatches, the theme's blurb
   assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\]\s*\{/, "theme grid");
   assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\] \.swatch\s*\{/, "theme swatch paint box");
   assert.match(css, /forced-colors: active[\s\S]*\[data-role="themes"\][\s\S]*forced-color-adjust:\s*none/, "swatch colour survives forced-colors");
+  // Phone default DESIGNER SIZE 75 % × ui-scale 0.7 → zoom 0.525; a bare 16 px
+  // --fs-micro painted ~8.4 px on UNDO/REDO/FIT. Floor against --td-zoom.
+  // Prefer equal(+.test) over a source-pin regex assert — assertPinsAll is at ceiling.
+  assert.equal(/#trackdesigner\s*\{[^}]*--td-fs-floor:\s*calc\(12px\s*\/\s*var\(--td-zoom\)\)[^}]*--fs-micro:\s*max\(14px,\s*var\(--td-fs-floor\)\)/s.test(css), true,
+    "designer text floors at 12 painted px via --td-fs-floor");
+  assert.equal(/#trackdesigner\s+\.td-rail\s*\{[^}]*scroll-padding-bottom:\s*calc\(var\(--tap-paint\)\s*\+\s*var\(--gap\)\)/s.test(css), true,
+    "rail scroll-padding-bottom clears the SAVE foot");
+  const zoom = 0.7 * 0.75;
+  assert.equal((12 / zoom) * zoom >= 11.99 && 16 * zoom < 10, true, "floor paints ≥ 12 px; pre-fix LARGE micro was under 10");
 });
 
 // ── Banking UI + kerb styles + berms (overhaul E+F+G) ──────────────────────
