@@ -2381,11 +2381,15 @@ const Input = (function () {
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       if (!still) padIsWheel = false;
-      // Only the ACTIVE pad's edge baseline: a spare pad leaving must not turn
-      // every button still held on the driving pad into a fresh press.
-      if (e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons) padPrevButtons.length = 0;
+      // A replacement pad starts with its current buttons as the edge baseline.
+      // A spare leaving preserves both held buttons and the active menu repeat.
+      const activeLeft = e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons;
+      if (activeLeft || !still) {
+        if (padPrevKey !== null) padSnapshotLost = true;
+        padPrevButtons.length = 0;
+        padMenu.reset();
+      }
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
-      padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
       /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing

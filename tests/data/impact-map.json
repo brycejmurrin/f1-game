@@ -11643,7 +11643,8 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "create": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "download": [
         "tests/unit/phone-recorder.test.mjs"
@@ -11652,7 +11653,8 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "frame": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "init": [
         "tests/unit/phone-recorder.test.mjs"
@@ -11664,7 +11666,8 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "sample": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "serialize": [
         "tests/unit/phone-recorder.test.mjs"
@@ -11673,10 +11676,12 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "start": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "stop": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "*": [
         "tests/unit/save-schema-registry.test.mjs"
