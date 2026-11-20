@@ -728,3 +728,30 @@ test("an AI striker into a parked player: the AI pays the whole share, the playe
   assert.ok(maxHuman < 10, `the parked player was launched to ${maxHuman.toFixed(1)} m/s`);
   assert.ok(Number.isFinite(c.speed) && Number.isFinite(p.speed), "non-finite speed after the strike");
 });
+
+// #5894 (clean-room audit A15): the human punt cap was applied per relaxation PASS, and
+// resolveCollisions runs four, so an AI rear-ending the player at 50 vs 20 m/s gave
+// +4.79 m/s against the 2.93 m/s cap. The cap now holds over the whole step.
+test("an AI rear-end punts the player no further than the cap over all four passes", () => {
+  const ctx = vm.createContext({ Math, Number, Object, WeakMap, Log: { info() {}, enabled: () => false },
+    Tracks: { wallAt: () => 100 }, IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false } });
+  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+    vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
+  const p = { id: "p", prog: 104.6, s: 104.6, speed: 20, x: 0, human: true, yawVis: 0 };
+  const ai = { id: "ai", prog: 100, s: 100, speed: 50, x: 0, human: false };
+  const G = { track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+    wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
+  const solver = vm.runInContext("Collide", ctx).create(G, () => {});
+  solver.resolveCollisions([], DT);   // binds track / netPlay for pairContact
+  const ct = solver.pairContact(ai, p);
+  assert.ok(ct && !ct.oriented && !ct.sideContact, "the scenario must take the straight rear-end path");
+  const A = vm.runInContext("AiDrive", ctx);
+  const cap = ct.iB * (1 + A.bumpRestitution(30)) * A.humanPuntCap() / ct.iSum;   // the designed one-shove ceiling
+  solver.resolveCollisions([ai, p], DT);
+  const gain = p.speed - 20;
+  assert.ok(gain > 0, "the player was punted");
+  assert.ok(gain <= cap + 1e-9, `player gained ${gain.toFixed(2)} m/s in one step, cap ${cap.toFixed(2)}`);
+  ai.speed = 50; p.speed = 20; ai.s = ai.prog = 100; p.s = p.prog = 104.6;
+  G.raceT += DT; solver.resolveCollisions([ai, p], DT);
+  assert.ok(p.speed - 20 <= cap + 1e-9, "the next step gets its own cap, no more");
+});

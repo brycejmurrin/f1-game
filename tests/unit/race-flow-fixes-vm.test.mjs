@@ -1189,3 +1189,26 @@ test("deferred QUIT completes when the corrected-time opportunity expires, retai
     assert.ok(G.raceT >= p.finishT + p.penalty);
   } finally { g.close(); }
 });
+
+// #5892 (clean-room audit A23): the stationary-retirement clock ran only under GREEN, and the
+// caution the stopped car itself raised lasts StoppedCars.STOP_RECOVER (60 s) — so the car sat
+// on the racing line for ~60 s of green after it (retired at ~120 s). The clock now runs under
+// yellow/VSC/SC too (not under a red, which holds the field on purpose).
+test("#5892 a player stopped on the racing line is retired 60 s after it stops, caution or not", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const a = g.apex, G = g.G;
+    a.caution(true);
+    a.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 4);
+    for (let i = 0; i < G.cars.length; i++) if (!G.cars[i].human) a.retire(i);   // no rival to nudge the parked car
+    a.jump(0.3, 0, 0);
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const P = G.player;
+    let t = 0, flagged = false;
+    while (t < 70 && !P.retired) { g.step(60); t++; if (a.caution().level > 0) flagged = true; }
+    assert.ok(flagged, "the stopped car raised a caution (the scenario under test)");
+    assert.ok(P.retired, `still running ${t} s after stopping (stallT ${(P.stallT || 0).toFixed(1)}), level ${a.caution().level}`);
+    assert.ok(t <= 62, `retired ${t} s after stopping, want ~60`);
+  } finally { g.close(); }
+});

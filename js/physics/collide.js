@@ -343,6 +343,7 @@ const Collide = (() => {
     // whole -5 m/s on the first touch and rebuilt it at REVERSE_ACCEL. Forward
     // contacts, and every AI car (which never reverses on purpose), keep the floor.
     function floorFwd(c, v) { return c.human && c.speed < 0 ? v : Math.max(0, v); }
+    function punt(c, dv, cap) { const g = c._puntGot || 0, d = Math.min(dv, Math.max(0, cap - g)); c._puntGot = g + d; return d; }
     // A scrub is a loss of MAGNITUDE, whichever way the car is rolling.
     function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }
       function pushVelocity(c, state, dx, dy, dw) {
@@ -667,22 +668,18 @@ const Collide = (() => {
             const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
             const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
-            // BY DESIGN (#2565): an AI striker into a parked human sheds ~all its
-            // closing speed in ONE tick (54 -> ~0 m/s) while the human gains only
-            // the capped punt below. Momentum is not conserved on purpose: the AI
-            // behind pays its whole share, the human is never launched. With the
-            // incident layer active a hard hit goes to Rapier instead.
-            // The car in front takes the punt in full — that is the kick you feel
-            // and see. A HUMAN in front is capped: an AI misjudging a braking zone
-            // must not launch the player down the road (the cap is a closing speed,
-            // pace-scaled), while the AI behind still pays its whole share.
+            // BY DESIGN (#2565): the car in front takes the punt in full, but a
+            // HUMAN in front gains only a capped punt (a pace-scaled closing speed,
+            // per STEP across the passes: punt(), #5894) while the AI behind pays
+            // its whole share (54 -> ~0 m/s in one tick): momentum is not conserved
+            // on purpose, the player is never launched. Hard hits go to Rapier.
             const capV = AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05);
             if (sgn >= 0) {
               if (iB) b.speed = floorFwd(b, b.speed - iB * jImp);
-              if (iA) a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
+              if (iA) a.speed += a.human ? punt(a, iA * jImp, iA * (1 + e) * capV / iSum) : iA * jImp;
             } else {
               if (iA) a.speed = floorFwd(a, a.speed - iA * jImp);
-              if (iB) b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
+              if (iB) b.speed += b.human ? punt(b, iB * jImp, iB * (1 + e) * capV / iSum) : iB * jImp;
             }
           }
           if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }   // see the side branch: settled pairs must let it decay
@@ -794,6 +791,7 @@ const Collide = (() => {
       // Mirrors aSp/bSp for a net-owned car, whose predicted speed is the
       // reference and is not ours to mutate.
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed; }
+      for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (c.human && !ownsPose(c)) c._puntGot = 0; }
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || FIXED_DT);

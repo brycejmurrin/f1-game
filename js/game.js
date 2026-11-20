@@ -6552,22 +6552,16 @@ function rescuePlayer(c) {
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
   c.vLat = 0; c.yawRateCur = 0;
-  // Pace-scaled restore floor (same shape as coast()); never above vTop().
-  c.speed = Math.min(vTop(), Math.max(c.speed, 16 * Math.max(driveTune.PACE, 0.05)));
+  // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
+  c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
-  // Cues are for the driver at THIS screen — a rival being recovered elsewhere
-  // on track must not announce itself here.
-  //
-  // NO BANNER. A recovery is the most self-evident event in the game: the car
-  // is back on the road, pointing the right way, at a sane speed. The player
-  // just watched it happen, so a card saying RECOVERED spends the radio — and
-  // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
-  // obvious can delay or mask one that does not. The sound still marks it.
+  // Cues are for the driver at THIS screen (not a rival recovered elsewhere). NO BANNER: the player
+  // watched it happen, and the banner QUEUE (ANN_PRI) would let it delay one that matters. The sound marks it.
   if (c.local && soundOn) GameAudio.offtrack(); if (c === player) snapGameCam();   // a teleport is a CUT (#5020)
 }
 
@@ -6624,7 +6618,7 @@ function retireCar(c, reason) {
 // blast and a 25-lap race lose their cars at the same points of the story.
 function checkRetirements(dt) {
   const dist = Math.max(1, lapsTarget * track.total);
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level === 0 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s under green; a pause (online too) stops the clock
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its

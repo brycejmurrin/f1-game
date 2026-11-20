@@ -50,7 +50,7 @@ const CarFields = (function () {
     ["brake heat, exhaust pop, throttle edge and the last push distance (audio/fx and Collide)",
       ["brakeHeat", "exhaustPop", "wasOnThrottle", "_pushD"]],
     ["sector timing and the pre-collision snapshot Collide restores from",
-      ["_secValid", "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd"]],
+      ["_secValid", "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "_puntGot"]],
     ["body attitude springs (js/physics/body-attitude.js seed())",
       ["_ba", "baPitch", "baRoll", "baHeave", "baScrape"]],
     ["render side: LOD tier, wheel spin, wheel visibility",
@@ -110,7 +110,7 @@ const CarFields = (function () {
     ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
       ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
       "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
-      "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "skidIntensity", "passSide", "passBest",
+      "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "_puntGot", "skidIntensity", "passSide", "passBest",
       "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
@@ -188,6 +188,7 @@ const CarFields = (function () {
     if (!("_preColS" in c)) c._preColS = undefined;
     if (!("_preColX" in c)) c._preColX = undefined;
     if (!("_preColSpd" in c)) c._preColSpd = undefined;
+    if (!("_puntGot" in c)) c._puntGot = undefined;
     if (!("_ba" in c)) c._ba = undefined;
     if (!("baPitch" in c)) c.baPitch = undefined;
     if (!("baRoll" in c)) c.baRoll = undefined;
