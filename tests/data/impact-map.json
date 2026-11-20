@@ -12075,6 +12075,9 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
       ],
+      "aiErs": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "aiRescueDelay": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -12170,6 +12173,9 @@
       "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "hazardSide": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "holdLineGap": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -12177,7 +12183,8 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "humanInvMass": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs"
       ],
       "humanPuntCap": [
         "tests/unit/ai-drive.test.mjs",
@@ -12202,6 +12209,9 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "isMate": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "laneClear": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "laneFollow": [
@@ -12293,6 +12303,9 @@
       "paceSample": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "paceTrim": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "passCooldown": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -12368,6 +12381,9 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "sideYieldsA": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "slowHazard": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "softPairEdgeN": [
@@ -12481,6 +12497,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
@@ -12633,6 +12650,7 @@
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "parkedAhead": [
+        "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs"
       ],
       "pushVelocity": [
@@ -12742,11 +12760,13 @@
       "sweep": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "wallLimits": [
+        "tests/unit/collision-contact-vm.test.mjs"
+      ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/collide-severity-pace.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
-        "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -15427,6 +15447,9 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "getDprBoost": [
+        "tests/unit/perf-governor.test.mjs"
+      ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
@@ -15471,6 +15494,9 @@
       ],
       "setDepthMask": [
         "tests/unit/render-final-contracts.test.mjs"
+      ],
+      "setDprBoost": [
+        "tests/unit/perf-governor.test.mjs"
       ],
       "setMaterialMaps": [
         "tests/unit/assets-pack.test.mjs",

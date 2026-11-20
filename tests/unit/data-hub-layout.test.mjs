@@ -147,12 +147,14 @@ test("gap 23: SETTINGS › HIGH CONTRAST solidifies the hub card, as the OS pref
   assert.ok(!inGame.context.some((c) => /^@media/.test(c)), "unconditional: the setting, not a media query, decides: " + JSON.stringify(inGame.context));
 });
 
-test("mobile-ui: ICS row share + howto/quali overrides in data.css", () => {
+test("mobile-ui: ICS row share in data.css; the howto/quali/install overrides are NOT in route-loaded data.css", () => {
   assert.equal(
     decl(rules, '[data-ics="weekend"], [data-ics="season"]', "flex"),
     "1 1 calc(50% - var(--gap) / 2)"
   );
-  const howtoAt = DATA_CSS.indexOf("#howtoplay-inner #htp-contents");
-  const qualiAt = DATA_CSS.indexOf('#quali .sheet:not([data-shape="tall"]) #q-table');
-  assert.equal(howtoAt >= 0 && qualiAt > howtoAt, true);
+  // data.css loads for the data routes only (index.html data-route), so How To Play, the quali sheet and the
+  // iOS install tip never saw these rules before a late fallback (clean-room audit, 2026-11-20). They live with
+  // their screens' eager-deferred sheets now.
+  const moved = ["#howtoplay-inner #htp-contents", "#quali .sheet:not", "#ios-install"];
+  assert.deepEqual(rules.filter((r) => moved.some((sel) => r.selector.includes(sel))).map((r) => r.selector), [], "no css/data.css rule names a moved screen");
 });
