@@ -583,3 +583,37 @@ test("audio() at the title answers no_audio, and carState() holds only finite nu
   const bad = cs.flatMap((o) => Object.entries(o)).filter(([, v]) => typeof v === "number" && !Number.isFinite(v));
   assert.equal(bad.length, 0, JSON.stringify(bad));
 });
+
+// bankingDeg is the PEAK roll over the corner window: sampled once at the
+// detector's apex, Zandvoort's 18° zones read T3 9.9° and T14 −2.1° (#5712).
+test("Zandvoort's two 18° bank zones report their peak", async () => {
+  await load("zandvoort", 0.03, 60);
+  const cs = g.apex.trackInfo({ what: "corners" }).corners;
+  const at = (t) => cs.find((c) => c.turn === t);
+  assert.equal(at("T3").bankingDeg, 18);
+  assert.equal(at("T14").bankingDeg, -18);
+});
+
+// The VM twin has no dynamic-import loader, so Rapier never loads and every
+// debris hazard reads 0; debris() names that instead of a bare `ready:false`.
+test("debris() says the VM cannot load the physics world", async () => {
+  await load("monza", 0.05, 60);
+  g.apex.debris(true);
+  let st = g.apex.debris();
+  for (let i = 0; i < 200 && st.loadState === 1; i++) { await new Promise((r) => setImmediate(r)); st = g.apex.debris(); }
+  assert.equal(st.loadState, -1);
+  assert.equal(st.vmUnsupported, true);
+  assert.equal(st.active, false);
+});
+
+// Feel and pit loss were on G and never on __apex (#5712).
+test("world full carries feel; pit() carries the lane loss", async () => {
+  await load("monza", 0.05, 60);
+  const feel = g.apex.world({ detail: "full" }).feel;
+  assert.deepEqual(Object.keys(feel), ["shake", "hitStop", "camRoll"]);
+  assert.equal(feel.shake, 0);
+  assert.equal(feel.hitStop, 0);
+  const pit = g.apex.pit();
+  // Monza's lane at racing speed (the real figure is ~22-24 s).
+  assert.equal(pit.lossS, 22.54);
+});
