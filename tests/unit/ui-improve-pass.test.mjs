@@ -597,7 +597,7 @@ test("circuit search: a divider survives only while ITS run of tiles does", () =
   assert.ok(fn, "applyTrackSearch is in select-screen.js");
   const mk = (kind, group, search) => {
     const classes = new Set([kind]);
-    return { hidden: false, nextElementSibling: null, dataset: { trackGroup: group, search }, group,
+    return { hidden: false, nextElementSibling: null, dataset: { trackGroup: group, search }, group, click() {},
       classList: { contains: (c) => classes.has(c) } };
   };
   const list = [
