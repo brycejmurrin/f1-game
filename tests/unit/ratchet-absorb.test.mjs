@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, loadAt, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
+import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
 import { AT_REF } from "../../tools/check/tree-counts.mjs";
 
 test("eagerCodeBytes is measured live and at a ref, and its entry grants a 5000 B absorb at slack 0", () => {
@@ -49,12 +49,14 @@ test("retiredFor: eagerBytes deleted beside eagerCodeBytes is the planned switch
 });
 
 test("--base: a tree raise inside the base's absorb is no red; past it, it is", () => {
-  const head = loadAt("HEAD");
+  // The base is injected, not read at HEAD: the merge gate's retest worktree has the TIP as HEAD and this branch's
+  // ceilings only in the working tree (merge-gate ratchetsOnMerge / retestOnMerge), so HEAD may predate the entry.
+  const head = load();
   const bump = (n) => ({ ...head, tree: { ...head.tree, eagerCodeBytes: { ...head.tree.eagerCodeBytes, ceiling: head.tree.eagerCodeBytes.ceiling + n } } });
   const inside = [];
-  assert.equal(compareToBase("HEAD", { current: bump(5000), print: (l) => inside.push(l), historyReasoned: false }), 0, inside.join("\n"));
+  assert.equal(compareToBase("HEAD", { base: head, current: bump(5000), print: (l) => inside.push(l), historyReasoned: false }), 0, inside.join("\n"));
   const msg = inside.find((l) => l.startsWith("RAISE  (tree) eagerCodeBytes:"));
   assert.equal(msg?.slice(msg.indexOf("(+5000)")), "(+5000) — inside its 5000 absorb (the branch's own growth; no label)", inside.join("\n"));
   const past = [];
-  assert.notEqual(compareToBase("HEAD", { current: bump(5001), print: (l) => past.push(l), historyReasoned: false }), 0, past.join("\n"));
+  assert.notEqual(compareToBase("HEAD", { base: head, current: bump(5001), print: (l) => past.push(l), historyReasoned: false }), 0, past.join("\n"));
 });

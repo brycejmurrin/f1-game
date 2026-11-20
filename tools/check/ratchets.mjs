@@ -922,10 +922,12 @@ export const EXACT_CURE = "exact ceiling (slack 0): measure against the TIP (syn
  *  `historyReasoned` are injectable for tests. Returns the exit code. */
 export function compareToBase(ref, {
   maxRaise = 40, current = load(), print = console.log, advisory = false,
-  sourceGrowthFn = sourceGrowth, historyReasoned = undefined,
+  sourceGrowthFn = sourceGrowth, historyReasoned = undefined, base: given = undefined,
 } = {}) {
-  let base;
-  try { base = loadAt(ref); }
+  // `base` (tests only): the ceilings to compare against instead of loadAt(ref). The merge gate's retest worktree has
+  // the TIP as HEAD and the merge result only in the working tree, so a test that reads HEAD sees the tip's ceilings.
+  let base = given;
+  try { base ??= loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
