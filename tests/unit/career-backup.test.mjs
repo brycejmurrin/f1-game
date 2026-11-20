@@ -2201,7 +2201,7 @@ test("a refused slot-card deletion keeps the active save available for retry", (
   clickDelete(); clickDelete();
   assert.equal(h.Career.active(), true);
   assert.equal(h.disk.get(key), raw);
-  assert.match(ui.notices.at(-1), /NOT DELETED/);
+  assert.equal(ui.notices.at(-1), "SAVE NOT DELETED");
   storage.setItem = write;
   clickDelete(); clickDelete();
   assert.equal(h.Career.active(), false);
