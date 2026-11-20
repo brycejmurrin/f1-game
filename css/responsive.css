@@ -340,14 +340,23 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-tl-edit] #tl-art { position: absolute; z-index: -1; zoom: normal; pointer-events: auto; }
 :root[data-tl-edit] #tl-editor {
   position: fixed; z-index: 44;
-  left: 0; right: 0; bottom: var(--safe-b); margin-inline: auto;
+  left: var(--safe-l); right: var(--safe-r); bottom: var(--safe-b); margin-inline: auto;
   width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
   max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
   gap: calc(var(--gap) * 0.5); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
   background: var(--panel); border: 1px solid var(--plate-line); border-radius: 10px;
 }
-:root[data-tl-edit] #tl-editor > button { margin: 0; min-height: var(--tap-min); }
+:root[data-tl-edit] #tl-editor[data-top] { top: var(--safe-t); bottom: auto; }
+:root[data-tl-edit] #tl-editor button {
+  margin: 0; min-height: max(44px, var(--tap-min)); min-width: 44px;
+  padding-inline: .5em;
+}
+:root[data-tl-edit] #tl-adjustments:not([hidden]) {
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: .25em;
+}
+:root[data-tl-edit] #tl-values { flex: 0 0 100%; text-align: center; }
 :root[data-tl-edit] #tl-piece { padding-inline: calc(var(--gap) / 3); }
 :root[data-tl-edit] #tl-handle {
   position: fixed; width: 22px; height: 22px; translate: -50% -50%;

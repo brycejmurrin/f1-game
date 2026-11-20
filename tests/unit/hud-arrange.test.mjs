@@ -500,6 +500,22 @@ test('toolbar: one fixed-size strip, never scaled by HUD SIZE, BUTTON SIZE or TE
   assert.doesNotMatch(e.ids.get('hud-arrange-hint').style.cssText, /display:/, '[hidden] must still hide the hint');
 });
 
+test('only the widget picker, tools, cancel and apply occupy the initial HUD strip', () => {
+  const e = editor('map', { on: true });
+  e.api.setEditing(true);
+  const bar = e.ids.get('hud-arrange-bar'), toggle = e.ids.get('hud-arrange-move');
+  const compact = ['hud-arrange-element', 'hud-arrange-move', 'hud-arrange-cancel', 'hud-arrange-done'];
+  const visible = () => bar.children.filter(el => !el.hidden).map(el => el.id);
+  assert.deepEqual(visible(), compact);
+  toggle.onclick();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  for (const name of ['left', 'right', 'up', 'down', 'larger', 'smaller', 'undo', 'reset-screen']) {
+    assert.ok(visible().includes('hud-arrange-' + name));
+  }
+  toggle.onclick();
+  assert.deepEqual(visible(), compact);
+});
+
 test('editor: toolbar stays inside asymmetric safe areas on a narrow, short screen', () => {
   const e = editor('speed', { on: true, width: 420, height: 180,
     insets: { '--sal': '70px', '--sar': '10px', '--sat': '20px', '--sab': '15px' },
@@ -599,6 +615,7 @@ test('editor: hidden map, gaps and mirror stay selectable and their owner modes 
 test('editor: auto-shown pieces grey VISIBILITY with a visible hint reason', () => {
   const e = editor('pos', { on: true });
   e.api.setEditing(true);
+  e.ids.get('hud-arrange-move').onclick();
   const hint = e.ids.get('hud-arrange-hint');
   const vis = e.ids.get('hud-arrange-vis');
   assert.match(hint.textContent, /shown automatically with race events/i);

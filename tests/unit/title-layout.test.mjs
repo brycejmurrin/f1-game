@@ -40,7 +40,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
     for (const id of ["title-car", "menu-brand", "menu-buttons"]) overlay.appendChild(dom.byId(id));
     dom.byId("menu-buttons").appendChild(dom.byId("mb-race"));
     dom.byId("tl-editor").hidden = true;
-    dom.byId("tl-editor").appendChild(dom.byId("tl-done"));
+    dom.byId("tl-editor").appendChild(dom.makeElement("button", "tl-done"));
   }
   // The settings page and the title screen, so ScreenLooks' PEEK (which only
   // runs while SETTINGS is open, and only for a title screen that is up) has both.
@@ -225,8 +225,21 @@ test("editor: the fold's button trades the settings page for the title screen an
   assert.equal(html.hasAttribute("data-tl-edit"), true);
   const bar = dom.byId("tl-editor");
   assert.equal(bar.hidden, false);
-  assert.deepEqual(bar.children.map((c) => c.id), ["tl-piece", "tl-left", "tl-right", "tl-up", "tl-down", "tl-step", "tl-size-dn", "tl-size-up", "tl-width-dn", "tl-width-up", "tl-undo", "tl-reset-piece", "tl-reset-screen", "tl-cancel", "tl-done", "tl-handle"], "DONE adopted into the bar");
-  assert.equal(dom.byId("tl-piece").textContent, "BUTTONS · LANDSCAPE · 100% · AUTO WIDTH");
+  const panel = dom.byId("tl-adjustments"), toggle = dom.byId("tl-adjust");
+  assert.deepEqual(bar.children.filter(c => !c.hidden && c.tagName === "BUTTON").map(c => c.id),
+    ["tl-piece", "tl-adjust", "tl-cancel", "tl-done"]);
+  assert.equal(panel.hidden, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  toggle.click();
+  assert.equal(panel.hidden, false);
+  assert.equal(toggle.getAttribute("aria-controls"), panel.id);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(panel.contains(dom.byId("tl-width-up")), true);
+  assert.equal(dom.byId("tl-piece").textContent, "BUTTONS");
+  assert.equal(dom.byId("tl-values").textContent, "LANDSCAPE · 100% · AUTO WIDTH");
+  dom.byId("tl-dock").click(); assert.equal(bar.hasAttribute("data-top"), true);
+  dom.byId("tl-dock").click(); assert.equal(bar.hasAttribute("data-top"), false);
+  toggle.click(); assert.equal(panel.hidden, true);
   assert.equal(dom.byId("menu-buttons").hasAttribute("data-tl-sel"), true, "the buttons start selected");
   const art = dom.byId("tl-art");
   assert.equal(art.parentNode, dom.byId("overlay"), "the drawing's proxy lives in #overlay, under the doors");
@@ -341,6 +354,7 @@ test("editor: keys nudge, size and cycle the pieces; the bar's steps and RESET P
   assert.equal(M.current().art.x, -1);
   assert.equal(key(dom, "Escape").defaultPrevented, undefined, "Escape is left to data-esc-close (Cancel)");
   key(dom, "]");
+  dom.byId("tl-adjust").click();
   dom.byId("tl-size-up").click();
   assert.equal(M.current().btns.size, 110);
   dom.byId("tl-width-up").click();
@@ -357,6 +371,7 @@ test("title entry restores its opener and discards canceled drafts", () => {
   dom.byId("pmsettings").hidden = true;
   const opener = dom.byId("mb-race");
   M.enter(opener);
+  dom.byId("tl-adjust").click();
   dom.byId("tl-right").click();
   assert.equal(M.current().btns.x, 1);
   dom.byId("tl-undo").click();

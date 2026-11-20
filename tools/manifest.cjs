@@ -440,9 +440,7 @@ const FULL = [
   "js/ui/results-story.js",
   "js/ui/results-boot.js", // GameResults stub; sheet body is LAZY_RESULTS_SHEET
   "js/race/quali-model.js",
-  "js/share/share-card-data.js",
-  "js/share/share-card-layout.js",
-  "js/share/share-card.js",
+  // share-card-data / -layout / -card are LAZY_RESULTS_SHEET (#5821 paid for its re-land with them)
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -893,9 +891,6 @@ const HARD_EDGES = [
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
   // start-lights / marshal-panels → LAZY_RACE_SESSION (ensureRaceSession before startRace)
-  ["js/share/share-card-data.js", "js/race/daily-challenge.js"], // Daily shareCard builds the canonical model
-  ["js/share/share-card-layout.js", "js/share/share-card.js"],   // ShareCard.render lays out before painting
-  ["js/share/share-card.js", "js/race/daily-challenge.js"],      // Daily shareCard renders and delivers the PNG
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/ui/title-flow.js", "js/game.js"],          // game.js calls TitleFlow.create(G) at eval time
@@ -1363,17 +1358,20 @@ const LAZY_UI_PRESETS = [
 ];
 const LAZY_UI_PRESETS_EDGES = [["js/ui/screen-regions.js", "js/ui/screen-placement.js"]];
 
-// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~62 KB). endRace and the
+// RESULTS / TT / STANDINGS / CHAMPION DOM builders + the share-card stack (~92 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
 // ensureResultsSheet so buildResults stays synchronous at the flag. The SHARE
 // CARD chip (ShareCardChips) rides here: results-sheet and career-ui's THE YEAR
 // card are its only callers, both behind a typeof check (deploy red, boot wall).
 const LAZY_RESULTS_SHEET = [
+  "js/share/share-card-data.js",   // ShareCardData: Daily / results / career-year card models, read at call time
+  "js/share/share-card-layout.js", // ShareCardLayout: ShareCard.render lays out before painting
+  "js/share/share-card.js",        // ShareCard: Daily shareCard() loads this group first
   "js/share/share-card-chips.js",
   "js/ui/results-sheet.js",
   "js/ui/quali-sheet.js", // QualiSheet: paints only after a session ran (C1 #5807 moved it off the boot wall)
 ];
-const LAZY_RESULTS_SHEET_EDGES = [];
+const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/share-card.js"]];
 
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS

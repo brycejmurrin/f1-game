@@ -84,6 +84,7 @@ import {
   renderFindingsMd, renderIndexHtml, selfTest, shardCells,
 } from "../lib/hud-survey-matrix.mjs";
 import { awaitPresentedFrame, chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
+import { loadAllModels } from "./capture-fallbacks.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -448,7 +449,7 @@ async function runGroup(browser, group, plan, log) {
       await page.reload({ waitUntil: "domcontentloaded", timeout: plan.waitMs });
       await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: plan.waitMs });
     }
-    await page.evaluate(async () => { try { if (window.Assets && Assets.loadModels) await Assets.loadModels(); } catch { /* procedural */ } });
+    await loadAllModels(page);
     const ins = dev.ins;
     if (ins.sal || ins.sar || ins.sat || ins.sab) {
       await page.addStyleTag({ content: `:root{--sal:${ins.sal}px;--sar:${ins.sar}px;--sat:${ins.sat}px;--sab:${ins.sab}px;}` });

@@ -97,7 +97,7 @@ const HudArrange = (() => {
     let preview = null;    // title-screen HUD shell visibility, never saved as a preference
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
     let move, bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
-    let moving = false, coarse = false;
+    let expanded = false, coarse = false;
     const moveControls = [], history = [];
     let initial, visibilityDraft = {}, undo;
     function visibility(id) {
@@ -127,15 +127,7 @@ const HudArrange = (() => {
       return null;
     };
 
-    /* ---- the toolbar (built once; inline styles — the shell is not this module's to edit) ----
-       FIXED-SIZE CHROME, ONE STRIP (#5198). Every size below is a CSS px constant: the bar is an editing tool laid
-       over the HUD, so HUD SIZE, BUTTON SIZE and TEXT SIZE must not grow it (the CAM / PAUSE rule, #5179). It used
-       to ride --fs-micro (16 px at TEXT SIZE large) with wrapping rows and native selects, and on Bryce's iPhone
-       (852x393, insets 59/21/59, HUD 155 %, BUTTON 245 %) it painted ~715x217 over the widgets being arranged,
-       the selects as empty ~135x100 boxes. Now: one nowrap row of 44 px targets in a 52 px strip (BAR_H), selects
-       drawn by us (appearance none, explicit 44 px height: inline beats the coarse-pointer `select` floor in
-       css/components.css), the hint clamped to two short lines. It wraps only where one row cannot fit at all
-       (portrait), see placeBar. */
+    // Fixed chrome stays at 44px even when the HUD is zoomed.
     const ctl = "box-sizing:border-box;flex:none;height:" + T + "px;min-height:" + T + "px;max-height:" + T + "px;margin:0;" +
       "font:inherit;font-weight:700;color:inherit;border:1px solid var(--text,#fff);border-radius:6px;";
     const selectCss = ctl + "-webkit-appearance:none;appearance:none;padding:0 20px 0 8px;line-height:normal;" +
@@ -175,13 +167,13 @@ const HudArrange = (() => {
         "white-space:normal;overflow-wrap:anywhere;flex:1 1 0;min-width:72px;";   // no inline display: [hidden] must still win
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
-      picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
+      picker.setAttribute("aria-label", "HUD element; use arrow keys on Tools to position");
       picker.setAttribute("data-arrows", "own");
       picker.style.cssText = selectCss + "width:128px;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
       bar.appendChild(picker);
-      move = mk("MOVE", "Show movement controls; arrow keys also position this element", () => {
-        moving = !moving;
+      move = mk("Controls", "Layout controls", () => {
+        expanded = !expanded;
         after();
       }, "hud-arrange-move");
       move.setAttribute("data-arrows", "own");
@@ -271,12 +263,11 @@ const HudArrange = (() => {
         SettingRow.disable(visibilityRow, !vis);
         visibilityRow.title = vis ? "" : "Shown automatically with race events";
       }
-      for (const control of moveControls) control.hidden = !moving;
-      move.textContent = moving ? "Back" : "MOVE";
-      move.setAttribute("aria-expanded", String(moving));
-      for (const id of ["hud-arrange-smaller", "hud-arrange-larger", "hud-arrange-recover", "hud-arrange-reset"]) $(id).hidden = moving;
-      visibilityRow.hidden = moving;
-      if (moving) { nameEl.hidden = true; hintEl.hidden = !message; }
+      for (const control of moveControls) control.hidden = !expanded;
+      move.setAttribute("aria-expanded", String(expanded));
+      for (const id of ["hud-arrange-smaller", "hud-arrange-larger", "hud-arrange-recover", "hud-arrange-reset"]) $(id).hidden = !expanded;
+      undo.hidden = visibilityRow.hidden = !expanded;
+      if (!expanded) nameEl.hidden = hintEl.hidden = true;
       placeBar(rects || rectsNow());
     }
 
@@ -507,7 +498,7 @@ const HudArrange = (() => {
       editing = !!on;
       if (editing && !was) {
         ensureBar();
-        moving = false;
+        expanded = false;
         opener = document.activeElement;
         context = { set: HudLayout.shown(), profile: HudLayout.profile() };
         history.length = 0; visibilityDraft = {};

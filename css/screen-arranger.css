@@ -56,14 +56,10 @@ body:has(> main#overlay) {
   bottom: max(var(--safe-b), var(--kb));
   box-sizing: border-box;
   display: grid;
-  gap: .5em;
-  width: min(23rem, var(--safe-w));
-  max-height: calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb)));
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y pinch-zoom;
-  padding: .75em;
+  width: min(24rem, var(--safe-w));
+  max-height: min(54svh, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: calc(var(--gap, .75rem) / 4);
   border: 1px solid var(--card-line);
   border-radius: var(--r-lg);
   background: var(--surf-1);
@@ -71,6 +67,32 @@ body:has(> main#overlay) {
   scroll-padding: .75em;
 }
 #screen-arranger[data-edge="start"] .arrange-tools { right: auto; left: var(--safe-l); }
+#screen-arranger #arrange-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap, .75rem) / 4);
+  overflow-x: auto;
+  touch-action: pan-x;
+}
+#screen-arranger #arrange-bar select {
+  height: max(44px, 2.4em);
+  white-space: nowrap;
+  flex: 1 1 5em;
+  min-width: 44px;
+  text-overflow: ellipsis;
+}
+#screen-arranger #arrange-bar :is(button, select) {
+  min-width: 44px;
+  padding-inline: .4em;
+}
+#arrange-controls:not([hidden]) {
+  display: grid;
+  gap: .4em;
+  padding: .4em;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
 #screen-arranger .arrange-tools :is(h2, p) { margin: 0; }
 #screen-arranger .arrange-tools h2 { font-size: var(--fs-6); }
 #screen-arranger .arrange-row {
@@ -92,7 +114,7 @@ body:has(> main#overlay) {
   color: var(--text);
   font: inherit;
 }
-#screen-arranger .arrange-tools > label {
+#screen-arranger #arrange-controls > label {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -103,11 +125,6 @@ body:has(> main#overlay) {
   color: var(--dim);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
-}
-#screen-arranger .arrange-tools > :last-child {
-  justify-content: flex-end;
-  border-top: 1px solid var(--card-line);
-  padding-top: .5em;
 }
 #screen-arranger .arrange-tools #screen-arranger-cancel + button {
   background: var(--text);
@@ -191,7 +208,7 @@ body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hid
   #screen-arranger .arrange-tools {
     left: var(--safe-l);
     width: auto;
-    max-height: min(46%, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
+    max-height: min(26svh, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
   }
   #screen-arranger[data-edge="start"] .arrange-tools {
     right: var(--safe-r);
@@ -200,7 +217,7 @@ body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hid
   }
 }
 @media (orientation: landscape) and (max-height: 32rem) {
-  #screen-arranger .arrange-tools { width: min(23rem, 49%, var(--safe-w)); }
+  #screen-arranger .arrange-tools { width: min(24rem, var(--safe-w)); }
 }
 } /* @layer layout */
 

@@ -95,7 +95,7 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
 });
 
 for (const touch of [false, true]) {
-  const landscape = touch ? { width: 844, height: 390 } : { width: 1280, height: 800 };
+  const landscape = touch ? { width: 852, height: 393 } : { width: 1728, height: 1117 };
   test.describe("Arrange a live screen with " + (touch ? "touch" : "mouse and keyboard"), () => {
     test.use({ viewport: landscape, hasTouch: touch, deviceScaleFactor: 1, reducedMotion: "reduce" });
     test("save title and Career independently through rotation, theme change, reload and reset", async ({ page, browser }, testInfo) => {
@@ -124,6 +124,7 @@ for (const touch of [false, true]) {
       await page.goto("/");
       await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
       await activate(page.locator("#title-arrange-entry"));
+      await activate(page.locator("#tl-adjust"));
       await activate(page.locator("#tl-size-up"));
       await activate(page.locator("#tl-done"));
       const title = (await saved()).title;
@@ -134,7 +135,28 @@ for (const touch of [false, true]) {
       const region = page.locator("#screen-arranger").getByLabel("Region");
       await region.selectOption("navigation");
       const initial = await layout();
+      const panel = page.locator("#screen-arranger .arrange-tools");
+      const compact = await panel.boundingBox();
+      expect(compact.width * compact.height).toBeLessThan(landscape.width * landscape.height * .1);
       await capture("career-before");
+      await activate(button("Controls"));
+      // An expanded panel still leaves a hit-testable part of the navigation
+      // column. Starting there returns to the compact bar for the drag.
+      const column = await career.boundingBox(), drawer = await panel.boundingBox();
+      const point = [0.15, 0.5, 0.85].map(fraction => ({
+        x: column.x + column.width * fraction, y: column.y + 24,
+      })).find(({ x, y }) => x < drawer.x || x > drawer.x + drawer.width || y < drawer.y || y > drawer.y + drawer.height);
+      expect(point).toBeTruthy();
+      if (touch) await page.touchscreen.tap(point.x, point.y);
+      else {
+        await page.mouse.move(point.x, point.y);
+        await page.mouse.down();
+        await page.mouse.move(point.x + 20, point.y, { steps: 3 });
+        await page.mouse.up();
+        expect((await layout()).x).toBeGreaterThan(initial.x);
+      }
+      await expect(button("Controls")).toHaveAttribute("aria-expanded", "false");
+      await activate(button("Controls"));
       if (touch) await activate(button("Right"));
       else { await button("Right").focus(); await page.keyboard.press("Enter"); }
       await activate(button("Width +"));
@@ -170,6 +192,7 @@ for (const touch of [false, true]) {
       await region.selectOption("navigation");
       expect(Math.abs((await layout()).width - changed.width)).toBeLessThan(2);
       expect(await saved()).toEqual(applied);
+      await activate(button("Controls"));
       await activate(button("Reset screen"));
       await activate(button("Apply"));
       await expect(entry).toBeFocused();

@@ -44,17 +44,35 @@ window.ScreenArranger = (function () {
     }
     const panel = node("section", dialog);
     panel.className = "arrange-tools";
-    const heading = node("h2", panel);
+    const actions = node("div", panel);
+    actions.id = "arrange-bar";
+    const controls = node("div", panel);
+    controls.id = "arrange-controls";
+    controls.hidden = true;
+    const heading = node("h2", controls);
     heading.id = "screen-arranger-title";
-    const label = node("label", panel, "Region ");
-    const picker = node("select", label);
+    button(controls, "Move toolbar", () => {
+      dialog.dataset.edge = dialog.dataset.edge === "start" ? "end" : "start";
+      setExpanded(false);
+      toggle.focus({preventScroll:true});
+    });
+    const picker = node("select", actions);
+    picker.setAttribute("aria-label", "Region");
+    const toggle = button(actions, "Controls", () => setExpanded(controls.hidden));
+    toggle.setAttribute("aria-controls", controls.id);
+    toggle.setAttribute("aria-expanded", "false");
+    function setExpanded(open) {
+      controls.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      if (!open && controls.contains(document.activeElement)) toggle.focus({preventScroll:true});
+    }
     for (const k of keys) node("option", picker, screen.regions[k].label).value = k;
-    const stepLabel = node("label", panel, " Adjustment ");
+    const stepLabel = node("label", controls, "Adjustment ");
     const step = node("select", stepLabel);
     node("option", step, "Fine").value = "1";
     node("option", step, "Coarse").value = "5";
     const row = () => {
-      const el = node("div", panel);
+      const el = node("div", controls);
       el.className = "arrange-row";
       return el;
     };
@@ -119,7 +137,7 @@ window.ScreenArranger = (function () {
         sizing.push({btn, prop});
       }
     }
-    const status = node("output", panel);
+    const status = node("output", controls);
     status.setAttribute("aria-live", "polite");
     const edits = row();
     const undo = button(edits, "Undo", () => {
@@ -135,10 +153,6 @@ window.ScreenArranger = (function () {
     const copy = button(edits, "", () => change(() => {
       drafts[side] = clone(drafts[side === "portrait" ? "landscape" : "portrait"]);
     }));
-    button(edits, "Move toolbar", () => {
-      dialog.dataset.edge = dialog.dataset.edge === "start" ? "end" : "start";
-    });
-    const actions = row();
     button(actions, "Cancel", () => finish(false)).id = "screen-arranger-cancel";
     button(actions, "Apply", () => finish(true));
     function render() {
@@ -158,7 +172,20 @@ window.ScreenArranger = (function () {
         (screen.regions[key].constraint ? " · " + screen.regions[key].constraint : "") +
         (resetLegacy ? " · Reset covers both orientations" : "");
     }
-    picker.addEventListener("change", () => { key = picker.value; render(); });
+    // Prefer the edge covering less of the selected region. Keep the bar
+    // still during a drag so moving a region never moves the controls.
+    function clearSelection() {
+      const box = rectOf(marked), bar = panel.getBoundingClientRect();
+      const {w, h} = viewport();
+      const overlap = (x, y) => Math.max(0, Math.min(x + bar.width, box.right) - Math.max(x, box.left))
+        * Math.max(0, Math.min(y + bar.height, box.bottom) - Math.max(y, box.top));
+      const x = side === "landscape" ? w - bar.right : bar.left;
+      const y = side === "portrait" ? h - bar.bottom : bar.top;
+      if (overlap(x, y) < overlap(bar.left, bar.top)) {
+        dialog.dataset.edge = dialog.dataset.edge === "start" ? "end" : "start";
+      }
+    }
+    picker.addEventListener("change", () => { key = picker.value; render(); clearSelection(); });
     function abortDrag() {
       if (!drag) return;
       cancelAnimationFrame(frame);
@@ -177,6 +204,7 @@ window.ScreenArranger = (function () {
     dialog.addEventListener("pointerdown", e => {
       if (drag) { abortDrag(); return; }
       if (!e.isPrimary || e.button !== 0 || panel.contains(e.target)) return;
+      setExpanded(false);
       e.preventDefault();
       const hit = keys.map(k => ({k, rect:element(k) && rectOf(element(k))})).filter(({rect}) => rect &&
         e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom);
@@ -265,6 +293,7 @@ window.ScreenArranger = (function () {
     window.addEventListener("keydown", keydown, true);
     active = () => finish(false);
     render();
+    clearSelection();
     picker.focus();
     return true;
   }

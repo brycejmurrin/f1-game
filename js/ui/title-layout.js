@@ -13,10 +13,7 @@ const TitleLayout = (function () {
     art: Object.freeze({ x: 0, y: 0, size: 100 }),
     layout: "grid", side: "auto",
   });
-  // A PHONE in landscape (touch, short side <= 500 px) ships bigger doors, nudged in from the edge
-  // (#5358: the owner's 2026-11-10 profile at UI SIZE 70 %). DEFAULT stays the CSS base — the layout
-  // that writes nothing; shipped(sh) is what an UNSET shape reads on this device. index.html's inline
-  // boot carries the same numbers for first paint.
+  // Keep the adaptive touch defaults in sync with the shell’s first paint.
   const PHONE_WIDE = Object.freeze({
     btns: Object.freeze({ x: 2, y: 1, size: 123, width: 0 }),
     title: DEFAULT.title, art: DEFAULT.art, layout: "grid", side: "auto",
@@ -108,24 +105,9 @@ const TitleLayout = (function () {
     scheduleFit();   // a request landed; the box decides what fits (#5150)
   }
 
-  // ---- FIT: in landscape the title screen never scrolls (#5150) -----------
-  // Every SIZE, WIDTH, X and Y above is a REQUEST; the overlay's content box is
-  // the law. A piece (the button cluster, the brand) taller or wider than the
-  // box is zoomed down to fit through --tf, which css/title.css, css/menus.css
-  // and css/responsive.css multiply into every zoom the piece carries; an
-  // offset that would carry it past an edge is pulled back through --tf-dx /
-  // --tf-dy, added to its translate. Wide shapes only: the portrait title has
-  // height to spend and keeps its scroll fallback (css/menus.css).
-  // MEASURED, NOT DERIVED: CSS cannot know a cluster's content height (the
-  // doors wrap, hide and re-flow with --ui-scale, text size and the scene), so
-  // this runs after every apply() and on every size change the overlay or a
-  // piece reports (ResizeObserver), starting each time from an unfitted piece
-  // and shrinking until the content fits — monotone, so a layout that changes
-  // column count under the shrink cannot oscillate — then writing the result
-  // once. A re-run that lands on the same numbers changes no size, so the
-  // observer goes quiet by itself. Chromium zooms a translate with the
-  // element (20px under zoom 1.09 moved 21.8px, measured 2026-11-06), so a
-  // screen overrun divides by the piece's effective zoom before it lands.
+  // Landscape fit starts from unfitted pieces and shrinks monotonically. The
+  // ResizeObserver settles when the computed zoom and offset stop changing.
+  // Translate is zoomed too, so divide the overrun by the effective zoom.
   const FIT_IDS = ["menu-buttons", "menu-brand"];
   const FIT_MIN = 0.1;       // a setting that cannot fit shrinks until it does (#5150 §5); the clip only shows below this
   const FIT_PASSES = 6;
@@ -546,6 +528,16 @@ const TitleLayout = (function () {
     });
     steps.setAttribute("aria-pressed", "false");
     const moves = [direction("Left", "x", -1), direction("Right", "x", 1), direction("Up", "y", -1), direction("Down", "y", 1)];
+    const panel = mk("div", "tl-adjustments");
+    const readout = mk("output", "tl-values");
+    const adjust = btn("tl-adjust", "Controls", "Controls for selected region", () => {
+      panel.hidden = !panel.hidden;
+      adjust.setAttribute("aria-expanded", String(!panel.hidden));
+    });
+    adjust.setAttribute("aria-controls", panel.id);
+    const dock = btn("tl-dock", "Move bar", "Move toolbar to opposite edge", () => {
+      layer.toggleAttribute("data-top", !layer.hasAttribute("data-top"));
+    });
     const undo = btn("tl-undo", "Undo", "Undo last change", () => {
       const previous = ed.history.pop();
       if (previous) { draft = previous; draftBase = store.get(KEY, null); apply(); paintEd(); }
@@ -567,11 +559,13 @@ const TitleLayout = (function () {
     const art = mk("div", "tl-art");
     art.setAttribute("aria-hidden", "true");
     art.hidden = true;
-    for (const c of [name, ...moves, steps, sizeDn, sizeUp, wDn, wUp, undo, rst, resetScreen, cancel]) layer.insertBefore(c, done);   // DONE, the shell's, ends the bar
+    for (const c of [name, adjust, cancel]) layer.insertBefore(c, done);
+    for (const c of [readout, dock, ...moves, steps, sizeDn, sizeUp, wDn, wUp, undo, rst, resetScreen]) panel.appendChild(c);
+    layer.appendChild(panel);
     layer.appendChild(handle);
     overlay.appendChild(art);
     done.addEventListener("click", exit);
-    ed.els = { layer, done, overlay, name, undo, wDn, wUp, handle, art };
+    ed.els = { layer, done, overlay, name, adjust, panel, readout, undo, wDn, wUp, handle, art };
     for (const p of Object.keys(PIECES)) {
       const e = pieceEl(p);
       if (e) e.addEventListener("pointerdown", (ev) => down(ev, p, "move"));
@@ -608,6 +602,9 @@ const TitleLayout = (function () {
     peek(false);
     page(false);
     root.setAttribute("data-tl-edit", "");
+    E.panel.hidden = true;
+    E.adjust.setAttribute("aria-expanded", "false");
+    E.layer.removeAttribute("data-top");
     E.layer.hidden = false;
     E.art.hidden = false;
     select(ed.sel);
@@ -684,10 +681,11 @@ const TitleLayout = (function () {
     const E = ed.els;
     if (!E || !ed.on) return;
     const p = current()[ed.sel];
-    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
+    E.name.textContent = PIECES[ed.sel];
+    E.readout.textContent = SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
       (ed.sel === "btns" ? " · " + (p.width ? p.width + "% WIDE" : "AUTO WIDTH") : "");
     E.undo.disabled = !ed.history.length;
-    E.name.setAttribute("aria-label", "Select next region. " + E.name.textContent);
+    E.name.setAttribute("aria-label", "Select next region. " + E.name.textContent + " · " + E.readout.textContent);
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";
     const car = byId("title-car"), r = car ? car.getBoundingClientRect() : null;
     if (r && r.width >= 1 && r.height >= 1) {

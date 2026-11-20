@@ -821,6 +821,7 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       bounds: HudLayout.screenBounds(),
     }));
     expect(before.rect.x > before.bounds.right || before.rect.y + before.rect.height < before.bounds.top).toBe(true);
+    await page.locator("#hud-arrange-move").click();
     await page.locator("#hud-arrange-recover").tap();
     const recovered = await page.evaluate(() => ({
       value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
@@ -1086,6 +1087,7 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.locator("#hud-arrange-element").selectOption("sectors");
+    await page.locator("#hud-arrange-move").click();
     for (let i = 0; i < 4; i++) await page.locator("#hud-arrange-smaller").click();
     await page.locator("#hud-arrange-move").focus();
     const target = await page.evaluate(() => {
@@ -1860,6 +1862,7 @@ test.describe("unrestricted manual widgets", () => {
       want: HudLayout.ELEMENTS.length - (document.body.classList.contains("desktop") ? 0 : HudArrange.TOUCH_CARRIED.length) }));
     expect(offered.all).toBe(19);
     expect(ids).toHaveLength(offered.want);
+    await page.locator("#hud-arrange-move").click();
     for (const id of ids) {
       await page.locator("#hud-arrange-element").selectOption(id);
       await page.locator("#hud-arrange-move").focus();
