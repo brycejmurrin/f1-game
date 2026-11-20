@@ -36,19 +36,7 @@ const HudLayout = (function () {
   const LIM = Object.freeze({ x: [-Infinity, Infinity], y: [-Infinity, Infinity], s: [0, Infinity] });
   const DEF = Object.freeze({ x: 0, y: 0, s: 100 });
   const fz = (o) => { for (const k in o) Object.freeze(o[k]); return Object.freeze(o); };
-  // SHIPPED per set — what RESET returns to. The wheel covers roughly the middle
-  // 40% of the width (30..70vw) and the bottom 45% at 16:9, so the strip moves
-  // 30vw out from the centre line: centred at 20vw / 80vw, a 130px bar spans
-  // 104..234px at 844 wide (wheel from 253) and 319..449px at 1920 (wheel from
-  // 576). ENERGY/TYRES (seconds and laps) go left; OVERTAKE/AERO — the readouts
-  // for the right-hand buttons — go right, raised more because they are the
-  // bottom of the stack: level with the left pair at phone landscape, and clear
-  // of the pedal/shift row the touch docks keep in both bottom corners.
-  // PER STYLE the strip is the same: every style keeps the bottom band centred
-  // (BROADCAST moves only the TOWER, top-left, and parks map + gaps under it),
-  // so the wheel is the only thing to clear. MINIMAL hides ENERGY / OVERTAKE /
-  // AERO / BRAKE BIAS, which leaves TYRES alone at its shipped spot. They are
-  // three entries rather than one so a style can diverge without a migration.
+  // Cockpit readouts clear the wheel and touch controls. See the measurements in SCREEN-LOOKS-STORAGE.md.
   const COCKPIT_STRIP = {
     energy: { x: -30, y: -4, s: 100 },
     tyre: { x: -30, y: -4, s: 100 },
@@ -56,26 +44,9 @@ const HudLayout = (function () {
     aero: { x: 30, y: -14, s: 100 },
     bb: { x: -18, y: 0, s: 100 },
   };
-  // HELMET — the VISOR HUD (js/camera/cam-groups.js HELMET_LAYOUT): the same
-  // wheel, but nothing is left to its LCD. DESKTOP: the cockpit strip plus
-  // GEAR and SPEED stacked left of the wheel above ENERGY / TYRES (1280x720:
-  // gear x-30 y-20 → fit() pins it at the left edge, 4..266 y438-503; speed
-  // 123..210 y366-413; ENERGY from y577 — measured by the hud-survey helmet
-  // cells, docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH,
-  // read through shippedEl while body lacks .desktop): the steer and pedal
-  // columns sit beside the wheel, so ENERGY stacks in the left bottom strip
-  // above TYRES (css/hud.css anchor-positioning on helmet touch — the old
-  // y-37 centre lift read as an ERS pill floating mid-visor, 2026-10-07).
-  // TYRES stays in the left corner between STRATEGY and the steer buttons:
-  // y-2 is 232..273 at 844×390 dock zoom 0.865. GEAR takes the LCD's place
-  // and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay with
-  // the touch buttons that carry them (css/track-detail.css, the helmet
-  // touch hide).
+  // Desktop visor readout measurements: docs/notes/HELMET-VISOR-HUD-2026-10-05.md.
   const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
-  // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
-  // where the wheel's screen is (the chase row's own centre, one step down),
-  // SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor,
-  // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
+  // The touch visor keeps gear on the wheel and speed beside it.
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
     gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: -5, s: 100 } };
   const SHIPPED = Object.freeze({
@@ -100,14 +71,6 @@ const HudLayout = (function () {
   // 2026-10-22 tip): CLEAN with ot/aero s:90 stacked them on SPEED; BIG
   // gearbox x-3 / CORNERS gearbox x+50 were authored for flex homes and put
   // the gearbox on SPEED or past the right edge.
-  // BIG: tower/map grow in the top band; gaps stay between map and tower (x+7
-  //   clears the grown map without meeting the tower); gearbox x-32 y-18 s:115
-  //   sits left and above the TYRE row (detached home is bottom:12; y-12 still
-  //   clipped TYRES by ~14px at 1280) and clear of SPEED at 1280 and 1920.
-  // CORNERS: gearbox x+38 y-18 is the right corner ABOVE the chip row; ENERGY
-  //   x-32 and TYRES x-44 take the vacated left strip (both forced to 130px
-  //   wide under data-hl-v4; x-42 still kissed ENERGY by 2px at 1280) clear of
-  //   the reflowed SPEED / BB row at both widths.
 
   // TOUCH cockpit / helmet: those desktop offsets land on the steer column
   // and the pedal stack (852×393 cockpit + CORNERS). The chips the touch hide
@@ -219,7 +182,7 @@ const HudLayout = (function () {
     return true;
   }
   // Leaving or backgrounding the page mid-gesture keeps what is on screen.
-  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", commit);
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", () => { if (!arrangePreview) commit(); });
   const camSet = (modeId) => LAYOUT_SET(modeId);
   const has = (c) => !!(doc && doc.body && doc.body.classList && doc.body.classList.contains(c));
   /** Is the race HUD up? (#hud carries `hidden` outside a race — js/game.js.) */
@@ -946,23 +909,42 @@ const HudLayout = (function () {
     apply();
     // A place on MIRROR (data-hl-user) cures the soft hide — same contract as
     // the touch-cockpit chips / SPEED wheel-LCD rule.
-    if (id === "mirror") {
+    if (id === "mirror" && !(live && arrangePreview)) {
       const el = doc && doc.querySelector && doc.querySelector("#hud-mirror");
       if (el && el.hasAttribute && el.hasAttribute("data-hl-user")) revealMirror();
     }
     return e;
   }
-  function resetEl(id, setName, pn) {
+  function resetEl(id, setName, pn, live) {
     if (IDS.indexOf(id) < 0) return null;
     const sn = setArg(setName), p = profArg(pn), st = stored();
     delete st[p][sn][id];
-    save(st); apply();
+    save(st, live); apply();
     return shippedEl(id, sn, p);
   }
-  function resetSet(setName, pn) {
+  function resetSet(setName, pn, live) {
     const st = stored();
     st[profArg(pn)][setArg(setName)] = {};
-    save(st); apply();
+    save(st, live); apply();
+  }
+
+  // Sparse snapshots preserve automatic placement, including on a different handset.
+  function arrangeSnapshot(setName, pn) { return stored()[profArg(pn)][setArg(setName)]; }
+  function restoreSnapshot(setName, pn, snapshot) {
+    const st = stored();
+    st[profArg(pn)][setArg(setName)] = snapshot;
+    save(st, true);
+    apply();
+  }
+  function endArrangeDraft(accept, setName, pn, original) {
+    const snapshot = arrangeSnapshot(setName, pn);
+    if (accept && draft && JSON.stringify(original) !== JSON.stringify(snapshot)) {
+      commit();
+      if (snapshot.mirror && !sameEl(snapshot.mirror, original.mirror || DEF)) revealMirror();
+    } else {
+      draft = null;
+      apply();
+    }
   }
 
   /** Preset `pid` laid over style `pn` / set `sn`'s shipped layout — the full layout. Pure. */
@@ -1345,7 +1327,7 @@ const HudLayout = (function () {
     ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
-    get, set, commit, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
+    get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
   };

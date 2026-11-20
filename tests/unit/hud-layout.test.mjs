@@ -1669,3 +1669,30 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
   assert.equal(D.H.applyPreset("corners", "other"), true, "desktop keeps CORNERS");
   assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
 });
+
+test("HUD arrangement drafts preserve sparse ownership, scope, external imports and mirror settings", () => {
+  const {H, written} = load({hudMirror:"off"});
+  H.set("map", {x:13}, "helmet", "broadcast");
+  const original = written.hudLayout;
+  const snapshot = H.arrangeSnapshot("other", "standard");
+  H.holdArrangePreview(true);
+  H.set("mirror", {x:7}, "other", "standard", true);
+  const moved = H.arrangeSnapshot("other", "standard");
+  H.resetSet("other", "standard", true);
+  H.restoreSnapshot("other", "standard", moved);
+  assert.equal(H.get("mirror", "other", "standard").x, 7);
+  assert.equal(written.hudLayout, original);
+  assert.equal(written.hudMirror, "off");
+  H.endArrangeDraft(false, "other", "standard", snapshot);
+  assert.deepEqual(plain(H.arrangeSnapshot("other", "standard")), {});
+  assert.equal(written.hudLayout, original);
+  H.set("mirror", {x:15}, "other", "standard", true);
+  H.endArrangeDraft(true, "other", "standard", snapshot);
+  assert.equal(written.hudMirror, "on");
+  assert.equal(written.hudLayout.standard.other.mirror.x, 15);
+  assert.equal(written.hudLayout.broadcast.helmet.map.x, 13);
+  H.set("mirror", {x:25}, "other", "standard", true);
+  written.hudLayout = original;
+  H.endArrangeDraft(true, "other", "standard", moved);
+  assert.equal(written.hudLayout, original, "a newer settings import wins");
+});

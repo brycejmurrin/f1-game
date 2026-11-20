@@ -604,8 +604,8 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
       continue;
     }
     if (id === "hud-arrange-bar") {
-      assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-done"\)/);
-      assert.match(read("js/ui/hud-arrange.js"), /mk\("DONE", "Done arranging the HUD", \(\) => setEditing\(false\), "hud-arrange-done"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);
       continue;
     }
     const tag = openTag(id);

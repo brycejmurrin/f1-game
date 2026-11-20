@@ -18780,6 +18780,10 @@
       "applyPreset": [
         "tests/unit/hud-layout.test.mjs"
       ],
+      "arrangeSnapshot": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
       "build": [
         "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
@@ -18793,6 +18797,10 @@
       ],
       "effective": [
         "tests/unit/hud-elements.test.mjs"
+      ],
+      "endArrangeDraft": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
       ],
       "hiddenReason": [
         "tests/unit/hud-layout-hidden.test.mjs",
@@ -18829,6 +18837,10 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "resetSet": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "restoreSnapshot": [
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],

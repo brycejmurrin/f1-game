@@ -97,8 +97,25 @@ const HudArrange = (() => {
     let preview = null;    // title-screen HUD shell visibility, never saved as a preference
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
     let move, bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
-    let moving = false, coarse = false, startValue = null;
-    const moveControls = [];
+    let moving = false, coarse = false;
+    const moveControls = [], history = [];
+    let initial, visibilityDraft = {}, undo;
+    function visibility(id) {
+      const state = HudLayout.visibility(id);
+      return state && visibilityDraft[id] ? { ...state, value: visibilityDraft[id] } : state;
+    }
+    function remember() {
+      if (history.length >= 64) history.shift();
+      history.push({ layout: HudLayout.arrangeSnapshot(context.set, context.profile), choices: {...visibilityDraft} });
+    }
+    function undoEdit() {
+      if (!history.length) return;
+      pending = null; paint(); drag = null; pinch = null; pointers.clear();
+      const previous = history.pop();
+      HudLayout.restoreSnapshot(context.set, context.profile, previous.layout);
+      visibilityDraft = previous.choices;
+      ghosts(); after();
+    }
     const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
 
     const elOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? document.querySelector(row[2]) : null; };
@@ -131,13 +148,13 @@ const HudArrange = (() => {
       bar.id = "hud-arrange-bar";
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", "Arrange HUD");
-      bar.setAttribute("data-esc-close", "hud-arrange-done");
+      bar.setAttribute("data-esc-close", "hud-arrange-cancel");
       bar.style.cssText = "position:fixed;z-index:9999;" +
         "display:flex;flex-wrap:nowrap;box-sizing:border-box;align-items:center;gap:4px;padding:2px 4px;border-radius:8px;" +
         "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);" +
         "font-family:inherit;font-size:13px;line-height:1.15;letter-spacing:0.02em;width:max-content;" +
         "max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));" +
-        "overflow-x:auto;overflow-y:hidden;scrollbar-width:none;";
+        "overflow:auto;scrollbar-width:none;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
@@ -179,7 +196,7 @@ const HudArrange = (() => {
       }, "hud-arrange-step");
       moveControls.push(step, mk("Reset HUD", "Restore this HUD profile and camera group", () => {
         flush();
-        HudLayout.resetSet(context.set, context.profile);
+        remember(); HudLayout.resetSet(context.set, context.profile, true);
         after("Restored " + context.profile + " · " + context.set);
       }, "hud-arrange-reset-screen"));
       for (const control of moveControls) { control.hidden = true; bar.appendChild(control); }
@@ -192,7 +209,7 @@ const HudArrange = (() => {
       // The one long label wraps to two 11 px lines inside its 44 px box instead of widening the strip.
       recover.style.whiteSpace = "normal"; recover.style.width = "72px"; recover.style.fontSize = "11px"; recover.style.padding = "0 4px";
       bar.appendChild(recover);
-      bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
+      bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); remember(); HudLayout.resetEl(selected, context.set, context.profile, true); after(); } }, "hud-arrange-reset"));
       visibilityRow = document.createElement("label");
       // No visible "VISIBILITY" caption: the select names itself (aria-label) and paints SHOW / HIDE / AUTO.
       visibilityRow.style.cssText = "display:flex;flex:none;align-items:center;";
@@ -204,11 +221,17 @@ const HudArrange = (() => {
       visibilityPick.setAttribute("aria-describedby", "hud-arrange-hint");
       visibilityPick.style.cssText = selectCss + "width:76px;";
       visibilityRow.appendChild(visibilityPick);
-      SettingRow.wire(visibilityRow, { values: [], read: () => HudLayout.visibility(selected)?.value || "", write: (value) => {
-        flush(); HudLayout.setVisibility(selected, value); ghosts(); after();
+      SettingRow.wire(visibilityRow, { values: [], read: () => visibility(selected)?.value || "", write: (value) => {
+        flush(); remember();
+        if (value === HudLayout.visibility(selected)?.value) delete visibilityDraft[selected];
+        else visibilityDraft[selected] = value;
+        ghosts(); after();
       } });
       bar.appendChild(visibilityRow);
-      bar.appendChild(mk("DONE", "Done arranging the HUD", () => setEditing(false), "hud-arrange-done"));
+      undo = mk("Undo", "Undo last HUD edit", undoEdit, "hud-arrange-undo");
+      bar.appendChild(undo);
+      bar.appendChild(mk("Cancel", "Discard HUD edits", () => setEditing(false, true, false), "hud-arrange-cancel"));
+      bar.appendChild(mk("Apply", "Apply HUD edits", () => setEditing(false), "hud-arrange-done"));
       bar.hidden = true;
       document.body.appendChild(bar);
       if (typeof TopModal !== "undefined" && TopModal.wireLayer) TopModal.wireLayer(bar);
@@ -234,18 +257,19 @@ const HudArrange = (() => {
       if (picker && selected) picker.value = selected;
       nameEl.textContent = cur ? paintedSize(cur.s, elOf(selected)?.currentCSSZoom) + "%" : "";
       nameEl.hidden = !cur;
-      const visibility = selected && HudLayout.visibility(selected);
-      const off = visibility && visibility.value === "off";
+      undo.disabled = !history.length;
+      const vis = selected && visibility(selected);
+      const off = vis && vis.value === "off";
       hintEl.textContent = message || (clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
         : off ? "hidden in the race \u00b7 SHOW brings it back"
-        : visibility && visibility.value === "mixed" ? "some tower readouts are hidden"
-        : selected && !visibility ? "shown automatically with race events"
+        : vis && vis.value === "mixed" ? "some tower readouts are hidden"
+        : selected && !vis ? "shown automatically with race events"
         : "");
       hintEl.hidden = !hintEl.textContent;
       if (visibilityRow) {
-        SettingRow.paint(visibilityRow, visibility ? visibility.value : "", visibility ? visibility.choices : []);
-        SettingRow.disable(visibilityRow, !visibility);
-        visibilityRow.title = visibility ? "" : "Shown automatically with race events";
+        SettingRow.paint(visibilityRow, vis ? vis.value : "", vis ? vis.choices : []);
+        SettingRow.disable(visibilityRow, !vis);
+        visibilityRow.title = vis ? "" : "Shown automatically with race events";
       }
       for (const control of moveControls) control.hidden = !moving;
       move.textContent = moving ? "Back" : "MOVE";
@@ -326,7 +350,7 @@ const HudArrange = (() => {
       const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
       if (nameEl && e && p.id === selected) nameEl.textContent = paintedSize(e.s, elOf(p.id)?.currentCSSZoom) + "%";
     }
-    function flush() { paint(); HudLayout.commit(); }
+    function flush() { paint(); }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
       if (id === "map" && v.s != null) { const orig = dragOrig(id); v = Object.assign({ x: orig.x, y: orig.y }, v); }
@@ -347,23 +371,25 @@ const HudArrange = (() => {
       for (const [id, , sel] of ELEMENTS) {
         const el = document.querySelector(sel);
         if (!el) continue;
-        if (HudLayout.visibility(id)?.value !== "off") { if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off"); }
+        if (visibility(id)?.value !== "off") { if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off"); }
         else el.setAttribute("data-hl-off", "");
       }
     }
     function nudge(x, y, amount) {
       if (!selected) return;
       flush();
+      remember();
       const cur = dragOrig(selected);
       const next = { x: cur.x + x * amount, y: cur.y + y * amount };
-      HudLayout.set(selected, next, context.set, context.profile);
+      HudLayout.set(selected, next, context.set, context.profile, true);
       after("X " + next.x.toFixed(1) + "% · Y " + next.y.toFixed(1) + "%");
     }
     function size(dir) {
       if (!selected) return;
       flush();
+      remember();
       const orig = dragOrig(selected);
-      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile);
+      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile, true);
       after();
     }
 
@@ -389,9 +415,10 @@ const HudArrange = (() => {
       });
       let delta = move(rect);
       if (!delta.x && !delta.y) { after(oversized ? message : "Already in view. Size unchanged."); return; }
+      remember();
       const orig = dragOrig(selected);
       delta = move(el.getBoundingClientRect());
-      HudLayout.set(selected, Object.assign({}, orig, dragTo(orig, delta.x, delta.y, window.innerWidth, window.innerHeight)), context.set, context.profile);
+      HudLayout.set(selected, Object.assign({}, orig, dragTo(orig, delta.x, delta.y, window.innerWidth, window.innerHeight)), context.set, context.profile, true);
       after(message);
     }
 
@@ -475,7 +502,7 @@ const HudArrange = (() => {
       if (was.pause && pause) pause.hidden = false;
     }
 
-    function setEditing(on, restore) {
+    function setEditing(on, restore, accept = true) {
       const was = editing;
       editing = !!on;
       if (editing && !was) {
@@ -483,6 +510,8 @@ const HudArrange = (() => {
         moving = false;
         opener = document.activeElement;
         context = { set: HudLayout.shown(), profile: HudLayout.profile() };
+        history.length = 0; visibilityDraft = {};
+        initial = HudLayout.arrangeSnapshot(context.set, context.profile);
         HudLayout.holdArrangePreview(true);
         hideDialogs();
         reveal();
@@ -505,6 +534,9 @@ const HudArrange = (() => {
       }
       if (!editing && was) {
         flush();
+        HudLayout.endArrangeDraft(accept, context.set, context.profile, initial);
+        if (accept) for (const [id, value] of Object.entries(visibilityDraft)) HudLayout.setVisibility(id, value);
+        history.length = 0; visibilityDraft = {};
         if (reflow) { cancelAnimationFrame(reflow); reflow = 0; }
         document.body.removeAttribute("data-hud-arrange");
         for (const [, , sel] of ELEMENTS) {
@@ -591,7 +623,7 @@ const HudArrange = (() => {
       if (drag) return;   // another finger must not switch the gesture to a different piece
       flush();
       selected = id;
-      startValue = elOf(id)?.hasAttribute("data-hl-user") ? current(id) : null;
+      remember();
       let orig = dragOrig(id);
       drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
       pinch = null;
@@ -622,8 +654,6 @@ const HudArrange = (() => {
         drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
         ended = true;
       } else if (drag && e.pointerId === drag.pid) { drag = null; ended = true; }
-      // The one save of the gesture: when the last finger on the piece lifts.
-      if (!drag) HudLayout.commit();
       if (ended) after();
     }
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -633,23 +663,23 @@ const HudArrange = (() => {
       if (!drag || (e.pointerId != null && e.pointerId !== drag.pid && e.pointerId !== pinch?.pid)) return;
       pending = null;
       paint();
-      if (startValue) HudLayout.set(drag.id, startValue, context.set, context.profile);
-      else HudLayout.resetEl(drag.id, context.set, context.profile);
+      const previous = history.pop();
+      if (previous) HudLayout.restoreSnapshot(context.set, context.profile, previous.layout);
       drag = null; pinch = null; pointers.clear(); after();
     }
     document.addEventListener("pointercancel", cancelGesture, true);
     document.addEventListener("lostpointercapture", cancelGesture, true);
     const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
     if (watched.length && typeof MutationObserver !== "undefined") {
-      const mo = new MutationObserver(() => { if (editing && watched.some((el) => !el.hidden)) setEditing(false, false); });
+      const mo = new MutationObserver(() => { if (editing && watched.some((el) => !el.hidden)) setEditing(false, false, false); });
       for (const el of watched) mo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
     }
     if (typeof MutationObserver !== "undefined") {
       const rotate = $("rotate-device");
       const mo = new MutationObserver(() => {
         if (!editing) return;
-        if (HudLayout.shown() !== context.set || HudLayout.profile() !== context.profile) setEditing(false);
-        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false);
+        if (HudLayout.shown() !== context.set || HudLayout.profile() !== context.profile) setEditing(false, true, false);
+        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false, true, false);
       });
       mo.observe(document.body, { attributes: true, attributeFilter: ["class", "data-hl-set"] });
       if (rotate) mo.observe(rotate, { attributes: true, attributeFilter: ["aria-hidden"] });
@@ -665,7 +695,7 @@ const HudArrange = (() => {
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
-      setEditing(false);
+      setEditing(false, true, false);
     }, true);
     if (typeof window !== "undefined" && window.addEventListener) {
       const resize = () => {

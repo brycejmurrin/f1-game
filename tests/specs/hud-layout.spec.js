@@ -825,7 +825,7 @@ test.describe("HUD editing drafts and explicit recovery", () => {
     const recovered = await page.evaluate(() => ({
       value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
       rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
-      bounds: HudLayout.screenBounds(), saved: localStorage.getItem("apex26.hudLayout"),
+      bounds: HudLayout.screenBounds(),
     }));
     expect(recovered.value.s).toBe(before.value.s);
     expect(Math.abs(recovered.rect.width - before.rect.width)).toBeLessThanOrEqual(.5);
@@ -838,13 +838,14 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       if (id !== "sectors") expect(recovered.all[id], id + " was not selected for recovery").toEqual(value);
     }
     await page.locator("#hud-arrange-done").tap();
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await closeDisplayAndResume(page);
     await page.evaluate(async () => {
       GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     expect(await page.evaluate(() => HudLayout.get("sectors"))).toEqual(recovered.value);
-    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(recovered.saved);
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
     const resumed = await page.locator("#hud-sectors").boundingBox();
     for (const key of ["x", "y", "width", "height"]) {
       expect(Math.abs(resumed[key] - recovered.rect[key]), key + " survives Resume").toBeLessThanOrEqual(.5);
@@ -1094,8 +1095,8 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     });
     await page.mouse.move(target.x, target.y); await page.mouse.down();
     await page.mouse.move(target.x + target.dx, target.y + target.dy, { steps: 4 }); await page.mouse.up();
-    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await page.locator("#hud-arrange-done").click();
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await page.locator("#pm-settings-close").click();
     await page.locator("#pm-settings-close").click();
     await page.locator("#pm-resume").click();

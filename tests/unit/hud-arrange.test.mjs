@@ -177,6 +177,15 @@ function editor(pieceId = "piece", options = {}) {
       ids.get(id).removeAttribute('data-hl-user');
       ids.get(id).removeAttribute('data-hl-v4');
       dirty = false;
+    }, arrangeSnapshot(sn, pn) {
+      const entry = values.get(key(sn, pn));
+      return entry ? {...entry} : null;
+    }, restoreSnapshot(sn, pn, snapshot) {
+      if (!snapshot) this.resetEl(pieceId, sn, pn);
+      else this.set(pieceId, snapshot, sn, pn, true);
+    }, endArrangeDraft(accept, sn, pn, initial) {
+      if (!accept) this.restoreSnapshot(sn, pn, initial);
+      else this.commit();
     }, resetSet(sn, pn) { this.resetEl(pieceId, sn, pn); } };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
@@ -234,9 +243,9 @@ test('editor: a drag paints every frame but saves once, and reads layout only at
     assert.equal(e.stats.rects, rects, gesture + ': no forced layout read while the finger is down');
     if (gesture === 'pinch') { e.fire('pointerup', { pointerId: 2 }); assert.equal(e.stats.saves, 0, 'one finger still holds the piece'); }
     e.fire('pointerup');
-    assert.equal(e.stats.saves, 1, gesture + ': exactly one write at the end of the gesture');
+    assert.equal(e.stats.saves, 0, gesture + ': the edit remains a preview after the finger lifts');
     e.api.setEditing(false);
-    assert.equal(e.stats.saves, 1, gesture + ': exit has nothing left to save');
+    assert.equal(e.stats.saves, 1, gesture + ': Apply commits the session once');
   }
 });
 
@@ -270,7 +279,7 @@ test('editor: title preview restores shell visibility on normal and interrupted 
     assert.equal(e.ids.get('hud').hidden, false); assert.equal(e.ids.get('overlay').hidden, true);
     const bar = e.ids.get('hud-arrange-bar');
     assert.equal(bar.getAttribute('role'), 'toolbar'); assert.equal(bar.getAttribute('aria-label'), 'Arrange HUD');
-    assert.equal(bar.getAttribute('data-esc-close'), 'hud-arrange-done');
+    assert.equal(bar.getAttribute('data-esc-close'), 'hud-arrange-cancel');
     e.api.setEditing(false, restore);
     assert.equal(e.ids.get('hud').hidden, true); assert.equal(e.ids.get('overlay').hidden, titleHidden);
     assert.equal(e.writes.length, 0);
@@ -353,7 +362,7 @@ test('editor: opt-in readouts are selectable previews without enabling them and 
     }
     const vis = e.ids.get('hud-arrange-vis');
     assert.equal(vis.value, 'off'); e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
-    assert.equal(e.on.has(id), true); assert.equal(root.hidden, false); assert.equal(vis.value, 'on');
+    assert.equal(e.on.has(id), false); assert.equal(root.hidden, false); assert.equal(vis.value, 'on');
     e.chooseVisibility(vis.value === 'off' ? 'on' : 'off'); assert.equal(e.on.has(id), false); assert.equal(root.hidden, false);
     e.api.setEditing(false);
     assert.equal(root.hidden, true); assert.equal(root.children.length, 1);
@@ -387,9 +396,12 @@ test('editor: tower hide/show includes DELTA and leaves SPEED independent', () =
   const vis = e.ids.get('hud-arrange-vis');
   assert.equal(vis.value, 'on');
   e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
+  assert.deepEqual([...e.on], [...tower, 'speed'], 'preview leaves race settings untouched');
+  e.api.setEditing(false); e.api.setEditing(true);
   assert.deepEqual([...e.on], ['speed'], 'no timing-tower child remains on');
   assert.equal(vis.value, 'off');
   e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
+  e.api.setEditing(false); e.api.setEditing(true);
   for (const id of tower) assert.equal(e.on.has(id), true, id + ' returns with the tower');
   assert.equal(e.on.has('speed'), true);
   // DELTA can be the only enabled child after individual settings changes.
@@ -397,6 +409,7 @@ test('editor: tower hide/show includes DELTA and leaves SPEED independent', () =
   e.api.setEditing(false); e.api.setEditing(true);
   assert.equal(vis.value, 'mixed', 'a delta-only tower remains partly shown');
   e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
+  e.api.setEditing(false);
   assert.deepEqual([...e.on], ['speed']);
 });
 
@@ -575,6 +588,7 @@ test('editor: hidden map, gaps and mirror stay selectable and their owner modes 
     assert.equal(e.ids.get('hud-arrange-vis').value, 'on');
     e.chooseVisibility('auto');
     assert.equal(e.ids.get('hud-arrange-vis').value, 'auto');
+    e.api.setEditing(false);
     assert.equal(e.preferences[id === 'map' ? 'hudMapVis' : id === 'gaps' ? 'hudGapsVis' : 'hudMirror'], 'auto');
     assert.equal(e.writes.length, 0, 'changing visibility does not move the piece');
   }
@@ -743,4 +757,22 @@ test("movement controls share keyboard offsets, restore a cancelled drag and res
   assert.deepEqual(e.get("piece", "chase", "standard"), {x:-1,y:5,s:100});
   e.fire("pointerdown"); e.fire("pointermove", {clientX:300}); e.tick(); e.fire("blur");
   assert.equal(e.ids.get("piece").hasAttribute("data-hl-user"), false, "an interrupted first gesture restores automatic placement");
+});
+
+test("HUD Undo restores layout and a partially visible tower; Escape discards pending choices", () => {
+  const e = editor("tower", {on:["delta", "speed"]});
+  e.api.setEditing(true);
+  const button = name => e.ids.get("hud-arrange-" + name);
+  button("larger").onclick();
+  e.chooseVisibility("off");
+  assert.equal(button("vis").value, "off");
+  assert.deepEqual(e.visibilityWrites, []);
+  button("undo").onclick();
+  assert.equal(button("vis").value, "mixed");
+  assert.equal(e.get("tower").s, 110);
+  e.chooseVisibility("on");
+  e.fire("keydown", {key:"Escape"});
+  assert.equal(e.stats.saves, 0);
+  assert.deepEqual([...e.on], ["delta", "speed"]);
+  assert.equal(e.get("tower").s, 100);
 });
