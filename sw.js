@@ -65,8 +65,9 @@ const offlineRetries = new Map();
 // @gen-shell:sw-required-lazy
 const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js"];
 // /@gen-shell:sw-required-lazy
+const PACK_MANIFEST_KEY_PREFIX = "assets/pack/manifest.json?b=";
 function isInstallCriticalOptional(u) {
-  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
+  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u) || u.startsWith(PACK_MANIFEST_KEY_PREFIX);
 }
 // Default-off / explicit opt-in: still seeded in `optional` when gen-shell
 // requires lockstep, but never install-precached. WGX + LAZY_EDITOR / LAZY_XR /
@@ -845,6 +846,9 @@ function isCarriedRuntime(url) {
 }
 async function carryEntry(cache, req, old) {
   const url = new URL(req.url);
+  // A previous worker may have stored a newer response under an older hash.
+  // Even a matching HTTP validator would only authenticate those wrong bytes.
+  if (isHashedPackRequest(url) && !(await packResponseMatches(old, url.search.slice(3)))) return;
   const etag = old.headers.get("ETag"), modified = old.headers.get("Last-Modified");
   if (!etag && !modified) {
     // Nothing to ask with: only an address that names its content is safe to keep.
@@ -914,6 +918,7 @@ async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
     // loads; an engine without Fetch Priority ignores the unknown member
     // (https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#priority).
     const init = { priority: "low" };
+    if (url.startsWith(PACK_MANIFEST_KEY_PREFIX)) init.cache = "no-store";
     if (ctrl) init.signal = ctrl.signal;
     const res = await Promise.race([fetch(url, init), expired]);
     if (res && res.ok) {
@@ -988,13 +993,16 @@ self.addEventListener("install", (event) => {
     // Keep both path classes.
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
+    // Seed the new build's own manifest before activation. Carrying the older
+    // manifest or relying on the first online boot loses the pack after an update.
+    const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport|settings-export-body)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
           return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
-        });
+        }).concat(packManifest);
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (in the seed's order: race-entry bundles, then circuits +
     // scenery, then data / net — not runtime-only doors), then
@@ -1190,13 +1198,60 @@ function packNetworkFirst(event, req, fixedCache, staleFirst) {
 }
 
 // Content-addressed pack files: assets.js asks for `assets/pack/<file>?h=<md5>`
-// with the md5 the (network-first) manifest records. The URL IS the content, so
+// with the md5 the manifest records. The URL names the content, so
 // a cached copy is always right and no revalidation round trip is owed; a
 // rebake changes the md5, hence the URL, hence misses the old entry.
 const PACK_HASHED = /^\?h=[0-9a-f]{32}$/;
 function isHashedPackRequest(url) {
   return PACK_HASHED.test(url.search) && url.pathname.includes("/assets/pack/") &&
     !url.pathname.endsWith("/manifest.json");
+}
+
+// The baked manifest uses MD5 to identify bytes. Web Crypto has no MD5, so
+// compute the RFC 1321 digest here before returning or storing a cache miss.
+const MD5_SHIFTS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+const MD5_CONSTANTS = Int32Array.from({ length: 64 }, (_, i) => Math.floor(2 ** 32 * Math.abs(Math.sin(i + 1))));
+function packDigest(bytes) {
+  const body = new DataView(bytes);
+  const state = new Int32Array([0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]);
+  const words = new Int32Array(16);
+  function processBlock(input, offset) {
+    for (let i = 0; i < 16; i++) words[i] = input.getInt32(offset + i * 4, true);
+    let a = state[0], b = state[1], c = state[2], d = state[3];
+    for (let i = 0; i < 64; i++) {
+      let mix, word;
+      if (i < 16) { mix = (b & c) | (~b & d); word = i; }
+      else if (i < 32) { mix = (d & b) | (~d & c); word = (5 * i + 1) % 16; }
+      else if (i < 48) { mix = b ^ c ^ d; word = (3 * i + 5) % 16; }
+      else { mix = c ^ (b | ~d); word = (7 * i) % 16; }
+      const shift = MD5_SHIFTS[(i >> 4) * 4 + (i % 4)];
+      const sum = (a + mix + MD5_CONSTANTS[i] + words[word]) | 0;
+      a = d;
+      d = c;
+      c = b;
+      b = (b + ((sum << shift) | (sum >>> (32 - shift)))) | 0;
+    }
+    state[0] += a; state[1] += b; state[2] += c; state[3] += d;
+  }
+  const end = bytes.byteLength - bytes.byteLength % 64;
+  for (let offset = 0; offset < end; offset += 64) processBlock(body, offset);
+  const remainder = bytes.byteLength - end;
+  const tail = new Uint8Array(remainder < 56 ? 64 : 128);
+  tail.set(new Uint8Array(bytes, end));
+  tail[remainder] = 0x80;
+  const padded = new DataView(tail.buffer);
+  const bits = bytes.byteLength * 8;
+  padded.setUint32(tail.length - 8, bits, true);
+  padded.setUint32(tail.length - 4, Math.floor(bits / 2 ** 32), true);
+  for (let offset = 0; offset < tail.length; offset += 64) processBlock(padded, offset);
+  let hex = "";
+  for (const word of state) {
+    for (let shift = 0; shift < 32; shift += 8) hex += ((word >>> shift) & 0xff).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+async function packResponseMatches(response, hash) {
+  return packDigest(await response.clone().arrayBuffer()) === hash;
 }
 // THE PACK MANIFEST UNDER THE PAGE'S BUILD (#5629): assets.js asks for
 // `assets/pack/manifest.json?b=<shell build>`. One deploy ships one manifest, so
@@ -1211,7 +1266,7 @@ const PACK_BUILD_KEY = /^\?b=[1-9][0-9]{0,9}$/;
 function isBuildKeyedManifest(url) {
   return PACK_BUILD_KEY.test(url.search) && url.pathname.endsWith("/assets/pack/manifest.json");
 }
-function packCacheFirst(event, req) {
+function packCacheFirst(event, req, hash) {
   let cacheWrite = Promise.resolve();
   const response = (async () => {
     const hit = await matchPreferCurrent(req);
@@ -1219,6 +1274,7 @@ function packCacheFirst(event, req) {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
+        if (!(await packResponseMatches(res, hash))) return Response.error();
         const copy = res.clone();
         cacheWrite = (async () => {
           const cache = await openCache(await currentCacheName());
@@ -1395,9 +1451,10 @@ self.addEventListener("fetch", (event) => {
   // revalidation makes an unchanged file a 304), the cache when the network
   // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
   // The exception is a `?h=<md5>` file (isHashedPackRequest): content-addressed,
-  // so cache-first. The manifest that names the hashes stays network-first.
+  // so cache-first. The build-keyed manifest also answers from cache while
+  // revalidating in the background.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
-    if (isHashedPackRequest(url)) packCacheFirst(event, req);
+    if (isHashedPackRequest(url)) packCacheFirst(event, req, url.search.slice(3));
     else packNetworkFirst(event, req, null, isBuildKeyedManifest(url));
     return;
   }

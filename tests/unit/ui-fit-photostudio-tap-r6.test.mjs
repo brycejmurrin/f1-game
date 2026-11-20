@@ -44,9 +44,22 @@ test("portrait studio: preview-band pad, guide, overflow and --bg (393×852 hunt
     "calc(100svh - 42svh - var(--safe-b))", "preview band = viewport minus sheet minus safe-b");
   assert.equal(decl(rules, "#photo-studio", "padding-top", phone), "var(--ps-preview-h)");
   assert.equal(decl(rules, "#photo-studio", "padding-bottom", phone), "0");
-  assert.equal(decl(rules, "#ps-guide", "top", phone), "calc(var(--ps-preview-h) / 2)",
-    "guide centres on the preview band, not the full viewport");
   assert.equal(decl(rules, "#ps-panel", "overflow", phone), "visible",
     "Garage / Subject native selects must not clip to the sheet");
   assert.equal(decl(rules, "#ps-body", "overscroll-behavior", phone), "contain");
+});
+
+test("portrait studio centres each export guide on the full canvas behind the sheet", () => {
+  const phone = { context: /max-width:\s*640px/ };
+  assert.equal(decl(rules, "#photo-studio", "inset"), "0");
+  assert.equal(decl(rules, "#ps-guide", "left"), "50%");
+  assert.equal(decl(rules, "#ps-guide", "top"), "50%");
+  assert.equal(decl(rules, "#ps-guide", "top", phone), null,
+    "the sheet may overlay the scene without moving the crop centre");
+  for (const [mode, ratio, height] of [["wide", "16 / 9", "56.25vw"], ["square", "1", "100vw"], ["portrait", "4 / 5", "125vw"]]) {
+    const selector = `#photo-studio[data-aspect="${mode}"] #ps-guide`;
+    assert.equal(decl(rules, selector, "aspect-ratio"), ratio);
+    assert.equal(decl(rules, selector, "height"), `min(100%, ${height})`);
+    assert.equal(decl(rules, selector, "height", phone), null);
+  }
 });
