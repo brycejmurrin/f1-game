@@ -1,8 +1,9 @@
 /* Apex 26 — GarageHiPrims: the EXTREME garage's dense primitives (GfxQuality
  * feature "garageHi" / "crewHi", desktop EXTREME only). LAZY (tools/manifest.cjs
  * LAZY_RACE: LazyBundles.ensureGarageData loads it with the garage's Blender
- * tables). GaragePrims.dense(on, fn) routes block / tube / hose / tyre here only
- * inside that scope, and only while this file is resident; HIGH and below, every
+ * tables). It also holds every EXTREME-only branch of the eager garage files: their
+ * hooks route block / cyl / tube / hose and the dense equipment details here only
+ * inside this file's dense() scope, and only while it is resident; HIGH and below, every
  * phone and the trackside pit rows never reach it. Every triangle is oriented
  * against its intended normal and zero-area triangles are dropped, so a builder
  * here cannot ship a back-facing or degenerate face.
@@ -230,6 +231,107 @@ const GarageHiPrims = (function () {
     return Object.freeze({ axis: spec.axis, sides: spec.sides * 2, p: spec.p, rings, panels });
   }
 
-  return Object.freeze({ densifyLoft, bevelBox, spline, sweep, lathe, tyre, roomExtras, TYRE_PROFILE });
+  /* The EXTREME build scope. Everything EXTREME-only lives here so the eager
+   * boot carries only small hooks (the boot wall's eagerCodeBytes): while
+   * dense(true, fn) runs, GaragePrims.hi(api) points block / cyl / tube / hose
+   * and the builders' GaragePrims.ex(name, ...) hooks at this file; while
+   * detail(true, fn) runs, GarageCrewDraw.body.hi(denseSpec) does the same for
+   * the crew lofts. Outside a scope both are unset and every primitive is
+   * today's (HIGH, phones, pit rows, car-mesh.js). run / build open both scopes
+   * for a room or crew build and fall back to today's build on a throw. */
+  const segs = (s) => Math.min(48, s * 2);   // 2x ring segments
+  let _prims = false, _crew = false;
+  function dense(on, fn) {
+    const was = _prims;
+    _prims = !!on; GaragePrims.hi(_prims ? api : null);
+    try { return fn(); } finally { _prims = was; GaragePrims.hi(was ? api : null); }
+  }
+  const DENSE = {};
+  const denseSpec = (name) => DENSE[name] || (DENSE[name] = densifyLoft(GarageCrewDraw.body.PARTS[name]));
+  function detail(on, fn) {
+    const was = _crew;
+    _crew = !!on; GarageCrewDraw.body.hi(_crew ? denseSpec : null);
+    try { return fn(); } finally { _crew = was; GarageCrewDraw.body.hi(was ? denseSpec : null); }
+  }
+  // Feature reads, cached on first use (the file lands once, on a tier that already chose them).
+  const _on = {};
+  function hiOn(name) {
+    if (!(name in _on)) {
+      let v = false;
+      try { v = typeof GfxQuality !== "undefined" && !!GfxQuality.feature(name); } catch (_) { v = false; }
+      _on[name] = v;
+    }
+    return _on[name];
+  }
+  /** The api when feature `name` is on (this file being resident is the other half), else false. */
+  const live = (name) => hiOn(name) && api;
+  // GaragePrims.run: a room ("room", garageHi; lookKey carries the bit) or crew ("crew" / "pit", crewHi) build, dense when live.
+  const run = (kind, fn, undo) => (live(kind === "room" ? "garageHi" : "crewHi") ? build(kind, fn, undo) : fn());
+  function hiReset() { for (const k in _on) delete _on[k]; }
+  // GaragePrims.lookKey: the room's geometry identity carries the EXTREME bit (strings made once, no per-frame garbage).
+  const HI_LOOK = {};
+  const key = (look) => live("garageHi") && (HI_LOOK[look] || (HI_LOOK[look] = look + "+hi"));
+  const lookKey = () => key(GaragePrims.lookId()) || GaragePrims.lookId();
+  // A dense build that throws builds today's instead (undo first frees what it half-made).
+  const FAIL = { room: ["game", "GarageScene dense room failed, stock room"], crew: ["game", "GarageCrew dense crew failed, stock crew"],
+    pit: ["race", "PitCrewAnim dense crew failed, stock crew"] };
+  function build(kind, fn, undo) {
+    try { return dense(true, kind === "room" ? fn : () => detail(true, fn)); }
+    catch (e) { if (undo) undo(); Log.warn(FAIL[kind][0], `${FAIL[kind][1]}: ${e && e.message}`); return fn(); }
+  }
+
+  // The primitives' dense forms: GaragePrims.block / hose pass their arguments (block: and its sideOnly); true = handled here.
+  function block([out, cx, cy, cz, hx, hy, hz, col, mid], sideOnly) {
+    const m = Math.min(hx, hy, hz);
+    if (m < 0.01) return false;
+    bevelBox(out, [cx, cy, cz], [hx, hy, hz], Math.min(0.014, 0.2 * m), col, mid, sideOnly);
+    return true;
+  }
+  function hose([out, pts, rad, col, seg, mid]) {
+    if (pts.length < 3) return false;
+    sweep(out, spline(pts, 6), rad, col, segs(seg || 8), mid);
+    return true;
+  }
+  // A tyre at EXTREME: the lathed slick at 2x segments.
+  const slick = (out, a, b, rad, col, seg, mid) => tyre(out, a, b, rad, col, segs(seg || 14), mid);
+  // GarageScene's tyre stack: a lathed slick, its compound band laid on the flat upper sidewall.
+  function stack(out, x, y, z, comp) {
+    slick(out, [x, y, z], [x, y + 0.33, z], 0.36, [0.045, 0.045, 0.050], 14);
+    GaragePrims.cyl(out, x, y + 0.33, z, 0.305, 0.006, comp, 14);
+    return true;
+  }
+  // GarageEquipment's tyre trolley tyre at z = wz.
+  function wheel(out, x, wz) {
+    slick(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, [0.045, 0.045, 0.050], 14);
+    return true;
+  }
+  // GarageEquipment's tool chest drawer d: a round full-width pull on two stand-offs, and the drawer's shadow gap above it.
+  function pull(out, x, z, s, d) {
+    const { tube, block: blk, STEEL, DARK, MAT } = GaragePrims, py = 0.28 + d * 0.24;
+    tube(out, [x + s * 0.41, py, z - 0.30], [x + s * 0.41, py, z + 0.30], 0.011, STEEL, 8, MAT.METAL);
+    for (const pz of [-0.27, 0.27]) tube(out, [x + s * 0.382, py, z + pz], [x + s * 0.41, py, z + pz], 0.007, STEEL, 6, MAT.METAL);
+    blk(out, x + s * 0.3825, 0.35 + d * 0.24, z, 0.0025, 0.004, 0.70, DARK);
+    return true;
+  }
+  // GarageEquipment's monitor gantry screen at z + dz: a raised bezel lip round the panel and the mount box behind it.
+  function bezel(out, x, z, s, dz) {
+    const { block: blk, STEEL, DARK, MAT, scale } = GaragePrims;
+    for (const sy of [-1, 1]) blk(out, x + s * 0.125, 1.92 + sy * 0.235, z + dz, 0.006, 0.012, 0.37, DARK);
+    for (const sz of [-1, 1]) blk(out, x + s * 0.125, 1.92, z + dz + sz * 0.36, 0.006, 0.225, 0.012, DARK);
+    blk(out, x + s * 0.045, 1.98, z + dz, 0.02, 0.06, 0.06, scale(STEEL, 0.6), MAT.METAL);
+    return true;
+  }
+
+  const api = Object.freeze({ densifyLoft, bevelBox, spline, sweep, lathe, tyre, roomExtras, TYRE_PROFILE,
+    segs, dense, isDense: () => _prims, detail, isDetail: () => _crew, denseSpec, hiOn, live, hiReset, key, build,
+    block, hose, slick, wheel, stack, pull, bezel, run, lookKey });
+  // Landing installs the EXTREME seams GaragePrims keeps as today's stubs (lookKey = lookId, run = call):
+  // from here the room key and PitCrewAnim's rig key (crewHi) change, the bay crew is freed, and each rebuilds dense.
+  if (typeof GaragePrims !== "undefined") Object.assign(GaragePrims, { lookKey, run });
+  if (live("crewHi")) {
+    if (typeof GaragePrims !== "undefined") GaragePrims.crewHi = true;
+    if (typeof GarageCrew !== "undefined") GarageCrew.free();
+  }
+  return api;
 })();
 if (typeof window !== "undefined") window.GarageHiPrims = GarageHiPrims;

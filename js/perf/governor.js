@@ -125,69 +125,46 @@ let _stallsTrimmed = 0;   // this evaluation window
 
 // UPPER LADDER (desktop ULTRA / EXTREME on TLX; inert at detail 0). Why: docs/GOVERNOR-RATIONALE.md §gov-42.
 let _xShed = 0, _xFutile = false;
-const GPU_BOUND = 0.75, GPU_ROOM = 0.7, GPU_FRESH_MS = 2000;
 function _xq() {
   try {
     return _gfx && _gfx.__tlx && typeof GfxQuality !== "undefined" && GfxQuality.detail() > 0 && GfxQuality.SHED_ORDER ? GfxQuality : null;
   } catch (_) { return null; }
 }
-// Next / previous shed count that changes an enabled extra, or -1.
-function _xNext(q) {
+// The shed count one rung DOWN (d 1: the next count that drops an enabled extra) or UP (d -1: the previous
+// count that restores one, or 0), or -1. Each extra is read at the count that still keeps it.
+function _xStep(q, d) {
   try {
-    const max = q.SHED_ORDER.length;
-    for (let n = _xShed; n < max; n++) if (q.feature(q.SHED_ORDER[max - 1 - n])) return n + 1;
-  } catch (_) { /* fall through: no rung */ }
-  return -1;
-}
-function _xPrev(q) {
-  try {
-    const max = q.SHED_ORDER.length;
-    for (let n = _xShed - 1; n >= 0; n--) {
-      q.setShed(n);
-      if (q.feature(q.SHED_ORDER[max - 1 - n]) || n === 0) { q.setShed(_xShed); return n; }
-    }
-    q.setShed(_xShed);
-  } catch (_) { /* fall through */ }
+    const O = q.SHED_ORDER, m = O.length;
+    for (let n = _xShed - (d < 0); n >= 0 && n < m; n += d) { q.setShed(n); if (q.feature(O[m - 1 - n]) || (d < 0 && !n)) return n + (d > 0); }
+  } catch (_) { /* fall through: no rung */ } finally { try { q.setShed(_xShed); } catch (_) { /* restored */ } }
   return -1;
 }
 function _xSet(n) { const q = _xq(); try { _xShed = q ? q.setShed(n) : 0; } catch (_) { _xShed = 0; } }
-// A fresh TLX GPU timer reading in ms, or -1.
+// A fresh (<= 2 s) TLX GPU timer reading in ms, or -1 (no gfx / no timer throws into the catch).
 function _gpuMs() {
   try {
-    if (!_gfx || typeof _gfx.gpuMs !== "function" || typeof _gfx.gpuTimer !== "function") return -1;
-    const st = _gfx.gpuTimer();
-    if (!st || !st.on || !(st.sampleAgeMs >= 0) || st.sampleAgeMs > GPU_FRESH_MS) return -1;
-    const v = +_gfx.gpuMs();
+    const st = _gfx.gpuTimer(), v = st && st.on && st.sampleAgeMs >= 0 && st.sampleAgeMs <= 2000 ? +_gfx.gpuMs() : -1;
     return v > 0 && Number.isFinite(v) ? v : -1;
   } catch (_) { return -1; }
 }
-function _xShedStep(ev) {
+// One upper-ladder move: a shed (GPU-bound: timer >= 0.75 x EMA, or no timer) or a restore (GPU room: <= 0.7 x floor).
+function _xMove(ev, up) {
   const q = _xq();
-  if (!q || _xFutile || _tierHold) return false;
+  if (!q || _tierHold || (up ? _xShed <= 0 : _xFutile)) return false;
   const g = _gpuMs();
-  if (g > 0 && g < ev * GPU_BOUND) return false;
-  const n = _xNext(q);
+  if (g > 0 && (up ? g > _floorMs * 0.7 : g < ev * 0.75)) return false;
+  const n = _xStep(q, up ? -1 : 1);
   if (n < 0) return false;
-  _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev };
-  _xSet(n); _govCool = 90; _downHold = _chargeCut();
-  return true;
-}
-function _xRestoreStep(ev) {
-  const q = _xq();
-  if (!q || _xShed <= 0 || _tierHold) return false;
-  const g = _gpuMs();
-  if (g > 0 && g > _floorMs * GPU_ROOM) return false;
-  const n = _xPrev(q);
-  if (n < 0) return false;
-  _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev, up: true };
-  _xSet(n); _govCoolMs = 4000; _sinceUp = 0;
+  _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev, up };
+  _xSet(n);
+  if (up) { _govCoolMs = 4000; _sinceUp = 0; } else { _govCool = 90; _downHold = _chargeCut(); }
   return true;
 }
 
 // The restore climb's top: _resCeil, or the backend's supersampling ceiling above 1 (§gov-42).
 function _climbTop() {
-  let m = 1;
-  try { if (_gfx && typeof _gfx.maxRenderScale === "function") m = +_gfx.maxRenderScale() || 1; } catch (_) { m = 1; }
+  let m;
+  try { m = +_gfx.maxRenderScale() || 1; } catch (_) { m = 1; }   // no gfx / no method: 1
   return m > 1 ? Math.max(_resCeil, Math.min(2, m)) : _resCeil;
 }
 
@@ -293,7 +270,7 @@ function init(gfx) {
   _autoShed = 0;
   _phoneSlowLatch = false;
   _xShed = 0; _xFutile = false;
-  try { if (_xq() && typeof gfx.gpuTimer === "function") gfx.gpuTimer(true); } catch (_) { /* timing is optional */ }
+  try { if (_xq()) gfx.gpuTimer(true); } catch (_) { /* timing is optional */ }
   // Two strikes: the phone was killed twice, so boot with the smallest backing store too (TLX reads this after create; GLX has no capDpr).
   if (_crashStrikes >= 2 && gfx && gfx.isMobile && typeof gfx.capDpr === "function") gfx.capDpr(1);
 }
@@ -467,7 +444,7 @@ function tick(dtMs, drawn) {
         return;
       }
       if (v.kind === "xshed" && !v.up) {
-        const q = _xq(), n = q ? _xNext(q) : -1;
+        const q = _xq(), n = q ? _xStep(q, 1) : -1;
         if (n > 0) { _xSet(n); _pendingVerify = v; _govCool = 90; return; }
       }
       if (v.kind === "scale") {
@@ -526,7 +503,7 @@ function tick(dtMs, drawn) {
   if (ev <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (ev > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
-    if (_xShedStep(ev)) { _degradeArm = 0; return; }   // §gov-42
+    if (_xMove(ev, false)) { _degradeArm = 0; return; }   // §gov-42
     if (_shedDprBoost()) { _degradeArm = 0; return; }
     // Why: docs/GOVERNOR-RATIONALE.md §gov-29.
     let stepped = false;
@@ -589,7 +566,7 @@ function tick(dtMs, drawn) {
       } else { _perfTier = _perfTierFloor; _autoShed = 0; }
       _govCoolMs = 4000; _sinceUp = 0;
     }
-    if (!stepped) _xRestoreStep(ev);   // §gov-42
+    if (!stepped) _xMove(ev, true);   // §gov-42
   }
 }
 

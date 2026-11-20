@@ -34,52 +34,52 @@ function lightsCtx(preset, { mobile = false, perfGov = null } = {}) {
     ...(perfGov ? { PerfGov: perfGov } : {}),
   });
   for (const f of ["js/render/shared/light-budget.js", "js/render/shared/frustum.js", "js/render/shared/lamp-chunks.js",
-    "js/perf/quality-preset.js", "js/lighting/frame-lights.js"])
+    "js/perf/quality-preset.js", "js/render/shared/gfx-hi.js", "js/lighting/frame-lights.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const g = (n) => vm.runInContext(n, ctx);
-  return { LB: g("LightBudget"), LC: g("LampChunks"), Q: g("GfxQuality"), FL: g("FrameLights"), clock };
+  return { LB: g("LightBudget"), LC: g("LampChunks"), Q: g("GfxQuality"), FL: g("FrameLights"), HI: g("GfxHi"), clock };
 }
 
 test("lightsHi: detail 0 (HIGH, ULTRA, a phone) keeps 48 / 24 / 8 / 5 and never compiles past 48", () => {
   for (const [preset, mobile] of [["high", false], ["ultra", false], ["extreme", true], ["low", false]]) {
-    const { LB, LC } = lightsCtx(preset, { mobile });
+    const { LB, LC, HI } = lightsCtx(preset, { mobile });
     assert.deepEqual([LB.MAX, LB.CHUNK, LB.MIRROR, LB.TAIL_RESERVE, LB.MOBILE, LB.LITE], [48, 24, 8, 5, 24, 16]);
     assert.equal(LB.tlxSlots(true), 48, `${preset}: TLX WebGPU stays 48`);
     assert.equal(LB.setSlots(128), 48, `${preset}: a 128 request clamps to 48`);
-    assert.equal(LB.frameMax(), 48);
+    assert.equal(HI.frameMax(), 48);
     assert.equal(LB.bakeChunk(), 24);
-    assert.equal(LB.chunkFor(1), 0, "no HI loop: no chunk-cap override");
+    assert.equal(HI.chunkFor(1), 0, "no HI loop: no chunk-cap override");
     assert.equal(LC.capFor(1, LB.bakeChunk()), 24);
   }
 });
 
 test("lightsHi: EXTREME on TLX WebGPU compiles 128 / 48; WebGL2, GLX and WGX keep 48", () => {
-  const { LB, LC } = lightsCtx("extreme");
-  assert.equal(LB.hiOn(), true);
+  const { LB, LC, HI } = lightsCtx("extreme");
+  assert.equal(HI.hiOn(), true);
   assert.equal(LB.tlxSlots(false), 48, "three's WebGL2 path keeps the uniform floor");
   assert.equal(LB.setSlots(48), 48, "GLX / WGX publish 48 and stay there on EXTREME");
-  assert.equal(LB.frameMax(), 48);
+  assert.equal(HI.frameMax(), 48);
   assert.equal(LB.bakeChunk(), 24);
   assert.equal(LB.setSlots(LB.tlxSlots(true)), 128);
-  assert.equal(LB.frameMax(), 128);
+  assert.equal(HI.frameMax(), 128);
   assert.equal(LB.bakeChunk(), 48);
   assert.equal(LC.capFor(1, 48), 48);
   assert.equal(LC.capFor(0.5, 48), 24);
   assert.equal(LC.capFor(0.05, 48), 8, "the floor of 8 still holds");
-  assert.deepEqual([LB.chunkFor(1), LB.chunkFor(0.5), LB.chunkFor(0), LB.chunkFor(-1)], [48, 36, 24, 24]);
+  assert.deepEqual([HI.chunkFor(1), HI.chunkFor(0.5), HI.chunkFor(0), HI.chunkFor(-1)], [48, 36, 24, 24]);
 });
 
 test("lightsHi: a governor shed (GfxQuality.setShed) drops frameMax to 48 within the poll, bake stays 48", () => {
-  const { LB, Q, clock } = lightsCtx("extreme");
+  const { LB, Q, HI, clock } = lightsCtx("extreme");
   LB.setSlots(LB.tlxSlots(true));
-  assert.equal(LB.frameMax(), 128);
+  assert.equal(HI.frameMax(), 128);
   Q.setShed(7);   // lightsHi is SHED_ORDER[0]: the last extra the governor drops
-  assert.equal(LB.frameMax(), 128, "cached inside the 250 ms poll");
+  assert.equal(HI.frameMax(), 128, "cached inside the 250 ms poll");
   clock.t += 300;
-  assert.equal(LB.frameMax(), 48, "today's budget after the poll");
+  assert.equal(HI.frameMax(), 48, "today's budget after the poll");
   assert.equal(LB.bakeChunk(), 48, "boot-time: a shed never re-bakes");
   Q.setShed(0); clock.t += 300;
-  assert.equal(LB.frameMax(), 128);
+  assert.equal(HI.frameMax(), 128);
 });
 
 // A stride-15 lamp record: [x,y,z, r,g,b, rad, dir.., cone..].

@@ -26,20 +26,6 @@ const LampChunks = (function () {
     return (knob > 0 && knob < 1) ? Math.max(8, Math.round(full * knob)) : full;
   }
 
-  // THE HI ORDER (only for a table baked above CAP: lightsHi). Today's bake keeps the NEAREST lamps.
-  // With 48 slots a cell also holds lamps near the edge of their reach, and a big floodlight 30 m off
-  // outshines a small kerb lamp 10 m off, so the HI bake ranks by the lit shader's own geometric
-  // attenuation at the box's nearest point instead: win^2 / (max(d, NEAR)^2 + 1), win = 1 - (d/rad)^4
-  // (tsl-lit.js lamp loop, LAMP NEAR CLAMP def 4 m). The key is its reciprocal, so "smaller is better"
-  // and the heap below is shared. Colour is not in it: the bake runs once per track, often before the
-  // lamps have warmed up, so the lanes it reads are the four the cache key snapshots (x, y, z, radius).
-  const NEAR2 = 16;
-  function hiKey(d2, rad) {
-    const q = d2 / (rad * rad), win = 1 - q * q;
-    if (!(win > 0)) return Infinity;
-    return ((d2 > NEAR2 ? d2 : NEAR2) + 1) / (win * win);
-  }
-
   // Bake the whole table for one (lights, chunks, knob) triple. lights is the
   // flat stride-15 baked track set; chunks carry {min,max} AABBs. Returns
   //   lists   Int32Array per chunk — indices into lights, nearest first
@@ -49,7 +35,7 @@ const LampChunks = (function () {
   // this is genuine build-time work — never a per-frame cull.
   function buildTable(lights, chunks, knob, capMax) {
     const cap = capFor(knob, capMax), n = (lights.length / 15) | 0, nc = chunks.length;
-    const hi = capMax > CAP;   // lightsHi: rank by attenuation (hiKey), not by distance
+    const hi = capMax > CAP;   // lightsHi (only GfxHi bakes above CAP): rank by attenuation (GfxHi.hiKey), not distance
     const lists = new Array(nc);
     // Position and radius, packed and stripped of dead radii, in source order.
     // The chunk loop streams that list instead of gathering stride-15 floats
@@ -91,7 +77,7 @@ const LampChunks = (function () {
         const d2 = Frustum.aabbDist2(ch.min, ch.max, pack[k], pack[k + 1], pack[k + 2]);
         if (!(d2 <= rad * rad)) continue;
         const i = live[j];
-        const key = hi ? hiKey(d2, rad) : d2;
+        const key = hi ? GfxHi.hiKey(d2, rad) : d2;
         if (m < cap) {
           let p = m++;
           idx[p] = i; dist[p] = key;

@@ -69,7 +69,7 @@ const GarageCrewDraw = (function () {
   /** Loft part `name` into acc `out` with livery c1/c2. `T` (optional) maps
    *  part-space points and normals: { p(v) → v, n(v) → v }. */
   function build(out, name, c1, c2, T) {
-    const spec = _dense ? denseSpec(name) : PARTS[name], g = grid(spec), n = spec.sides, cols = palette(c1, c2);
+    const spec = D ? D(name) : PARTS[name], g = grid(spec), n = spec.sides, cols = palette(c1, c2);
     const R = g.length, raw = [];
     // Which way is out depends on the axis and on whether the rings climb or
     // descend (the helmet's run crown-down): measure it against the axis.
@@ -120,16 +120,9 @@ const GarageCrewDraw = (function () {
     }
     return out;
   }
-  // EXTREME ("crewHi"): inside detail(true, fn) parts loft from GarageHiPrims.densifyLoft's
-  // denser copy of the spec (same frames, rest lengths, slots); outside, the authored lofts.
-  let _dense = false;
-  const DENSE = {};
-  function detail(on, fn) {
-    const was = _dense;
-    _dense = !!on && typeof GarageHiPrims !== "undefined";
-    try { return fn(); } finally { _dense = was; }
-  }
-  const denseSpec = (name) => DENSE[name] || (DENSE[name] = GarageHiPrims.densifyLoft(PARTS[name]));
+  // EXTREME ("crewHi"): D is GarageHiPrims.denseSpec while its detail() scope runs
+  // (set through body.hi): a denser copy of the loft, same frames, rest lengths and slots.
+  let D;
   /** The full-face helmet about head centre H (GarageCrew.helmet's contract). */
   function helmet(out, H, c1, c2) {
     return build(out, "head", c1, c2, { p: (v) => [v[0] + H[0], v[1] + H[1], v[2] + H[2]], n: (v) => v });
@@ -154,6 +147,6 @@ const GarageCrewDraw = (function () {
   function boot(out, f, c1, c2, lift = 0) {
     return build(out, "boot", c1, c2, { p: (v) => [v[0] + f[0], v[1] + f[1] + lift, v[2] + f[2]], n: (v) => v });
   }
-  const body = Object.freeze({ PARTS, build, helmet, segment, boot, palette, detail, denseSpec, isDense: () => _dense });
+  const body = Object.freeze({ PARTS, build, helmet, segment, boot, palette, hi: (f) => (D = f) });
   return Object.freeze({ acc, ease, place, mul, body });
 })();

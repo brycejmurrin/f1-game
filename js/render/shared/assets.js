@@ -611,16 +611,12 @@ const Assets = (function () {
     } catch (_) { return true; }
   }
 
-  // packHd (EXTREME, desktop TLX): materials.hd (512 px), fetched only here, never precached. Else 256 px.
-  function _hdWanted() {
-    if (!_gfx || _gfx.backend !== "three" || _gfx.isMobile || _gfx.mobileTier) return false;
-    try { return typeof GfxQuality !== "undefined" && !!GfxQuality.feature("packHd"); } catch (_) { return false; }
-  }
-  // opts.tier wins (a missing variant reads "high"), then low-data / phone LOW, then hd.
+  // opts.tier wins (a missing variant reads "high"), then low-data / phone LOW, then hd: packHd (EXTREME,
+  // desktop TLX: GfxHi.hd, lazy) wants materials.hd (512 px), fetched only here, never precached. Else 256 px.
   function _wantTier(mats, tier) {
     if (tier) return tier === "low" && mats.low ? "low" : tier === "hd" && mats.hd ? "hd" : "high";
     if (mats.low && (_phoneLowPreset() || _lowDataLink())) return "low";
-    return mats.hd && _hdWanted() ? "hd" : "high";
+    return mats.hd && typeof GfxHi !== "undefined" && GfxHi.hd(_gfx) ? "hd" : "high";
   }
   let _lastWant = null;
 

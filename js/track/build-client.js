@@ -230,9 +230,9 @@ const TrackBuildClient = (function () {
     if (typeof Tracks !== "undefined" && Tracks.diagnosticBuild && Tracks.diagnosticBuild()) { _last = null; return null; }
     const prepare = gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null;
     // The page's desktop detail level rides the config and the key (no GfxQuality in the worker).
-    const det = pageDetail();
-    const key = [JSON.stringify(prepare), def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier,
-      det.detail, JSON.stringify(det.detailFeatures)].join("|");
+    // The page's desktop detail level rides the build message (post); it is boot-time (GfxQuality.detail), so a
+    // page's requests share one level and the key need not carry it.
+    const key = [JSON.stringify(prepare), def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
     // A live caller owns its own permit; unrelated equal-key callers retain
     // their shared request without inheriting another caller's cancellation.
     if (!_last || _last.key !== key || _last.live !== live) _last = { key, live, p: post(idx, def, opts, gfx, sceneryFile, live) };
@@ -253,6 +253,9 @@ const TrackBuildClient = (function () {
     if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
     if (!up || !_w || _ready !== r || !isLive(live)) return null;
     const seq = ++_seq, worker = _w;
+    // { detail, detailFeatures } (js/track/scenery/detail.js, lazy); none = the worker's level 0 (no GfxQuality there).
+    let det;
+    try { det = TrackDetail.config(); } catch (_) { /* detail 0 */ }
     return new Promise((resolve) => {
       let timer = null;
       if (typeof setTimeout === "function") timer = setTimeout(() => {
@@ -267,7 +270,7 @@ const TrackBuildClient = (function () {
           // The graph cannot cross; the CPU geometry only when the dev surface will read it.
           retainGeometry: !!(opts.retainGraph || (typeof Tracks !== "undefined" && Tracks.keepGeometry && Tracks.keepGeometry())) },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
-        ...pageDetail(),
+        ...det,
         prepare: gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null,
         scenery: sceneryFile ? url(sceneryFile) : null,
         team: myTeam(),
@@ -277,11 +280,6 @@ const TrackBuildClient = (function () {
         if (_w === worker) drop("build send " + ((e && e.message) || "failed"));
       }
     });
-  }
-  // { detail, detailFeatures } as a page build resolves it (TrackDetail.page); level 0 without TrackDetail.
-  function pageDetail() {
-    try { const d = TrackDetail.page(); if (d.level) return { detail: d.level, detailFeatures: Object.assign({}, d.features) }; } catch (_) { /* detail 0 */ }
-    return { detail: 0, detailFeatures: {} };
   }
   // The MY TEAM entry of the PAGE's Teams.LIST (custom-team.js splices the
   // player's saved team in from localStorage), as plain data: the garage row

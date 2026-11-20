@@ -131,9 +131,7 @@ const CarShade = (function () {
    *  opts.frontCol paints the front (+Z) cap (an intake mouth), opts.surface
    *  overrides the surface id. */
   // heroCar loft UVs (CarGeometry.loftUv): a no-op unless a hero build with the TLX car-surface program is running.
-  function loftUv(out, v0, rings) {
-    if (typeof CarGeometry !== "undefined" && CarGeometry.luvOn && CarGeometry.luvOn()) CarGeometry.loftUv(out, v0, rings);
-  }
+  const loftUv = (o, v, r) => typeof CarGeometry !== "undefined" && CarGeometry.loftUv(o, v, r);
   function loft(out, front, rear, col, tri, opts) {
     const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP, pt = (opts && opts.pt) || EXP_TOP;
     const sf = opts && opts.surface, fc = (opts && opts.frontCol) || col;
@@ -411,7 +409,7 @@ const CarShade = (function () {
     const fr = fracs(q(X1, 0), [0.10, 0.07, rTop, rBot]), CT = 0.018;
     // heroCar: the plate's two rims rounded 4 mm in two segments (CarGeometry.heroBevel; today's plate otherwise).
     const plate = (o) => skin(o, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
-    if (typeof CarGeometry !== "undefined" && CarGeometry.heroBevel) CarGeometry.heroBevel(out, 0.004, 2, plate); else plate(out);
+    if (typeof CarGeometry !== "undefined") CarGeometry.heroBevel(out, 0.004, 2, plate); else plate(out);
     // The crown straddles the top edge as the flat strip did (y top +- 9 mm), its
     // ends inset half its thickness so they finish flush with the plate's edges.
     pipe(out, rquad(q((X0 + X1) / 2, CT / 2), fr, seg).slice(seg + 1, 3 * (seg + 1)), crownCol, tri, crownSurf,
@@ -723,7 +721,7 @@ const CarShade = (function () {
       const n = P.length / 3, nrm = [0, 1, 2].map((k) => N[u * 3 + k] + (N[w * 3 + k] - N[u * 3 + k]) * t), l = len(nrm) || 1;
       for (let k = 0; k < 3; k++) { P.push(at(u, w, t, k)); N.push(nrm[k] / l); C.push(body[k]); }
       M.push(M[u]);
-      if (out.luv && typeof CarGeometry !== "undefined") CarGeometry.luvLerp(out, u, w, t);
+      if (out.luv) CarHero.luvLerp(out, u, w, t);
       return n;
     };
     // Triangle q (indices, winding kept) cut where g(x, y, z) changes sign, as

@@ -2952,6 +2952,15 @@
       ]
     },
     "js/car/car-hero.js": {
+      "body": [
+        "tests/unit/car-detail-tiers.test.mjs"
+      ],
+      "build": [
+        "tests/unit/car-detail-tiers.test.mjs"
+      ],
+      "refine": [
+        "tests/unit/car-detail-tiers.test.mjs"
+      ],
       "*": [
         "tests/unit/gfx-hi-lazy.test.mjs"
       ]
@@ -5711,6 +5720,7 @@
       ],
       "norm": [
         "tests/unit/car-shade.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/shared-math.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
         "tests/unit/voice-pack.test.mjs"
@@ -8758,9 +8768,6 @@
       "layout": [
         "tests/unit/garage-crew.test.mjs"
       ],
-      "make": [
-        "tests/unit/garage-frame-garbage.test.mjs"
-      ],
       "noseTip": [
         "tests/unit/garage-crew.test.mjs"
       ],
@@ -10252,6 +10259,7 @@
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/frame-lights-rank-cache.test.mjs",
         "tests/unit/frame-lights-shed.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
         "tests/unit/mirror-lights.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
@@ -11475,6 +11483,7 @@
       ],
       "init": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
@@ -11489,6 +11498,7 @@
       ],
       "sentinelArm": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs"
@@ -11501,6 +11511,7 @@
       ],
       "tick": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
@@ -11738,6 +11749,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "detail": [
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
@@ -11745,6 +11757,7 @@
       ],
       "feature": [
         "tests/unit/census-verdict.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
@@ -11756,6 +11769,7 @@
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
@@ -16012,12 +16026,28 @@
       "*": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
-        "tests/unit/extreme-lights-sky.test.mjs"
+        "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs"
       ]
     },
     "js/render/shared/gfx-hi.js": {
+      "chunkFor": [
+        "tests/unit/extreme-lights-sky.test.mjs"
+      ],
+      "frameMax": [
+        "tests/unit/extreme-lights-sky.test.mjs"
+      ],
+      "hiOn": [
+        "tests/unit/extreme-lights-sky.test.mjs"
+      ],
+      "tlxSlots": [
+        "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs"
+      ],
       "*": [
-        "tests/unit/gfx-hi-lazy.test.mjs"
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/gfx-hi-lazy.test.mjs",
+        "tests/unit/tlx-csm-lampx.test.mjs"
       ]
     },
     "js/render/shared/gltf.js": {
@@ -16058,6 +16088,7 @@
       ],
       "buildTable": [
         "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/lamp-chunks.test.mjs"
       ],
       "capFor": [
@@ -16077,20 +16108,16 @@
     "js/render/shared/light-budget.js": {
       "bakeChunk": [
         "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/lamp-chunks.test.mjs"
       ],
-      "chunkFor": [
-        "tests/unit/extreme-lights-sky.test.mjs"
-      ],
-      "frameMax": [
-        "tests/unit/extreme-lights-sky.test.mjs"
-      ],
-      "hiOn": [
-        "tests/unit/extreme-lights-sky.test.mjs"
+      "hiBuilt": [
+        "tests/unit/gfx-hi-absent.test.mjs"
       ],
       "setSlots": [
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "slots": [
@@ -16098,7 +16125,8 @@
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "tlxSlots": [
-        "tests/unit/extreme-lights-sky.test.mjs"
+        "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs"
       ],
       "*": [
         "tests/unit/always-lamp-floor.test.mjs",
@@ -16280,6 +16308,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
@@ -16290,6 +16319,7 @@
       ],
       "lampPass": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs"
@@ -16302,6 +16332,7 @@
       "reset": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
@@ -16312,6 +16343,7 @@
       "sunPass": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
+        "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],

@@ -53,19 +53,12 @@ function _rigMark(out,start,surface) {
   for(let i=start;i<out.mat.length;i++)out.mat[i]=surface;
 }
 function _rigMaterials(out) { _rigMark(out,out.pos.length/3,26); return out; }
-// heroCar (EXTREME player car, CarGeometry.heroOn; read once, boot-time): the rig's round parts take twice the
+// heroCar (EXTREME player car, the lazy CarHero; read once, boot-time): the rig's round parts take twice the
 // segments (tubes, grips, discs, bezels, rounded corners), and the wheel and dash meshes are welded and refined once
-// (CarGeometry.refine, edges over 8 mm). 1 below EXTREME, on phones and in node: today's rig exactly.
+// (CarHero.rig). 1 below EXTREME, on phones and in node: today's rig exactly.
 let _rigX = 0;
-function rigX() {
-  if (!_rigX) { let h = false; try { h = typeof CarGeometry !== "undefined" && !!CarGeometry.heroOn(); } catch (_) { h = false; } _rigX = h ? 2 : 1; }
-  return _rigX;
-}
-function _rigHero(out) {
-  if (rigX() < 2) return out;
-  try { CarGeometry.weld(out); CarGeometry.refine(out, 1, 0.008); } catch (_) { /* keep the welded/plain rig */ }
-  return out;
-}
+const rigX = () => _rigX || (_rigX = typeof CarHero !== "undefined" && CarHero.on() ? 2 : 1);
+const _rigHero = (out) => rigX() > 1 ? CarHero.rig(out) : out;
 function _rigPlate(out, pts, z, depth, col) {
   const start=out.pos.length/3;
   let area = 0;

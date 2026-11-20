@@ -58,15 +58,15 @@ test("LAZY_GFX_HI is a lazy group: no <script> tag on the boot wall, rostered fo
   assert.ok(HI.length >= 2 && HI.includes("js/render/shared/gfx-hi.js") && HI.includes("js/car/car-hero.js"));
   const wall = new Set(eagerScriptsOf(read("index.html")));
   for (const f of HI) assert.equal(wall.has(f), false, f + " is not eager");
-  const roster = read("js/roster.js");
-  for (const f of HI) assert.ok(roster.includes(JSON.stringify(f)), f + " is in js/roster.js");
+  const roster = (() => { const c = { self: {} }; vm.runInNewContext(read("js/roster.js"), c); return c.self.ApexRoster; })();
+  assert.deepEqual([...roster.LAZY_GFX_HI], HI, "js/roster.js hands the loader the manifest's list");
 });
 
 test("desktop EXTREME: start() loads the bundle beside the backend and the tier's extras turn on", async () => {
   const h = boot({ preset: "extreme" });
   assert.equal(h.Q.detail(), 2);
   await h.rb.start();
-  for (const f of HI) assert.ok(h.loads.includes(f), f + " fetched");
+  assert.deepEqual(h.loads.filter((f) => HI.includes(f)), HI, "the whole group fetched");
   assert.equal(typeof vm.runInContext("GfxHi", h.ctx), "object", "GfxHi resident when start() returns");
   assert.equal(typeof vm.runInContext("CarHero", h.ctx), "object", "CarHero resident when start() returns");
   assert.equal(h.Q.feature("heroCar"), true);

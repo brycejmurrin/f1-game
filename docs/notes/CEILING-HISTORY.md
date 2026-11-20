@@ -86,19 +86,28 @@ run at boot to see a settled rotation; on SHARED, the default, it returns at onc
 (`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
 row stay lazy in `js/ui/layout-presets.js`. Fragment:
 `tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
-## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): #5951 folded in, re-measured as eagerCodeBytes
+## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): #5951 folded in; EXTREME code moved lazy (LAZY_GFX_HI)
 
-`(tree) eagerCodeBytes` 3989027 → **4023399** (+34372). Deliberate raise past the 5,000 B absorb: the two
-entries below were raw `eagerBytes` (+49775, +15432), retired by #5975, so they are dropped from both
-fragments and the whole desktop-tiers growth (#5951 and its follow-ups, now one PR) is re-measured stripped on
-the sync with tip 98bb4092. Bryce's chat asks: "Increase budget or remove comments" and "in follow up pr fix
-more and implement the test" (2026-11-20); it still needs his own `ratchet-raise` label on #6003. Where it is
-(stripped bytes over the tip): `js/car/car-geometry.js` +11143 (hero-car refine pass, modelled parts, loft
-UVs, bevels), `js/car/car3d.js` +2551, `js/car/car-draw.js` +2342, `js/perf/governor.js` +2298 (the upper
-shed ladder), `js/perf/quality-preset.js` +2207 (the detail seam), `js/render/shared/shadow-pass.js` +1788
-(cascades, lamp maps), `js/car/car-wheels.js` +1335, `js/garage/scene-prims.js` +1212, `js/track/tracks.js`
-+1141, and 25 more files under 1 KB each. `assertPins` +1 / `assertPinsAll` +1 on top of the deltas below:
-one pin the sync merge brought into the follow-up's tests. Fragment:
+`(tree) eagerCodeBytes` 3989027 → **4001631** (+12604). Deliberate raise past the 5,000 B absorb, under Bryce's
+`ratchet-raise`. The two entries below were raw `eagerBytes` (+49775, +15432), retired by #5975; those deltas are
+dropped from both fragments. Bryce's B for this PR (2026-11-20, relayed by the orchestrator): move the tier code into
+a lazy bundle rather than raise. Measured stripped growth went from +34,372 to +12,604. The EXTREME / CINEMA code now
+lives in lazy files: `js/car/car-hero.js` and `js/render/shared/gfx-hi.js` (the new LAZY_GFX_HI, fetched beside the
+backend only when `GfxQuality.detail() >= 2`, never on a phone), `js/garage/hi-prims.js` and
+`js/track/scenery/detail.js`. What stays eager, and why:
+- the ULTRA (detail 1) code every desktop ULTRA boot runs, about 4.3 KB: car meshHi tessellation (`withDetail`, the
+  FOIL_T_HI grid, 48-segment wheels, helmet `hi`, `liveryHi`, the field-lod reach, the car-draw detail keys) and the
+  governor's upper shed ladder (`js/perf/governor.js` +1,690, gated on `detail() > 0`, sheds raysHi / ssaoHi /
+  superSample);
+- `js/perf/quality-preset.js` +2,207: the EXTREME row, `detail()` / `feature()` / FEATURES, which every seam and the
+  GRAPHICS setting read;
+- one guarded hook per EXTREME seam (car ~2.35 KB, render ~1.6 KB, garage ~0.6 KB, track ~0.3 KB), plus the loader
+  (`renderer-boot.js` +285, `js/roster.js` +337), the TLX dev-flag keys (`save-schema-registry.js` +268), `game.js` +172
+  (`setCinema`) and `lazy-bundles.js` +128.
+
+`assertPins` +52 / `assertPinsAll` +64 come from the follow-up's tier tests (tier-record 15, tlx-mat-detail 12,
+assets-pack 8, tsl-gi 6, …): source pins on TSL shader wiring and the tier record's `ran:` fields, which no Node test
+can check by behaviour (no GPU). `vmSrcLoads` +8 are the new unit files' VM loads. Fragment:
 `tests/data/ratchets.d/claude--desktop-tiers-followup-5951.json`.
 
 ## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): follow-ups to the desktop tiers, real-GPU tier gate

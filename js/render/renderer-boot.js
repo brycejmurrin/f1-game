@@ -200,18 +200,11 @@ if (typeof RendererPicker !== "undefined" && RendererPicker.setUnavailableDefaul
 }
 // DESKTOP EXTREME / CINEMA (LAZY_GFX_HI): fetched beside the backend and awaited before start() hands it back, so
 // it is resident before the first car build; GfxQuality.detail() is 0 on every phone, which never fetches it.
-function wantGfxHi() {
-  try { return typeof GfxQuality !== "undefined" && GfxQuality.detail() >= 2 && !!(ApexRoster.LAZY_GFX_HI || []).length; } catch (_) { return false; }
-}
-function loadGfxHi() {
-  if (!wantGfxHi()) return Promise.resolve(false);
-  return Promise.resolve(loadBackendScripts(ApexRoster.LAZY_GFX_HI, ApexRoster.LAZY_GFX_HI_EDGES))
-    .then((ok) => { if (ok === false) Log.warn("gfx", "EXTREME detail bundle did not load: ULTRA detail this boot"); return ok !== false; },
-          () => { Log.warn("gfx", "EXTREME detail bundle threw: ULTRA detail this boot"); return false; });
-}
 async function start() {
-  const hi = loadGfxHi(), made = await start0();
-  await hi;
+  let hi = 0;
+  try { if (GfxQuality.detail() > 1) hi = loadBackendScripts(ApexRoster.LAZY_GFX_HI); } catch (_) { /* no GfxQuality (a harness): ULTRA */ }
+  const made = await start0();
+  if (hi && (await hi.catch(() => false)) === false) Log.warn("gfx", "EXTREME detail bundle did not load: ULTRA detail this boot");
   return made;
 }
 async function start0() {

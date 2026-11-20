@@ -17,7 +17,7 @@ import { loadCarDetail, meshHealth } from "../helpers/car-detail-vm.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DATA = join(ROOT, "tests/data/car-detail-tris.json");
-const { Car3D, Parts, CarGeometry, Helmets } = loadCarDetail();
+const { Car3D, Parts, CarGeometry, Helmets, CarHero } = loadCarDetail();
 // The race has the lazy MeshDetail kit by the time the cars build (heroCar bevels, the hero-mesh rival LODs).
 const MD = loadCarDetail(null, { meshDetail: true });
 const C1 = [0.7, 0.05, 0.05], C2 = [0.95, 0.8, 0.1];
@@ -187,7 +187,7 @@ test("heroCar modelled detail: bevelled boxes, round rods, aerofoil arms, thick 
 
 test("refine: interpolating, watertight, bulge clamped, creases straight", () => {
   const s = sphere(), before = s.pos.slice();
-  CarGeometry.refine(s, 2, 0);
+  CarHero.refine(s, 2, 0);
   assert.equal(tris(s), SPHERE_TRIS * 16);
   assert.deepEqual(s.pos.slice(0, before.length), before, "original vertices never move");
   for (const n of edgeUse(s).values()) assert.equal(n, 2, "a closed mesh stays closed (no crack, no T-junction)");
@@ -198,13 +198,13 @@ test("refine: interpolating, watertight, bulge clamped, creases straight", () =>
   // The first-round midpoint of the equator edge at 0..30 degrees bulged out from the chord toward the sphere,
   // by at most MAX_BULGE.
   const one = sphere();
-  CarGeometry.refine(one, 1, 0);
+  CarHero.refine(one, 1, 0);
   const t15 = Math.tan(Math.PI / 12);
   let m = -1;
   for (let i = 0; i < one.pos.length; i += 3) if (Math.abs(one.pos[i + 1]) < 1e-9 && one.pos[i] > 0 && Math.abs(one.pos[i + 2] / one.pos[i] - t15) < 1e-6) m = i;
   assert.ok(m >= 0, "equator midpoint not found");
   const chord = Math.cos(Math.PI / 12), r = Math.hypot(one.pos[m], one.pos[m + 2]);
-  assert.ok(r > chord + 1e-6 && r <= chord + CarGeometry.MAX_BULGE + 1e-9, `midpoint radius ${r} vs chord ${chord}`);
+  assert.ok(r > chord + 1e-6 && r <= chord + CarHero.MAX_BULGE + 1e-9, `midpoint radius ${r} vs chord ${chord}`);
   // A box built from addBox-style split corners: every edge is a crease, so refining adds points ON the faces only.
   const box = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   const face = (n, u, v) => {
@@ -218,14 +218,14 @@ test("refine: interpolating, watertight, bulge clamped, creases straight", () =>
   face([0, 0, 1], [1, 0, 0], [0, 1, 0]); face([0, 0, -1], [0, 1, 0], [1, 0, 0]);
   face([1, 0, 0], [0, 1, 0], [0, 0, 1]); face([-1, 0, 0], [0, 0, 1], [0, 1, 0]);
   face([0, 1, 0], [0, 0, 1], [1, 0, 0]); face([0, -1, 0], [1, 0, 0], [0, 0, 1]);
-  CarGeometry.refine(box, 2, 0);
+  CarHero.refine(box, 2, 0);
   for (let i = 0; i < box.pos.length; i += 3) {
     const big = Math.max(Math.abs(box.pos[i]), Math.abs(box.pos[i + 1]), Math.abs(box.pos[i + 2]));
     assert.ok(Math.abs(big - 1) < 1e-12, "a crease-only box stays exactly a box");
   }
   // minEdge: nothing under it splits.
   const small = sphere();
-  CarGeometry.refine(small, 1, 5);
+  CarHero.refine(small, 1, 5);
   assert.equal(tris(small), SPHERE_TRIS);
 });
 
@@ -233,7 +233,7 @@ test("refine interpolates uv along the edge and keeps it in 0..1", () => {
   const s = sphere();
   s.uv = [];
   for (let i = 0; i < s.pos.length; i += 3) s.uv.push((s.pos[i] + 1) / 2, (s.pos[i + 1] + 1) / 2);
-  CarGeometry.refine(s, 1, 0);
+  CarHero.refine(s, 1, 0);
   assert.equal(s.uv.length, (s.pos.length / 3) * 2);
   // a new point's uv is its edge's mean: the planar map stays within the chord's own uv range
   const n0 = 2 + SLICES * (STACKS - 1);
@@ -322,4 +322,41 @@ test("garage hero: garageDetail is {} in node; heroCopy refines a refinish build
   assert.equal(tris(copy), BASE.extreme.body, "the garage car is the race's EXTREME body");
   assert.equal(tris(MD.Car3D.heroCopy(MD.Car3D.refinish(g, {}))), BASE.extreme.body, "a finish tap too");
   assert.deepEqual(meshHealth(copy).bad, []);
+});
+
+// THE LAZY SPLIT (js/car/car-hero.js, LAZY_GFX_HI: loaded only at detail >= 2). Without it every detail-2 / hero ask
+// builds ULTRA's arrays exactly and nothing throws; with it the race and garage builds are the pinned EXTREME counts.
+test("CarHero absent: a detail-2 hero build is the detail-1 build, number for number; present: the pinned totals", () => {
+  const NO = loadCarDetail(null, { omit: ["js/car/car-hero.js"] }), NOMD = loadCarDetail(null, { meshDetail: true, omit: ["js/car/car-hero.js"] });
+  assert.equal(NO.CarHero, undefined);
+  for (const v of [NO, NOMD]) {
+    for (const mk of [(d, h) => body(d, h, v.Car3D), (d, h) => cockpit(d, h, v.Car3D),
+                      (d, h) => v.Car3D.build(C1, C2, { noWheels: true, teamId: TEAM.id, parts, num: 4, detail: d, hero: h, loftUv: true }),
+                      (d, h) => v.Car3D.heroCopy(v.Car3D.build(C1, C2, { livery: {}, refinish: true, noWheels: true, teamId: TEAM.id, parts, num: 4, detail: d, hero: h }))]) {
+      const ultra = mk(1, false), hi = mk(2, true);
+      for (const k of ["pos", "nrm", "col", "mat", "idx"]) assert.deepEqual(hi[k], ultra[k], k);
+      assert.equal(hi.trk, undefined);
+      assert.equal(hi._hero, undefined, "no hero mark without CarHero");
+    }
+    for (const r of [0.32, 0.38]) {
+      const w2 = v.Car3D.buildWheelLayers(r, null, null, null, false, null, null, null, null, null, 2);
+      const w1 = v.Car3D.buildWheelLayers(r, null, null, null, false, null, null, null, null, null, 1);
+      for (const k of ["rotating", "fixed"]) assert.deepEqual(w2[k].idx, w1[k].idx, `wheel ${r} ${k}`);
+    }
+    assert.equal(v.CarGeometry.withDetail(2, () => v.CarGeometry.level(), true), 1, "level capped at ULTRA");
+    assert.equal(v.CarGeometry.withDetail(2, () => v.CarGeometry.hero(), true), false, "never a hero build");
+  }
+  const gq = { detail: () => 2, feature: () => true };
+  const R = loadCarDetail({ GfxQuality: gq }, { rig: true, omit: ["js/car/car-hero.js"] });
+  assert.deepEqual([R.CarGeometry.detailFor(true), R.CarGeometry.detailFor(false), R.CarGeometry.heroOn()], [1, 1, false]);
+  assert.deepEqual({ ...R.Car3D.garageDetail() }, { detail: 1, hero: false }, "the EXTREME garage without CarHero is ULTRA's");
+  const liv = { c1: [0.7, 0.05, 0.05], c2: [0.95, 0.8, 0.1] };
+  assert.deepEqual({ steeringWheel: tris(R.CockpitRig.getCockpitWheel(liv, "f1")), dash: tris(R.CockpitRig.getCockpitDash()) },
+    { steeringWheel: BASE.ultra.steeringWheel, dash: BASE.ultra.dash }, "today's rig");
+  // present (the race path: MeshDetail too): the pinned EXTREME counts
+  assert.ok(MD.CarHero && CarHero, "the default VM loads car-hero.js");
+  assert.equal(tris(body(2, true, MD.Car3D)), BASE.extreme.body);
+  assert.equal(tris(cockpit(2, true, MD.Car3D)), BASE.extreme.cockpit);
+  assert.equal(tris(body(2, true)), BASE.extremeNoMeshDetail.body);
+  assert.equal(wheel(0.32, 2), BASE.extreme.frontWheel);
 });

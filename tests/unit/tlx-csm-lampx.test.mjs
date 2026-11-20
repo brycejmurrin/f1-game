@@ -374,6 +374,8 @@ function passRig(withX) {
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: false, moonShadow: 0, lampShadow: true, shadowStr: 1 } };
     var PerfGov = { tier: () => 0 };`, ctx);
+  // the EXTREME casters (ShadowPass's far cascades / extra lamp maps) live in the lazy GfxHi bundle
+  vm.runInContext(read("js/render/shared/gfx-hi.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/gfx-hi.js") });
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   const calls = [];
   const rec = (name) => (...a) => { calls.push(name); return true; };
@@ -435,6 +437,8 @@ test("shadow-pass far cars: cascade 1 casts gated rivals (the shared low-poly bo
   // carShadow on, but no gfx.carShadowBegin: the near car map stays out of the call log
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: true, moonShadow: 0, lampShadow: false, shadowStr: 1 } };
     var PerfGov = { tier: () => 0 };`, ctx);
+  // the EXTREME casters (ShadowPass's far cascades / extra lamp maps) live in the lazy GfxHi bundle
+  vm.runInContext(read("js/render/shared/gfx-hi.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/gfx-hi.js") });
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   const calls = [], bodies = [];
   const rec = (name) => (...a) => { calls.push(name); return true; };

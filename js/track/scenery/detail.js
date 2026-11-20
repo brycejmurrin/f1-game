@@ -307,7 +307,87 @@ const TrackDetail = (function () {
     return { xz };
   }
 
-  return { NAMES, NONE, normalize, page, resolve, crowdFigure, crowdMat, TREE_MODELS, modelHint, CROWD_NEAR_M, POSES, SKIN, farTerrain, sampleXZ, batchXZ, FAR,
-           kerbRibbon, withKerbs, KERB_LAT, KERB_H };
+  // ---- the build's hooks -----------------------------------------------------------------------------------------
+  // The eager engine (tracks.js, core/mesh.js, build-client.js) carries only guarded one-line hooks into this lazy
+  // file, so the tiers above ULTRA add nothing to the boot wall. Each hook absent (TrackDetail not loaded) or null
+  // (detail 0) is today's build exactly.
+
+  // The page's level as the worker build config carries it (build-client.js: the request key and the message).
+  function config() {
+    const d = page();
+    return d.level ? { detail: d.level, detailFeatures: Object.assign({}, d.features) } : { detail: 0, detailFeatures: {} };
+  }
+
+  // tracks.js buildSteps: resolves the level onto track._detail / _detailFeatures (every flag reader's input) and
+  // returns the per-build hooks, null at detail 0. kerbProfile hands core/mesh.js buildKerbs a strip hook through
+  // track._kerbProfile; farTerrain defers the floor upload and collects the flat-under-props mask as the build
+  // uploads (positions sampled BEFORE each upload, which may drop or transfer them).
+  function attach(track, opts) {
+    const G = track._gfx, d = resolve(opts, G);
+    track._detail = d.level;
+    track._detailFeatures = d.features;
+    if (!d.level) return null;
+    const f = d.features, far = !!f.farTerrain && !track.def.street, mask = [];
+    // A road drawn unchunked may be re-chunked later (game.js quality recovery): it chunks track.roadDrawGeo.
+    const chunkRibbons = !!(opts && opts.chunkRibbons && G.createChunkedMesh);
+    let kerb = null;   // { idx: the road's index array, i0, i1: its flat-kerb triangle range, prof: the profiled buffer }
+    if (f.kerbProfile) track._kerb = (out) => {
+      // core/mesh.js buildKerbs' constants, mirrored (it keeps them local; the identity tests pin the result).
+      const style = track.def && track.def.kerbStyle, pal = track.def.palette;
+      const c = { KW: style === "sausage" ? 1.05 : 0.9, KH0: style === "sausage" ? 0.09 : style === "rumble" ? 0.07 : 0.06,
+        style, ka: pal.kerbA, kb: pal.kerbB, ds: track.total / track.n, STRIPE_M: 1.6,
+        upOf: TrackMesh.upOf, bankOffsetAt: TrackMesh.bankOffsetAt, MAT: TrackGeom.MAT };
+      const k = kerb = { idx: out.idx, i0: out.idx.length, i1: out.idx.length, prof: { pos: [], nrm: [], col: [], mat: [], trk: [], idx: [] } };
+      // Called after each flat strip lands: the same strip, profiled, into the drawn-only buffer.
+      return (k0, k1, side) => {
+        k.i1 = out.idx.length;
+        if (k.prof.failed) return;
+        try { kerbRibbon(track, k0, k1, side, k.prof, c); }
+        catch (e) { k.prof.failed = true; Log.warn("track", "kerbProfile failed, flat kerbs: " + ((e && e.message) || e)); }
+      };
+    };
+    return {
+      far,
+      // The DRAWN road: the profiled kerbs in place of the flat ones; track.roadGeo (debris collider, agent, shadow
+      // caster, re-chunk fallback) stays the flat-kerb geometry every level shares. Returns the geo to draw.
+      road(geo) {
+        const k = kerb;
+        kerb = null;
+        delete track._kerb;   // a later TrackMesh.buildRoad (garage exterior) lays flat kerbs only
+        if (!k || !geo || geo.idx !== k.idx || k.prof.failed || !k.prof.idx.length) return geo;
+        const vis = withKerbs(geo, k.i0, k.i1, k.prof);
+        if (!TrackModels.validateGeometry(vis).ok) return geo;
+        // Dropped with the ribbon CPU copies (Tracks.dropRibbonCpuIfReady).
+        if (!chunkRibbons) track.roadDrawGeo = vis;
+        return vis;
+      },
+      // farTerrain's mask: the props' positions, and the glass / water's (props = buildProps' result) as the build
+      // will upload them: an invalid one ships empty (tracks.js safe), so it masks nothing.
+      xz(propsGeo, props) {
+        if (!far) return;
+        mask.push(sampleXZ(propsGeo && propsGeo.pos));
+        for (const g of [props && props.glass, props && props.water])
+          if (g && TrackModels.validateGeometry(g).ok) mask.push(sampleXZ(g.pos));
+      },
+      // An instanced batch's options (crowd: the seated figures draw with TLX's CROWD LIFE vertex stage; other
+      // backends ignore it); its placements join the mask (their triangles never reach propsGeo).
+      inst(b) {
+        if (far) mask.push(batchXZ([b]));
+        return String(b.model).startsWith("crowd-fig|") ? { cellSize: 72, crowd: true } : { cellSize: 72 };
+      },
+      // The deferred floor upload: the heightfield ring, or the flat floor when it fails or validates false.
+      floor(floorGeo) {
+        if (!far) return;
+        let g = null;
+        try { g = farTerrain(track, floorGeo, mask); }
+        catch (e) { Log.warn("track", track.def.id + " farTerrain failed, flat floor: " + ((e && e.message) || e)); }
+        if (g && !TrackModels.validateGeometry(g).ok) g = null;
+        track.meshes.floor = G.createMesh(g || floorGeo);
+      },
+    };
+  }
+
+  return { NAMES, NONE, normalize, page, resolve, config, attach, crowdFigure, crowdMat, TREE_MODELS, modelHint, CROWD_NEAR_M, POSES, SKIN,
+           farTerrain, sampleXZ, batchXZ, FAR, kerbRibbon, withKerbs, KERB_LAT, KERB_H };
 })();
 Object.freeze(TrackDetail);

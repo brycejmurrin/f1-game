@@ -210,9 +210,8 @@ const CarDraw = (function () {
     let _det = null;
     function carDetail() {
       if (!_det) {
-        const CG = typeof CarGeometry !== "undefined" && CarGeometry.detailFor ? CarGeometry : null;
-        const pd = CG ? CG.detailFor(true) : 0, hero = CG ? CG.heroOn() : false;
-        _det = { player: pd, rival: CG ? CG.detailFor(false) : 0, hero, key: pd || hero ? ":d" + pd + (hero ? "h" : "") : "" };
+        const CG = typeof CarGeometry !== "undefined" && CarGeometry.detailFor && CarGeometry, p = CG ? CG.detailFor(true) : 0, h = !!CG && CG.heroOn();
+        _det = { player: p, rival: CG ? CG.detailFor(false) : 0, hero: h, key: p || h ? ":d" + p + (h ? "h" : "") : "" };
       }
       return _det;
     }
@@ -485,8 +484,7 @@ const CarDraw = (function () {
     // browsed-away ones. A canvas with no numeric size counts 0 (tests, stubs).
     const DECAL_TEX_BYTES_MAX = 160 * 1024 * 1024;
     const _decalTexBytes = {};   // key -> estimated GPU bytes (RGBA + mip chain)
-    const _nearFull = new Map();   // planNearAtlases: a rival's own atlas key -> { f: flush frame last drawn, d2: eye distance² }
-    let _nearFullOn = null;        // nearFullOn(), read once
+    let _near = null;   // CarHero.nearAtlases (desktop EXTREME): the nearest rivals' 2048 atlases; 0 without CarHero
     const atlasBytes = (canvas) => canvas && canvas.width > 0 && canvas.height > 0
       ? Math.round(canvas.width * canvas.height * 4 * 4 / 3) : 0;
     // Evict the least recently drawn until under both budgets; `keep` (the atlas
@@ -495,7 +493,7 @@ const CarDraw = (function () {
       for (;;) {
         let bytes = 0;
         for (let i = 0; i < _decalTexOrder.length; i++) bytes += _decalTexBytes[_decalTexOrder[i]] || 0;
-        if (_decalTexOrder.length <= 1 || (_decalTexOrder.length <= DECAL_TEX_CACHE_MAX && bytes <= DECAL_TEX_BYTES_MAX + nearFullBytes())) return;
+        if (_decalTexOrder.length <= 1 || (_decalTexOrder.length <= DECAL_TEX_CACHE_MAX && bytes <= DECAL_TEX_BYTES_MAX + (_near ? _near.b : 0))) return;
         let oi = -1, ot = Infinity;
         for (let i = 0; i < _decalTexOrder.length; i++) {
           if (_decalTexOrder[i] === keep) continue;
@@ -513,7 +511,7 @@ const CarDraw = (function () {
       const tex = _decalTexCache[key];
       if (tex && G.gfx.freeTexture && !parkDraftAtlas(key, tex)) G.gfx.freeTexture(tex);
       delete _decalTexCache[key]; delete _decalTexFail[key]; delete _decalTexBytes[key];
-      _decalTexUse.delete(key); _photoKeys.delete(key); _nearFull.delete(key);
+      _decalTexUse.delete(key); _photoKeys.delete(key); if (_near) _near.m.delete(key);
       _hiResDone.delete(key); _hiResPending.delete(key); _hiResFail.delete(key); _decalSeen.delete(key);
       const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
       // A deferred hi-res swap parks the preview in _hiResGrave until the next
@@ -667,56 +665,6 @@ const CarDraw = (function () {
       if (victim === null) return;
       dropDecalTexture(victim);
       _photoMint = best;
-    }
-    // NEAR RIVAL FULL ATLASES (desktop EXTREME: liveryHi on, the player's detail 2, never a phone). The nearest
-    // NEAR_FULL_MAX rivals inside NEAR_FULL_IN m of the eye have their OWN atlas (1024x1280, liveryHi) upgraded in
-    // place to 2048x2560 through the player's deferred path (schedulePlayerHiRes: an idle-slot paint,
-    // createImageBitmap, one upload, the 1024 freed after the next bind). A held rival past NEAR_FULL_OUT m
-    // (hysteresis) or not drawn for NEAR_FULL_IDLE flushes is released: its atlas is dropped and its next draw
-    // re-mints the 1024. Per frame: one release or one acquire, and no acquire while a rival upgrade is in flight,
-    // so at most one rival atlas upload lands at a time. A full set yields its farthest only to a newcomer nearer
-    // by 10 % in distance. Photo mode only releases (its rivals draw their ":P" previews).
-    // MEMORY: 2048x2560 RGBA + mips = 27.96 MB against 6.99 MB at 1024x1280: +20.97 MB a held rival, +62.9 MB
-    // for three, plus one 6.99 MB 1024 parked until the next bind during a swap. The LRU byte cap grows by the
-    // same 62.9 MB while this is on, so the upgrade never evicts the field's own atlases.
-    const NEAR_FULL_MAX = 3, NEAR_FULL_IN = 30, NEAR_FULL_OUT = 45, NEAR_FULL_IDLE = 120;
-    const NEAR_FULL_EXTRA = Math.round(2048 * 2560 * 4 * 4 / 3) - Math.round(1024 * 1280 * 4 * 4 / 3);
-    function nearFullOn() {
-      if (_nearFullOn === null) {
-        try {
-          _nearFullOn = typeof LiveryTex !== "undefined" && !LiveryTex.IS_MOBILE && !LiveryTex.IS_PHONE && !!LiveryTex.liveryHi()
-            && !!LiveryTex.playerHiResDeferred && LiveryTex.playerHiResDeferred(false) && carDetail().player >= 2;
-        } catch (_) { _nearFullOn = false; }
-      }
-      return _nearFullOn;
-    }
-    function nearFullBytes() { return _nearFullOn ? NEAR_FULL_MAX * NEAR_FULL_EXTRA : 0; }
-    function planNearAtlases() {
-      if (!nearFullOn()) return;
-      for (const [k, r] of _nearFull) {
-        if (r.d2 > NEAR_FULL_OUT * NEAR_FULL_OUT || _flushFrame - r.f > NEAR_FULL_IDLE) { dropDecalTexture(k); return; }
-      }
-      const eye = G.camEye;
-      if (G.photoMode || !eye) return;
-      let best = -1, bestD2 = NEAR_FULL_IN * NEAR_FULL_IN, bestKey = null;
-      for (let i = 0; i < _decalCount; i++) {
-        if (_decalSetup[i] || _decalCockpit[i]) continue;   // the player's own car has its own 2048
-        const key = decalKeyFor(_decalTeams[i], _decalNums[i], false);
-        const m = _decalMats[i], dx = m[12] - eye[0], dy = m[13] - eye[1], dz = m[14] - eye[2], d2 = dx * dx + dy * dy + dz * dz;
-        const rec = _nearFull.get(key);
-        if (rec) { rec.f = _flushFrame; rec.d2 = d2; continue; }
-        if (d2 < bestD2 && _decalTexCache[key]) { best = i; bestD2 = d2; bestKey = key; }
-      }
-      if (best < 0) return;
-      for (const k of _nearFull.keys()) if (_hiResPending.has(k)) return;
-      if (_nearFull.size >= NEAR_FULL_MAX) {
-        let far = null, farD2 = -1;
-        for (const [k, r] of _nearFull) if (r.d2 > farD2) { farD2 = r.d2; far = k; }
-        if (far !== null && bestD2 < farD2 * 0.81) dropDecalTexture(far);   // the newcomer takes the slot next frame
-        return;
-      }
-      _nearFull.set(bestKey, { f: _flushFrame, d2: bestD2 });
-      schedulePlayerHiRes(_decalTeams[best], _decalNums[best], bestKey, true);
     }
     // The atlas a car draws with. Photo mode upgrades a rival only when its full
     // player-tier preview exists or this frame's plan picked it; otherwise the
@@ -2320,7 +2268,12 @@ const CarDraw = (function () {
     function flushDecals(night) {
       planPhotoAtlases();
       if (++_flushFrame % DECAL_SWEEP_EVERY === 0) sweepStaleDecals();
-      planNearAtlases();
+      // NEAR RIVAL FULL ATLASES (desktop EXTREME): js/car/car-hero.js nearAtlases, handed this file's decal state
+      // (its K, short keys: the atlas cache, pending hi-res kicks, the decal queue, the key / drop / upgrade calls).
+      if (_near === null) _near = typeof CarHero !== "undefined" && CarHero.nearAtlases({ G, c: _decalTexCache, p: _hiResPending,
+        s: _decalSetup, k: _decalCockpit, t: _decalTeams, n: _decalNums, m: _decalMats, K: decalKeyFor, d: dropDecalTexture,
+        h: schedulePlayerHiRes, D: carDetail }) || 0;
+      if (_near) _near.plan(_flushFrame, _decalCount);
       _decalFlushing = true;
       try {
         for (let i = 0; i < _decalCount; i++)

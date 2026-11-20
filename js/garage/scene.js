@@ -23,7 +23,7 @@ const AMB_SKY = [0.200, 0.215, 0.250], AMB_GROUND = [0.130, 0.125, 0.118];
 // Mesh primitives, room dimensions and the shared colours live in
 // js/garage/scene-prims.js (GaragePrims); the pit equipment in scene-equipment.js
 // (GarageEquipment); the live atlas in scene-live.js (GarageLive).
-const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css, pushMat, tile } = GaragePrims;
+const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css, pushMat, tile, ex } = GaragePrims;
 
 // ── the bay shell ──────────────────────────────────────────────────────────
 // A CLOSED six-sided room whose every face is wound to be seen from INSIDE.
@@ -166,12 +166,10 @@ const SIDES = ["nx", "px", "back", "door", "mid", "shutter", "barrier"];
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
 function tyreStack(out, x, z, seed) {
   for (let t = 0; t < 4; t++) {
-    const y = t * 0.345;
-    // EXTREME: a lathed slick, its compound band laid on the flat upper sidewall.
-    const d = GaragePrims.isDense();
-    if (d) GaragePrims.tyre(out, [x, y, z], [x, y + 0.33, z], 0.36, [0.045, 0.045, 0.050], 14);
-    else cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 14);
-    cyl(out, x, y + (d ? 0.33 : 0.30), z, 0.305, d ? 0.006 : 0.025, COMPOUND[(seed + t) % 3], 14);
+    const y = t * 0.345, c = COMPOUND[(seed + t) % 3];
+    if (ex("stack", out, x, y, z, c)) continue;   // EXTREME: a lathed slick
+    cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 14);
+    cyl(out, x, y + 0.30, z, 0.305, 0.025, c, 14);
   }
 }
 function toolChest(out, x, z, c1) {
@@ -1288,27 +1286,6 @@ function uploadLive(team, liv, ctx, now) {
     if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
     liveFail++; liveRetryAt = now + 1000; liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
-// The setup room's CPU buffers, built before any upload so a failed dense
-// build (rebuild's fallback) leaves no half-made GPU meshes behind.
-function roomAccs(liv, ctx, look, roof) {
-  const shell = acc(); buildShell(shell, liv, look);
-  const truss = roof ? acc() : null;
-  if (truss) buildTruss(truss, look, true);
-  const led = {};
-  for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
-  buildLed(led, liv);
-  if (look) GarageDress.lookLed(led, liv, look);
-  const flr = acc(); buildBayFloor(flr, liv, look);
-  const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, hourNight(ctx));
-  const g = {};
-  for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
-  buildProps(g, liv);
-  GarageEquipment.build(g, liv, ctx);
-  GarageExperience.buildFacility(g, liv, ctx);
-  if (look) GarageDress.lookProps(g, liv, look);
-  if (GaragePrims.isDense()) GarageHiPrims.roomExtras(g, truss, look);
-  return { shell, truss, led, flr, fallback, g };
-}
 function rebuild(team, liv, info, ctx) {
   const { geom, live, dressId, board, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -1333,22 +1310,38 @@ function rebuild(team, liv, info, ctx) {
     const look = GaragePrims.look();   // design-preview room look; null = shipped
     // Roof geometry and wall-decal UVs never depend on paint, team or context.
     // Keep their GPU handles until release(), including across colour drags.
-    const lk = GaragePrims.lookKey(), hi = lk !== GaragePrims.lookId(), roof = !trussMesh || trussLook !== lk;
-    // EXTREME (garageHi): the same builders inside GaragePrims.dense; a throw there builds today's room instead.
-    let R;
-    try { R = GaragePrims.dense(hi, () => roomAccs(liv, ctx, look, roof)); }
-    catch (e) { if (!hi) throw e; Log.warn("game", `GarageScene dense room failed, stock room: ${e && e.message}`); R = roomAccs(liv, ctx, look, roof); }
-    shellMesh = _gfx.createMesh(R.shell);
-    if (roof) { if (trussMesh) _gfx.freeMesh(trussMesh); trussMesh = _gfx.createMesh(R.truss); trussLook = lk; }
+    const lk = GaragePrims.lookKey(), roof = !trussMesh || trussLook !== lk;
+    // The CPU buffers first, then the uploads: GaragePrims.run runs the builders in the EXTREME
+    // (garageHi) dense scope once GarageHiPrims has landed; a throw there runs them again for today's room.
+    let shell, truss, led, flr, fallback, g;
+    GaragePrims.run("room", () => {
+      shell = acc(); buildShell(shell, liv, look);
+      if (roof) buildTruss(truss = acc(), look, true);
+      led = {};
+      for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
+      buildLed(led, liv);
+      if (look) GarageDress.lookLed(led, liv, look);
+      flr = acc(); buildBayFloor(flr, liv, look);
+      fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, hourNight(ctx));
+      g = {};
+      for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
+      buildProps(g, liv);
+      GarageEquipment.build(g, liv, ctx);
+      GarageExperience.buildFacility(g, liv, ctx);
+      if (look) GarageDress.lookProps(g, liv, look);
+      ex("roomExtras", g, truss, look);
+    });
+    shellMesh = _gfx.createMesh(shell);
+    if (roof) { if (trussMesh) _gfx.freeMesh(trussMesh); trussMesh = _gfx.createMesh(truss); trussLook = lk; }
     for (let i = 0; i < SIDES.length; i++)
-      if (R.led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(R.led[SIDES[i]]);
-    exteriorFallbackMesh = _gfx.createMesh(R.fallback);
+      if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
+    exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = hourNight(ctx) ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
-    floorMesh = _gfx.createMesh(R.flr);
+    floorMesh = _gfx.createMesh(flr);
     for (let i = 0; i < SIDES.length; i++)
-      if (R.g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(R.g[SIDES[i]]);
+      if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     // A new team or paint: the "what changed" marker on the spec board starts
     // over — every row differs from the last team's, and a board of twelve
     // highlights marks nothing. The crest canvas itself is keyed below.

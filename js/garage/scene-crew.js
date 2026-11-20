@@ -222,35 +222,33 @@ const GarageCrew = (function () {
     const nose = noseTip(teamId, liv), noseY = nose.at(nose.z - 0.1);
     // Snapshot components rather than a weighted sum: distinct palettes can
     // share a numeric hash, and the editor can mutate a colour array in place.
-    const hi = GaragePrims.hiLive("crewHi");   // EXTREME: denser bodies and props; the key carries it
     if (mechMesh && key && key[0] === style && key[1] === c1[0] && key[2] === c1[1] && key[3] === c1[2] &&
-        key[4] === c2[0] && key[5] === c2[1] && key[6] === c2[2] && key[7] === nose.z && key[8] === noseY && key[9] === hi) return;
+        key[4] === c2[0] && key[5] === c2[1] && key[6] === c2[2] && key[7] === nose.z && key[8] === noseY) return;
     free();
-    try { if (hi) { GaragePrims.dense(true, () => GarageCrewDraw.body.detail(true, () => make(style, c1, c2, nose))); key = [style, ...c1, ...c2, nose.z, noseY, hi]; return; } }
-    catch (e) { free(); Log.warn("game", `GarageCrew dense crew failed, stock crew: ${e && e.message}`); }
-    make(style, c1, c2, nose);
-    key = [style, ...c1, ...c2, nose.z, noseY, hi];
-  }
-  function make(style, c1, c2, nose) {
-    const J = joints("stand");
-    const m = acc(); rig(m, J, c1, c2, false);
-    mechMesh = gfx.createMesh(m);
-    const b = acc(); rig(b, J, c1, c2, true);
-    bodyMesh = gfx.createMesh(b);
-    const L = style === "classic" ? null : buildLook(style, c1, c2, nose);
-    lookMesh = L && L.idx.length ? gfx.createMesh(L) : null;
-    // The lollipop: arm and pole along local +x from the shoulder, the round
-    // board at the end facing ±z (toward the car), raised by a turn about z.
-    const p = acc();
-    block(p, 0.16, 0, 0, 0.16, 0.05, 0.06, c1);                          // upper arm
-    tube(p, [0.30, 0, 0], [1.75, 0, 0], 0.016, [0.85, 0.85, 0.88], 6);   // pole
-    tube(p, [1.95, 0, -0.012], [1.95, 0, 0.012], 0.24, [0.95, 0.95, 0.96], 16);   // board
-    tube(p, [1.95, 0, -0.016], [1.95, 0, 0.016], 0.17, [0.86, 0.10, 0.08], 16);   // its red face
-    poleMesh = gfx.createMesh(p);
-    if (style !== "classic" && style !== "welcome" && typeof GarageCrewMotion !== "undefined")
-      motionRig = GarageCrewMotion.create(gfx, c1, c2, helmet);
-    if (style === "service" && typeof GarageCrewService !== "undefined") serviceRig = GarageCrewService.create(gfx, nose, frontJack, c2);
-    if (style === "choreo" && typeof GarageCrewChoreo !== "undefined") choreoProps = GarageCrewChoreo.createProps(gfx, c2);
+    // EXTREME (crewHi): GaragePrims.run builds dense in GarageHiPrims' scope (its landing frees this crew
+    // so it rebuilds); a throw there frees the half-made meshes and builds today's crew.
+    GaragePrims.run("crew", () => {
+      const J = joints("stand");
+      const m = acc(); rig(m, J, c1, c2, false);
+      mechMesh = gfx.createMesh(m);
+      const b = acc(); rig(b, J, c1, c2, true);
+      bodyMesh = gfx.createMesh(b);
+      const L = style === "classic" ? null : buildLook(style, c1, c2, nose);
+      lookMesh = L && L.idx.length ? gfx.createMesh(L) : null;
+      // The lollipop: arm and pole along local +x from the shoulder, the round
+      // board at the end facing ±z (toward the car), raised by a turn about z.
+      const p = acc();
+      block(p, 0.16, 0, 0, 0.16, 0.05, 0.06, c1);                          // upper arm
+      tube(p, [0.30, 0, 0], [1.75, 0, 0], 0.016, [0.85, 0.85, 0.88], 6);   // pole
+      tube(p, [1.95, 0, -0.012], [1.95, 0, 0.012], 0.24, [0.95, 0.95, 0.96], 16);   // board
+      tube(p, [1.95, 0, -0.016], [1.95, 0, 0.016], 0.17, [0.86, 0.10, 0.08], 16);   // its red face
+      poleMesh = gfx.createMesh(p);
+      if (style !== "classic" && style !== "welcome" && typeof GarageCrewMotion !== "undefined")
+        motionRig = GarageCrewMotion.create(gfx, c1, c2, helmet);
+      if (style === "service" && typeof GarageCrewService !== "undefined") serviceRig = GarageCrewService.create(gfx, nose, frontJack, c2);
+      if (style === "choreo" && typeof GarageCrewChoreo !== "undefined") choreoProps = GarageCrewChoreo.createProps(gfx, c2);
+    }, free);
+    key = [style, ...c1, ...c2, nose.z, noseY];
   }
   function free() {
     if (!gfx || !gfx.freeMesh) return 0;

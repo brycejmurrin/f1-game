@@ -1174,7 +1174,7 @@ const Car3D = (function () {
       }
     };
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(styledTipZ - 0.04);
-    if (CarGeometry.hero() && !ckpt) heroNoseParts(out, anchors, styledTipZ);
+    if (CarGeometry.hero() && !ckpt) CarHero.nose(HK, out, anchors, styledTipZ);   // heroCar pitot + antenna
     // fitSeat: a concept cone bulges 27-98 mm over the straight 1.60-to-tip chord, which
     // buried the accent and z-fought where it crossed the skin (sharkfin 215 cm2). Follow
     // the skin in ~12 cm steps from the cockpit deck's front (2.15), which covers it behind.
@@ -2607,9 +2607,7 @@ const Car3D = (function () {
         addBox(out, s*0.595, 0.32, AXLES.frontZ + 0.14, 0.014, 0.10, 0.16, CARBON);
       }
       if (!ckpt) (shadeFlags.round ? CarShade.boxFn(addTri, { r: 0.028 }) : addBox)(out, s*0.58, 0.30, AXLES.rearZ - 0.20, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
-      // heroCar: the rear duct gets the front duct's throat too (its forward face, 0.06 x ductMul ahead).
-      if (CarGeometry.hero() && !ckpt) addInletMouth(out, s * 0.58, 0.30, AXLES.rearZ - 0.20 + 0.060 * ductMul,
-                                                     0.05, 0.135 * ductMul, DARK, 0.040 * ductMul, 0);
+      if (CarGeometry.hero() && !ckpt) CarHero.duct(HK, out, s, ductMul);   // heroCar: the rear duct's throat
       if (brakeScoop >= 1 && !ckpt) {
         addBox(out, s*0.58, 0.355, AXLES.rearZ - 0.275, 0.07, 0.040, 0.045, INTAKE);
         addBox(out, s*0.58, 0.385, AXLES.rearZ - 0.295, 0.08, 0.010, 0.028, CARBON);
@@ -2870,71 +2868,25 @@ const Car3D = (function () {
   }
 
   // opts.detail (0 / 1 / 2, CarGeometry.detailFor): the tessellation level of this build, 0 = today's mesh.
-  // opts.hero (EXTREME player car, CarGeometry.heroOn): two CarGeometry.refine rounds over the welded body. Any
-  // throw in the detailed build falls back to today's detail-0 mesh.
+  // opts.hero (EXTREME player car, CarGeometry.heroOn): the lazy CarHero's pass (js/car/car-hero.js; absent, the
+  // build is ULTRA's). Any throw in the detailed build falls back to today's detail-0 mesh.
   function build(color, color2, opts) {
+    if (opts && opts.hero && typeof CarHero !== "undefined") return CarHero.build(build0, color, color2, opts);
     const d = CarGeometry.clampDetail(opts && opts.detail);
-    const hero = !!(opts && opts.hero) && !(opts.field || opts.silhouette || opts.seats);
-    if (!d && !hero) return build0(color, color2, opts);
+    if (!d) return build0(color, color2, opts);
     try {
-      return CarGeometry.withDetail(d, () => {
-        const out = build0(color, color2, opts);
-        if (hero) out._hero = true;   // heroCopy's mark (refinish's copy keeps it); no renderer reads it
-        if (hero && !out._refinish && !out.parts && !opts.noWeld) { CarGeometry.refine(out, HERO.levels, HERO.minEdge); loftTrk(out); }
-        return out;
-      }, hero, hero && loftUvWanted(opts));
+      return CarGeometry.withDetail(d, () => build0(color, color2, opts));
     } catch (e) {
-      Log.warn("car", "detail " + d + (hero ? " hero" : "") + " build failed, detail 0: " + (e && e.message));
+      Log.warn("car", "detail " + d + " build failed, detail 0: " + (e && e.message));
       return build0(color, color2, Object.assign({}, opts, { detail: 0, hero: false }));
     }
   }
-  // LOFT UVS (CarGeometry.loftUv) are recorded only for the TLX car-surface program (tsl-carsurf.js reads them
-  // from the trk attribute) or when a test asks (opts.loftUv).
-  function loftUvWanted(opts) {
-    if (opts && opts.loftUv != null) return !!opts.loftUv;
-    try { return typeof TLXCarSurf !== "undefined" && !!TLXCarSurf.enabled(); } catch (_) { return false; }
-  }
-  function loftTrk(out) {
-    if (!out.luv) return out;
-    CarGeometry.luvPad(out, out.pos.length / 3);
-    if (out.luv.length === out.pos.length) out.trk = out.luv;
-    delete out.luv;
-    return out;
-  }
-  // THE GARAGE / CAR STUDIO HERO (js/garage/setup-camera.js): the turntable builds with refinish (a finish tap
-  // re-finishes the kept arrays), which a refine would scramble, so the hero pass refines a welded COPY for the
-  // upload and the kept build stays as it was. garageDetail: the opts the garage adds ({} below EXTREME, every
-  // phone, node); heroCopy hands back its argument unchanged for anything but a hero build, and on any throw.
+  // The garage / CAR STUDIO opts (js/garage/setup-camera.js): {} below ULTRA, every phone, node.
   function garageDetail() {
-    const d = CarGeometry.detailFor(true), hero = CarGeometry.heroOn() && d >= 2;
-    return d || hero ? { detail: d, hero } : {};
+    const d = CarGeometry.detailFor(true), h = CarGeometry.heroOn() && d > 1;
+    return d || h ? { detail: d, hero: h } : {};
   }
-  function heroCopy(data) {
-    if (!data || !data._hero || !data.pos || !data.idx) return data;
-    try {
-      const out = Object.assign({}, data, { pos: data.pos.slice(), nrm: data.nrm.slice(), col: data.col.slice(), mat: data.mat.slice(), idx: data.idx.slice() });
-      if (data.luv) out.luv = data.luv.slice();
-      delete out._refinish;
-      CarGeometry.weld(out);
-      CarGeometry.withDetail(2, () => CarGeometry.refine(out, HERO.levels, HERO.minEdge), true);
-      return loftTrk(out);
-    } catch (e) {
-      Log.warn("car", "garage hero copy failed, the plain build: " + (e && e.message));
-      return data;
-    }
-  }
-  // heroCar (EXTREME player car): a pitot probe out of the nose tip and a telemetry antenna on the survival cell's
-  // deck, both rooted ON the nose loft (anchors.noseAt) so they follow every team's nose. Generic, physics-free.
-  function heroNoseParts(out, anchors, tipZ) {
-    const tip = anchors.noseAt(tipZ - 0.015), py = (tip.top + tip.bottom) / 2;
-    addTube(out, [[0, py, tipZ - 0.03], [0, py, tipZ + 0.035]], 0.0045, 8, [0.30, 0.30, 0.33], SURFACES.metal);
-    addTube(out, [[0, py, tipZ + 0.035], [0, py, tipZ + 0.06]], 0.0022, 6, [0.55, 0.55, 0.58], SURFACES.metal);
-    const az = Math.min(1.35, tipZ - 0.35), deck = anchors.noseAt(az);
-    addBox(out, 0, deck.top + 0.008, az, 0.016, 0.020, 0.030, CARBON, SURFACES.carbon);          // the antenna's foot
-    addTube(out, [[0, deck.top + 0.012, az], [0, deck.top + 0.075, az - 0.012]], 0.0018, 6, DARK, SURFACES.carbon);
-  }
-  // Two rounds, edges over 30 mm: ~85k triangles on the default body (tests/data/car-detail-tris.json).
-  const HERO = Object.freeze({ levels: 2, minEdge: 0.03 });
+  const HK = { G: geometry, CARBON, DARK, mouth: addInletMouth };   // CarHero's kit (it reads Car3D.SURFACES / AXLES)
   // opts.seats (#4219): teammates' bodies from this one build (CarMaterials.reseat; `lid` emits a seat's lid alone).
   function build0(color, color2, opts) {
     if (!(opts && opts.seats && opts.seats.size && CarMaterials.seatable(opts))) return buildOne(color, color2, opts);
@@ -2962,7 +2914,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, HERO, garageDetail, heroCopy, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, garageDetail, heroCopy: (d) => d && d._hero ? CarHero.copy(d) : d, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

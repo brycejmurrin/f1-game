@@ -64,11 +64,11 @@ test("one feature at a time: garageHi leaves the crew alone, crewHi leaves the r
 
 test("dense crew parts keep the authored silhouette, frames and paint slots", () => {
   const H = load(read, { hi: true });
-  const B = H.get("GarageCrewDraw").body;
+  const B = H.get("GarageCrewDraw").body, P = H.get("GarageHiPrims");
   for (const name of Object.keys(B.PARTS)) {
     const box = (dense) => {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
-      if (dense) B.detail(true, () => B.build(out, name, [1, 0, 0], [0, 1, 0])); else B.build(out, name, [1, 0, 0], [0, 1, 0]);
+      if (dense) P.detail(true, () => B.build(out, name, [1, 0, 0], [0, 1, 0])); else B.build(out, name, [1, 0, 0], [0, 1, 0]);
       const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], cols = new Set();
       for (let i = 0; i < out.pos.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], out.pos[i + k]); hi[k] = Math.max(hi[k], out.pos[i + k]); }
       for (let i = 0; i < out.col.length; i += 3) cols.add(out.col.slice(i, i + 3).join(","));
@@ -81,7 +81,7 @@ test("dense crew parts keep the authored silhouette, frames and paint slots", ()
     }
     assert.deepEqual([...b.cols].sort(), [...a.cols].sort(), `${name}: same paint slots`);
     assert.ok(b.tris >= a.tris * 3.5, `${name}: denser (${a.tris} -> ${b.tris})`);
-    assert.equal(B.isDense(), false, "detail() restores the scope");
+    assert.equal(P.isDetail(), false, "detail() restores the scope");
   }
 });
 
@@ -101,13 +101,13 @@ test("GarageHiPrims: bevelled box, swept hose and lathed tyre are clean and outw
     assert.equal(badTriangle([m]), null, name);
     assert.equal(backWound([m]), 0, name + ": wound with its normals");
   }
-  // Outside a dense() scope GaragePrims is today's block; inside, the bevelled one; a throw restores the scope.
+  // Outside GarageHiPrims' dense() scope GaragePrims is today's block; inside, the bevelled one; a throw restores the scope.
   const a = acc(), b = acc();
   GP.block(a, 0, 0, 0, 0.5, 0.5, 0.5, [1, 1, 1]);
-  GP.dense(true, () => GP.block(b, 0, 0, 0, 0.5, 0.5, 0.5, [1, 1, 1]));
+  P.dense(true, () => GP.block(b, 0, 0, 0, 0.5, 0.5, 0.5, [1, 1, 1]));
   assert.equal(a.idx.length / 3, 12);
   assert.equal(b.idx.length / 3, 44);
-  assert.equal(GP.isDense(), false);
-  assert.throws(() => GP.dense(true, () => { throw new Error("boom"); }), /boom/);
-  assert.equal(GP.isDense(), false);
+  assert.equal(P.isDense(), false);
+  assert.throws(() => P.dense(true, () => { throw new Error("boom"); }), /boom/);
+  assert.equal(P.isDense(), false);
 });

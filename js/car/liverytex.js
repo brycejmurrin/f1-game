@@ -65,7 +65,7 @@ const LiveryTex = (function () {
   let _livHi = null;
   function liveryHi() {
     if (_livHi === null) {
-      try { _livHi = typeof GfxQuality !== "undefined" && !!GfxQuality.feature("liveryHi"); } catch (_) { _livHi = false; }
+      try { _livHi = !!GfxQuality.feature("liveryHi"); } catch (_) { _livHi = false; }   // absent (node): the ReferenceError
     }
     return _livHi;
   }

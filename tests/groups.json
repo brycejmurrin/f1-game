@@ -556,6 +556,8 @@
     "tests/unit/gfx-backend-canary.test.mjs",
     "tests/unit/gfx-debug-overlay.test.mjs",
     "tests/unit/gfx-escalation.test.mjs",
+    "// GfxHi absent: every eager seam keeps the ULTRA path (governor, shadow pass, light budget, frame lights). ~0.1 s.",
+    "tests/unit/gfx-hi-absent.test.mjs",
     "// LAZY_GFX_HI (#6003, Bryce's B): the desktop tiers above ULTRA load beside the backend only at detail 2; a phone and ULTRA never fetch it. Real GfxQuality + RendererBoot in a VM, ~0.1 s.",
     "tests/unit/gfx-hi-lazy.test.mjs",
     "tests/unit/ghost-share.test.mjs",

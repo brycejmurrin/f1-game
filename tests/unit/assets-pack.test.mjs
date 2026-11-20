@@ -73,12 +73,14 @@ test("GLTF accessors stay inside their declared bufferView and reject invalid st
   assert.throws(() => gltf.toMesh(makeGlb(100)), /GLTF: accessor exceeds bufferView bounds/);
 });
 
-function assetLoader(overrides = {}) {
+// gfxHi: also load the lazy EXTREME bundle (js/render/shared/gfx-hi.js: GfxHi.hd is the packHd gate).
+function assetLoader(overrides = {}, { gfxHi = false } = {}) {
   const vm = require("node:vm");
   const sandbox = { ...overrides };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
+  if (gfxHi) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gfx-hi.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/gfx-hi.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/assets.js") });
   return sandbox.Assets;
 }
@@ -1083,7 +1085,7 @@ test("the material pack takes the low tier under Save-Data or 2G (#3110 F2)", as
 });
 
 test("packHd: the 512 px tier loads only on a desktop TLX with the feature on, and never under Save-Data", async () => {
-  const run = async ({ backend = "three", feature = true, mobile = false, hdInManifest = true, connection, tier, throws } = {}) => {
+  const run = async ({ backend = "three", feature = true, mobile = false, hdInManifest = true, connection, tier, throws, hi = true } = {}) => {
     const urls = [];
     const assets = assetLoader({
       navigator: connection === undefined ? {} : { connection },
@@ -1099,7 +1101,7 @@ test("packHd: the 512 px tier loads only on a desktop TLX with the feature on, a
           : { ok: true, blob: async () => ({ size: 16 }) };
       },
       async createImageBitmap() { return { close() {} }; },
-    });
+    }, { gfxHi: hi });
     const sizes = [];
     assets.init({ backend, isMobile: mobile, createTextureArray(size) { sizes.push(size); return {}; }, setMaterialMaps() {} });
     await assets.load(tier ? { tier } : undefined);
@@ -1110,7 +1112,8 @@ test("packHd: the 512 px tier loads only on a desktop TLX with the feature on, a
   assert.deepEqual(on.strips.sort(), ["a512.png", "n512.png"], "only the hd strips are fetched");
   assert.ok(on.sizes.every((s) => s === 8), "arrays built at the hd size");
   for (const [why, o] of [["feature off", { feature: false }], ["GLX", { backend: "glx" }], ["WGX", { backend: "webgpu" }],
-    ["a phone", { mobile: true }], ["no hd in the manifest", { hdInManifest: false }], ["GfxQuality throws", { throws: true }]]) {
+    ["a phone", { mobile: true }], ["no hd in the manifest", { hdInManifest: false }], ["GfxQuality throws", { throws: true }],
+    ["no GfxHi bundle (ULTRA path)", { hi: false }]]) {
     const r = await run(o);
     assert.notEqual(r.tier, "hd", why);
     assert.ok(!r.strips.some((u) => /512/.test(u)), why + ": no hd strip fetched");

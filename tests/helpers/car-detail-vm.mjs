@@ -1,6 +1,8 @@
 /* car-detail-vm.mjs — the Car3D build chain in a node VM, WITH car-shade.js (the shipped rounded car), for the
  * desktop-detail suite (tests/unit/car-detail-tiers.test.mjs). GfxQuality is deliberately absent: in node that
- * means detail 0, and the suite passes opts.detail / opts.hero explicitly.
+ * means detail 0, and the suite passes opts.detail / opts.hero explicitly. The lazy EXTREME kit js/car/car-hero.js
+ * (CarHero) loads last, as RendererBoot has it resident at detail >= 2; `omit: ["js/car/car-hero.js"]` is the ULTRA
+ * path without it.
  */
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -12,7 +14,9 @@ import { absSrc } from "./abs-src.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILES = ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js",
   "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js",
-  "js/car/car-body-geom.js", "js/car/car3d.js"];
+  "js/car/car-body-geom.js", "js/car/car3d.js",
+  // the lazy EXTREME kit (LAZY_GFX_HI): resident at detail 2; opts.omit drops it to check the ULTRA path without it
+  "js/car/car-hero.js"];
 
 export function loadCarDetail(extra, opts) {
   const ctx = vm.createContext(Object.assign({ Math, console, Object, Array, Number, isFinite }, extra || {}));
@@ -22,7 +26,7 @@ export function loadCarDetail(extra, opts) {
   const files = (opts && opts.meshDetail ? ["js/render/shared/mesh-detail.js"] : []).concat(FILES, opts && opts.rig ? ["js/car/cockpit-rig.js"] : []);
   for (const f of files) if (!omit.has(f)) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   if (opts && opts.rig) vm.runInContext("CockpitRig.init({ createMesh: (d) => d, freeMesh() {} })", ctx);
-  return vm.runInContext("({ Car3D, Parts, Teams, CarGeometry, Helmets" + (opts && opts.rig ? ", CockpitRig" : "") + (opts && opts.meshDetail ? ", MeshDetail" : "") + " })", ctx);
+  return vm.runInContext("({ Car3D, Parts, Teams, CarGeometry, Helmets, CarHero: typeof CarHero === 'undefined' ? undefined : CarHero" + (opts && opts.rig ? ", CockpitRig" : "") + (opts && opts.meshDetail ? ", MeshDetail" : "") + " })", ctx);
 }
 
 // The mesh health the suite pins: finite numbers, indices in range, zero-area triangles counted, unit normals,

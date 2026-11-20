@@ -86,7 +86,7 @@ const CarBodyGeom = (function () {
       const c = rings[i + 1][j], d = rings[i + 1][k];
       addTri(out, a, c, b, col); addTri(out, b, c, d, col);
     }
-    if (CarGeometry.luvOn && CarGeometry.luvOn()) CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (sides only)
+    CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (sides only)
     for (const [ring, reverse] of [[rings[0], false], [rings[rings.length - 1], true]])
       for (let j = 1; j < ring.length - 1; j++)
         addTri(out, ring[0], ring[reverse ? j + 1 : j], ring[reverse ? j : j + 1], col);
@@ -2007,7 +2007,7 @@ const CarBodyGeom = (function () {
           recessedPodExit(out, q, side, data.podSculpt.exitDepth, color);
         else addQuad(out, ...q, color);
       }
-      if (CarGeometry.luvOn && CarGeometry.luvOn()) CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
+      CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
       for (const [boundary, front] of [[rings[0], true], [rings[rings.length - 1], false]]) {
         let ring = boundary;
         const centre = ring.reduce((m, p) => m.map((v, i) => v + p[i] / ring.length), [0, 0, 0]);
@@ -2060,7 +2060,7 @@ const CarBodyGeom = (function () {
       const j = (k + 1) % rings[r].length;
       addQuad(out, rings[r][k], rings[r + 1][k], rings[r + 1][j], rings[r][j], color);
     }
-    if (CarGeometry.luvOn && CarGeometry.luvOn()) CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
+    CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
     for (const [ring, front] of [[rings[0], true], [rings[rings.length - 1], false]]) {
       const c = ring.reduce((a, p) => a.map((v, i) => v + p[i] / ring.length), [0, 0, 0]);
       for (let k = 0; k < ring.length; k++) {

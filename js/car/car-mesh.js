@@ -765,11 +765,11 @@ function _flapPut(cache, order, max, key, data) {
 // meshHi (ULTRA+): every car's flaps at detail 1 (twice the foil stations each way). The level is boot-time,
 // one per page, so the flap keys need not carry it; 0 below ULTRA, on phones and in node (CarGeometry.detailFor).
 let _flapDetail = -1;
-function _flapGeom(g, c, finish, surface) {
+function _flapGeom(...a) {
   if (_flapDetail < 0) _flapDetail = typeof CarGeometry !== "undefined" && CarGeometry.detailFor ? CarGeometry.detailFor(false) : 0;
-  if (!_flapDetail) return Car3D.buildFlapGeom(g, c, finish, surface);
-  try { return CarGeometry.withDetail(_flapDetail, () => Car3D.buildFlapGeom(g, c, finish, surface)); }
-  catch (_) { return Car3D.buildFlapGeom(g, c, finish, surface); }
+  const f = () => Car3D.buildFlapGeom(...a);
+  if (!_flapDetail) return f();
+  try { return CarGeometry.withDetail(_flapDetail, f); } catch (_) { return f(); }
 }
 function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
   const c = col || FLAP_DEF_COL;
