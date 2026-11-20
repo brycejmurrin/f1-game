@@ -55,8 +55,8 @@ const DesignerWorkspace = (function () {
       checks.disabled = !verdict;
       if (!verdict) return;
       checks.dataset.level = verdict.red ? "red" : verdict.amber ? "amber" : "ok";
-      checks.textContent = "CHECKS · " + (verdict.red ? verdict.red + " TO FIX" : verdict.amber ? verdict.amber + " WARNINGS" : "READY TO RACE");
-      checks.setAttribute("aria-label", "Review design checks: " + verdict.red + " errors, " + verdict.amber + " warnings");
+      checks.textContent = "CHECKS · " + (verdict.red ? verdict.red + " TO FIX" : verdict.amber ? verdict.amber + (verdict.amber === 1 ? " WARNING" : " WARNINGS") : "READY TO RACE");
+      checks.setAttribute("aria-label", "Review design checks: " + verdict.red + (verdict.red === 1 ? " error, " : " errors, ") + verdict.amber + (verdict.amber === 1 ? " warning" : " warnings"));
     }
     return { navigate, remember, refresh, review, closeMenu };
   }
