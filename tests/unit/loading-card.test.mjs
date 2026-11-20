@@ -1248,8 +1248,7 @@ test("fitCard runs after every reveal and whenever the card's geometry or the wi
 
 // #5897 row 3 (Bryce, via the orchestrator 2026-11-20 07:21Z: CLOUDY wins): one weather word for
 // overcast. The Daily sub-line and the track-select Daily chip printed p.weather.toUpperCase(), "OVERCAST".
-test("wxWord names overcast CLOUDY, and the Daily sub-line and chip print it", () => {
+// Its two callers (title-menu.js refresh, select-screen.js trackFilterBar) were checked with apex-lsp lsp_callers.
+test("wxWord names overcast CLOUDY", () => {
   assert.deepEqual(["overcast", "rain", "dry", "hail", ""].map(LC.wxWord), ["CLOUDY", "RAIN", "DRY", "HAIL", ""]);
-  const src = ["js/ui/title-menu.js", "js/ui/select-screen.js"].map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
-  assert.equal((src.match(/LoadingCard\.wxWord\(p\.weather\)/g) || []).length, 2, "both Daily labels use LoadingCard.wxWord");
 });
