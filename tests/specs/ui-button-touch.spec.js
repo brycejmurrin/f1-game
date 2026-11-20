@@ -992,11 +992,13 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
   const sizeAfter = await page.evaluate(() => HudLayout.get("map").s);
   expect(sizeAfter, "Larger adds ten points to the adopted painted size").toBeCloseTo(sizeBefore + 10, 8);
   const sizeLabel = await page.locator("#hud-arrange-name").textContent();
-  expect(sizeLabel).toMatch(/^\d+(?:\.\d+)?%$/);
-  expect(sizeLabel.length, "the toolbar reports a readable percentage").toBeLessThanOrEqual(8);
-  // The label is the PAINTED size (#5256): the stored factor times the zoom the map paints under.
+  // "N%" (of the factory size, #5977) and, when the map paints under a zoom, " · M% painted" (#5256).
+  const parts = /^(\d+(?:\.\d+)?)%(?: · (\d+(?:\.\d+)?)% painted)?$/.exec(sizeLabel);
+  expect(parts, `the toolbar reports a readable percentage: "${sizeLabel}"`).not.toBeNull();
+  expect(parts[1].length, "each figure stays short").toBeLessThanOrEqual(7);
+  // The painted figure is the stored factor times the zoom the map paints under.
   const painted = sizeAfter * await page.evaluate(() => document.getElementById("minimap").currentCSSZoom || 1);
-  expect(Math.abs(parseFloat(sizeLabel) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
+  expect(Math.abs(parseFloat(parts[2] ?? parts[1]) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
   await page.locator("#hud-arrange-done").click();
   await expect(page.locator("#pmsettings")).toBeVisible();
   await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
@@ -1118,6 +1120,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(page.locator("#pmsettings")).toBeHidden();
     await expect(page.locator("#pausemenu")).toBeHidden();
     await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+    // A fresh store: the map sits at this device's factory placement (on a phone, hud-layout.js PHONE_STANDARD).
+    const factory = await page.evaluate(() => HudLayout.get("map"));
     expect(await page.locator("[data-hl-arr]").count()).toBeGreaterThan(5);
     // The pieces the race hides until something happens show sample content while arranging.
     await expect(page.locator("#announce")).toBeVisible();
@@ -1145,7 +1149,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-smaller").click();
     expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s - 10, 8);
     await page.locator("#hud-arrange-reset").click();
-    expect(await page.evaluate(() => HudLayout.get("map"))).toEqual({ x: 0, y: 0, s: 100 });
+    expect(await page.evaluate(() => HudLayout.get("map")), "RESET restores the factory placement").toEqual(factory);
 
     // The drag again, then DONE: the layout persists, every handle is released, the
     // sample content goes, and the pause card comes back.
