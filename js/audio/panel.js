@@ -46,6 +46,7 @@ var AudioPanel = (() => {
       // iOS/Safari may leave it suspended. Setting the master first also makes
       // createCtx() build the gain graph at the right level immediately.
       if (b && fromGesture) GameAudio.init();
+      if (b && G.radio && G.radio.soundOn) G.radio.soundOn();   // the voice packs a muted race entry did not fetch
       // "♪ ON" read as ambiguous — the state of what? The word makes it a
       // labelled state (this is the MASTER gate: engine and SFX too, so
       // SOUND, not MUSIC). index.html's static markup is the other writer

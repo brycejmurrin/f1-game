@@ -34,7 +34,7 @@ const ExtraRigs = (function () {
     return v < 0 ? v + L : v;
   }
 
-  const _rvRows = [], _rvOut = [];
+  const _rvRows = [], _rvOut = [], _fights = [];
 
   /** Closest battle partner for the player, reusing Broadcast.battles when present. The 20 m/s crawl
    *  floor rides _vScale (vTop()/VMAX, latched by tickPitAuto(G) each frame before game.js calls this)
@@ -79,21 +79,34 @@ const ExtraRigs = (function () {
     return best;
   }
 
+  // Same contract as Broadcast.battles: reuse fight bags; the list never escapes pickRival.
   function localBattles(cars, vScale) {
-    const out = [];
+    let n = 0;
+    const floor = 20 * (vScale > 0 ? vScale : 1);
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20 * (vScale > 0 ? vScale : 1));
+      const v = Math.max(b.speed || 0, floor);
       const g = (a.prog - b.prog) / v;
-      if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
+      if (g < 0 || g >= BATTLE_S) continue;
+      let f = _fights[n];
+      if (!f) { f = { key: null, ahead: null, gapS: 0, score: 0 }; _fights[n] = f; }
+      f.key = b.key; f.ahead = a.key; f.gapS = g; f.score = g + i * 0.08;
+      n++;
     }
-    return out.sort((x, y) => x.score - y.score);
+    _fights.length = n;
+    _fights.sort((x, y) => x.score - y.score);
+    return _fights;
   }
 
+  // Pooled: rivalLock calls this every rendered RIVAL frame; the fields are
+  // read synchronously into locals, so a shared bag is safe (same contract as
+  // pickRival's running rows).
+  const _carSamp = { s: 0, x: 0, p: null, t: null, r: null, hw: 0 };
   function carSample(track, car, out) {
     const s = wrapS(track, car.s || 0), x = car.x || 0;
     Tracks.sample(track, s, out);
-    return { s, x, p: out.p, t: out.t, r: out.r, hw: out.hw };
+    _carSamp.s = s; _carSamp.x = x; _carSamp.p = out.p; _carSamp.t = out.t; _carSamp.r = out.r; _carSamp.hw = out.hw;
+    return _carSamp;
   }
 
   /** Frame the car ahead or behind in a battle — both cars stay in shot. */

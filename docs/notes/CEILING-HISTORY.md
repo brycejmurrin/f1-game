@@ -1,12 +1,57 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
 
+`(tree) eagerBytes` 8015286 → **8016541** (+1255). Deliberate raise of the exact boot-wall ceiling;
+it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's eager
+`js/track/core/def.js`, `js/ui/platform-session.js`, `js/core/lazy-bundles.js` and `js/track/build-client.js`
+(+1793 after the sync onto dec94440; shorter wording of the PR's own new comments took it to +1255).
+The code is `TrackDef.scenerySource` + `ENGINE_MODELS`, the one text the page and the build worker read a
+circuit's pack-model set from (Spa built procedural pines because `pine_lod0` was spelled only inside an
+engine helper), and the IntersectionObserver gate that stops the offline note costing about 620 worker
+cache lookups on every boot. Fragment: `tests/data/ratchets.d/claude--perf-assets-flow-1118.json`.
+
+## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
+
+`(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is this PR's eager code from its
+merge base: `js/career/save-migrate.js` +874 (import range clamps), `js/physics/collide.js` +518
+(pace-normalised contact severity), `js/career/career-ui.js` +358 (NEW CAREER code check),
+`js/input/steer-tuning.js` +355 (DRIVING HELP reads OFF only at gain 0), and
+`js/physics/aero-zones.js` +264, `js/physics/consts.js` +190 and `js/physics/ai-band.js` +175
+(fix 6, the stale-text corrections). About +1379 of it is whole-line comments, which carry
+fix 6's corrected facts. Fragment: `ratchets.d/claude--gameplay-hunt-1118.json`.
+
+## 2026-11-19 — PR #5786 (claude/quali-model-refit-1118): qualifying-model refit, option 1
+
+`(tree) eagerBytes` 8015286 → **8019119** (+3833), measured on the merge with tip `9db4870f`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is option 1 of the qualifying
+refit (Bryce's `decision: 1`, 2026-11-19 07:36:21Z), in two eager files:
+`js/race/quali-model.js` +3469 (the wing term in `carLap`, the human-neutral wing and the
+generated `@gen-quali-calib` per-circuit factor block) and `js/physics/ai-drive.js` +364 (the
+shared `aeroGrip` / `AERO_GRIP_K` helper the model and the AI's lateral and brake reads now
+share). Not taken: a lazy split of the calibration table behind the race-session bundle.
+It is unmeasured. Fragment: `ratchets.d/claude--quali-model-refit-1118.json`.
+2026-11-20, on the merge with tip `3fd508b5` (#5854 merged first and its `ai-drive.js` side won the
+conflict, so the +364 is gone): `eagerBytes` 7968494 → **7971963** (+3469), the `quali-model.js` growth
+alone. The fragment was narrowed from +3833 to +3469; nothing was raised beyond what Bryce labelled.
 ## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
 
 `(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
 explained them were the bytes over the tip, so they were cut and the fragment records the
 lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
 inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
+## 2026-11-19 — PR #5679 (claude/picker-outline-centre-5656): select preview outline centred
+
+`(tree) eagerBytes` 8,015,938 → **8,017,320** (+1,382 B). Deliberate raise past the absorb by
+Bryce's `decision: A` on #5679 (2026-11-19 18:29Z); the tree-wide ceiling still needs his
+`ratchet-raise` label. Measured on the sync merge with tip `99c7832f`: the PR grew eager
+`js/ui/select-screen.js` +2,057; trimming its own new comments took back 675. The rest is the fix's
+code: the pure `previewMapBand` (free band between caption and stats row), `fitPreviewMapBand`
+(pads and centres the map button), its export, and `previewMapSlot` now applying on every layout.
+Fragment: `tests/data/ratchets.d/claude--picker-outline-centre-5656.json`.
 
 ## 2026-11-19 — PR #5738 (claude/appearance-shapes-4529): PORTRAIT & LANDSCAPE, garage PANEL HEIGHT
 
