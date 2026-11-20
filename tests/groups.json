@@ -345,6 +345,8 @@
     "// comparing the PAIR can see it. Pure text, well under a second.",
     "tests/unit/delta-sign-colour.test.mjs",
     "tests/unit/deploy-pr-rest.test.mjs",
+    "// #5870: the ratchets.json conflict cure judges EFFECTIVE ceilings (ratchets.d) and keeps every fragment. Throwaway git repo, ~1 s.",
+    "tests/unit/deploy-ratchet-fragments.test.mjs",
     "tests/unit/deploy-staging-build.test.mjs",
     "tests/unit/deploy-staging.test.mjs",
     "// that touches the LUT rather than on every edit.",

@@ -10336,6 +10336,7 @@
       "*": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/deploy-ratchet-fragments.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-presets-extreme-knobs.test.mjs",
