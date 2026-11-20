@@ -16,7 +16,11 @@ const RaceControl = (function () {
   // player's finish OR retirement (`since`) — a DNF no longer ends the race for
   // everyone, so season/career points use the real classification — then endRace
   // classifies as before (RaceControl.shortRun when no car ever took the flag).
-  // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
+  // NET (`post.net`, #5989 A1): the same POST_FINISH_CAP s, counted from the
+  // FIRST human's finish (`post.first`); a friend still on track is then
+  // classified by laps done instead of holding the finished screen to the
+  // 360 s/lap hard cap.
+  // TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
   const POST_FINISH_CAP = 75;
   function finishPending(cars, raceT, lapsTarget, raceT0) {
     if (raceT - (raceT0 > 0 ? raceT0 : 0) > 360 * lapsTarget) return false;
@@ -30,13 +34,14 @@ const RaceControl = (function () {
   }
   function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
     const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false;
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, humanFinished = false;
     for (const c of cars || []) {
       if (!c) continue;
       if (c.finished) anyFinished = true;
       else if (!c.retired) running = true;
       if (!c.human && !c._nHuman) continue;
       anyHuman = true;
+      if (c.finished && !c.retired) humanFinished = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
     // A time penalty is served on the CLOCK (classification sorts finishers by
@@ -49,6 +54,8 @@ const RaceControl = (function () {
     if (finishPending(cars, raceT, lapsTarget, raceT0)) return 0;
     if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
     if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
+    if (post && post.net) { if (!humanFinished) post.first = -1; else if (!(post.first >= 0)) post.first = raceT; }
+    if (humanFinished && !allHumansDone && post && post.net) return raceT - post.first < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (ran > 360 * lapsTarget) return 0.1;

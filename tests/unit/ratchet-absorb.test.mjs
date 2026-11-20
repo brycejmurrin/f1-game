@@ -4,7 +4,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, loadAt, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
+import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, loadAt, ownGrowth, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
+import { treeRaises } from "../../tools/ci/merge-gate.mjs";
 import { AT_REF } from "../../tools/check/tree-counts.mjs";
 
 test("eagerCodeBytes is measured live and at a ref, and its entry grants a 5000 B absorb at slack 0", () => {
@@ -57,4 +58,45 @@ test("--base: a tree raise inside the base's absorb is no red; past it, it is", 
   assert.equal(msg?.slice(msg.indexOf("(+5000)")), "(+5000) — inside its 5000 absorb (the branch's own growth; no label)", inside.join("\n"));
   const past = [];
   assert.notEqual(compareToBase("HEAD", { current: bump(5001), print: (l) => past.push(l), historyReasoned: false }), 0, past.join("\n"));
+});
+
+/* D-037 (Bryce, 2026-11-20 ~17:22Z, "Pin slack"): the two pin counters carry the same absorb, 5 pins. */
+const PINS = ["assertPins", "assertPinsAll"];
+
+test("D-037: assertPins and assertPinsAll grant a 5-pin absorb", () => {
+  for (const m of PINS) assert.equal(absorbOf(load().tree[m]), 5, m);
+});
+
+test("D-037: the hook takes a branch's own +5 pins as its fragment; +6 still blocks", async () => {
+  for (const metric of PINS) {
+    const row = (own) => ({ tree: true, metric, value: 8146, over: own, slackMax: 200, absorb: 5 });
+    const grow = (n) => ownGrowth([row(n)], { base: "MB", pinGrowth: async (m, ref) => (assert.equal(ref, "MB"), assert.equal(m, metric), n) });
+    assert.equal(autoRaiseBlockReason((await grow(5))[0]), null, `${metric} +5`);
+    assert.equal(autoRaiseBlockReason((await grow(6))[0]),
+      "the branch grows it by 6, past its 5 absorb — convert a source pin to a behaviour assertion, or raise it as a fragment under Bryce's ratchet-raise");
+    const blind = await ownGrowth([row(1)], { base: "MB", pinGrowth: async () => { throw new Error("no base"); } });
+    assert.equal(autoRaiseBlockReason(blind[0]), "a tree-wide metric is shrink-only — never auto-raised", "unmeasured: no absorb");
+  }
+});
+
+test("D-037: the tip's own growth does not count, only the branch's since its merge base", () => {
+  // Merge base 8140 plus fragments other PRs landed on the tip (+4) and a sync brought in: both sides carry them.
+  const before = { assertPins: 8144, assertPinsAll: 10370 }, absorb = { assertPins: 5, assertPinsAll: 5 };
+  assert.deepEqual(treeRaises(before, { assertPins: 8149, assertPinsAll: 10375 }, absorb, absorb), [], "+5 own: no raise");
+  assert.deepEqual(treeRaises(before, { assertPins: 8150, assertPinsAll: 10370 }, absorb, absorb).map((r) => [r.metric, r.from, r.to]),
+    [["assertPins", 8144, 8150]], "+6 own: Bryce's ratchet-raise");
+  // --base on CI: +5 is named inside the absorb; +6 is a named RAISE (under the 40 per-file absorb a warning there),
+  // and the raise row above is what asks Bryce.
+  const head = loadAt("HEAD");
+  for (const m of PINS) {
+    if (!absorbOf(head.tree[m])) continue; // HEAD predates D-037 (a pre-commit run): the merged table carries it
+    const bump = (n) => ({ ...head, tree: { ...head.tree, [m]: { ...head.tree[m], ceiling: head.tree[m].ceiling + n } } });
+    const out = [];
+    assert.equal(compareToBase("HEAD", { current: bump(5), print: (l) => out.push(l), historyReasoned: false }), 0, out.join("\n"));
+    assert.ok(out.some((l) => l.startsWith(`RAISE  (tree) ${m}:`) && l.endsWith("inside its 5 absorb (the branch's own growth; no label)")), out.join("\n"));
+    const past = [];
+    compareToBase("HEAD", { current: bump(6), print: (l) => past.push(l), historyReasoned: false });
+    const line = past.find((l) => l.includes(`RAISE  (tree) ${m}:`));
+    assert.ok(line && !line.includes("inside its"), past.join("\n"));
+  }
 });

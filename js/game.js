@@ -686,7 +686,7 @@ const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(buil
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 let pendingFinishQuit = false;
-const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
+const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (+ net, first)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
 const _gridIdleOpts = { soundOn: false, wet: false, step: true };
@@ -1558,7 +1558,7 @@ function makeCars() {
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
         // Declared here so every car has the shape whether or not a race arms it.
         retired: false, dnf: null, dnfAt: null, dnfWhy: null,
-        offroad: false, offT: 0, cuts: 0, penalty: 0,
+        offroad: false, offT: 0, offCut: false, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
         // lanePref is the grid HOME LINE and never moves; adaptLane biases c.lane
@@ -1569,6 +1569,7 @@ function makeCars() {
     });
   });
   player = cars.find((c) => c.isPlayer) || null;   // find() yields undefined; G.player's contract is CarState | null
+  if (player && flow === "season" && season && !netPlay.active()) SeasonCal.seatPlayer(season, player.driverId);   // #5877
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
@@ -1756,7 +1757,7 @@ function gridUp(preOrder) {
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.offCut = false; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref; c.laneClr = 0;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -3500,7 +3501,6 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
-if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
@@ -4692,7 +4692,7 @@ function update(dt) {
   // off the table and the countdown stands.
   if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
   else if (resultT === 0) {
-    postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
+    postFinish.net = session === "race" && netPlay.active(); postFinish.solo = session === "race" && !postFinish.net && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
@@ -5636,8 +5636,9 @@ function updateCarLongitudinal(c, dt, ranked, S) {
     const grassFloor = GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05);
     if (c.speed > grassFloor) c.speed = Math.max(grassFloor, c.speed - grassDrag * dt);
     c.offT += dt;
-    if (c.offT > 1.2) {
-      c.offT = -2;   // grace before next count
+    // ONE STRIKE PER TRIP OFF (#5945 1A): `offCut` latches the count until the car rejoins.
+    if (c.offT > 1.2 && !c.offCut) {
+      c.offT = -2; c.offCut = true;   // grace before next count
       c.cuts++;
       // A LAP WITH A COUNTED CUT IS NOT A TIMED LAP — in ANY session. A time
       // trial is a leaderboard (a lap run off-track replaced a 42 s record with
@@ -5674,15 +5675,9 @@ function updateCarLongitudinal(c, dt, ranked, S) {
         if (soundOn) GameAudio.offtrack();
       }
     }
-  } else if (c.offT !== 0) {
-    // Relax offT toward 0 during clean running — from BOTH sides. A counted cut
-    // parks it at the -2 grace sentinel; decaying only positive values (the old
-    // `else if (c.offT > 0)`) froze that -2 the whole rest of the stint, so the
-    // NEXT, separate excursion started from -2 and needed ~3.2 s off-track to
-    // count instead of 1.2 s — an unintended free pass. The continuous-excursion
-    // grace is unaffected: that path is the `if` branch above (offT += dt), not
-    // this one, which only runs while the car is back on track.
-    c.offT = c.offT > 0 ? Math.max(0, c.offT - dt) : Math.min(0, c.offT + dt);
+  } else if (c.offCut || c.offT !== 0) {
+    // Rejoined after a counted trip: the -2 grace starts here. Else relax from BOTH sides (a frozen -2 made the next trip need 3.2 s, not 1.2).
+    c.offT = c.offCut ? -2 : c.offT > 0 ? Math.max(0, c.offT - dt) : Math.min(0, c.offT + dt); c.offCut = false;
   }
 
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little

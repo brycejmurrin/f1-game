@@ -55,6 +55,7 @@ const RaceInsights = (function () {
   // vTop(), the same shape AiDrive.otWant uses for its own margin.
   const THREAT = 0.02;
   const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
+  const BRAKE_REF = 50;        // m/s: a braking score is the stop scaled to this entry speed (v², #5888)
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
   // SPEED UNITS (js/ui/appearance-opts.js) is display-only; the drills still measure in m/s.
@@ -68,7 +69,7 @@ const RaceInsights = (function () {
   const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
   const boundedPush = (a, v, n) => { a.push(v); if (a.length > n) a.shift(); };
   function create(G) {
-    const kmh = (v) => kmhOf(G.dashKph, v);
+    const kmh = (v) => kmhOf(G.dashKph, v), brakingRef = () => kmh(BRAKE_REF) + unit();
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
     let lapEnergy = null, lastLapEnergy = null;
     let tyreStart = null, drill = null, lastDrill = null, distance = 0, lapClean = false, weather = null, attempts = {};
@@ -152,11 +153,7 @@ const RaceInsights = (function () {
     }
     // The first failure is the one the driver needs to hear; later ones follow from it.
     function failDrill(reason) { if (drill && !drill.done && drill.clean) { drill.clean = false; drill.reason = reason; } }
-    // THE PLAYER'S PLACE, counted the way the classification counts it: by
-    // cumulative arc, so a car a lap down is behind rather than alongside. The
-    // first drill to look past G.player — every other one judges the car alone
-    // against the road. Same sort js/agent/apex.js uses for its gap readouts.
-    // Returns 1-based position, or 0 when there is no field to have a place in.
+    // The player's 1-based place by cumulative arc (as the classification and apex.js count it); 0 with no field.
     function placeOf(c) {
       const cars = G.cars;
       if (!c || !Array.isArray(cars) || cars.length < 2) return 0;
@@ -164,12 +161,14 @@ const RaceInsights = (function () {
       for (const o of cars) if (o !== c && !o.retired && (o.prog || 0) > (c.prog || 0)) ahead++;
       return ahead + 1;
     }
+    // #5888: circuit + team in EVERY session (G.records.key() is the TT class: null or stale in a race).
+    // Braking scores are speed-scaled (`:v2`); a raw-metre legacy best stays stored, never compared.
+    const classOf = (circuit, team) => "c2|" + circuit + "|" + team;
     const masteryKey = (mode, sectorIdx) => {
-      const key = G.records.key() + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
+      const key = classOf(G.track && G.track.def && G.track.def.id || "", G.player && G.player.team && G.player.team.id || "")
+        + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all") + (mode === "braking" ? ":v2" : "");
       if (mode !== "sector") return key;
-      // A changed timing line measures a different duration on the same road.
-      // Keep lap/other drill records intact; unversioned sector scores cannot
-      // establish which split positions they measured.
+      // A moved timing line is a different comparison; unversioned sector scores never match.
       const splits = G.track && G.track.def && G.track.def.sectors || [1 / 3, 2 / 3];
       return key + ":splits:" + JSON.stringify(splits);
     };
@@ -202,19 +201,29 @@ const RaceInsights = (function () {
     }
     const nearestAhead = (c) => nearestIn(c, 1);
     const nearestBehind = (c) => nearestIn(c, -1);
-    // The rolling pace read on whoever is in front. _vmaxNow is stashed for every
-    // car after every pace multiplier (js/game.js), which is the same cross-car
-    // comparison the AI itself makes. MEDIAN, not mean: one frame of tow or one
-    // caution sample must not move the verdict.
+    // Rolling pace of the car in front from _vmaxNow (the AI's own comparison); a MEDIAN, so one tow frame cannot move it.
     function samplePace(c) {
       const ah = nearestAhead(c);
       if (ah !== paceRef) { paceRef = ah; paceWin = []; }
       if (ah && ah._vmaxNow > 0 && c._vmaxNow > 0) boundedPush(paceWin, ah._vmaxNow / c._vmaxNow, 20);
     }
     const paceParity = () => (paceWin.length >= PARITY_MIN ? median(paceWin) : null);
+    // A pre-#5888 key began with its TT class JSON: it moves to that class's circuit + team (min best, runs summed).
+    function migrate(e) {
+      const m = /^(\{.*\})(:[a-z]+:.*)$/.exec(e.key); let c = null;
+      try { c = m && JSON.parse(m[1]); } catch (_) { /* not a class key */ }
+      return c && typeof c.circuit === "string" && Array.isArray(c.car) ? { ...e, key: classOf(c.circuit, c.car[0]) + m[2] } : e;
+    }
     function masteryEntries() {
-      const raw = G.store.get("circuitMastery", null);
-      return raw && raw.version === 1 && Array.isArray(raw.entries) ? raw.entries.filter(e => e && typeof e.key === "string").slice(-63) : [];
+      const raw = G.store.get("circuitMastery", null), out = new Map();
+      if (!raw || raw.version !== 1 || !Array.isArray(raw.entries)) return [];
+      for (const e of raw.entries) {
+        if (!e || typeof e.key !== "string") continue;
+        const n = migrate(e), o = out.get(n.key), bests = o ? [o.best, n.best].filter(Number.isFinite) : null;
+        out.set(n.key, o ? { key: n.key, best: bests.length ? Math.min(...bests) : null,
+          completed: Math.min(9999, (Math.floor(o.completed) || 0) + (Math.floor(n.completed) || 0)) } : n);
+      }
+      return [...out.values()].slice(-63);
     }
     function mastery(mode) {
       const found = masteryEntries().find(e => e.key === masteryKey(mode, G.sectorIdx));
@@ -223,23 +232,13 @@ const RaceInsights = (function () {
     function finishDrill(current, c) {
       drill.done = true;
       const seconds = Math.max(0, G.raceT - drill.time), stop = Math.max(0, current.prog - drill.brakeProg), mode = drill.mode;
-      // Each goal is scored by the number the driver can act on: braking by the
-      // stopping distance from the first firm brake and launch by the time from
-      // the first throttle (both repeat from a restored checkpoint, so they
-      // compare); a lap by the timed lap itself (the line keeps the exact time
-      // even though practice laps never enter the records); the rest by time.
+      // Scored by what the driver can act on: braking from the first firm brake, launch from the
+      // first throttle, a lap by the line's exact time; the rest by time.
       const lapTime = Number.isFinite(c._lapTimeAtLine) && c._lapTimeAtLine > 0 ? c._lapTimeAtLine : drill.lapStart == null ? seconds : G.raceT - drill.lapStart;
-      // PLACES GAINED IS THE ONE SCORE WHERE MORE IS BETTER. Every other drill
-      // scores a time or a distance and mastery keeps the MINIMUM, so this is
-      // stored NEGATED — gaining two places scores -2, which the same Math.min
-      // ranks above -1. The sign is undone once, at the display edge, so
-      // nothing else in the ledger needs a per-mode "which way is better".
+      // Mastery keeps the MINIMUM, so "more is better" scores (places gained, metres closed,
+      // seconds held) are stored NEGATED; the display edge undoes the sign once.
       const placed = (drill.place0 || 0) - (drill.placeNow || 0);
-      // …and the rival drills add two more of the same shape: metres CLOSED and
-      // seconds HELD are both "more is better", so both are stored negated.
-      // OVERTAKE is the one that needs no sign work — it scores the time the
-      // move took, and less of that is better, like every drill above.
-      const score = mode === "braking" ? stop : mode === "launch" && drill.launchT != null ? G.raceT - drill.launchT
+      const score = mode === "braking" ? stop * (BRAKE_REF / Math.max(1, drill.brakeSpeed)) ** 2 : mode === "launch" && drill.launchT != null ? G.raceT - drill.launchT
         : mode === "lap" ? lapTime : mode === "start" ? -placed
         : mode === "slipstream" ? -Math.max(0, drill.closed)
         : mode === "defend" ? -Math.min(HOLD_CAP, drill.pressT) : seconds;
@@ -252,20 +251,16 @@ const RaceInsights = (function () {
       const slack = limit == null ? null : Math.max(0, stop - limit);
       const text = mode === "braking" ? "stopped " + stop.toFixed(0) + " m after braking from " + kmh(drill.brakeSpeed) + unit()
           + (slack >= 1 ? " · " + slack.toFixed(0) + " m of it below your hardest braking" : "")
+          + " · " + score.toFixed(0) + " m from " + brakingRef()
         : mode === "slalom" ? seconds.toFixed(1) + "s · " + drill.changes + " direction changes"
         : mode === "corner" ? seconds.toFixed(1) + "s · min " + kmh(drill.minSpeed) + unit() + " · exit " + kmh(drill.exitSpeed) + unit()
         : mode === "launch" ? "0 to " + kmh(G.vTop() * .5) + unit() + " in " + score.toFixed(2) + "s"
         : mode === "start" ? (placed > 0 ? "gained " + placed + (placed === 1 ? " place" : " places") : placed < 0 ? "lost " + (-placed) + (placed === -1 ? " place" : " places") : "held position")
           + " — P" + drill.place0 + " to P" + drill.placeNow
-        // SLIPSTREAM reports tow-seconds beside the metres rather than scoring
-        // them: the tow is a vmax multiplier, so below vmax it reads 1.0 and
-        // buys nothing. Metres closed is the EFFECT, and it is zero when the
-        // tow is inert. A run with 12 m closed and 0.4 s of tow is visibly not
-        // a slipstream, which is exactly what the pairing is for.
+        // Tow-seconds are reported, not scored: below vmax the tow buys nothing; metres closed is the effect.
         : mode === "slipstream" ? "closed " + Math.max(0, drill.closed).toFixed(0) + " m in " + drill.towS.toFixed(1) + "s of tow · nearest " + (Number.isFinite(drill.gapMin) ? drill.gapMin.toFixed(0) : "—") + " m"
         : mode === "overtake" ? "passed " + drill.rivalCode + " in " + seconds.toFixed(1) + "s · closed from " + drill.gap0.toFixed(0) + " m" + (drill.gifted ? " · he moved over" : "")
-        // "he gave up the move", never "you forced him to": the AI's commitment
-        // also decays on its own cooldown, so the wording is the honest hedge.
+        // "he gave up the move": the AI's commitment also decays on its own cooldown.
         : mode === "defend" ? "held P" + drill.place0 + " for " + Math.min(HOLD_CAP, drill.pressT).toFixed(1) + "s under attack"
           + (drill.attacked ? "" : " — he never committed") + (drill.gaveUp ? " · he gave up the move" : "")
         : mode === "backmarkers" ? "cleared " + drill.cleared + " of " + TRAFFIC_N + " in " + seconds.toFixed(1) + "s"
@@ -639,7 +634,7 @@ const RaceInsights = (function () {
     }
     function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase } : null, lastDrill: lastDrill ? { ...lastDrill, ...(lastDrill.recovery ? { recovery: { ...lastDrill.recovery } } : {}) } : null }; }
     return { update, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
-      attempts: mode => (attempts[mode] || []).map(a => ({ ...a })) };
+      attempts: mode => (attempts[mode] || []).map(a => ({ ...a })), brakingRef };
   }
   return Object.freeze({ create, DRILLS, needsRivals });
 })();

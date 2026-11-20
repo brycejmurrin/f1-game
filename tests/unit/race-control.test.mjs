@@ -236,6 +236,33 @@ test("the finish policy closes completed human races and bounded edge cases", ()
   ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
 });
 
+test("a VS FRIEND race waits POST_FINISH_CAP s after the first human finishes, not 360 s/lap (#5989 A1)", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const post = { solo: false, net: true, since: -1, first: -1 };
+  const cars = [
+    { human: true, finished: false, retired: false },
+    { _nHuman: true, finished: false, retired: false },
+    { human: false, finished: false, retired: false },
+  ];
+  assert.equal(finishDelay(cars, 290, 5, 0, post), 0, "nobody home: racing");
+  assert.equal(post.first, -1);
+  Object.assign(cars[0], { finished: true, finishT: 300 });
+  assert.equal(finishDelay(cars, 300, 5, 0, post), 0, "the first human home starts the wait");
+  assert.equal(post.first, 300);
+  assert.equal(finishDelay(cars, 374, 5, 0, post), 0, "74 s on: the friend still has time");
+  assert.equal(finishDelay(cars, 375, 5, 0, post), 0.1, "75 s on: classify the friend by laps done");
+  // The friend's own screen applies the same bound to the remote finisher.
+  const theirs = { solo: false, net: true, since: -1, first: -1 };
+  const mirror = [{ human: true, finished: false, retired: false }, { _nHuman: true, finished: true, retired: false, finishT: 300 }];
+  assert.equal(finishDelay(mirror, 300, 5, 0, theirs), 0);
+  assert.equal(finishDelay(mirror, 376, 5, 0, theirs), 0.1, "both peers end on the same bound");
+  // Both home is the ordinary 2.2 s countdown, AI still on track or not.
+  Object.assign(cars[1], { finished: true, finishT: 320 });
+  assert.equal(finishDelay(cars, 330, 5, 0, post), 2.2);
+  // Without `post.net` (TT, quali, harnesses) the old 360 s/lap cap stands.
+  assert.equal(finishDelay([{ human: true, finished: true, retired: false, finishT: 300 }, { _nHuman: true, finished: false, retired: false }], 400, 5), 0);
+});
+
 test("a Data Hub JUMP IN counts the hard cap from the clock it was seeded to, not from zero", () => {
   // PR #402 audit: RealRace.place seeds raceT to the real race's time at the
   // lap you join (K0 * t0 — 5 000+ s at lap 40 of Baku). On a 3-lap condensed
