@@ -413,3 +413,21 @@ test("a successful key capture rebuilds once, restores the changed slot's focus,
   assert.match(read("index.html"), /id="pm-keys-note"[^>]*role="status"/,
     "the capture result is exposed as a polite status update");
 });
+
+
+test("clean-room 12: a pointer-kind flip re-renders KEYBOARD after syncPointerKind writes body.desktop", () => {
+  // key-binds subscribes before platform-session, so a synchronous rerender
+  // read the stale class; the deferred one reads the new verdict.
+  let desk = false, flip = null;
+  const { $, Input, flushTimers } = bootUi(false, {}, null, (s) => {
+    s.document.body.classList.contains = (c) => c === "desktop" && desk;
+    s.matchMedia = () => ({ matches: true, addEventListener: (t, f) => { flip = f; } });
+  }, { deferTimers: true });
+  flushTimers();
+  assert.equal($("pm-keys-section").hidden, true, "touch: hidden behind the hint");
+  Input.onPointerKindChange(() => { desk = true; });      // syncPointerKind, subscribed later at boot
+  flip({ matches: false });
+  flushTimers();
+  assert.equal($("pm-keys-section").hidden, false, "desktop class shows the KEYBOARD table");
+  assert.equal($("pm-ctl-hint").hidden, true, "and drops the phone hint");
+});

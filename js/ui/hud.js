@@ -467,9 +467,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
-// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box), so the paused landscape
-// HUD kept no caps until RESUME. Refit at the flip and once the viewport settles; the paused card's HUD ticks run it.
-const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true; };
+// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box). Refit at the flip and the
+// settle; a paused race runs NO HUD tick (game.js parks the loop before updateHud), so then it fits here, bounded.
+const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true;
+  if (G.paused && (G.state === "race" || G.state === "count")) for (let i = 0; i < 4 && _fitPending; i++) updateHud(true); };
 if (_rotMq && typeof _rotMq.addEventListener === "function") _rotMq.addEventListener("change", () => { refitRot(); setTimeout(refitRot, VP_SETTLE_MS); });
 // THE 3 s BACKSTOP RE-FITS ONLY WHAT RESIZED, seen by a ResizeObserver (no layout read); why and the settle window: docs/notes/LIVE-INPUT-H11-2026-10-20.md.
 const FIT_SETTLE_MS = 400, FIT_SKIP_MAX = 9, _fitSeen = new WeakSet(), _fitSize = new WeakMap();
@@ -538,7 +539,7 @@ function hlKey() {
 // container whose tree stays clean — so this is a structural fix, not a
 // measured win, and the honest claim is that it removes a per-tick flush whose
 // cost depends on a tree this box does not reproduce.
-let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
+let _cssRootKey = "", _cssScale = 1, _cssMult = 1, _cssDrop = 15;
 function syncComputedRootVars() {
   // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
   // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
@@ -548,7 +549,7 @@ function syncComputedRootVars() {
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
   // which has no getComputedStyle — the same guard the reads below carried.
-  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; return; }
+  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; _cssDrop = 15; return; }
   // ONE CSSStyleDeclaration for both: the flush happens on first access, so two
   // getComputedStyle calls were two chances to pay for it.
   const cs = getComputedStyle(document.documentElement);
@@ -557,6 +558,7 @@ function syncComputedRootVars() {
   // token reads back as a literal string and coerces to NaN — so --hud-btn-mult
   // is resolved from its own factor rather than parsed out of the calc.
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
+  _cssDrop = parseFloat(cs.getPropertyValue("--limits-drop")) || 15;   // css/hud.css F-17: the LIMITS chip's drop
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 // LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
@@ -951,12 +953,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // would read a 0.82 dock as 18 % wider than it paints. Read AFTER the
   // same-key return above: a steady tick must not pay a computed-style pass.
   let btnFloor = 1;
-  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
-  // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
-  // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
-  // 142 = 110×0.862/0.666). Dividing getBoundingClientRect by that stale live
-  // zoom over/under-estimates intrinsics and the next pass flips between
-  // ~--hud-scale (uncapped) and the 0.4 floor. Measure with what we published.
+  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom, which lags --hud-z-top a frame under load
+  // (Pages 37714419183): dividing rects by it flipped the next pass between uncapped and the 0.4 floor.
   // No currentCSSZoom on a real DOM (iOS Safari < 26.4) still paints zoom into rects:
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
@@ -1189,35 +1187,17 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // so a zoom-1 copy was an A->B swap of root vars (a whole-document restyle) on every full fit.
   if (!canon) {
     hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
-    // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
-    // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
-    // where the BOOST pedal is on a touch phone, so a track-limits warning painted
-    // over a tap target. Published in the chrome's own zoom space (the dock zooms
-    // by the RAW slider, the chrome by --hud-z-top) so the CSS can add it directly.
-    // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
-    // --hud-z-top group, so its `right:` needs the stand-off in that space, and
-    // the dock's own zoom (the raw slider) never enters it.
-    // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge.
-    // #hud-limits derived that offset from a hand-computed `4.8em` (three rows at
-    // line-height 1.6) — which is only the box's height while the box EXISTS. Every
-    // profile that hides it (MINIMAL, and a broadcast camera outside the broadcast
-    // profile) left the chip hanging in mid-air below an empty corner, reported
-    // from a phone as "LIMITS floats in the middle of the screen". Measured, in
-    // the chip's own zoom units, it is 0 exactly when the box is gone.
+    // THE RIGHT DOCK'S WIDTH, so right-anchored chrome stands off it: #hud-limits sits BELOW #hud-sectors, where
+    // the BOOST pedal is on a touch phone. Published in the chrome's zoom space (--hud-z-top), not the dock's.
+    // THE SECTOR BOX'S HEIGHT, for the chip hanging off its bottom: a hand-computed `4.8em` held only while the
+    // box EXISTS, so MINIMAL and a broadcast camera left LIMITS floating mid-screen. Measured, it is 0 when gone.
     const secH = tall(els.hudSectors, zTopPub);
     hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
     const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
-    // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
-    // Standing off unconditionally dragged a top-right chip halfway across the
-    // screen on any viewport tall enough for the two never to meet (the second
-    // half of the same phone report). #hud-dock is bottom-anchored and only as
-    // tall as its tallest column, so the test is one rect comparison: does the
-    // chip's bottom edge reach the dock's top edge? The chip's own box cannot be
-    // measured — it is `hidden` until the player takes a strike — so its top is
-    // reconstructed from the column it hangs in: #pausebtn's bottom edge plus the
-    // same 4 px of air css/hud.css puts between them, then the sector box, then
-    // the 15 px offset. CHIP_H is its one line plus padding at --fs-micro.
-    const CHIP_H = 26, CHIP_DROP = 15;
+    // …BUT ONLY WHEN THE CHIP REACHES THE DOCK: standing off unconditionally dragged it halfway across a tall
+    // screen. The chip is `hidden` until a strike, so its box is rebuilt from its column: #pausebtn's bottom
+    // + 4 px, the sector box, --limits-drop (F-17), and CHIP_H (one line plus padding at --fs-micro).
+    const CHIP_H = 26, CHIP_DROP = _cssDrop;
     const pauseR = els.pausebtn ? els.pausebtn.getBoundingClientRect() : null;
     const colTop = scR && scR.height ? scR.top : (pauseR && pauseR.height ? pauseR.bottom + 4 : 0);
     const limBot = colTop + (secH + CHIP_DROP + CHIP_H) * chromeZ;
