@@ -130,7 +130,10 @@ for (const touch of [false, true]) {
       const title = (await saved()).title;
       expect(title.wide.btns.size).toBeGreaterThan(100);
 
-      await activate(page.locator("#mb-career"));
+      await activate(page.locator("#mb-settings"));
+      await activate(page.locator("#pm-open-appearance"));
+      await activate(page.getByRole("group", { name: "Preview screen" }).getByRole("button", { name: "CAREER", exact: true }));
+      await activate(page.getByRole("button", { name: "Open Career", exact: true }));
       await activate(entry);
       const region = page.locator("#screen-arranger").getByLabel("Region");
       await region.selectOption("navigation");

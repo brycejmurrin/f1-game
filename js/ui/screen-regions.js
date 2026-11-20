@@ -74,7 +74,10 @@ window.ScreenRegions = (function () {
     }
     if (mine !== request || !button.isConnected || button.closest("[hidden]")) return;
     const invoker = prepare ? prepare() : button;
-    if (invoker) window.ScreenArranger.open(id, invoker);
+    // Closing Settings reveals the native Pause dialog through a layer observer.
+    // Its regions have layout boxes after that observer promotes it to the top layer.
+    if (prepare && invoker) await new Promise(resolve => requestAnimationFrame(resolve));
+    if (mine === request && invoker && !invoker.closest("[hidden]")) window.ScreenArranger.open(id, invoker);
   }
 
   function entry(root, label, run) {
@@ -102,9 +105,9 @@ window.ScreenRegions = (function () {
     popups: ["Race results", null, "Finish a race, then choose Arrange this screen on Results. Each dialog saves separately."],
   };
   function attachPicker(host) {
-    const preview = host.querySelector(".as-preview");
+    const preview = host.querySelector('[data-as="preview"]');
     if (!preview || host.querySelector(".arrange-route")) return;
-    const note = host.querySelector(".as-note");
+    const note = host.querySelector('[data-as="note"]');
     const go = document.createElement("button");
     go.type = "button";
     go.className = "arrange-route";
@@ -149,7 +152,7 @@ window.ScreenRegions = (function () {
 
   function install() {
     document.addEventListener("apex:appearance-picker", event => attachPicker(event.target));
-    const existingPicker = document.querySelector(".as-preview-side");
+    const existingPicker = document.querySelector('[data-as="preview-side"]');
     if (existingPicker) attachPicker(existingPicker);
     const ids = new WeakMap();
     const reveal = (root) => {
