@@ -244,6 +244,22 @@ test("the shell's Content-Security-Policy is generated, first, and strict where 
   assert.ok(dir["connect-src"].includes("https:") && dir["connect-src"].includes("wss:"));
 });
 
+// #5993: every other ROOT page ships the same generated policy, with its own
+// inline-script hashes (none for overlay and cockpit-view), before its first <script>.
+for (const page of ["overlay.html", "bench.html", "cockpit-view.html"]) {
+  test(`${page}: carries the shell's generated CSP before any script`, async () => {
+    const { cspFor } = await import("../../tools/gen/gen-shell.mjs");
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const { at, text, dir } = cspOf(html);
+    assert.equal(text, cspFor(html), "the meta is the generated one (run `node tools/gen/gen-shell.mjs`)");
+    assert.ok(at < html.indexOf("<script"), "before the first <script>, or that script is ungoverned");
+    assert.ok(!dir["script-src"].includes("'unsafe-inline'") && !dir["script-src"].includes("'unsafe-eval'"));
+    assert.deepEqual(dir["object-src"], ["'none'"]);
+    assert.deepEqual(dir["script-src"].filter((s) => s.startsWith("'sha256-")).sort(),
+      [...new Set(inlineBodies(html).map(sha))].sort(), "script-src hashes == the inline scripts' hashes");
+  });
+}
+
 // SEC2-7: an injected <img onerror=…> or <script> is the stored-XSS class the
 // 2026-09-24 sweep fixed; 'unsafe-inline' in script-src would let it run again.
 for (const page of ["index.html", "controller.html"]) {

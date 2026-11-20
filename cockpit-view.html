@@ -3,6 +3,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Apex 26 — Cockpit Preview</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#171b20;color:#eee;font:14px system-ui}#view{width:100%;height:100%;display:block}#err{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:20px}</style>
 </head><body><canvas id="view" aria-label="Stationary cockpit model"></canvas>
 <div id="hud" hidden></div><div id="tip" hidden></div><div id="err" role="status"></div>
