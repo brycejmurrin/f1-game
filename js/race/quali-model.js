@@ -3,9 +3,22 @@ const Quali = (function () {
 
   const STEP = 4;
 
-  const QUALI_TRIM = 0.75;
+  const QUALI_TRIM = 0.92;
+  const PACE_CORNER = 1.15;
 
-  const PACE_CORNER = 1.1;
+  const CALIB = {
+    abudhabi: 0.9508, albert_park: 0.9488, anderstorp: 0.9649, bahrain: 0.9662, baku: 0.9653, brands_hatch: 0.9610,
+    buddh: 0.9575, buenos_aires: 0.9582, catalunya: 0.9586, cota: 0.9386, dijon: 0.9506, donington: 0.9693,
+    estoril: 0.9635, fuji: 0.9605, hockenheim: 0.9675, hungaroring: 0.9491, imola: 0.9802, indianapolis: 0.9492,
+    interlagos: 0.9533, istanbul: 0.9554, jacarepagua: 0.9558, jeddah: 0.9640, jerez: 0.9621, korea: 0.9518,
+    kyalami: 0.9563, madrid: 0.9509, magny_cours: 0.9654, mexico: 0.9510, miami: 0.9491, monaco: 0.9678,
+    mont_tremblant: 0.9709, montreal: 0.9656, monza: 0.9532, mosport: 0.9364, mugello: 0.9410, nurburgring: 0.9552,
+    okayama: 0.9651, paul_ricard: 0.9403, portimao: 0.9719, qatar: 0.9699, redbull: 0.9637, sepang: 0.9715,
+    shanghai: 0.9470, silverstone: 0.9340, singapore: 0.9629, sochi: 0.9698, spa: 0.9562, suzuka: 0.9429,
+    vegas: 0.9498, watkins_glen: 0.9689, zandvoort: 0.9611, zolder: 0.9623,
+  };
+  const CALIB_DEFAULT = 0.9584;
+  const QUALI_CENTRE = 0.993;
 
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;
@@ -85,21 +98,25 @@ const Quali = (function () {
 
     function paceNow() { const vm = PhysicsConsts.VMAX; return vm > 0 ? G.vTop() / vm : 1; }
 
-    function freeFor(tierV, skill) {
-      const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
-      return G.vTop() * tierV * skill * dd.ai;
+    function diffRow() { return PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal; }
+    function freeFor(tierV, skill) { return G.vTop() * tierV * skill * diffRow().ai; }
+    function cornerFor(skill) { const dc = diffRow().corner; return skill * (dc > 0 ? dc : 1); }
+    function seatWing(t) { const s = t && typeof Parts !== "undefined" && (Career.inCareer() && Career.aiSetup && Career.aiSetup(t) || Parts.getFactorySetup(t)); return s ? Parts.aeroLoad(s, t) : 0.5; }
+    function wingFor(c) { return typeof AiDrive !== "undefined" && AiDrive.aeroGrip ? Math.sqrt(AiDrive.aeroGrip(c.human ? seatWing(c.team) : c.aeroLoad)) : 1; }
+    function calibFor(track) {
+      const id = track && track.def && track.def.id;
+      return id != null && Object.prototype.hasOwnProperty.call(CALIB, id) ? CALIB[id] : CALIB_DEFAULT;
     }
-    function capFor(c) { return freeFor(c.tierV, c.skill) * QUALI_TRIM; }
 
-    function paceLap(track, free, grip) {
+    function paceLap(track, free, grip, corner) {
       const p = paceNow();
-      const free1 = free / p;
-      const anchor = lapTime(track, free1 * QUALI_TRIM, grip, { pace: 1, free: 0, corner: 1 });
-      if (p === 1) return anchor;
-      const shape = (q) => lapTime(track, free1 * q, grip, { pace: q, free: free1 * q, corner: PACE_CORNER });
-      return anchor * shape(p) / shape(1);
+      return QUALI_TRIM * lapTime(track, free, grip, { pace: p, free, corner: PACE_CORNER * corner });
     }
-    function carLap(c, track, grip) { return paceLap(track, freeFor(c.tierV, c.skill), grip); }
+    function carLap(c, track, grip, raw) {
+      const free = freeFor(c.tierV, c.skill);
+      const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * cornerFor(c.skill) * wingFor(c) });
+      return raw ? t : QUALI_CENTRE * calibFor(track) * t;
+    }
 
     function referenceGrip() {
       const w = G.trackWetness ? G.trackWetness() : NaN;
@@ -109,7 +126,7 @@ const Quali = (function () {
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
-      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip());
+      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip(), cornerFor(1));
     }
 
     function simLap(c, track, grip, round, seed) {

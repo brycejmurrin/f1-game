@@ -101,7 +101,7 @@ const TrackPit = (function () {
         Math.max(EXIT_ROAD_MIN, straightRun(track, curvature, wrap(eM, L), 1, EXIT_ROAD)));
     };
     const entryRoad0 = Math.min(ENTRY_ROAD, Math.max(ROAD_MIN, (L / 3 - (entryM + exitM)) * 0.4),
-      Math.max(ROAD_MIN, straightRun(track, curvature, wrap(-entryM, L), -1, ENTRY_ROAD)));
+      Math.max(ENTRY_ROAD_MIN, straightRun(track, curvature, wrap(-entryM, L), -1, ENTRY_ROAD)));
     const span = (12 - 1) * PITCH;
     const budgetFor = (eM) => {
       const grow = Math.min(WALL_GROW, entryRoad0 * 0.5, roadFor(eM) * 0.5);

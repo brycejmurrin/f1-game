@@ -41,7 +41,7 @@ var RivalAudio = (() => {
       return !!v && v.split(",").some((s) => s.trim() === name);
     } catch (e) { return false; }
   }
-  const EPS_ON = labOn("rivalEps");
+  const EPS_ON = !labOn("noRivalEps");
   const EPS_GAIN = { abs: 5e-4, rel: 0.03 };
   const EPS_RATE = { abs: 0, rel: 0.005 };
   const EPS_PAN = { abs: 0.01, rel: 0 };
@@ -66,10 +66,13 @@ var RivalAudio = (() => {
   const slots = Array.from({ length: SLOTS },
     () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null }));
   const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  const _xzOut = [0, 0];
   function worldXZ(track, s, x) {
     if (!track || s == null || typeof Tracks === "undefined" || !Tracks.sample) return null;
     Tracks.sample(track, s, _wScratch);
-    return [_wScratch.p[0] + _wScratch.r[0] * (x || 0), _wScratch.p[2] + _wScratch.r[2] * (x || 0)];
+    _xzOut[0] = _wScratch.p[0] + _wScratch.r[0] * (x || 0);
+    _xzOut[1] = _wScratch.p[2] + _wScratch.r[2] * (x || 0);
+    return _xzOut;
   }
   const out = [];
 
@@ -164,6 +167,9 @@ var RivalAudio = (() => {
       const v = voices[i];
       try { if (v.gain.gain) v.gain.gain.setTargetAtTime(0, t, 0.06); } catch (e) {  }
       try { v.src.stop(t + 0.3); } catch (e) {  }
+      for (const n of [v.src, v.filt, v.gain, v.pan]) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) {  }
+      }
     }
     voices = null;
     actx = null;

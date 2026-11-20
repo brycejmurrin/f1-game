@@ -340,6 +340,24 @@
       };
       _warmCompiles = _warmCompiles.then(job).catch(() => {  });
     }
+    const _hold = [], _holdSeen = new Set();
+    let _holdDev = null, _holdSize = -1;
+    function holdBegin() {
+      _last.held = 0; _last.submits = 0;
+      if (_holdDev || !webgpu || compileJobs || _scissorWarm || !(ctx.postSubmitHold && ctx.postSubmitHold())) return;
+      const dev = renderer.backend && renderer.backend.device;
+      if (!dev || !dev.queue) return;
+      _holdDev = dev; _hold.length = 0; _holdSeen.clear(); _holdSize = -1;
+      dev.apexSubmitHold = _hold;
+    }
+    function holdFlush(again) {
+      const dev = _holdDev;
+      if (!dev) return;
+      dev.apexSubmitHold = null;
+      _holdSeen.clear();
+      try { if (_hold.length) { _last.held += _hold.length; _last.submits++; dev.queue.submit(_hold); } }
+      finally { _hold.length = 0; if (again) dev.apexSubmitHold = _hold; else _holdDev = null; }
+    }
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
       if (_scissorWarm) {
@@ -356,6 +374,11 @@
         renderer.autoClear = false;
         try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); target.scissorTest = st0; }
         return;
+      }
+      if (_holdDev) {
+        const cv = target ? null : renderer.domElement, size = target ? target.width * 65536 + target.height : (cv ? cv.width * 65536 + cv.height : -2);
+        if (_holdSeen.has(mat) || (size !== _holdSize && _hold.length)) holdFlush(true);
+        _holdSeen.add(mat); _holdSize = size;
       }
       setQuadMat(mat);
       renderer.setRenderTarget(target);
@@ -424,7 +447,7 @@
     const _sunScr = { visible: false, ndcx: -5, ndcy: -5, flare: 0, shaft: 0 };
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
-    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false };
+    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false, held: 0, submits: 0 };
     let _lastPresentRT = null;
 
     function resize(w, h, pw, ph) {
@@ -494,6 +517,7 @@
       renderer.autoClear = false;
       let dest = null;
       try {
+      holdBegin();
       if (phys) VP.sync();
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
@@ -784,10 +808,12 @@
       _last.shafts = !!haveGR;
       _last.ssr = !!(haveRefl && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
       _last.fxaa = !viz;
+      holdFlush(false);
       aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
       grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
       bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
       } finally {
+        try { holdFlush(false); } catch (_) {  }
         if (!dest) {
           try { renderer.setRenderTarget(null); } catch (_) {  }
         }
@@ -971,6 +997,7 @@
         tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
+        submitHold: { on: !!(ctx.postSubmitHold && ctx.postSubmitHold()), held: _last.held, submits: _last.submits },
         targets: [W, H],
         postTargets: [pW, pH],
         phonePost,

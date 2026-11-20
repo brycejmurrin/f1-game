@@ -311,6 +311,7 @@ const SceneryStructures = (function () {
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
       ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
+        rec.mat(0);
         if (st === "cabin") {
           rec.box([0, 1.0, 0], [2.0, 2.8, 2.6], [0.52, 0.40, 0.28]);
           rec.prism([0, 2.30, 0], [2.2, 1.0, 2.4], roof);

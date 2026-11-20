@@ -98,12 +98,13 @@ const ShareCardChips = (function () {
           url = URL.createObjectURL(blob);
           img.src = url;
           status.textContent = "Card ready — " + size + ", " + Math.max(1, Math.round(blob.size / 1024)) + " KB.";
-          busy(false);
         } catch (error) {
           if (mine !== drawing) return;
           Log.warn("ui", "share card draw failed: " + (error && error.message));
           status.textContent = error && error.code === "too-large"
             ? "This card is too large to share. Try another size." : "The card could not be drawn on this device.";
+        } finally {
+          if (mine === drawing && dlg.isConnected) busy(false);
         }
       }
       for (const [id, label] of SIZES) {

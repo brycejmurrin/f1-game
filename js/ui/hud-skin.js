@@ -34,7 +34,9 @@ const HudSkin = (function () {
     const text = _hexRgb(cs.getPropertyValue("--text")), bg = _hexRgb(cs.getPropertyValue("--bg"));
     root.style.setProperty("--accent", G.cssCol(t.color));
     if (!text || !bg) return;
-    const ink = _wcag(t.color, text) >= _wcag(t.color, bg) ? "var(--text)" : "var(--bg)";
+    const cT = _wcag(t.color, text), cB = _wcag(t.color, bg);
+    let ink = cT >= cB ? "var(--text)" : "var(--bg)";
+    if (Math.max(cT, cB) < 4.5) ink = _wcag(t.color, [0, 0, 0]) >= _wcag(t.color, [1, 1, 1]) ? "#000" : "#fff";
     root.style.setProperty("--accent-ink", ink);
     if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && AppearanceOpts.menuAccent() === "team") {
       AppearanceOpts.applyMenuAccent();

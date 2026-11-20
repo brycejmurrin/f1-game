@@ -173,6 +173,42 @@ const LayoutPresets = (function () {
     return true;
   }
 
+  const SHAPES_KEY = "appearanceShapes";
+  const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis",
+    "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups", "lookDesigner"]);
+  const studio = () => (typeof AppearanceStudio !== "undefined" && AppearanceStudio) || null;
+  const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const pick = (v) => { const o = {}; for (const k of SHAPE_KEYS) o[k] = v[k] === undefined ? null : v[k]; return o; };
+  function normalizeShapes(raw) {
+    const ok = isObj(raw) && raw.v === 2 && raw.mode === "separate", a = studio();
+    return { separate: ok, live: ok && (raw.live === "wide" || raw.live === "tall") ? raw.live : null,
+      park: ok && isObj(raw.park) && a ? pick(a.normalizeSnapshot(pick(raw.park))) : null };
+  }
+  const shapes = () => normalizeShapes(store() ? store().get(SHAPES_KEY, null) : null);
+  function syncShape(now) {
+    const st = shapes(), a = studio(), s = store();
+    if (!a || !s || !st.separate || (now !== "wide" && now !== "tall") || st.live === now) return false;
+    const cur = a.snapshot(), out = pick(cur), park = st.park;
+    s.set(SHAPES_KEY, { v: 2, mode: "separate", live: now, park: out });
+    if (!park || JSON.stringify(park) === JSON.stringify(out)) return false;
+    if (undoSnap) undoSnap = null;
+    a.applySnapshot(Object.assign(cur, park), { history: false });
+    paint();
+    return true;
+  }
+  function setShapeMode(mode) {
+    const s = store(), a = studio();
+    if (!s) return false;
+    if (mode !== "separate") { s.set(SHAPES_KEY, null); return true; }
+    if (shapes().separate) return true;
+    const now = a && a.shapeNow ? a.shapeNow() : null;
+    s.set(SHAPES_KEY, { v: 2, mode: "separate", live: now, park: null });
+    return true;
+  }
+  const ORIENT_ROW = "pm-orientation";
+  const ORIENT_VALUES = [["shared", "SHARED"], ["separate", "SEPARATE"]];
+  const orientNow = () => (shapes().separate ? "separate" : "shared");
+
   const values = () => PRESETS.map((p) => [p.id, p.name]).concat([["custom", "CUSTOM", true]]);
   let ui = null;
   function noteText(cur) {
@@ -227,9 +263,21 @@ const LayoutPresets = (function () {
       : help && help.tagName === "P" ? panel.children[1] || null : (panel.children && panel.children[0]) || null;
     panel.insertBefore(box, anchor);
     ui = { row: built.row, note, undo: undoBtn, box };
+    const orient = SettingRow.build(ORIENT_ROW, "PORTRAIT & LANDSCAPE", ORIENT_VALUES);
+    const orientNote = doc.createElement("p");
+    orientNote.id = ORIENT_ROW + "-note";
+    orientNote.className = "adv-help";
+    orientNote.textContent = "SHARED: one set of sizes and screen looks for both orientations. SEPARATE: portrait and landscape each keep their own UI and HUD sizes, pause menu and screen looks on this device, starting from your current ones. Colours and text stay shared.";
+    box.appendChild(orient.row);
+    box.appendChild(orientNote);
+    SettingRow.wire(orient.row, { values: ORIENT_VALUES, read: orientNow, write: (v) => { setShapeMode(v); } });
     SettingRow.wire(built.row, { values: values(), read: current, write: (v) => { apply(v); } });
     const st = store();
-    if (st && st.subscribe) st.subscribe((c) => { if (managed(c && c.key)) queuePaint(); });
+    if (st && st.subscribe) st.subscribe((c) => {
+      if (managed(c && c.key)) queuePaint();
+      if (c && c.key === SHAPES_KEY) SettingRow.paint(orient.row, orientNow());
+    });
+    SettingRow.paint(orient.row, orientNow());
     paint();
     return built.row;
   }
@@ -242,5 +290,6 @@ const LayoutPresets = (function () {
   }
 
   return Object.freeze({ KEY, PRESETS, PAUSE_KNOBS, apply, undo, current, matches, expected, mount, snapshot,
+    SHAPES_KEY, SHAPE_KEYS, shapes, normalizeShapes, syncShape, setShapeMode,
     get canUndo() { return !!undoSnap; } });
 })();

@@ -48,16 +48,18 @@ const OverlayFeed = (function () {
   const _wrap = [];
   function battle(ranked, vScale) {
     if (!ranked || ranked.length < 2) return null;
-    const n = ranked.length;
-    while (_wrap.length < n) _wrap.push({ key: null, prog: 0, speed: 0 });
-    if (_wrap.length !== n) _wrap.length = n;
-    for (let i = 0; i < n; i++) {
+    let n = 0;
+    for (let i = 0; i < ranked.length; i++) {
       const c = ranked[i];
-      const w = _wrap[i];
+      if (!Number.isFinite(c.prog)) continue;
+      if (_wrap.length <= n) _wrap.push({ key: null, prog: 0, speed: 0 });
+      const w = _wrap[n++];
       w.key = c;
-      w["prog"] = Number.isFinite(c.prog) ? c.prog : 0;
+      w["prog"] = c.prog;
       w["speed"] = Number.isFinite(c.speed) ? c.speed : 0;
     }
+    if (n < 2) return null;
+    if (_wrap.length !== n) _wrap.length = n;
     _wrap.sort((a, b) => b.prog - a.prog);
     let fight = null;
     if (typeof Broadcast !== "undefined" && Broadcast && Broadcast.battles) {
@@ -67,10 +69,10 @@ const OverlayFeed = (function () {
       for (let i = 1; i < n; i++) {
         const a = _wrap[i - 1], b = _wrap[i];
         const gapS = (a.prog - b.prog) / Math.max(b.speed || 0, floor);
-        if (gapS >= 0 && gapS < 1 && (!fight || gapS < fight.gapS)) fight = { ahead: a.key, key: b.key, gapS };
+        if (Number.isFinite(gapS) && gapS >= 0 && gapS < 1 && (!fight || gapS < fight.gapS)) fight = { ahead: a.key, key: b.key, gapS };
       }
     }
-    return fight ? {
+    return fight && Number.isFinite(fight.gapS) ? {
       ahead: codeOf(fight.ahead),
       behind: codeOf(fight.key),
       gapS: +fight.gapS.toFixed(3),
@@ -82,6 +84,10 @@ const OverlayFeed = (function () {
       ? { ahead: String(b.ahead), behind: String(b.behind), gapS: +b.gapS.toFixed(3) } : null;
   }
 
+  function fromProg(aheadProg, behindProg, speed) {
+    if (!Number.isFinite(aheadProg) || !Number.isFinite(behindProg)) return null;
+    return +((aheadProg - behindProg) / speed).toFixed(3);
+  }
   function rowsFrom(ranked) {
     const rows = [], lead = ranked && ranked[0];
     for (let i = 0; ranked && i < ranked.length; i++) {
@@ -91,8 +97,8 @@ const OverlayFeed = (function () {
         pos: Number.isFinite(c.pos) ? c.pos : i + 1,
         code: codeOf(c),
         team: teamOf(c),
-        interval: i ? number(c.intervalS) ?? +(((ahead.prog || 0) - (c.prog || 0)) / speed).toFixed(3) : null,
-        gap: i ? number(c.gapToLeaderS) ?? +(((lead.prog || 0) - (c.prog || 0)) / speed).toFixed(3) : null,
+        interval: i ? number(c.intervalS) ?? fromProg(ahead.prog, c.prog, speed) : null,
+        gap: i ? number(c.gapToLeaderS) ?? fromProg(lead.prog, c.prog, speed) : null,
         tyre: tyreOf(c),
         pit: !!(c.pit || c.inPit),
         out: !!(c.out || c.retired),

@@ -11,10 +11,12 @@ var StoppedCars = (function () {
       const c = cars[i];
       if (!c || c.finished || !(Math.abs(c.speed || 0) < STOP_V) || !Number.isFinite(c.s)) continue;
       Tracks.sample(track, c.s, smp);
-      if (Math.abs(c.x || 0) > (smp.hw || 6)) continue;
-      if (c.inPit || c.inPitLane || (Tracks.inPitLane && Tracks.inPitLane(track, c.s, c.x || 0))) continue;
+      const x = c.x || 0, ax = Math.abs(x);
+      if (c.inPit || c.inPitLane || (Tracks.inPitLane && Tracks.inPitLane(track, c.s, x))) continue;
+      const off = ax > (smp.hw || 6) ? 1 : 0;
+      if (off && (!c.retired || (Tracks.wallAt && ax > Tracks.wallAt(track, c.s, x >= 0 ? 1 : -1)))) continue;
       const frac = (((c.s / track.total) % 1) + 1) % 1;
-      out.push({ id: c.num != null ? c.num : i, frac: +frac.toFixed(4), sector: frac < s0 ? 0 : frac < s1 ? 1 : 2 });
+      out.push({ id: c.num != null ? c.num : i, frac: +frac.toFixed(4), sector: frac < s0 ? 0 : frac < s1 ? 1 : 2, off });
     }
     return out;
   }
@@ -39,7 +41,7 @@ var StoppedCars = (function () {
         stopT.set(r.id, t);
         if (t < STOP_DWELL || t >= STOP_RECOVER) continue;
         n++;
-        if (t >= STOP_VSC) vsc++;
+        if (t >= STOP_VSC && !r.off) vsc++;
         if (!yellow || t > yellow.t) yellow = { t, sector: r.sector, frac: r.frac };
       }
       for (const id of [...stopT.keys()]) if (!seen.has(id)) stopT.delete(id);

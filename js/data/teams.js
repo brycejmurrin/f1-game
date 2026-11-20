@@ -4,7 +4,7 @@ const Teams = (function () {
   const LIST = [
     {
       id: "mercedes", name: "Mercedes-AMG", short: "MER",
-      color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671], 
+      color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],
       livery: {
         logo3: [0.06, 0.06, 0.08], cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "standard", spineHeight: "raised",
                 spineLogo: "fade", spineSide: "starfield", coverBind: "spineOnly",
@@ -19,7 +19,7 @@ const Teams = (function () {
     },
     {
       id: "ferrari", name: "Scuderia Ferrari", short: "FER",
-      color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0], 
+      color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],
       livery: { cover: [0.863, 0.0, 0.0], finShape: "stepped", spineHeight: "standard",
                 wing: [0.06, 0.06, 0.07], rearWing: [0.06, 0.06, 0.07],
                 spineLogo: "cap", spineSide: "shoulder", coverBind: "saddleWrap", finHandoff: "contrast",
@@ -37,11 +37,11 @@ const Teams = (function () {
       livery: {
         logo3: [0.06, 0.06, 0.08], finShape: "stepped", spineHeight: "raised", spineLogo: "panel", spineSide: "wordmark",
         lower: [0.122, 0.122, 0.122] },
-      color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122], 
+      color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122],
       engine: "Mercedes", tier: 1,
       stats: { speed: 93, accel: 94, cornering: 96, braking: 91 },
       drivers: [
-        { name: "Lando Norris", code: "NOR", num: 1 }, 
+        { name: "Lando Norris", code: "NOR", num: 1 },
         { name: "Oscar Piastri", code: "PIA", num: 81 }
       ]
     },
@@ -49,7 +49,7 @@ const Teams = (function () {
       id: "redbull", name: "Red Bull Racing", short: "RBR",
       livery: { finShape: "standard", spineHeight: "standard", spineLogo: "wrap", spineSide: "duo",
                 logo3: [1.0, 0.788, 0.024], nose: [1.0, 0.788, 0.024], fin: [0.145, 0.333, 0.710] },
-      color: [0.145, 0.333, 0.710], color2: [1.0, 0.843, 0.0], 
+      color: [0.145, 0.333, 0.710], color2: [1.0, 0.843, 0.0],
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
       drivers: [
@@ -63,7 +63,7 @@ const Teams = (function () {
         logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
                 spineTint: [1.0, 0.702, 0.820], pod: [1.0, 0.529, 0.737], noseStripe: [1.0, 0.529, 0.737],
                 halo: [1.0, 0.529, 0.737], wing: [0.0, 0.576, 0.8] },
-      color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737], 
+      color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },
       drivers: [
@@ -76,7 +76,7 @@ const Teams = (function () {
       livery: {
         logo3: [0.97, 0.97, 0.98], finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
                 spineTint: [0.086, 0.204, 0.796], wingCarbon: "carbon", finish: "matte" },
-      color: [0.961, 0.961, 0.969], color2: [0.086, 0.204, 0.796], 
+      color: [0.961, 0.961, 0.969], color2: [0.086, 0.204, 0.796],
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
       drivers: [
@@ -88,7 +88,7 @@ const Teams = (function () {
       id: "haas", name: "Haas", short: "HAA",
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "number",
                 logo3: [0.06, 0.06, 0.08], lower: [0.06, 0.06, 0.07] },
-      color: [0.957, 0.957, 0.965], color2: [0.855, 0.161, 0.11], 
+      color: [0.957, 0.957, 0.965], color2: [0.855, 0.161, 0.11],
       engine: "Ferrari", tier: 3,
       stats: { speed: 80, accel: 79, cornering: 79, braking: 79 },
       drivers: [
@@ -98,7 +98,7 @@ const Teams = (function () {
     },
     {
       id: "williams", name: "Williams", short: "WIL",
-      color: [0.059, 0.235, 0.788], color2: [1.0, 1.0, 1.0], 
+      color: [0.059, 0.235, 0.788], color2: [1.0, 1.0, 1.0],
       livery: { cover: [0.055, 0.058, 0.070], finShape: "none", spineHeight: "dorsal",
                 spineLogo: "ridge", spineSide: "rake", coverBind: "independent",
                 spineTint: [0.0, 0.82, 0.95], sideTint: [0.059, 0.235, 0.788], pod: [1.0, 1.0, 1.0] },
@@ -127,7 +127,7 @@ const Teams = (function () {
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "logo",
                 spineTint: [0.008, 0.086, 0.078], finish: "satin", coverVents: "gills",
                 rearWing: [0.55, 0.72, 0.88] },
-      color: [0.0, 0.349, 0.31], color2: [0.718, 0.882, 0.106], 
+      color: [0.0, 0.349, 0.31], color2: [0.718, 0.882, 0.106],
       engine: "Honda", tier: 4,
       stats: { speed: 74, accel: 72, cornering: 76, braking: 74 },
       drivers: [
@@ -139,7 +139,7 @@ const Teams = (function () {
       id: "cadillac", name: "Cadillac", short: "CAD",
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate",
                 bodySplit: "lr", halo: [0.86, 0.88, 0.92], coverVents: "gills", logo3: [0.06, 0.06, 0.08] },
-      color: [0.84, 0.85, 0.86], color2: [0.039, 0.039, 0.039], 
+      color: [0.84, 0.85, 0.86], color2: [0.039, 0.039, 0.039],
       engine: "Ferrari", tier: 4,
       stats: { speed: 73, accel: 73, cornering: 73, braking: 72 },
       drivers: [

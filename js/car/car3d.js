@@ -289,6 +289,9 @@ const Car3D = (function () {
           if(s>0) addQuad(out,a[j],b[j],b[j+1],a[j+1],c1); else addQuad(out,a[j+1],b[j+1],b[j],a[j],c1);
         }
         CarMaterials.smoothSkin(out,start);
+        const L=rings.map(q=>q.map(p=>{const x=q[0][0]-p[0],y=q[4][1]-p[1],d=Math.hypot(x,y)/.002||1;return [p[0]+x/d,p[1]+y/d,p[2]];}));
+        for(let i=1;i<3;i++) for(let j=1;j<4;j++){const a=L[i],b=L[i+1];
+          if(s>0) addQuad(out,a[j+1],b[j+1],b[j],a[j],CARBON,SURFACES.carbon); else addQuad(out,a[j],b[j],b[j+1],a[j+1],CARBON,SURFACES.carbon);}
         for(const i of [0,rings.length-1]) for(let j=1;j<6;j++) {
           const q=rings[i]; if((i===0)===(s>0)) addTri(out,q[0],q[j],q[j+1],c1); else addTri(out,q[0],q[j+1],q[j],c1);
         }

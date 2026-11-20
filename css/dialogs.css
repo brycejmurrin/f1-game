@@ -1,6 +1,6 @@
 @layer components {
 #pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
-#pmsettings  { --sheet-w: 760px; }
+#pmsettings  { --sheet-w: 1020px; }
 #pm-hud-sample {
   zoom: var(--hud-scale);
   align-self: start;
@@ -190,7 +190,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 #pm-standings,
 #pm-howto,
 #pm-build,
-#pm-now-card { grid-column: 1 / -1; } 
+#pm-now-card { grid-column: 1 / -1; }
 #pm-quit { margin-top: calc(var(--gap) * 0.65); }
 #pausemenu .sheet .stack .as-tbtn {
   width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
@@ -222,10 +222,10 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-pause-layout="compact"] #pausemenu .sheet #pm-quit { margin-top: 0; }
 :root[data-pause-layout="compact"] #pm-quit::before { content: none; }
 :root[data-pause-layout="wide"] #pausemenu { --sheet-w: 1020px; align-items: end; }
-:root[data-pause-layout="wide"] #pausemenu .sheet-body.stack { display: flex; flex-direction: row; flex-wrap: wrap; } 
+:root[data-pause-layout="wide"] #pausemenu .sheet-body.stack { display: flex; flex-direction: row; flex-wrap: wrap; }
 :root[data-pause-layout="wide"] #pausemenu .sheet-body.stack > button { flex: 1 1 0; min-width: calc(var(--tap-0) * 3); }
 :root[data-pause-layout="wide"] :is(#pm-now-card, #pm-build) { flex-basis: 100%; }
-:root[data-pause-layout="wide"] :is(#pm-race-context, #pm-quick-doors) { flex-basis: 100%; } 
+:root[data-pause-layout="wide"] :is(#pm-race-context, #pm-quick-doors) { flex-basis: 100%; }
 :root[data-pause-layout="wide"] #pausemenu .sheet #pm-quit { margin-top: 0; }
 :root[data-pause-layout="wide"] #pm-quit::before { content: none; }
 :root[data-look-pause-vpos="top"] #pausemenu { align-items: start; }
@@ -282,7 +282,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
   #pm-replay-scrub { order: -1; flex: 1 0 100%; width: 100%; height: max(32px, var(--tap)); margin: 0; accent-color: var(--red); }
   #pm-replay-dock button { padding-inline: calc(var(--gap) * 0.5); }
 }
-} 
+}
 
 @layer overlays {
   #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy) {
@@ -476,4 +476,4 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
     box-sizing: border-box;
     align-self: stretch;
   }
-} 
+}

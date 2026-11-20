@@ -176,6 +176,7 @@ const WGX = (function () {
     const initActive = () => !initOwner || initOwner.active;
     if (!initActive()) return null;
     if (typeof navigator === "undefined" || !navigator.gpu) return null;
+    _gpuErrors = 0; _gpuFirstMsg = null;
     if (!_Chunks || !_Chunks.LIT || !_Chunks.SKY || !_Chunks.BLIT || !_Chunks.SHADOW) {
       _fail("wgsl-chunks missing");
       return null;
@@ -2255,7 +2256,7 @@ const WGX = (function () {
         return { _wgx: "texture", texture: tex, view: tex.createView() };
       } catch (_) {
         if (tex) try { tex.destroy(); } catch (__) {  }
-        return { _wgx: "texture", _phase: 4 }; 
+        return { _wgx: "texture", _phase: 4 };
       }
     }
 
@@ -3549,7 +3550,7 @@ const WGX = (function () {
         return tok;
       } catch (_) {
         if (tex) try { tex.destroy(); } catch (__) {  }
-        return null; 
+        return null;
       }
     }
     function _releaseOwnedMatMaps(keep) {

@@ -201,6 +201,8 @@ const Collide = (() => {
   _lim.laneMin = 0.5; _lim.laneMin = 0;
 
   function create(G, collideFx, ownsPose = () => false) {
+    const sevRef = Math.pow(1.06, -3);
+    const sevV = (v) => v * (sevRef / Math.max(G.PACE, 0.05));
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;
     const incidentSim = IncidentSim;
@@ -263,7 +265,7 @@ const Collide = (() => {
       if (correction > CORR_EPS || j.magnitude > CORR_EPS) {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
-        if (firstPairFx(a, b)) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
+        if (firstPairFx(a, b)) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
         if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
           if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
           incidentSim.notifyCar(a, b, j.closing);
@@ -412,7 +414,7 @@ const Collide = (() => {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
-          if (firstPairFx(a, b)) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
+          if (firstPairFx(a, b)) collideFx(a, b, sevV(Math.abs(aSp - bSp)) * 0.02 + 0.18);
         }
       } else {
         const sgn = dProg >= 0 ? 1 : -1;
@@ -438,7 +440,7 @@ const Collide = (() => {
           }
           if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }
           const fx = firstPairFx(a, b);
-          if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+          if (fx) collideFx(a, b, clamp(sevV(relV) * 0.03 + penLong * 0.05, 0.15, 1));
           if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           if (fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);
         }

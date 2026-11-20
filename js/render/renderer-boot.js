@@ -181,7 +181,7 @@ try {
   }
   if (stored.unset && pref === "three") {
     const ok = await gpuAdapterAvailable();
-    if (!ok) pref = "webgl2";
+    if (!ok && !_adapterSlow) pref = "webgl2";
     try { if (ok) sessionStorage.removeItem("apex26.gfxAdapterWhy"); else sessionStorage.setItem("apex26.gfxAdapterWhy", _adapterWhy || "no adapter"); } catch (_) {  }
   }
   let skipClaim = false;

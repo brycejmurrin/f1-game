@@ -41,6 +41,7 @@ var GameAudioRadioFx = (function () {
         osc.start(t);
         osc.stop(t + secs + 0.04);
         osc.onended = () => { osc.disconnect(); g.disconnect(); };
+        osc._apexChain = [osc, g];
         if (keep) keep.push(osc);
         t += secs;
       }
@@ -59,7 +60,15 @@ var GameAudioRadioFx = (function () {
       src.start(at, off);
       src.stop(at + decay + 0.1);
       src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
+      src._apexChain = [src, hp, lp, g];
       return src;
+    }
+
+    function dropChain(head) {
+      const nodes = (head && head._apexChain) || (head ? [head] : []);
+      for (const n of nodes) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) {  }
+      }
     }
 
     function radioStingStop() {
@@ -74,6 +83,10 @@ var GameAudioRadioFx = (function () {
         b.src.stop(t + 0.08);
       } catch (e) {  }
       for (const x of b.extra || []) { try { x.stop(t); } catch (e) {  } }
+      for (const n of b.nodes || []) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) {  }
+      }
+      for (const x of b.extra || []) dropChain(x);
     }
 
     function radioSting(channel, seconds) {
@@ -87,8 +100,9 @@ var GameAudioRadioFx = (function () {
       if (channel === "radio" && !preset.cue) return false;
       if (!host.sfxOk() || !ch || radioFx <= 0) return false;
       const t0 = host.now();
-      radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
       const extra = [];
+      const click = radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
+      if (click) extra.push(click);
       const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03, extra);
       const hold = Math.max(0.25, tuneS + 0.12, Math.min(8, +seconds || 1.5));
       const src = host.context().createBufferSource();
@@ -106,7 +120,7 @@ var GameAudioRadioFx = (function () {
       src.start(t0, Math.random() * (signal.noisePoolSeconds - 0.5));
       src.stop(t0 + hold + 0.2);
       src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
-      radioBed = { src, gain: g, extra };
+      radioBed = { src, gain: g, extra, nodes: [src, hp, lp, g] };
       if (ch.tail > 0) { const tail = radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold); if (tail) extra.push(tail); }
       return true;
     }

@@ -184,6 +184,9 @@ const SPEC = [
   { k: "garageLook", lane: "raw", group: "appearance", def: "stock", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
   { k: "crewLook", lane: "raw", group: "appearance", def: "classic", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
   { k: "garageMood", lane: "raw", group: "appearance", def: "shipped", src: "js/garage/scene.js setMood (LIGHTING row)", oneOf: ["shipped", "broadcast", "night", "showroom", "daylight", "inspection", "goldenhour", "endurance", "podium", "rain", "neon"] },
+  { k: "appearanceShapes", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js PORTRAIT & LANDSCAPE",
+    normalize: (v) => v === null ? null : v && typeof v === "object" && v.v === 2 && v.mode === "separate"
+      ? { v: 2, mode: "separate", live: v.live === "wide" || v.live === "tall" ? v.live : null, park: v.park && typeof v.park === "object" && !Array.isArray(v.park) ? v.park : null } : undefined },
   { k: "appearanceProfiles", lane: "json", group: "appearance", def: [], src: "js/ui/appearance-studio.js", normalize: (v) => Array.isArray(v) ? (!v.length ? [] : typeof AppearanceStudio !== "undefined" ? AppearanceStudio.normalizeProfiles(v) : undefined) : undefined },
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
   { k: "aiPace", lane: "json", group: "driving", def: "scripted", src: "js/game.js / js/physics/ai-band.js", oneOf: ["scripted", "catchup"] },

@@ -328,7 +328,7 @@ function buildResults(order, race) {
     const card = document.createElement("div"); card.className = "res-personal"; card.id = "res-incidents";
     const heading = document.createElement("strong"); heading.textContent = tr("results.incidents", null, "INCIDENTS & PENALTIES");
     const detail = document.createElement("span");
-    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: trN(e.lap) }, "LAP {lap}") + " · " + e.text).join("  ·  ");
+    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: trN(Math.max(1, e.lap | 0)) }, "LAP {lap}") + " · " + e.text).join("  ·  ");
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
   const coaching = G.coach && G.coach.feedback && G.coach.feedback();
@@ -520,9 +520,10 @@ function buildTTResults() {
     els.resultsTable.appendChild(note);
   }
   if ((guestGhost || Ghost.hasGhost()) && isFinite(best)) {
-    const ghostBest = replayGhost.bestTime();
+    const ghostBest = replayGhost.bestTime(), pm = guestGhost || typeof Ghost.meta !== "function" ? null : Ghost.meta();
+    const prevBest = pm && typeof pm.prevBest === "number" && isFinite(pm.prevBest) && Math.abs(ghostBest - best) < 0.0006 ? pm.prevBest : null;
     if (isFinite(ghostBest)) {
-      const delta = best - ghostBest;
+      const delta = best - (prevBest != null ? prevBest : ghostBest);
       const gr = document.createElement("div");
       gr.className = "res-row";
       const gl = document.createElement("span"); gl.className = "res-name";
@@ -683,14 +684,14 @@ function buildTTResults() {
     clrBtn.className = "sel-chip";
     clrBtn.id = "res-ghost-clear";
     clrBtn.textContent = guestGhost ? tr("results.clearRivalGhost", null, "✕ CLEAR RIVAL GHOST") : tr("results.clearGhost", null, "✕ CLEAR GHOST");
-    clrBtn.onclick = () => {
+    clrBtn.onclick = () => G.armConfirm(clrBtn, tr("results.clearGhostConfirm", null, "TAP AGAIN TO CLEAR"), () => {
       if (guestGhost) GhostShare.clearGuest();
       else Ghost.clear(track.def.id);
       const remaining = G.records.board(track.def.id);
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
       if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(els.results, buildTTResults);
       else buildTTResults();
-    };
+    });
     els.resultsTable.appendChild(clrBtn);
   }
 

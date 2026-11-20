@@ -62,12 +62,9 @@
 :root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  animation-delay: 0s !important; 
+  animation-delay: 0s !important;
   transition-duration: 0.01ms !important;
-}
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons),
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) :is(*, *::before, *::after) {
-  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow !important;
 }
 body:not(.hud-hidden) #hud-restore { display: none; }
 #overlay[data-paused] *,
@@ -140,7 +137,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-appearance-peek] #pmsettings::backdrop { background: transparent; }
 :root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
 :root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
-:root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; } 
+:root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }
 :root[data-tl-edit] :is(#menu-buttons, #menu-brand, #tl-art) {
   outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
   outline-offset: 4px;
@@ -169,7 +166,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 
 
 
-} 
+}
 
 @layer layout {
 @media (min-width: 1920px) and (orientation: landscape) {
@@ -206,4 +203,4 @@ body:not(.hud-hidden) #hud-restore { display: none; }
     padding-block-end: max(var(--safe-b), var(--fold-gap-y));
   }
 }
-} 
+}

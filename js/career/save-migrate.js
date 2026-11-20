@@ -38,6 +38,7 @@ const SaveMigrate = (function () {
   function clampTo(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
   const MONEY_MAX = 1e9;
   const SALARY_MAX = 1e5;
+  const BONUS_MAX = 24, YEARS_MAX = 3, BUDGET_LVL_MAX = 3;
   const salaryIn = (v) => clampTo(finiteNumber(v), 0, SALARY_MAX);
 
   function numMap(o, lo, hi) {
@@ -184,9 +185,9 @@ const SaveMigrate = (function () {
   function cleanDeal(deal) {
     if (!deal || typeof deal !== "object" || Array.isArray(deal)) return null;
     deal.salary = salaryIn(deal.salary);
-    deal.bonusPt = finiteNumber(deal.bonusPt);
-    deal.left = finiteNumber(deal.left);
-    deal.years = finiteNumber(deal.years);
+    deal.bonusPt = clampTo(finiteNumber(deal.bonusPt), 0, BONUS_MAX);
+    deal.left = clampTo(Math.trunc(finiteNumber(deal.left)), 0, YEARS_MAX);
+    deal.years = clampTo(Math.trunc(finiteNumber(deal.years)), 0, YEARS_MAX);
     const g = deal.goal;
     if (g && typeof g === "object" && !Array.isArray(g) && (typeof g.type !== "string" || g.type in Object.prototype)) g.type = "champPos";
     return deal;
@@ -265,7 +266,8 @@ const SaveMigrate = (function () {
     driver.num = typeof driver.num === "number" && Number.isFinite(driver.num)
       ? Math.max(0, Math.min(999, Math.trunc(driver.num))) : 99;
     career.driver = driver;
-    career.team = typeof career.team === "string" && career.team ? career.team : (career.flavour === "myteam" ? "custom" : "haas");
+    const teamKnown = (id) => typeof Teams === "undefined" || !Teams || !Array.isArray(Teams.LIST) || Teams.LIST.some((t) => t && t.id === id);
+    career.team = typeof career.team === "string" && career.team && teamKnown(career.team) ? career.team : (career.flavour === "myteam" ? "custom" : "haas");
     career.seat = career.flavour === "myteam" ? 0 : clampSeat(career.seat, career.team);
     career.deal = cleanDeal(career.deal);
     career.seed = finiteNumber(career.seed) | 0;
@@ -277,6 +279,8 @@ const SaveMigrate = (function () {
     cleanParts(career);
     const rows = (a) => (Array.isArray(a) ? a.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : []);
     career.results = rows(career.results).map(cleanResult);
+    const lastR = career.results.reduce((m, r) => (Number.isInteger(r.r) ? Math.max(m, r.r) : m), -1);
+    if (career.season.round <= lastR) career.season.round = lastR + 1;
     career.history = rows(career.history);
     career.tally = cleanTally(career.tally, career.history);
     career.dev = devMap(career.dev);
@@ -285,10 +289,11 @@ const SaveMigrate = (function () {
       ? career.aiParts : {};
     career.seats = seatMap(career.seats);
     career.offers = rows(career.offers).map(cleanOffer);
+    if (typeof Teams !== "undefined" && Teams && Array.isArray(Teams.LIST)) career.offers = career.offers.filter((o) => teamKnown(o.teamId));
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
     career.objPick = career.objPick && typeof career.objPick === "object"
       && !Array.isArray(career.objPick) ? career.objPick : null;
-    career.budgetLvl = Math.max(0, finiteNumber(career.budgetLvl) | 0);
+    career.budgetLvl = clampTo(finiteNumber(career.budgetLvl) | 0, 0, BUDGET_LVL_MAX);
     career.facility = clampTo(finiteNumber(career.facility) | 0, 0, FACILITY_LIMIT);
     career.moves = rows(career.moves);
     career.roster = Array.isArray(career.roster) ? rows(career.roster).map((d) => {
@@ -338,6 +343,6 @@ const SaveMigrate = (function () {
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
-           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT }) };
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX }) };
 })();
 Object.freeze(SaveMigrate);

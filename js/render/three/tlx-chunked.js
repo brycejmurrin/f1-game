@@ -107,10 +107,12 @@
       const kk = kind || "raw";
       packStats.wideBy[kk] = (packStats.wideBy[kk] || 0) + 1;
       packStats.wideLen[kk] = (packStats.wideLen[kk] || 0) + len;
-      let mx = packStats.wideMax[kk];
-      for (let i = 0; i < len; i++) {
-          if ((i & 8191) === 0) yield; const v = src[i]; if (!(mx >= v)) mx = v; }
-      packStats.wideMax[kk] = mx;
+      if (kind != null) {
+        let mx = packStats.wideMax[kk];
+        for (let i = 0; i < len; i++) {
+            if ((i & 8191) === 0) yield; const v = src[i]; if (!(mx >= v)) mx = v; }
+        packStats.wideMax[kk] = mx;
+      }
       if (halfOk && finite && THREE.Float16BufferAttribute && (kind === "unorm" || kind === "id")) {
         packStats.half++;
         const h = new Uint16Array(len);
@@ -419,7 +421,7 @@
     const _ic = new Int32Array(1024);
     function mergeVisible(mesh, n, slot) {
       const vis = _visList;
-      if (!(n > 1) || !mesh || !mesh.chunks) return null;
+      if (!mesh || !mesh.chunks || !(n > 1 || (n === 1 && mesh.attrs))) return null;
       const slots = mesh._tlxMv || (mesh._tlxMv = []);
       const si = slot | 0;
       let s = slots[si];

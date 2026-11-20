@@ -8,6 +8,12 @@ const CareerAiDev = (function () {
     return (mods.speed || 1) + (mods.accel || 1) + (mods.cornering || 1) + (mods.braking || 1);
   }
 
+  const ATR_LEAD = 0.75, ATR_LAST = 1.15;
+  function atrScale(pos, field) {
+    const n = Math.max(2, field | 0);
+    return ATR_LEAD + (ATR_LAST - ATR_LEAD) * (clamp(pos, 1, n) - 1) / (n - 1);
+  }
+
   function teamCap(team, career) {
     let works = 0;
     try {
@@ -67,6 +73,7 @@ const CareerAiDev = (function () {
     const baseScore = scoreMods(Parts.getMods(fitted, team));
     let best = null;
     for (const cat of Parts.CATALOG) {
+      if (cat.id === "tyres") continue;
       for (const opt of cat.options) {
         if (!(opt.cost > 0)) continue;
         if (!Parts.isOptionAvailable(opt, team)) continue;
@@ -89,12 +96,13 @@ const CareerAiDev = (function () {
     if (!career || typeof Parts === "undefined") return;
     const year = diceYear != null ? diceYear : career.year;
     const posOf = new Map((tStand || []).map((r) => [r.id, r.pos]));
+    const field = Teams.LIST.filter((t) => Teams.isReal && Teams.isReal(t)).length;
     for (const team of Teams.LIST) {
       if (!Teams.isReal || !Teams.isReal(team)) continue;
       const pos = posOf.get(team.id) || 11;
       const exp = (expected && expected.get(team.id)) || 11;
       const shove = exp - pos;
-      const chance = clamp(0.30 + shove * 0.12, 0.12, 0.80);
+      const chance = clamp(0.30 + shove * 0.12, 0.12, 0.80) * atrScale(pos, field);
       if (rnd(year, "aidev", team.id) > chance) continue;
       const bag = ensureSeed(career, team);
       const cap = teamCap(team, career);
@@ -148,6 +156,6 @@ const CareerAiDev = (function () {
     }
   }
 
-  return { developWinter, fittedOf, teamCap, pickStep, scrubFitted, worksSetup };
+  return { developWinter, fittedOf, teamCap, pickStep, scrubFitted, worksSetup, atrScale, ATR_LEAD, ATR_LAST };
 })();
 Object.freeze(CareerAiDev);

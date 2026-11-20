@@ -472,9 +472,20 @@ const TrackBuildProps = (function () {
 
     const UPV = [0, 1, 0];
 
+    const _shapeWarned = new Set();
+    const shapeWarn = (name, why) => {
+      if (_shapeWarned.has(name)) return;
+      _shapeWarned.add(name);
+      Log.warn("scenery", `${def && def.id}: ${name}() called with the wrong shape (${why}) — nothing emitted; see docs/SCENERY-API.md`);
+    };
+    const seatArgs = (name, foot, sz) => {
+      if (Array.isArray(foot) && Array.isArray(sz)) return true;
+      shapeWarn("seat." + name, `expects (out, foot[3], size[3], col, basis), got a ${foot && typeof foot === "object" && !Array.isArray(foot) ? "spec object" : typeof foot} foot`);
+      return false;
+    };
     const seat = {
-      box:     (o, foot, sz, col, b) => addBox(o, vadd(foot, (b ? b[1] : UPV), sz[1] / 2), sz, col, b),
-      prism:   (o, foot, sz, col, b) => addPrism(o, foot, sz, col, b),
+      box:     (o, foot, sz, col, b) => seatArgs("box", foot, sz) && addBox(o, vadd(foot, (b ? b[1] : UPV), sz[1] / 2), sz, col, b),
+      prism:   (o, foot, sz, col, b) => seatArgs("prism", foot, sz) && addPrism(o, foot, sz, col, b),
       cyl:     (o, foot, rad, h, col, seg, b) => addCyl(o, foot, rad, h, col, seg, b),
       cone:    (o, foot, rad, h, col, seg, b) => addCone(o, foot, rad, h, col, seg, b),
       frustum: (o, foot, r0, r1, h, col, seg, b) => addFrustum(o, foot, r0, r1, h, col, seg, b),
@@ -483,7 +494,11 @@ const TrackBuildProps = (function () {
     const foundation = (o, spec) => {
       spec = spec || {};
       const c = spec.center, size = spec.size, top = spec.top;
-      if (!c || !size || !Number.isFinite(top)) return false;
+      if (!c || !size || !Number.isFinite(top)) {
+        if (!c && !size && (spec.footprint || spec.at))
+          shapeWarn("foundation", "expects {center[3], size[w,d], top}, got {footprint, at}");
+        return false;
+      }
       const b = spec.basis || [[1, 0, 0], UPV, [0, 0, 1]];
       const r = b[0], f = b[2];
       let lo = Infinity;
@@ -991,7 +1006,6 @@ const TrackBuildProps = (function () {
           const kn = k + STEP >= n ? 0 : k + STEP, km = (k + 1) % n;
           if (pitOwned(k, side) || pitOwned(kn, side)) continue;
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
-          const oM = side * (hw[km] + barrierOffset);
           const qx = (px[k] + track.rx[k] * side * (hw[k] + barrierOffset)
                     + px[kn] + track.rx[kn] * side * (hw[kn] + barrierOffset)) / 2;
           const qz = (pz[k] + track.rz[k] * side * (hw[k] + barrierOffset)

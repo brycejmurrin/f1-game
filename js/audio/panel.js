@@ -28,6 +28,7 @@ var AudioPanel = (() => {
         if (G.radio && G.radio.pack) G.radio.pack.stop();
       }
       if (b && fromGesture) GameAudio.init();
+      if (b && G.radio && G.radio.soundOn) G.radio.soundOn();
       els.soundbtn.textContent = b ? "SOUND ON" : "SOUND OFF";
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }

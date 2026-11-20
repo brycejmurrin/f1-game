@@ -51,6 +51,7 @@ function adoptTeam(team) {
 }
 
 function scenerySrc(def) {
+  if (typeof TrackDef !== "undefined") return TrackDef.scenerySource(def, self.TrackScenery);
   const fn = def.scenery || (self.TrackScenery && self.TrackScenery[def.id]);
   return fn ? String(fn) : "";
 }

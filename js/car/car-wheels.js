@@ -42,11 +42,11 @@ const CarWheels = (function () {
     return t;
   }
   function createGarage(gfx) {
-    let key = "", meshes = null;
+    let key = "", meshes = null, matRef = null;
     const local = new Float32Array(16), world = new Float32Array(16);
     function release() {
       if (meshes && gfx.freeMesh) for (const mesh of meshes) gfx.freeMesh(mesh);
-      meshes = null; key = "";
+      meshes = null; key = ""; matRef = null;
     }
     function prepare(next, liv, tiers) {
       if (meshes && key === next) return;
@@ -69,7 +69,7 @@ const CarWheels = (function () {
     const opts = { doubleSided: true };
     function draw(base, distance, steer, material) {
       if (!meshes) return;
-      Object.setPrototypeOf(opts, material);
+      if (material !== matRef) { Object.setPrototypeOf(opts, material || null); matRef = material; }
       const spin = (distance || 0) / WHEEL_R, cp = Math.cos(spin), sp = Math.sin(spin);
       for (let axle = 0; axle < 2; axle++) for (let side = -1; side <= 1; side += 2) {
         const a = axle ? 0 : steer, ca = Math.cos(a), sa = Math.sin(a);

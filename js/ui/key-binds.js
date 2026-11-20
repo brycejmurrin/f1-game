@@ -291,11 +291,15 @@ function create(G) {
     ],
   });
   if (pad) for (const ev of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(ev, () => { cancelCalibration(); pad.render(); });
+  let reveal = null;
   if (keys) {
-    const reveal = () => setTimeout(() => { if (keys.hidden() && Input.keyboardSeen()) keys.render(); if (!keys.hidden()) window.removeEventListener("keydown", reveal); }, 0);
+    reveal = () => setTimeout(() => { if (keys.hidden() && Input.keyboardSeen()) keys.render(); if (!keys.hidden()) window.removeEventListener("keydown", reveal); }, 0);
     window.addEventListener("keydown", reveal);
   }
-  const rerender = () => { for (const s of sections) s.render(); };
+  const rerender = () => {
+    for (const s of sections) s.render();
+    if (reveal && keys && !keys.hidden()) window.removeEventListener("keydown", reveal);
+  };
   if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
   if (typeof MutationObserver === "function") {
     const helpSheet = document.getElementById("howtoplay");

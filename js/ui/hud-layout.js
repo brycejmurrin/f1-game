@@ -443,7 +443,7 @@ const HudLayout = (function () {
     packPhonePrimary(W, H);
     clearReadouts(W, H);
   }
-  function packPhonePrimary(W, H) { 
+  function packPhonePrimary(W, H) {
     if (!doc || !doc.body || !doc.body.classList || doc.body.classList.contains("desktop")) return;
     let pct = 100;
     if (store && typeof store.get === "function") pct = +store.get("hudScale", 100) || 100;

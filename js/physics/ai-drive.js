@@ -329,16 +329,18 @@ const AiDrive = (function () {
   }
 
   const AI_DF = 0.65;
+  const AERO_GRIP_K = 0.055;
+  function aeroGrip(load) { return 1 + ((load != null ? load : 0.5) - 0.5) * AERO_GRIP_K; }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    return (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
+    return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
   }
   const YAW_AERO = -0.28 / AI_DF;
   function yawScale(speed, load, grip, pace, vmax) { return lateralScale(speed, load, grip, pace, vmax, YAW_AERO); }
   const _lsOut = { yaw: 1, lat: 1 };
   function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    const pre = (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip);
+    const pre = (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip);
     out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
     out.lat = pre * (1 + AI_DF * aero * q * q);
     return out;
@@ -364,7 +366,7 @@ const AiDrive = (function () {
     const sampleN = window ? window.n : samples.length;
     let windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
-    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
+    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_GRIP_K);
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
@@ -957,7 +959,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) {  }
   return {
-    lateralScale, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, aeroGrip, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

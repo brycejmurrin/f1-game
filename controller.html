@@ -98,11 +98,11 @@
   #pad-status { flex: 0 1 26%; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 10px; line-height: 1.15; overflow: hidden; }
   #input-health { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--warn); font-weight: 700; }
   #input-health::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--warn); }
-  #input-health[data-state="good"] { font-size: 0; } 
+  #input-health[data-state="good"] { font-size: 0; }
   #input-health[data-state="good"]::before { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
   #input-health:is([data-state="reconnecting"], [data-state="disconnected"]) { color: var(--bad); }
   #input-health:is([data-state="reconnecting"], [data-state="disconnected"])::before { background: var(--bad); }
-  #input-health:not([data-state="good"]) ~ #link { display: none; } 
+  #input-health:not([data-state="good"]) ~ #link { display: none; }
   #input-age { display: none; }
   .grip-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr)); gap: 8px; flex: none; }
   .grip-keys:empty { display: none; }
@@ -117,7 +117,7 @@
   body[data-pedals="side"] #right > .grip-keys { grid-column: 1 / -1; grid-row: auto; }
   body[data-pedals="side"][data-strip="column"] #right:has(> .grip-keys:not(:empty)) { grid-template-columns: minmax(64px, .8fr) 1fr 1fr; grid-template-rows: 1fr; }
   body[data-pedals="side"][data-strip="column"] #right > .grip-keys { grid-column: auto; grid-row: 1; }
-  body[data-pedals="side"][data-swap] #right { direction: rtl; } 
+  body[data-pedals="side"][data-swap] #right { direction: rtl; }
   body[data-pedals="side"][data-swap] #right > * { direction: ltr; }
   #b-layout { flex: none; width: 44px; padding: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
   #b-layout svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
@@ -179,7 +179,7 @@
   .pedal small { display: none; font-size: 11px; letter-spacing: .14em; color: var(--dim); margin-top: 4px; }
   body.gears-auto .shift { display: none; }
   body.gears-auto .tap { display: flex; }
-  body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; } 
+  body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; }
   body.throttle-auto #gas { pointer-events: none; flex-direction: column; align-items: center; justify-content: flex-end; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
   body.throttle-auto #gas::before { border-color: var(--card-line); }
   body.throttle-auto #gas small { display: block; color: color-mix(in oklab, var(--dim) 55%, transparent); }

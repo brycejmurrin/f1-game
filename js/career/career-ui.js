@@ -486,8 +486,9 @@ function create(G) {
       ["LOW", "half those odds"],
       "Two things buy the risk down: developing the team, and what you have spent "
       + "on the ENGINE and GEARBOX. So money buys finishes as well as lap time.",
-      "A retirement is classified below every car that finished and scores "
-      + "nothing. It also fails a CLEAN RACE brief — a car in the barriers on lap "
+      "A retirement short of 90% of the winner's laps is not classified and scores "
+      + "nothing; a late one is classified on laps completed and paid its place. Either "
+      + "way it fails a CLEAN RACE brief — a car in the barriers on lap "
       + "two has not completed anything.",
       "Whether a car stops is decided at the green light, not while you drive, so "
       + "it is never a reaction to how your race is going.",
@@ -1603,6 +1604,7 @@ function create(G) {
     if (!d || !String(d.name || "").trim()) out.name = "Enter a name";
     const code = String(d && d.code || "").trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(code)) out.code = "Code must be 3 letters";
+    else if (typeof DriverRatings !== "undefined" && (Object.hasOwn(DriverRatings.BASE, code) || Object.hasOwn(DriverRatings.HIRES, code))) out.code = "Code already on the grid";
     const n = d && d.num;
     if (!Number.isInteger(n) || n < 1 || n > 99) out.num = "Number must be 1–99";
     return out;

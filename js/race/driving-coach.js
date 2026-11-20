@@ -1,5 +1,5 @@
 "use strict";
-const DrivingCoach = (function () {
+const DrivingCoachBody = (function () {
   const TIPS = Object.freeze({
     recovery: { label: "Off-track recovery", text: "OFF TRACK — SLOW DOWN AND REJOIN GENTLY", detail: "Grip is lower off the track. Use gentle inputs and check for traffic before rejoining.", dwell: 0.8 },
     trail: { label: "Braking into turns", text: "EASE THE BRAKE AS YOU TURN", detail: "Heavy braking is using most of your grip. Release the brake gradually as you steer.", dwell: 0.5 },
@@ -23,10 +23,7 @@ const DrivingCoach = (function () {
   const TURN_WINDOW_M = 150;
   const MIN_LOSS_S = 0.2;
   const TYRE_SHARE = 0.15, TYRE_FAST_K = 1.1, TYRE_EVERY = 3;
-  const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"], ["cooling", "COOLING LAP"],
-    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"],
-    ["start", "RACE START"], ["slipstream", "SLIPSTREAM"], ["overtake", "OVERTAKE"], ["defend", "DEFEND"],
-    ["backmarkers", "TRAFFIC"]]);
+  const GOALS = DrivingCoach.GOALS;
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -538,12 +535,6 @@ const DrivingCoach = (function () {
         note.textContent = e ? "Estimated pit loss: " + e.lossS.toFixed(1) + "s" + (e.gapS == null ? "" : " · gap behind: " + e.gapS.toFixed(1) + "s") : "Pit strategy is available with tyre wear enabled.";
       }
     }
-    const bind = (id, fn) => { const b = $(id); if (b) b.onclick = () => { fn(); paint(); }; };
-    bind("pm-driving-trace", downloadTrace);
-    bind("pm-practice-set", mark); bind("pm-practice-retry", retry);
-    bind("pm-practice-rewind", rewind); bind("pm-practice-arm", armPractice);
-    SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
-      read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
     function beginSetupTrial() {
       if (!G.practice || !canPractice()) return false;
       drillMode = "launch";
@@ -554,19 +545,6 @@ const DrivingCoach = (function () {
       if (!Object.hasOwn(RaceInsights.DRILLS, mode)) return false;
       drillMode = mode; paint(); return true;
     }
-    SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
-      read: () => drillMode, write: setPracticeGoal });
-    SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
-      write: v => { if (typeof RealRace !== "undefined" && RealRace.status().watch) return; G.pits.selectNext(G.player, v); paint(); } });
-    const menu = $("pmsettings"), panel = $("pm-panel-driving");
-    if (menu && panel && typeof MutationObserver === "function") {
-      const observer = new MutationObserver(() => { if (!menu.hidden && !panel.hidden) paint(); });
-      observer.observe(menu, { attributes: true, attributeFilter: ["hidden"] });
-      observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
-    }
-    if (typeof SettingsNav !== "undefined") SettingsNav.onEnter((id) => {
-      if (["driving", "practice", "strategy", "review"].includes(id)) paint();
-    });
     function armPractice() {
       if (G.timeTrial || G.daily.isActive() || G.netPlay.active()) return false;
       if (G.flow === "season" || G.flow === "career") return false;
@@ -580,9 +558,9 @@ const DrivingCoach = (function () {
     return { update, status, feedback, advice, beginSetupTrial, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
       practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
-      practiceActive: () => practice,
+      practiceActive: () => practice, isEnabled: () => !!enabled, downloadTrace,
       trace: () => trace.map(row => ({ ...row })), insights };
   }
   return { create };
 })();
-Object.freeze(DrivingCoach);
+Object.freeze(DrivingCoachBody);

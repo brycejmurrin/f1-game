@@ -1,7 +1,7 @@
 "use strict";
 
 const GLXChunked = (function () {
-  let _saTbl = null, _saX = 0, _saY = 0, _saZ = 0, _saIdx = -1;
+  const _saCache = new WeakMap();
   function _sameList(a, b) {
     if (a === b) return true;
     if (!a || !b || a.length !== b.length) return false;
@@ -28,12 +28,16 @@ const GLXChunked = (function () {
     return e;
   }
   function _shadowAllIdx(AL, tbl, lx, ly, lz) {
-    if (tbl === _saTbl && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
+    let e = tbl && typeof tbl === "object" ? _saCache.get(tbl) : undefined;
+    if (e !== undefined && lx === e.x && ly === e.y && lz === e.z) return e.idx;
     let r = -1;
     for (let p = 0; p < AL.length; p += 15) {
       if (AL[p] === lx && AL[p + 1] === ly && AL[p + 2] === lz) { r = p / 15; break; }
     }
-    _saTbl = tbl; _saX = lx; _saY = ly; _saZ = lz; _saIdx = r;
+    if (tbl && typeof tbl === "object") {
+      if (e === undefined) _saCache.set(tbl, e = { x: 0, y: 0, z: 0, idx: -1 });
+      e.x = lx; e.y = ly; e.z = lz; e.idx = r;
+    }
     return r;
   }
 

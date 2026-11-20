@@ -179,15 +179,15 @@ const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
 const STEER_LEVEL_LABEL = { easy: "SUPER EASY", assist: "ASSISTED", normal: "NORMAL", sim: "SIM" };
 const STEER_DEFAULTS = { steerRate: 2, steerExpo: 6, steerLock: 7, steerSpeed: 7 };
 const HELP_LEVELS = { low: 1, med: 5, high: 9 };
-const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH" };
+const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH", custom: "CUSTOM" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 const LINE_FOLD = { off: "STEER OFF", corner: "CORNERS", full: "FULL", custom: "CUSTOM" };
 const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);
-const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]);
+const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]).concat([["custom", HELP_LABEL.custom, true]]);
 const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]];
 function helpBand() {
   const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
-  return dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
+  return dh <= 1 ? "low" : dh <= 3 ? "custom" : dh <= 7 ? "med" : "high";
 }
 function lineBand() {
   const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
@@ -534,6 +534,7 @@ function applySteerLevel(name) {
 }
 SettingRow.wire("pm-feel", { values: FEEL_VALUES, read: () => matchSteerLevel() || "custom", write: applySteerLevel });
 SettingRow.wire("pm-helplevel", { values: HELP_VALUES, read: helpBand, write: (n) => {
+  if (HELP_LEVELS[n] == null) return;
   store.set("drivingHelp", HELP_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 } });

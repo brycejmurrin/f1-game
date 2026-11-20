@@ -37,9 +37,7 @@
   pointer-events: none;
   z-index: -1;
   color: var(--red);
-
   contain: paint;
-
 }
 :where(body[data-shape="tall"]) #title-car { display: none; }
 #title-car g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
@@ -50,7 +48,7 @@
 :root[data-title-art="soft"] #title-car { opacity: 0.14; }
 :root[data-title-art="off"] #title-car { display: none; }
 @media (max-width: 1000px) { #title-car { opacity: 0.4; } }
-@media (max-width: 699px)  { #title-car { opacity: 0.22; } } 
+@media (max-width: 699px)  { #title-car { opacity: 0.22; } }
 #tc-frame { transform-box: view-box; transform-origin: 0 0; }
 @media (max-aspect-ratio: 13/10) and (min-width: 700px) { #title-car { opacity: 0.26; } }
 @media (prefers-reduced-transparency: reduce) {
@@ -151,4 +149,4 @@
 :root:not([data-booted]) #menu-buttons { filter: grayscale(1) brightness(.45); pointer-events: none; }
 #menu-buttons { transition: filter var(--dur-3) var(--ease-out); }
 :root:not([data-booted]) #title::after { transform: skewX(-30deg) scaleX(calc(var(--boot-p, .07) * .85)); transform-origin: left; }
-} 
+}

@@ -44,6 +44,7 @@ const TrackGraph = (function () {
     const models = new Map();
     const nodes = [];
     let dropped = 0;
+    let inheritHit = false;
     const meshes = new Map();
 
     function recorder(ops) {
@@ -148,6 +149,7 @@ const TrackGraph = (function () {
       for (const op of m.ops) {
         const c = xform(place, op.c);
         if (op.mat !== undefined) out._mat = op.mat;
+        else if (out._mat) inheritHit = true;
         out._matAt = op.sway ? swayAt(out._mat || 0, place.o, place.u, upScale(s), op.sway) : null;
         if (op.sway) swayed = true;
         const col = colourOf(op, place);
@@ -185,6 +187,7 @@ const TrackGraph = (function () {
       }
       const m = model(key, build);
       if (!m.ops.length) { dropped++; return 0; }
+      inheritHit = false;
       let whole = null;
       if (meta && (meta.kind === "pine" || meta.whole) && emit) {
         const verd = m._whole || (m._whole = new Uint8Array(m.ops.length));
@@ -228,6 +231,7 @@ const TrackGraph = (function () {
           full,
           inst: skipFuse,
           meta: meta || null,
+          matInherit: inheritHit,
         });
         if (prefer && !skipFuse) {
           out._replayVerdicts = verd; out._vIdx = 0;
@@ -378,6 +382,12 @@ const TrackGraph = (function () {
         const e = byKind[kind];
         e.reuse = e.uniqueVerts > 0 ? e.fusedVerts / e.uniqueVerts : 0;
       }
+      const matInherit = { nodes: 0, byModel: {} };
+      for (const node of nodes) {
+        if (!node.matInherit) continue;
+        matInherit.nodes++;
+        matInherit.byModel[node.model] = (matInherit.byModel[node.model] || 0) + 1;
+      }
       let mModels = 0, mInst = 0, mUnique = 0, mFused = 0;
       for (const m of meshes.values()) {
         if (!m.places.length) continue;
@@ -392,6 +402,7 @@ const TrackGraph = (function () {
         fusedVerts: fused,
         reuse: unique > 0 ? fused / unique : 0,
         byKind,
+        matInherit,
       };
     }
 

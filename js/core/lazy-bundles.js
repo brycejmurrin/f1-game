@@ -33,6 +33,7 @@ const RACE_SESSION_READY = {
   "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
+  "js/race/driving-coach.js": () => typeof DrivingCoachBody !== "undefined",
 };
 const raceSessionLoaded = new Set();
 let raceSessionHooked = false;
@@ -141,7 +142,7 @@ const _sceneryLoads = new Map();
 function sceneryModels(def) {
   if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
   const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
-  return Assets.modelsReady(0, fn ? String(fn) : "");
+  return Assets.modelsReady(0, typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, window.TrackScenery) : fn ? String(fn) : "");
 }
 function fetchScenery(id) {
   let p = _sceneryLoads.get(id);
@@ -278,19 +279,23 @@ function dataHubRetryDelay(attempt) {
   if (!ms) return Promise.resolve();
   return new Promise((r) => setTimeout(r, ms));
 }
-function ensureDataHub() {
-  if (dataHubLoad) return dataHubLoad;
+let dataHubSlow = [];
+function ensureDataHub(opts) {
+  const cb = opts && opts.onSlow;
+  if (dataHubLoad) { if (cb) { if (dataHubSlow === true) cb(); else dataHubSlow.push(cb); } return dataHubLoad; }
+  dataHubSlow = cb ? [cb] : [];
+  const markSlow = () => { const cbs = dataHubSlow; if (cbs !== true) { dataHubSlow = true; cbs.forEach((f) => f()); } };
   dataHubLoad = (async () => {
     const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) await dataHubRetryDelay(attempt);
       const [complete, realOk] = await Promise.all([loadBackendScripts(DATA_FILES, DATA_EDGES, {
-        strict: true, loaded: dataScriptsLoaded,
+        strict: true, loaded: dataScriptsLoaded, onSlow: markSlow,
         ready: (src) => DATA_READY[src] && DATA_READY[src](),
         cacheBust: attempt > 0 ? attempt : 0,
       }), ensureRealRace()]);
       if (!complete || !realOk) {
-        if (attempt < maxAttempts - 1) continue;
+        if (attempt < maxAttempts - 1 && dataHubSlow !== true) continue;
         Log.warn("data", "the data hub bundle did not load — DATA stays closed");
         dataHubLoad = null;
         return false;

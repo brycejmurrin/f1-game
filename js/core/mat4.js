@@ -36,7 +36,9 @@ const M4 = (function () {
   }
   function lookAtTo(out, eye, target, up) {
     let zx=eye[0]-target[0],zy=eye[1]-target[1],zz=eye[2]-target[2];
-    let l=Math.hypot(zx,zy,zz)||1; zx/=l; zy/=l; zz/=l;
+    let l=Math.hypot(zx,zy,zz);
+    if (l < 1e-12) { zx = 0; zy = 0; zz = 1; }
+    else { zx/=l; zy/=l; zz/=l; }
     let xx=up[1]*zz-up[2]*zy,xy=up[2]*zx-up[0]*zz,xz=up[0]*zy-up[1]*zx;
     l=Math.hypot(xx,xy,xz)||1; xx/=l; xy/=l; xz/=l;
     const yx=zy*xz-zz*xy,yy=zz*xx-zx*xz,yz=zx*xy-zy*xx;

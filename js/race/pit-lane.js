@@ -19,6 +19,10 @@ var PitLane = (function () {
     }
 
     function enabled() { return !!(z() && G.tyres && G.tyres.on()); }
+    const tt = () => !!G.timeTrial;
+    const ttStop = () => tt() && !enabled();
+    function laneOpen() { return enabled() || !!(z() && tt()); }
+    const TT_DECIDE_S = 4;
 
     function limit() {
       const zz = z();
@@ -79,7 +83,8 @@ var PitLane = (function () {
       for (const o of G.cars || []) {
         if (o !== c && !o.retired && !o.finished && o.prog < c.prog && (!behind || o.prog > behind.prog)) behind = o;
       }
-      const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || G.vTop() * roadFrac) : null;
+      const pace = Math.max(1, c.speed || G.vTop() * roadFrac);
+      const gapS = behind ? (c.prog - behind.prog) / pace : null;
       return { lossS: loss, gapS, marginS: gapS == null ? null : gapS - loss, caution: flag >= 2, estimated: true };
     }
     function choices(c) {
@@ -171,7 +176,7 @@ var PitLane = (function () {
       return r;
     }
     function cueOf(c) {
-      if (!enabled() || !c || !c.local || c.retired || c.finished) return null;
+      if (!laneOpen() || !c || !c.local || c.retired || c.finished) return null;
       const st = c.pitState || "none";
       if (st === "box") return { phase: "box", text: "STOP", dist: 0, frac: 1 };
       if (st === "lane") {
@@ -207,7 +212,7 @@ var PitLane = (function () {
       const d = toEntry(c);
       if (d < 0 || d > CUE_M) return null;
       if (c.pitArmed) {
-        const next = nextFor(c);
+        const next = ttStop() ? null : nextFor(c);
         return { phase: "armed", text: "STAY IN LANE · BOX BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
       }
       if (!worthStopping(c)) return null;
@@ -269,7 +274,7 @@ var PitLane = (function () {
     }
 
     function arm(c, on) {
-      if (!c || !enabled()) return false;
+      if (!c || !laneOpen()) return false;
       c.pitArmed = on == null ? !c.pitArmed : !!on;
       if (!c.pitArmed) c.pitPos0 = 0;
       if (c.pitArmed && !(c.pitPos0 > 0)) c.pitPos0 = rankOf(c);
@@ -400,7 +405,7 @@ var PitLane = (function () {
 
     function boxUniform() {
       const zz = z(), t = G.track, car = G.player;
-      if (!enabled() || !zz || !t || !car) return null;
+      if (!laneOpen() || !zz || !t || !car) return null;
       if (t.pit && !t.pit.painted) return null;
       _boxU[0] = boxThroughFor(car, zz, t.total); _boxU[1] = BOX_TOL * 0.75;
       return _boxU;
@@ -408,7 +413,7 @@ var PitLane = (function () {
 
     function laneUniform() {
       const zz = z(), t = G.track;
-      if (!enabled() || !zz || !t) return null;
+      if (!laneOpen() || !zz || !t) return null;
       if (t.pit && !t.pit.painted) return null;
       _laneU[0] = zz.sIn; _laneU[1] = zz.lenM; _laneU[2] = zz.side; _laneU[3] = t.total;
       return _laneU;
@@ -421,12 +426,12 @@ var PitLane = (function () {
     function commitNow(c) {
       c.pitCommitT = 0; c.pitCommitted = true;
       arm(c, true);
-      const next = nextFor(c);
+      const next = ttStop() ? null : nextFor(c);
       if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
     }
     function update(c, dt) {
       if (!c || c.retired) return;
-      if (!enabled()) { clearArm(c); c.pitNext = null; return; }
+      if (!laneOpen()) { clearArm(c); c.pitNext = null; return; }
       const st = c.pitState || "none";
       if (!c.human && c.pitArmed && st === "none" && !owesCompound(c) &&
           ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow())) clearArm(c);
@@ -452,13 +457,14 @@ var PitLane = (function () {
         return;
       }
       if (st === "box") {
-        if (!c.pitFitted) {
+        if (!c.pitFitted && !ttStop()) {
           const a = stopAnim(c);
           if (a.u >= 0.50) { serviceCar(c); c.pitFitted = true; }
         }
         c.pitT = (c.pitT || 0) - dt;
         if (c.pitT <= 0) {
-          if (!c.pitFitted) { serviceCar(c); c.pitFitted = true; }
+          if (!c.pitFitted && !ttStop()) serviceCar(c);
+          c.pitFitted = true;
           c.pitState = "out"; c.pitT = 0; release(c, zz);
         }
         return;
@@ -476,12 +482,13 @@ var PitLane = (function () {
         if (!inLaneLat(c, _smp.hw || 0, zz.side)) return;
       }
       c.pitState = "lane";
+      if (tt() && c.human) c.incidentInvalidLap = true;
       if (boxBusy(c)) return;
       if (at >= boxAt - BOX_TOL && at <= boxAt + BOX_TOL * 2 && Math.abs(c.speed) < G.vTop() * BOX_SPEED_FRAC) {
         Tracks.sample(G.track, c.s, _smp);
         if (!boxSquare(c, _smp, zz.side)) return;
         c.pitState = "box";
-        c.pitT = zz.boxS;
+        c.pitT = zz.boxS + (ttStop() ? TT_DECIDE_S : 0);
         c.pitArmed = false;
         c.pitStops = (c.pitStops || 0) + 1;
         c.pitFitted = false;

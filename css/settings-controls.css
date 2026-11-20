@@ -76,6 +76,11 @@
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
+#pmsettings-inner .adv-help {
+  opacity: 1;
+  color: var(--steel);
+  font-size: var(--fs-2);
+}
 #pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button {
   width: auto; flex: 0 1 auto;
   min-width: calc(var(--chip-h) * 1.7);
@@ -192,6 +197,11 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
     width: auto;
     height: 100%;
     align-self: stretch;
+  }
+}
+@media (orientation: portrait) {
+  @container sheet (min-width: 24rem) and (max-width: 39.99rem) {
+    body:not(.desktop) #pmsettings-inner #pm-settings-index { display: flex; }
   }
 }
 @container sheet (min-width: 52rem) {
@@ -412,6 +422,23 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
+#pmsettings-inner .pm-group details > summary,
+#pmsettings-inner .pm-group details > summary:active {
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  margin-block: calc(var(--gap) * 0.15);
+  padding-block: calc(var(--gap) * 0.35);
+}
+@media (hover: hover) and (pointer: fine) {
+  #pmsettings-inner .pm-group details > summary:hover {
+    background: var(--surf-1);
+    border: 1px solid var(--plate-line);
+  }
+}
+#pmsettings-inner .pm-group details {
+  border-bottom: 0;
+}
 body:not(.desktop) :is(#pmsettings-inner .pm-group, #rs-body) details > summary {
   min-height: max(var(--chip-h), calc(45px / var(--ui-scale)));
 }
@@ -588,7 +615,7 @@ button:has(> [data-fold]) {
 body.desktop #pm-steer-item,
 body.desktop #pm-calib,
 body.desktop #pm-calib-help { display: none !important; }
-} 
+}
 
 @layer components {
 #pm-hud-elements-list [data-hud-el-row] { min-width:0; }
