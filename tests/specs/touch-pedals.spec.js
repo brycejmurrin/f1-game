@@ -94,6 +94,14 @@ test.describe("on-screen pedals report travel, not just a press", () => {
 // (the near-miss: setSteerMode only refreshes when state is race/count). This
 // test is what stops that staying true by luck. It cycles every mode through the
 // pause menu, in a race, and asserts the pair can never disagree.
+//
+// OWN BROWSER (#5599, tests/helpers/fixtures.js `ownBrowser`). This race test boots a track in whatever shared
+// browser its worker hands it. On #5800's heads 59105b16 and f6e4cd8f it ran right after a race or photo page in
+// that browser: real-race and telemetry-fit (packed-4, job 136005402434), photo-studio-conditions (packed-2, job
+// 135856785271). Both times its evaluates stalled (13.6 s and 8.3 s for three clicks), and the 10 s mode-flip wait
+// ran out. That is the abandoned-GPU-process stall shipped-defaults showed. In the test:input group, which puts
+// no race before it, it passed on both heads (runs 44494510089, 44614767007). A fresh browser costs ~0.3 s.
+test.describe(() => { test.use({ ownBrowser: true });
 test("auto-throttle and the GAS button can never disagree, across mode switches", async ({ page, loadTrack }) => {
   test.setTimeout(120_000);
   await loadTrack("monza");
@@ -134,4 +142,5 @@ test("auto-throttle and the GAS button can never disagree, across mode switches"
   // Anti-vacuity: the loop must actually have visited more than one mode, or it
   // proved the invariant for a single state and called it a sweep.
   expect(new Set(seen.map((s) => s.mode)).size).toBeGreaterThan(1);
+});
 });
