@@ -2,6 +2,12 @@
 
 Kind: investigation · Re-measure-by: 2027-01-20
 
+**Decision: E-only.** Bryce chose it through the orchestrator session at
+2026-11-20 08:49Z. The work is the checker's blind spot, the drift fixes, the test
+fakes, freezing the `_` scratch members, and `Object.seal(G)`. **There will be no
+sub-façade split.** Option A stays in this note only as a documented future option,
+for the "what would change this" triggers below.
+
 Base: `0794b7b7` (`origin/claude/f1-game-project-26h3ng`, 2026-11-20). Asked by Bryce
 2026-11-20 ~08:36Z: "investigate the g facade and how it works and how to redesign".
 Docs-only lane; no `js/` edits. Prior art this builds on (and does not repeat):
