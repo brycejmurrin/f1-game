@@ -99,7 +99,7 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
   return row;
 }
 
-let saidFor = null, saidWatch = null, saidMo = null;
+let saidFor = null, saidWatch = null, saidMo = null, saidPending = null;
 function spokenText(n) {
   const kids = n.children ? Array.from(n.children) : [];
   return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
@@ -107,6 +107,7 @@ function spokenText(n) {
 function sayCards(sheet, table, key) {
   if (!table || typeof LiveRegion === "undefined" || key === saidFor) return;
   saidFor = key;
+  if (saidPending) { saidPending.disconnect(); saidPending = null; }
   if (sheet && saidWatch !== sheet && typeof MutationObserver !== "undefined") {
     if (saidMo) { saidMo.disconnect(); saidMo = null; }
     saidWatch = sheet;
@@ -117,7 +118,13 @@ function sayCards(sheet, table, key) {
   if (!text) return;
   const say = () => LiveRegion.say(text, "save");
   if (!sheet || !sheet.hidden || typeof MutationObserver === "undefined") { setTimeout(say, 0); return; }
-  const mo = new MutationObserver(() => { if (!sheet.hidden) { mo.disconnect(); say(); } });
+  const mo = new MutationObserver(() => {
+    if (sheet.hidden) return;
+    mo.disconnect();
+    if (saidPending === mo) saidPending = null;
+    say();
+  });
+  saidPending = mo;
   mo.observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
 }
 
