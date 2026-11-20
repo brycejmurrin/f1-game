@@ -33,7 +33,7 @@
   }
 
   /** One texture's row, or null when it has no size yet (never uploaded). */
-  function row(T, tex, owner) {
+  function row(T, tex, owner, backend) {
     const rt = owner || tex.renderTarget || null;
     let img = tex.image;
     if (Array.isArray(img)) img = img[0];
@@ -43,9 +43,22 @@
     const own = tex.mipmaps && tex.mipmaps.length > 1 ? tex.mipmaps.length : 0;
     const mips = own || (tex.generateMipmaps ? Math.floor(Math.log2(Math.max(w, h))) + 1 : 1);
     const bpt = texelBytes(T, tex);
-    const samples = rt && rt.samples > 1 ? rt.samples | 0 : 1;
-    // An MSAA target is the resolved texture plus a multisampled one at level 0.
-    const bytes = chainBytes(w, h, bpt, mips) * layers + (samples > 1 ? w * h * bpt * layers * samples : 0);
+    let samples = rt && rt.samples > 1 ? rt.samples : 1;
+    let primarySamples = 1, extraSampleLayers = samples > 1 ? layers * samples : 0;
+    if ((rt || tex.isDepthTexture) && backend?.isWebGPUBackend && backend.has(tex)) {
+      const data = backend.get(tex);
+      if (data.texture?.sampleCount) {
+        // GPUTexture metadata: ordinary depth is multisampled directly. Colour has a resolve texture,
+        // and layered targets can have one extra multisampled attachment per layer.
+        primarySamples = samples = data.texture.sampleCount;
+        extraSampleLayers = 0;
+        for (const extra of data.msaaTextures || (data.msaaTexture ? [data.msaaTexture] : [])) {
+          samples = Math.max(samples, extra.sampleCount);
+          extraSampleLayers += extra.sampleCount * extra.depthOrArrayLayers;
+        }
+      }
+    }
+    const bytes = chainBytes(w, h, bpt, mips) * layers * primarySamples + w * h * bpt * extraSampleLayers;
     const kind = tex.isDepthTexture ? "rtDepth" : (rt || tex.isRenderTargetTexture ? "renderTarget"
       : (tex.isCubeTexture ? "cube" : (layers > 1 ? "materialArray" : (tex.isDataTexture ? "data" : "content2D"))));
     return { kind, name: tex.name || (rt && rt.texture && rt.texture.name) || "", w, h, layers, mips, samples, bpt, bytes };
@@ -55,7 +68,7 @@
   function memCensus(t, top) {
     const out = { supported: true, backend: "tlx", bytes: 0, count: 0, mb: 0, byKind: {}, biggest: null, targets: [],
       buffers: { attrBytes: 0, indexBytes: 0, uniformBytes: 0, source: "three" }, swapchainEst: null, three: null,
-      estimated: ["swapchainEst (one drawing buffer; the browser keeps more)", "rtDepth (4 bytes a texel, stencil not counted)", "buffers (three's own byte counts)"],
+      estimated: ["swapchainEst (one drawing buffer; the browser keeps more)", "rtDepth (4 bytes a texel, stencil not counted)", "buffers (three's own byte counts)", "WebGL multisample renderbuffers (requested sample count)"],
       excludes: EXCLUDES };
     const r = t && t.renderer, T = t && t.THREE;
     try { if (t && typeof t.ctxLost === "function" && t.ctxLost()) out.contextLost = true; } catch (_) { /* a probe, never a throw */ }
@@ -68,7 +81,7 @@
       if (!tex || seen.has(tex)) return;
       seen.add(tex);
       let x = null;
-      try { x = row(T, tex, owner); } catch (_) { x = null; }
+      try { x = row(T, tex, owner, r.backend); } catch (_) { x = null; }
       if (x) rows.push(x);
     };
     // The registry holds render targets and plain textures alike. A target's colour textures and its depth
@@ -91,8 +104,8 @@
     out.targets = rows.filter((x) => x.kind === "renderTarget" || x.kind === "rtDepth").slice(0, top > 0 ? top : 16);
     const m = r.info && r.info.memory;
     if (m) {
-      out.buffers.attrBytes = m.attributesSize | 0; out.buffers.indexBytes = m.indexAttributesSize | 0; out.buffers.uniformBytes = m.uniformBuffersSize | 0;
-      out.three = { texturesSize: m.texturesSize | 0, textures: m.textures | 0, renderTargets: m.renderTargets | 0, total: m.total | 0 };
+      out.buffers.attrBytes = m.attributesSize ?? 0; out.buffers.indexBytes = m.indexAttributesSize ?? 0; out.buffers.uniformBytes = m.uniformBuffersSize ?? 0;
+      out.three = { texturesSize: m.texturesSize ?? 0, textures: m.textures ?? 0, renderTargets: m.renderTargets ?? 0, total: m.total ?? 0 };
     }
     const bufBytes = out.buffers.attrBytes + out.buffers.indexBytes + out.buffers.uniformBytes;
     out.byKind.buffers = bufBytes; out.bytes += bufBytes;

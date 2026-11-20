@@ -459,7 +459,7 @@ function liftDecl(src, name) {
   const m = src.match(new RegExp(`^\\s*let ${name}\\b[^\\n]*$`, "m"));
   return m ? m[0] : "";
 }
-function tlxLampGrid() {
+function tlxLampGrid(countReads = false) {
   const TLX = readFileSync(join(ROOT, "js/render/three/tlx.js"), "utf8");
   const block = liftBlock(TLX, "if (lit && lit.setLampGrid) {");
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
@@ -473,16 +473,32 @@ function tlxLampGrid() {
   const LampChunksC = LC();
   const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => {} };
   const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs")].join("\n");
-  const run = new Function("LampChunks", "Log", "lit", `
+  // Use the real record pool and submission/reset paths so a small frame can
+  // reuse the slots of a much larger one, exactly as it does after the grid.
+  const pool = TLX.slice(TLX.indexOf("const _recPool = [];"), TLX.indexOf("function pushRec("));
+  const reads = { count: 0, scanning: false };
+  const records = countReads ? new Proxy([], { get(arr, key) {
+    if (reads.scanning && typeof key === "string" && /^\d+$/.test(key)) reads.count++;
+    return arr[key];
+  } }) : [];
+  const run = new Function("LampChunks", "Log", "lit", "records", "reads", `
     ${decls}
+    ${pool.replace("const _recPool = [];", "const _recPool = records;")}
+    const _roadSplitOn = false;
+    ${liftBlock(TLX, "function pushRec(")}
+    ${liftBlock(TLX, "function resetRecs(")}
     let frameAllLightsGen = 0, _lgGen = -1, _lampGridState = null;
-    let frameAllLights = null, framePerChunk = 0, drawList = null;
+    let frameAllLights = null, framePerChunk = 0;
     return function (dl, AL, knob) {
-      drawList = dl; frameAllLights = AL; framePerChunk = knob;
+      resetRecs();
+      for (const rec of dl) pushRec(rec.geo, null, null, 0, 1, 0, rec.chunked, null);
+      frameAllLights = AL; framePerChunk = knob;
+      reads.count = 0; reads.scanning = true;
       ${block}
+      reads.scanning = false;
       return _lampGridState;
-    };`)(LampChunksC, { info() {} }, lit);
-  return { run, n };
+    };`)(LampChunksC, { info() {} }, lit, records, reads);
+  return { run, n, reads };
 }
 
 test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap", () => {
@@ -515,6 +531,24 @@ test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap
   } finally {
     delete globalThis.__n;
   }
+});
+
+test("TLX lamp scans visit only submitted chunked records after a high-water frame", () => {
+  const { run, n, reads } = tlxLampGrid(true);
+  const lamps = lampSet([[0, 0, 0, 10]]);
+  const chunk = (gx) => ({ chunked: { cellSize: 72, chunks: [{ min: [gx * 72, 0, 0], max: [gx * 72 + 1, 1, 1], gx, gz: 0 }] } });
+  const frame = [chunk(0), {}, chunk(1)];
+  try {
+    run(Array.from({ length: 400 }, () => ({})), null, 0);
+    assert.equal(reads.count, 0, "no chunked geography was submitted");
+    assert.equal(run(frame, lamps, 1).recs, 2);
+    assert.equal(reads.count, 4, "two chunks for discovery and two for the rebuild");
+    assert.equal(run(frame, lamps, 1).chunks, 2);
+    assert.equal(reads.count, 2, "cached frame visits only the live chunks");
+    assert.equal(run([{}], lamps, 1).chunks, 0);
+    assert.equal(reads.count, 0, "prior frame's chunk slots are inactive");
+    assert.equal(n.bakes, 1);
+  } finally { delete globalThis.__n; }
 });
 
 /* ── ChunkBins: the chunk key the lamp grid decodes ──────────────────────────

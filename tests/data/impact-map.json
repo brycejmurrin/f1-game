@@ -16832,6 +16832,7 @@
       ],
       "pushRec": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -16901,6 +16902,7 @@
       ],
       "resetRecs": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -17011,7 +17013,6 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/validation-cli-check.test.mjs"
@@ -17100,6 +17101,7 @@
       ],
       "updateFrame": [
         "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],

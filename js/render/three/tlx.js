@@ -1555,6 +1555,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
+      let _mirReleaseWait = null;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
@@ -2194,9 +2195,13 @@ const TLX = (function () {
       // regrew it 17 -> 334 twice a frame (young-gen garbage, perf hunt A5).
       const drawList = _recPool;    // {geo, matrix, material} in submission order
       drawList.n = 0;
+      // Pool indices have no geometry references and keep the lamp scans proportional to chunked submissions.
+      const chunkSlots = [];
+      let chunkCount = 0;
       function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
         let r = _recPool[drawList.n];
         if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null, split: null };
+        if (chunked) chunkSlots[chunkCount++] = drawList.n;
         drawList.n++;
         r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
         // THE ROAD SPLIT (tlx-chunked.js splitRanges): its AABBs are world-space, so only an identity draw
@@ -2291,6 +2296,7 @@ const TLX = (function () {
       // pooled slot never pins an evicted material or a freed geometry.
       function resetRecs() {
         for (let i = 0; i < drawList.n; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; r.split = null; }
+        chunkCount = 0;
         drawList.n = 0;
       }
       // Model matrices are COPIED into this per-frame pool at draw() time.
@@ -5969,6 +5975,9 @@ const TLX = (function () {
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
           _instStamp++;
+          // A real pass can claim the target after warm-up clears but before
+          // a previous session's queued quit callback runs. Warm draws cannot claim it.
+          _mirReleaseWait = null;
           _mirActive = true;
           _mirUsed = true;
           return true;
@@ -6022,7 +6031,21 @@ const TLX = (function () {
         // garage. The post / FXAA texture nodes and the glass material drop it first (WebKit keeps a freed GPU
         // texture while a bind group names it); prepareMirrorTarget re-allocates on the next mirrorBegin.
         releaseMirror() {
-          if (_mirActive || _warmPending) return false;
+          if (_mirActive) return false;
+          const pending = _warmPending;
+          if (pending) {
+            // Quit asks once. Wait for the warm to stop using the target even
+            // if the menu never presents another frame.
+            if (_mirReleaseWait !== pending) {
+              _mirReleaseWait = pending;
+              const retry = () => {
+                if (_mirReleaseWait === pending) backend.releaseMirror();
+              };
+              pending.then(retry, retry);
+            }
+            return false;
+          }
+          _mirReleaseWait = null;
           if (!mirRT) return true;
           const t = mirRT.texture;
           try { if (post && post.releaseMirror) post.releaseMirror(); } catch (_) { /* node values only */ }
@@ -6596,10 +6619,8 @@ const TLX = (function () {
             const AL = frameAllLights;
             const knob = framePerChunk;
             let total = 0, nrec = 0, cell = 0, cellSplit = false, first = null;
-            // Both chunked-only walks may cover the whole pool: a slot past the
-            // live count is a record resetRecs already nulled (chunked null).
-            for (let k = 0; k < drawList.length; k++) {
-              const ck = drawList[k].chunked;
+            for (let k = 0; k < chunkCount; k++) {
+              const ck = drawList[chunkSlots[k]].chunked;
               if (!ck || !ck.chunks || !ck.chunks.length) continue;
               if (!first) first = ck.chunks;
               nrec++; total += (ck.lampCells || ck.chunks).length;
@@ -6639,8 +6660,8 @@ const TLX = (function () {
                 try {
                   if (!_lgChs || _lgChsFirst !== first || _lgChsTotal !== total || _lgChsNrec !== nrec) {
                     const fresh = [];
-                    for (let k = 0; k < drawList.length; k++) {
-                      const ck = drawList[k].chunked;
+                    for (let k = 0; k < chunkCount; k++) {
+                      const ck = drawList[chunkSlots[k]].chunked;
                       if (!ck || !ck.chunks || !ck.chunks.length) continue;
                       const cells = ck.lampCells || ck.chunks;   // lamp cells, not merged draws
                       for (let j = 0; j < cells.length; j++) fresh.push(cells[j]);

@@ -16,10 +16,10 @@ vm.runInContext(fs.readFileSync(new URL("../../js/render/three/tlx-mem.js", impo
 const { memCensus, memInstall } = ctx.TLXShaders;
 
 /** A fake __tlx whose renderer tracks `objs` the way r187's Textures does (WeakRefs; targets and textures). */
-function tlx(objs, { memory = {}, depthOf = new Map(), canvas = null, lost = false } = {}) {
+function tlx(objs, { backend = null, memory = {}, depthOf = new Map(), canvas = null, lost = false } = {}) {
   const tracked = new Set(objs.map((o) => new WeakRef(o)));
   return { THREE, ctxLost: () => lost,
-    renderer: { _textures: { _tracked: tracked, get: (o) => ({ depthTexture: depthOf.get(o) || null }) }, info: { memory }, domElement: canvas } };
+    renderer: { backend, _textures: { _tracked: tracked, get: (o) => ({ depthTexture: depthOf.get(o) || null }) }, info: { memory }, domElement: canvas } };
 }
 const chain = (w, h, bpt) => { let t = 0; for (let i = 0; i <= Math.floor(Math.log2(Math.max(w, h))); i++) t += Math.max(1, w >> i) * Math.max(1, h >> i) * bpt; return t; };
 
@@ -37,14 +37,14 @@ test("an unreadable registry says so instead of reporting zero", () => {
   assert.equal(memCensus(null).supported, false);
 });
 
-test("render targets: format bytes, exact non-square mip chains, MSAA, and three's own depth texture", () => {
+test("WebGL fallback estimate: format bytes, exact non-square mip chains, MSAA and depth", () => {
   const hdr = new THREE.RenderTarget(959, 414, { type: THREE.HalfFloatType, depthBuffer: false });               // rgba16float
   const packed = new THREE.RenderTarget(959, 414, { type: THREE.UnsignedInt101111Type, format: THREE.RGBFormat, depthBuffer: false });   // rg11b10ufloat
   const ao = new THREE.RenderTarget(480, 207, { format: THREE.RedFormat, depthBuffer: false });                 // r8unorm
   const mir = new THREE.RenderTarget(138, 39, { generateMipmaps: true, depthBuffer: false });                   // rgba8 + mips
   const msaa = new THREE.RenderTarget(640, 360, { samples: 4, depthBuffer: true });
   const autoDepth = new THREE.DepthTexture(640, 360);
-  const c = memCensus(tlx([hdr, packed, ao, mir, msaa], { depthOf: new Map([[msaa, autoDepth]]) }), 99);
+  const c = memCensus(tlx([hdr, packed, ao, mir, msaa], { backend: new THREE.WebGLBackend(), depthOf: new Map([[msaa, autoDepth]]) }), 99);
   const want = {
     hdr: 959 * 414 * 8, packed: 959 * 414 * 4, ao: 480 * 207, mir: chain(138, 39, 4),
     msaaColour: 640 * 360 * 4 * (1 + 4), msaaDepth: 640 * 360 * 4 * (1 + 4),
@@ -94,6 +94,41 @@ test("buffers come from three's byte counts and join the total; the swapchain is
   assert.equal(c.byKind.buffers, 3596);
   assert.equal(c.bytes, 400 + 3596);
   assert.deepEqual([c.swapchainEst.w, c.swapchainEst.h, c.swapchainEst.bytes], [959, 414, 959 * 414 * 4]);
+});
+
+test("vendored WebGPU target allocations: primary depth, resolved colour, layered MSAA and sample clamping", (t) => {
+  // Let the real r187 texture utility select descriptors; the fake GPU device returns their read-only metadata.
+  const usage = Object.getOwnPropertyDescriptor(globalThis, "GPUTextureUsage");
+  if (!usage) {
+    globalThis.GPUTextureUsage = { COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, RENDER_ATTACHMENT: 16 };
+    t.after(() => { delete globalThis.GPUTextureUsage; });
+  }
+  const backend = new THREE.WebGPUBackend();
+  backend.device = { features: new Set(), createTexture: (d) => ({
+    sampleCount: d.sampleCount, depthOrArrayLayers: d.size.depthOrArrayLayers,
+  }) };
+  for (const [layers, requested, colourPlanes, depthPlanes] of [[1, 4, 5, 4], [1, 2, 1, 1], [1, 8, 5, 4], [3, 4, 15, 15]]) {
+    const rt = new THREE.RenderTarget(16, 8, { samples: requested, depth: layers });
+    const depth = new THREE.DepthTexture(16, 8, THREE.UnsignedIntType);
+    depth.image.depth = layers;
+    depth.isArrayTexture = layers > 1;
+    depth.renderTarget = rt;  // r187 updateRenderTarget links the implicit texture before registering it
+    for (const tex of [depth, rt.texture]) backend.createTexture(tex, { width: 16, height: 8, depth: layers });
+    const c = memCensus(tlx([rt, rt.texture, depth], { backend, depthOf: new Map([[rt, depth]]) }));
+    assert.equal(c.count, 2);
+    assert.equal(c.byKind.renderTarget, 16 * 8 * 4 * colourPlanes);
+    assert.equal(c.byKind.rtDepth, 16 * 8 * 4 * depthPlanes);
+  }
+});
+
+test("GPU byte counters retain their values above two and four GiB", () => {
+  const attributesSize = 2 ** 31 + 1024;
+  const texturesSize = 2 ** 32 + 512;
+  const total = attributesSize + texturesSize;
+  const c = memCensus(tlx([], { memory: { attributesSize, texturesSize, total } }));
+  assert.equal(c.bytes, attributesSize);
+  assert.equal(c.three.texturesSize, texturesSize);
+  assert.equal(c.three.total, total);
 });
 
 test("a lost device is flagged", () => {
