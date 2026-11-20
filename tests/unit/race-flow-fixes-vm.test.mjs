@@ -1212,3 +1212,23 @@ test("#5892 a player stopped on the racing line is retired 60 s after it stops, 
     assert.ok(t <= 62, `retired ${t} s after stopping, want ~60`);
   } finally { g.close(); }
 });
+
+// Clean-room fixes 39-41: AI avoidance of a car STOPPED on track. A stopped live car was seen only
+// inside the 2.2 m lateral blocker scan (~40 m out in a corner, then lost mid-avoidance), the pass
+// side flipped as the line drifted, and the side-by-side yield could pin an AI onto it. Measured
+// here before the fix, player parked at Monaco 0.35 for 90 s: 82 hits (Silverstone 0.18: 16); after: 0 and 0.
+test("clean-room 39-41: the field passes a player stopped mid-corner without ramming it", async () => {
+  const g = await createGame({ track: "monaco" });
+  try {
+    const a = g.apex, G = g.G;
+    a.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 4);
+    a.jump(0.35, 0, 0);
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const P = G.player, h0 = P.hits | 0;
+    g.step(60 * 55);   // under the 60 s stationary retirement
+    assert.equal(P.retired, false, "the scenario keeps the car parked on the road");
+    const hits = (P.hits | 0) - h0;
+    assert.ok(hits <= 5, `the field hit the parked car ${hits} times in 55 s`);
+  } finally { g.close(); }
+});

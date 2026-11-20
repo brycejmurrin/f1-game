@@ -1,10 +1,15 @@
 {
   "files": {
+    "js/agent/apex.js": {
+      "codeLines": 1,
+      "lines": 2
+    },
     "js/game.js": {
-      "lines": -6
+      "codeLines": 9,
+      "lines": -16
     }
   },
   "tree": {
-    "eagerBytes": -143
+    "eagerBytes": -327
   }
 }

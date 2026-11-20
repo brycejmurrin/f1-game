@@ -51,6 +51,8 @@ const CarFields = (function () {
       ["brakeHeat", "exhaustPop", "wasOnThrottle", "_pushD"]],
     ["sector timing and the pre-collision snapshot Collide restores from",
       ["_secValid", "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "_puntGot"]],
+    ["the stopped-car hazard: seconds stationary, the hazard being passed and its committed side (clean-room 39/40)",
+      ["stillT", "_hzOf", "_hzSide"]],
     ["body attitude springs (js/physics/body-attitude.js seed())",
       ["_ba", "baPitch", "baRoll", "baHeave", "baScrape"]],
     ["render side: LOD tier, wheel spin, wheel visibility",
@@ -106,7 +108,7 @@ const CarFields = (function () {
       "steerVis", "collideT", "xVis", "rPrevX", "accSm", "corridorAccel", "hitSev", "rPrevYawVis", "aiHead", "aiFam",
       "contactT", "kerbGripSm", "kerbCueT", "towing", "wake", "passT", "passCool", "passFailT", "errT", "pressT",
       "queueT", "trailT", "_trYT", "calm", "sbsT", "runT", "tyreWearF", "tyreWearR", "tyreTs", "tyreTb", "otT", "otE", "rescueT",
-      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain"]],
+      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain", "stillT"]],
     ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
       ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
       "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
@@ -115,7 +117,7 @@ const CarFields = (function () {
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
       "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
-      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT"]],
+      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT", "_hzSide"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -189,6 +191,9 @@ const CarFields = (function () {
     if (!("_preColX" in c)) c._preColX = undefined;
     if (!("_preColSpd" in c)) c._preColSpd = undefined;
     if (!("_puntGot" in c)) c._puntGot = undefined;
+    if (!("stillT" in c)) c.stillT = undefined;
+    if (!("_hzOf" in c)) c._hzOf = undefined;
+    if (!("_hzSide" in c)) c._hzSide = undefined;
     if (!("_ba" in c)) c._ba = undefined;
     if (!("baPitch" in c)) c.baPitch = undefined;
     if (!("baRoll" in c)) c.baRoll = undefined;

@@ -4425,7 +4425,7 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [], parked = [], _colField = [];   // _colField: ranked + parked for resolveCollisions, refilled (was ranked.concat(parked) per step, PP-8)
+const ranked = [], parked = [], stillCars = [], _colField = [];   // _colField: ranked + parked for resolveCollisions, refilled (was ranked.concat(parked) per step, PP-8)
 // Progress order, descending, by STABLE insertion: the order ranked.sort((a, b) => b.prog - a.prog) gave from the same
 // input, without the work array both V8's and JSC's Array.prototype.sort allocate per call (CPU-HUNT-2026-10-24 C1).
 function rankByProg(a) {
@@ -4445,7 +4445,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch(quit) {
-  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
+  ranked.length = 0; parked.length = 0; stillCars.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -4628,8 +4628,14 @@ function update(dt) {
   // walk: a lapped car is a lap away in ranked[] and beside you on the road.
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars); pits.stepBegin();
-  parked.length = 0;
-  for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
+  // A live car stopped 1.5 s is a hazard wherever the line goes (clean-room 39).
+  parked.length = 0; stillCars.length = 0;
+  for (let i = 0; i < cars.length; i++) {
+    const o = cars[i];
+    if (o.retired) { if (o.parkedOnRoad) parked.push(o); continue; }
+    o.stillT = state === "race" && !o.finished && !o.inPit && !o.inPitLane && Math.abs(o.speed) < 1 ? (o.stillT || 0) + dt : 0;
+    if (o.stillT >= 1.5) stillCars.push(o);
+  }
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
@@ -5929,49 +5935,33 @@ function updateCarLateral(c, dt, ranked, S) {
       if (c.holdOff == null) c.holdOff = desiredX - targetX;
       desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
     } else c.holdOff = null;
-    const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;   // a car parked on the road (#2162): pass it a lane clear
+    const pk = (parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null)   // a car parked on the road (#2162): pass it a lane clear
+      || (stillCars.length ? Collide.parkedAhead(c, stillCars, track.total, AiDrive.hazardReach(c.speed)) : null);
     const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);   // a STOPPED car ahead is a hazard too (AiDrive.stoppedHazard)
     const hzClear = AiDrive.hazardClear(CLEAR);   // wider than a moving neighbour's gap: a static body does not give (#5539)
-    if (hz && Math.abs(desiredX - hz.x) < hzClear) desiredX = clamp(hz.x > 0 ? hz.x - hzClear : hz.x + hzClear, -(hw - 0.5), hw - 0.5);
-    // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
-    // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
-    // anything under 0.3 m, while the shared racing line pulls the outer car up
-    // to 2.4 m INTO the pair — so two cars on lines half a metre apart settled
-    // at |dx| 1.5-1.8 and rubbed every frame (closed form in the audit; measured
-    // as every standoff in the bench sitting at dx ≈ 1.9). The car that yields
-    // (AiDrive.sideYieldsA — behind on arc, or the outer car when level) is held
-    // a full lane off the other on the side it is already on. A hard edge gives
-    // the deadzone an error it cannot swallow.
+    if (hz !== c._hzOf) { c._hzOf = hz; c._hzSide = hz ? AiDrive.hazardSide(c.x, hz.x) : 0; }
+    if (hz && (c._hzSide < 0 ? desiredX > hz.x - hzClear : desiredX < hz.x + hzClear)) desiredX = clamp(hz.x + c._hzSide * hzClear, -(hw - 0.5), hw - 0.5);
+    // SIDE RUB AS A CONSTRAINT: a proportional `sep` under the 0.3 m deadzone let pairs settle at
+    // |dx| 1.5-1.8 and rub every frame; the yielder (AiDrive.sideYieldsA) is held a full lane off.
     let rubClamp = false;
     const alongClose = !!alongO && Math.abs(alongDx) < CLEAR;
-    // THE AIM, NOT THE CONTACT (AiDrive.aimIntrudes): is our aim point inside
-    // the other car's clear gap and on their side of where we are? Asked of a
-    // HUMAN neighbour only. Asked of every neighbour it also worked (Monza,
-    // first touches with a scripted player 5.6 -> 3.1 per 100 s), but the
-    // AI-only field paid for it: settled passes 40 -> 30 per 240 s, every seed
-    // at or under the old minimum, and the field strung out 1091 -> 1238 m —
-    // two AI cars both running the election at aim distance concede a
-    // side-by-side neither has lost yet. Between AI cars the contact-time
-    // election below stays; a human runs no election at all, which is why
-    // the aim is the right moment there (AiDrive.aimIntrudes).
+    // THE AIM, NOT THE CONTACT (AiDrive.aimIntrudes), asked of a HUMAN neighbour only: asked of AI
+    // pairs too it cost settled passes 40 -> 30 per 240 s (both concede at aim distance).
     const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO._snapX, CLEAR);
     let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, AiDrive.cornerK(c.kTurn, alongO.kTurn));   // one k for the pair (audit4 I4 F10)
-    // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
-    // AiDrive.humanYieldGrace; this end only carries the per-car timer.
-    // Are WE steering into them (aim vs where we already are), and is there
-    // still room left to concede? Both halves matter — AiDrive.humanYieldT.
+    // ELECTING THE HUMAN IS ELECTING NOBODY (AiDrive.humanYieldGrace / humanYieldT); this end keeps the timer.
     const inBand = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand();
     const intruding = inBand && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
     c.hYieldT = AiDrive.humanYieldT(c.hYieldT, !!alongO && Math.abs(alongDx) < CLEAR + 1, yieldMine, !!(alongO && alongO.human), intruding, dt, inBand);
     if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
-    // A HUMAN neighbour: an aim into their gap is conceded at once. Nobody else
-    // in the pair will, and a clear gap held at the aim point IS the clean
-    // side-by-side the grace protects — the grace stays for the contact case.
+    // A HUMAN neighbour's gap is conceded at once at the aim point; the grace stays for contact.
     if (!yieldMine && aimClose && alongO.human) yieldMine = true;
     c.sbsT = yieldMine ? (c.sbsT || 0) + dt : 0;   // read by COMMIT OR YIELD above, next frame
     if (yieldMine) {
+      const preYield = desiredX;
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO._snapX + CLEAR) : Math.min(desiredX, alongO._snapX - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
+      if (hz && !alongO.human && (c._hzSide < 0 ? desiredX > hz.x - hzClear : desiredX < hz.x + hzClear)) desiredX = preYield;   // not into the hazard (clean-room 41)
       // Only a car ALREADY inside the gap is an emergency for the controller
       // below; at aim distance the heading state bends the line in time.
       rubClamp = alongClose;
@@ -6024,7 +6014,7 @@ function updateCarLateral(c, dt, ranked, S) {
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // yaw and lateral from one q/prefix (X-mode costs the AI its wings only in .lat)
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
-      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead) and before a hazard's gap (hazardHead)
+      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax, c._hzSide);   // stop before the edge (AiDrive.edgeHead) and before a hazard's gap (hazardHead)
       const head0 = c.aiHeadV != null && vStd(Math.abs(vAbs - c.aiHeadV)) > AI_HEAD_JUMP ? 0 : c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt); c.aiHeadV = vAbs;
       gripScale = ls.lat;   // X-mode costs the AI its wings too
