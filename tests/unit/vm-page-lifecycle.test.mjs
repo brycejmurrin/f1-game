@@ -5,8 +5,26 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VmPage } from '../helpers/vm-page.js';
+import vm from 'node:vm';
 
 const adapter = new URL('../helpers/vm-page.js', import.meta.url).href;
+
+test('VM evaluate follows the new realm after reload and close/reopen', async () => {
+  const page = new VmPage(); let generation = 0, closed = 0;
+  // Keep production goto/reload/close/evaluate; only replace costly game boot.
+  page._boot = async function () {
+    this._handle = { ctx: vm.createContext({ generation: ++generation }),
+      record: { rejections: [], scripts: [], console: [] }, close() { closed++; } };
+    return this._handle;
+  };
+  await page.goto('/');
+  assert.equal(await page.evaluate(() => generation), 1);
+  await page.reload();
+  assert.equal(await page.evaluate(() => generation), 2, 'reload must invalidate the compiled runner');
+  await page.close(); await page.goto('/');
+  assert.equal(await page.evaluate(() => generation), 3, 'close/reopen must not retain the old realm');
+  await page.close(); assert.equal(closed, 3);
+});
 
 function pumpingPage({ timers = () => {}, frame = () => {} } = {}) {
   const page = new VmPage(), calls = { timers: 0, frames: 0 };

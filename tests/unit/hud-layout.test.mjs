@@ -743,7 +743,7 @@ test("clearControls preserves manual placement and discards stale automatic clea
     style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
     setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
     // 100 wide at 800 + --hl-x vw: stored +30vw is 204 px past the right edge before the clamp.
-    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W + parseFloat(props["--hud-clear-x"] || 0); return { left: x, right: x + 100, top: 500, bottom: 530, width: 100, height: 30 }; },
+    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W + parseFloat(props["--hud-clear-x"] || 0), y = 500 + parseFloat(props["--hud-clear-y"] || 0); return { left: x, right: x + 100, top: y, bottom: y + 30, width: 100, height: 30 }; },
   };
   const btn = { hidden: false, classList: { contains: () => false },
     getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 540, width: 100, height: 140 }) };
@@ -760,7 +760,9 @@ test("clearControls preserves manual placement and discards stale automatic clea
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
+  // Wholly off the screen is a parked piece: #5678's race-time keep leaves it where the player put it.
   assert.equal(r.right, 1200, "an edited widget is not brought back on screen");
+  assert.deepEqual([props["--hud-clear-x"], props["--hud-clear-y"]], [undefined, undefined]);
   assert.equal(props["--hl-x"], "30", "control clearance cannot change the saved geometry");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
   // A prior terminal placement must not bias the next edge clamp. Simulate a
@@ -1201,7 +1203,14 @@ test("every edited widget retains geometry through clearance and high-scale pack
     assert.equal(el.props["--hl-s"], String(wanted.s / 100), id);
     assert.deepEqual(el.getBoundingClientRect(), before[sel], id + " stays where the player put it");
     for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) assert.equal(el.hasAttribute(a), false, id + " " + a);
-    for (const p of ["translate", "margin-left", "margin-top", "--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
+    for (const p of ["translate", "margin-left", "margin-top", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
+    // #5678: the one race-time correction is keepUser's, only the edge clamp here (the control covers the
+    // whole screen, so no clear spot exists), and only for a piece the saved spot puts off screen.
+    const b = before[sel], cx = el.props["--hud-clear-x"], cy = el.props["--hud-clear-y"];
+    if (!el.hasAttribute("data-hl-keep")) { assert.equal(cx, undefined, id + " --hud-clear-x"); assert.equal(cy, undefined, id + " --hud-clear-y"); continue; }
+    const wantX = b.right - b.left > W ? -b.left : b.left < 0 ? -b.left : b.right > W ? W - b.right : 0;
+    const wantY = b.bottom - b.top > H ? -b.top : b.top < 0 ? -b.top : b.bottom > H ? H - b.bottom : 0;
+    assert.deepEqual([parseFloat(cx), parseFloat(cy)], [+wantX.toFixed(1), +wantY.toFixed(1)], id + " edge clamp only");
   }
   assert.equal(JSON.stringify(saved), storedBefore);
 });

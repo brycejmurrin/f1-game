@@ -686,7 +686,7 @@ const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(buil
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 let pendingFinishQuit = false;
-const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
+const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (+ net, first)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
 const _gridIdleOpts = { soundOn: false, wet: false, step: true };
@@ -3501,7 +3501,6 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
-if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G, () => raceSettings.preparePickerTrack());
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
@@ -4688,7 +4687,7 @@ function update(dt) {
   // off the table and the countdown stands.
   if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
   else if (resultT === 0) {
-    postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
+    postFinish.net = session === "race" && netPlay.active(); postFinish.solo = session === "race" && !postFinish.net && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a

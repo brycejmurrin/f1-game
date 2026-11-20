@@ -1480,7 +1480,8 @@
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-layout-hidden.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs"
       ]
     },
     "js/camera/cam-picker.js": {
@@ -18824,7 +18825,8 @@
       "apply": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-arrange.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs"
       ],
       "applyPreset": [
         "tests/unit/hud-layout.test.mjs"
@@ -18857,6 +18859,15 @@
       ],
       "isShipped": [
         "tests/unit/hud-layout.test.mjs"
+      ],
+      "keepClear": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
+      ],
+      "keepUser": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
+      ],
+      "maxRect": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
       ],
       "migrate": [
         "tests/unit/hud-layout.test.mjs"
@@ -18991,6 +19002,9 @@
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/input-hud-properties.test.mjs"
       ],
+      "gapClock": [
+        "tests/unit/hud-race-keep-5678.test.mjs"
+      ],
       "gapDecimals": [
         "tests/unit/hud-gap-decimals.test.mjs"
       ],
@@ -19012,14 +19026,17 @@
       ],
       "push": [
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
       ],
       "reset": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "sample": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "sectorTimingKind": [
@@ -19043,6 +19060,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
@@ -19082,6 +19100,7 @@
         "tests/unit/hud-relative.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
@@ -19117,6 +19136,7 @@
         "tests/unit/hud-strategy.test.mjs"
       ],
       "tick": [
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/pit-lane.test.mjs"
       ],

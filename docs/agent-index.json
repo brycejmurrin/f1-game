@@ -1571,6 +1571,7 @@
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
@@ -4874,7 +4875,7 @@
     {
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/ui/hud-layout.js",
