@@ -2720,7 +2720,8 @@ function quitToMenu() {
 }
 
 
-const ranked = [], parked = [], _colField = [];
+const ranked = [], parked = [], stillCars = [], _colField = [];
+const STILL_V = 1.0, STILL_HAZARD_S = 1.5;
 function rankByProg(a) {
   for (let i = 1; i < a.length; i++) { const c = a[i], p = c.prog; let j = i - 1; while (j >= 0 && a[j].prog < p) { a[j + 1] = a[j]; j--; } a[j + 1] = c; }
 }
@@ -2829,8 +2830,13 @@ function update(dt) {
   }
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars); pits.stepBegin();
-  parked.length = 0;
-  for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
+  parked.length = 0; stillCars.length = 0;
+  for (let i = 0; i < cars.length; i++) {
+    const o = cars[i];
+    if (o.retired) { if (o.parkedOnRoad) parked.push(o); continue; }
+    o.stillT = state === "race" && !o.finished && !o.inPit && !o.inPitLane && Math.abs(o.speed) < STILL_V ? (o.stillT || 0) + dt : 0;
+    if (o.stillT >= STILL_HAZARD_S) stillCars.push(o);
+  }
   _windStep.st = null;
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");
@@ -3532,7 +3538,8 @@ function updateCarLateral(c, dt, ranked, S) {
       if (c.holdOff == null) c.holdOff = desiredX - targetX;
       desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
     } else c.holdOff = null;
-    const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;
+    const pk = (parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null)
+      || (stillCars.length ? Collide.parkedAhead(c, stillCars, track.total, AiDrive.hazardReach(c.speed)) : null);
     const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);
     const hzClear = AiDrive.hazardClear(CLEAR);
     if (hz && Math.abs(desiredX - hz.x) < hzClear) desiredX = clamp(hz.x > 0 ? hz.x - hzClear : hz.x + hzClear, -(hw - 0.5), hw - 0.5);

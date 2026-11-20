@@ -606,6 +606,7 @@ const Collide = (() => {
     let best = null, bestAbs = Infinity;
     for (let i = 0; i < parked.length; i++) {
       const o = parked[i];
+      if (o === c) continue;
       const d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;
       if (!(d > -LCAR && d < reach)) continue;
       const ad = d < 0 ? -d : d;
