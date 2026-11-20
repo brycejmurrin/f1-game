@@ -1720,18 +1720,41 @@ const TrackBuildProps = (function () {
     // wrong side. Only the grandstand remains.
     const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
-    for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
-      const k = (i * 4) % n;
-      // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
-      // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
-      // slot), which buried that row and left its front face millimetres off
-      // the shell's. From 6.55 its back edge is 10.98, clear of the nearest
-      // slot (11.035); of 6.3 / 6.55 this one also keeps the riser faces off
-      // the generic catch fences (15 -> 0 pairs on estoril/jacarepagua/magny).
-      place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
-      crowdBank(k, -1, 6.55, 16, 7, 4.2,                     // speckled tiered crowd
-                [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
-    }
+    // DEFERRED to after def.scenery() (the call site), like the foliage: the
+    // stand is placed from the RUN-OFF EDGE, and the circuit's own barriers
+    // only exist once its closure has run. From the kerb at gap 6.55 the bank
+    // stood inside the 9 m default run-off on 17 circuits with no wall in
+    // front, and cars drove through the crowd (#5998). The shells' place()
+    // slots are reserved HERE, so every later prop keeps its SEP_SLOTS phase.
+    const crowdSeq = placeSeq;
+    if (!def.ownPitStraight) placeSeq += 7;
+    const placePitStraightCrowd = () => {
+      if (def.ownPitStraight) return;
+      const seqNow = placeSeq;
+      placeSeq = crowdSeq;
+      const half = Math.max(1, Math.round(8 / ds));   // the bank is 16 m long
+      for (let i = 0; i < 7; i++) {
+        const k = (i * 4) % n;
+        // Where a car's side stops over the bank's length (barL is the car
+        // CENTRE's limit, WALL_CLEAR its half-width), plus 0.5 m air. The front
+        // riser's face is 0.23 m inside `gap` (a 1.3 m slab 0.42 m back).
+        let edge = 0;
+        for (let d = -half; d <= half; d++) {
+          const kk = ((k + d) % n + n) % n;
+          edge = Math.max(edge, track.barL[kk] - hw[kk] + WALL_CLEAR);
+        }
+        const gap = Math.max(6.55, edge + 0.23 + 0.5);
+        // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
+        // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
+        // slot), which buried that row and left its front face millimetres off
+        // the shell's. At 7.45 m ahead of the shell its back edge is 4.43 m
+        // behind `gap`, clear of the nearest slot (+4.485).
+        place(k, -1, gap + 7.45, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
+        crowdBank(k, -1, gap, 16, 7, 4.2,                              // speckled tiered crowd
+                  [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
+      }
+      placeSeq = seqNow;
+    };
 
     // Place a BAKED MODEL from the asset pack (assets/pack, built by
     // `node tools/gen/assets.mjs bake-model`) at a trackside anchor. This is the one
@@ -2043,6 +2066,7 @@ const TrackBuildProps = (function () {
     }
     yield;   // perf hunt 7: the circuit's closure is the build's biggest single step; the venue dressing reads only its finished index
 
+    placePitStraightCrowd();   // from the run-off edge the circuit's barriers left (#5998)
     SceneryVenue.build(ctx, sceneryTheme, dressingExcluded);
 
     // Foliage runs LAST, once every barrier on the circuit is registered, so the
