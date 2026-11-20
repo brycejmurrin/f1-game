@@ -589,3 +589,22 @@ test("a pinch that starts on the closing segment hands the prior selection back,
   assert.equal(h.ev.changes.length, 0, "the abandoned insert never commits");
   assert.ok(h.cv.selection().sel < N);
 });
+
+test("a resize re-fits the loop unless the player moved the view (clean-room 67)", () => {
+  const h = boot();
+  h.canvas._rect = { left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 };
+  h.cv.resize(); h.cv.fit();
+  const wide = h.cv.view();
+  // Rotate to a portrait phone: the whole 600 × 400 m loop must still be on the map.
+  h.canvas._rect = { left: 0, top: 0, right: 390, bottom: 844, width: 390, height: 844 };
+  h.cv.resize();
+  const tall = h.cv.view();
+  assert.ok(tall.scale < wide.scale, "re-fitted to the narrow box: " + wide.scale + " → " + tall.scale);
+  for (const p of h.pts) { const s = h.scr(p); assert.ok(s.clientX >= 0 && s.clientX <= 390 && s.clientY >= 0 && s.clientY <= 844, "point on screen: " + JSON.stringify(s)); }
+  // A wheel zoom is the player's view: the next resize keeps it.
+  h.dom.dispatch(h.canvas, { type: "wheel", deltaY: -400, clientX: 195, clientY: 422, preventDefault() {} });
+  const zoomed = h.cv.view().scale;
+  h.canvas._rect = { left: 0, top: 0, right: 844, bottom: 390, width: 844, height: 390 };
+  h.cv.resize();
+  assert.equal(h.cv.view().scale, zoomed, "a zoomed view survives the resize");
+});

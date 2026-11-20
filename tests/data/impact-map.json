@@ -916,6 +916,9 @@
       ],
       "syncAudioPanel": [
         "tests/unit/audio-recovery.test.mjs"
+      ],
+      "*": [
+        "tests/unit/spoken-lang-offer-vm.test.mjs"
       ]
     },
     "js/audio/race-mix-audition.js": {
@@ -6723,6 +6726,7 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "resize": [
+        "tests/unit/designer-canvas.test.mjs",
         "tests/unit/designer-profile.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -7045,6 +7049,7 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "*": [
+        "tests/unit/css-has-scope.test.mjs",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
@@ -9495,6 +9500,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -9517,7 +9523,8 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "wireHold": [
-        "tests/unit/key-binds-hunt.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs"
       ],
       "wireTap": [
         "tests/unit/key-binds-hunt.test.mjs"
@@ -9961,6 +9968,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
@@ -19758,7 +19766,8 @@
       "*": [
         "tests/unit/followup-platform.test.mjs",
         "tests/unit/install-chip-overlap.test.mjs",
-        "tests/unit/pause-key-tools.test.mjs"
+        "tests/unit/pause-key-tools.test.mjs",
+        "tests/unit/race-leave-guard-vm.test.mjs"
       ]
     },
     "js/ui/podium-beat.js": {

@@ -132,7 +132,7 @@ test("an added chain step cannot raise specificity: every step between body and 
   assert.deepEqual(bad, []);
 });
 
-test("scoped :has(> .screen…) holds: every .screen is a <body> child; the one built in JS (share-card preview) is too", () => {
+test("scoped :has(> .screen…) holds: every .screen is a <body> child; the ones built in JS (share-card preview, designer KEEP MINE ask) are too", () => {
   const screens = ELS.filter((e) => e.classes.includes("screen"));
   assert.ok(screens.length >= 10, "screens found");
   assert.deepEqual(screens.filter((e) => e.parent !== "body").map((e) => e.id || e.tag), []);
@@ -142,8 +142,8 @@ test("scoped :has(> .screen…) holds: every .screen is a <body> child; the one 
     if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /["'\s]screen["'\s]/.test(read(rel)) && /classList\.add\(\s*["']screen["']|className\s*=\s*["'](?:[^"']*\s)?screen(?=\s|["'])|\bel\(\s*["']dialog["']\s*,\s*["'](?:[^"']*\s)?screen(?=\s|["'])/.test(read(rel))) js.push(rel);
   } };
   walk("js");
-  assert.deepEqual(js, ["js/share/share-card-chips.js"], "a .screen built at runtime must be a body child (and named here)");
-  assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true);
+  assert.deepEqual(js, ["js/editor/designer.js", "js/share/share-card-chips.js"], "a .screen built at runtime must be a body child (and named here)");
+  for (const f of js) assert.equal(/document\.body\.appendChild\(dlg\)/.test(read(f)), true, f);
 });
 
 test("a <body> or #hud child is never searched for unscoped (write `:has(> #id…)` / `:has(> :where(#hud) > #id…)`)", () => {
@@ -184,8 +184,8 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; ru
     if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /(?:createElement|\bel)\(\s*["']dialog["']/.test(read(rel))) built.push(rel);
   } };
   walk("js");
-  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry.js", "js/share/share-card-chips.js", "js/ui/screen-arranger.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
-  assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true, "the share-card preview is a <body> child");
+  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry.js", "js/editor/designer.js", "js/share/share-card-chips.js", "js/ui/screen-arranger.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  for (const f of ["js/share/share-card-chips.js", "js/editor/designer.js"]) assert.equal(/document\.body\.appendChild\(dlg\)/.test(read(f)), true, f + ": the preview / KEEP MINE ask is a <body> child");
   // js/ui/screen-arranger.js appends its <dialog> to <body>: tests/specs/appearance-orientation.spec.js asserts it live.
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
   const bad = [];
