@@ -1569,6 +1569,7 @@ function makeCars() {
     });
   });
   player = cars.find((c) => c.isPlayer) || null;   // find() yields undefined; G.player's contract is CarState | null
+  if (player && flow === "season" && season && !netPlay.active()) SeasonCal.seatPlayer(season, player.driverId);   // #5877
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.

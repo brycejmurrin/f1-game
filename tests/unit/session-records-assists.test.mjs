@@ -12,13 +12,14 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const read = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
 
 function load() {
-  let level = 1, wheel = false, daily = null;
+  let level = 1, wheel = false, daily = null, wind = "real";
   const announced = [];
   const G = { player: { team: { id: "mclaren" }, tierV: 1 }, track: { def: { id: "monza" }, n: 1, total: 1 },
     session: "tt", raceWeather: "dry", difficulty: "normal", raceTimeOfDay: "day", store: { rev: 1 },
     recordControls: null, announce: (m) => announced.push(m), daily: { current: () => daily } };
   const ctx = vm.createContext({ G, Teams: { LIST: [{ id: "mclaren" }] }, Input: { setSteerSpeedRef() {} },
     PhysicsConsts: { REVISION: 1 }, Ghost: { contextKey: (c) => JSON.stringify(c) },
+    Wind: { level: () => wind },
     GripSteer: { level: () => level, setLevel: (v) => { level = v; } },
     WheelState: { enabled: () => wheel, setEnabled: (v) => { wheel = !!v; } } });
   vm.runInContext(read("js/race/session-phys.js") + ";globalThis.SessionPhys = SessionPhys;", ctx, { filename: absSrc("js/race/session-phys.js") });
@@ -26,7 +27,7 @@ function load() {
   // game.js recordControls, through the same SessionPhys.controls seam
   G.recordControls = () => ctx.SessionPhys.controls({ autoThrottle: false, gearsManual: false, steerMode: "keys", aero: "auto" });
   const rec = vm.runInContext("SessionRecords.create(G)", ctx);
-  return { G, rec, announced, set: (o) => { if ("level" in o) level = o.level; if ("wheel" in o) wheel = o.wheel; },
+  return { G, rec, announced, set: (o) => { if ("level" in o) level = o.level; if ("wheel" in o) wheel = o.wheel; if ("wind" in o) wind = o.wind; },
     get: () => ({ level, wheel }), setDaily: (d) => { daily = d; } };
 }
 
@@ -60,4 +61,16 @@ test("#5024: a STANDARD daily forces both OFF, restores them after, and refuses 
   h.rec.restoreDaily();
   assert.equal(h.G.PACE, defaultPace, "daily restores the player's current pace");
   assert.deepEqual(h.get(), { level: 8, wheel: true }, "restoreDaily: the driver's own settings come back");
+});
+
+test("#5895: WIND OFF is its own record/ghost class; the default REAL leaves the old key byte-identical", () => {
+  const h = load();
+  const real = h.rec.current();
+  assert.equal(JSON.parse(real).wind, undefined, "REAL adds no field: every key recorded before #5895 stays valid");
+  h.set({ wind: "off" });
+  const calm = h.rec.current();
+  assert.notEqual(calm, real, "a windless lap never shares a board or ghost with a windy one");
+  assert.equal(JSON.parse(calm).wind, "off");
+  h.set({ wind: "real" });
+  assert.equal(h.rec.current(), real);
 });
