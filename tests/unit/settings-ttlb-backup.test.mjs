@@ -46,6 +46,7 @@ function boot(opts = {}) {
   vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
   sb.GameStore = vm.runInContext("GameStore", ctx);
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));

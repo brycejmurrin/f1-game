@@ -27,6 +27,7 @@ const DEFAULTS_SRC = path.join(ROOT, "js/data/garage-defaults.js");
 const SETTINGS_DEFAULTS_SRC = path.join(ROOT, "js/data/settings-defaults.js");
 const STORE_SRC = path.join(ROOT, "js/core/store.js");
 const EXPORT_SRC = path.join(ROOT, "js/ui/settings-export.js");
+const EXPORT_BODY_SRC = path.join(ROOT, "js/ui/settings-export-body.js");
 const MANIFEST = path.join(ROOT, "tools/manifest.cjs");
 
 function makeDisk(seed = {}) {
@@ -63,6 +64,7 @@ function load(diskSeed) {
   }
   vm.runInContext(fs.readFileSync(EXPORT_SRC, "utf8")
     + "\n;globalThis.SettingsExport = SettingsExport;", ctx);
+  vm.runInContext(fs.readFileSync(EXPORT_BODY_SRC, "utf8"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   return ctx;
 }
 
