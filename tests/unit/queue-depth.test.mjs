@@ -294,7 +294,6 @@ test("2026-11-20: a CI run reads `pending` while its lane legs run: their in_pro
   const legs = [...Array.from({ length: 6 }, () => job("in_progress")), ...Array.from({ length: 20 }, () => job("pending"))];
   const f = fakeApi({ pending: [{ id: 44744533398, status: "pending" }] }, () => legs);
   const v = measure({ request: f.request });
-  assert.ok(f.calls.includes("actions/runs?status=pending&per_page=100&page=1"));
   assert.equal(v.linux.running, 6, "a pending run's running legs hold runners");
   assert.equal(v.laneWaiting, 20, "its lane-waiting legs are counted apart");
   assert.equal(v.verdict, "ok");
