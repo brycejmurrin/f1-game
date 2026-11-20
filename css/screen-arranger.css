@@ -72,6 +72,7 @@ body:has(> main#overlay) {
   align-items: center;
   gap: calc(var(--gap, .75rem) / 4);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   touch-action: pan-x;
 }
 #screen-arranger #arrange-bar select {
@@ -89,8 +90,9 @@ body:has(> main#overlay) {
   display: grid;
   gap: .4em;
   padding: .4em;
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   touch-action: pan-y;
 }
 #screen-arranger .arrange-tools :is(h2, p) { margin: 0; }
