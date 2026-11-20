@@ -838,6 +838,23 @@ orchestrator): the runner was picked up 21 s after dispatch. Shard wall time was
 GitHub-hosted and `boot-guard` 90 s against 51–63 s. So a 2-vCPU leg runs up to ~1.5x slower than this repo's 4-vCPU
 `ubuntu-latest`. If legs near their budget, `ubicloud-standard-4` is the fallback.
 
+**Lane counts (D-LANES, 2026-11-20).** The lanes cap how many browser legs hold a runner at once. They were sized for
+GitHub's 40-slot pool: `LANES` 28 (`tools/ci/select-specs.mjs`) plus `GROUP_LANES` 8 (`tools/ci/remote-group.mjs`).
+A leg on the variable runner takes no slot of that pool, so two more repository variables can raise the counts:
+
+| variable | read by | used only when | unset or invalid |
+|---|---|---|---|
+| `APEX_CI_LANES` | ci.yml's select step → select-specs `ciLanes` | the run's `selected` legs resolve to `APEX_CI_BROWSER_RUNNER` (same condition as their `runs-on`: not `pull_request_target`, not a fork PR, the runner variable set) | 28 |
+| `APEX_GROUP_LANES` | remote-group.mjs `groupLanes` (env, or `--group-lanes <n>`) | the dispatcher sets it only when the target branch's browser-group.yml reads `APEX_BROWSER_RUNNER` (synced past 0575bc45) and that variable is set | 8 |
+
+Each value is an integer in [1, 128]; anything else falls back to the default. A fork or unset case can never get more
+lanes than the GitHub-hosted pool was budgeted for (`tests/unit/ci-runner-variable.test.mjs` pins the condition).
+Lanes are assigned when a run is planned, so only runs planned after a change use it; runs already queued keep their
+lanes. Bryce's values with Ubicloud (2026-11-20): `APEX_CI_LANES` 64, `APEX_GROUP_LANES` 24.
+**Cost:** more lanes means more legs billed at once on the provider. The lane cap no longer throttles spend, so
+the Ubicloud bill scales with the legs that would otherwise have queued. Watch the provider console after raising them.
+**Rollback:** delete the variable (or unset the env). The next planned run is back at 28 / 8, with no commit.
+
 **What the image must provide.** The jobs assume GitHub's Ubuntu runner image:
 - passwordless `sudo` and `apt` for `.github/actions/mesa-xvfb` (`mesa-utils libgl1-mesa-dri libegl1 libgles2
   xvfb`, which gives llvmpipe) and for Playwright's `--with-deps` on a Chromium cache miss

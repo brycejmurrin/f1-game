@@ -2305,6 +2305,11 @@ jobs:
           # NIGHTLY_OVER_BUDGET_SHARDS; at the default 9 the day's union diff dropped 2 routed specs and the verdict
           # redded three nights running). Every other event keeps MAX_OVER_BUDGET_SHARDS.
           OVER_BUDGET_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
+          # THE LANE COUNT (D-LANES, 2026-11-20): `vars.APEX_CI_LANES` ONLY when this run's `selected` legs resolve to
+          # the variable runner (the same condition as their runs-on: not pull_request_target, not a fork PR,
+          # APEX_CI_BROWSER_RUNNER set). Otherwise '' and select-specs keeps LANES (28): a GitHub-hosted run never
+          # gets more lanes than the 40-slot pool was budgeted for. select-specs ciLanes validates [1, 128].
+          APEX_CI_LANES: ${{ github.event_name != 'pull_request_target' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.APEX_CI_BROWSER_RUNNER != '' && vars.APEX_CI_LANES || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # THE PLAN RECORD (#5426). Every run's plan, as one `apex-selected` annotation (plan key, dropped count, base
       # sha), so a later ready flip on the same head can ask what this run's legs proved.
