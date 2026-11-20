@@ -653,6 +653,8 @@ const api = {
     // The AI's strategy, when it has one: what it plans to do and why it last
     // deviated. Null for the player, who plans their own race.
     if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    // The lane's net cost at racing speed: the figure the STRATEGY row shows.
+    if (out && G.pits.lossS) out.lossS = +G.pits.lossS().toFixed(2);
     // THE STOP, SEEN — crew mesh facts + how many frames submitted it since
     // the last read (pitCrewDrawn clears). A browser spec asserts both the
     // people count and a positive draw while the car is in its box.

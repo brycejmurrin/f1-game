@@ -9422,6 +9422,7 @@
       ],
       "create": [
         "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "replace": [
@@ -10099,6 +10100,7 @@
       "create": [
         "tests/specs/steer-migration.spec.js",
         "tests/unit/collide-severity-pace.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/steer-presets.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -20121,7 +20123,7 @@
         "tests/unit/settings-export.test.mjs"
       ]
     },
-    "js/ui/settings-export.js": {
+    "js/ui/settings-export-body.js": {
       "applyCareer": [
         "tests/unit/settings-export.test.mjs"
       ],
@@ -20135,16 +20137,19 @@
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
       ],
       "careerRow": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "collect": [
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
@@ -20154,14 +20159,13 @@
       ],
       "collectGarage": [
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "create": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs",
-        "tests/unit/debris-opts.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
-        "tests/unit/scale-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "defaultOf": [
@@ -20174,11 +20178,8 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "garageRow": [
+        "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
-      ],
-      "isGarageKey": [
-        "tests/unit/garage-defaults.test.mjs",
-        "tests/unit/player-tools-backup.test.mjs"
       ],
       "mount": [
         "tests/unit/settings-export.test.mjs"
@@ -20197,14 +20198,52 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
+        "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
+      ]
+    },
+    "js/ui/settings-export.js": {
+      "create": [
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/debris-opts.test.mjs",
+        "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/scale-defaults.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "ensureMounted": [
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "garageValue": [
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "isCareerKey": [
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "isGarageKey": [
+        "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "ready": [
+        "tests/unit/debris-opts.test.mjs",
+        "tests/unit/settings-export-lazy.test.mjs"
+      ],
+      "*": [
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs",
+        "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
+        "tests/unit/settings-ttlb-backup.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/store-key-types.test.mjs",
         "tests/unit/title-fx.test.mjs",
