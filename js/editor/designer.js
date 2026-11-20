@@ -1653,7 +1653,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind,
+      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind, view: cv ? cv.view() : null,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],

@@ -88,6 +88,36 @@ test("an XR capability probe that never settles does not hold the boot", async (
   assert.ok(h.warns.some((m) => /XR capability probe gave no answer/.test(m)));
 });
 
+// #5599: a requestAdapter() that never answers (the eval-time kick AND the probe) is bounded by caps alone. Since #5699 a
+// slow adapter on the unset default still gets TLX's own try after the probe's 4 s cap; a TLX create() that then hangs
+// too (it would ask the GPU process itself) is cut by the step cap and GLX takes the canvas. Each wait is one armed
+// cap, armed in turn, and none is left live. (CI's ~75 s boots were a main thread the browser blocked, which no timer
+// can cap; the spec-side cure is shipped-defaults.spec.js's own browser per test.)
+test("unset default: a requestAdapter() that never answers reaches GLX on the probe cap, then TLX's step cap", async () => {
+  let asks = 0;
+  const h = boot({ stored: null, requestAdapter: () => { asks++; return new Promise(() => {}); }, gfxCreate: () => new Promise(() => {}) });
+  const started = h.rb.start();
+  let done = false;
+  started.then(() => { done = true; });
+  await settle();
+  assert.equal(done, false, "premise: start() waits on the probe");
+  const live = () => h.timers.filter((t) => t.live && t.ms >= 1000).map((t) => t.ms);
+  assert.deepEqual(live(), [4000], "the probe's cap is the only wait armed");
+  h.fire(4000);
+  await settle();
+  assert.equal(done, false, "TLX gets its own try after the probe cap (#5699)");
+  assert.deepEqual(h.calls, ["tlx.js"], "TLX's group is fetched once, GLX not yet touched");
+  assert.deepEqual(live(), [BOOT_STEP_MS], "the hung create() is bounded by the step cap alone");
+  h.fire(BOOT_STEP_MS);
+  const r = await started;
+  assert.equal(r.gfx !== null, true, "GLX bound");
+  assert.equal(r.bound, false);
+  assert.deepEqual(h.calls, ["tlx.js", "GLX.init"], "GLX takes the canvas");
+  assert.equal(asks, 1, "the eval-time request is the probe's: boot asks the GPU process once");
+  assert.equal(h.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() gave no answer in 4 s");
+  assert.deepEqual(live(), [], "no cap left live");
+});
+
 test("steps that settle in time are untouched and leave no live timer", async () => {
   const h = boot({ gfxCreate: async () => ({ api: "three" }), loadBackend: async (files) => { h.calls.push(...files); } });
   const r = await h.rb.start();
@@ -335,6 +365,24 @@ test("a SLOW adapter on a WGX pick still tries WGX, and a refusal names the slow
   const ok = boot({ stored: "webgpu", requestAdapter: () => new Promise(() => {}), gfxCreate: async () => ({ api: "webgpu" }) });
   const s2 = ok.rb.start(); await settle(); ok.fire(4000);
   assert.equal((await s2).bound, true, "and binds when WGX answers");
+});
+
+// Hunt 2026-11-18 (2) row 4 (#5699): the UNSET default (Bryce's iPhone) treated a slow adapter as absent and bound
+// GLX for the session. Like the WGX pick above, it now still tries TLX; a null adapter still keeps GLX.
+test("a SLOW adapter on the unset default still tries TLX; a null one keeps GLX", async () => {
+  let created = 0;
+  const h = boot({ stored: null, requestAdapter: () => new Promise(() => {}), gfxCreate: async () => { created++; return { api: "three" }; } });
+  const started = h.rb.start();
+  await settle();
+  h.fire(4000);
+  const r = await started;
+  assert.equal(created, 1, "TLX gets its own try after the 4 s cap");
+  assert.equal(r.bound, true);
+  assert.equal(h.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() gave no answer in 4 s", "the boot probe's miss is still recorded");
+  let created2 = 0;
+  const none = boot({ stored: null, requestAdapter: async () => null, gfxCreate: async () => { created2++; return { api: "three" }; } });
+  assert.equal((await none.rb.start()).bound, false);
+  assert.equal(created2, 0, "a null adapter never fetches three");
 });
 
 test("a create() that refuses without its own reason still records one", async () => {

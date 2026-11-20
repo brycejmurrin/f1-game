@@ -145,6 +145,15 @@ test("protect-files.py: generated files (derived list), generated blocks, packag
     assert.equal(r.stderr, `BLOCKED: ${f} is a guard (a .claude/allow-* hatch, a hook, settings, .githooks, tools/hooks, .mcp.json or a host's hook config): a subagent never writes one (AGENTS.md rule 10). Report the change for the parent.\n`);
   }
   assert.equal(pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, ".claude/allow-protected"), content: "" } }).status, 0, "the main session creates its hatch");
+  // #5849: a MAIN session's guard edit goes through the hatch too (no silent in-place hook edit after a refusal)
+  for (const f of [".claude/hooks/github-mcp-guard.sh", ".claude/settings.json", ".claude/settings.local.json", ".claude/allow-context-cap", ".githooks/pre-commit", "tools/hooks/readonly-bash.sh", ".mcp.json"]) {
+    const r = pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, f), content: "" } });
+    assert.equal(r.status, 2, `main session must not write ${f} without the hatch`);
+    assert.equal(r.stderr, `BLOCKED: ${f} is a guard (a hook, settings, a .claude/allow-* hatch, .githooks, tools/hooks, .mcp.json or a host's hook config) — `
+      + "a main session edits one only for an assigned change, which ships in a PR with Bryce's own config-ok; editing a guard to lift a refusal is the same act as retrying it. "
+      + `If this edit was explicitly assigned, the MAIN session runs: touch ${path.join(ROOT, ".claude/allow-protected")} , retries, and removes it after.\n`);
+  }
+  for (const f of [".claude/rules/claude-config.md", ".claude/skills/steward/SKILL.md", ".claude/agents/worker.md"]) assert.equal(pf(edit(f)).status, 0, `${f} is not a guard`);
   assert.equal(pf({ tool_name: "Bash", tool_input: { command: "echo x > version.json" } }).status, 0, "Bash is bash-guard's business");
   const junk = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: "junk", encoding: "utf8" });
   assert.equal(junk.status, 2, "fail closed");
@@ -179,6 +188,14 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     assert.equal(JSON.parse(other.stdout).hookSpecificOutput.additionalContext,
       `protect-files: .claude/allow-protected is ACTIVE in ${dir} — no rule applied to notes.md.${tail}`, "every guarded call announces the hatch");
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
+    // #5849 both sides: under the hatch the main session's guard edit passes and is announced; a subagent's never does
+    const guard = (extra = {}) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")],
+      { input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: path.join(dir, ".claude/settings.json"), content: "{}" }, ...extra }), encoding: "utf8" });
+    const g = guard();
+    assert.equal(g.status, 0, g.stderr);
+    assert.equal(JSON.parse(g.stdout).hookSpecificOutput.additionalContext,
+      `protect-files: .claude/allow-protected is ACTIVE in ${dir} — it lifted: .claude/settings.json is a guard (a hook, settings, a .claude/allow-* hatch, .githooks, tools/hooks, .mcp.json or a host's hook config).${tail}`);
+    assert.equal(guard({ agent_id: "a1" }).status, 2, "the hatch never lifts the guard rule for a subagent");
     // A tree from before ON_DEMAND_PATHS (an older branch's worktree edited from a newer checkout) has no such list:
     // that is "no on-demand file", not an unreadable list, so the other rules still hold there (2026-11-11, #5427).
     const gpSrc = fs.readFileSync(path.join(ROOT, "tools/lib/generated-paths.mjs"), "utf8");
@@ -197,46 +214,69 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
 });
 
 test("mcp-browser-guard.sh: a subagent never drives a browser; the main session may; a live Playwright run in this checkout blocks it", async () => {
-  const mb = (payload) => sh(".claude/hooks/mcp-browser-guard.sh", payload);
-  for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }, { tool_name: "mcp__chrome-devtools__new_page", agent_id: "a1" },
-    { tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1", tool_input: { expr: "1" } }, { tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" },
-    { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "shot_survey" } }, { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "no_such_kind" } },
-    { tool_name: "mcp__apex-tools__apex_shot", agent_id: "a1", tool_input: "not json" },
-    { tool_name: "mcp__apex-tools__apex_debug_chrome", agent_id: "a1", tool_input: { action: "start" } }, { tool_name: "mcp__plugin_browser-use_browser-use__x", agent_id: "a1" },
-    { tool_name: "mcp__browserstack__runBrowserLiveSession", agent_id: "a1" }])
-    assert.equal(mb(p).status, 2, JSON.stringify(p));
-  for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate" }, { tool_name: "mcp__js-debugger__debugger_state" },
-    { tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }, { tool_name: "mcp__apex-tools__apex_debug_chrome", agent_id: "a1", tool_input: { action: "status" } },
-    { tool_name: "mcp__github__get_me", agent_id: "a1" }, { tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1", tool_input: { expr: "1", vm: true } },
-    { tool_name: "mcp__js-debugger__debugger_node_test", agent_id: "a1" }, { tool_name: "mcp__js-debugger__output_read", agent_id: "a1" },
-    { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "verify_all" } },
-    { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "verify_change_fast" } },
-    { tool_name: "mcp__apex-tools__apex_eval", agent_type: "reviewer", tool_input: { expr: "1" } },
-    { tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }])
-    assert.equal(mb(p).status, 0, JSON.stringify(p));
-  assert.equal(mb("junk").status, 2, "fail closed");
-  // the settings matcher selects the browser tools and leaves the tree tools alone
-  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
-  const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("mcp-browser-guard.sh")));
-  const re = new RegExp(g.matcher);
-  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page", "mcp__js-debugger__debugger_attach", "mcp__apex-tools__apex_shot",
-    "mcp__apex-tools__apex_job_start", "mcp__apex-tools__apex_debug_chrome", "mcp__plugin_browser-use_browser-use__x", "mcp__browserstack__runBrowserLiveSession"])
-    assert.ok(re.test(n), `matcher must select ${n}`);
-  for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"]) assert.ok(!re.test(n), `matcher must leave ${n} alone`);
-  // the live-run check (the one safety rule that had no mechanism): a `playwright test` whose cwd is under THIS checkout
-  // (a shell whose -c text merely mentions the runner is skipped by design — the self-match trap — so the fixture is `node …/playwright test`)
+  // HERMETIC (#5799 row 2): the guard scopes its live-run check to the checkout it sits in, and a loaded floor runs
+  // other unit files that start `run-playwright.mjs` / `playwright test` children in THIS checkout, so a guard run
+  // from ROOT flipped "the main session may" to exit 2 once. Run a copy of the guard from a throwaway checkout that
+  // nothing else uses; only this test's own fixtures live there.
+  const box = fs.mkdtempSync(path.join(ROOT, "artifacts", "mbg-root-"));
+  for (const rel of [".claude/hooks/mcp-browser-guard.sh", ".claude/hooks/mcp_browser_rules.py", "tools/mcp/apex-extras.mjs"]) {
+    fs.mkdirSync(path.dirname(path.join(box, rel)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, rel), path.join(box, rel));
+  }
+  const mb = (payload) => spawnSync("bash", [path.join(box, ".claude/hooks/mcp-browser-guard.sh")], {
+    input: typeof payload === "string" ? payload : JSON.stringify(payload), encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: box } });
   const { spawn } = await import("node:child_process");
-  const bin = fs.mkdtempSync(path.join(ROOT, "artifacts", "mbg-"));
-  fs.writeFileSync(path.join(bin, "playwright"), "setTimeout(() => {}, 30000);\n");
-  const fake = spawn(process.execPath, [path.join(bin, "playwright"), "test"], { cwd: ROOT, stdio: "ignore", detached: true });
+  const live = (cwd, argv) => spawn(process.execPath, argv, { cwd, stdio: "ignore", detached: true });
+  const shown = (pid) => { const t0 = Date.now(); while (Date.now() - t0 < 2000 && !fs.existsSync(`/proc/${pid}/cmdline`)) { /* spin until /proc shows it */ } };
+  const reap = (child) => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } };
   try {
-    const t0 = Date.now();
-    while (Date.now() - t0 < 2000 && !fs.existsSync(`/proc/${fake.pid}/cmdline`)) { /* spin until /proc shows it */ }
-    const r = mb({ tool_name: "mcp__playwright-official__browser_navigate" });
-    assert.equal(r.status, 2, "main session: a second browser over a live run is refused");
-    assert.match(r.stderr, /Playwright run .* is live/);
-    assert.equal(mb({ tool_name: "mcp__github__get_me" }).status, 0, "tree tools stay open during a run");
-  } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
+    for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }, { tool_name: "mcp__chrome-devtools__new_page", agent_id: "a1" },
+      { tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1", tool_input: { expr: "1" } }, { tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" },
+      { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "shot_survey" } }, { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "no_such_kind" } },
+      { tool_name: "mcp__apex-tools__apex_shot", agent_id: "a1", tool_input: "not json" },
+      { tool_name: "mcp__apex-tools__apex_debug_chrome", agent_id: "a1", tool_input: { action: "start" } }, { tool_name: "mcp__plugin_browser-use_browser-use__x", agent_id: "a1" },
+      { tool_name: "mcp__browserstack__runBrowserLiveSession", agent_id: "a1" }])
+      assert.equal(mb(p).status, 2, JSON.stringify(p));
+    for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate" }, { tool_name: "mcp__js-debugger__debugger_state" },
+      { tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }, { tool_name: "mcp__apex-tools__apex_debug_chrome", agent_id: "a1", tool_input: { action: "status" } },
+      { tool_name: "mcp__github__get_me", agent_id: "a1" }, { tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1", tool_input: { expr: "1", vm: true } },
+      { tool_name: "mcp__js-debugger__debugger_node_test", agent_id: "a1" }, { tool_name: "mcp__js-debugger__output_read", agent_id: "a1" },
+      { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "verify_all" } },
+      { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "verify_change_fast" } },
+      { tool_name: "mcp__apex-tools__apex_eval", agent_type: "reviewer", tool_input: { expr: "1" } },
+      { tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }])
+      assert.equal(mb(p).status, 0, JSON.stringify(p));
+    assert.equal(mb("junk").status, 2, "fail closed");
+    // the settings matcher selects the browser tools and leaves the tree tools alone
+    const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+    const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("mcp-browser-guard.sh")));
+    const re = new RegExp(g.matcher);
+    for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page", "mcp__js-debugger__debugger_attach", "mcp__apex-tools__apex_shot",
+      "mcp__apex-tools__apex_job_start", "mcp__apex-tools__apex_debug_chrome", "mcp__plugin_browser-use_browser-use__x", "mcp__browserstack__runBrowserLiveSession"])
+      assert.ok(re.test(n), `matcher must select ${n}`);
+    for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"]) assert.ok(!re.test(n), `matcher must leave ${n} alone`);
+    // the live-run check (the one safety rule that had no mechanism): a `playwright test` whose cwd is under THIS checkout
+    // (a shell whose -c text merely mentions the runner is skipped by design — the self-match trap — so the fixture is `node …/playwright test`)
+    const bin = path.join(box, "bin");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "playwright"), "setTimeout(() => {}, 30000);\n");
+    fs.writeFileSync(path.join(bin, "worker.mjs"), "setTimeout(() => {}, 30000);\n");
+    // Decoys that must NOT block: a long-lived plain node worker inside the checkout (the floor's VM workers), and a
+    // live `playwright test` in ANOTHER checkout (here: the real tree this test runs from).
+    const decoys = [live(box, [path.join(bin, "worker.mjs"), "--test"]), live(ROOT, [path.join(bin, "playwright"), "test"])];
+    try {
+      for (const d of decoys) shown(d.pid);
+      const quiet = mb({ tool_name: "mcp__playwright-official__browser_navigate" });
+      assert.equal(quiet.status, 0, `a non-Playwright node worker here, or a run in another checkout, does not block\n${quiet.stderr}`);
+      const fake = live(box, [path.join(bin, "playwright"), "test"]);
+      decoys.push(fake);
+      shown(fake.pid);
+      const r = mb({ tool_name: "mcp__playwright-official__browser_navigate" });
+      assert.equal(r.status, 2, "main session: a second browser over a live run is refused");
+      assert.match(r.stderr, new RegExp(`Playwright run \\(pid ${fake.pid}\\) is live`));
+      assert.equal(mb({ tool_name: "mcp__github__get_me" }).status, 0, "tree tools stay open during a run");
+    } finally { decoys.forEach(reap); }
+  } finally { fs.rmSync(box, { recursive: true, force: true }); }
 });
 
 test("github-mcp-guard.sh: the orchestrator's CI acts (owner request 2026-11-18) pass, a cloud one as a child with APEX_ORCH_ENV (#5819); a worker, a bare child or a subagent is denied", () => {

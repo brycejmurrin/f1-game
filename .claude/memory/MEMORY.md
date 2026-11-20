@@ -12,7 +12,8 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews, tests and walkthroughs: one reviewer per skill
 - [Survey then fix](survey-then-fix.md) — after an audit, land the ranked gap list the same session; the user asks "fix all of those"
-- [User plays on a phone](user-plays-on-phone.md) — phone landscape and touch are the owner’s actual play setup
+- [User plays on a phone](user-plays-on-phone.md) — iPhone 15: 852×393 CSS px landscape @3x, touch first; 844×390 is not his phone
+- [Bryce's desktop: 16-inch MacBook Pro](bryce-desktop-macbook.md) — 1728×1117 CSS px @2x full display (3456×2234 panel); UI SIZE defaults to 115% there
 - [User timezone: Pacific](user-timezone-pacific.md) — the owner’s time zone is America/Los_Angeles
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
@@ -20,3 +21,4 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first (D-013)
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR (D-017)
 - [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-live-export-2026-11-10.json is his CURRENT Home Screen app export (UI SIZE 70, BUTTON 143); shipped phone sizes are too big for him
+- [Orchestrator: check in and keep the task list](orchestrator-checkin-and-task-list.md) — each cycle read every live worker session (archive, nudge or relaunch) unprompted; keep the task list current after every state change

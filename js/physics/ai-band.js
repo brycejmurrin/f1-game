@@ -9,7 +9,8 @@
  *                        driven by car/driver data and the difficulty ladder.
  *   catchup            — legacy reverse-only vmax (and corner) band: AI behind
  *                        the lead human get up to DIFF.band extra authority,
- *                        still gated off the start line and once lapped.
+ *                        still gated off the start line and once the AI is
+ *                        half a lap or more behind (not only once lapped).
  *
  * Pure factor/apply helpers; mode() is the live setting updateCar reads. */
 const AiBand = (function () {
@@ -27,7 +28,7 @@ const AiBand = (function () {
 
   /**
    * Catch-up factor in [0, bandAuth]. Zero in scripted mode, with no human,
-   * inside the start guard, once lapped, or when the AI is ahead.
+   * inside the start guard, half a lap or more behind, or when the AI is ahead.
    *
    * @param {{ mode?: string, leadProg?: number, carProg?: number,
    *           trackTotal?: number, raceT?: number, launchT0?: number,
@@ -40,7 +41,8 @@ const AiBand = (function () {
     const lead = /** @type {number} */ (ctx.leadProg), car = /** @type {number} */ (ctx.carProg), total = /** @type {number} */ (ctx.trackTotal);  // finite-checked below
     if (!(Number.isFinite(lead) && Number.isFinite(car) && Number.isFinite(total) && total > 0)) return 0;
     const gap = lead - car;
-    // Reverse band only: human ahead of this AI, and not a full lap clear.
+    // Reverse band only: human ahead of this AI by less than HALF a lap (gap is
+    // cumulative prog, so the cut is a choice, not a wrap limit; #5783 JD5).
     if (!(gap > 0 && gap < total * 0.5)) return 0;
     const t0 = ctx.launchT0 || 0;
     if ((ctx.raceT || 0) - t0 <= START_GUARD_S) return 0;

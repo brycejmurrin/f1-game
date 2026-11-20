@@ -308,6 +308,36 @@ test("a normal decode failure keeps the albedo upload and closes its bitmaps", a
   assert.equal(maps[0].normal, null);
 });
 
+// Hunt 2026-11-18 (2) row 9 (#5699): the albedo upload fails while the normal strip is still decoding. Its bitmaps
+// land after the catch ran _discardLoad(albedo, normal = null): they must still be closed.
+test("an albedo upload failure closes the normal strip's bitmaps when they land", async () => {
+  const bitmaps = [];
+  let releaseNormal;
+  const normalGate = new Promise((r) => { releaseNormal = r; });
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 16, normal: url.endsWith("n.png") }) };
+    },
+    async createImageBitmap(blob) {
+      if (blob.normal) await normalGate;
+      const b = { normal: !!blob.normal, closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      return b;
+    },
+  });
+  assets.init({ createTextureArray() { return null; }, setMaterialMaps() {} });
+  assert.equal(await assets.load(), false);
+  assert.equal(assets.state().error, "albedo-upload");
+  releaseNormal();
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+  const normals = bitmaps.filter((b) => b.normal);
+  assert.ok(normals.length > 0, "the normal strip decoded after the failure");
+  assert.deepEqual(normals.map((b) => b.closed), normals.map(() => 1), "every late normal bitmap closed exactly once");
+  assert.deepEqual(bitmaps.filter((b) => !b.normal).map((b) => b.closed), [1], "albedo closed by _discardLoad");
+});
+
 test("unload during parallel downloads rejects the stale generation before any decode", async () => {
   const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
   let decodes = 0, uploads = 0;
@@ -1973,6 +2003,74 @@ test("#5555: a pack load that ran out its transfer deadline retries on the low t
   assert.equal(await flaky.assets.load(), true);
   assert.deepEqual(flaky.urls, ["hi.png", "hi.png"], "a dropped request is not a slow link: same tier");
   assert.equal(flaky.assets.state().tier, "high");
+});
+
+// #5561: the pack tier follows a GRAPHICS preset change, but the re-upload only happens off track. The real
+// GfxQuality and the real Assets in one context; the page is a fake body (data-race), #pausemenu and observer.
+test("#5561: a preset change swaps the pack tier in a menu, waits for the pause card while driving, and never reloads a matching tier", async () => {
+  const vm = require("node:vm");
+  const manifest = { materials: { size: 4, albedo: "hi.png", layers: [{ mat: 1, scale: 1 }],
+    low: { size: 2, albedo: "lo.png", layers: [{ mat: 1, scale: 1 }] } } };
+  const urls = [], sizes = [], maps = [], observers = [];
+  const body = { dataset: {} }, pm = { hidden: true };
+  const sandbox = { AbortController, setTimeout, clearTimeout, GLX: { isMobile: true },
+    document: { readyState: "complete", body, getElementById: (id) => (id === "pausemenu" ? pm : null) },
+    MutationObserver: class { constructor(cb) { this.cb = cb; this.live = true; observers.push(this); } observe() {} disconnect() { this.live = false; } },
+    async fetch(url) {
+      if (String(url).endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+      urls.push(String(url).replace(/^.*\/|\?.*$/g, ""));
+      return { ok: true, blob: async () => ({ size: 1 }) };
+    },
+    async createImageBitmap() { return { close() {} }; } };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  for (const f of ["js/perf/quality-preset.js", "js/render/shared/assets.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sandbox, { filename: absSrc(f) });
+  const Q = vm.runInContext("GfxQuality", sandbox), assets = sandbox.Assets;
+  assets.init({ isMobile: true, createTextureArray: (size) => { sizes.push(size); return {}; }, setMaterialMaps: (m) => maps.push(m ? "set" : "clear") });
+  const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+  const fire = () => observers.filter((o) => o.live).forEach((o) => o.cb());
+
+  Q.set("low");
+  assert.equal(await assets.load(), true);
+  assert.equal(assets.state().tier, "low", "a phone that boots on GRAPHICS: LOW takes 128 px");
+
+  // 1. In a menu (no race): the change reloads at once.
+  Q.set("medium"); await settle();
+  assert.equal(assets.state().tier, "high");
+  assert.deepEqual(urls, ["lo.png", "hi.png"]);
+  assert.deepEqual(sizes, [2, 4]);
+  assert.deepEqual(maps, ["set", "clear", "set"], "the old arrays are dropped before the new tier uploads");
+
+  // 2. Same tier (MEDIUM -> HIGH are both 256 px): no reload.
+  Q.set("high"); await settle();
+  assert.deepEqual(urls, ["lo.png", "hi.png"]);
+  assert.equal(maps.length, 3);
+
+  // 3. Driving (race on, pause card hidden): deferred, then applied when the pause card opens.
+  body.dataset.race = "1";
+  Q.set("low"); await settle();
+  assert.equal(assets.state().tier, "high", "nothing is swapped on a driven frame");
+  assert.equal(urls.length, 2);
+  pm.hidden = false; fire(); await settle();
+  assert.equal(assets.state().tier, "low", "the pause card applies the waiting change");
+  assert.deepEqual(urls, ["lo.png", "hi.png", "lo.png"]);
+  assert.equal(observers.filter((o) => o.live).length, 0, "the watch ends once applied");
+
+  // Changed while driving and never paused: applied when the race ends.
+  pm.hidden = true;
+  Q.set("medium"); await settle();
+  assert.equal(assets.state().tier, "low");
+  fire(); await settle();
+  assert.equal(assets.state().tier, "low", "still driving: an unrelated attribute change applies nothing");
+  delete body.dataset.race; fire(); await settle();
+  assert.equal(assets.state().tier, "high");
+
+  // A forced tier (the slow-link retry, __apex.assetLoad(tier)) is not undone by the preset.
+  assets.unload();
+  assert.equal(await assets.load({ tier: "low" }), true);
+  assert.equal(assets.followQuality(), false);
+  assert.equal(assets.state().tier, "low");
 });
 
 test("shared model fetch and body deadlines settle stalled work and permit both readiness routes to retry", async () => {

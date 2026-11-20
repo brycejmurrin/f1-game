@@ -1227,6 +1227,9 @@ const GLXPost = (function () {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // The chain ends at the last level mirrorMips' generateMipmap writes
+      // (1 px on the long side), not GL's default 1000 (#4272 item 8).
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, Math.floor(Math.log2(Math.max(w, h))));
       gl.bindTexture(gl.TEXTURE_2D, null);
       mirDepthRB = gl.createRenderbuffer();
       gl.bindRenderbuffer(gl.RENDERBUFFER, mirDepthRB);

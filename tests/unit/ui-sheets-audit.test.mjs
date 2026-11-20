@@ -1352,6 +1352,15 @@ test("translated stint accessibility and craft debrief localise prose ranges and
   assert.deepEqual(debrief.children.map(e => e.textContent), ["Bremse: 1.000", "Runde 1.000, 2.000"]);
 });
 
+test("INCIDENTS: one before the first line crossing is LAP 1, never LAP 0 (#5883)", () => {
+  const { cars } = tiedSeason();
+  const h = bootResults({ season: null, cars, seasonMode: false });
+  h.G.coach = { insights: { settle: () => [{ lap: 0, text: "Car contact" }, { lap: 3, text: "Track limits" }], debrief: () => [] } };
+  h.api.buildResults(cars.slice());
+  const card = h.els.resultsTable.children.find((e) => e.id === "res-incidents");
+  assert.equal(card.children[1].textContent, "LAP 1 · Car contact  ·  LAP 3 · Track limits");
+});
+
 // #5672: CLEAR GHOST deleted the PB ghost AND its medal on one tap, and YOUR PB read +0.000s on every record
 // (Ghost.finishLap had already made this lap the ghost). The clear arms first; the PB row compares with the
 // best the record replaced (meta.prevBest, written by session-records.js before finishLap).

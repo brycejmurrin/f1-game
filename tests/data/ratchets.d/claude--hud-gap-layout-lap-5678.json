@@ -11,6 +11,7 @@
   },
   "tree": {
     "eagerBytes": -5056,
+    "eagerCodeBytes": -3720,
     "eagerScripts": -1
   }
 }

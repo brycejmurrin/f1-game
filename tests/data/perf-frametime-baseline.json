@@ -21,22 +21,23 @@
     "api": "webgl2",
     "adapter": "ANGLE (Mesa, llvmpipe (LLVM 21.1.8 256 bits), OpenGL 4.5)",
     "browser": "chromium 153",
-    "viewport": "844x390@1"
+    "viewport": "844x390@1",
+    "cpu": "Intel(R) Xeon(R) 6975P-C x4"
   },
   "metrics": {
-    "p50": 516.6,
-    "p95": 3833.1,
-    "p99": 4699.8,
-    "max": 4699.8,
+    "p50": 533.3,
+    "p95": 3766.4,
+    "p99": 4716.4,
+    "max": 4716.4,
     "frames": 33,
-    "longTasks": 23,
-    "heapUsedMB": 103.63,
-    "heapTotalMB": 164.04
+    "longTasks": 22,
+    "heapUsedMB": 72.27,
+    "heapTotalMB": 75.64
   },
   "_blessed": {
-    "sha": "8068e0d4f32fc8fb59f79acfa6f53a3571b7ca3b",
-    "reason": "re-bless on the llvmpipe lane after the api capture fix (#5734; decision A on #5732): records env, accepts today's ~100 MB heap as the reference",
-    "at": "2026-11-18T11:58:13.829Z",
-    "hash": "77afe9fba902f6c062e56689c6fbc6e5e0d7ff9a26c5a0b862163307492505bb"
+    "sha": "f2eed836b283d9f02fd134d46c664c1e3e922ecf",
+    "reason": "re-bless with runner cpu in env (#5903): same sha read 1.84x on one runner VM and green on another",
+    "at": "2026-11-19T18:00:23.894Z",
+    "hash": "075e021a43c11dea1d8863e70ad4aa431558475c8abfb6268587a874a9b29a7e"
   }
 }

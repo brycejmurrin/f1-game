@@ -648,7 +648,22 @@ const Assets = (function () {
     return true;
   }
 
+  // Reload the material tier the GRAPHICS preset wants, off track only (#5561); a forced tier stays.
+  let _pinned = false;
+  function followQuality() {
+    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high")) return false;
+    const mats = _manifest && _manifest.materials;
+    const want = (_phoneLowPreset() || _lowDataLink()) && mats && mats.low ? "low" : "high";
+    if (want === _tier) return false;
+    Log.info("assets", "pack tier " + _tier + " -> " + want);
+    if (_gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
+    _uploaded = false; _tier = null; _bytes = 0; _loadPromise = null;
+    load();
+    return true;
+  }
+
   async function _load(opts, generation) {
+    _pinned = !!opts.tier;
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
     if (generation !== _loadGeneration) return false;
@@ -697,7 +712,7 @@ const Assets = (function () {
         normalP = _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration)
           .then((v) => v, (error) => { if (error === DECODE_CANCELED) throw error; return null; });
       }
-      const quietNormal = () => { if (normalP) normalP.then(() => {}, () => {}); };
+      const quietNormal = () => { if (normalP) normalP.then(_releaseStrip, () => {}); };
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
       // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
@@ -1080,7 +1095,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
+  return { init, supported, manifest, load, retry, followQuality, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 

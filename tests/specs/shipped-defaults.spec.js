@@ -30,6 +30,9 @@ const PINNED_KEYS = ["apex26.gfxBackend", "apex26.tyreWear", "apex26.wind", "ape
 // Each test boots TLX and builds a circuit on software GL: the peers on the
 // race fixture (hud-layout, results-flow) declare the same budget.
 test.setTimeout(300_000);
+// #5599: one Chromium per test (fixtures.js `ownBrowser`). A race test closed at its results screen left this file's
+// next boot frozen ~70 s on CI behind the shared browser's GPU process (pit stop after the garage race, twice).
+test.use({ ownBrowser: true });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -139,6 +142,9 @@ test.describe("shipped defaults", () => {
     if (s.bootAdapterWhy == null && s.hasAdapter) {
       expect(s.backend, JSON.stringify(s)).toBe("three");
       expect(s.fallbackWhy, JSON.stringify(s)).toBeNull();
+    } else if (s.bootAdapterWhy != null && /no answer in 4 s/.test(s.bootAdapterWhy)) {
+      // A slow adapter is not an absent one: the unset default still tries TLX, which binds or names its refusal.
+      expect(s.backend === "three" || s.fallbackWhy != null, JSON.stringify(s)).toBe(true);
     } else if (s.bootAdapterWhy != null) {
       expect(s.backend, JSON.stringify(s)).toBeUndefined();
     }
