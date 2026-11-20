@@ -469,7 +469,7 @@ test("career.css: the lines the fixes extend must wrap, not ellipsize", () => {
 
 /* ── SEASON SETUP (#season-setup): SeasonUI in a VM ─────────────────────── */
 
-function loadSeasonUi(trackIds = ["a", "b"], cal = {}, list = null) {
+function loadSeasonUi(trackIds = ["a", "b"], cal = {}, list = null, extra = {}) {
   const dom = makeDom({ tagFor: (id) => (/^(ss-back|ss-apply|mb-season)$/.test(id) ? "button" : "div") });
   const G = {
     $: (id) => dom.byId(id), els: {}, soundOn: false, season: null,
@@ -485,6 +485,7 @@ function loadSeasonUi(trackIds = ["a", "b"], cal = {}, list = null) {
       ...cal,
     },
     Tracks: { LIST: list || [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
+    ...extra,
   });
   vm.runInNewContext(DOM_SOURCE, sb, { filename: absSrc("js/ui/dom.js") });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: absSrc("js/career/season-ui.js") });
@@ -645,6 +646,32 @@ test("season setup: 2026 REAL marks its sprint rounds, and each round toggles", 
   toggles()[0].onclick();
   assert.deepEqual(toggles().map((b) => b.textContent), ["SPRINT", "SPRINT"]);
   assert.equal($("ss-sprint").querySelectorAll(".sel-chip.active")[0].textContent, "SPRINT ROUNDS");
+});
+
+// Hunt #5694 B1(b) + I3: ✕ left the round's sprint mark behind, so re-adding it
+// from the shelf silently brought a sprint back; and no move was announced.
+test("season setup: a removed round drops its sprint mark, and calendar edits are announced", () => {
+  const said = [];
+  const { ui, $ } = loadSeasonUi(["a", "b"], {
+    PRESETS: [{ id: "full", label: "FULL" }, { id: "real2026", label: "2026 REAL" }],
+    preset: (id) => (id === "real2026" ? { trackIds: ["b", "c"], sprint: "rounds", sprintIds: ["c"] } : { trackIds: ["a"] }),
+  }, null, { LiveRegion: { say: (text, kind) => said.push([text, kind]) } });
+  ui.open();
+  $("ss-presets").querySelectorAll("button").find((b) => b.textContent === "2026 REAL").onclick();
+  assert.deepEqual(said.at(-1), ["2026 REAL — 2 rounds", "hud"]);
+  const last = (label) => $("ss-cal").querySelectorAll("button").findLast((b) => b.getAttribute("aria-label") === label);
+  last("Move up — C").click();
+  assert.deepEqual(said.at(-1), ["C — round 1", "hud"]);
+  last("Remove — C").click();
+  assert.deepEqual(said.at(-1), ["C removed", "hud"]);
+  const shelfC = $("ss-pool").querySelectorAll(".track-row").findLast((r) => r.getAttribute("aria-label") === "Add C to the calendar");
+  assert.ok(shelfC, "C is back on the shelf");
+  (shelfC.onclick || (() => shelfC.click()))();
+  const toggle = $("ss-cal").querySelectorAll("button").findLast((b) => b.getAttribute("aria-label") === "Sprint weekend — C");
+  assert.ok(toggle, "C is back on the calendar");
+  assert.equal(toggle.textContent, "GP", "re-added as a Grand Prix, not a silent sprint");
+  toggle.onclick();
+  assert.deepEqual(said.at(-1), ["C — sprint weekend", "hud"]);
 });
 
 test("season setup: the sprint note names the unit of the points it quotes", () => {
