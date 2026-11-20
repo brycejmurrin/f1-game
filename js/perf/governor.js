@@ -48,6 +48,7 @@ const SPIKE_RUN = 3;
 const SLOW_CAP = 1000;
 const DEGRADE_OVER = 2.3;
 const RESTORE_WITHIN = 0.6;
+const FLOOR_ACCEPT_MS = 20;
 
 let _pendingVerify = null;
 const VERIFY_MARGIN = 0.5;
@@ -78,9 +79,12 @@ let _openSlow = 0;
 let _userTier = 0;
 function _floorTier() { return Math.max(_perfTierFloor, _userTier); }
 
+function _canShedTier() { return !_tierHold && _perfTier < 4 && _perfTierFloor < 4 && !_tierFutile; }
 function _floorStep(x) {
   _floorShadowMs += (x - _floorShadowMs) * (x < _floorShadowMs ? FLOOR_DOWN_A : FLOOR_UP_A);
+  const was = _floorMs;
   _floorMs += (x - _floorMs) * (x < _floorMs ? FLOOR_DOWN_A : (_computeBound ? FLOOR_UP_A_BOUND : FLOOR_UP_A));
+  if (_floorMs > was && _floorMs > FLOOR_ACCEPT_MS && _canShedTier()) _floorMs = Math.max(was, FLOOR_ACCEPT_MS);
   if (_floorMs < _floorMinMs) _floorMinMs = _floorMs;
 }
 function _latchBound() {
