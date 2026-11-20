@@ -616,8 +616,12 @@ const Input = (function () {
   let deviceProfiles = null;
   function profileChanged() { if (deviceProfiles) deviceProfiles.save(); }
   const bindings = InputBindings.create({
-    onKeysChanged() { heldKeys.clear(); keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; clearDriveToggles(); },
-    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; clearDriveToggles(); profileChanged(); },
+    onKeysChanged() { heldKeys.clear(); keyThrottleToggle = keyLookBackToggle = false; syncHeldKeys(); },
+    onPadBindingChanged() {
+      padThrottle = padBrake = padLookBack = padThrottleToggle = padLookBackToggle = false;
+      padThrottleVal = padBrakeVal = 0;
+      profileChanged();
+    },
     activePad,
   });
   const {
@@ -809,7 +813,9 @@ const Input = (function () {
   function calibratePad(expectedOwner) {
     const pads = readPads(), pad = pickPad(pads, null, wheelFirst());
     if (!pad || !pad.axes || (expectedOwner !== undefined && expectedOwner !== padKey(pad, Array.prototype.indexOf.call(pads, pad)))) return false;
-    const v = readPadAxis(pad.axes, padAxisMap.steer) * padAxisMap.steerInvert;
+    const raw = pad.axes[padAxisMap.steer];
+    if (!Number.isFinite(raw)) return false;
+    const v = raw * padAxisMap.steerInvert;
     // A stick genuinely held over cannot be a rest position; refuse rather than
     // bake a permanent offset that steers the car on its own.
     if (Math.abs(v) > 0.5) return false;
@@ -863,6 +869,10 @@ const Input = (function () {
     const v = axes[i];
     return (typeof v === "number" && isFinite(v)) ? v : 0;
   }
+  function padStick(axes, rest = padRestOffset, wheel = padIsWheel) {
+    const raw = axes[padAxisMap.steer];
+    return Number.isFinite(raw) ? padAxisShape(raw * padAxisMap.steerInvert, rest, wheel) : 0;
+  }
   // A wheel can assign either right-stick slot to a pedal or steering. Those
   // axes belong to driving, including a pedal's -1 rest position.
   function readLookAxis(axes, i) {
@@ -912,7 +922,8 @@ const Input = (function () {
   function padPedalAxis(axes, which, seen = padPedalSeen) {
     const i = padAxisMap[which];
     if (i == null) return 0;
-    const raw = readPadAxis(axes, i);
+    const raw = axes[i];
+    if (!Number.isFinite(raw)) { seen[which] = false; return 0; }
     if (raw !== 0) seen[which] = true;
     if (!seen[which]) return 0;
     // The wizard's measured travel ends (a pedal that rests at 0, or a
@@ -930,6 +941,12 @@ const Input = (function () {
      and a full pedal stay exactly 1. */
   const PAD_PEDAL_DZ = 0.12;
   function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
+  function resetPadDriveState() {
+    padThrottleToggle = padLookBackToggle = false;
+    padDpadTarget = padDpadVal = padDpadT = 0;
+    padDpadLeftHeld = padDpadRightHeld = false;
+    padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+  }
   function padDpadSteer(pad) {
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
     // Worn pads and some maps briefly report both left+right; right−left
@@ -971,7 +988,7 @@ const Input = (function () {
     const axes = pad.axes || [];
     const rest = padRestMap.get(padIdOf(pad)) || (padRestLegacy !== null ? padRestLegacy : 0);
     const wheel = !padStd(pad) && !padAxesAreDefault();
-    const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert, rest, wheel);
+    const stick = padStick(axes, rest, wheel);
     const seen = Object.assign({}, padPedalSeen);
     return {
       steer: analogShape(stick, wheel ? "wheel" : "pad"),
@@ -1458,17 +1475,21 @@ const Input = (function () {
       const k = padKey(p, i), axes = p.axes || [], nb = p.buttons ? p.buttons.length : 0;
       padUseLive.add(k);
       let rec = padUse.get(k), used = false;
-      if (!rec) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
+      const first = !rec;
+      if (first) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
       else {
         for (let a = 0; a < axes.length; a++) {
           if (typeof rec.axes[a] === "number" && Math.abs(readPadAxis(axes, a) - rec.axes[a]) >= PAD_WAKE) used = true;
         }
-        for (let b = 0; b < nb; b++) if (btnDown(p, b) && !rec.btn[b]) used = true;
+      }
+      for (let b = 0; b < nb; b++) {
+        const down = btnDown(p, b);
+        if (!first && down && !rec.btn[b]) used = true;
+        rec.btn[b] = down;
       }
       // The rest reference moves only on use (or first sight), so a slow drift
       // cannot creep past PAD_WAKE a frame at a time without ever counting.
       if (used || !rec.axes.length) for (let a = 0; a < axes.length; a++) rec.axes[a] = readPadAxis(axes, a);
-      for (let b = 0; b < nb; b++) rec.btn[b] = btnDown(p, b);
       if (used) rec.usedAt = t > 0 ? t : 1;
     }
     for (const k of padUse.keys()) if (!padUseLive.has(k)) padUse.delete(k);
@@ -1591,9 +1612,7 @@ const Input = (function () {
       padThrottleVal = 0; padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
       lookStickX = 0; lookStickY = 0;
-      padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
-      padDpadLeftHeld = padDpadRightHeld = false;
-      padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+      resetPadDriveState();
       padIsWheel = false;
       // A missing browser snapshot is not a release. Reseed on recovery:
       // even a button pressed during the gap needs
@@ -1613,6 +1632,7 @@ const Input = (function () {
     // pad. Not on first connection: the press that woke a pad is a real one.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
     if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
+      resetPadDriveState();
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
@@ -1636,7 +1656,7 @@ const Input = (function () {
       Log.warn("input", `gamepad mapping "${pad.mapping}" is not "standard": button/axis indices may not match`);
     }
     const axes = pad.axes || [];
-    const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
+    const stick = padStick(axes);
     // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
     // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
     // ONLY ON A STANDARD PAD, and never an axis the wheel wizard took: a wheel
@@ -1650,7 +1670,7 @@ const Input = (function () {
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {
-        const t = (mag - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
+        const t = (Math.min(1, mag) - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
         lookStickX = (rx / mag) * t;
         lookStickY = (ry / mag) * t;
       }
@@ -2373,19 +2393,21 @@ const Input = (function () {
       let still = false;
       try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
       if (!still) { _padLostAt = nowMs(); _padNextProbeMs = 0; } else { _padLostAt = 0; _padNextProbeMs = 0; }
-      padConnected = still; padSteer = 0; padThrottle = padBrake = false;
-      padThrottleVal = padBrakeVal = 0;
-      padSteerAnalog = false; padLookBack = false;
-      lookStickX = 0; lookStickY = 0;
-      padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
-      padDpadLeftHeld = padDpadRightHeld = false;
-      padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
-      if (!still) padIsWheel = false;
-      // Only the ACTIVE pad's edge baseline: a spare pad leaving must not turn
-      // every button still held on the driving pad into a fresh press.
-      if (e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons) padPrevButtons.length = 0;
+      padConnected = still;
+      const lostActive = e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons;
+      if (!still || lostActive) {
+        padSteer = padThrottleVal = padBrakeVal = 0;
+        padThrottle = padBrake = padSteerAnalog = padLookBack = false;
+        lookStickX = lookStickY = 0;
+        resetPadDriveState();
+        padIsWheel = false;
+        padMenu.reset();
+      }
+      if (lostActive) {
+        padPrevButtons.length = 0;
+        padSnapshotLost = true;
+      }
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
-      padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
       /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing

@@ -242,7 +242,7 @@ async function mirrorRig(t, ls = {}) {
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
   const mk = new Function("THREE", "localStorage", "hooks", "renderer", "scene", `"use strict";
     let mirRT = null, mirCam = null, _mirRect = null, _mirActive = false, _warmPending = null, _mirRenders = 0;
-    let _mirReleaseWait = null;
+    let _mirReleaseWait = null, _mirReady = false;
     const W = 1280, H = 720, presentW = 1280, presentH = 720;
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
     const post = { hdrOk: () => true, releaseMirror: () => { hooks.post++; } };
@@ -251,9 +251,10 @@ async function mirrorRig(t, ls = {}) {
     const _softBlit = false, _envActive = false, mirrorWarmGate = () => false;
     const resetRecs = () => {}, _kidsBegin = () => {}, _poolShow = () => {}, _hideUndrawnInstanced = () => {}, pinSkyMaterial = () => {}, softOutRT = () => null;
     let _mirDead = false, _mirErr, _mirEye, _mirCull, _mirFog, _mirUsed, _dMatUsed, _fxMatUsed, _gpuLastOperation;
-    let _instStamp = 0, _poolBatch = 0, _mirFails = 0;
+    let _instStamp = 0, _poolBatch = 0, _mirFails = 0, _mirFlip = true, _mirGlass = 0;
+    const _mirRectScratch = [0, 0, 0, 0];
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    const backend = { ${tslice("        mirrorBegin(frame, w, h) {", "        mirrorRect(r, flip)") } ${tslice("        releaseMirror() {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
+    const backend = { ${tslice("        mirrorBegin(frame, w, h) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
     return { backend, prepareMirrorTarget, rt: () => mirRT, cam: () => mirCam, rect(r) { _mirRect = r; }, release: backend.releaseMirror,
       busy(active, warm) { _mirActive = active; _warmPending = warm; }, rendered() { _mirRenders++; }, renders: () => _mirRenders,
       glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);
@@ -263,7 +264,7 @@ async function mirrorRig(t, ls = {}) {
     M.prepareMirrorTarget(w, h);
     renderer.setRenderTarget(M.rt()); renderer.render(scene, cam); renderer.setRenderTarget(null);
   };
-  return { M, frame, storage, mipCount: () => mips, deleted, hooks };
+  return { M, renderer, frame, storage, mipCount: () => mips, deleted, hooks };
 }
 // The census's helmet-cam mirror: a 461 x 132 target (SS 2) over its 230 x 66 px HUD rect — ratio 2.004, LOD ~1.
 const RECT = [0.4, 0.02, 230.4 / 1280, 66 / 720];
@@ -394,6 +395,29 @@ test("a mirror pass started after warm-up supersedes a deferred quit release", a
   assert.equal(h.M.rt(), null);
 });
 
+test("mirror resize invalidates the old image until the resized target renders", async (t) => {
+  const { M, renderer } = await mirrorRig(t);
+  const matrix = new THREE.Matrix4().elements;
+  const frame = { proj: matrix, view: matrix, viewProj: matrix };
+  assert.equal(M.backend.mirrorBegin(frame, 461, 132), true);
+  M.backend.mirrorEnd();
+  assert.equal(M.backend.mirrorState().ready, true);
+  const oldCount = M.backend.mirrorState().renders;
+
+  const render = renderer.render.bind(renderer);
+  renderer.render = () => { throw new Error("mirror draw failed after resize"); };
+  assert.equal(M.backend.mirrorBegin(frame, 300, 90), true);
+  M.backend.mirrorEnd();
+  assert.equal(M.backend.mirrorState().ready, false, "the resized backing has never been painted");
+  assert.equal(M.backend.mirrorState().renders, oldCount, "readiness is independent of the lifetime counter");
+
+  renderer.render = render;
+  assert.equal(M.backend.mirrorBegin(frame, 300, 90), true);
+  M.backend.mirrorEnd();
+  assert.equal(M.backend.mirrorState().ready, true);
+  assert.equal(M.backend.mirrorState().renders, oldCount + 1);
+});
+
 test("A-H5: tlx.js wiring — the glass latch in drawMirrorGlass, mirrorState reports the levels", () => {
   assert.match(TLX, /_mirGlass\+\+;\s*_mirGlassSeen = true;/);
   assert.match(TLX, /mips: mirRT \? _mirLevelsNow\(mirRT\.width, mirRT\.height\) : 0, mipCap: _mirMipCap/);
@@ -411,15 +435,22 @@ function withStore(ls, fn) {
   }
 }
 // The REAL post chain (tlx-post + tsl-post) on three r186 over the fake WebGL2, plus one lit mesh to draw.
-async function postRig(t, { ls = {}, samples = 0, ssrTag = false } = {}) {
+async function postRig(t, { ls = {}, samples = 0, ssrTag = false, wantSpatialUpscale = () => false } = {}) {
   const fg = makeFakeGL(320, 180);
   const inv = [];
   fg.gl.invalidateFramebuffer = (target, list) => { inv.push([target, list.slice()]); };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
-  const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
-    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: samples }));
+  const shaders = globalThis.TLXShaders, makeGraph = shaders.post;
+  let graph, post;
+  try {
+    shaders.post = (...args) => (graph = makeGraph(...args));
+    post = withStore(ls, () => shaders.postChain(THREE, TSL, { renderer, isMobile: true,
+      chunks: shaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
+      wantSpatialUpscale, getPresentSize: () => [320, 180], sceneSamples: samples }));
+  } finally {
+    shaders.post = makeGraph;
+  }
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   const scene = new THREE.Scene();
@@ -436,8 +467,85 @@ async function postRig(t, { ls = {}, samples = 0, ssrTag = false } = {}) {
     renderer.setRenderTarget(null);
     return { keep, dropped };
   };
-  return { fg, renderer, post, inv, scenePass, gl: fg.gl };
+  return { fg, renderer, post, graph, inv, scenePass, gl: fg.gl };
 }
+test("post warm-up does not spend the live target idle grace period", async (t) => {
+  const { post } = await postRig(t);
+  const closed = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present({ ...closed, bloom: 0.5 }, NIGHT);
+  assert.equal(post.state().held.bloom, true);
+  for (let i = 0; i < 7; i++) post.present(closed, NIGHT);
+  await post.warm(closed, NIGHT);
+  assert.equal(post.state().held.bloom, true, "compile warm is not a live frame");
+  post.drawWarm(closed, NIGHT);
+  await post.warmSettled();
+  assert.equal(post.state().held.bloom, true, "scissored warm is not a live frame");
+  post.present(closed, NIGHT);
+  assert.equal(post.state().held.bloom, false, "the eighth live frame sheds the block");
+});
+
+test("disabling spatial upscale releases its input texture before disposing the AA target", async (t) => {
+  let upscale = true;
+  const { post, graph } = await postRig(t, { wantSpatialUpscale: () => upscale });
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present(opts, NIGHT);
+  const aa = post.presentedTarget();
+  assert.equal(aa.texture.name, "TLXPostAA");
+  let sampledAA = false;
+  const readsAA = () => graph.sgsr.tex.value === aa.texture;
+  assert.equal(readsAA(), true);
+  aa.addEventListener("dispose", () => { sampledAA = readsAA(); });
+  upscale = false;
+  post.resize(320, 180);
+  assert.equal(post.presentedTarget(), post.ldrTarget());
+  assert.equal(sampledAA, false, "the retiring target was detached from the shader first");
+  assert.equal(readsAA(), false);
+  upscale = true;
+  post.resize(320, 180);
+  post.present(opts, NIGHT);
+  assert.notEqual(post.presentedTarget(), aa);
+  assert.equal(post.presentedTarget().texture.name, "TLXPostAA");
+});
+
+test("disposing a post chain abandons its queued canvas compiles", async (t) => {
+  const { post, renderer } = await postRig(t);
+  let compiles = 0;
+  const compile = renderer.compileAsync.bind(renderer);
+  renderer.compileAsync = (...args) => { compiles++; return compile(...args); };
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.drawWarm(opts, NIGHT);
+  await post.warmSettled();
+  assert.ok(compiles > 0, "an active chain runs the queued canvas warm");
+  compiles = 0;
+  post.drawWarm(opts, NIGHT);
+  post.dispose();
+  await post.warmSettled();
+  assert.equal(compiles, 0, "retired materials must not be compiled again");
+});
+
+test("disposing a post chain stops a blocked warm without touching the replacement target", async (t) => {
+  const { post, renderer } = await postRig(t);
+  const gate = Promise.withResolvers();
+  const targets = [];
+  renderer.compileAsync = () => {
+    targets.push(renderer.getRenderTarget());
+    return gate.promise;
+  };
+  const warm = post.warm({ bloom: 0.5, carReflect: 0, flareMul: 0 }, NIGHT);
+  assert.equal(targets.length, 1);
+  assert.ok(targets[0]?.isRenderTarget, "the pending compile was using a post target");
+  post.dispose();
+  const afterDispose = renderer.getRenderTarget();
+  const replacement = new THREE.RenderTarget(32, 32);
+  t.after(() => replacement.dispose());
+  renderer.setRenderTarget(replacement);
+  gate.resolve();
+  await warm;
+  assert.equal(targets.length, 1, "retired targets must not be compiled after disposal");
+  assert.equal(afterDispose, null, "dispose unbinds its own target before retiring it");
+  assert.equal(renderer.getRenderTarget(), replacement);
+});
+
 const I16 = new THREE.Matrix4().toArray();
 // A night frame: the key light below the horizon and dim, so the flare is off; no SSAO, godray or SSR inputs.
 const VP = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1000).projectionMatrix.toArray();   // looking down -z
@@ -561,6 +669,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
     const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, garageScene: null, total: null, attempts: 0, failed: 0 };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
+    let _mirReady = false;
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
     ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}

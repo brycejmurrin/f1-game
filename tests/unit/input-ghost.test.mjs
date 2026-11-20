@@ -32,7 +32,10 @@ function createHarness(opts = {}) {
   const store = opts.store || new Map(Object.entries(opts.disk || {}));
   const listeners = new Map();
   const mockLocalStorage = {
-    getItem(k) { return store.has(k) ? store.get(k) : null; },
+    getItem(k) {
+      if (opts.failReads && opts.failReads()) throw new Error("dummy storage read unavailable");
+      return store.has(k) ? store.get(k) : null;
+    },
     setItem(k, v) {
       if (opts.failWrites && opts.failWrites()) throw new Error("dummy storage unavailable");
       store.set(k, String(v));
@@ -225,6 +228,64 @@ test("flush preserves a faster foreign PB over a pending local lap through reloa
   reloaded.InputGhost.setTrack("monza", "dummy-class");
   assert.equal(reloaded.InputGhost.bestTime(), 19);
   assert.equal(reloaded.InputGhost.steps(), 1140);
+});
+
+test("flush keeps a foreign save even before its storage event reaches this tab", () => {
+  const disk = new Map();
+  const A = createHarness({ store: disk, deferWrites: true });
+  const B = createHarness({ store: disk });
+  A.InputGhost.setTrack("monza");
+  driveLap(A.InputGhost, 40, 20);
+  B.InputGhost.setTrack("spa");
+  driveLap(B.InputGhost, 40, 21);
+  A.InputGhost.flush();
+  const saved = JSON.parse(disk.get("apex26.inputGhost.v1"));
+  assert.deepEqual(Object.keys(saved).sort(), ["monza", "spa"]);
+});
+
+test("clearing a track before a storage event preserves the other tab's new tape", () => {
+  const disk = new Map();
+  const A = createHarness({ store: disk });
+  const B = createHarness({ store: disk });
+  A.InputGhost.setTrack("monza");
+  driveLap(A.InputGhost, 40, 20);
+  B.InputGhost.setTrack("spa");
+  driveLap(B.InputGhost, 40, 21);
+  A.InputGhost.clear("monza");
+  assert.equal(A.InputGhost.hasGhost(), false);
+  assert.deepEqual(Object.keys(JSON.parse(disk.get("apex26.inputGhost.v1"))), ["spa"]);
+});
+
+test("a refused clear stays cleared after a foreign save and retries without losing it", () => {
+  const disk = new Map();
+  let refuse = false;
+  const A = createHarness({ store: disk, failWrites: () => refuse });
+  const B = createHarness({ store: disk });
+  A.InputGhost.setTrack("monza");
+  driveLap(A.InputGhost, 40, 20);
+  refuse = true;
+  A.InputGhost.clear("monza");
+  assert.equal(A.InputGhost.hasGhost(), false);
+  B.InputGhost.setTrack("spa");
+  driveLap(B.InputGhost, 40, 21);
+  A.storageEvent("apex26.inputGhost.v1");
+  assert.equal(A.InputGhost.hasGhost(), false);
+  refuse = false;
+  A.InputGhost.flush();
+  assert.deepEqual(Object.keys(JSON.parse(disk.get("apex26.inputGhost.v1"))), ["spa"]);
+});
+
+test("a blocked write-boundary read retains other locally cached tapes", () => {
+  let blockReads = false;
+  const h = createHarness({ deferWrites: true, failReads: () => blockReads });
+  h.InputGhost.setTrack("monza");
+  driveLap(h.InputGhost, 40, 20);
+  h.InputGhost.flush();
+  h.InputGhost.setTrack("spa");
+  driveLap(h.InputGhost, 40, 21);
+  blockReads = true;
+  h.InputGhost.flush();
+  assert.deepEqual(Object.keys(JSON.parse(h.disk.get("apex26.inputGhost.v1"))).sort(), ["monza", "spa"]);
 });
 
 test("a failed flush retains pending laps across a foreign write for a later retry", () => {

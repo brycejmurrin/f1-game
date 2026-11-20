@@ -139,7 +139,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
   const ctx = vm.createContext({
     _mirActive: false, _poolBatch: 0, drawList: [], _showInstanced() {}, chunkedSys: null, acquireMesh() {}, meshPool: [],
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
-    _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
+    _mirRenders: 0, _mirReady: false, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
     _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
     _mirMrt: () => false, _mirMrtArm() {},   // A·W14: a one-attachment mirror target draws with no MRT
     post: null, _mirInv: () => null, _mirDiscards: 0,   // A-P2: the WebGL2 depth + tag discard after the mirror render

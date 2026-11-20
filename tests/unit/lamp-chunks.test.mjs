@@ -456,7 +456,7 @@ function liftBlock(src, head) {
 /** A `let <name> ...` state line tlx.js declares for the block ("" if absent:
  *  the behavioural assertions below, not a missing name, are the verdict). */
 function liftDecl(src, name) {
-  const m = src.match(new RegExp(`^\\s*let ${name}\\b[^\\n]*$`, "m"));
+  const m = src.match(new RegExp(`^\\s*(?:let|const) ${name}\\b[^\\n]*$`, "m"));
   return m ? m[0] : "";
 }
 function tlxLampGrid(countReads = false) {
@@ -468,11 +468,11 @@ function tlxLampGrid(countReads = false) {
                 "function buildTable(lights, chunks, knob) { __n.bakes++;")
     + "; return LampChunks;")
   ;
-  const n = { bakes: 0, grids: 0 };
+  const n = { bakes: 0, grids: 0, tints: 0 };
   globalThis.__n = n;
   const LampChunksC = LC();
-  const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => {} };
-  const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs")].join("\n");
+  const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => { n.tints++; } };
+  const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs"), liftDecl(TLX, "_lgGroups")].join("\n");
   // Use the real record pool and submission/reset paths so a small frame can
   // reuse the slots of a much larger one, exactly as it does after the grid.
   const pool = TLX.slice(TLX.indexOf("const _recPool = [];"), TLX.indexOf("function pushRec("));
@@ -487,12 +487,12 @@ function tlxLampGrid(countReads = false) {
     const _roadSplitOn = false;
     ${liftBlock(TLX, "function pushRec(")}
     ${liftBlock(TLX, "function resetRecs(")}
-    let frameAllLightsGen = 0, _lgGen = -1, _lampGridState = null;
+    let frameAllLightsGen = 0, frameAllLightsStaticGen = 0, _lgGen = -1, _lgStaticGen = -1, _lampGridState = null;
     let frameAllLights = null, framePerChunk = 0;
-    return function (dl, AL, knob) {
+    return function (dl, AL, knob, valueGen = 0, staticGen = 0) {
       resetRecs();
       for (const rec of dl) pushRec(rec.geo, null, null, 0, 1, 0, rec.chunked, null);
-      frameAllLights = AL; framePerChunk = knob;
+      frameAllLights = AL; framePerChunk = knob; frameAllLightsGen = valueGen; frameAllLightsStaticGen = staticGen;
       reads.count = 0; reads.scanning = true;
       ${block}
       reads.scanning = false;
@@ -533,6 +533,42 @@ test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap
   }
 });
 
+test("a replacement lamp-cell group of the same size invalidates the TLX grid", () => {
+  const { run, n } = tlxLampGrid();
+  const lamps = lampSet([[0, 0, 0, 50]]);
+  const group = (gx) => [{ min: [gx * 72, 0, 0], max: [gx * 72 + 1, 1, 1], gx, gz: 0 }];
+  const drawList = [{ chunked: { chunks: group(0) } }, { chunked: { chunks: group(1) } }];
+  try {
+    assert.equal(run(drawList, lamps, 1).gw, 2);
+    drawList[1].chunked.chunks = group(4);
+    assert.equal(run(drawList, lamps, 1).gw, 5);
+    drawList[1].chunked.lampCells = group(6);
+    assert.equal(run(drawList, lamps, 1).gw, 7);
+    drawList[1].chunked.lampCells = group(7);
+    assert.equal(run(drawList, lamps, 1).gw, 8);
+    assert.equal(n.bakes, 4);
+  } finally { delete globalThis.__n; }
+});
+
+test("TLX refreshes lamp geometry across in-place source refills and only tints on colour changes", () => {
+  const { run, n } = tlxLampGrid();
+  const lamps = lampSet([[0, 0, 0, 10]]);
+  const draws = [{ chunked: { chunks: [{ gx: 0, gz: 0, min: [0, 0, 0], max: [1, 1, 1] }] } }];
+  try {
+    assert.equal(run(draws, lamps, 1, 1, 1).idx, 1);
+    lamps[3] *= 0.5;
+    assert.equal(run(draws, lamps, 1, 2, 1).idx, 1);
+    assert.deepEqual(n, { grids: 1, bakes: 1, tints: 1 });
+    lamps[0] = 100;
+    assert.equal(run(draws, lamps, 1, 3, 2).idx, 0, "moved lamp no longer reaches the cell");
+    lamps[6] = 110;
+    assert.equal(run(draws, lamps, 1, 4, 3).idx, 1);
+    lamps[8] = 1;
+    run(draws, lamps, 1, 5, 4);
+    assert.deepEqual(n, { grids: 4, bakes: 3, tints: 1 }, "beam direction refreshes the lamp texture while membership stays cached");
+  } finally { delete globalThis.__n; }
+});
+
 test("TLX lamp scans visit only submitted chunked records after a high-water frame", () => {
   const { run, n, reads } = tlxLampGrid(true);
   const lamps = lampSet([[0, 0, 0, 10]]);
@@ -549,6 +585,33 @@ test("TLX lamp scans visit only submitted chunked records after a high-water fra
     assert.equal(reads.count, 0, "prior frame's chunk slots are inactive");
     assert.equal(n.bakes, 1);
   } finally { delete globalThis.__n; }
+});
+
+test("TLX fills the active lamp, index and grid data without clearing texture capacity", () => {
+  const source = readFileSync(join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  let clearWrites = 0;
+  class CountedTexture extends Float32Array {
+    fill(value) { clearWrites += this.length; return super.fill(value); }
+  }
+  const texture = (n) => ({ image: { data: new CountedTexture(n) } });
+  const gpu = { LAMPS: 1024, IDXW: 256, G: 256, lampTex: texture(1024 * 16),
+    idxTex: texture(256 * 256), gridTex: texture(256 * 256 * 2) };
+  const uniforms = { lgOn: {}, lgCell: {}, lgIdxW: {}, lgOrigin: { value: { set() {} } }, lgSize: { value: { set() {} } } };
+  const upload = new Function("LGRID", "U", "LampChunks", liftBlock(source, "function setLampGrid(info)") + ";return setLampGrid;")(gpu, uniforms, LampChunks);
+  const lights = lampSet([[0, 0, 0, 100], [72, 0, 0, 50]]);
+  for (const coords of [[0, 1, 2], [1], [0, 2]]) {
+    const cells = coords.map(gx => ({ gx, gz: gx % 2, min: [gx * 72, 0, 0], max: [gx * 72 + 1, 1, 1] }));
+    const table = LampChunks.resolve(lights, cells, 1), grid = LampChunks.buildGrid(table, cells);
+    assert.equal(upload({ lights, table, grid, cell: 72 }), true);
+    for (let z = 0; z < grid.gh; z++) {
+      assert.deepEqual(Array.from(gpu.gridTex.image.data.subarray(z * gpu.G * 2, (z * gpu.G + grid.gw) * 2)),
+        Array.from(grid.data.subarray(z * grid.gw * 2, (z + 1) * grid.gw * 2)));
+    }
+    const indices = grid.concat || table.concat;
+    assert.deepEqual(Array.from(gpu.idxTex.image.data.subarray(0, indices.length)), Array.from(indices));
+    for (let i = 0; i < lights.length / 15; i++) assert.equal(gpu.lampTex.image.data[16 * i + 3], lights[i * 15 + 6]);
+  }
+  assert.equal(clearWrites, 0, "active data is overwritten and bounds exclude the remaining texels");
 });
 
 /* ── ChunkBins: the chunk key the lamp grid decodes ──────────────────────────
