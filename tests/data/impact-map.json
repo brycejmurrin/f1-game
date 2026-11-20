@@ -19956,7 +19956,8 @@
       "fill": [
         "tests/specs/photo-studio.spec.js",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/photo-studio.test.mjs"
+        "tests/unit/photo-studio.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "optionDisabled": [
         "tests/unit/async-lifecycle.test.mjs",

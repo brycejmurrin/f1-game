@@ -188,7 +188,7 @@ function bootMenus(disk = {}, o = {}) {
   const tiles = () => selTracks.querySelectorAll(".track-row");
   const tile = (id) => tiles().find((r) => LIST[+r.dataset.trackIdx].id === id);
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
-  return { dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
+  return { sb, dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
 
 test("select titles and CTAs name Practice, Time Trial, and Race", () => {
@@ -287,6 +287,21 @@ test("Practice brief is one row on the compact phone card", () => {
   assert.equal(decl(rules, `${card} #practice-brief[hidden]`, "display"), "none", "the row rule must not un-hide the brief");
   assert.equal(decl(rules, `${card} #practice-brief > p`, "clip-path"), "inset(50%)");
   assert.equal(decl(rules, `${card} #practice-brief .set-row`, "flex-wrap"), "nowrap");
+});
+
+// #5890: opened while the circuit file loads, the detail read "0 turns" and never repainted.
+test("CIRCUIT DETAIL repaints when its circuit file arrives, if still open on that circuit", async () => {
+  let land;
+  const h = bootMenus({}, { ensureCircuit: () => new Promise((r) => { land = r; }) });
+  h.menus.openTrackDetail();
+  const meta = () => h.dom.byId("track-detail-meta").textContent;
+  assert.match(meta(), /\b0 turns/, "the meta stub has no corners yet");
+  assert.equal(typeof land, "function", "opening on a stub asks for the circuit file");
+  h.sb.Tracks.LIST[1].path = { pts: [[0, 0], [1, 1]] };
+  h.sb.TrackMaps.corners = () => new Array(19).fill({});
+  land();
+  await new Promise((r) => setImmediate(r));
+  assert.match(meta(), /\b19 turns/, "the open panel repainted with the hydrated circuit");
 });
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
