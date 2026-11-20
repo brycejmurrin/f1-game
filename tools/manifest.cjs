@@ -1362,6 +1362,7 @@ const LAZY_UI_PRESETS_EDGES = [];
 // garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
 // it at idle, at the garage door, with the agent surface and with the career screen.
 const LAZY_SAVES_DATA = [
+  "js/ui/progress-backup.js",      // ProgressBackup (#5992): the settings file's `progress` section; read at call time
   "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
 ];
 const LAZY_SAVES_DATA_EDGES = [];

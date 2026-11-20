@@ -6015,6 +6015,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/photo-studio.test.mjs",
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -19722,6 +19723,19 @@
       "*": [
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/settings-tabs.test.mjs"
+      ]
+    },
+    "js/ui/progress-backup.js": {
+      "apply": [
+        "tests/unit/progress-backup.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "collect": [
+        "tests/unit/progress-backup.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "ghostOk": [
+        "tests/unit/progress-backup.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {
