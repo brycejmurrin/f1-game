@@ -851,11 +851,11 @@ const Input = (function () {
 
   function recomputeTouchSteer() {
     let best = -1;
-    touchActive = false;
+    touchActive = touches.size > 0;
+    touchSteer = 0;
     for (const rec of touches.values()) {
-      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
+      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); }
     }
-    if (!touchActive) touchSteer = 0;
     updateDragAnchor();
   }
 
@@ -913,7 +913,7 @@ const Input = (function () {
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, {
-        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: ++touchSeq,
+        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: 0,
       });
     }
     recomputeTouchSteer();
@@ -924,7 +924,9 @@ const Input = (function () {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
-      if (rec) { rec.x = t.clientX; rec.seq = ++touchSeq; }
+      if (!rec) continue;
+      rec.x = t.clientX;
+      if (!rec.seq && Math.abs(rec.x - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
     }
     recomputeTouchSteer();
   }
