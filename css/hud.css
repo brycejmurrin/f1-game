@@ -2594,11 +2594,16 @@ body.desktop #hud-inputs:not([data-hl-user]) {
    widgets use HUD SIZE directly, including instruments detached from the
    bottom flex/grid cluster by HudLayout. */
 [data-hl][data-hl-v4] {
-  --hud-z: var(--hud-scale) !important;
+  --hud-z: var(--hl-z-seed, var(--hud-scale)) !important;
   --vwzh: calc(1vw / var(--hud-z)) !important;
   zoom: var(--hud-z) !important;
   max-width: none !important; max-height: none !important;
 }
+/* The factory phone seed (data-hl-seed, PHONE_STANDARD) keeps its band's
+   screen-fit cap (Bryce 2026-11-20); only a player's own placement paints the
+   raw --hud-scale. A piece lifted out of the bottom cluster rides the bottom band. */
+[data-hl-seed] { --hl-z-seed: var(--hud-z-top, var(--hud-scale)); }
+[data-hl-seed][data-hl-bottom] { --hl-z-seed: var(--hud-z-bot, var(--hud-scale)); }
 [data-hl-bottom] {
   position: fixed !important; position-anchor: auto !important;
   left: calc(50vw / var(--hud-z)) !important; right: auto !important;

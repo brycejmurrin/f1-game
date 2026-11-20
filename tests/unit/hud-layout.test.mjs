@@ -1769,3 +1769,38 @@ test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMCo
   for (const cb of kindCbs) cb(true);
   assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "a pointer-kind flip re-applies the touch helmet");
 });
+
+// Bryce 2026-11-20 ("Keep the caps"): the factory PHONE_STANDARD seed sets where the
+// pieces start, but fitHud's screen-fit caps still size them; a piece the player
+// moved or sized owns its geometry. 852x393 helmet, measured: HUD 100 paints every
+// seed rect where it was, HUD 200 caps the top band at 1.11 (the tip: 1.1).
+test("the factory phone seed keeps the screen-fit caps; a player's own placement does not", () => {
+  const { H, els } = load({}, true);
+  H.setCam("chase");
+  const tower = els[".hud-top"];
+  assert.equal(tower.hasAttribute("data-hl-user"), true, "the seed is an explicit placement");
+  assert.equal(tower.hasAttribute("data-hl-seed"), true, "…still the factory entry");
+  H.set("tower", { s: 122 }, "other");
+  assert.equal(tower.hasAttribute("data-hl-seed"), false, "sized by the player: it owns its geometry");
+  H.resetEl("tower", "other");
+  assert.equal(tower.hasAttribute("data-hl-seed"), true, "reset returns it to the seed");
+  const desk = load({}, false);
+  desk.H.set("tower", { s: 80 }, "other");
+  assert.equal(desk.els[".hud-top"].hasAttribute("data-hl-seed"), false, "no seed off a phone, even at the seed's numbers");
+
+  // fitHud's cap passes count a seed piece like an automatic one (layoutRect undoes its offset and size).
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const defs = hud.slice(hud.indexOf("const manualHud = "), hud.indexOf("\n", hud.indexOf("const capManual = ")));
+  const capManual = vm.runInNewContext(defs + "; capManual", {}, { filename: absSrc("js/ui/hud.js") });
+  const piece = (...a) => ({ hasAttribute: (k) => a.includes(k) });
+  assert.equal(capManual(piece()), false, "automatic: measured");
+  assert.equal(capManual(piece("data-hl-user", "data-hl-seed")), false, "the factory seed: measured");
+  assert.equal(capManual(piece("data-hl-user")), true, "the player's own placement: left out");
+  const fit = hud.slice(hud.indexOf("function fitHud()"));
+  assert.equal(fit.split("capManual(").length - 1, 8, "the eight cap-measurement sites");
+  // …and paints it at its band's capped zoom: only a non-seed placement takes the raw --hud-scale.
+  const rules = cssRules(CSS);
+  assert.equal(decl(rules, "[data-hl][data-hl-v4]", "--hud-z"), "var(--hl-z-seed, var(--hud-scale)) !important");
+  assert.equal(decl(rules, "[data-hl-seed]", "--hl-z-seed"), "var(--hud-z-top, var(--hud-scale))");
+  assert.equal(decl(rules, "[data-hl-seed][data-hl-bottom]", "--hl-z-seed"), "var(--hud-z-bot, var(--hud-scale))");
+});

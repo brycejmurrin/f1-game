@@ -1,8 +1,18 @@
 {
+  "files": {
+    "css/hud.css": {
+      "codeLines": 4,
+      "lines": 5
+    },
+    "js/ui/hud.js": {
+      "codeLines": 2,
+      "lines": 4
+    }
+  },
   "tree": {
     "cssClasses": 5,
     "dynamicIdReads": 2,
-    "eagerCodeBytes": -2821,
+    "eagerCodeBytes": -2386,
     "eagerScripts": -1,
     "rawColor": 3,
     "rawColorDistinct": 3,

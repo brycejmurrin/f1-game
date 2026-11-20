@@ -3338,3 +3338,15 @@ test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", (
     assert.equal(checks.textContent, "CHECKS · 3 WARNINGS");
   } finally { b.ctx.TrackValidate = V; }
 });
+
+// track-designer:71 (734x343 / 852x344 at 100 %, foot tucked): the screen
+// arranger's entry took a fourth 44 px grid row and the dialog scrolled 16 px.
+// Tucked, it floats at the foot's end at a fixed width the status line keeps clear.
+test("the tucked designer floats the arrange entry instead of adding a grid row", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const rules = cssRules(read("css/screen-arranger.css"));
+  const entry = '#trackdesigner[data-foot="in"] > .screen-arrange-entry';
+  assert.equal(decl(rules, entry, "position"), "absolute");
+  assert.equal(decl(rules, entry, "width"), "9rem");
+  assert.equal(decl(cssRules(read("css/editor.css")), '#trackdesigner[data-foot="in"] .td-foot .td-msg', "padding-inline-end"), "calc(9rem + var(--gap) / 2)");
+});

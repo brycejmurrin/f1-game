@@ -66,6 +66,8 @@ const HudLayout = (function () {
   };
   const phoneStandard = () => typeof HudElements !== "undefined" && HudElements.phone?.() ? PHONE_STANDARD : null;
   const factorySet = (pn, sn) => (pn === "standard" && phoneStandard()?.[sn]) || {};
+  /** A stored entry that is still the factory phone seed for its piece. */
+  const isSeedEl = (id, entry, sn, pn) => { const f = factorySet(pn, sn)[id]; return !!(entry && f && sameEl(normEl(f), normEl(entry))); };
   function matchesFactory(entries, pn, sn) {
     const factory = factorySet(pn, sn);
     return Object.keys(entries).length === Object.keys(factory).length
@@ -325,6 +327,10 @@ const HudLayout = (function () {
       const entry = st[pn][sn][id];
       if (entry) el.setAttribute("data-hl-v4", "");
       else el.removeAttribute("data-hl-v4");
+      // Bryce 2026-11-20: the factory PHONE_STANDARD seed keeps the screen-fit caps (fitHud, js/ui/hud.js);
+      // a piece the player moved or sized owns its geometry.
+      if (isSeedEl(id, entry, sn, pn)) el.setAttribute("data-hl-seed", "");
+      else el.removeAttribute("data-hl-seed");
       if (manuallyPlaced(el)) releaseAutomatic(el);
       ownBottom(el);
       if (selected === id && preview) el.setAttribute("data-hl-sel", "");

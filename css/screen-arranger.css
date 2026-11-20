@@ -197,7 +197,25 @@ body:has(> main#overlay) {
   left: auto;
   right: var(--safe-r);
 }
+/* A narrow landscape phone: the left panel reaches the right inset, and DONE
+   sits at its right end (568x320: entry 363..509 over DONE 392..497, so CLOSE
+   GARAGE never took a click). Keep the entry at the left, as the right panel does. */
+@media (orientation: landscape) and (max-width: 700px) {
+  :root[data-look-garage-side="left"] #carsetup > .screen-arrange-entry {
+    left: var(--safe-l);
+    right: auto;
+  }
+}
 #trackdesigner > .screen-arrange-entry { position: static; grid-row: 4; justify-self: end; }
+/* Short landscape phone, foot tucked under the rail (js/editor/designer.js
+   seatFoot): a fourth 44 px row made the dialog scroll 16 px at 734x343 and
+   852x344. The entry floats at the foot's end instead, at a fixed width the
+   foot's status line keeps clear (css/editor.css; both inside the dialog's zoom). */
+#trackdesigner[data-foot="in"] > .screen-arrange-entry {
+  position: absolute; top: auto; width: 9rem;
+  bottom: calc(var(--safe-b) / var(--td-zoom, 1));
+  inset-inline-end: calc(var(--safe-r) / var(--td-zoom, 1));
+}
 /* These owners position their panel on the right. Some have zero-width
    wrappers so a button sized against the wrapper would be unclickable. */
 :is(#lighting, #camtune, #flyby, #freecam, #garrival, #photo-studio) > .screen-arrange-entry {

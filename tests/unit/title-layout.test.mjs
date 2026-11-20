@@ -749,3 +749,17 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
   assert.deepEqual(legacy.slice(-2), ["preview", "save"]);
   assert.deepEqual(stored, {portrait:{}, landscape:{}});
 });
+
+// title-menu-rotation:470 (iPhone 14 portrait, UI SIZE 200): the phone's PHONE_TALL
+// seed sets data-title-layout, whose zoom rule read --ui-scale 2 x 1.05 = 2.1 and
+// pushed the doors 414 px into a 390 px screen. Compact keeps its shipped cap
+// (measured after: 1.3125 = 1.25 x 1.05, no door off-screen).
+test("a title layout on a compact screen scales the shipped compact cap, not the raw UI SIZE", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const rules = cssRules(CSS);
+  const at = (part) => decl(rules, `:root[data-title-layout] :where(body[data-density="compact"]) ${part}`, "zoom");
+  assert.equal(at("#menu-buttons"), "calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1))");
+  assert.equal(at("#menu-brand"), "calc(var(--ui-compact-brand-scale) * var(--tl-title-size, 1) * var(--tf, 1))");
+  // Later in the sheet at the same specificity, so it beats the raw --ui-scale rule.
+  assert.ok(CSS.indexOf(':where(body[data-density="compact"]) #menu-buttons') > CSS.indexOf(":root[data-title-layout] #menu-buttons {"));
+});
