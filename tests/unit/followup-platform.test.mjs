@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { absSrc } from '../helpers/abs-src.mjs';
 const read = p => fs.readFileSync(new URL('../../'+p, import.meta.url), 'utf8');
 const flush = async () => { for(let i=0;i<20;i++) await Promise.resolve(); };
 const ps = read('js/ui/platform-session.js');
@@ -54,3 +55,35 @@ test('offline retry coalesces in one generation and records downloaded coverage'
  h.finish();await Promise.all(first.lifetimes);const status=await h.ask('apex-offline-status');assert.equal(status.reply.optionalMissing,0);assert.equal(status.reply.retrying,false);
 });
 test('offline status rejects hostile summary instead of fetching arbitrary URLs',async()=>{const h=worker();h.data.set('__apex_offline_status__',new Response(JSON.stringify({build:321,required:['index.html'],optional:['https://evil.test/foo']})));assert.equal((await h.ask('apex-offline-retry')).reply.known,false)});
+// The offline note asks the worker for one cache lookup per precached file. It must not do that at boot, where the
+// note is inside a closed Settings panel: only when the note is on screen (or the player presses the button).
+function offlineNote({ observer = true } = {}) {
+ const posts=[],swEvents=new Map(),made=[];let io=null;
+ const el=()=>{const e={attrs:{},listeners:{},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,f){this.listeners[k]=f},textContent:'',disabled:false};made.push(e);return e;};
+ const anchor={parentNode:{insertBefore(){}},nextSibling:null};
+ const controller={postMessage:(m,tr)=>{posts.push(m.type);tr[0].postMessage({type:'apex-offline-status',known:true,coreReady:true,optionalTotal:2,optionalMissing:0});}};
+ class Channel{constructor(){const a={close(){},onmessage:null},b={close(){},postMessage:d=>queueMicrotask(()=>a.onmessage&&a.onmessage({data:d}))};this.port1=a;this.port2=b;}}
+ const sb={Native:{isNative:()=>false},$:k=>k==='pm-install'?anchor:null,document:{createElement:el},MessageChannel:Channel,setTimeout,clearTimeout,
+  navigator:{serviceWorker:{controller,addEventListener:(k,f)=>swEvents.set(k,f)}}};
+ if(observer) sb.IntersectionObserver=class{constructor(cb){io=cb}observe(){}};
+ vm.runInNewContext(section('offlineReadiness'),sb,{filename:absSrc('js/ui/platform-session.js')});
+ return {posts,note:made[0],button:made[1],see:on=>io([{isIntersecting:on}]),controllerchange:()=>swEvents.get('controllerchange')()};
+}
+test('offline note asks the worker only when it is on screen',async()=>{
+ const h=offlineNote();await flush();
+ assert.deepEqual(h.posts,[],'boot sends no status request');
+ assert.equal(h.note.textContent,'Checking offline availability…');
+ h.controllerchange();await flush();assert.deepEqual(h.posts,[],'a new controller while hidden only marks the note stale');
+ h.see(true);await flush();assert.deepEqual(h.posts,['apex-offline-status']);
+ assert.equal(h.note.textContent,'Core game and install downloads ready offline. Optional content used later may still need a connection.');
+ h.see(false);h.see(true);await flush();assert.equal(h.posts.length,1,'re-showing a fresh note asks nothing');
+ h.see(false);h.controllerchange();await flush();assert.equal(h.posts.length,1);
+ h.see(true);await flush();assert.equal(h.posts.length,2,'a controller change while hidden is picked up on the next show');
+ h.controllerchange();await flush();assert.equal(h.posts.length,3,'a controller change while on screen refreshes at once');
+ h.button.listeners.click();await flush();assert.equal(h.posts.length,4,'the button always asks');
+});
+test('offline note without IntersectionObserver keeps the boot check',async()=>{
+ const h=offlineNote({observer:false});await flush();
+ assert.deepEqual(h.posts,['apex-offline-status']);
+ h.controllerchange();await flush();assert.equal(h.posts.length,2);
+});

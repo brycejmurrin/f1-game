@@ -27,7 +27,7 @@ function load() {
     Tracks: { sample(_t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[2] = 1; out.r[0] = 1; out.r[2] = 0; } },
   });
   vm.runInContext(source.replace(anchor,
-    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, pool: () => _tlPool.slice(), sel: () => _tlSel.slice() };"), ctx,
+    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, pool: () => _tlPool.slice(), sel: () => _tlSel.slice(), hshLen: () => _hshC.length, growHsh: (o) => _hshOf(o) };"), ctx,
     { filename: absSrc("js/lighting/frame-lights.js") });
   return vm.runInContext("FrameLights", ctx);
 }
@@ -50,4 +50,12 @@ test("release() clears every _tlPool car ref and empties _tlSel after a night ap
     assert.equal(e.c, null, "release nulls every pooled car ref");
   }
   assert.equal(api.sel().length, 0, "release empties _tlSel");
+});
+
+test("release() drops the flicker hash table grown for a dense night grid", () => {
+  const api = load();
+  api.growHsh(5000);
+  assert.ok(api.hshLen() > 5000, "hash table grew with the lamp offset");
+  api.release();
+  assert.equal(api.hshLen(), 0, "track switch must not keep the peak hash allocation");
 });

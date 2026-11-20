@@ -650,15 +650,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
 | `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button. |
 
-**`js/share/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
-| `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
-| `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
-| `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
-
 **`js/render/glx/shaders/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -762,6 +753,15 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
+
+**`js/share/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `share-card-data.js` | `ShareCardData` | LAZY_RESULTS_SHEET | pure, JSON-safe data models for exported result cards. |
+| `share-card-layout.js` | `ShareCardLayout` | LAZY_RESULTS_SHEET | pure card layout: model + spec + text metric -> paint ops. |
+| `share-card.js` | `ShareCard` | LAZY_RESULTS_SHEET | canvas painter, PNG encoder and Web Share/download delivery. |
+| `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
 <!-- /@gen-arch:modules -->
 
 ---
