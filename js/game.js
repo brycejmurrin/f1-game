@@ -3542,7 +3542,8 @@ function updateCarLateral(c, dt, ranked, S) {
       || (stillCars.length ? Collide.parkedAhead(c, stillCars, track.total, AiDrive.hazardReach(c.speed)) : null);
     const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);
     const hzClear = AiDrive.hazardClear(CLEAR);
-    if (hz && Math.abs(desiredX - hz.x) < hzClear) desiredX = clamp(hz.x > 0 ? hz.x - hzClear : hz.x + hzClear, -(hw - 0.5), hw - 0.5);
+    if (hz !== c._hzOf) { c._hzOf = hz; c._hzSide = hz ? AiDrive.hazardSide(c.x, hz.x) : 0; }
+    if (hz && (c._hzSide < 0 ? desiredX > hz.x - hzClear : desiredX < hz.x + hzClear)) desiredX = clamp(hz.x + c._hzSide * hzClear, -(hw - 0.5), hw - 0.5);
     let rubClamp = false;
     const alongClose = !!alongO && Math.abs(alongDx) < CLEAR;
     const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO._snapX, CLEAR);
@@ -3578,7 +3579,7 @@ function updateCarLateral(c, dt, ranked, S) {
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);
-      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax);
+      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax, c._hzSide);
       const head0 = c.aiHeadV != null && vStd(Math.abs(vAbs - c.aiHeadV)) > AI_HEAD_JUMP ? 0 : c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt); c.aiHeadV = vAbs;
       gripScale = ls.lat;

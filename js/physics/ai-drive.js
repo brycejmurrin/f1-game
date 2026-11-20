@@ -592,10 +592,15 @@ const AiDrive = (function () {
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
   const HAZARD_CLEAR_M = 2.8;
   function hazardClear(clear) { return clear > HAZARD_CLEAR_M ? clear : HAZARD_CLEAR_M; }
-  function hazardHead(want, x, hz, clear, desiredX, v, yawMax) {
+  const HAZARD_COMMIT_M = 1;
+  function hazardSide(x, hzX) {
+    if (Math.abs(x - hzX) >= HAZARD_COMMIT_M) return x < hzX ? -1 : 1;
+    return hzX > 0 ? -1 : 1;
+  }
+  function hazardHead(want, x, hz, clear, desiredX, v, yawMax, side) {
     if (!hz || !(v > 1) || !(yawMax > 0)) return want;
     const k = 2 * EDGE_YAW_SHARE * yawMax / v;
-    if (hz.x > 0) {
+    if (side ? side < 0 : hz.x > 0) {
       const lim = hz.x - clear;
       if (desiredX > lim + 0.01) return want;
       const hi = Math.sqrt(k * Math.max(0, lim - x));
@@ -966,7 +971,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, hazardSide, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
