@@ -341,6 +341,31 @@ test("an empty year falls back to last season, labelled, with no calendar button
   assert.equal(all.filter((n) => n.attrs && n.attrs["data-ics"]).length, 0, "no ADD-TO-CALENDAR for a finished season");
   assert.equal(all.filter((n) => n.cls === "dh-empty").length, 0, "not an empty tab");
   assert.equal(wrap.attrs["data-season"], "last");
+  assert.equal(wrap.nextFlipAt, now + 30 * 60 * 1000, "the fallback node is rebuilt soon, not reused for 6 h (#5694 B5)");
+});
+
+// Hunt #5694 B5: between the finale and 1 January the current season is all
+// past — ADD WHOLE SEASON offered a calendar of races already run.
+test("a finished current season gets no ADD-TO-CALENDAR bar", async () => {
+  const now = Date.parse("2026-12-20T10:00:00Z");
+  class ClockDate extends Date {
+    constructor(...a) { super(...(a.length ? a : [now])); }
+    static now() { return now; }
+  }
+  function el(tag, cls, text) {
+    return { tag, cls, textContent: text || "", attrs: {}, children: [], isConnected: false, parentElement: null,
+      classList: { add() {} }, addEventListener() {}, removeAttribute(k) { delete this.attrs[k]; },
+      setAttribute(k, v) { this.attrs[k] = v; },
+      appendChild(child) { child.parentElement = this; this.children.push(child); return child; } };
+  }
+  const context = vm.createContext({ I18n: i18nStub(), Date: ClockDate, MutationObserver: class { observe() {} disconnect() {} },
+    document: { documentElement: {} }, queueMicrotask() {}, setInterval: () => 1, clearInterval() {},
+    F1API: { schedule: () => Promise.resolve([{ ...VEGAS, round: 22 }]) } });
+  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context, { filename: absSrc("js/data/schedule.js") });
+  const wrap = await context.S.create({ el, emptyMsg: (t) => el("div", "dh-empty", t) }).loadSchedule();
+  const all = []; (function walk(n) { all.push(n); (n.children || []).forEach(walk); })(wrap);
+  assert.equal(all.filter((n) => n.attrs && n.attrs["data-ics"]).length, 0);
+  assert.equal(all.filter((n) => n.cls === "dh-section")[0].textContent, "2026 CALENDAR", "the calendar itself still shows");
 });
 
 test("both years empty is still the empty message", async () => {
