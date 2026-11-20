@@ -132,7 +132,9 @@ export const TREE_METRICS = {
  * fails only when the change makes it WORSE than its base: over(head) >
  * over(base), where the base count is head minus the delta of the files the
  * change touched (only those blobs are read at the base, so a blob:none clone
- * fetches a handful, not a thousand). An inherited overage warns and stays green. */
+ * fetches a handful, not a thousand). An inherited overage warns and stays green.
+ * assertPins and assertPinsAll carry `absorb: 5` (D-037, eagerCodeBytes' mechanism): the commit hook writes a
+ * branch's own growth of up to 5 since its merge base (pinDelta) as its fragment; past 5 it is `ratchet-raise`. */
 const RAW_GAME = /game\.js(?:"|'(?!s\b))/g;
 // `assert.ok(x.includes(` is the same source pin as `assert.match(x, /…/)`: counting
 // both keeps "includes() instead of assert.match" from lowering the number.
@@ -751,9 +753,9 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
   if (r.missing) return "the file is missing";
   // Giving back part of this branch's own tree lowering is not a raise (attributeTree).
   if (r.tree && r.ownFrag < 0 && r.over <= -r.ownFrag) return null;
-  // The entry's absorb (eagerCodeBytes, B+D): the branch's own growth from its merge base, not the tip's, up to it.
+  // The entry's absorb (eagerCodeBytes, B+D; assertPins/assertPinsAll, D-037): the branch's own growth from its merge base, not the tip's, up to it.
   if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth) && r.ownGrowth <= r.absorb) return null;
-  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth)) return `the branch grows it by ${r.ownGrowth}, past its ${r.absorb} absorb — lazy-load it, or raise it as a fragment under Bryce's ratchet-raise`;
+  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth)) return `the branch grows it by ${r.ownGrowth}, past its ${r.absorb} absorb — ${Object.hasOwn(PIN_METRICS, r.metric) ? "convert a source pin to a behaviour assertion" : "lazy-load it"}, or raise it as a fragment under Bryce's ratchet-raise`;
   if (r.tree) return "a tree-wide metric is shrink-only — never auto-raised";
   if (!AUTO_RAISE_METRICS.has(r.metric)) return `${r.metric} is not a line count — never auto-raised`;
   if (r.slackMax === 0) return "its entry carries slack 0 (exact) — never auto-raised";
@@ -762,11 +764,17 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
 }
 
 /** Set `ownGrowth` (value minus the value at the merge base) on each over tree row whose entry has an absorb and
- *  whose metric tree-counts AT_REF can measure at a ref. A row it cannot measure keeps no ownGrowth and blocks as
+ *  whose metric tree-counts AT_REF can measure at a ref, or that is a pin counter (pinDelta). A row it cannot measure keeps no ownGrowth and blocks as
  *  before. Mutates and returns `rows`. */
-export async function ownGrowth(rows, { base = mergeBase(), at } = {}) {
+export async function ownGrowth(rows, { base = mergeBase(), at, pinGrowth = pinDelta } = {}) {
   for (const r of rows) {
     if (!(r.tree && r.absorb > 0) || !base) continue;
+    // A pin counter (assertPins/assertPinsAll, D-037) reads only the files the branch changed since the base, so a
+    // tip that moved on after the merge base adds nothing to the branch's own growth.
+    if (Object.hasOwn(PIN_METRICS, r.metric)) {
+      try { r.ownGrowth = await pinGrowth(r.metric, base); } catch { /* base unreadable: no absorb */ }
+      continue;
+    }
     at ||= (await import("./tree-counts.mjs")).AT_REF;
     if (!Object.hasOwn(at, r.metric)) continue;
     try { r.ownGrowth = r.value - await at[r.metric](base); } catch { /* base unreadable: no absorb */ }
