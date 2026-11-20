@@ -884,7 +884,8 @@ test("#5237: a rotation resets the fit's retry budget, at the flip and after the
   let fire = null; const timers = [];
   const ctx = { window: { matchMedia: () => ({ addEventListener: (t, fn) => { if (t === "change") fire = fn; } }) },
     setTimeout: (fn, ms) => timers.push([fn, ms]), VP_SETTLE_MS: 2000,
-    _fitRetry: 31, _fitKey: "k", _fitWait: 20, _fitPending: false };
+    _fitRetry: 31, _fitKey: "k", _fitWait: 20, _fitPending: false, G: { paused: false, state: "race" }, fits: 0 };
+  ctx.updateHud = (force) => { assert.equal(force, true, "a forced refresh"); if (++ctx.fits >= 2) ctx._fitPending = false; };
   vm.createContext(ctx);
   vm.runInContext(block, ctx, { filename: absSrc("js/ui/hud.js") });
   assert.equal(typeof fire, "function", "listens for the orientation flip");
@@ -893,4 +894,27 @@ test("#5237: a rotation resets the fit's retry budget, at the flip and after the
   assert.equal(timers.length, 1); assert.equal(timers[0][1], 2000);
   ctx._fitRetry = 31; ctx._fitKey = "k2"; timers[0][0]();
   assert.deepEqual([ctx._fitRetry, ctx._fitKey], [0, ""], "and again once the viewport settles");
+  assert.equal(ctx.fits, 0, "a running race leaves the fit to its own HUD tick");
+});
+
+test("#5237: a PAUSED race fits at the rotation itself: game.js parks the loop before updateHud", () => {
+  // js/game.js's paused branch returns before its updateHud call (measured in the page: no cap for 6 s while paused).
+  const src = read("js/ui/hud.js"), at = src.indexOf("const _rotMq");
+  const block = src.slice(at, src.indexOf("});", at) + 3).replace(/^const /, "var ").replace(", refitRot =", "; var refitRot =");
+  let fire = null; const timers = [];
+  const ctx = { window: { matchMedia: () => ({ addEventListener: (t, fn) => { if (t === "change") fire = fn; } }) },
+    setTimeout: (fn, ms) => timers.push([fn, ms]), VP_SETTLE_MS: 2000, _fitRetry: 31, _fitKey: "k", _fitWait: 20,
+    _fitPending: false, G: { paused: false, state: "race" }, fits: 0 };
+  // Each forced refresh is one fit; the paint pass asks for one more pass, then settles.
+  ctx.updateHud = () => { ctx.fits++; ctx._fitPending = ctx.fits % 2 === 1; };
+  vm.createContext(ctx);
+  vm.runInContext(block, ctx, { filename: absSrc("js/ui/hud.js") });
+  fire();   // the flip lands before the rotation pause opens
+  assert.equal(ctx.fits, 0);
+  ctx.G.paused = true; timers[0][0]();   // the settle, with the pause card up
+  assert.equal(ctx.fits, 2, "the settle runs the fit until it stops asking, before RESUME");
+  assert.equal(ctx._fitPending, false);
+  ctx.updateHud = () => { ctx.fits++; ctx._fitPending = true; };   // a fit that never settles is bounded
+  ctx.fits = 0; fire(); assert.equal(ctx.fits, 4);
+  ctx.G.state = "results"; ctx.fits = 0; fire(); assert.equal(ctx.fits, 0, "only a race or countdown fits the race HUD");
 });

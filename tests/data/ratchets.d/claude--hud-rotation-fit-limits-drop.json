@@ -5,11 +5,11 @@
       "lines": 1
     },
     "js/ui/hud.js": {
-      "codeLines": 1,
-      "lines": -17
+      "codeLines": 2,
+      "lines": -20
     }
   },
   "tree": {
-    "eagerBytes": -1077
+    "eagerBytes": -1187
   }
 }

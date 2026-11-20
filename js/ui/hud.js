@@ -471,9 +471,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
-// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box), so the paused landscape
-// HUD kept no caps until RESUME. Refit at the flip and once the viewport settles; the paused card's HUD ticks run it.
-const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true; };
+// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box). Refit at the flip and the
+// settle; a paused race runs NO HUD tick (game.js parks the loop before updateHud), so then it fits here, bounded.
+const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true;
+  if (G.paused && (G.state === "race" || G.state === "count")) for (let i = 0; i < 4 && _fitPending; i++) updateHud(true); };
 if (_rotMq && typeof _rotMq.addEventListener === "function") _rotMq.addEventListener("change", () => { refitRot(); setTimeout(refitRot, VP_SETTLE_MS); });
 // THE 3 s BACKSTOP RE-FITS ONLY WHAT RESIZED, seen by a ResizeObserver (no layout read); why and the settle window: docs/notes/LIVE-INPUT-H11-2026-10-20.md.
 const FIT_SETTLE_MS = 400, FIT_SKIP_MAX = 9, _fitSeen = new WeakSet(), _fitSize = new WeakMap();
@@ -956,12 +957,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // would read a 0.82 dock as 18 % wider than it paints. Read AFTER the
   // same-key return above: a steady tick must not pay a computed-style pass.
   let btnFloor = 1;
-  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
-  // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
-  // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
-  // 142 = 110×0.862/0.666). Dividing getBoundingClientRect by that stale live
-  // zoom over/under-estimates intrinsics and the next pass flips between
-  // ~--hud-scale (uncapped) and the 0.4 floor. Measure with what we published.
+  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom, which lags --hud-z-top a frame under load
+  // (Pages 37714419183): dividing rects by it flipped the next pass between uncapped and the 0.4 floor.
   // No currentCSSZoom on a real DOM (iOS Safari < 26.4) still paints zoom into rects:
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
