@@ -20063,6 +20063,7 @@
       ],
       "*": [
         "tests/specs/menu-survey.spec.js",
+        "tests/specs/touch-pedals.spec.js",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",

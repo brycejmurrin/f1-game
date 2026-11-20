@@ -120,16 +120,20 @@ test("auto-throttle and the GAS button can never disagree, across mode switches"
     // Through the REAL pause menu, the way a player switches: the pause button
     // opens it, STEER cycles the mode, resume closes it. Driving setSteerMode()
     // directly would skip the very refresh this test exists to check.
-    const prevMode = pair.mode;
-    await page.evaluate(() => {
+    // The flip is SYNCHRONOUS: › runs setSteerMode inside its click handler
+    // (js/ui/setting-row.js step -> js/game.js setSteerMode -> Input), so read it
+    // in the same task as the clicks. A page-side poll (#5958) timed out on CI
+    // with the flip already made: a stalled main thread could not run the poll.
+    const flip = await page.evaluate(() => {
       document.getElementById("pausebtn")?.click();
       // STEERING INPUT is a setting row: › steps to the next mode.
       document.getElementById("pm-steer-next")?.click();
       document.getElementById("pm-resume")?.click();
+      return { mode: window.__apex.inputState().steerMode,
+        closed: !!document.getElementById("pausemenu")?.hidden };
     });
-    // Wait for the mode flip — a fixed 150 ms sleep raced a slow pause close.
-    await page.waitForFunction((m) => window.__apex.inputState().steerMode !== m,
-      prevMode, { polling: 50, timeout: 10_000 });
+    expect(flip.mode, `STEER › from ${pair.mode} changed nothing`).not.toBe(pair.mode);
+    expect(flip.closed, "RESUME left the pause card open").toBe(true);
   }
   // Anti-vacuity: the loop must actually have visited more than one mode, or it
   // proved the invariant for a single state and called it a sweep.
