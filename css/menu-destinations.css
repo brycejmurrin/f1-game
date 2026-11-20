@@ -461,7 +461,7 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #
 :root[data-title-btns="row"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 /* TOUCH PAINT FLOOR (#5213; docs/notes/UI-HISTORY-2026-11-06.md item 8). Under a finger a SIZE
    under 100 paints as 100, a door is 44 px there, a label 12. js/ui/title-layout.js re-flows
-   ([data-home-rows] 7, 5) before it shrinks; [data-home-floor="off"] is the fit winning. */
+   ([data-home-rows] 7, 6) before it shrinks; [data-home-floor="off"] is the fit winning. */
 @media (pointer: coarse) {
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) {
   --home-b: max(1, var(--ui-compact-scale));
@@ -473,11 +473,11 @@ body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) {
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn { min-height: calc(44.2px / var(--home-b)); }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--home-fs) * .74 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--home-fs) * .64 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
-body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #menu-hero { flex-direction: row; }
-body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #menu-retention { display: contents; }
-body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #mb-career { flex: 1 1 0; }
-body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="5"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="5"] #menu-explore { display: contents; }
+/* Keep Career full width and Continue / Daily beneath it at every fit tier.
+   Short phones recover vertical space by packing the play doors below them. */
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="7"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="6"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="6"] #menu-explore { display: contents; }
 }
 }
 @media (max-height: 519px) and (min-aspect-ratio: 1/1) and (prefers-reduced-motion: reduce) {

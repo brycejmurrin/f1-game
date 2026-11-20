@@ -177,7 +177,7 @@ const TitleLayout = (function () {
   let fitRaf = 0;
   function fitClear(el) { for (const k of FIT_TOKENS) el.style.removeProperty(k); }
   // THE TOUCH PAINT FLOOR (#5213; css/menu-destinations.css): under a finger a door is never under
-  // 44 px, so a cluster too tall RE-FLOWS (8 rows, 7, 5) before it shrinks; the fit wins last.
+  // 44 px, so a cluster too tall RE-FLOWS (8 rows, 7, 6) before it shrinks; the fit wins last.
   const touchHome = () => { try { return phoneWide() && win().matchMedia("(pointer: coarse)").matches; } catch (_) { return false; } };
   const floored = () => { const e = doc && doc.getElementById("menu-buttons"); return !!e && touchHome() && e.getAttribute("data-home-floor") !== "off"; };
   /** BUTTONS SIZE's low end: 100 while the floor holds. */
@@ -207,7 +207,7 @@ const TitleLayout = (function () {
       }
       return true;
     };
-    const tiers = current().layout === "grid" ? ["", "7", "5"] : [""];
+    const tiers = current().layout === "grid" ? ["", "7", "6"] : [""];
     for (const t of tiers) { tier(t); if (fits(1)) { el.style.removeProperty("--tf"); return; } }
     // No row count takes this SIZE: the one that paints the biggest doors, held (--tf) between the
     // floor and the request, so hold() stops the slider (never a bigger SIZE, smaller doors).

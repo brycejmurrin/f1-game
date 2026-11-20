@@ -29,7 +29,7 @@ const EXPORT_FILE = OWNER_EXPORT;   // his 2026-11-10 export: tools/lib/bryce-ph
 const BOOT = 60000;
 /** Per screen: how a player opens it from the title, and the boxes compared. */
 const MENUS = [
-  { id: "title", open: async () => {}, ids: ["menu-buttons", "mb-career", "mb-race", "mb-garage", "mb-data", "mb-photo", "mb-settings", "mb-saves"] },
+  { id: "title", open: async () => {}, ids: ["menu-buttons", "menu-retention", "mb-career", "mb-race", "mb-garage", "mb-data", "mb-photo", "mb-settings", "mb-saves"] },
   { id: "select", open: async (p) => { await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])"); },
     ids: ["sel-inner", "select-title", "sel-track-search", "sel-map-btn", "sel-back", "sel-car", "sel-go"] },
   { id: "race settings", open: async (p) => { await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])"); await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])"); },
@@ -167,6 +167,9 @@ test.describe("a clean phone profile paints what the owner's 2026-11-10 export p
     // #5578: the suite runs MOTION REDUCED (playwright.config.js reducedMotion), where the title's doors must still hand
     // the fit their CURRENT label size. Before the fix every door's label read its previous font-size for one frame.
     for (const [who, m] of [["clean", clean], ["his export", his]]) {
+      const hero = m.title.rects["mb-career"], retention = m.title.rects["menu-retention"];
+      expect(hero[2], who + ": Career spans the menu column").toBeGreaterThanOrEqual(retention[2] - 1);
+      expect(retention[1], who + ": Continue and Daily follow Career").toBeGreaterThanOrEqual(hero[1] + hero[3] - 1);
       expect(m.lag.motion, `${who}: this spec boots with MOTION REDUCED (the state #5578 needs)`).toBe("reduce");
       expect(m.lag.late, `${who}: a title door's label and icon follow the door's font-size in the same frame`).toEqual([]);
     }
