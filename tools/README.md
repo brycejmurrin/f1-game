@@ -308,6 +308,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
 | **shot/capture-contract.mjs** | Shared bounded input/output and pixel evidence contracts for capture CLIs. | — |
 | **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
+| **shot/capture-fallbacks.mjs** | What a capture drew LESS of, or loaded MORE of, than a player's page (#5790): the TLX software-renderer fallbacks | — |
 | **shot/capture-gallery.mjs** | Verify capture indexes and package all images, recipes and source receipts into a portable static gallery. | — |
 | **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |

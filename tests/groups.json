@@ -161,6 +161,7 @@
     "tests/unit/camera-ride.test.mjs",
     "tests/unit/camera-tuner-a11y.test.mjs",
     "tests/unit/captions.test.mjs",
+    "tests/unit/capture-fallbacks.test.mjs",
     "tests/unit/capture-tools-agent.test.mjs",
     "tests/unit/capture-tools-cli.test.mjs",
     "tests/unit/capture-tools-pool.test.mjs",

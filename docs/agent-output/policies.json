@@ -2281,6 +2281,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/capture-fallbacks.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The one capture-state line beside each image: every active software-renderer fallback, the tlxForceHw set, the extra models and parity true/false; the whole-pack prefetch line."
+    },
     "tools/shot/capture-gallery.mjs": {
       "action": "keep-native",
       "presentation": "native",
