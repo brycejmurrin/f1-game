@@ -159,3 +159,22 @@ test("begin() re-uploads uLampShadowIdx when lampIdx changes; same idx skips via
   h.GLX.begin(h.frame({ lights: L, time: 3 }));
   assert.ok(idxUploads().some((c) => c[1][1] === 0), "begin re-uploads when lampIdx changes");
 });
+
+// #5699 row 17: _shadowAllIdx caches per lamp TABLE. LampChunks.resolve returns a table per chunks array, so props,
+// glass, terrain and road alternate; the single global slot it had missed on every alternation and re-scanned AL.
+test("_shadowAllIdx: alternating tables hit their own cache entry; a moved caster re-scans once (#5699 row 17)", () => {
+  const src = read(CHUNKED);
+  const fn = new Function(`"use strict"; const _saCache = new WeakMap(); ${fnSource(src, "function _shadowAllIdx(")}; return _shadowAllIdx;`)();
+  let scans = 0;
+  const base = new Float32Array(15 * 3);
+  base.set([1, 2, 3], 0); base.set([4, 5, 6], 15); base.set([7, 8, 9], 30);
+  const AL = new Proxy(base, { get: (t, k) => { if (k === "0") scans++; const v = t[k]; return typeof v === "function" ? v.bind(t) : v; } });
+  const props = {}, road = {}, glass = {};
+  for (let f = 0; f < 4; f++) for (const tbl of [props, road, glass]) assert.equal(fn(AL, tbl, 4, 5, 6), 1);
+  assert.equal(scans, 3, "one scan per table, then hits across four frames of alternating draws");
+  assert.equal(fn(AL, road, 7, 8, 9), 2, "a moved caster resolves its new slot");
+  assert.equal(scans, 4, "and costs exactly one more scan");
+  assert.equal(fn(AL, props, 4, 5, 6), 1, "the other tables keep their entries");
+  assert.equal(scans, 4);
+  assert.equal(fn(AL, road, 0, 0, 1), -1, "a caster not in the list is -1");
+});

@@ -1197,6 +1197,7 @@
     "tests/unit/tlx-gpumem-leak.test.mjs",
     "// TLX3-05 (#5651): the real tlx-chunked packer never hands a Float16BufferAttribute to the WebGPU leg (r187 widens it to Uint32 under a float16xN format); a would-be half keeps the exact Float32 source and a prepared half payload decodes to its exact f32 at build().",
     "tests/unit/tlx-half-webgpu-guard.test.mjs",
+    "tests/unit/tlx-hunt-5699.test.mjs",
     "// TLX perf hunt 3 (lane TLX-1): three's real WebGPURenderer over a no-op WebGL2 compiles the real lit material; GLSL pins (no env cube when opted out) + tlx.js source pins.",
     "tests/unit/tlx-hunt3.test.mjs",
     "// TLX perf hunt 4 (lane RENDER-S, A-H1): bufferSubData bytes over three r186 on the fake WebGL2 — the plain-Mesh instance streams (batches, mirror views, R1 runs, FX streams) upload 0 B unchanged and exactly the written range when written; the real InstancedMesh caster keeps Dynamic.",

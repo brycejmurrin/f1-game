@@ -254,7 +254,7 @@ try {
     // probe saw is still recorded, so a test or a triage can tell "no adapter at boot" (a 4 s cap under load included)
     // from a TLX that failed: an adapter found later by another caller does not say what this boot saw (#5304).
     const ok = await gpuAdapterAvailable();
-    if (!ok) pref = "webgl2";
+    if (!ok && !_adapterSlow) pref = "webgl2";
     try { if (ok) sessionStorage.removeItem("apex26.gfxAdapterWhy"); else sessionStorage.setItem("apex26.gfxAdapterWhy", _adapterWhy || "no adapter"); } catch (_) { /* blocked storage */ }
   }
   // Last load claimed the canvas then died — skip opt-in THIS tab only
