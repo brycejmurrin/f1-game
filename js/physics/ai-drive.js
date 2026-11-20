@@ -529,9 +529,7 @@ const AiDrive = (function () {
   const AI_DF = 0.65;   // PhysicsConsts.DOWNFORCE (not bound here: unit VMs load this file alone)
   // `aero` scales the wing term. The YAW budget (yawScale) gets no wings: it is a lane-change smoothness
   // budget, and wings took ai-racecraft-vm's solo lateral jerk from 5.9 to 8.1 m/s² (cap 7.5).
-  // THE AI WING IS NEARLY NEUTRAL (#5791): at 0.16 grip/load solo laps ran in aero-load
-  // order (tools/check/ai-solo.mjs, #5330); now AERO_GRIP_K, and AI X-mode reads the mid wing.
-  const AERO_GRIP_K = 0.055;   // PhysicsConsts.AI_WING_GRIP, unbound as AI_DF
+  const AERO_GRIP_K = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.AI_WING_GRIP) || 0.055;   // the literal: unit VMs (as AI_DF)
   function aeroGrip(load) { return 1 + ((load != null ? load : 0.5) - 0.5) * AERO_GRIP_K; }
   // AI ERS IS BOUNDED (#5330): deploy/regen cost nothing (PaceMath) and works kits
   // don't trade them (Aston 0.91/0.79, Haas 0.00/0.43); deploy 0->1 was 1.2-1.9 % of

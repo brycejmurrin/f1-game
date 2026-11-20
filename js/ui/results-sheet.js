@@ -687,10 +687,10 @@ function buildTTResults() {
   }
 
   // MEDAL. Thresholds from the model's pole for this circuit at this pace and
-  // difficulty (Quali.referencePole): gold beats it, silver within 3 %, bronze
+  // difficulty (Quali.referencePole("medal")): gold beats it, silver within 3 %, bronze
   // within 7 %. The medal held is the GHOST lap's (Ghost.medal), so it is
   // always the lap the player can race against.
-  const pole = G.referencePole ? G.referencePole() : 0;
+  const pole = G.referencePole ? G.referencePole("medal") : 0;
   if (pole > 0) {
     const held = Ghost.medal();
     const mr = document.createElement("div");

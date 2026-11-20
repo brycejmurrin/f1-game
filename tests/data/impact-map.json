@@ -15425,6 +15425,9 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "getDprBoost": [
+        "tests/unit/perf-governor.test.mjs"
+      ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
@@ -15469,6 +15472,9 @@
       ],
       "setDepthMask": [
         "tests/unit/render-final-contracts.test.mjs"
+      ],
+      "setDprBoost": [
+        "tests/unit/perf-governor.test.mjs"
       ],
       "setMaterialMaps": [
         "tests/unit/assets-pack.test.mjs",

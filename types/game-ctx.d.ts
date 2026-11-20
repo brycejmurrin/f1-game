@@ -786,8 +786,8 @@ interface GameCtx {
   raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
   /** A championship's grid with qualifying off: "champ" (standings, FIA 2026 SR B2.5.4(a)) | "tier" | "revchamp" | "random". */
   champGrid: "champ" | "tier" | "revchamp" | "random";
-  /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
-  readonly referencePole: () => number;
+  /** The modelled pole (Quali.referencePole): at QUALI_TRIM, the lap pit loss and the replay scale use; "medal": the calibrated time-trial / daily medal target. */
+  readonly referencePole: (kind?: "medal") => number;
   /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
   readonly redFlagRestart: () => boolean;
   /** The day's time-trial plan (js/race/daily-challenge.js). */

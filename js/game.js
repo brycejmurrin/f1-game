@@ -3418,7 +3418,7 @@ const G = {
   get raceQuali() { return qualiGrid(); }, set raceQuali(v) { if (!!v !== qualiGrid()) raceGrid = v ? "quali" : "tier"; },
   get raceGrid() { return raceGrid; }, set raceGrid(v) { if (GRID_RULES.indexOf(v) >= 0) raceGrid = v; },
   get champGrid() { return champGrid; }, set champGrid(v) { if (CHAMP_GRID_RULES.indexOf(v) >= 0) champGrid = v; },
-  referencePole: () => quali.referencePole(),
+  referencePole: (kind) => quali.referencePole(kind),
   redFlagRestart,
   get daily() { return daily; },
   holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
@@ -6619,7 +6619,7 @@ function checkRetirements(dt) {
 }
 
 // Results, ghosts and matching-class records share one settlement path.
-function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.referencePole()); }
+function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.referencePole("medal")); }
 
 // CEREMONY COOLDOWN: the flag is down and RaceCeremony's cooldown beat lets the human drive the finished car
 // (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
