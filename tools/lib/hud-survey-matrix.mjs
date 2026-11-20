@@ -30,12 +30,18 @@ export const DEVICES = Object.freeze({
   "desktop-1920": { w: 1920, h: 1080, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   // A 16:10 laptop (MacBook Air class): named cells and --device only, not a matrix axis.
   "desktop-1440x900": { w: 1440, h: 900, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  // The owner's 16-inch MacBook Pro (2024, M4), full display: 1728x1117 CSS px at DPR 2 (tools/ui/menu-screens.mjs
+  // desktop-macbook-pro-16-m4, #5977). Named cells and --device only, not a matrix axis.
+  "desktop-macbook-pro-16-m4": { w: 1728, h: 1117, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   // iPhone 12-14 landscape: 47px of notch each side, 21px home indicator.
   // Injected as --sal/--sar/--sat/--sab like hud-layout.spec.js: headless
   // Chromium reports env(safe-area-inset-*) as 0.
   "phone-landscape-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 47, sat: 0, sab: 21 } },
   // The owner's iPhone (tools/lib/bryce-phone.mjs BRYCE_WINDOWS; issue #5262): Home Screen app and Safari tab. Named
   // cells, not a matrix axis. `owner`: hud-survey seeds his live settings export unless --settings names another file.
+  // The same iPhone 15 windows on SHIPPED settings (no owner export): ids mirror #5977 (tools/ui/menu-screens.mjs).
+  "ios-iphone-landscape": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 } },
+  "ios-iphone-landscape-safari": { w: 852, h: 368, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 } },
   "bryce-852x393": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "standalone" },
   "bryce-852x368": { w: 852, h: 368, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "safari" },
   "phone-portrait-390x844": { w: 390, h: 844, touch: true, ins: { sal: 0, sar: 0, sat: 47, sab: 34 } },
@@ -239,7 +245,7 @@ export function normalizeCell(raw, base = DEFAULT_CELL) {
   return c;
 }
 
-const short = { "desktop-1280": "d1280", "desktop-1920": "d1920", "desktop-1440x900": "d1440", "phone-landscape-844x390": "phoneL",
+const short = { "desktop-1280": "d1280", "desktop-1920": "d1920", "desktop-1440x900": "d1440", "desktop-macbook-pro-16-m4": "mbp16", "phone-landscape-844x390": "phoneL",
   "phone-portrait-390x844": "phoneP", "tablet-1180x820": "tablet" };
 function hash6(s) {
   let h = 2166136261;

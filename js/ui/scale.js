@@ -94,19 +94,12 @@ const UiScale = (() => {
     const HUD_MIN = 70;
     const minFor = (k) => (k === "hudScale" ? HUD_MIN : SCALE_MIN);
     const SCALE_STEP = 0.25;
-    // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
-    // are mirrored here — CSS owns FIRST paint, this owns every write after it,
-    // and the two must not disagree. BUTTON SIZE keeps its own fixed default.
-    // History: 1.4536, then 1.25 (2026-09-14, when --hud-scale still carried a 1.24 bump and
-    // nothing capped the dock; fitHud's caps do that now).
-    // NOT moved to the owner's 143.25 % (#5358): in TILT / DRAG steering the bigger BOOST / OT / AERO
-    // column makes fitHud shrink the readouts to pay for it (852x393: minimap 103 -> 90 px, tower
-    // 371 -> 324) and tests/specs/hud-layout.spec.js stops settling. In BUTTONS steering the only
-    // difference is the steer pad: 90 px here, 103 at his stored 143.25.
+    // Touch defaults mirror css/tokens.css's `(pointer: coarse)` block: CSS owns first paint, this every
+    // write after. BUTTON SIZE stays 125, not the owner's 143.25 (#5358): in TILT / DRAG the bigger column
+    // makes fitHud shrink the readouts (852x393 minimap 103 -> 90 px) and hud-layout.spec stops settling.
     const BTN_DEFAULT = 1.25;
-    // A PHONE (touch, short side <= 500 px) ships UI SIZE 70 %, the owner's own setting (#5358):
-    // 109 % painted every menu "way too big" there. A tablet keeps 109. Only an UNSET size reads
-    // these; a stored one is never rewritten by a new default.
+    // A PHONE (touch, short side <= 500 px) ships UI SIZE 70 %, the owner's own (#5358); a tablet keeps
+    // 109. Only an UNSET size reads these defaults.
     const PHONE_UI_DEFAULT = 70;
     const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
     const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : (phoneUi() ? PHONE_UI_DEFAULT : 109)) : 100);
@@ -114,10 +107,14 @@ const UiScale = (() => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
     };
+    // Big desktop: unset HUD SIZE is 125 % (D-036), mirroring css/tokens.css.
+    const BIG_HUD_MQ = "(pointer: fine) and (min-width: 1600px) and (min-height: 960px)";
+    const BIG_HUD_DEFAULT = 125;
+    const bigHud = () => { try { return !!(window.matchMedia && window.matchMedia(BIG_HUD_MQ).matches); } catch (_) { return false; } };
     // Button size is an independent preference, including when unset.
     const scaleDefaultFor = (k) => (k === "hudBtnScale"
       ? 100 * (coarseUi() ? BTN_DEFAULT : 1)
-      : scaleDefault(k));
+      : k === "hudScale" && bigHud() ? BIG_HUD_DEFAULT : scaleDefault(k));
     const scalePct = (k) => {
       const v = store.get(k, null);
       return typeof v === "number" ? scaleSnap(v, k) : scaleDefaultFor(k);
