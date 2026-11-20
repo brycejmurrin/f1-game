@@ -21,6 +21,17 @@ were 2,847,130 B (35.7 %) of the old count. A branch's own growth up to 5000 B i
 label; past it, `ratchet-raise` as before. Open fragments' `eagerBytes` deltas are inert from here (applyFragments
 skips a metric ratchets.json no longer names). Evidence: docs/notes/RATCHET-REVIEW-2026-11-20.md.
 
+## 2026-11-19 — PR #5721 (claude/hunt4-fixes-5694): hunt #5694 season and replay fixes
+
+`(tree) eagerBytes` 8,015,286 → **8,017,013** (+1,727 B). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. The growth is the PR's own
+fix code in three FULL (eager) files, measured on the sync merge with tip `dec94440`:
+`js/career/season-ui.js` +1,022 (Season calendar edits, presets and the stale-tab note spoken
+through `LiveRegion`; a removed round drops its sprint mark), `js/career/season-cal.js` +376
+(`normalize` keeps sprintIds a set over the calendar) and `js/camera/replay-buf.js` +329 (a field
+replaced mid-scrub ends the scrub; `at/apply(NaN)` refused). The data-hub and real-race hunks are
+already lazy (LAZY_DATA, LAZY_REAL_RACE) and cost nothing. Fragment:
+`tests/data/ratchets.d/claude--hunt4-fixes-5694.json`.
 ## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
 
 `(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.

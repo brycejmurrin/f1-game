@@ -4591,17 +4591,17 @@
     {
       "path": "js/share/share-card-data.js",
       "global": "ShareCardData",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-layout.js",
       "global": "ShareCardLayout",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card.js",
       "global": "ShareCard",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/track/build-client.js",
