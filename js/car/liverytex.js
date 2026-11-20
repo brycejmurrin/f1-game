@@ -2067,15 +2067,8 @@ const LiveryTex = (function () {
     // the sidepod line. Sharing the flank with the mark is what the real cover
     // does; hiding behind the rear tyre to avoid it is not.
     const sideFrom = spineLogo === "wrap" ? Math.round((sunReach(0) + 0.02) * 1000) / 1000 : 0;
-    // …and a band may run to the tail of the flank, but CONTENT may not: a
-    // stripe's aft end disappearing behind the wheel is a stripe, a sponsor
-    // name's aft end disappearing behind the wheel is half a word. `su` is the
-    // band axis, `sc` the content axis, and they differ only where a crown has
-    // taken the front. On every crown the content axis also STOPS at
-    // FLANK_SEEN: the wordmark and duo boxes once ran to u 0.94/0.96 on a bare
-    // flank and McLaren's shipped wordmark was 24 % behind the rear tyre (duo
-    // 36 %, spine-station --occlude), so a box past the seen strip is clamped
-    // to it rather than trusted (#5712).
+    // …a band may run to the flank's tail, CONTENT stops at FLANK_SEEN on every
+    // crown: a name behind the wheel is half a word (#5712). `su` band, `sc` content.
     const sideTo = sideFrom ? FLANK_SEEN : 1;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
     const sc = (F, u) => F.fx(Math.min(FLANK_SEEN, sideFrom + u * (sideTo - sideFrom)));
@@ -2221,9 +2214,7 @@ const LiveryTex = (function () {
             { align: "center", pad: 4, halo: flankHalo(inkFlank) });
           return;
         }
-        // A bare flank stacks too: abreast, the title had to sit aft of u 0.40
-        // and ran to 0.96, a third of it behind the rear tyre. Stacked inside
-        // the seen strip, the title keeps the wider upper row.
+        // Stacked inside the seen strip (#5712).
         drawWordmark(ctx, names[0] || "", sbox(F, 0.04, 0.60, 0.10, 0.32), inkFlank,
           { align: "center", pad: 6, halo: flankHalo(inkFlank) });
         drawWordmark(ctx, names[1] || "", sbox(F, 0.10, 0.54, 0.34, 0.52), inkFlank,

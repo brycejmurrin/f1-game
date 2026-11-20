@@ -8,9 +8,12 @@
       "lines": 2
     },
     "js/game.js": {
-      "codeLines": -1,
+      "codeLines": 1,
       "gMembers": 1,
       "lines": 1
     }
+  },
+  "tree": {
+    "eagerBytes": -8
   }
 }
