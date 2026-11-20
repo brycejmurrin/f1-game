@@ -104,13 +104,58 @@ Not filed, low impact:
 - `js/car/cockpit-rig.js:265` passes a 10th argument (`21`) that `_rigBar` ignores.
 - `js/ui/experience.js:177` APX2 reads `.shot`, which the scene never defines; the clean-room audit found the fallback unreachable.
 
+## 1b. Subagents, counted separately
+
+The 13 sampled sessions launched 1 subagent, `ci-red-triage`, which made 5 calls; its card has no lsp tools. Subagent transcripts were not otherwise in the sample (follow-up: re-measure from `.claude/` subagent jsonl in an orchestrator session).
+
+What each card can do:
+
+| Card | apex-lsp in `tools:` | Body points at it |
+|---|---|---|
+| Explore, code-hunter, finding-verifier | yes (7 tools; Explore lacks diagnostics) | yes |
+| worker | `*` (all) | yes |
+| physics-contract-auditor (its step 2 is a references hunt for `Tracks.curvature`) | **no → added in PR B** | **step 2 now starts from `lsp_callers`** |
+| ci-red-triage, deploy-research, prior-art-scout, surface-reviewer, track-surveyor, verify-agent | no (logs, web, docs or circuit data: grep is right) | — |
+
+## 1c. Waste, with numbers
+
+**Replay** (a scripted run of 10 real "find X" tasks from the survey on the current tree): grep printed 15,812 chars (~3,950 tokens); the one apex-lsp call per task printed 6,162 chars (~1,540 tokens). Grep cost more on 7 of 10 tasks, by up to 15× (`XrBoot` uses: 4,163 vs 282 chars).
+
+Grep was cheaper or equal on three:
+- `where is setRoomy`: grep 53 chars vs 750 with `body: true`, a one-line definition.
+- `what does Ghost export`: grep 1,213 vs 1,449.
+- `bootGlx`: no longer exists; both find nothing.
+
+The standing 15-question `lsp-eval`: apex-lsp 8,585 chars against grep 147,416 for the same answers.
+
+**Per-call costs:**
+- Deferred loading: one ToolSearch call per session. After `alwaysLoad` that becomes ~2,670 tokens of schemas on every turn.
+- First query: 1–2.5 s while the project loads, then 30–600 ms.
+- `diag js/game.js`: 8 s cold.
+
+**Answers that mislead and drive agents back to grep:**
+- `refs penaltyWhy` (a property only ever set on untyped `c` objects) heads its output "0 references" and lists the 11 real `.penaltyWhy` sites only in a note. Follow-up: lead with the text-match count and print those rows tagged `[text]`.
+- `def GLX.makeFrustumPlanes`: members installed at run time are invisible (§2).
+
+## 1d. When grep is the right tool (keep guidance two-sided)
+
+Use grep, not apex-lsp, for:
+- text, comments, log and error strings, regex shapes
+- CSS, HTML, JSON, Markdown
+- files outside `js/` (tools/, tests/, workflows)
+- a one-line definition you will read whole anyway
+- a word that is not a JS identifier
+
+Forcing LSP-first lowered success in the published harness study (§Research). So the guidance names the tool at the moment of a symbol lookup (`alwaysLoad`, briefs, hook) and never blocks grep.
+
 ## 4. Fixes to steering (PR B)
 
 | Lever | Change |
 |---|---|
 | Deferral | `"alwaysLoad": true` on `apex-lsp` in `.mcp.json` / `.cursor/mcp.json` (https://code.claude.com/docs/en/mcp.md#exempt-a-server-from-deferral). The cost is 8 tool schemas, ~2,670 tokens per turn (`tools/mcp/mcp-listing-cost.mjs --only=apex-lsp`). |
 | Briefs | the worker prompt, skill `steward` and the orchestrator brief name the calls |
-| Hook | `lsp-hint.py` splits alternations and treats camelCase names inside js/ searches as symbols: 7 of 7 survey examples now hint, and the old quiet cases stay quiet |
+| Subagent card | `physics-contract-auditor` gets `lsp_references` / `lsp_callers` / `lsp_definition`, and its step 2 starts from `lsp_callers Tracks.curvature` |
+| Hook (PROTECTED, not shipped) | A proposed `lsp-hint.py` patch splits alternations and treats camelCase names inside js/ searches as symbols. Replayed on the survey: 7 of 7 examples hint, and the old quiet cases stay quiet. It is left for Bryce (a guard file; the patch is attached to PR B). Today the hook fires on 2 of 396 calls. |
 | AGENTS.md | the loop's edit step says to find symbols with apex-lsp, not grep |
 
 ## Research (cited by the 2026-11-20 lane; not all re-verified)
