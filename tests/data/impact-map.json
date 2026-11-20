@@ -19954,6 +19954,9 @@
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "previewMapBand": [
+        "tests/unit/select-preview-band.test.mjs"
+      ],
       "setTeamPicker": [
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
