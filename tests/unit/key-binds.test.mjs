@@ -21,6 +21,7 @@ test("malformed imported binding slots cannot stop Controls initialization", () 
     sb.window = sb;
     const ctx = vm.createContext(sb);
     vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+    vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
     const settings = vm.runInContext("SettingsExport", ctx);
     const hostile = JSON.parse('{"toString":null,"valueOf":null}');
     const saved = kind === "keys"

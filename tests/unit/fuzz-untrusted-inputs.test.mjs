@@ -330,6 +330,7 @@ function bootSettingsExport() {
   // The livery.custom.* door hands rows to CustomLiveries.normalizeImported.
   vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
   return { SettingsExport, G, store, disk };
