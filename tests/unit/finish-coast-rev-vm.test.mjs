@@ -86,7 +86,12 @@ test("AI finisher: the same coast branch winds its rpm to the crawl, not the cro
     assert.ok(rpmCross > PC.IDLE_RPM + 3000, "crossing revs: " + rpmCross);
     ai.finished = true;
     const samples = [];
-    for (let i = 0; i < 900 && G.state === "race"; i++) { g.step(1); if (i % 30 === 29) samples.push({ rpm: ai.rpm, v: ai.speed, gear: ai.gear }); }
+    // Every 5 ticks: the coast sheds ~20 m/s² and reaches the idle floor within ~0.7 s of a 25 m/s pick, so a 30-tick
+    // sample caught one or two points above idle and the third came from whatever bump the rival met (#5330: the AI
+    // pace calibration changed which car is first over 20 m/s, and the pass with it). Same assertions, finer clock.
+    // 5 s, not 15: the coast holds its floor by ~1.5 s, and by 15 s the racing pack caught the crawler and its contact
+    // shoved it to 15.04 m/s (#5686 after #5791: PIA/VER 4.6 m behind) — traffic, not the coast branch under test.
+    for (let i = 0; i < 300 && G.state === "race"; i++) { g.step(1); if (i % 5 === 4) samples.push({ rpm: ai.rpm, v: ai.speed, gear: ai.gear }); }
     assert.equal(G.state, "race", "the humans are still running");
     assert.ok(ai.speed < 15, "the AI finisher coasts to a crawl: " + ai.speed);
     // rpm = rpmFor(gear, coast speed): above the idle floor, rpm / speed is the
