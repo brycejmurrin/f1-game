@@ -1060,11 +1060,11 @@ body[data-ga-bars]::after { bottom: 0; }
   --cs-sheet-w: min(100%, clamp(min(410px, calc(420px * var(--look-garage-pw, 1))), calc((var(--safe-w) - 420px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
 }
 :root[data-look-garage-ph] #carsetup #cs-inner {
-  max-height: calc(100% * var(--look-garage-ph, 1));
+  max-height: max(calc(100% * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9)));
 }
 @media (orientation: portrait) {
   :root[data-look-garage-ph] #carsetup #cs-inner {
-    max-height: calc(min(70vh, 100%) * var(--look-garage-ph, 1));
+    max-height: max(calc(min(70vh, 100%) * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9)));
   }
   :root[data-look-garage-pw] #carsetup #cs-inner {
     width: calc(100% * min(var(--look-garage-pw, 1), 1));
@@ -1073,7 +1073,7 @@ body[data-ga-bars]::after { bottom: 0; }
   :root[data-look-garage-pw][data-look-garage-side="left"] #carsetup #cs-inner { justify-self: start; }
 }
 @media (orientation: portrait) and (max-height: 740px) {
-  :root[data-look-garage-ph] #carsetup #cs-inner { max-height: calc(100% * var(--look-garage-ph, 1)); }
+  :root[data-look-garage-ph] #carsetup #cs-inner { max-height: max(calc(100% * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9))); }
 }
 
 :root[data-look-garage-side="left"] #carsetup { place-items: stretch start; }
