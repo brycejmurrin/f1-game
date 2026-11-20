@@ -732,6 +732,29 @@ export class Lsp {
       msg: m.called ? `${m.owner}.${m.member}() is called, but no declaration of it defines '${m.member}' (TypeError at run time)` : `${m.owner}.${m.member} is read, but no declaration of it defines '${m.member}' (always undefined)`,
       src: (lines[m.line0] || "").trim() }));
   }
+  // TS2554 "Expected 0 arguments" is noise when the callee TypeScript resolved is a placeholder: a stub
+  // module's empty function (the real one replaces it at run time) or a parameter defaulted to `() => x`.
+  async placeholderCallee(f, text, pos) {
+    const lines = text.split("\n");
+    let off = 0; for (let i = 0; i < pos.line; i++) off += lines[i].length + 1; off += pos.character;
+    let depth = 0, i = off - 1;
+    for (; i >= 0; i--) { const ch = text[i]; if (ch === ")" || ch === "]" || ch === "}") depth++; else if (ch === "(" || ch === "[" || ch === "{") { if (depth === 0) break; depth--; } }
+    if (i < 1 || text[i] !== "(") return false;
+    let j = i - 1; while (j >= 0 && /\s/.test(text[j])) j--;
+    if (j < 0 || !/[\w$]/.test(text[j])) return false;
+    const before = text.slice(0, j), line = before.split("\n").length - 1, character = j - (before.lastIndexOf("\n") + 1);
+    let defs;
+    try { defs = await this.request("textDocument/definition", { textDocument: { uri: this.uriOf(f) }, position: { line, character } }); } catch { return false; }
+    defs = Array.isArray(defs) ? defs : defs ? [defs] : [];
+    if (!defs.length) return false;
+    return defs.every(l => {
+      const file = this.rel(l.uri || l.targetUri), start = (l.range || l.targetSelectionRange).start;
+      if (/(^|[/.-])stub\b/.test(file)) return true;
+      let src; try { src = file === f ? lines : fs.readFileSync(path.join(this.root, file), "utf8").split("\n"); } catch { return false; }
+      const tail = (src[start.line] || "").slice(start.character);
+      return /^\(\)\s*=>/.test(tail) || /^function\s*[\w$]*\s*\(\)\s*\{\s*\}/.test(tail) || /^[\w$]+\s*=\s*\(\)\s*=>/.test(tail) || /^[\w$]+\s*(?::\s*)?(?:function\s*)?\(\)\s*(?:=>\s*)?\{\s*\}/.test(tail) || /^[\w$]+\s*:\s*\(\)\s*=>/.test(tail);
+    });
+  }
   async diagnose(file, all = false) {
     await this.prepare();
     const f = this.inRoot(file);
@@ -744,7 +767,12 @@ export class Lsp {
       this.open.set(f, v);
       this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(f), version: v }, contentChanges: [{ text: "// @ts-check\n" + text }] });
       const r = await this.request("textDocument/diagnostic", { textDocument: { uri: this.uriOf(f) } });
-      return (r?.items || []).filter(d => {
+      const items = [];
+      for (const d of r?.items || []) {
+        if (d.code === 2554 && /^Expected 0 arguments/.test(d.message) && await this.placeholderCallee(f, "// @ts-check\n" + text, d.range.start)) continue;
+        items.push(d);
+      }
+      return items.filter(d => {
         if (d.code < 2000) return true;
         if (!DIAG_CODES.has(d.code)) return false;
         const name = /'([\w$]+)'/.exec(d.message)?.[1];
