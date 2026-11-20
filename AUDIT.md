@@ -865,3 +865,49 @@ re-tested. The CSP hashes were recomputed with `tools/csp-hashes.mjs --write` (s
 inline scripts changes them). After the merge every script parses, and the game boots and steps a race at
 Monza with no page or console errors. File and line references in the sections above are from before
 this refresh.
+
+## Round on the refreshed base (deploy 6555994c) — regressions in the last day's deploy changes
+
+Three subagents reviewed the 149 files deploy changed since the first snapshot (rendering; race, physics
+and track; UI and CSS), using the LSP tool and the running game; I reviewed the service worker, storage and
+lazy loading, re-ran each patch below myself, and re-ran the node-level checks for the earlier fixes on the
+merged code (all hold).
+
+### Fixes 73–76
+
+- **73** `js/race/quali-model.js` — **regression on deploy** — the time-trial medal reference lap lost its
+  per-circuit calibration: gold was 3–7% faster than the AI's own pole (reference / AI pole 0.955 Monza,
+  0.943 Monaco, 0.974 Silverstone, 0.930 Imola, where matching the fastest AI earned no medal). After:
+  0.982–0.985 on all four. Pit-loss estimates and the real-race replay scale read the same value.
+- **74** `js/render/glx/glx.js` — **regression on deploy** — the new RESOLUTION "MAX" option did nothing on
+  the WebGL2 renderer (only three.js got `setDprBoost`). At pixel ratio 3: canvas 640x360 → 960x540 with
+  the boost. The raw WebGPU renderer still lacks it.
+- **75** `css/carsetup.css` — **regression on deploy** — the new garage PANEL HEIGHT setting at 40 left a
+  150 px panel with no controls and a clipped CLOSE button at 844x390 → floor added, 374 px.
+- **76** `css/data.css` — **regression on deploy** — qualifying sheet rows doubled in height in phone
+  landscape: 12 of 22 rows visible → 22.
+- LSP tool: `diag` hides "Expected 0 arguments" where the callee is a placeholder (stub module function
+  or a parameter defaulted to `() => x`): `js/game.js` 29 → 9 hits, `js/physics/collide.js` 10 → 1.
+
+### Found, not patched
+
+- **Photo Studio, phone portrait:** the framing guide no longer matches the saved photo. The guide is now
+  centred on the top preview band (y 129–348 at 390x844) but CAPTURE still crops the centre of the canvas
+  (y 312–531). The proper fix is to make the crop follow the guide (`js/ui/photo-studio.js` `crop()`).
+- **Rules in a late-loading stylesheet:** three new rule blocks sit in `css/data.css`, which loads only
+  for some screens or after a fallback at about 15–19 s. The iOS install-banner rule therefore never
+  applies before the banner auto-dismisses (and would clip the message if it did), and its static masks
+  override the scroll-fade classes on How To Play and the track strip. A patch exists but does not apply
+  on top of fix 76 and removes masks that may be deliberate.
+- **Stream overlay at 720p:** with 22 tower rows (fix 9) the tower is 748 px tall starting at 7vh, so in
+  a 1280x720 browser source P21 and P22 fall off screen (1080p is fine). Arithmetic, not rendered.
+- **Time-trial pit stop:** time trials now have a working pit stop ("END TIME TRIAL") even with tyre wear
+  off, while How To Play says there is then no pit lane; entering the lane invalidates the lap.
+- **Dark frames on software rendering:** fixed in the three.js renderer only; the WebGL2 and raw WebGPU
+  paths still drop dark frames (read only; a patch exists with no before/after).
+- `setDprBoost` returns "the cap changed", not "the boost changed", so the governor can skip its cooldown
+  and log line; `PhysicsConsts.AI_WING_GRIP` is new but never read (the AI hard-codes 0.055);
+  `MenuQuitTail.afterOverlay(forgetGp)` passes an argument its callee ignores.
+- LSP tool gaps seen this round: `callers` on members of an untyped factory return falls back to text
+  (correct but lists a line twice); it misses a cross-file call made through an alias function
+  (`studio().shapeNow()`); `refs` on a single-letter parameter lists unrelated text matches.
