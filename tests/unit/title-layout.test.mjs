@@ -21,7 +21,7 @@ const SHELL = read("index.html");
 const CSS = read("css/responsive.css");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
-function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = false } = {}) {
+function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = false, viewport = {} } = {}) {
   const dom = makeDom();
   const panel = dom.byId("pm-panel-appearance");
   // The shell's TITLE SCREEN fold: summary + body, REPLAY INTRO last in the body.
@@ -63,6 +63,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     innerWidth: 1000, innerHeight: 500, addEventListener: (n, fn) => (winOn[n] ||= []).push(fn),
   };
+  Object.assign(sb, viewport);
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
   if (raf) { sb.requestAnimationFrame = (fn) => frames.push(fn); sb.cancelAnimationFrame = (n) => { frames[n - 1] = null; }; }
   sb.window = sb;
@@ -129,20 +130,43 @@ test("index.html's first-paint copy writes exactly what the module writes", () =
   const A = { btns: { x: -10, y: 5, size: 120, width: 40 }, title: { x: 3, y: -4, size: 80 }, art: { x: 0, y: 12, size: 150 }, layout: "stack", side: "swap" };
   const B = { btns: { x: 0, y: 0, size: 100, width: 0 }, title: { x: 0, y: 0, size: 100 }, art: { x: 20, y: 0, size: 100 }, layout: "row", side: "auto" };
   // v1 (one layout, both shapes), a v2 pair, and a v2 with only the portrait shape custom.
-  const cases = [A, B, { v: 2, wide: A, tall: B }, { v: 2, tall: A }];
-  for (const stored of cases) for (const shape of ["wide", "tall"]) {
-    const { M, html } = boot({ titleLayout: stored }, { shape });
+  const cases = [null, A, B, { v: 2, wide: A, tall: B }, { v: 2, tall: A }];
+  const phone = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  for (const stored of cases) for (const shape of ["wide", "tall"]) for (const viewport of [{}, phone]) {
+    const { M, html } = boot({ titleLayout: stored }, { shape, viewport });
     const de = { style: { _d: {}, setProperty(k, v) { this._d[k] = v; } }, dataset: {} };
     const sb = { localStorage: { getItem: (k) => (k === "apex26.titleLayout" ? JSON.stringify(stored) : null) }, document: { documentElement: de }, JSON,
       b: { getAttribute: (k) => (k === "data-shape" ? shape : null) } };
-    vm.runInContext(m[1], vm.createContext(sb));
+    vm.runInContext(m[1], vm.createContext({ ...sb, ...viewport }), { filename: absSrc("index.html") });
     const why = `${JSON.stringify(stored).slice(0, 40)}… on ${shape}`;
-    assert.deepEqual(de.style._d, plain(html.style._decls), "same tokens: " + why);
-    assert.deepEqual(de.dataset, plain(html.dataset), "same attributes: " + why);
+    const titleTokens = Object.fromEntries(Object.entries(html.style._decls).filter(([key]) => key.startsWith("--tl-")));
+    assert.deepEqual(de.style._d, titleTokens, "same tokens: " + why);
+    const titleAttrs = Object.fromEntries(Object.entries(html.dataset).filter(([key]) => key.startsWith("title")));
+    assert.deepEqual(de.dataset, titleAttrs, "same attributes: " + why);
     const want = M.isDefault(M.current()) ? {} : plain(M.vars(M.current()));
     assert.deepEqual(de.style._d, want, "and both are TitleLayout.vars of the shape's layout: " + why);
   }
   assert.ok(SHELL.indexOf("// Title layout: apex26.titleLayout") > SHELL.indexOf('b.setAttribute("data-shape"'), "it runs after data-shape is known");
+});
+
+test("factory phone title layouts follow rotation and reset while tablets retain the base layout", () => {
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  const { M, rotate, html, data } = boot({}, { viewport });
+  const profile = JSON.parse(read("tests/data/phone-appearance-2026-11-20.json")).settings.appearance.titleLayout;
+  const wide = profile.wide;
+  assert.deepEqual(plain(M.current()), wide);
+  rotate("tall");
+  assert.equal(html.style.getPropertyValue("--tl-btns-size"), "1.05");
+  assert.equal(html.dataset.titleBtnw, undefined);
+  M.set({ btns: { size: 155 } });
+  rotate("wide");
+  assert.deepEqual(plain(M.current()), wide);
+  assert.equal(M.current("tall").btns.size, 155);
+  M.resetShape("tall");
+  assert.deepEqual(plain(M.current("tall")), profile.tall);
+  assert.equal(data.titleLayout, undefined);
+  const tablet = boot({}, { viewport: { ...viewport, innerWidth: 1024, innerHeight: 768 } });
+  assert.deepEqual(plain(tablet.M.current()), plain(tablet.M.DEFAULT));
 });
 
 test("v1 → v2: a one-layout store is BOTH shapes, and the next write keeps the untouched shape", () => {
@@ -349,6 +373,37 @@ test("editor: keys nudge, size and cycle the pieces; the bar's steps and RESET P
   dom.byId("tl-reset-piece").click();
   assert.deepEqual(plain(data.titleLayout.tall.btns), { x: 0, y: 0, size: 100, width: 0 }, "RESET PIECE");
   assert.equal(data.titleLayout.tall.art.x, -1, "and only that piece");
+});
+
+test("phone sliders expose every width step, Auto and the current orientation's reset values", () => {
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  const { dom, M, rotate } = boot({}, { viewport });
+  const width = dom.byId("pm-tl-btns-width"), size = dom.byId("pm-tl-btns-size");
+  assert.deepEqual([size.value, width.value], ["106", "25"]);
+  width.focus();
+  for (const requested of [24, 23, 22, 21, 20, 19, 20, 100]) {
+    width.value = String(requested);
+    dom.dispatch(width, { type: "input" });
+    dom.dispatch(width, { type: "change" });
+    const value = requested === 19 ? 0 : requested;
+    assert.equal(M.current().btns.width, value);
+    assert.equal(width.value, String(requested));
+    assert.equal(width.getAttribute("aria-valuetext"), value ? value + "%" : "AUTO");
+  }
+  dom.byId("pm-tl-reset-shape").click();
+  assert.equal(width.value, "25", "a reset also repaints the focused range");
+  rotate("tall");
+  assert.deepEqual([size.value, width.value, width.getAttribute("aria-valuetext")], ["105", width.min, "AUTO"]);
+  rotate("wide");
+  assert.equal(width.value, "25");
+});
+
+test("editor width nudges reach the minimum before Auto from an off-step percentage", () => {
+  const { dom, M } = editing({ titleLayout: { v: 2, wide: { btns: { width: 22 } } } });
+  dom.byId("tl-width-dn").click();
+  assert.equal(M.current().btns.width, 20);
+  dom.byId("tl-width-dn").click();
+  assert.equal(M.current().btns.width, 0);
 });
 
 test("editor: DONE gives the settings page back, opens the fold and focuses its button; mid-race it cannot open", () => {

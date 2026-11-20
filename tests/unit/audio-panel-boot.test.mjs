@@ -60,6 +60,17 @@ test("init sets the music switch before setSound can start the menu track", () =
   assert.ok(start < 0 || sw < start, "setSound started the menu track before the MUSIC OFF switch reached the soundtrack: " + calls.join(" "));
 });
 
+test("the mixer shell shows fresh-panel volume positions and readouts before boot", () => {
+  const { dom } = boot({ soundOn: true, musicEnabled: true });
+  const shell = read("index.html");
+  for (const id of ["as-mvol", "as-svol", "as-rvol"]) {
+    const input = shell.match(new RegExp(`<input id="${id}"[^>]*value="(\\d+)"`));
+    const label = shell.match(new RegExp(`id="${id}-v">(\\d+)</b>`));
+    assert.equal(input?.[1], dom.byId(id).value, id);
+    assert.equal(label?.[1], dom.byId(id + "-v").textContent, id + "-v");
+  }
+});
+
 test("enabling SOUND follows falling rain rather than standing water", () => {
   for (const rainfall of [0, 0.2, 1]) {
     const { G, GameAudio, dom } = boot({ soundOn: false, musicEnabled: false });

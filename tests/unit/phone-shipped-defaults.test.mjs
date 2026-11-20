@@ -1,12 +1,4 @@
-/* phone-shipped-defaults — what an UNSET size reads on a phone (#5358).
- *
- * The owner's 2026-11-10 profile (tests/data/settings-live-export-2026-11-10.json) is what makes his iPhone
- * "playable and not way too big": UI SIZE 70, and per-screen looks on top of it. Those numbers are now what a phone
- * ships. Two things are held here, by running the real modules in node:vm:
- *   1. a phone with NOTHING stored reads his values, and a desktop / tablet reads what it always did;
- *   2. a stored value is never rewritten: it wins over the new default, and nothing is written at boot.
- * The painted rects are tests/specs/phone-shipped-defaults.spec.js (CI).
- *
+/* Phone defaults from the November 20 appearance export.
  * Run: node --test tests/unit/phone-shipped-defaults.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +13,8 @@ import { OWNER_EXPORT } from "../../tools/lib/bryce-phone.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 const plain = (o) => JSON.parse(JSON.stringify(o));
-const EXPORT = JSON.parse(read(OWNER_EXPORT)).settings;   // his 2026-11-10 export (#5218)
+const EXPORT = JSON.parse(read("tests/data/phone-appearance-2026-11-20.json")).settings;
+const OLD = JSON.parse(read(OWNER_EXPORT)).settings;
 
 const DEVICES = {
   phone: { coarse: true, innerWidth: 852, innerHeight: 393 },
@@ -54,41 +47,42 @@ function boot(file, global, device, stored = {}, shape = "wide") {
 const looks = (device, stored) => boot("js/ui/screen-looks.js", "ScreenLooks", device, stored);
 const title = (device, stored, shape) => boot("js/ui/title-layout.js", "TitleLayout", device, stored, shape);
 
-const LOOK_KEYS = { pause: "lookPause", select: "lookSelect", race: "lookRace", garage: "lookGarage", designer: "lookDesigner" };
+const LOOK_KEYS = { pause: "lookPause", select: "lookSelect", race: "lookRace", garage: "lookGarage", career: "lookCareer", datahub: "lookDatahub", designer: "lookDesigner" };
 
 test("a phone with nothing stored reads the owner's per-screen looks, and stores nothing", () => {
   const { M, data, writes, html } = looks("phone");
   for (const [id, key] of Object.entries(LOOK_KEYS)) {
     const got = M.read(id);
-    for (const [k, v] of Object.entries(EXPORT.appearance[key])) {
-      // NOT taken: garage BUTTON HEIGHT 80 (DONE paints 35 px, under the 44 px tap floor) and garage
-      // PANEL WIDTH 110 (clips UNLIMITED at UI SIZE 50 %).
-      if (id === "garage" && (k === "btn" || k === "pw")) assert.equal(got[k], 100, `garage.${k} stays at the base`);
-      else assert.equal(got[k], v, `${id}.${k}`);
+    // A null setting follows each device's adaptive values.
+    const adaptive = { select: { w: 125, tile: 95 }, race: { w: 120, btn: 90 }, designer: { size: 75 } };
+    const expected = EXPORT.appearance[key] ?? adaptive[id];
+    for (const [k, v] of Object.entries(expected)) {
+      // Compact phones cannot paint a roomy Career layout. AUTO stays responsive on resize.
+      assert.equal(got[k], id === "career" && k === "density" ? "auto" : v, `${id}.${k}`);
     }
     assert.equal(M.isShipped(id), true, `${id} is SHIPPED, not CUSTOM`);
   }
   assert.deepEqual(writes, [], "no store write at boot");
   assert.deepEqual(data, {}, "the store is still empty");
   // …and they PAINT: off the CSS base, so the attribute and the token are stamped.
-  assert.equal(html.dataset.lookPauseBtn, "115");
-  assert.equal(html.style.getPropertyValue("--look-pause-btn"), "1.15");
+  assert.equal(html.dataset.lookPauseBtn, "125");
+  assert.equal(html.style.getPropertyValue("--look-pause-btn"), "1.25");
   assert.equal(html.style.getPropertyValue("--look-race-w"), "1.2");
   assert.equal(html.style.getPropertyValue("--look-designer-size"), "0.75");
   assert.equal(html.dataset.lookGarageStats, "hide");
 });
 
-test("the same seeded looks read identically on a phone: his export and a clean profile are one picture", () => {
+test("seeding the exported panel looks preserves the explicit Career density and matches other phone defaults", () => {
   const stored = {};
   for (const key of Object.values(LOOK_KEYS)) stored[key] = EXPORT.appearance[key];
   const a = looks("phone"), b = looks("phone", stored);
-  // His picture is the clean one plus his garage BUTTON HEIGHT 80 and PANEL WIDTH 110 (not shipped).
-  a.M.set("garage", "btn", 80);
-  a.M.set("garage", "pw", 110);
+  assert.equal(a.M.read("career").density, "auto");
+  assert.equal(b.M.read("career").density, "roomy");
+  a.M.set("career", "density", "roomy");
   for (const id of Object.keys(LOOK_KEYS)) assert.deepEqual(plain(a.M.read(id)), plain(b.M.read(id)), id);
   assert.deepEqual(plain(a.html.dataset), plain(b.html.dataset));
   assert.deepEqual(plain(a.html.style._decls), plain(b.html.style._decls));
-  assert.deepEqual(plain(a.data), { lookGarage: { btn: 80, pw: 110 } }, "and those two knobs are all the clean profile had to store");
+  assert.deepEqual(plain(a.data), { lookCareer: { density: "roomy" } });
   assert.deepEqual(b.data, stored, "his stored looks are left exactly as they were");
 });
 
@@ -116,34 +110,47 @@ test("a stored knob wins over the phone default and is not rewritten; the old ba
   assert.deepEqual(data, stored);
   assert.equal(html.dataset.lookPauseBtn, undefined, "100 is the CSS base: no stamp");
   // Moving a knob TO the phone default drops it from the store; moving it to the old base keeps it.
-  M.set("pause", "w", 115);
+  M.set("pause", "w", 135);
   assert.deepEqual(plain(data.lookPause), { btn: 100 });
-  M.set("pause", "btn", 115);
+  M.set("pause", "btn", 125);
   assert.equal(data.lookPause, undefined, "all at the phone default stores null");
   M.set("pause", "btn", 100);
   assert.deepEqual(plain(data.lookPause), { btn: 100 });
   M.reset("pause");
-  assert.equal(M.read("pause").btn, 115, "RESET returns to what the phone ships");
+  assert.equal(M.read("pause").btn, 125, "RESET returns to what the phone ships");
 });
 
-test("TitleLayout: a landscape phone ships the owner's doors; portrait, tablet and desktop do not", () => {
-  const want = EXPORT.appearance.titleLayout.wide;
-  const p = title("phone");
-  assert.deepEqual(plain(p.M.current("wide")), want);
-  assert.deepEqual(plain(p.M.current("tall")), plain(p.M.normalize(null)), "portrait keeps the base");
-  assert.deepEqual(p.writes, []);
-  assert.equal(p.html.dataset.titleLayout, "on");
-  assert.equal(p.html.style.getPropertyValue("--tl-btns-size"), "1.23");
-  assert.equal(p.html.style.getPropertyValue("--tl-btns-x"), "2vw");
-  assert.equal(p.html.style.getPropertyValue("--tl-btns-y"), "1vh");
-  const tall = title("phonePortrait", {}, "tall");
-  assert.equal(tall.html.dataset.titleLayout, undefined, "portrait paints the base");
+test("both phone shapes ship the November 20 layout and desktop and tablet retain the base", () => {
+  for (const [device, shape] of [["phone", "wide"], ["phonePortrait", "tall"]]) {
+    const p = title(device, {}, shape);
+    const layout = EXPORT.appearance.titleLayout[shape];
+    assert.deepEqual(plain(p.M.current()), layout);
+    assert.deepEqual(plain(p.html.style._decls), plain(p.M.vars(layout)));
+    assert.equal(p.html.dataset.titleLayout, "on");
+    assert.deepEqual(p.writes, []);
+  }
   for (const device of ["tablet", "desktop"]) {
     const d = title(device);
     assert.deepEqual(plain(d.M.current("wide")), plain(d.M.normalize(null)), device);
     assert.equal(d.html.dataset.titleLayout, undefined, device);
     assert.deepEqual(plain(d.html.style._decls), {}, device);
   }
+});
+
+test("existing explicit November 10 settings still win while missing shapes follow the current phone default", () => {
+  const storedLooks = Object.fromEntries(Object.values(LOOK_KEYS).map(key => [key, OLD.appearance[key]]));
+  const legacy = looks("phone", storedLooks);
+  for (const [id, key] of Object.entries(LOOK_KEYS)) {
+    for (const [knob, value] of Object.entries(storedLooks[key] || {})) assert.equal(legacy.M.read(id)[knob], value);
+  }
+  assert.deepEqual(legacy.data, storedLooks);
+  assert.deepEqual(legacy.writes, []);
+  const storedTitle = { titleLayout: OLD.appearance.titleLayout };
+  const legacyTitle = title("phone", storedTitle);
+  assert.deepEqual(plain(legacyTitle.M.current("wide")), storedTitle.titleLayout.wide);
+  assert.deepEqual(plain(legacyTitle.M.current("tall")), EXPORT.appearance.titleLayout.tall);
+  assert.deepEqual(legacyTitle.data, storedTitle);
+  assert.deepEqual(legacyTitle.writes, []);
 });
 
 test("TitleLayout: his stored layout and a clean phone paint the same tokens; a stored layout is never rewritten", () => {
@@ -164,8 +171,8 @@ test("TitleLayout: his stored layout and a clean phone paint the same tokens; a 
   assert.equal(a.html.dataset.titleLayout, undefined);
   a.M.reset();
   assert.equal(a.data.titleLayout, undefined);
-  assert.equal(a.M.current("wide").btns.size, 123);
-  assert.equal(a.html.style.getPropertyValue("--tl-btns-size"), "1.23");
+  assert.equal(a.M.current("wide").btns.size, 106);
+  assert.equal(a.html.style.getPropertyValue("--tl-btns-size"), "1.06");
 });
 
 test("index.html's first-paint copy gives a clean landscape phone the same tokens as the module", () => {

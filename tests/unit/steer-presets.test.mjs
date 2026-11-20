@@ -177,6 +177,17 @@ function bootTuning(input = {}, disk = {}, g = {}) {
   return { $, disk, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
 }
 
+test("steering sliders and labels show their fresh-store values in the HTML shell", () => {
+  const { $ } = bootTuning();
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  for (const id of ["pm-rate", "pm-expo", "pm-smooth", "pm-lock", "pm-speedsteer", "pm-help", "pm-adaptbtn"]) {
+    const value = html.match(new RegExp('<input id="' + id + '"[^>]*?value="([^"]+)"'))[1];
+    const label = html.match(new RegExp('<b id="' + id + '-v">([^<]+)</b>'))[1];
+    assert.equal(value, String($(id).value), id);
+    assert.equal(label, String($(id + "-v").textContent), id + " label");
+  }
+});
+
 test("the open settings haptics row follows phone capability changes and pad disconnects", () => {
   let supported = false;
   const { $, fire } = bootTuning({ hapticsSupported: () => supported });

@@ -20458,6 +20458,7 @@
       ],
       "vars": [
         "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [

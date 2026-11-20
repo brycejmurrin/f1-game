@@ -80,8 +80,8 @@ const ScreenLooks = (function () {
       help: "BUTTON HEIGHT, CARD WIDTH and BUTTON GAP size the pause card's buttons. CORNERS, BUTTON STYLE and TEXT ALIGN change how they look; VERTICAL POSITION moves the card up or down; MUSIC CARD and BUILD TAG hide those two lines.",
       target: () => byId("pausemenu"),
       knobs: Object.freeze([
-        rng("btn", "BUTTON HEIGHT", 80, 150, 5, 100, { phone: 115 }),
-        rng("w", "CARD WIDTH", 70, 200, 5, 100, { phone: 115 }),
+        rng("btn", "BUTTON HEIGHT", 80, 150, 5, 100, { phone: 125 }),
+        rng("w", "CARD WIDTH", 70, 200, 5, 100, { phone: 135 }),
         rng("gap", "BUTTON GAP", 0, 200, 10, 100),
         ...core(["corners"]),
         cyc("style", "BUTTON STYLE", [["filled", "FILLED"], ["outline", "OUTLINE"]], "filled"),
@@ -98,8 +98,8 @@ const ScreenLooks = (function () {
       knobs: Object.freeze([
         ...core(["w", "btn", "corners", "dim", "head"]),
         cyc("rows", "ROW HEIGHT", ROWS3, "shipped"),
-        cyc("tabs", "TAB STYLE", [["filled", "FILLED"], ["underline", "UNDERLINE"], ["pill", "PILL"]], "filled"),
-        cyc("stripes", "ROW STRIPES", [["off", "OFF"], ["on", "ON"]], "off"),
+        cyc("tabs", "TAB STYLE", [["filled", "FILLED"], ["underline", "UNDERLINE"], ["pill", "PILL"]], "filled", { phone: "underline" }),
+        cyc("stripes", "ROW STRIPES", [["off", "OFF"], ["on", "ON"]], "off", { phone: "on" }),
       ]),
     }),
     Object.freeze({
@@ -141,14 +141,11 @@ const ScreenLooks = (function () {
       help: "The garage panel: which side it docks on (the car moves over to the other side), its width and height (shrink either to see more of the car, in portrait too), how see-through it is, and the stat bars.",
       target: () => byId("carsetup"),
       knobs: Object.freeze([
-        // Of the owner's garage look only STAT BARS: HIDE ships on a phone (#5358). His BUTTON HEIGHT 80
-        // paints DONE 35 px tall, under the 44 px tap floor; his PANEL WIDTH 110 clips 13 % of UNLIMITED at
-        // UI SIZE 50 % (tests/specs/ui-scale.spec.js "every main screen fits at 50%").
         ...core(["density", "btn", "corners", "head"]),
         cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
         // #4529: below 100 % PANEL WIDTH shrinks past the 410 px rail floor (landscape) and the full-width
         // portrait sheet; PANEL HEIGHT caps the sheet so the car band shows (portrait) or the panel docks short.
-        rng("pw", "PANEL WIDTH", 60, 150, 5, 100),
+        rng("pw", "PANEL WIDTH", 60, 150, 5, 100, { phone: 115 }),
         rng("ph", "PANEL HEIGHT", 40, 100, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
         cyc("stats", "STAT BARS", SHOWHIDE, "show", { phone: "hide" }),

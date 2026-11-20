@@ -5,6 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -22,10 +23,21 @@ const TITLE_CRITICAL = [
 ];
 
 test("pre-paint script stamps html[data-home-scene] from apex26.homeScene", () => {
-  assert.match(html, /apex26\.homeScene/);
-  assert.match(html, /document\.documentElement\.setAttribute\("data-home-scene"/);
-  assert.match(html, /setAttribute\("data-home-live", "1"\)/);
-  assert.match(html, /hsMode === "auto"[\s\S]*hsMode = envs\[0\]/);
+  const script = [...html.matchAll(/^<script>([\s\S]*?)<\/script>/gm)]
+    .map((match) => match[1]).find((source) => source.includes('localStorage.getItem("apex26.homeScene")'));
+  const getComputedStyle = () => ({ getPropertyValue: () => "" });
+  for (const [stored, scene] of [[null, "static"], ["unknown", "static"], ["photo", "photo"], ["night", "night"], ["auto", "garage"]]) {
+    const attrs = new Map();
+    vm.runInNewContext(script, {
+      localStorage: { getItem: (key) => key === "apex26.homeScene" ? JSON.stringify(stored) : null },
+      document: { body: { setAttribute() {} }, documentElement: {
+        dataset: {}, setAttribute: (key, value) => attrs.set(key, value), removeAttribute: (key) => attrs.delete(key),
+      } },
+      window: { getComputedStyle, innerWidth: 1728, innerHeight: 1117 }, getComputedStyle,
+    }, { filename: path.join(ROOT, "index.html") });
+    assert.equal(attrs.get("data-home-scene"), scene);
+    assert.equal(attrs.get("data-home-live"), scene === "static" ? undefined : "1");
+  }
 });
 
 test("live Home grid geometry lives in blocking css/menus.css", () => {
@@ -115,6 +127,7 @@ test("portrait live Home #menu-buttons is tall before data-home-ready", {
       args: ["--use-angle=swiftshader-webgl", "--disable-dev-shm-usage"],
     });
     const page = await browser.newPage({ viewport: { width: 393, height: 659 } });
+    await page.addInitScript(() => localStorage.setItem("apex26.homeScene", '"photo"'));
     await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector("#menu-buttons");
     const metrics = await page.evaluate(() => new Promise((resolve) => {

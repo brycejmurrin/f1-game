@@ -136,12 +136,10 @@ for (const sz of [...PHONES, TABLET]) {
       expect(s.inert, "title must not stay inert after a bare rotation").toBe(false);
       if (sz.land.width === 844 && sz.land.height === 390) {
         // Live scene, then the still one (data-home-live removed): same compact fit, no word split.
-        for (const scene of ["live", "static"]) {
-          if (scene === "static") {
-            await page.evaluate(() => AppearanceStudio.setScene("static", "still"));
-            await page.waitForFunction(() => !document.documentElement.dataset.homeLive, null, { polling: 100, timeout: 10_000 });
-            await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-          }
+        for (const scene of ["photo", "static"]) {
+          await page.evaluate((scene) => AppearanceStudio.setScene(scene, "still"), scene);
+          await page.waitForFunction((scene) => document.documentElement.dataset.homeScene === scene, scene, { polling: 100, timeout: 10_000 });
+          await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
           const fit = await page.evaluate(() => {
             const mb = document.getElementById("menu-buttons");
             const play = ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice", "mb-garage"].map(id => {

@@ -261,8 +261,8 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before); assert.equal(studio.undo(), false);
   studio.applyPreset("classic", "screen"); assert.equal(values.homeScene, "static");
   assert.equal(values.uiTheme, "light"); assert.equal(values.hudProfile, "minimal");
-  // Screen-scope RESET restores the shipped home scene (photo), not the prior garage value.
-  studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
+  // Screen-scope RESET restores the shipped home scene (static).
+  studio.reset("screen"); assert.equal(values.homeScene, "static"); assert.equal(values.uiTheme, "light");
 });
 
 test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD style (#4920)", () => {
@@ -342,7 +342,7 @@ test("Profile boundary rejects duplicates and bad ids and enforces the saved-pro
 });
 
 test("Scene events and independent background motion respect OS reduce and unsubscribe", () => {
-  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   const changes = []; const stop = studio.onSceneChange((v) => changes.push(plain(v)));
   studio.setScene("night", "ambient"); assert.deepEqual(plain(studio.scene()), { mode: "night", motion: "ambient" });
   assert.equal(studio.effectiveSceneMotion(), "still"); assert.equal(changes.length, 1); stop(); studio.setScene("studio", "still"); assert.equal(changes.length, 1);
@@ -371,7 +371,7 @@ test("Home camera defaults and hostile saved choices normalize without expanding
   const fresh = load().studio;
   assert.equal(fresh.homeCamera(), "side"); assert.equal(fresh.snapshot().homeCamera, "side");
   const { studio, values } = load({ homeScene: "unknown", homeCamera: "driver" });
-  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   const changes = []; studio.onSceneChange((value) => changes.push(plain(value)));
   studio.setScene("garage", "still"); studio.setHomeCamera("front");
   assert.equal(values.homeCamera, "front"); assert.equal(studio.homeCamera(), "front"); assert.equal(changes.length, 2);
@@ -398,7 +398,7 @@ test("Circuit, pit lane and mixed environments persist through named visual prof
 test("Home scoped reset includes camera and environment while undo preserves other screens", () => {
   const { studio, values } = load({ homeScene: "pitlane", homeCamera: "rear", backgroundMotion: "still", hudProfile: "broadcast", uiTheme: "light", raceSettings: { laps: 18 } });
   const before = plain(studio.snapshot()); studio.reset("screen");
-  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   assert.equal(values.hudProfile, "broadcast"); assert.equal(values.uiTheme, "light"); assert.deepEqual(values.raceSettings, { laps: 18 });
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before);
   studio.applyPreset("classic", "screen"); assert.equal(studio.scene().mode, "static"); assert.equal(studio.homeCamera(), "side");
@@ -652,7 +652,7 @@ function photoPickerHarness(album, setBackground = () => true) {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance");
   panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   const observers = [];
-  const result = load({}, true, false, dom.document, {
+  const result = load({ homeScene: "photo" }, true, false, dom.document, {
     PhotoStudio: { album, setBackground },
     ScreenLooks: { endPeek() {}, normalize: (_id, value) => value, apply() {}, refresh() {} },
     MutationObserver: class { constructor(cb) { observers.push(cb); } observe() {} },

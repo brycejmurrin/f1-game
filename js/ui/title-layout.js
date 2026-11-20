@@ -16,25 +16,11 @@
    ROW puts the play modes side by side) and a SIDE (SWAPPED trades the title's
    and the buttons' columns, or their order on a tall screen).
 
-   ONE stored object, apex26.titleLayout, holding ONE LAYOUT PER SHAPE:
-   {v: 2, wide, tall} — landscape and portrait lay the title screen out so
-   differently (two columns vs three bands) that one set of offsets could not
-   suit both. A missing shape is shipped; a v1 object (one layout, no `v`, as
-   PR #519 stored it) reads as BOTH shapes. The shape is body[data-shape]
-   (index.html's boot answers first, js/ui/sheet-shape.js every later time),
-   and a rotation re-applies. Untouched it is null and NOTHING is written to
-   the page — the shipped title screen stays byte-for-byte what it was, and no
-   rule in css/responsive.css's TITLE LAYOUT block matches. Custom, the current
-   shape's layout lands as --tl-* tokens on :root plus html[data-title-layout]
-   (and data-title-side / data-title-btns for the two choices), so CSS keys off
-   attributes and reads numbers from tokens. index.html's inline boot applies
-   the FIRST answer with the same arithmetic (tests/unit/title-layout.test.mjs
-   holds the two copies equal); this file owns every later one.
-
-   PEEK: the title screen is faded out under the settings dialog, so a slider
-   would move things nobody can see. While a layout slider is held (or just
-   moved), js/ui/screen-looks.js's html[data-appearance-peek="title"] shows the
-   title screen through a near-transparent settings page.
+   apex26.titleLayout v2 holds a layout per shape. Missing shapes use the
+   device defaults; v1 applies to both. index.html paints the initial --tl-*
+   tokens. TitleLayout follows body[data-shape] on rotation and updates them
+   as the user edits. ScreenLooks reveals the title beneath the settings
+   dialog while a slider is held.
 
    EDIT ON TITLE SCREEN: the fold's button hides the settings page and lets
    the player drag the three pieces where they want them (#tl-editor, a small
@@ -50,6 +36,7 @@ const TitleLayout = (function () {
   const PARTS = ["btns", "title", "art"];
   const LAYOUTS = [["grid", "GRID"], ["stack", "STACK"], ["row", "ROW"]];
   const SIDES = [["auto", "AUTO"], ["swap", "SWAPPED"]];
+  const WIDTH_MIN = 20;
   const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], size: [50, 200], width: [0, 100] });
   const DEFAULT = Object.freeze({
     btns: Object.freeze({ x: 0, y: 0, size: 100, width: 0 }),
@@ -57,16 +44,19 @@ const TitleLayout = (function () {
     art: Object.freeze({ x: 0, y: 0, size: 100 }),
     layout: "grid", side: "auto",
   });
-  // A PHONE in landscape (touch, short side <= 500 px) ships bigger doors, nudged in from the edge
-  // (#5358: the owner's 2026-11-10 profile at UI SIZE 70 %). DEFAULT stays the CSS base — the layout
-  // that writes nothing; shipped(sh) is what an UNSET shape reads on this device. index.html's inline
-  // boot carries the same numbers for first paint.
+  // Phone defaults from the November 20 appearance export. The inline boot in
+  // index.html uses the same layouts before this module loads.
   const PHONE_WIDE = Object.freeze({
-    btns: Object.freeze({ x: 2, y: 1, size: 123, width: 0 }),
-    title: DEFAULT.title, art: DEFAULT.art, layout: "grid", side: "auto",
+    ...DEFAULT,
+    btns: Object.freeze({ x: 0, y: 0, size: 106, width: 25 }),
+    title: Object.freeze({ x: 0, y: 0, size: 108 }),
+    art: Object.freeze({ x: -7, y: -2, size: 86 }),
+  });
+  const PHONE_TALL = Object.freeze({
+    ...DEFAULT, btns: Object.freeze({ x: 0, y: 0, size: 105, width: 0 }),
   });
   const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
-  const shipped = (sh) => (sh === "wide" && phone() ? PHONE_WIDE : DEFAULT);
+  const shipped = (sh) => phone() ? (sh === "tall" ? PHONE_TALL : PHONE_WIDE) : DEFAULT;
   const SHAPES = ["wide", "tall"];
   const SHAPE_NAMES = { wide: "LANDSCAPE", tall: "PORTRAIT" };
   const store = GameStore.store;
@@ -77,7 +67,7 @@ const TitleLayout = (function () {
     const [lo, hi] = LIM[k];
     const n = typeof v === "number" && isFinite(v) ? Math.round(v) : DEFAULT.btns[k];   // btns carries every key
     // WIDTH: 0 is AUTO; anything else is at least 20 % of the screen.
-    if (k === "width") return n <= 0 ? 0 : Math.max(20, Math.min(hi, n));
+    if (k === "width") return n <= 0 ? 0 : Math.max(WIDTH_MIN, Math.min(hi, n));
     return Math.max(lo, Math.min(hi, n));
   };
   /** Any stored value -> a complete, clamped layout. Junk reads as shipped. */
@@ -450,22 +440,22 @@ const TitleLayout = (function () {
     function slider(part, k) {
       const id = `pm-tl-${part}-${k}`;
       const out = el("b", { id: id + "-v" });
-      const inp = el("input", { id, type: "range", min: String(LIM[k][0]), max: String(LIM[k][1]), step: "1",
+      // The first WIDTH tick represents AUTO. Every following tick is a real percentage.
+      const min = k === "width" ? WIDTH_MIN - 1 : LIM[k][0];
+      const inp = el("input", { id, type: "range", min: String(min), max: String(LIM[k][1]), step: "1",
         attrs: { "aria-label": `${part === "btns" ? "Buttons" : part === "title" ? "Title" : "Car drawing"} ${NAMES[k].toLowerCase()}` } });
-      const paint = () => {
-        let n = current()[part][k];
-        // Range = what paints, number = the painted size.
-        if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, sizeMin(part)); }
-        if (d.activeElement !== inp) inp.value = String(n);
+      const paint = (layout = current()) => {
+        let n = layout[part][k];
+        if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, Number(inp.min)); }
+        inp.value = String(k === "width" && !n ? min : n);
         out.textContent = pctTxt(k, n);
+        inp.setAttribute("aria-valuetext", out.textContent);
       };
       inp.addEventListener("input", () => {
-        let l = current();
-        l[part][k] = num(parseFloat(inp.value), k);
-        l = hold(set(l, undefined, true), part, k, true);
-        // The thumb shows what was stored: WIDTH 1..19 is 20, a held request is the edge.
-        if (String(l[part][k]) !== inp.value) inp.value = String(l[part][k]);
-        out.textContent = pctTxt(k, l[part][k]); paintSum();
+        const l = current(), n = Number(inp.value);
+        l[part][k] = k === "width" && n === min ? 0 : num(n, k);
+        paint(hold(set(l, undefined, true), part, k, true));
+        paintSum();
         peek(true, 900);
       });
       // The store write waits for the thumb's release (`change`), not each input.
@@ -694,9 +684,12 @@ const TitleLayout = (function () {
       // fifths of the box (css/menu-destinations.css PHONE LANDSCAPE HOME), so AUTO
       // steps from 20; elsewhere it starts at the share the buttons have now.
       const r = pieceEl("btns").getBoundingClientRect();
-      const w = (p.width || (phoneWide() ? 20 : Math.round(r.width / (win().innerWidth || 1) * 100))) + d;
-      p.width = w < 20 ? 0 : num(w, "width");
-    } else p[k] = num(p[k] + d, k);
+      const from = p.width || (phoneWide() ? WIDTH_MIN : Math.round(r.width / (win().innerWidth || 1) * 100));
+      p.width = d < 0 && from <= WIDTH_MIN ? 0 : num(Math.max(WIDTH_MIN, from + d), "width");
+    } else {
+      const from = k === "size" ? Math.max(sizeMin(ed.sel), p.size) : p[k];
+      p[k] = num(from + d, k);
+    }
     hold(set(l), ed.sel, k);
     paintEd();
   }
@@ -743,6 +736,7 @@ const TitleLayout = (function () {
     const from = Object.assign({}, current()[part]);
     let c = [e.clientX, e.clientY];
     if (mode === "size") {
+      from.size = Math.max(from.size, sizeMin(part));
       const r = pieceEl(part).getBoundingClientRect();
       c = [(r.left + r.right) / 2, (r.top + r.bottom) / 2];
     }

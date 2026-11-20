@@ -1238,9 +1238,9 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const src = read("js/ui/appearance-opts.js");
   const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);
   assert.ok(keys.length >= 8, "found appearance-opts.js's K_* keys: " + keys.join(", "));
-  // Store non-default values so CHANGES includes them (shipped: large / high).
+  // Store non-default values so CHANGES includes them (shipped: normal / standard contrast).
   const { SettingsExport, collect } = boot({ disk: {
-    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("off"),
+    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("high"),
     "apex26.speedUnits": JSON.stringify("mph"), "apex26.ldCard": JSON.stringify({ scale: 1.2, x: 4, y: -3 }),
     "apex26.flybyShots": JSON.stringify([{ id: "a" }]),
   } });
@@ -1248,7 +1248,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   for (const k of keys) assert.ok(inSpec.has(k), k + " (js/ui/appearance-opts.js) needs a SPEC row");
   const f = collect("changes");
   assert.equal(f.settings.appearance.textSize, "larger");
-  assert.equal(f.settings.appearance.uiContrast, "off");
+  assert.equal(f.settings.appearance.uiContrast, "high");
   assert.equal(f.settings.appearance.speedUnits, "mph");
   assert.deepEqual(f.settings.camera.ldCard, { scale: 1.2, x: 4, y: -3 });
   assert.equal(f.settings.camera.flybyShots.length, 1);
@@ -1314,7 +1314,7 @@ test("appearance import rejects malformed bags and enums and clamps profile cont
   const saved = JSON.parse(b.disk.get("apex26.appearanceProfiles"));
   assert.ok(saved.length <= 12); assert.equal(new Set(saved.map(p => p.id)).size, saved.length);
   assert.equal(saved[0].name.length, 40); assert.equal(saved[0].values.uiScale, 200);
-  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "photo");
+  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "static");
   assert.equal(saved[0].values.lookCareer.density, "auto"); assert.equal(saved[0].values.career, undefined);
 });
 

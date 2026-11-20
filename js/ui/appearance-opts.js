@@ -83,8 +83,8 @@ const AppearanceOpts = (function () {
   let hudAccent = oneOf(store.get(K_HUD, "team"), ACCENTS, "team");
   let menuHex = normHex(store.get(K_MENU_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
   let hudHex = normHex(store.get(K_HUD_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
-  let textSize = oneOf(store.get(K_TEXT, "large"), TEXT_SIZES, "large");
-  let contrast = oneOf(store.get(K_CONTRAST, "high"), CONTRASTS, "high");
+  let textSize = oneOf(store.get(K_TEXT, "normal"), TEXT_SIZES, "normal");
+  let contrast = oneOf(store.get(K_CONTRAST, "off"), CONTRASTS, "off");
   let cvdMode = oneOf(store.get(K_CVD, "off"), CVD_MODES, "off");
   let appIcon = oneOf(store.get(K_ICON, "default"), ICON_SETS, "default");
   let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
@@ -386,14 +386,14 @@ const AppearanceOpts = (function () {
   }
 
   function setTextSize(v) {
-    textSize = oneOf(v, TEXT_SIZES, "large");
+    textSize = oneOf(v, TEXT_SIZES, "normal");
     store.set(K_TEXT, textSize);
     applyAll();
     paintRow("pm-textsize", textSize);
     return textSize;
   }
   function setContrast(v) {
-    contrast = oneOf(v, CONTRASTS, "high");
+    contrast = oneOf(v, CONTRASTS, "off");
     store.set(K_CONTRAST, contrast);
     applyAll();
     paintRow("pm-contrast", contrast);
@@ -469,8 +469,8 @@ const AppearanceOpts = (function () {
     hudAccent = oneOf(v.hudAccent, ACCENTS, "team");
     menuHex = normHex(v.menuAccentHex, PRESET_HEX.brand);
     hudHex = normHex(v.hudAccentHex, PRESET_HEX.brand);
-    textSize = oneOf(v.textSize, TEXT_SIZES, "large");
-    contrast = oneOf(v.uiContrast, CONTRASTS, "high");
+    textSize = oneOf(v.textSize, TEXT_SIZES, "normal");
+    contrast = oneOf(v.uiContrast, CONTRASTS, "off");
     cvdMode = oneOf(v.cvdMode, CVD_MODES, "off");
     // Studio snapshots do not carry appIcon: keep the chosen icon (#5059).
     if ("appIcon" in v) appIcon = oneOf(v.appIcon, ICON_SETS, "default");

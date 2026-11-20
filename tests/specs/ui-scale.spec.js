@@ -651,7 +651,7 @@ test.describe("UI scale", () => {
           raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
           scrollY: menu.scrollHeight - menu.clientHeight, scrollX: menu.scrollWidth - menu.clientWidth,
           doors: doors.length, off,
-          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`); a phone ships 123 (#5358).
+          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`).
           doorSize: document.body.dataset.shape === "wide" ? Math.max(1, TitleLayout.current("wide").btns.size / 100) : 1,
         };
       });
@@ -1913,7 +1913,7 @@ test.describe("Factory Home on touch", () => {
     await page.evaluate(() => { __apex.uiScale(109); AppearanceOpts.setTextSize("large"); TitleLayout.reset(); });
     await inspectSettled(page, { root: "#overlay" });
     const menuBefore = await page.locator("#menu-buttons").boundingBox();
-    await page.evaluate(() => TitleLayout.set({ art: { x: 5, y: 0, size: 100 } }));
+    await page.evaluate(() => TitleLayout.set({ ...TitleLayout.current(), art: { x: 5, y: 0, size: 100 } }));
     await expect(page.locator("html")).toHaveAttribute("data-title-layout", "on");
     await inspectSettled(page, { root: "#overlay" });
     const menuAfter = await page.locator("#menu-buttons").boundingBox();

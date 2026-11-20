@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-lS8WIdY3PEJ0LGhsovtTDmiUfz0YJWd+6m9w6q7q3nQ=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-gXTdoyhaqMGSWY5M4cHRSVGst7iXqeCAN0CcRBkJyDI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -675,9 +675,12 @@
     // arithmetic as TitleLayout.vars, held equal by tests/unit/title-layout.test.mjs.
     try {
       var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
-      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[b.getAttribute("data-shape") === "tall" ? "tall" : "wide"];
-      // An unset landscape layout on a PHONE ships bigger doors (js/ui/title-layout.js PHONE_WIDE, #5358).
-      if (!(tl && typeof tl === "object") && b.getAttribute("data-shape") !== "tall" && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) <= 500) tl = { btns: { x: 2, y: 1, size: 123 } };
+      var tallTitle = b.getAttribute("data-shape") === "tall";
+      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[tallTitle ? "tall" : "wide"];
+      if (!(tl && typeof tl === "object") && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) <= 500) {
+        tl = tallTitle ? { btns: { size: 105 } } :
+          { btns: { size: 106, width: 25 }, title: { size: 108 }, art: { x: -7, y: -2, size: 86 } };
+      }
       if (tl && typeof tl === "object") {
         ["btns", "title", "art"].forEach(function (k) {
           var o = tl[k] || {};
@@ -699,7 +702,7 @@
       var hsRaw = null;
       try { hsRaw = JSON.parse(localStorage.getItem("apex26.homeScene")); } catch (e4) { /* unset */ }
       var hsModes = ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"];
-      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "photo";
+      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "static";
       if (hsMode === "auto") {
         // homeVariation.peek before enter() — index starts at 0 (homeVisit applies
         // only once renderHome calls enter(), after the first paint).
@@ -1396,8 +1399,8 @@
       <button id="pm-linemode-jump" type="button" class="adv-more-btn" data-settings-jump="advanced" data-jump-target="pm-line">STEER ASSIST · FINE, in ADVANCED &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
-        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">5</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="5" aria-label="Adaptive buttons"></label>
       <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
     </div>
     <div class="adv-item" id="pm-haptics-item">
@@ -1792,8 +1795,8 @@
       <button id="pm-tiltdeg-jump" type="button" class="adv-more-btn" data-settings-jump="controls" data-jump-target="pm-tiltsimple">TILT SENSITIVITY is in CONTROLS › FEEL &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
-        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
+      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">3</b></span>
+        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="3" aria-label="Steer smoothing"></label>
       <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
     </div>
     <div class="adv-item">
@@ -1845,29 +1848,29 @@
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help, fine steps"></label>
+      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">1</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="1" aria-label="Driving help, fine steps"></label>
       <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob. GRIP STEER (below, and in ROOKIE / RELAX) caps lock at the front peak without reading the road arc.</p>
       <button id="pm-help-jump" type="button" class="adv-more-btn" data-settings-jump="driving" data-jump-target="pm-helplevel-sel">DRIVING HELP is in DRIVING AIDS &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
-        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5" aria-label="Response"></label>
+      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">2</b></span>
+        <input id="pm-rate" type="range" min="1" max="10" step="1" value="2" aria-label="Response"></label>
       <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
-        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5" aria-label="Linearity"></label>
+      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">6</b></span>
+        <input id="pm-expo" type="range" min="1" max="10" step="1" value="6" aria-label="Linearity"></label>
       <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
-        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5" aria-label="Steer lock"></label>
+      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">7</b></span>
+        <input id="pm-lock" type="range" min="1" max="10" step="1" value="7" aria-label="Steer lock"></label>
       <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
-        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5" aria-label="Speed steer"></label>
+      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">7</b></span>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="7" aria-label="Speed steer"></label>
       <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
     </div>
     <div class="adv-item">
@@ -1907,8 +1910,8 @@
             <button id="as-music-next" type="button" data-step="1" aria-label="Next music">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">5</b></span>
-          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">6</b></span>
+          <input id="as-mvol" type="range" min="0" max="10" step="1" value="6" aria-label="Music volume"></label>
         <p class="as-note">The soundtrack in the menus and on track. VOLUME sets the music alone; SOURCE picks which songs play.</p>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
              once it is connected; picking another source releases it without
@@ -1951,8 +1954,8 @@
             <button id="as-sound-next" type="button" data-step="1" aria-label="Next sound effects">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME <b id="as-svol-v">10</b></span>
-          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
+        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME <b id="as-svol-v">2</b></span>
+          <input id="as-svol" type="range" min="0" max="10" step="1" value="2" aria-label="Sound effects volume"></label>
         <div id="as-ui" class="set-row" role="group" aria-labelledby="as-ui-label">
           <span class="tune-label" id="as-ui-label">MENU SOUNDS</span>
           <div>
@@ -2152,52 +2155,52 @@
         <p class="as-note">How the note climbs with the revs. Each readout is a trim percentage on that control (100&nbsp;=&nbsp;1&times;). TEAM profile is your manufacturer&rsquo;s factory mix, so the numbers are not all 100&nbsp;&mdash; PITCH, REV&nbsp;RANGE, SUB and DEPTH follow the team sound. RESET&nbsp;TO&nbsp;TEAM&nbsp;SOUND restores that profile. IDLE is the bottom, PITCH shifts the whole note, REV&nbsp;RANGE the spread to the limiter, CURVE how early it rises.</p>
         <label class="tune-row"><span class="tune-label">IDLE <b id="as-t-idle-v">100</b></span>
           <input id="as-t-idle" type="range" min="0" max="22" step="1" value="10" aria-label="Idle pitch"></label>
-        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
-          <input id="as-t-pitch" type="range" min="0" max="24" step="1" value="8" aria-label="Engine pitch"></label>
-        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
-          <input id="as-t-range" type="range" min="0" max="38" step="1" value="8" aria-label="Rev range"></label>
+        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">85</b></span>
+          <input id="as-t-pitch" type="range" min="0" max="120" step="1" value="25" aria-label="Engine pitch"></label>
+        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">130</b></span>
+          <input id="as-t-range" type="range" min="0" max="380" step="1" value="110" aria-label="Rev range"></label>
         <label class="tune-row"><span class="tune-label">CURVE <b id="as-t-curve-v">100</b></span>
-          <input id="as-t-curve" type="range" min="0" max="21" step="1" value="6" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
+          <input id="as-t-curve" type="range" min="0" max="42" step="1" value="12" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
         <h3 class="adv-sec">CHARACTER</h3>
         <p class="as-note">The engine&rsquo;s timbre: GRAVEL is low-rev roughness, DETUNE a thicker, less pure note, BRIGHTNESS the treble, SUB the low-octave weight.</p>
         <label class="tune-row"><span class="tune-label">GRAVEL LEVEL <b id="as-t-gravel-v">100</b></span>
-          <input id="as-t-gravel" type="range" min="0" max="16" step="1" value="4" aria-label="Low-rev roughness"></label>
-        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
-          <input id="as-t-detune" type="range" min="0" max="16" step="1" value="4" aria-label="Engine detune"></label>
+          <input id="as-t-gravel" type="range" min="0" max="80" step="1" value="20" aria-label="Low-rev roughness"></label>
+        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">0</b></span>
+          <input id="as-t-detune" type="range" min="0" max="80" step="1" value="0" aria-label="Engine detune"></label>
         <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
-          <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
-        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">100</b></span>
-          <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
+          <input id="as-t-bright" type="range" min="0" max="220" step="1" value="70" aria-label="Engine brightness"></label>
+        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">25</b></span>
+          <input id="as-t-sub" type="range" min="0" max="80" step="1" value="5" aria-label="Sub-octave weight"></label>
         <h3 class="adv-sec">LIMITER</h3>
         <p class="as-note">The rev-limiter cut: DEPTH is how hard it chops, RATE how fast, PITCH SAG how far the note dips on each cut.</p>
-        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
-        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">100</b></span>
-          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="6" aria-label="Rev limiter chop rate"></label>
-        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">100</b></span>
-          <input id="as-t-limsag" type="range" min="0" max="16" step="1" value="4" aria-label="Rev limiter pitch sag on each cut"></label>
+        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">225</b></span>
+          <input id="as-t-lim" type="range" min="0" max="60" step="1" value="45" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">80</b></span>
+          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="4" aria-label="Rev limiter chop rate"></label>
+        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">0</b></span>
+          <input id="as-t-limsag" type="range" min="0" max="80" step="1" value="0" aria-label="Rev limiter pitch sag on each cut"></label>
         <h3 class="adv-sec">BOOST</h3>
         <p class="as-note">While ERS deploys: LEVEL is the electric whine and whoosh, REV LIFT how far the note rises.</p>
-        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">100</b></span>
-          <input id="as-t-boost" type="range" min="0" max="100" step="1" value="25" aria-label="ERS deploy whine and whoosh level"></label>
+        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">112</b></span>
+          <input id="as-t-boost" type="range" min="0" max="400" step="1" value="112" aria-label="ERS deploy whine and whoosh level"></label>
         <label class="tune-row"><span class="tune-label">REV LIFT <b id="as-t-boostlift-v">100</b></span>
           <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
         <p class="as-note">The sounds stacked on the engine. The sliders set their levels; the switches under them mute a layer entirely.</p>
-        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="200" step="1" value="50" aria-label="Turbo whine and wastegate level"></label>
+        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">62</b></span>
+          <input id="as-t-whine" type="range" min="0" max="400" step="1" value="62" aria-label="Turbo whine and wastegate level"></label>
         <label class="tune-row"><span class="tune-label">HARVEST LEVEL <b id="as-t-harvest-v">100</b></span>
-          <input id="as-t-harvest" type="range" min="0" max="16" step="1" value="4" aria-label="MGU-K harvest whirr level"></label>
+          <input id="as-t-harvest" type="range" min="0" max="80" step="1" value="20" aria-label="MGU-K harvest whirr level"></label>
         <label class="tune-row"><span class="tune-label">WIND LEVEL <b id="as-t-wind-v">100</b></span>
-          <input id="as-t-wind" type="range" min="0" max="16" step="1" value="4" aria-label="Airflow level"></label>
+          <input id="as-t-wind" type="range" min="0" max="80" step="1" value="20" aria-label="Airflow level"></label>
         <label class="tune-row"><span class="tune-label">TYRES LEVEL <b id="as-t-tyres-v">100</b></span>
-          <input id="as-t-tyres" type="range" min="0" max="16" step="1" value="4" aria-label="Tyre screech level"></label>
+          <input id="as-t-tyres" type="range" min="0" max="80" step="1" value="20" aria-label="Tyre screech level"></label>
         <label class="tune-row"><span class="tune-label">BRAKES LEVEL <b id="as-t-brakes-v">100</b></span>
-          <input id="as-t-brakes" type="range" min="0" max="16" step="1" value="4" aria-label="Brake roar level"></label>
+          <input id="as-t-brakes" type="range" min="0" max="80" step="1" value="20" aria-label="Brake roar level"></label>
         <label class="tune-row"><span class="tune-label">SHIFT LEVEL <b id="as-t-shift-v">100</b></span>
-          <input id="as-t-shift" type="range" min="0" max="12" step="1" value="4" aria-label="Gear-shift crack level"></label>
+          <input id="as-t-shift" type="range" min="0" max="60" step="1" value="20" aria-label="Gear-shift crack level"></label>
         <label class="tune-row"><span class="tune-label">RIVALS LEVEL <b id="as-t-rivals-v">100</b></span>
-          <input id="as-t-rivals" type="range" min="0" max="16" step="1" value="4" aria-label="Rival engine level"></label>
+          <input id="as-t-rivals" type="range" min="0" max="80" step="1" value="20" aria-label="Rival engine level"></label>
         <label class="tune-row"><span class="tune-label">SPACE LEVEL <b id="as-t-rev-v">100</b></span>
           <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
         <label class="tune-row"><span class="tune-label">OVERRUN LEVEL <b id="as-t-ovr-v">100</b></span>

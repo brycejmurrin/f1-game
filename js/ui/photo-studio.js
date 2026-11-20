@@ -705,7 +705,7 @@ function create(G, deps) {
   }
   function sceneIsPhoto() {
     return typeof GameStore !== "undefined" && GameStore.store
-      ? GameStore.store.get("homeScene", "photo") === "photo" : true;
+      ? GameStore.store.get("homeScene", "static") === "photo" : false;
   }
   function useBackground() {
     if (!last) return;

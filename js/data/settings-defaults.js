@@ -41,7 +41,8 @@
    which rewrites the block below from the export's own CHANGED list. The
    provenance export is tests/data/settings-defaults-export.json; only
    drivingCoach/spotter OFF plus cockpit camera and home-screen look from that
-   file ship as fresh-install defaults (product 2026-10-05). Do not hand-edit
+   file ship as fresh-install defaults (product 2026-10-05). The current Home
+   scene and readability choices follow the November 20 owner export. Do not hand-edit
    the block; the tool prints every edit it makes and refuses keys that are not
    in SPEC. Device-adaptive defaults (uiScale, resMode, gfxPreset — the ones
    SPEC declares as null or as a function of the device) are refused on
@@ -69,7 +70,7 @@ const SettingsDefaults = (function () {
     "spotter": false,
     // DISPLAY / METRICS (raw lane — bare strings, not JSON)
     "debris": "0",
-    "gfxSsao": "1",      // js/ui/post-fx-opts.js — only "0" is off
+    "gfxSsao": "1",
     "gfxGodrays": "1",
     "metricsPos": "left",
     // CAMERA
@@ -79,9 +80,9 @@ const SettingsDefaults = (function () {
     "cockpitInterior": "team",
     // APPEARANCE
     "menuAccent": "ember",
-    "textSize": "large",
-    "uiContrast": "high",
-    "homeScene": "photo",
+    "textSize": "normal",
+    "uiContrast": "off",
+    "homeScene": "static",
     "backgroundMotion": "ambient",
     "homeCamera": "side",
   };

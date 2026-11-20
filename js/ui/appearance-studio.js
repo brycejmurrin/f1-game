@@ -21,13 +21,13 @@ const AppearanceStudio = (function () {
   const shipped = (k, d) => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
     ? SettingsDefaults.get(k) : d;
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
-    textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
+    textSize: shipped("textSize", "normal"), uiContrast: shipped("uiContrast", "off"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
     titleIntro: "full", menuWash: "full", titleArt: "on", titleButtonStyle: "auto", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
-    homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
+    homeScene: shipped("homeScene", "static"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
   // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
   // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
@@ -74,7 +74,7 @@ const AppearanceStudio = (function () {
   let photoRows = [], photoGeneration = 0, photoPanelVisible = false;
   function say(message) { if (ui) ui.status.textContent = message; }
   function invoke(name, ...args) { try { if (typeof hooks[name] === "function") return hooks[name](...args); } catch (e) { Log.warn("ui", "Appearance " + name + ": " + e.message); say("Your appearance is saved; the scene preview could not refresh. Try another scene."); } }
-  function scene() { const mode = store.get("homeScene", "photo"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : "photo", motion: motion === "ambient" ? "ambient" : "still" }; }
+  function scene() { const mode = store.get("homeScene", DEFAULTS.homeScene), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : DEFAULTS.homeScene, motion: motion === "ambient" ? "ambient" : "still" }; }
   function homeCamera() { const value = store.get("homeCamera", "side"); return ENUMS.homeCamera.includes(value) ? value : "side"; }
   function setHomeCamera(value) { const next = snapshot(); next.homeCamera = value; return applySnapshot(next); }
   function effectiveSceneMotion() {
