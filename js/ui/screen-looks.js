@@ -138,7 +138,7 @@ const ScreenLooks = (function () {
     }),
     Object.freeze({
       id: "garage", key: "lookGarage", title: "GARAGE",
-      help: "The garage panel: which side it docks on (the car moves over to the other side), its width, how see-through it is, and the stat bars.",
+      help: "The garage panel: which side it docks on (the car moves over to the other side), its width and height (shrink either to see more of the car, in portrait too), how see-through it is, and the stat bars.",
       target: () => byId("carsetup"),
       knobs: Object.freeze([
         // Of the owner's garage look only STAT BARS: HIDE ships on a phone (#5358). His BUTTON HEIGHT 80
@@ -146,7 +146,10 @@ const ScreenLooks = (function () {
         // UI SIZE 50 % (tests/specs/ui-scale.spec.js "every main screen fits at 50%").
         ...core(["density", "btn", "corners", "head"]),
         cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
-        rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
+        // #4529: below 100 % PANEL WIDTH shrinks past the 410 px rail floor (landscape) and the full-width
+        // portrait sheet; PANEL HEIGHT caps the sheet so the car band shows (portrait) or the panel docks short.
+        rng("pw", "PANEL WIDTH", 60, 150, 5, 100),
+        rng("ph", "PANEL HEIGHT", 40, 100, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
         cyc("stats", "STAT BARS", SHOWHIDE, "show", { phone: "hide" }),
       ]),
@@ -601,7 +604,8 @@ const ScreenLooks = (function () {
      already showing); a host with no router (a unit harness, a tool page) has
      no enter to wait for, so it builds once the document is parsed. */
   function arm() {
-    registerSearch();
+    // #4798: Settings search only.
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(registerSearch); else registerSearch();
     const panel = byId("pm-panel-appearance");
     if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) {
       SettingsNav.onEnter((id) => { if (id === "appearance") build(); });

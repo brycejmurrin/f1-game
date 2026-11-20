@@ -526,6 +526,11 @@
       "presentation": "native",
       "preserve": "Caller-readable kind; do not prepend prose"
     },
+    "tools/ci/child-health.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every DEAD child and every PARK/RELAUNCH/NONE row with its cause and reset; exit 1 when a PR has a dead owner; read-only"
+    },
     "tools/ci/ci-coverage.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -775,6 +780,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus apply; protected/open refs; partial failures and unarchived kept refs"
+    },
+    "tools/ci/pool-share.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Read-only census; the closing = pool-share line; API failure exit 3"
     },
     "tools/ci/queue-depth.mjs": {
       "action": "keep-native",
@@ -1400,6 +1410,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Skip reasons, angular units, thresholds and full JSON rows."
+    },
+    "tools/gfx/sharpness-ab.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Evidence class (software pixels), each arm's buffer size and the per-crop metrics; never read a sheet as what a phone shows."
     },
     "tools/gfx/ssr-probe.mjs": {
       "action": "artifact-first",

@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { stageSiteMinified, stampStaged } from "../../tools/desktop/stage.mjs";
+import { writeNotices } from "../../desktop/scripts/notices.mjs";
 
 const { isCurrentStage, repoHead } = createRequire(import.meta.url)("../../desktop/lib/site.cjs");
 
@@ -124,6 +125,11 @@ async function prepareSrc(o = {}) {
   return src;
 }
 
+/** The third-party notices ship inside the app, as desktop/electron-builder.config.cjs does for Electron. */
+function writeAppNotices(www, root = ROOT) {
+  return writeNotices(root, path.join(www, "THIRD-PARTY-NOTICES.txt"));
+}
+
 function capSync() {
   const r = spawnSync("npx", ["cap", "sync", "android"], {
     cwd: MOBILE,
@@ -158,6 +164,7 @@ async function main() {
   const src = await prepareSrc();
   if (out) copyIsolated(src, www);
   else copyTree(src, www);
+  writeAppNotices(www);
   let syncOut = null;
   if (!flag("--skip-sync")) syncOut = capSync();
   const html = fs.readFileSync(path.join(www, "index.html"), "utf8");
@@ -179,4 +186,4 @@ if (isMain) {
   });
 }
 
-export { copyTree, prepareSrc, resolveSrc };
+export { copyTree, prepareSrc, resolveSrc, writeAppNotices };

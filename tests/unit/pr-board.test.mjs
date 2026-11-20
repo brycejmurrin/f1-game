@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  brief, fullTierPassed, DEPLOY, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, laneOf, handoffOwner, ageLabel, ciState, decide, suggest, evaluate, render, measure,
+  brief, fullTierPassed, handoffLease, leaseLabel, leaseState, adopters, PARK_GRACE_HOURS, CHURN_ADOPTIONS, DEPLOY, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, laneOf, handoffOwner, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -158,8 +158,8 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }]);
   const out = render(r);
   const lines = out.split("\n");
-  assert.match(lines[0], /^PR\s+LANE\s+OWNER\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+-\s+-\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+WAIT$/);
+  assert.match(lines[0], /^PR\s+LANE\s+OWNER\s+LEASE\s+ADOPTED\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+SUGGEST$/);
+  assert.match(lines[1], /^#1\s+-\s+-\s+-\s+0\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+WAIT$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\)$/);
   const empty = render(evaluate([]));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -450,4 +450,54 @@ test("--brief: one line per PR with the fields an orchestrator acts on, then a t
   assert.equal(brief({ rows: [] }), "= pr-board: 0 open");
   const cli = (...a) => { try { execFileSync(process.execPath, [path.join(ROOT, "tools/ci/pr-board.mjs"), ...a], { encoding: "utf8", stdio: "pipe" }); return 0; } catch (e) { return e.status; } };
   assert.equal(cli("--brief", "--json"), 2, "--brief with --json is a usage error, before any request");
+});
+
+// #5847: the owner lease (skill `steward` §Lane 3) and the churn flag, from fixtures.
+const LEASE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/pr-board/lease-churn.json"), "utf8"));
+
+test("lease + churn: owner, until-time, live/lapsed/parked/open/none and distinct adopters per fixture PR", () => {
+  const now = Date.parse(LEASE.now);
+  const items = LEASE.prs.map((f) => ({ pr: prObj(f.number, { body: f.body, labels: f.labels }), runs: [], checkRuns: guard(), comments: f.comments }));
+  const r = evaluate(items, { now });
+  for (const f of LEASE.prs) {
+    const row = r.rows.find((x) => x.number === f.number);
+    assert.deepEqual({ owner: row.owner, lease: row.lease, adopted: row.adopted, churn: row.churn }, f.expect, `#${f.number}`);
+  }
+  assert.equal(r.rows.find((x) => x.number === 11).leaseUntil, "2026-11-19T14:00Z");
+  const byNo = (n) => r.rows.find((x) => x.number === n);
+  assert.deepEqual([11, 12, 13, 15, 16].map((n) => leaseLabel(byNo(n), now)), ["live 2h", "lapsed 3h", "parked", "open", "-"]);
+  const cells = (line) => line.split(/\s{2,}/);
+  const table = render(r, { now }).split("\n");
+  assert.deepEqual(cells(table[0]).slice(2, 5), ["OWNER", "LEASE", "ADOPTED"]);
+  assert.deepEqual(cells(table.find((l) => l.startsWith("#12 "))).slice(3, 5), ["lapsed 3h", "3 churn"]);
+  const flags = (n) => brief(r, { now }).split("\n").find((l) => l.startsWith(`#${n} `)).split(" | ")[5];
+  assert.equal(flags(12), "lease lapsed 3h; churn: adopted 3x");
+  assert.equal(flags(13), "lease parked");
+  assert.equal(flags(16), "ready, ci none: the full tier is not green on the head", "owner: none prints no lease flag");
+});
+
+test("lease: a parked lease lapses PARK_GRACE_HOURS past its until-time; an unparsable until-time is an open lease", () => {
+  const until = "2026-11-19T00:00:00Z";
+  const t0 = Date.parse(until);
+  assert.equal(leaseState({ owner: "claude:s", until, labels: ["needs-decision"] }, t0 + (PARK_GRACE_HOURS - 1) * 3600e3), "parked");
+  assert.equal(leaseState({ owner: "claude:s", until, labels: ["needs-decision"] }, t0 + (PARK_GRACE_HOURS + 1) * 3600e3), "lapsed");
+  assert.equal(leaseState({ owner: "claude:s", until, labels: [] }, t0 - 1), "live");
+  assert.deepEqual(handoffLease("```handoff\nowner: claude:s until soon\n```"), { owner: "claude:s", until: null }, "an unparsable until-time: the owner holds an open lease");
+  assert.equal(handoffOwner("no block"), "-");
+  assert.equal(CHURN_ADOPTIONS, 3);
+  assert.deepEqual(adopters(LEASE.prs[1].comments, 12), ["claude:session_a", "claude:session_b", "claude:session_old"]);
+});
+
+test("measure reads every comment page, so adoptions older than the newest 100 comments still count", () => {
+  const pr = prObj(1, { comments: 150 });
+  const page1 = [{ created_at: "2026-11-10T00:00:00Z", body: "adopts PR #1 — claude:s1" }, ...Array.from({ length: 99 }, () => ({ body: "x" }))];
+  const page2 = [{ created_at: "2026-11-12T00:00:00Z", body: "adopts PR #1 — claude:s2" }, { created_at: "2026-11-13T00:00:00Z", body: "adopts PR #1 — claude:s3" }];
+  const { request: inner } = fakeApi({ prs: [pr], checksBySha: { [SHA(1)]: guard() } });
+  const request = (qs) => {
+    const m = /^issues\/1\/comments\?per_page=100&page=(\d+)/.exec(qs);
+    return m ? { json: m[1] === "1" ? page1 : page2 } : inner(qs);
+  };
+  const v = measure({ request, only: 1 });
+  assert.equal(v.ok, true, v.error);
+  assert.deepEqual([v.rows[0].adopted, v.rows[0].churn], [3, true]);
 });
