@@ -47,3 +47,17 @@ test("help: ACTIVE AERO and GEARS are named in the panel that holds them", () =>
   const paths = [...help.matchAll(/SETTINGS › ([A-Z ]+?) › (ACTIVE AERO|GEARS)\b/g)].map((m) => m[2] + " in " + m[1]);
   assert.deepEqual(paths, ["ACTIVE AERO in DRIVING AIDS", "GEARS in DRIVING AIDS"]);
 });
+
+// Clean-room fix 45: the game disqualifies for one dry compound
+// (SportingRegs.applyCompoundRule) but HOW TO PLAY never said so. The figures in
+// the entry are read from the code that enforces them.
+test("help: TWO DRY COMPOUNDS states the rule's lap floor, warning and red-flag penalty", () => {
+  const entry = (help.match(/<dt>TWO DRY COMPOUNDS<\/dt>\s*<dd>([\s\S]*?)<\/dd>/) || [])[1] || "";
+  assert.ok(entry, "the entry exists under PIT STOPS");
+  const words = { eight: 8, five: 5 };
+  const pit = read("js/race/pit-lane.js");
+  assert.equal(words[(entry.match(/race of (\w+) laps or more/) || [])[1]], num(pit, /const TWO_COMPOUND_MIN_LAPS = (\d+)/));
+  assert.equal(words[(entry.match(/warns you (\w+) laps out/) || [])[1]], num(pit, /const COMPOUND_WARN_LAPS = (\d+)/));
+  assert.equal(num(entry, /costs (\d+) s/), num(read("js/race/sporting-regs.js"), /const SUSPENDED_PEN_S = (\d+)/));
+  assert.match(entry, /disqualified/);
+});

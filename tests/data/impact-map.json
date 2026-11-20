@@ -14057,6 +14057,7 @@
       ],
       "*": [
         "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchets.test.mjs"
       ]
@@ -14997,6 +14998,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "*": [
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs"
       ]
     },
