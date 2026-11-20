@@ -13,6 +13,20 @@ merge base: `js/career/save-migrate.js` +874 (import range clamps), `js/physics/
 (fix 6, the stale-text corrections). About +1379 of it is whole-line comments, which carry
 fix 6's corrected facts. Fragment: `ratchets.d/claude--gameplay-hunt-1118.json`.
 
+## 2026-11-19 — PR #5786 (claude/quali-model-refit-1118): qualifying-model refit, option 1
+
+`(tree) eagerBytes` 8015286 → **8019119** (+3833), measured on the merge with tip `9db4870f`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is option 1 of the qualifying
+refit (Bryce's `decision: 1`, 2026-11-19 07:36:21Z), in two eager files:
+`js/race/quali-model.js` +3469 (the wing term in `carLap`, the human-neutral wing and the
+generated `@gen-quali-calib` per-circuit factor block) and `js/physics/ai-drive.js` +364 (the
+shared `aeroGrip` / `AERO_GRIP_K` helper the model and the AI's lateral and brake reads now
+share). Not taken: a lazy split of the calibration table behind the race-session bundle.
+It is unmeasured. Fragment: `ratchets.d/claude--quali-model-refit-1118.json`.
+2026-11-20, on the merge with tip `3fd508b5` (#5854 merged first and its `ai-drive.js` side won the
+conflict, so the +364 is gone): `eagerBytes` 7968494 → **7971963** (+3469), the `quali-model.js` growth
+alone. The fragment was narrowed from +3833 to +3469; nothing was raised beyond what Bryce labelled.
 ## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
 
 `(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
