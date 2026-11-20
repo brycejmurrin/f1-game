@@ -1733,6 +1733,7 @@ const TrackBuildProps = (function () {
       const seqNow = placeSeq;
       placeSeq = crowdSeq;
       const half = Math.max(1, Math.round(8 / ds));   // the bank is 16 m long
+      const gaps = [];
       for (let i = 0; i < 7; i++) {
         const k = (i * 4) % n;
         // Where a car's side stops over the bank's length (barL is the car
@@ -1744,6 +1745,22 @@ const TrackBuildProps = (function () {
           edge = Math.max(edge, track.barL[kk] - hw[kk] + WALL_CLEAR);
         }
         const gap = Math.max(6.55, edge + 0.23 + 0.5);
+        // FIRST MASS WINS. Moved back, the bank lands where nine of those
+        // circuits stand their OWN main grandstand (nurburgring, dijon,
+        // magny_cours …): it stood in the run-off in front of the real one.
+        // There the circuit's stand is the crowd and this bank yields. Asked
+        // of every bank BEFORE any is placed, so a neighbour's shell is not
+        // the occupant; a bank that did not move is never asked.
+        let hits = 0;
+        if (gap > 6.55) for (const dd of [gap + 0.42, gap + 2.1, gap + 3.8, gap + 7.45]) for (const al of [-7, 0, 7]) {
+          const kk = ((k + Math.round(al / ds)) % n + n) % n, o = -(hw[kk] + dd);
+          if (!barrierClear(px[kk] + track.rx[kk] * o, pz[kk] + track.rz[kk] * o, 0.6)) hits++;
+        }
+        gaps.push(hits >= 2 ? null : gap);
+      }
+      for (let i = 0; i < 7; i++) {
+        const k = (i * 4) % n, gap = gaps[i];
+        if (gap == null) { placeSeq++; continue; }   // the shell's slot, spent
         // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
         // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
         // slot), which buried that row and left its front face millimetres off
