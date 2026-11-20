@@ -140,7 +140,7 @@ function sentinelArm(on) {
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0;
             _tierFutile = false; _scaleFutile = false;
-            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; } else _live = false;
+            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; _phoneSlowLatch = false; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
     _raceTicked = false;
@@ -259,6 +259,7 @@ function tick(dtMs, drawn) {
       _govCoolMs = VERIFY_COOL;
       if (v.up) { _sinceUp = -1; _downHold = _upBackoff; _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX); }
       if (v.up) _latchBound(); else _computeBound = false;
+      if (v.up && v.kind === "tier" && _gfx && _gfx.isMobile) _phoneSlowLatch = true;
       return;
     }
     if (v.kind === "tier" && !v.up && _gfx && _gfx.isMobile) _phoneSlowLatch = true;
