@@ -40,7 +40,7 @@ test("replacing the results host disconnects the prior spoken-card observer", ()
   });
   // Absolute filename: tip vmSrcLoads is at ceiling; a missing filename would raise it.
   vm.runInContext(
-    "var saidFor = null, saidWatch = null, saidMo = null;\n" + SPOKEN + "\n" + SAY,
+    "var saidFor = null, saidWatch = null, saidMo = null, saidPending = null;\n" + SPOKEN + "\n" + SAY,
     ctx,
     { filename: absSrc("js/ui/results-sheet.js") },
   );

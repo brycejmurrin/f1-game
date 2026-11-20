@@ -82,7 +82,7 @@ const PodiumBeat = (function () {
     if (!(options && Array.isArray(options.points))) {
       const head = story.querySelector('[data-results-part="head"]');
       for (const line of head ? Array.from(head.children) : []) {
-        line.textContent = String(line.textContent).replace(/^(P\d+) · \d+ points$/, "$1");
+        line.textContent = String(line.textContent).replace(/^(P\d+) · \d+ points?$/, "$1");
       }
     }
     // Ceremony beat shows the podium tiles; keep the story head as caption.
