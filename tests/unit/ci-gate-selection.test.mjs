@@ -413,3 +413,39 @@ test("XR filter executes renderer, lazy-roster and emulated-spec changes while s
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("the nightly's over-budget pool: schedule-only 12 jobs, PR plans keep the default, and a full pool drops nothing", async () => {
+  // 2026-11-20: three red nightlies; 44739348355 redded only because the 9-job pool was full and the plan DROPPED
+  // two routed specs (docs/notes/CI-CRON-DELAY-2026-11-20.md, select-specs NIGHTLY_OVER_BUDGET_SHARDS).
+  const sel = await import("../../tools/ci/select-specs.mjs");
+  const { declaredTests } = await import("../../tools/ci/select-budget.mjs");
+  assert.equal(sel.MAX_OVER_BUDGET_SHARDS, 9, "PR, train and dispatch plans keep today's cap");
+  assert.ok(sel.NIGHTLY_OVER_BUDGET_SHARDS > sel.MAX_OVER_BUDGET_SHARDS);
+  // ci.yml passes the nightly cap on `schedule` alone (a group dispatch carries concurrency_key and keeps 9) …
+  const env = ciWorkflow.match(/^ {10}OVER_BUDGET_SHARDS: (.+)$/m);
+  assert.ok(env, "the select step sets OVER_BUDGET_SHARDS");
+  assert.equal(env[1], `\${{ github.event_name == 'schedule' && !inputs.concurrency_key && '${sel.NIGHTLY_OVER_BUDGET_SHARDS}' || '' }}`);
+  // … and the step script hands it to the selector only when set (its own flag line, expanded by bash).
+  const line = selectStep.split("\n").find((l) => l.includes("OVER_BUDGET_SHARDS:+"));
+  const expand = (v) => cp.spawnSync("bash", ["-c", `set -- ${line.replace(/--json.*$/, "")}; echo "$*"`],
+    { encoding: "utf8", env: { ...process.env, OVER_BUDGET_SHARDS: v } }).stdout.trim();
+  assert.equal(expand("12"), "--over-budget-shards 12");
+  assert.equal(expand(""), "", "unset on every other event: the selector keeps its default");
+  // A pool of 12 declared-slow routed specs at 330 s each (3960 s, 11 jobs' worth): the default cap drops one,
+  // the nightly's cap runs every one.
+  const all = fs.readdirSync("tests/specs").filter((f) => f.endsWith(".spec.js")).map((f) => "tests/specs/" + f);
+  const slow = all.filter((f) => sel.maxDeclaredTimeout(f) > sel.SELECTED_GATE.perTestTimeoutSec * 1000
+    && !sel.FIXED_GATE_SPECS.has(f) && !sel.MANUAL_OPT_IN_SPECS.has(f)).slice(0, 16);
+  assert.equal(slow.length, 16, "the tree still has 16 declared-slow specs for the fixture");
+  const db = { specs: Object.fromEntries(slow.map((f) => [f,
+    { s: [1, 2, 3].map((i) => [`2026-11-0${i}T00:00:00Z`, "llvmpipe", 330, declaredTests(f)]) }])) };
+  const plan = (overBudgetShards) => sel.fit(slow, 1, { db, overBudgetShards, overflowShards: 0, spillShards: 0, includeTwinned: true });
+  assert.ok(plan(sel.MAX_OVER_BUDGET_SHARDS).overBudgetSpecs.length > 0, "fixture: the default pool is full");
+  const nightly = plan(sel.NIGHTLY_OVER_BUDGET_SHARDS);
+  assert.deepEqual(nightly.overBudgetSpecs, [], "the nightly's pool drops no routed spec");
+  assert.ok(nightly.overBudgetRun.reduce((n, s) => n + s.sec, 0) <= sel.NIGHTLY_OVER_BUDGET_SHARDS * sel.TARGET_SHARD_SEC);
+  // The real nightly shape (a whole-suite route on the committed timings) drops nothing at the nightly cap.
+  const real = sel.select(undefined, 60, { files: ["tests/helpers/fixtures.js"], overflowShards: 12, staleFirst: true,
+    overBudgetShards: sel.NIGHTLY_OVER_BUDGET_SHARDS });
+  assert.deepEqual(real.overBudgetSpecs, [], "a whole-suite nightly plan drops no routed spec");
+});
