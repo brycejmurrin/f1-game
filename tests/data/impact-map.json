@@ -6720,6 +6720,7 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "resize": [
+        "tests/unit/designer-canvas.test.mjs",
         "tests/unit/designer-profile.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ],
