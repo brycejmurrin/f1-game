@@ -85,6 +85,8 @@ const Input = (function () {
   // toggles as the fix, between HOLD and full AUTO. `throttleLatch` is the mode,
   // `throttleLatched` the state it keeps.
   let throttleLatch = false, throttleLatched = false;
+  // PEDAL SLIDE (#5996): "instant" | "ease", read by hold-buttons.js slideEase.
+  let pedalSlide = "instant";
   let padThrottle = false;
   let padBrake = false;
   let padThrottleVal = 0;
@@ -1291,11 +1293,11 @@ const Input = (function () {
   // control back to a finger the player stopped using.
   function recomputeTouchSteer() {
     let best = -1;
-    touchActive = false;
+    touchActive = touches.size > 0;
+    touchSteer = 0;
     for (const rec of touches.values()) {
-      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
+      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); }
     }
-    if (!touchActive) touchSteer = 0;
     updateDragAnchor();
   }
 
@@ -1355,7 +1357,8 @@ const Input = (function () {
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, {
-        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: ++touchSeq,
+        // seq 0 until it moves past the dead zone: a resting finger never steals steering.
+        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: 0,
       });
     }
     recomputeTouchSteer();
@@ -1366,7 +1369,9 @@ const Input = (function () {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
-      if (rec) { rec.x = t.clientX; rec.seq = ++touchSeq; }
+      if (!rec) continue;
+      rec.x = t.clientX;
+      if (!rec.seq && Math.abs(rec.x - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
     }
     recomputeTouchSteer();
   }
@@ -1420,6 +1425,7 @@ const Input = (function () {
   const holdButtons = InputHoldButtons.create({
     clamp,
     beforeReleaseAll(keepLatch) { if (!keepLatch) { throttleLatched = false; paintLatch(); } },
+    slideEase: () => pedalSlide === "ease",
   });
   const { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease } = holdButtons;
 
@@ -1610,7 +1616,7 @@ const Input = (function () {
       _padNextProbeMs = 0;   // next poll may re-probe immediately (fast window)
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
-      padSteerAnalog = false; padLookBack = false;
+      padSteerAnalog = padLookBack = padThrottleToggle = padLookBackToggle = false;
       lookStickX = 0; lookStickY = 0;
       resetPadDriveState();
       padIsWheel = false;
@@ -2167,15 +2173,11 @@ const Input = (function () {
     }
     return !!(_coarseMql && _coarseMql.matches);
   }
-  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING, and until now only half the
-     app heard about it. The query above stays live, so autoThrottle/manualGears
-     were always right — but `body.desktop` was computed ONCE at boot
-     (js/game.js), and every CSS rule that gives the driving dock its tap targets
-     and its `pointer-events: auto` hangs off `body:not(.desktop)`. Undock an
-     iPad from its Magic Keyboard mid-session and the pointer goes coarse: the
-     GAS/BRAKE/BOOST buttons duly appear, inherit `pointer-events: none` from
-     #hud-dock, and do nothing — with #pm-steer and #pm-calib still hidden by
-     css/responsive.css, so there is no route back either. Subscribe instead. */
+  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING. The query stays live, but
+     `body.desktop` was computed once at boot, and the dock's tap targets and
+     `pointer-events: auto` hang off `body:not(.desktop)`: undock an iPad from
+     its keyboard and GAS/BRAKE/BOOST appear but do nothing, with #pm-steer and
+     #pm-calib still hidden (css/responsive.css). Subscribe instead. */
   function onPointerKindChange(cb) {
     touchControlsNeeded();            // make sure the MQL (and its listener) exists
     if (typeof cb === "function" && !_coarseCbs.includes(cb)) _coarseCbs.push(cb);
@@ -2320,8 +2322,8 @@ const Input = (function () {
       // latch outright rather than toggling it (see holdReleaseAll).
       if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
       else btnThrottle = v;
-    }, function (l) { btnThrottleVal = l; }, { sibling: "btn-brake" });
-    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { sibling: "btn-throttle" });
+    }, function (l) { btnThrottleVal = l; }, { sibling: "btn-brake", easeIn: true });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { sibling: "btn-throttle", easeIn: true });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -2625,6 +2627,8 @@ const Input = (function () {
     triggerRumbleSupported,
     vibrate,
     hapticsSupported,
+    setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
+    pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
     setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),

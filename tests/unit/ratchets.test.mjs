@@ -276,6 +276,25 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   assert.match(nope[0], /cannot read tests\/data\/ratchets\.json at 0{40}/);
 });
 
+test("D-037: a tree absorb widened passes --base only with a CEILING-HISTORY line naming that metric", () => {
+  const head = loadAt("HEAD");
+  const [metric, raw] = Object.entries(head.tree).find(([, v]) => typeof v === "object" && Number(v.absorb) > 0) || [];
+  assert.ok(metric, "ratchets.json carries at least one tree entry with an absorb");
+  const wider = { ...head, tree: { ...head.tree, [metric]: { ...raw, absorb: raw.absorb + 1 } } };
+  const named = [];
+  assert.equal(compareToBase("HEAD", { current: wider, print: (l) => named.push(l), historyNamesFn: (_ref, m) => m === metric }), 0, named.join("\n"));
+  assert.ok(named.some((l) => l.includes(`LOOSEN (tree) ${metric}: absorb`) && /reason recorded/.test(l)), named.join("\n"));
+  const unnamed = [];
+  assert.equal(compareToBase("HEAD", { current: wider, print: (l) => unnamed.push(l), historyNamesFn: () => false }), 1, "no history line: fatal");
+  assert.ok(unnamed.some((l) => new RegExp(`add a .*CEILING-HISTORY.* line naming \\(tree\\) ${metric}`).test(l)), unnamed.join("\n"));
+  // A line naming another metric does not cover this one.
+  assert.equal(compareToBase("HEAD", { current: wider, print: () => {}, historyNamesFn: (_ref, m) => m !== metric }), 1);
+  // A slack loosen stays fatal even when the history names the metric.
+  const exact = Object.entries(head.tree).find(([, v]) => typeof v === "object" && v.slack === 0)?.[0];
+  const slackLoose = { ...head, tree: { ...head.tree, [exact]: head.tree[exact].ceiling } };
+  assert.equal(compareToBase("HEAD", { current: slackLoose, print: () => {}, historyNamesFn: () => true }), 1, "slack loosen is never recorded away");
+});
+
 test("15-F10: --base blocks a loosened slack and a deleted entry whose file still exists", () => {
   const head = loadAt("HEAD");
   const exact = Object.entries(head.tree).find(([, v]) => typeof v === "object" && v.slack === 0)?.[0];
