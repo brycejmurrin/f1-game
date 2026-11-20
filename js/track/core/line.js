@@ -630,7 +630,10 @@ const TrackLine = (function () {
     const n = track.n, L = track.total;
     s %= L; if (s < 0) s += L;
     const i = Math.floor(s / L * n) % n;
-    _atk.q = track.attackQ[i]; _atk.toTurnIn = track.toTurnIn[i] - (s - i * (L / n));
+    const ds = L / n;
+    let to = track.toTurnIn[i] - (s - i * ds);
+    if (to < 0) to = track.toTurnIn[(i + 1) % n] + ((i + 1) * ds - s);
+    _atk.q = track.attackQ[i]; _atk.toTurnIn = to;
     return _atk;
   }
 
@@ -645,6 +648,7 @@ const TrackLine = (function () {
     const ln = track.line;
     if (!ln) { _out.x = 0; _out.w = 0; return _out; }
     const n = track.n, L = track.total;
+    if (!(n > 0) || !(L > 0) || !isFinite(s)) { _out.x = 0; _out.w = 0; return _out; }
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);

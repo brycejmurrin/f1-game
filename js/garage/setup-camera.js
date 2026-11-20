@@ -509,6 +509,13 @@ function startPitOut(done) {
   return true;
 }
 function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
+// END TIME TRIAL (#5789): the drive-in, then done() once (end, SKIP, DONE); gated as startPitOut, on PIT IN.
+function startPitIn(done) {
+  handoff = { done };
+  if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitIn") || reducedMotion() || auto()) { fireHandoff(); return false; }
+  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO RESULTS" });
+  return true;
+}
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -1554,7 +1561,7 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
-  startArrival(...args) { endHome(); homeScene = null; return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, skipPitOut, noteResult, startHome,
+  startArrival(...args) { endHome(); homeScene = null; return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, startPitIn, skipPitOut, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview: (dt, hold) => renderSetupPreview(dt, hold) && !driveOutCovered(hold), resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,

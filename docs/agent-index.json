@@ -661,7 +661,8 @@
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
         "tests/unit/followup-platform.test.mjs",
-        "tests/unit/notices.test.mjs"
+        "tests/unit/notices.test.mjs",
+        "tests/unit/shipped-notices.test.mjs"
       ],
       "twinned": false
     },
@@ -754,6 +755,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -803,6 +805,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
@@ -829,6 +832,7 @@
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
@@ -862,6 +866,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -910,6 +915,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
@@ -936,6 +942,7 @@
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
@@ -1006,6 +1013,7 @@
         "tests/unit/agent-view-vm.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -1031,6 +1039,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
@@ -1043,6 +1052,7 @@
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs"
@@ -1581,6 +1591,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/session-records-assists.test.mjs",
+        "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
@@ -1728,6 +1739,7 @@
       "kind": "browser",
       "files": [
         "tests/specs/agent-determinism.spec.js",
+        "tests/specs/appearance-orientation.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/bryce-phone-paint.spec.js",
@@ -4579,17 +4591,17 @@
     {
       "path": "js/share/share-card-data.js",
       "global": "ShareCardData",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card-layout.js",
       "global": "ShareCardLayout",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/share/share-card.js",
       "global": "ShareCard",
-      "roster": "tag"
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/track/build-client.js",

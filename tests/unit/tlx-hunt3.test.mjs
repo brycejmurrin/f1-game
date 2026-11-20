@@ -1227,3 +1227,41 @@ test("GPU hunt 3 (TLX-P5-3): the TLX composite fetches lens dirt only under lens
     assert.equal(taps.filter((m) => m[1] === dirt[0][1]).length, 1, "the dirt sampler is fetched nowhere else (no ungated twin)");
   } finally { post.dispose(); renderer.dispose(); }
 });
+
+// #5699 row 8: smoothstep(edge0, edge1, x) with edge0 > edge1 is UNDEFINED in GLSL ES 3.00 (TLX's WebGL2 leg). Every
+// descending call goes through smoothstepDown(hi, lo, x) = smoothstep(lo, hi, x).oneMinus(); this scan refuses a raw
+// builtin call whose second edge is a literal below its first (a literal pair, or any edge falling to 0.0).
+test("TSL: no raw smoothstep with a descending literal edge pair (#5699 row 8)", () => {
+  const num = (a) => { const m = /^\s*(?:float\()?\s*(-?\d+(?:\.\d+)?)\s*\)?\s*$/.exec(a); return m ? Number(m[1]) : null; };
+  const bad = [];
+  for (const rel of ["js/render/three/tsl-lit.js", "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"]) {
+    const src = read(rel).split("\n");
+    src.forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, "");
+      for (const m of code.matchAll(/(?<![\w.])smoothstep\(/g)) {
+        // the first two top-level arguments
+        let depth = 0, j = m.index + m[0].length, cur = "", args = [];
+        for (; j < code.length && args.length < 2; j++) {
+          const ch = code[j];
+          if (ch === "(") depth++;
+          if (ch === ")") { if (depth === 0) break; depth--; }
+          if (ch === "," && depth === 0) { args.push(cur); cur = ""; } else cur += ch;
+        }
+        if (args.length < 2) continue;
+        const a = num(args[0]), b = num(args[1]);
+        if ((a !== null && b !== null && a > b) || (b === 0 && a !== 0)) bad.push(`${rel}:${i + 1} ${line.trim()}`);
+      }
+    });
+  }
+  assert.deepEqual(bad, [], "write a descending edge as smoothstepDown(hi, lo, x)");
+});
+
+test("smoothstepDown equals the descending smoothstep formula exactly where that is defined (#5699 row 8)", () => {
+  const ss = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  const down = (hi, lo, x) => 1 - ss(lo, hi, x);
+  for (const [hi, lo] of [[0.05, 0], [1, 0.4], [3, 1.5], [0.028, 0.006]])
+    for (let k = -2; k <= 12; k++) {
+      const x = lo + (hi - lo) * k / 10;
+      assert.ok(Math.abs(down(hi, lo, x) - ss(hi, lo, x)) < 1e-12, `hi=${hi} lo=${lo} x=${x}`);
+    }
+});

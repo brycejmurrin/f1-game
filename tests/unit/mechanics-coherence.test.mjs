@@ -33,7 +33,7 @@ test("the actual collision candidate accepts two rotated humans across the lap s
 test("AI corner planning solves the same speed-dependent envelope as steering", () => {
   const A = load(["js/physics/ai-drive.js"]).get("AiDrive");
   for (const pace of [.4,.84,1,1.4]) for (const grip of [.4,.8,1]) for (const k of [.001,.006,.03,.1]) {
-    const load=.8, lat=22*(1+(load-.5)*.16)*grip;
+    const load=.8, lat=22*A.aeroGrip(load)*grip;
     const v=A.cornerSpeed(k,lat,pace,72);
     assert.ok(Math.abs(v*v*k - 22*A.lateralScale(v,load,grip,pace,72))<1e-9);
     assert.ok(A.cornerSpeed(k,lat*.8,pace,72)<v,"less grip must lower the target");

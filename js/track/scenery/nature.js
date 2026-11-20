@@ -200,10 +200,10 @@ const SceneryNature = (function () {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       // CHECK the spot here; RESERVE it (and the coplanar facets) only once the
-      // pine has landed — tree() and lobedTree() order it the same way. A pine
-      // the guards drop whole (graph.instance's dry run, a pit-rejected trunk)
-      // used to keep its spot, facets and note, blocking its neighbours and
-      // leaving a phantom record in the registry.
+      // pine has landed (#5699 row 18; scenery audit W21). A pine the guards
+      // drop whole (the graph's whole-tree dry run, a pit-rejected trunk) must
+      // not hold its TREE_GAP spot, facets or note, or it blocks neighbours
+      // that would have stood and leaves a phantom record in the registry.
       if (spotOccupied(a.c[0], a.c[2], false)) return;
       // The CROWN's radius from the pit complex, not the trunk's: crown tiers
       // may overhang the complex (js/track/tracks.js onRoadHit), so a pine a

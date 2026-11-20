@@ -41,6 +41,9 @@ export const NOTICE_SOURCES = [
   "vendor/gpu-capture/SPECTOR-LICENSE.txt",
   "vendor/gpu-capture/WEBGL-LINT-LICENSE.md",
   "vendor/sgsr/LICENSE",
+  "mobile/licenses/capacitor-LICENSE",
+  "mobile/licenses/capacitor-filesystem-LICENSE",
+  "mobile/licenses/capacitor-share-LICENSE",
 ];
 
 /** The shipped third-party code, fonts and icons. `licence` is a licence FILE; the id is read from it. */
@@ -59,6 +62,16 @@ export const COMPONENTS = [
     version: (root) => readJson(root, "vendor/gpu-capture/MANIFEST.json").packages.webglLint },
   { name: "Snapdragon Game Super Resolution 1", group: "software", licence: "vendor/sgsr/LICENSE", url: "https://github.com/SnapdragonStudios/snapdragon-gsr", use: "upscaling shader, adapted",
     version: () => "" },
+  // The Android app's runtime (mobile/package.json "dependencies"; each `npm` names one exactly,
+  // tests/unit/shipped-notices.test.mjs). Licence texts copied from the npm tarballs. mobile/ is not
+  // staged to the site, so the panel names these in its closing line instead of linking them, and
+  // mobile/scripts/sync-web.mjs writes the full notices into the app (writeNotices).
+  { name: "Capacitor", group: "android", licence: "mobile/licenses/capacitor-LICENSE", url: "https://capacitorjs.com", use: "Android app wrapper (Android build only)",
+    npm: ["@capacitor/core", "@capacitor/android"], version: (root) => mobileDep(root, "@capacitor/core") },
+  { name: "Capacitor Filesystem", group: "android", licence: "mobile/licenses/capacitor-filesystem-LICENSE", url: "https://capacitorjs.com/docs/apis/filesystem", use: "saving files in the Android app",
+    npm: ["@capacitor/filesystem"], version: (root) => mobileDep(root, "@capacitor/filesystem") },
+  { name: "Capacitor Share", group: "android", licence: "mobile/licenses/capacitor-share-LICENSE", url: "https://capacitorjs.com/docs/apis/share", use: "the share sheet in the Android app",
+    npm: ["@capacitor/share"], version: (root) => mobileDep(root, "@capacitor/share") },
   { name: "Titillium Web", group: "fonts", licence: "assets/fonts/titillium-web-OFL.txt", url: "https://fonts.google.com/specimen/Titillium+Web", use: "typeface" },
   { name: "Barlow Condensed", group: "fonts", licence: "assets/fonts/barlow-condensed-OFL.txt", url: "https://github.com/jpt/barlow", use: "typeface" },
   { name: "Saira", group: "fonts", licence: "assets/fonts/saira-OFL.txt", url: "https://github.com/Omnibus-Type/Saira", use: "typeface (subset)" },
@@ -78,6 +91,7 @@ export const TRADEMARK = "This game is unofficial and is not associated in any w
 export const TITLE_NOTICE = "Unofficial fan game, not associated with Formula 1 companies";
 
 function readJson(root, rel) { return JSON.parse(fs.readFileSync(path.join(root, rel), "utf8")); }
+const mobileDep = (root, name) => String(readJson(root, "mobile/package.json").dependencies[name] || "").replace(/^[\^~]/, "");
 function readText(root, rel) {
   const abs = path.join(root, rel);
   if (!fs.existsSync(abs)) throw new Error(`notices: missing ${rel} (expected at ${abs})`);
@@ -179,6 +193,12 @@ export function buildNoticesText(root = ROOT) {
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ext = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
 
+/** The closing sentence for the Android-only components (a sentence, not a list: the shell's node ratchet). */
+export function androidLine(m) {
+  const names = m.components.filter((c) => c.group === "android").map((c) => `${c.name}${c.version ? " " + c.version : ""} (${c.spdx})`);
+  return names.length ? `The Android app also includes ${names.slice(0, -1).join(", ")}${names.length > 1 ? " and " : ""}${names.at(-1)}.` : "";
+}
+
 /** The body of the ABOUT & CREDITS settings page (between the markers in index.html). */
 export function buildCreditsHtml(root = ROOT) {
   const m = noticeModel(root);
@@ -204,7 +224,7 @@ export function buildCreditsHtml(root = ROOT) {
       ...m.audio.map((a) => `${esc(a.label)} &middot; ${a.unknown ? "licence not on record" : esc(a.licence)} &middot; <a href="${esc(a.credits)}" target="_blank" rel="noopener">credits</a>`),
       ...m.pack.map((g) => `${esc(g.author)} &middot; ${esc(g.licence)} &middot; ${g.n} ${esc([...g.kinds].sort().join(" / "))} item${g.n === 1 ? "" : "s"} in the asset pack`),
     ]),
-    `${I}<p class="adv-help" data-help="keep">Full licence texts ship beside each component (the links above) and in THIRD-PARTY-NOTICES in the project&rsquo;s repository.</p>`,
+    `${I}<p class="adv-help" data-help="keep">Full licence texts ship beside each component (the links above) and in THIRD-PARTY-NOTICES, in the project&rsquo;s repository and inside the desktop and Android apps. ${esc(androidLine(m))}</p>`,
   ].join("\n");
 }
 
@@ -224,8 +244,8 @@ export function writeNotices(root = ROOT, dest = OUT) {
 /** Write (or with check, compare) the two committed outputs. Returns the exit code. */
 export function syncCommitted(root = ROOT, { check = false } = {}) {
   // A partial checkout (tools/ci/deploy.mjs's throwaway regen copy leaves out assets/ and
-  // vendor/) has no sources to read: say so and leave the committed outputs alone.
-  const missing = ["vendor", "assets"].filter((d) => !fs.existsSync(path.join(root, d)));
+  // vendor/; mobile/ is read too) has no sources to read: say so and leave the committed outputs alone.
+  const missing = ["vendor", "assets", "mobile"].filter((d) => !fs.existsSync(path.join(root, d)));
   if (missing.length) { process.stdout.write(`notices: skipped (no ${missing.join("/")} in this checkout)\n`); return 0; }
   const targets = [
     [ROOT_NOTICES, buildNoticesText(root)],

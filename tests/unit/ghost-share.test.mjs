@@ -828,7 +828,7 @@ test("TT records find historical wear classes without crossing other settings", 
   const ctx = vm.createContext({ G, Ghost, InputGhost, PhysicsConsts: { REVISION: 7 },
     GhostShare: { hasGuest: () => !!guestContext, guest: () => ({ context: guestContext }),
       contextNotice(a, b) { compared.push([a, b]); return "comparison"; } },
-    Quali: { medalFor: () => null },
+    Quali: { medalFor: () => null, MEDAL_RANK: { bronze: 1, silver: 2, gold: 3 } },
     GameStore: { ttBoard: (id, key) => board.get(key) || [],
       ttBoardAdd(id, entry) { board.set(entry.context, [entry]); } } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-phys.js"), "utf8"), ctx, { filename: absSrc("js/race/session-phys.js") });

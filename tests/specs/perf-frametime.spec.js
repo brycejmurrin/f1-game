@@ -20,6 +20,7 @@ import {
   readPageEnv,
   writeArtifact,
   loadBaseline,
+  runnerCpu,
 } from "../helpers/perf-frametime.mjs";
 import { blessing } from "../helpers/baseline-blessing.mjs";
 
@@ -165,7 +166,10 @@ test.describe("perf frametime — SwiftShader race regression", () => {
     const env = await page.evaluate(readPageEnv);
     env.browser = browser.browserType().name();
     env.browserVersion = browser.version();
+    env.cpu = runnerCpu();
     const compared = envOf(env);
+    // Logged on every run, green included, so the job log names the runner class it measured (#5903).
+    console.log(`[perf-frametime env] cpu=${compared.cpu} p50=${measured.p50} p95=${measured.p95} p99=${measured.p99}`);
 
     const payload = {
       at: new Date().toISOString(),

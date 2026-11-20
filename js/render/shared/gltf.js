@@ -54,16 +54,6 @@ const GLTF = (function () {
     ];
   }
 
-  // Transform a point [x,y,z] by a column-major mat4 (w=1, perspective divide).
-  function mPoint(m, p) {
-    const x = p[0], y = p[1], z = p[2];
-    const w = m[3] * x + m[7] * y + m[11] * z + m[15] || 1;
-    return [
-      (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
-      (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
-      (m[2] * x + m[6] * y + m[10] * z + m[14]) / w,
-    ];
-  }
 
   // Sign of the upper-left 3x3 determinant: negative for a MIRRORED node (an
   // odd number of negative scale axes — a modeller's "mirror" modifier, or a
@@ -423,7 +413,7 @@ const GLTF = (function () {
           if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
             throw new Error("GLTF: invalid POSITION accessor");
           }
-          // mPoint, inlined: a 40k-vert import was spending the stall on one
+          // The mat4 point transform (w=1, perspective divide), inlined: a 40k-vert import was spending the stall on one
           // short-lived array per vertex after the boxed accessor was gone.
           const pw = m3 * px + m7 * py + m11 * pz + m15 || 1;
           const inv = scale / pw;

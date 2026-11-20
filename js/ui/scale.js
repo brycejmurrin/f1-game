@@ -306,6 +306,8 @@ const UiScale = (() => {
       { id: "low",  label: "LOW",  v: 0.5  },
       { id: "med",  label: "MED",  v: 0.75 },
       { id: "high", label: "HIGH", v: 1.0  },
+      // MAX (#5222): HIGH + device DPR (≤3); opt-in. PerfGov sheds it first (GOVERNOR-RATIONALE §gov-39).
+      { id: "max",  label: "MAX",  v: 1.0, dpr: 3 },
     ];
     // Every device ships at AUTO; a phone's AUTO is capped at MED's 0.75 buffer
     // (PHONE_AUTO_CEIL, above). "Phone" is the question Input.touchControlsNeeded()
@@ -317,6 +319,7 @@ const UiScale = (() => {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
       SettingRow.paint($("pm-res"), m.id);
       const gfx = G.gfx;
+      if (gfx.setDprBoost) gfx.setDprBoost(m.dpr || 0);
       if (m.v != null) { PerfGov.setAutoRes(false); if (gfx.setRenderScale) gfx.setRenderScale(m.v); return; }
       // AUTO: the governor takes over from wherever the scale sits now, under the device's ceiling.
       // A scale above a phone's ceiling (the boot's 1.0, or a HIGH pin just left) comes down to it.

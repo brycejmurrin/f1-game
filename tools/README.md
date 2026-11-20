@@ -144,6 +144,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/claude-agents.mjs** | Claude Code CLI adapter, reads only: auth status, the remembered cloud-address registry and local session reads. | — |
+| **ci/closing-refs.mjs** | Lists closing keywords (fix/close/resolve #N) in a PR body whose target is an open PR; ship-pr refuses on any (#5929). | ship |
 | **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | steward |
 | **ci/deploy-child.mjs** | Bounded deploy child supervision, including descendants and cooperative shutdown. | — |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
@@ -215,6 +216,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/physics-oracle.mjs** | Golden physics traces (VM): raw-double per-step player state + track queries for the apex-26 TypeScript port gate. | tune-physics |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
+| **check/quali-calibrate.mjs** | Qualifying calibration (VM): drives the clear-air AI field per circuit, writes `tests/data/quali-calibration.json`. | race-weekend |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
@@ -260,6 +262,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
 | **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |
 | **gen/gen-output-surface.mjs** | Generates the agent output catalog from tools, npm scripts and configured MCP routes; --check detects drift. | agent-config |
+| **gen/gen-quali-calib.mjs** | Regenerates the qualifying factors in `js/race/quali-model.js` from `tests/data/quali-calibration.json`; `--check`. | race-weekend |
 | **gen/gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
 | **gen/gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
 | **gen/gen-test-groups.mjs** | Regenerates package.json's `test:*` scripts from tests/groups.json; `--check`. | check-changes |
@@ -307,6 +310,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
 | **shot/capture-contract.mjs** | Shared bounded input/output and pixel evidence contracts for capture CLIs. | — |
 | **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
+| **shot/capture-fallbacks.mjs** | What a capture drew LESS of, or loaded MORE of, than a player's page (#5790): the TLX software-renderer fallbacks | — |
 | **shot/capture-gallery.mjs** | Verify capture indexes and package all images, recipes and source receipts into a portable static gallery. | — |
 | **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
@@ -695,6 +699,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
 | **ci/behind-ship.mjs** | Print how many commits a PR head is behind the ship branch; warn over 10, never fail. |
+| **ci/child-health.mjs** | Quota watchdog: which open PRs name a child session that died (usage limit, failed turn, lost worker) as owner. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout diffs against: the test commit's FIRST PARENT, else the fallback given. |
 | **ci/ci-rerun.mjs** | Guarded CI re-run: refuses a superseded run (head_sha ≠ PR head), a live run, or a second re-run. |
@@ -718,7 +723,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
 | **ci/merge-train.mjs** | Merge train: folds green `land` PRs onto the deploy tip as a `train/*` PR; the gate checks each car's own rows. |
-| **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| retest-refused \| tip-red \| no. |
+| **ci/needs-sync.mjs** | Needs a deploy-tip sync? conflict \| union-conflict \| stale-red \| retest-refused \| gate-refused \| tip-red \| no. |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
