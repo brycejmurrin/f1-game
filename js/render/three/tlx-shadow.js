@@ -1488,6 +1488,9 @@
         }
       },
       reset() { if (_csmPlan) _csmPlan.reset(); if (_lampDrv) _lampDrv.reset(); },
+      // A/B writers for the two kill switches (both read at build: reload after). gfx.shadowX.setCsmCars(false).
+      setCsmCars(on) { try { localStorage.setItem("apex26.tlxCsmCars", on ? "1" : "0"); } catch (_) { /* no storage */ } return !!on; },
+      setCsmDither(on) { try { localStorage.setItem("apex26.tlxCsmDither", on ? "1" : "0"); } catch (_) { /* no storage */ } return !!on; },
       state() {
         return {
           csm: { on: S.csm.on, n: S.csm.n, sizes: S.csm.sizes.slice(), half: S.csm.half.slice(), biasK: S.csm.biasK.slice(),

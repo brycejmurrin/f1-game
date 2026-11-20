@@ -237,6 +237,7 @@ const RENDERER_LS_KEYS = [
   "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
   "apex26.gfxTlxFail",
   "apex26.tlxAgx",   // the EXTREME AgX tone-map opt-in (__tlx.post.setAgx): a RESET returns to ACES
+  "apex26.tlxCsmCars", "apex26.tlxCsmDither",   // EXTREME cascade A/B switches (gfx.shadowX.setCsmCars / setCsmDither)
   // The canary's strike counter: a RESET that left it behind would hand the
   // next boot a strike it did not earn, and retire the pick on its first
   // real failure.

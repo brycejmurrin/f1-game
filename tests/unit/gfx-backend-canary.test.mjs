@@ -1039,6 +1039,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
     "apex26.tlxAgx",   // the EXTREME AgX tone-map opt-in: a RESET returns the picture to ACES (#6003)
+    "apex26.tlxCsmCars", "apex26.tlxCsmDither",   // the EXTREME cascade A/B switches (#6003)
     // The boot canary's latch. gfxProbeStrikes counts loads that died before
     // presenting a frame — one is a memory kill, two retires the pick. A RESET
     // that left a strike behind would hand the next boot a strike it did not

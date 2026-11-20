@@ -223,5 +223,9 @@ test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and t
   assert.equal(boot("extreme", false, { "apex26.gfxDetail": "0" }).detail(), 0);
   assert.equal(boot("high", true, { "apex26.gfxDetail": "2" }).detail(), 0, "never on a phone");
   assert.equal(boot("ultra", false, { "apex26.gfxDetail": "9" }).detail(), 1, "an unknown value is ignored");
+  const held = boot("extreme", false, { "apex26.gfxHoldExtras": "1" });
+  held.setShed(99);
+  for (const name of held.SHED_ORDER) assert.equal(held.feature(name), true, `${name} stays on while the extras are held`);
+  assert.equal(held.feature("dof"), false, "holding the extras does not turn CINEMA on");
   assert.equal(boot("extreme", false, { "apex26.gfxx.csm": "0" }).feature("csm"), false);
 });

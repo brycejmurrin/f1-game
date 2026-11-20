@@ -62,11 +62,15 @@ function feature(name) {
   const have = detail() + (_cinema && detail() >= 2 ? 1 : 0);
   if (have < need) return false;
   const i = SHED_ORDER.indexOf(name);
-  return i < 0 || i < SHED_ORDER.length - _shed;
+  return i < 0 || i < SHED_ORDER.length - _shed || _holdExtras();
 }
 // The governor's upper ladder: n extras shed (0..SHED_ORDER.length), last in SHED_ORDER first.
 function setShed(n) { _shed = Math.max(0, Math.min(SHED_ORDER.length, n | 0)); return _shed; }
 function setCinema(on) { _cinema = !!on; return _cinema; }
+// apex26.gfxHoldExtras = 1 keeps every extra on whatever the governor sheds (the GPU census, so a slow runner
+// still proves gtao / ssgi / ssrHi / superSample ran). GfxQuality.holdExtras(true) writes it; read per call.
+function _holdExtras() { try { const st = gstore(); return !!st && st.raw("apex26.gfxHoldExtras") === "1"; } catch (_) { return false; } }
+function holdExtras(on) { const st = gstore(); if (st) st.rawSet("apex26.gfxHoldExtras", on ? "1" : ""); return !!on; }
 // A/B from the console: GfxQuality.forceDetail(2) then reload; forceDetail(null) clears it.
 function forceDetail(n) { const st = gstore(); if (st) st.rawSet("apex26.gfxDetail", n == null ? "" : String(n | 0)); return n; }
 const PHONE_MAX_ID = "high";
@@ -321,7 +325,7 @@ if (typeof document !== "undefined") {
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
-  detail, feature, setShed, setCinema, forceDetail, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
+  detail, feature, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();
 Object.freeze(GfxQuality);

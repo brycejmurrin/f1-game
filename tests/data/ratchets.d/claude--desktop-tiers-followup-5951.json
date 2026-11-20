@@ -10,7 +10,7 @@
   "tree": {
     "assertPins": 21,
     "assertPinsAll": 27,
-    "eagerBytes": 14423,
+    "eagerBytes": 15052,
     "vmSrcLoads": 1
   }
 }
