@@ -2,17 +2,25 @@
 const RaceControl = (function () {
   "use strict";
 
-  // Result countdown policy. A winner crossing the line does not remove a human
-  // still racing (an AI can finish first; humans can be minutes apart); the hard
-  // cap is the bounded escape for an unfinished/stale human. AI-only harnesses
-  // keep "shortly after the winner". `raceT0`: where the clock started (a Data Hub
-  // JUMP IN seeds it to the real race's time, which alone could pass the cap).
-  // SOLO (`post = { solo, since }`, game.js owns the bag): the player done does not
-  // end the race while an AI runs; the field takes the flag at its next crossings,
-  // bounded by POST_FINISH_CAP s from the player's finish OR retirement (`since`),
-  // then endRace classifies (RaceControl.shortRun when no car took the flag).
-  // NET (`post.net`, #5989 A1): the same cap from the first human finish (`post.first`).
-  // TT, quali and the AI-only harnesses pass no `post`, and so only the rules below apply.
+  // Result countdown policy. A winner crossing the line is not permission to
+  // remove a human who is still racing: single-player AI can finish first, and
+  // multiplayer humans can be separated by much more than 3.5 seconds. The
+  // hard cap remains the bounded escape hatch for an unfinished/stale human.
+  // AI-only harnesses retain the old "shortly after the winner" behaviour.
+  // `raceT0`: where the clock started — a Data Hub JUMP IN seeds it to the real
+  // race's time at the lap you join, which alone could pass the cap at once.
+  // SOLO (`post = { solo, since }`, game.js owns the bag): the player being done
+  // does not end the race while an AI is still on track — the field takes the
+  // flag at its next crossings and the result is a real classification, not a
+  // progress snapshot. Bounded by POST_FINISH_CAP s of race time from the
+  // player's finish OR retirement (`since`) — a DNF no longer ends the race for
+  // everyone, so season/career points use the real classification — then endRace
+  // classifies as before (RaceControl.shortRun when no car ever took the flag).
+  // NET (`post.net`, #5989 A1): the same POST_FINISH_CAP s, counted from the
+  // FIRST human's finish (`post.first`); a friend still on track is then
+  // classified by laps done instead of holding the finished screen to the
+  // 360 s/lap hard cap.
+  // TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
   const POST_FINISH_CAP = 75;
   function finishPending(cars, raceT, lapsTarget, raceT0) {
     if (raceT - (raceT0 > 0 ? raceT0 : 0) > 360 * lapsTarget) return false;
@@ -26,27 +34,28 @@ const RaceControl = (function () {
   }
   function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
     const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, hFin = false;
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, humanFinished = false;
     for (const c of cars || []) {
       if (!c) continue;
       if (c.finished) anyFinished = true;
       else if (!c.retired) running = true;
       if (!c.human && !c._nHuman) continue;
       anyHuman = true;
-      if (c.finished && !c.retired) hFin = true;
+      if (c.finished && !c.retired) humanFinished = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
     // A time penalty is served on the CLOCK (classification sorts finishers by
-    // finishT + penalty, game.js endRace): a finisher carrying one is not settled
-    // until every car on track has had that long to cross. Else the 2.2 s
-    // countdown ran from the player's crossing and a rival 3 s back with a +5 s
-    // penalty was filed "still running", behind on a result it had won. Bounded
-    // by the penalty; the hard cap below still wins.
+    // finishT + penalty, game.js endRace), so a finisher carrying one is not
+    // settled until every car still on track has had that long to cross.
+    // Without this the 2.2 s countdown ran from the player's crossing, and a
+    // rival 3 s back with a +5 s penalty against it was filed as "still
+    // running" — behind, on a result it had won. Bounded by the penalty
+    // itself; the hard cap below still wins.
     if (finishPending(cars, raceT, lapsTarget, raceT0)) return 0;
     if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
     if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
-    if (post && post.net) { if (!hFin) post.first = -1; else if (!(post.first >= 0)) post.first = raceT; }
-    if (hFin && !allHumansDone && post && post.net) return raceT - post.first < POST_FINISH_CAP ? 0 : 0.1;
+    if (post && post.net) { if (!humanFinished) post.first = -1; else if (!(post.first >= 0)) post.first = raceT; }
+    if (humanFinished && !allHumansDone && post && post.net) return raceT - post.first < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (ran > 360 * lapsTarget) return 0.1;
