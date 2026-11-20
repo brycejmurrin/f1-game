@@ -387,8 +387,9 @@
     },
     {
       "path": "tools/check/boot-wall.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/check/brake-cue-calibrate.mjs",
@@ -2441,6 +2442,11 @@
     },
     {
       "path": "tools/lib/impact-map.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/js-strip.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
