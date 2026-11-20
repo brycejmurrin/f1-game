@@ -266,6 +266,12 @@ const SaveMigrate = (function () {
       ? Math.max(0, Math.min(999, Math.trunc(driver.num))) : 99;
     career.driver = driver;
     career.team = typeof career.team === "string" && career.team ? career.team : (career.flavour === "myteam" ? "custom" : "haas");
+    if (career.flavour === "driver" && typeof Teams !== "undefined" && Array.isArray(Teams.LIST) && Teams.isReal
+        && !Teams.isReal(Teams.LIST.find((t) => t && t.id === career.team))) {
+      log("warn", "Career save named an unknown team; seated at haas.");
+      career.team = "haas";
+      if (career.deal && typeof career.deal === "object") career.deal.team = "haas";
+    }
     career.seat = career.flavour === "myteam" ? 0 : clampSeat(career.seat, career.team);
     career.deal = cleanDeal(career.deal);
     career.seed = finiteNumber(career.seed) | 0;
