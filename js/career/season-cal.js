@@ -125,7 +125,6 @@ function setConfig(next) {
   Log.info("game", `SeasonCal.setConfig rounds=${cfg.trackIds.length}`);
   return cfg;
 }
-function resetConfig() { return setConfig(null); }
 
 function frozenConfig(raw) {
   const out = normalize(raw);
@@ -721,7 +720,7 @@ function shuffled(ids, seed) {
 // SHORT_POINTS / resetWeekend stay module-local (payTable / restart / applyConfig).
 return {
   SPRINT_POINTS, CLASSIC_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
-  config, setConfig, resetConfig, applyConfig, matchesConfig, fresh, normalize,
+  config, setConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, canRace, hasProgress,

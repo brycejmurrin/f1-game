@@ -40,8 +40,8 @@ const AiBand = (function () {
     const lead = /** @type {number} */ (ctx.leadProg), car = /** @type {number} */ (ctx.carProg), total = /** @type {number} */ (ctx.trackTotal);  // finite-checked below
     if (!(Number.isFinite(lead) && Number.isFinite(car) && Number.isFinite(total) && total > 0)) return 0;
     const gap = lead - car;
-    // Reverse band only: human ahead of this AI, and not a full lap clear.
-    if (!(gap > 0 && gap < total * 0.5)) return 0;
+    // Reverse band only: human ahead of this AI, and not a full lap clear (half a lap cut the far cars off, #5900).
+    if (!(gap > 0 && gap < total)) return 0;
     const t0 = ctx.launchT0 || 0;
     if ((ctx.raceT || 0) - t0 <= START_GUARD_S) return 0;
     const auth = Number.isFinite(ctx.bandAuth) ? Math.max(0, /** @type {number} */ (ctx.bandAuth)) : 0;

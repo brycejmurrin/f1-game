@@ -262,7 +262,7 @@ function _wheelRimF1(out, CARB, RUB, GRIP, acc, style) {
   } else if (style === "endurance") {
     _rigGrip(out,[[-0.155,-0.099],[-0.118,-0.127],[-0.060,-0.141],[0,-0.144],[0.060,-0.141],[0.118,-0.127],[0.155,-0.099]],0.013,0.022,RUB);
     _rigGrip(out,[[-0.151,0.103],[-0.130,0.127],[-0.080,0.135],[0,0.135],[0.080,0.135],[0.130,0.127],[0.151,0.103]],0.012,0.022,RUB);
-    for (const side of [-1,1]) _rigBar(out,side*0.080,-0.085,side*0.118,-0.117,0.012,0.024,0.018,CARB,21);
+    for (const side of [-1,1]) _rigBar(out,side*0.080,-0.085,side*0.118,-0.117,0.012,0.024,0.018,CARB);
     _rigRounded(out,0,0.135,-0.004,0.016,0.020,0.033,0.004,acc||GRIP);
   }
   _wheelPaddles(out, true);

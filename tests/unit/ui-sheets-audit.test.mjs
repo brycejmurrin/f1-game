@@ -1043,7 +1043,7 @@ test("friend-race results are honest: RACE AGAIN (SOLO), a NEW FRIEND ROOM door,
   assert.equal(friend.els.resMenu.textContent, "NEW FRIEND ROOM");
   const hint = friend.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room");
   assert.ok(hint, "the sheet says the room is gone");
-  assert.match(hint.children[0].textContent, /VS FRIEND/);
+  assert.match(hint.children[0].textContent, /RACE A FRIEND on the title screen/);
   const solo = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => false, ownsClassification: () => false, peerResult: () => null } });
   solo.api.buildResults(cars.slice());
   assert.equal(solo.els.resNext.textContent, "RACE AGAIN");

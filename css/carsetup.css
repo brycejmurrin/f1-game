@@ -605,7 +605,8 @@
 .cs-tab-lbl {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0; color: var(--text);
 }
-.cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
+/* --dim, not --text at 40 %: that was ~3.3:1, under WCAG AA 4.5:1 (#5900). */
+.cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: var(--dim); }
 /* Upgraded = a cyan underline; the label keeps the white ink every other tab
    uses, so the strip reads as one row instead of red + cyan (design pass 2b). */
 .cs-tab.upgraded { box-shadow: inset 0 -3px 0 #4df; }
@@ -662,7 +663,7 @@
   font-size: var(--fs-micro); font-weight: 700; color: var(--dim);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
+.cs-opt-cost.free { color: var(--dim); font-weight: 600; }   /* was white at 30 %, ~2.6:1 (#5900); the lighter weight sets FREE apart */
 .cs-opt.active {
   background: var(--plate-on); border-color: var(--red);
   box-shadow: inset 3px 0 0 var(--red);

@@ -196,3 +196,23 @@ test("the stub AudioPanel paints a saved SOUND OFF on the title button before th
   assert.equal(on.textContent, "SOUND ON");
   assert.equal(on.attrs["aria-pressed"], "true");
 });
+
+// #5900: SOUND OFF as the first click downloaded the whole audio bundle (~3.6 MB) only to stay
+// silent: the stub ran AudioPanel._ensure() before reading which way the click went.
+test("the stub AudioPanel turns sound OFF without loading the audio bundle; ON still loads it", async () => {
+  const P = stubGlobal("AudioPanel"), was = P._ensure;
+  let loads = 0;
+  P._ensure = () => { loads++; return Promise.resolve(); };
+  try {
+    const btn = { textContent: "SOUND ON", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, onclick: null };
+    const G = { els: { soundbtn: btn }, store: G0.store, soundOn: true };
+    P.create(G);
+    btn.onclick();
+    await Promise.resolve();
+    assert.equal(loads, 0, "OFF needs no audio bundle");
+    assert.equal(G.soundOn, false);
+    assert.equal(btn.textContent, "SOUND OFF");
+    btn.onclick();
+    assert.equal(loads, 1, "ON loads the bundle");
+  } finally { P._ensure = was; }
+});

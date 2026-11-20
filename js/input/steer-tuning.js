@@ -525,7 +525,7 @@ function matchSteerLevel() {
 // Mirror the granular store values back onto the simplified controls so the two
 // views never disagree (presets, Advanced edits and macros all stay in sync).
 function refreshMacros() {
-  const ts = clamp(store.get("tiltDeg", 8), SLIDER_MIN, SLIDER_MAX);   // 8, the shipped default (settings-export SPEC and PRESETS.standard); this read kept the pre-2953f79a 6 and made the simple row disagree with the ADVANCED row about the same key
+  const ts = clamp(Number(store.get("tiltDeg", 8)) || 8, SLIDER_MIN, SLIDER_MAX);   // 8: the shipped default (PRESETS.standard); Number(): a stored string reached innerHTML (#5900)
   if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
   const lvl = matchSteerLevel();
   SettingRow.paint($("pm-feel"), lvl || "custom", FEEL_VALUES);
@@ -569,7 +569,7 @@ function applySteerTuning() {
   const rate    = clamp(store.get("steerRate",  2), SLIDER_MIN, SLIDER_MAX);
   const expo    = clamp(store.get("steerExpo",  6), SLIDER_MIN, SLIDER_MAX);
   const smooth  = clamp(store.get("steerSmooth", 3), SLIDER_MIN, SLIDER_MAX);
-  const tiltdeg = clamp(store.get("tiltDeg",    8), SLIDER_MIN, SLIDER_MAX);   // 8→25° for full lock (tiltDegFromRange: 56.5 - 4.5*(v-1))
+  const tiltdeg = clamp(Number(store.get("tiltDeg", 8)) || 8, SLIDER_MIN, SLIDER_MAX);   // 8→25° for full lock (tiltDegFromRange: 56.5 - 4.5*(v-1))
   const lock    = clamp(store.get("steerLock",  7), SLIDER_MIN, SLIDER_MAX);
   const spdsteer = clamp(store.get("steerSpeed", 7), SLIDER_MIN, SLIDER_MAX);
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF

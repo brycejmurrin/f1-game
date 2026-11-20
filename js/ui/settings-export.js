@@ -1343,7 +1343,7 @@ function create(G) {
     resetBtn.id = "cs-garage-reset";
     resetBtn.type = "button";
     resetBtn.textContent = resetLabel;
-    resetBtn.title = "Clear parts, liveries, setups and team/driver back to the shipped garage. Career and settings are never touched.";
+    resetBtn.title = "Clear parts, liveries, setups (career setup sheets included) and team/driver back to the shipped garage. Career saves and settings are never touched.";
     resetBtn.onclick = () => {
       if (reloading) return;
       if (!armed || armed.el !== resetBtn) {

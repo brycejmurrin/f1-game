@@ -18541,10 +18541,14 @@
     },
     "js/ui/dom.js": {
       "fmtLap": [
-        "tests/unit/i18n-number-format.test.mjs"
+        "tests/unit/i18n-number-format.test.mjs",
+        "tests/unit/lap-format-rollover.test.mjs"
       ],
       "fmtRaceClock": [
         "tests/unit/i18n-number-format.test.mjs"
+      ],
+      "paintFold": [
+        "tests/unit/steer-tuning-lock.test.mjs"
       ],
       "*": [
         "tests/specs/browser-ui-hunt.spec.js",
@@ -20448,6 +20452,12 @@
       "create": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/title-menu-even.test.mjs"
+      ],
+      "dailyHistory": [
+        "tests/unit/lap-format-rollover.test.mjs"
+      ],
+      "lapStr": [
+        "tests/unit/lap-format-rollover.test.mjs"
       ],
       "organize": [
         "tests/unit/title-menu-even.test.mjs"

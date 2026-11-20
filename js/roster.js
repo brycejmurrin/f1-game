@@ -162,6 +162,7 @@
     ]
   ],
     LAZY_AGENT: [
+    "js/render/shared/puddles.js",
     "js/agent/agentview-raster.js",
     "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
