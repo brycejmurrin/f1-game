@@ -115,10 +115,24 @@ test.describe("garage livery pick cost", () => {
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
       const before = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
-      await page.evaluate((k) => {
+      // Fonts settle first, and the click goes in the SAME task as the check: LiveryTex.paintSwatch / swatchCanvas
+      // bypass both caches while document.fonts.status is "loading" (a lockup in the fallback face must not stick),
+      // and that bypass counts nothing. The previous pick's deferred 2048 atlas can start a face the cards never
+      // used (canvas ctx.font), still in flight on a slow runner: #5726 run 44693184227 selected-2 read pick 2 as
+      // {cardPaints:0, cardBlits:0, cardReused:0} with the rebuild done. Bounded: the faces are local files.
+      const fonts = await page.evaluate(async (k) => {
+        const t0 = performance.now();
+        while (document.fonts && document.fonts.status !== "loaded") {
+          if (performance.now() - t0 > 30_000) break;
+          await document.fonts.ready;
+        }
+        const st = document.fonts ? document.fonts.status : "none";
+        if (st !== "loaded" && st !== "none") return st;
         window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k];
         window.__pickOf[s.closest("[data-cs-livery]").dataset.csLivery] = k; s.click();
+        return st;
       }, i);
+      expect(fonts, `pick ${i}: web fonts still loading after 30 s, so the card caches are bypassed`).not.toBe("loading");
       // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas, then the
       // product's own settle signal: no deferred 2048 still queued (car-draw decalBytes().hiPending). A fixed
       // frame count read before the idle slot fired on a slow runner (0 uploads seen: #2394 tally).
