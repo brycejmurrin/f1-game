@@ -526,7 +526,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
-    ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
+    ${tslice("      let _ssrMrt = null, _ssrMrtV = null;", "      let _poolNow = ")}
     ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
     return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, history: _warmHistory, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
   const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },

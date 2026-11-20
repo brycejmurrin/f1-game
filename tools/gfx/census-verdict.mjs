@@ -78,7 +78,9 @@ export function tierGate(g, { hardware = false, level = 0 } = {}) {
   for (const [name, f] of Object.entries(rec.features)) {
     const i = order.indexOf(name);
     if (f.need > have) { offLevel.push(name); continue; }
-    if (i >= 0 && i >= order.length - rec.shed) { shed.push(name); continue; }
+    // Shed by the governor, unless the run holds the extras (apex26.gfxHoldExtras=1): then feature() still
+    // answers on and the feature is judged like any other.
+    if (i >= 0 && i >= order.length - rec.shed && !f.on) { shed.push(name); continue; }
     const skip = TIER_SKIPS[name];
     let state;
     if (!f.on) { state = "GATE OFF — feature() answers false at this level"; if (gate) bad.push(`tiers: ${name} is off at detail ${rec.detail} although the level turns it on (feature() answered false)`); }

@@ -43,7 +43,7 @@ row stay lazy in `js/ui/layout-presets.js`. Fragment:
 `tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
 ## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): follow-ups to the desktop tiers, real-GPU tier gate
 
-`(tree) eagerBytes` 8021786 → **8036838** (+15052), on top of #5951's ceiling. Deliberate raise past the
+`(tree) eagerBytes` 8021786 → **8037218** (+15432), on top of #5951's ceiling. Deliberate raise past the
 absorb, under Bryce's chat ask for the follow-up (2026-11-20: "in follow up pr fix more and implement the
 test") and his earlier "Increase budget or remove comments"; the tree-wide ceiling still needs his own
 `ratchet-raise` label on the PR. What is eager: the car follow-ups in `js/car/*` (loft UVs, bevels, garage hero

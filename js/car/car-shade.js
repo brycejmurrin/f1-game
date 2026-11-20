@@ -137,7 +137,7 @@ const CarShade = (function () {
   function loft(out, front, rear, col, tri, opts) {
     const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP, pt = (opts && opts.pt) || EXP_TOP;
     const sf = opts && opts.surface, fc = (opts && opts.frontCol) || col;
-    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt), v0 = out.pos.length / 3;
+    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt), v0 = out.pos ? out.pos.length / 3 : 0;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
       tri(out, F[i], R[i], R[j], col, sf);
@@ -211,7 +211,7 @@ const CarShade = (function () {
     // back on itself (the headrest's U) has its ends side by side.
     const d0 = sub(mid(rings[1]), mid(rings[0])), d1 = sub(mid(rings[last]), mid(rings[last - 1]));
     const flip = dot(newell(rings[0]), d0) > 0;   // the rings wind the other way round the loft
-    const v0 = out.pos.length / 3;
+    const v0 = out.pos ? out.pos.length / 3 : 0;
     for (let r = 0; r < last; r++) {
       const F = rings[r], R = rings[r + 1];
       for (let i = 0; i < n; i++) {
@@ -504,7 +504,7 @@ const CarShade = (function () {
   /** Loft closed rings front -> rear (each CCW from +Z, same count), capped:
    *  the front cap in `frontCol`, the rear in `col`. */
   function loftRings(out, rings, col, frontCol, tri) {
-    const n = rings[0].length, v0 = out.pos.length / 3;
+    const n = rings[0].length, v0 = out.pos ? out.pos.length / 3 : 0;
     for (let r = 0; r < rings.length - 1; r++) {
       const F = rings[r], R = rings[r + 1];
       for (let i = 0; i < n; i++) {

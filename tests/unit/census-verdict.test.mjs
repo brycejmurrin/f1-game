@@ -407,6 +407,15 @@ test("tiers: the level not applied, a gate that answers off, or no record at all
   const shed = tierRun(tierRec(2, (n) => n !== "lampShadows", { shed: 2 }), "apex26.gfxDetail=2");
   assert.deepEqual(shed.bad, []);
   assert.ok(shed.rows.some((r) => /shed by the governor: superSample ssgi/.test(r)));
+  // HELD extras (apex26.gfxHoldExtras=1): the governor's count says shed, feature() still answers on, so the
+  // feature is judged, not excused. One that then did not run is a silent fallback like any other.
+  const held = tierRec(2, (n) => n !== "lampShadows" && n !== "ssgi", { shed: 2 });
+  for (const n of ["superSample", "ssgi"]) held.features[n].on = true;
+  held.features.superSample.ran = true; held.features.ssgi.ran = false;
+  const hv = tierRun(held, "apex26.gfxDetail=2");
+  assert.deepEqual(hv.bad, ["webgpu: tiers: ssgi is on at detail 2 but did NOT run — its build fell back silently"]);
+  assert.ok(hv.rows.some((r) => /superSample\s+need=1 on=1 ran=1 {2}ran/.test(r)), hv.rows.join("\n"));
+  assert.ok(!hv.rows.some((r) => /shed by the governor/.test(r)));
 });
 
 test("tiers: informational (no fail) on a software adapter, a lite GPU or three's WebGL2 backend; detail 0 runs unchanged", () => {
