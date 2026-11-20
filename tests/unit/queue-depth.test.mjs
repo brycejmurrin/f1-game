@@ -96,10 +96,10 @@ test("#2181: queued runs are examined FIRST — 35 in-progress runs no longer hi
   assert.equal(v.verdict, "hold");
   assert.equal(v.truncated, true, "10 in-progress runs were not examined");
   assert.ok(v.reasons.some((r) => /^queued jobs ≥50 \(a lower bound\) ≥ 10$/.test(r)), v.reasons.join("|"));
-  for (const s of ["queued", "in_progress"])
+  for (const s of ["queued", "in_progress", "pending"])
     assert.ok(f.calls.includes(`actions/runs?status=${s}&per_page=100&page=1`), `lists ${s} runs (REST status filter)`);
-  // 2026-10-26: pending / requested / waiting RUNS hold no runner; their three list calls were dropped.
-  for (const s of ["pending", "requested", "waiting"])
+  // 2026-10-26: requested / waiting RUNS hold no runner; their list calls were dropped.
+  for (const s of ["requested", "waiting"])
     assert.ok(!f.calls.some((q) => q.startsWith(`actions/runs?status=${s}&`)), `no ${s} run list`);
   assert.ok(f.calls.indexOf("actions/runs?status=queued&per_page=100&page=1") < f.calls.indexOf("actions/runs?status=in_progress&per_page=100&page=1"));
 });
@@ -217,11 +217,11 @@ test("#2266: running, queued and the oldest-queued age are reported; a starved q
   assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
 
-test("2026-10-26: only queued and in_progress runs are listed; a waiting run (environment gate) holds no runner", () => {
+test("2026-10-26: a waiting run (environment gate) is not listed; queued, in_progress and pending are", () => {
   // #2266 listed `waiting` runs too; the one environment here (github-pages) has no
-  // reviewers or wait timer, so a run never waits on it, and pending/requested
-  // runs hold no runner. Three list calls per gauge for nothing (system audit §7).
-  assert.deepEqual(RUN_STATUSES, ["queued", "in_progress"]);
+  // reviewers or wait timer, so a run never waits on it, and requested runs hold
+  // no runner (system audit §7). `pending` is back since 2026-11-20 (next test).
+  assert.deepEqual(RUN_STATUSES, ["queued", "in_progress", "pending"]);
   const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }], queued: [{ id: 78, status: "queued" }] }, () => many(3, "queued"));
   const v = measure({ request: f.request });
   assert.ok(!f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
@@ -286,4 +286,16 @@ test("--wait: 124 on timeout with the last trend; an API error retries, three in
   assert.equal(flaky.code, 0, "two errors then readings: keep polling");
   const down = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => ({ error: "HTTP 502" }), ...clock() });
   assert.equal(down.code, 3);
+});
+
+test("2026-11-20: a CI run reads `pending` while its lane legs run: their in_progress jobs are counted", () => {
+  // Run 44744533398 read status `pending` with 6 selected legs in_progress (14:58Z);
+  // the gauge listed only queued/in_progress runs and said 9 Linux in flight while 24+ ran.
+  const legs = [...Array.from({ length: 6 }, () => job("in_progress")), ...Array.from({ length: 20 }, () => job("pending"))];
+  const f = fakeApi({ pending: [{ id: 44744533398, status: "pending" }] }, () => legs);
+  const v = measure({ request: f.request });
+  assert.ok(f.calls.includes("actions/runs?status=pending&per_page=100&page=1"));
+  assert.equal(v.linux.running, 6, "a pending run's running legs hold runners");
+  assert.equal(v.laneWaiting, 20, "its lane-waiting legs are counted apart");
+  assert.equal(v.verdict, "ok");
 });
