@@ -31,6 +31,7 @@ const PhonePad = (function () {
   const HEARTBEAT_MS = 100;        // a sample at least this often, moving or not
   const MIN_SAMPLE_GAP_MS = 15;    // and at most ~66 Hz — the sensor's own rate
   const HUD_MS = 66;               // the dash refreshes ~15 Hz, like the game's own HUD tick
+  const FRESH_PAIR_MS = 5 * 60000; // a code this screen minted admits its first phone without ALLOW this long
 
   // ── desktop: the focus ring the phone moves ──────────────────────────────
   // The D-pad reaches MenuNav as SYNTHETIC arrow keys, and whether the browser
@@ -231,6 +232,11 @@ const PhonePad = (function () {
   // waiting. Touch-sized (48 px buttons) and short enough for 844×390. Only a
   // TRUSTED click counts — the phone's own SELECT is a synthetic click, and
   // the link is deaf while this is up anyway. Returns { result, dismiss }.
+  // IN THE TOP LAYER: Settings and the pause menu are modal <dialog>s (js/ui/modal.js
+  // showModal()), so a card appended to <body> sat UNDER them, inert, until they
+  // closed: a phone paired from Settings › CONTROLS stayed dead until the player went
+  // back to the title. The card is its own <dialog>, shown modal, so it opens over
+  // whatever screen is up. Escape does not answer it (only the two buttons do).
   function askOnScreen(doc, text) {
     if (!doc || !doc.body || typeof doc.createElement !== "function") return { result: Promise.resolve(false), dismiss() {} };
     let settle = null, done = false;
@@ -241,9 +247,9 @@ const PhonePad = (function () {
       if (txt != null) n.textContent = txt;
       return n;
     };
-    const box = mk("div", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
+    const box = mk("dialog", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
       display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", boxSizing: "border-box",
-      background: "rgba(0,0,0,0.6)" });
+      background: "rgba(0,0,0,0.6)", margin: "0", border: "0", width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", color: "inherit" });
     box.id = "phonepad-confirm";
     box.setAttribute("role", "alertdialog");
     box.setAttribute("aria-modal", "true");
@@ -258,6 +264,7 @@ const PhonePad = (function () {
     const finish = (ok) => {
       if (done) return;
       done = true;
+      try { if (typeof box.close === "function" && box.open) box.close(); } catch (e) { /* not in the top layer */ }
       try { if (box.parentNode) box.parentNode.removeChild(box); } catch (e) { /* already gone */ }
       settle(ok === true);
     };
@@ -274,7 +281,17 @@ const PhonePad = (function () {
     row.appendChild(button("REJECT", false, "#8a1c1c"));
     card.appendChild(h); card.appendChild(p); card.appendChild(row);
     box.appendChild(card);
+    box.addEventListener("cancel", (e) => { if (e && e.preventDefault) e.preventDefault(); });
     doc.body.appendChild(box);
+    // RAISED AGAIN after a tick: asking() pauses a solo race first, and js/ui/modal.js shows the
+    // pause menu modal from a MutationObserver, i.e. AFTER this call, over the card. Re-opening a
+    // modal dialog puts it back on top (the clean-room audit's fix 62 found the same order).
+    const raise = () => {
+      if (done || typeof box.showModal !== "function") return;
+      try { if (box.open) box.close(); box.showModal(); } catch (e) { /* not connected: the fixed card still covers */ }
+    };
+    raise();
+    if (typeof setTimeout === "function") setTimeout(raise, 0);
     return { result, dismiss: () => finish(false) };
   }
 
@@ -298,6 +315,8 @@ const PhonePad = (function () {
       makeCode: () => NetRendezvous.makeCode(),
       // ALLOW / REJECT on the game screen: { result: Promise<boolean>, dismiss() }.
       confirm: (text) => askOnScreen(typeof document !== "undefined" ? document : null, text),
+      now: () => Date.now(),
+      freshMs: FRESH_PAIR_MS,
     }, deps || {});
     const say = (t, bad) => { if (ui.say) { try { ui.say(t, !!bad); } catch (e) { /* ui's problem */ } } };
     const qr = (url, code) => { if (ui.qr) { try { ui.qr(url, code); } catch (e) { /* ui's problem */ } } };
@@ -312,10 +331,14 @@ const PhonePad = (function () {
     let relink = false, roomTiming = null;
     // WHO MAY STEER. Anyone holding the room code can answer it (and the code is
     // hosted again after a drop), so a phone is admitted only once the player
-    // taps ALLOW on THIS screen. `trusted` is the admitted peer ({ fp, id }, id
+    // taps ALLOW on THIS screen, bar the fresh-code case below. `trusted` is the admitted peer ({ fp, id }, id
     // read live: the hello may land after ALLOW); a re-link is let straight back
     // in only when it is that same peer, anything else asks again.
-    let trusted = null, asking = null;
+    // A PAIRING THIS SCREEN STARTED (Bryce's decision B on #5959, 2026-11-20): the FIRST phone to
+    // answer a code this desktop minted, within freshMs of minting it, steers with no ALLOW: the
+    // player just pressed the button and is holding the phone. Everything else still asks: a
+    // re-hosted code (a re-link) answered by another peer, or a code older than the window.
+    let trusted = null, asking = null, mintedAt = 0;
     const HELLO_WAIT_MS = 1500;   // how long a re-link waits for the phone to name itself
     const samePeer = (p) => !!trusted && ((!!trusted.id && p.id === trusted.id) || (!!trusted.fp && p.fp === trusted.fp));
     async function admit(p, whenId) {
@@ -324,6 +347,10 @@ const PhonePad = (function () {
         if (samePeer(p)) { Log.info("input", "phone pad re-link: same phone"); return true; }
       }
       if (phase !== "connecting") return false;
+      if (!trusted && !relink && mintedAt && deps.now() - mintedAt <= deps.freshMs) {
+        Log.info("input", "phone pad: first phone on a fresh code, admitted without ALLOW");
+        return true;
+      }
       phase = "confirming";
       say("A phone connected — tap ALLOW on this screen to let it steer, or REJECT.");
       let c = null;
@@ -382,7 +409,7 @@ const PhonePad = (function () {
         const invite = await deps.createInvite(transport, { pad: PROTO });
         if (phase !== "preparing") return;
         if (!invite.ok) { failed(invite.message || "Could not prepare the pairing."); return; }
-        if (!relink) code = deps.makeCode();
+        if (!relink) { code = deps.makeCode(); mintedAt = deps.now(); }
         const url = padUrl(code, null, deps.usingPrivateRelay() ? deps.relayUrl() : null);
         phase = "waiting";
         qr(url, code);

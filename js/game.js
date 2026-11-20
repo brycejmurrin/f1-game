@@ -8418,9 +8418,8 @@ function render(dt) {
     _gradeOut.hi     = LT.hiHue     ? hueRotateTint(_grade.hi, LT.hiHue)         : _grade.hi;
     _grade = _gradeOut;
   }
-  // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
-  // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
-  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
+  // SPEED BLUR (the tuner knob, or the camera tuner's MOTION BLUR if larger) ramps in above ~40% of vTop().
+  const _spd = Math.max(LT.speedBlur, typeof CamComfort !== "undefined" ? CamComfort.blurAmount() : 0) * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1);
   const po = _presentOpts;
   // Bloom joins the last MEASURED shed (lookPostShed / autoTier fallback): bloomAmt
   // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
@@ -8715,7 +8714,7 @@ function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.
 const platformSession = PlatformSession.create(G, {
   canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
   cancelMirrorPrep: () => mirrorPass.cancelPreparation(),
-  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn,
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
 });
 platformSession.wireFirstGesture();
 
