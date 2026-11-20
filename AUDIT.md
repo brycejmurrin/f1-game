@@ -720,3 +720,40 @@ Reported by those sub-audits and **not changed** (content the owner should decid
 - Brands Hatch, Zolder, Estoril, Kyalami and Dijon use today's layout under the historic Grand Prix name.
 - Rules: the two-compound exemption is decided by the weather at the flag rather than by whether the
   driver fitted wet tyres; Boost is not limited in low grip.
+
+### Fixes 46–53 — first run, phone layout, car detail, Baku
+
+- **46** `js/audio/stub.js`, `js/audio/panel.js` (A30) — the first click on SOUND ON muted the game and
+  saved the mute. Chromium: SOUND OFF / context suspended / `sound=false` stored → SOUND ON / running /
+  menu music. Later clicks still toggle. Real Safari not tested.
+- **47** `js/ui/modal.js` (A10) — focus was left on the page body after Title → RACE → SETUP → Esc → Esc;
+  it now returns to the RACE button and Tab moves on.
+- **48** `css/race-setup.css` — 8 race-setup values clipped at 390 px ("DEFAUI") → 0; other sizes unchanged.
+- **49** `css/touch-controls.css` — ERS value spilled out of its bar at 664x390 → inside at all four sizes.
+- **50** `css/touch-controls.css`, `js/ui/platform-session.js` (A9) — the iOS install banner covered four
+  title buttons at 390x664 (a tap on it opened HOW TO PLAY) and SAVES at 1280x720 → none covered.
+- **51** `js/car/field-lod.js`, `js/game.js` — **new** — under the zoomed trackside camera, cars 55–150 m
+  away were drawn at full detail with no cast shadow or exhaust flame. Real module: off → on at 70, 100,
+  150 m. Not checked in a rendered frame.
+- **52** `js/car/parts.js` — ERS "Deploy" description said +10% accel; the stat is +11%.
+- **53** `js/circuits/baku.js` — **new** — Baku was the only street circuit with walls at the road edge:
+  racing line within 0.6 m of a wall for 1,183 m of the lap → 31 m; AI wall contacts 112 → 41 (sub-audit).
+
+**Tried and reverted:** a patch making browser Back skip the post-race ceremony instead of leaving the
+game. The sub-audit reported it working; in my re-run the page still left on the first Back, so it is not
+applied. The defect itself (A-series: Back during the ceremony leaves the game) reproduces and stays open.
+
+**Not applied** from these reports:
+
+- AI steering targets ignore pit-exit wall limits (Mosport T1 and seven other circuits): the patch cut AI
+  wall contacts 167 → 116 over 52 circuits in single runs, but run-to-run variance is too high for me to
+  call it verified, and one Baku run produced a new two-car jam.
+- The generic main-straight crowd on 17 circuits stands inside run-off a car can drive through (and
+  marshal posts, fences and some named grandstands likewise). The patch adds a wall, shrinking the left
+  run-off to 3.9 m on those straights — a gameplay decision.
+- A "leave page?" prompt on refresh mid-race, and a loading label that queues a title click made before
+  boot finishes (the click is currently lost and the progress stripe runs backwards on slow connections).
+- `flyby-overrides.js` (night/wet shots and per-track overrides for Monaco and Spa) is never used by the
+  game; wiring it in as-is would put the Singapore night camera inside a catch fence.
+- The boot warning "[scenery] bahrain: suppressed … floodMast=149" is a false alarm from the garage's
+  windowed build.
