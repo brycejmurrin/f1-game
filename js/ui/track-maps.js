@@ -64,12 +64,13 @@ const TrackMaps = (function () {
     return crns;
   }
 
-  function measureApex(tr, frac) {
+  function measureApex(tr, frac, win) {
     const total = tr.total, n = tr.n, ds = total / n;
     const f = (((frac % 1) + 1) % 1);
     const s0 = f * total;
+    const w = win > 0 ? Math.min(50, win) : 50;
     let kPeak = Math.abs(Tracks.curvature(tr, s0)), sPeak = s0;
-    for (let d = -50; d <= 50; d += 2) {
+    for (let d = -w; d <= w; d += 2) {
       const s = ((s0 + d) % total + total) % total;
       const k = Math.abs(Tracks.curvature(tr, s));
       if (k > kPeak) { kPeak = k; sPeak = s; }
@@ -110,12 +111,12 @@ const TrackMaps = (function () {
     return { v: kPeak, r: r, ang: ang, cls: classifyCorner(r, ang), fPeak: ((sPeak / total) % 1 + 1) % 1 };
   }
 
-  function cornerAt(tr, frac, n) {
+  function cornerAt(tr, frac, n, win) {
     const m = tr.map.length;
     const f = (((frac % 1) + 1) % 1);
     const idx = Math.floor(f * m) % m;
     const mp = tr.map[idx];
-    const mes = measureApex(tr, f);
+    const mes = measureApex(tr, f, win);
     return { n: n, x: mp[0], y: mp[1], f: mes.fPeak, v: mes.v, r: mes.r, ang: mes.ang, cls: mes.cls };
   }
 
@@ -143,7 +144,12 @@ const TrackMaps = (function () {
         const pts = tr.map.map((p) => [p[0], p[1]]);
         let crns;
         if (def.turns && def.turns.length) {
-          crns = def.turns.map((frac, i) => cornerAt(tr, frac, i + 1));
+          const tl = def.turns, nt = tl.length;
+          crns = tl.map((frac, i) => {
+            if (nt < 2) return cornerAt(tr, frac, i + 1);
+            const gap = Math.min(((frac - tl[(i - 1 + nt) % nt]) % 1 + 1) % 1, ((tl[(i + 1) % nt] - frac) % 1 + 1) % 1) * tr.total;
+            return cornerAt(tr, frac, i + 1, Math.max(4, gap / 2));
+          });
         } else {
           crns = detectCorners(tr);
         }
