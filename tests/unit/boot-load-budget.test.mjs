@@ -25,26 +25,29 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-// The two ceilings live in tests/data/ratchets.json `tree` (eagerScripts, eagerBytes, slack 0) plus every
+// The two ceilings live in tests/data/ratchets.json `tree` (eagerScripts and eagerCodeBytes, slack 0) plus every
 // tests/data/ratchets.d fragment, since 2026-11-19 (docs/notes/BUDGET-RATCHETS-2026-11-19.md): three fixers each
 // hand-edited one constant measured on a different old tip, so whichever merged second went red. A branch that frees
 // bytes now lowers the ceiling by its own delta (the commit hook writes it); a raise is
 // `node tools/check/ratchets.mjs --update --fragment --reason="<why>"` and lands only under Bryce's `ratchet-raise`
 // (merge-gate raise row). Freed bytes are not headroom: room is the entry's `slack`, and loosening it is a raise.
 // The constants' history (325 → 313 scripts, 8.25 MB → 8,017,936 B): docs/notes/CEILING-HISTORY.md §Boot wall.
+// 2026-11-20 (Bryce's B+D, docs/notes/RATCHET-REVIEW-2026-11-20.md): the byte ceiling is eagerCodeBytes, the wall with
+// comments and spare whitespace stripped (tools/lib/js-strip.mjs), because Pages ships minified code; a branch's own
+// growth up to the entry's `absorb` is the commit hook's fragment with no label.
 const { tree } = load();
 const ceiling = (metric) => { const e = tree[metric]; return typeof e === "number" ? e : e?.ceiling; };
 const MAX_EAGER_SCRIPTS = ceiling("eagerScripts");
-const MAX_EAGER_BYTES = ceiling("eagerBytes");
+const MAX_EAGER_CODE_BYTES = ceiling("eagerCodeBytes");
 
 const eagerScripts = () => eagerScriptsOf(read("index.html"));
 
-test("the eager shell stays inside its script budget (count and raw bytes)", () => {
-  assert.ok(Number.isInteger(MAX_EAGER_SCRIPTS) && Number.isInteger(MAX_EAGER_BYTES), "tests/data/ratchets.json tree carries eagerScripts and eagerBytes");
-  const { scripts, bytes } = wallNow();
+test("the eager shell stays inside its script budget (count and code bytes)", () => {
+  assert.ok(Number.isInteger(MAX_EAGER_SCRIPTS) && Number.isInteger(MAX_EAGER_CODE_BYTES), "tests/data/ratchets.json tree carries eagerScripts and eagerCodeBytes");
+  const { scripts, codeBytes } = wallNow();
   const raise = 'lazy-load it, or raise it as a fragment (node tools/check/ratchets.mjs --update --fragment --reason="<why>") under Bryce\'s ratchet-raise';
   assert.ok(scripts <= MAX_EAGER_SCRIPTS, `index.html loads ${scripts} scripts at boot (budget ${MAX_EAGER_SCRIPTS}) — ${raise}`);
-  assert.ok(bytes <= MAX_EAGER_BYTES, `index.html boots ${bytes} raw bytes of script (budget ${MAX_EAGER_BYTES}) — ${raise}`);
+  assert.ok(codeBytes <= MAX_EAGER_CODE_BYTES, `index.html boots ${codeBytes} bytes of script code, comments and spare whitespace stripped (budget ${MAX_EAGER_CODE_BYTES}) — ${raise}`);
 });
 
 test("no lazy or deferred group is back on the boot wall", () => {
