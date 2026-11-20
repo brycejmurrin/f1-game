@@ -1349,7 +1349,8 @@ function tallyOf(c) {
 }
 
 function rollover() {
-  if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) {
+  if (!career || !seasonDone()) return null;
+  if (blocked() || (careerRevision != null && currentRevision() !== careerRevision)) {
     if (career && careerRevision != null && currentRevision() !== careerRevision) {
       careerConflict = true;
       lastSave = { ok: false, durable: false, reason: "conflict" };
