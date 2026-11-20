@@ -336,3 +336,4 @@ const TLXCarSurf = (function () {
       perturb, edgeBend, flakeLod, refractOut },
   };
 })();
+Object.freeze(TLXCarSurf);

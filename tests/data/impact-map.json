@@ -16104,6 +16104,7 @@
         "tests/unit/mesh-detail.test.mjs"
       ],
       "push": [
+        "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/mesh-detail-perf.test.mjs",
         "tests/unit/mesh-detail.test.mjs"
@@ -18335,6 +18336,7 @@
         "tests/unit/track-detail.test.mjs"
       ],
       "resolve": [
+        "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/track-detail.test.mjs"
       ],
       "*": [

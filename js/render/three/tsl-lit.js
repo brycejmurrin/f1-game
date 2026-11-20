@@ -2606,7 +2606,8 @@
         });
         // envAll: WORLD METAL (MAT 4: armco, gantries, fences) mirrors the live cube as a conductor, F0 from its
         // albedo, roughness-aware mip, fading out by 240 m. Not built below EXTREME.
-        if (ENV_ALL) If(classifiedCar.not().and(surfaceId.equal(4.0)).and(U.envWorld.greaterThan(0.5)), () => {
+        // `mid` is the raw WORLD material id (METAL = 4), not a car surface id (surface-id-parity scans those).
+        if (ENV_ALL) If(classifiedCar.not().and(floor(matA.add(0.5)).equal(4.0)).and(U.envWorld.greaterThan(0.5)), () => {
           const fadeW = clamp(vd.sub(90.0).div(150.0).oneMinus(), 0.0, 1.0).toVar();
           If(fadeW.greaterThan(0.001), () => {
             const Rw = reflect(V.negate(), N);
