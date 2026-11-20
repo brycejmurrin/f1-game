@@ -394,7 +394,7 @@ function useSlot(flavour, i) {
   if (applyRegs()) save({ migration: true });   // a different save can have a lower cap
   return career;
 }
-function deleteSlot(flavour, i, expectedRevision) {
+function deleteSlot(flavour, i, expectedRevision, options) {
   const ownership = writerStatus();
   if (!ownership.ok) return (lastSave = ownership);
   const f = flavourIn(flavour);
@@ -409,7 +409,8 @@ function deleteSlot(flavour, i, expectedRevision) {
     if (f === slotFlavour && n === slotIdx) careerConflict = true;
     return Object.assign({}, lastSave);
   }
-  lastSave = writeResult(key, null);
+  lastSave = writeResult(key, null, options);
+  if (!lastSave.ok) return Object.assign({}, lastSave);
   protectedRaw.delete(key);
   if (f === slotFlavour && n === slotIdx) { career = null; calendarProtection = null; armRevision(); applyRegs(); identityChanged(); }
   return Object.assign({}, lastSave);

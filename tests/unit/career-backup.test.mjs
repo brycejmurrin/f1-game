@@ -2186,3 +2186,21 @@ test("a MY TEAM identity captured on a device with no GP keys falls back to the 
   assert.equal(b.Career.identityValue("livery.custom", "default"), "default");
   assert.equal(b.Career.identityValue("customTeam", "fallback"), "fallback");
 });
+
+test("a refused slot-card deletion keeps the active save available for retry", () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const key = "apex26.career.driver.0", raw = h.disk.get(key);
+  const ui = bootBackupUi(h);
+  const clickDelete = () => ui.G.$("cr-left").querySelectorAll(".cr-slot-del").at(-1).onclick({ stopPropagation() {} });
+  const storage = h.ctx.localStorage, write = storage.setItem;
+  storage.setItem = () => { throw Object.assign(new Error("denied"), { name: "SecurityError" }); };
+  clickDelete(); clickDelete();
+  assert.equal(h.Career.active(), true);
+  assert.equal(h.disk.get(key), raw);
+  assert.match(ui.notices.at(-1), /NOT DELETED/);
+  storage.setItem = write;
+  clickDelete(); clickDelete();
+  assert.equal(h.Career.active(), false);
+  assert.equal(loadHarness({ disk: h.disk }).store.get("career.driver.0", null), null);
+});

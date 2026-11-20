@@ -865,9 +865,9 @@ test("#5743 P1: a borrowCar that throws hands FreeCam and photo mode back and op
 test("#5743 P3: a readback that never resolves times out to Capture failed, not busy, and frees the slot", async () => {
   const timers = [];
   const b = boot({ setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } });
-  let cancelled = null;
-  b.G.gfx.capturePixels = () => new Promise(() => {});
-  b.G.gfx.cancelCapture = (why) => { cancelled = why; };
+  let cancelled = null, readOwner;
+  b.G.gfx.capturePixels = (owner) => { readOwner = owner; return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (why, owner) => { assert.ok(owner); assert.equal(owner, readOwner); cancelled = why; };
   b.api.open();
   const pending = b.api.capture();
   assert.equal(b.api.state().busy, true);
@@ -879,4 +879,49 @@ test("#5743 P3: a readback that never resolves times out to Capture failed, not 
   assert.equal(b.api.state().captured, false);
   assert.equal(cancelled, "capture timed out");
   assert.equal(b.dom.byId("ps-message").textContent.split(":")[0], "Capture failed");
+});
+
+
+test("closing a capture releases its render scale before the next capture takes ownership", async () => {
+  const b = boot(), reads = [];
+  let scale = 0.5;
+  b.G.gfx.getRenderScale = () => scale;
+  b.G.gfx.setRenderScale = (value) => { scale = value; return true; };
+  b.G.gfx.capturePixels = () => new Promise((resolve) => reads.push(resolve));
+  const pixels = { width: 1, height: 1, data: new Uint8ClampedArray(4) };
+  b.api.open();
+  const first = b.api.capture();
+  b.api.close(false);
+  assert.equal(scale, 0.5);
+  b.G.gfx.setRenderScale(0.75);
+  b.api.open();
+  const second = b.api.capture();
+  reads[0](pixels);
+  assert.equal(await first, false);
+  assert.equal(scale, 1);
+  reads[1](pixels);
+  assert.equal(await second, true);
+  assert.equal(scale, 0.75);
+});
+
+test("a submitted read timing out after reopen leaves the next photo queued", async () => {
+  const timers = [], requests = [];
+  const b = boot({ setTimeout: (fn, ms) => { if (ms === 8000) timers.push(fn); return timers.length; } });
+  let queued;
+  b.G.gfx.capturePixels = (owner) => new Promise((resolve, reject) => {
+    queued = { owner, resolve, reject }; requests.push(queued);
+  });
+  b.G.gfx.cancelCapture = (why, owner) => {
+    if (queued && queued.owner === owner) { queued.reject(new Error(why)); queued = null; }
+  };
+  b.api.open();
+  const first = b.api.capture();
+  queued = null;   // WGX submitted this read, but its buffer has not mapped yet
+  b.api.close(false); b.api.open({ source: "garage" });
+  const second = b.api.capture();
+  timers[0]();
+  assert.equal(await first, false);
+  assert.equal(queued, requests[1], "the reopened studio still owns its queued GPU read");
+  queued.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await second, true);
 });

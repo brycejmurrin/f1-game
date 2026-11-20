@@ -1356,7 +1356,10 @@ self.addEventListener("fetch", (event) => {
       // (controller.html — the "Phone controller" shortcut and the QR landing
       // page — bench.html, cockpit-view.html) that lost the race used to open
       // the game instead; let its late network answer win, else fail honestly.
-      if (isShellDocument(url)) return (await matchPreferCurrent("index.html")) || Response.error();
+      if (isShellDocument(url)) {
+        const shell = await matchPreferCurrent("index.html");
+        if (shell) return shell;
+      }
       try { const late = await network; if (late) return late; } catch (_) { /* offline: nothing to show */ }
       return Response.error();
     })());

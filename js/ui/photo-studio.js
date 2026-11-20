@@ -530,8 +530,11 @@ function create(G, deps) {
     }
     finishClose(false);
   }
+  /** @type {(() => void) | null} */
+  let releaseCaptureScale = null;
   function finishClose(back) {
     if (!st.open && !st.closing) return;
+    if (releaseCaptureScale) releaseCaptureScale();
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
     if (!isGarage()) DrivingLine.setPhoto(null);
     endLight();
@@ -578,13 +581,14 @@ function create(G, deps) {
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
     if (gfx && gfx.capturePixels) {
+      const owner = {};   // a submitted read can still be mapping after another visit queues its read
       let read;
-      try { read = gfx.capturePixels(); } catch (e) { read = Promise.reject(e); }
+      try { read = gfx.capturePixels(owner); } catch (e) { read = Promise.reject(e); }
       // WGX resolves the read only from a later present(): a stalled loop or a hidden tab left CAPTURING…
       // forever and every retry "capture already pending". Give up after CAPTURE_MS and free the slot (#5743 P3).
       let capTimer = 0;
       const late = new Promise((_, reject) => { capTimer = setTimeout(() => {
-        if (gfx.cancelCapture) gfx.cancelCapture("capture timed out");
+        if (gfx.cancelCapture) gfx.cancelCapture("capture timed out", owner);
         reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
       }, CAPTURE_MS); });
       read = Promise.race([read, late]).finally(() => clearTimeout(capTimer));
@@ -667,7 +671,14 @@ function create(G, deps) {
   async function fullRes(run) {
     const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
     const raised = prev < 1 && !!gfx.setRenderScale(1);
-    try { return await run(); } finally { if (raised) gfx.setRenderScale(prev); }
+    if (!raised) return run();
+    const release = () => {
+      if (releaseCaptureScale !== release) return;
+      releaseCaptureScale = null;
+      if (gfx.getRenderScale() === 1) gfx.setRenderScale(prev);
+    };
+    releaseCaptureScale = release;
+    try { return await run(); } finally { release(); }
   }
   async function capture() {
     if (!st.open || st.busy) return false;
