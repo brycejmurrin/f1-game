@@ -1574,3 +1574,68 @@ test("voice-corpus writes nothing when a race failed, and publishes a full run b
     assert.deepEqual(fs.readdirSync(dir), ["corpus.json"]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// #5886: THE PACK LIMIT IS A STALL TIMER. One 15 s timer raced manifest + binary + hash, so a 4 MB announcer pack on a
+// ~2 Mbps link failed at 15.0 s every time and was fetched again each RETRY_MS. A fake clock drives the timers; the
+// binary arrives as a stream of chunks (its arrayBuffer() resolves only after the last one, like a real slow body).
+function slowLink(chunks) {
+  let now = 0, seq = 0;
+  const timers = new Map(), waiting = [];
+  const flush = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
+  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c, 0)).map((_, i) => i & 255);
+  const man = { binary: { sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.byteLength }, clips: { "car left": [0, 4, 0.5] } };
+  let sent = 0, offset = 0;
+  const reader = { read: () => new Promise((resolve) => waiting.push(resolve)) };
+  const all = new Promise((resolve) => { reader.done = resolve; });
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    setTimeout(fn, ms) { const id = ++seq; timers.set(id, { fn, at: now + ms }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    GameAudio: { now: () => 0 },
+    fetch: (url) => Promise.resolve(/\.json$/.test(url) ? { ok: true, json: () => Promise.resolve(man) }
+      : { ok: true, body: { getReader: () => reader }, arrayBuffer: () => all }),
+  });
+  const P = sb.VoicePack.create({});
+  // The next chunk (or the end of the body) reaches the page.
+  const deliver = async () => {
+    const resolve = waiting.shift();
+    if (sent < chunks.length) {
+      const c = bytes.slice(offset, offset + chunks[sent]);
+      offset += chunks[sent++];
+      if (resolve) resolve({ done: false, value: c });
+      if (sent === chunks.length) { reader.done(bytes.buffer.slice(0)); await flush(); const r2 = waiting.shift(); if (r2) r2({ done: true }); }
+    }
+    await flush();
+  };
+  const advance = async (ms) => {
+    const end = now + ms;
+    for (;;) {
+      let next = null;
+      for (const [id, x] of timers) if (x.at <= end && (!next || x.at < next[1].at)) next = [id, x];
+      if (!next) break;
+      now = next[1].at; timers.delete(next[0]); next[1].fn(); await flush();
+    }
+    now = end; await flush();
+  };
+  return { P, deliver, advance, flush };
+}
+
+test("a pack that keeps arriving past 15 s in total still loads (#5886)", async () => {
+  const link = slowLink([1000, 1000, 1000, 1000, 1000]);
+  assert.equal(link.P.ensure("george"), "loading");
+  await link.flush();
+  for (let i = 0; i < 5; i++) { await link.advance(5000); await link.deliver(); }   // one chunk every 5 s: 25 s in all
+  // The SHA-256 check is real webcrypto work off the event loop: wait for it in host time (bounded), not a flush count.
+  for (let i = 0; i < 400 && link.P.ensure("george") === "loading"; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(link.P.ensure("george"), "ready", "a slow link that never goes quiet for 15 s gets its announcer");
+});
+
+test("a binary that goes quiet still fails, 15 s after its last byte (#5886)", async () => {
+  const link = slowLink([1000, 1000, 1000]);
+  link.P.ensure("george");
+  await link.flush();
+  await link.advance(10000); await link.deliver();   // one chunk at 10 s, then silence
+  await link.advance(14000);
+  assert.equal(link.P.ensure("george"), "loading", "14 s of silence is inside the stall window");
+  await link.advance(1500);
+  assert.equal(link.P.ensure("george"), "failed", "15 s with no progress fails the fetch, so the retry window applies");
+});
