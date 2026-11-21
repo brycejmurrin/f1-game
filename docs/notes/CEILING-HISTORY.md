@@ -62,7 +62,7 @@ it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's 
 The code is `TrackDef.scenerySource` + `ENGINE_MODELS`, the one text the page and the build worker read a
 circuit's pack-model set from (Spa built procedural pines because `pine_lod0` was spelled only inside an
 engine helper), and the IntersectionObserver gate that stops the offline note costing about 620 worker
-cache lookups on every boot. Fragment: `tests/data/ratchets.d/claude--perf-assets-flow-1118.json`.
+cache lookups on every boot. Fragment: `ratchets.d/claude--perf-assets-flow-1118.json (folded)`.
 
 ## 2026-11-20 — boot wall counts stripped code (Bryce's B+D, D-036)
 
@@ -84,7 +84,7 @@ through `LiveRegion`; a removed round drops its sprint mark), `js/career/season-
 (`normalize` keeps sprintIds a set over the calendar) and `js/camera/replay-buf.js` +329 (a field
 replaced mid-scrub ends the scrub; `at/apply(NaN)` refused). The data-hub and real-race hunks are
 already lazy (LAZY_DATA, LAZY_REAL_RACE) and cost nothing. Fragment:
-`tests/data/ratchets.d/claude--hunt4-fixes-5694.json`.
+`ratchets.d/claude--hunt4-fixes-5694.json (folded)`.
 ## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
 
 `(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.
@@ -117,7 +117,7 @@ alone. The fragment was narrowed from +3833 to +3469; nothing was raised beyond 
 explained them were the bytes over the tip, so they were cut and the fragment records the
 lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
 inside the absorb. Fragment: `ratchets.d/cursor--hunt2-rest-5699-c7e1.json (folded)`.
-inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
+inside the absorb. Fragment: `ratchets.d/cursor--hunt2-rest-5699-c7e1.json (folded)`.
 ## 2026-11-19 — PR #5679 (claude/picker-outline-centre-5656): select preview outline centred
 
 `(tree) eagerBytes` 8,015,938 → **8,017,320** (+1,382 B). Deliberate raise past the absorb by
@@ -126,7 +126,7 @@ Bryce's `decision: A` on #5679 (2026-11-19 18:29Z); the tree-wide ceiling still 
 `js/ui/select-screen.js` +2,057; trimming its own new comments took back 675. The rest is the fix's
 code: the pure `previewMapBand` (free band between caption and stats row), `fitPreviewMapBand`
 (pads and centres the map button), its export, and `previewMapSlot` now applying on every layout.
-Fragment: `tests/data/ratchets.d/claude--picker-outline-centre-5656.json`.
+Fragment: `ratchets.d/claude--picker-outline-centre-5656.json (folded)`.
 
 ## 2026-11-19 — PR #5738 (claude/appearance-shapes-4529): PORTRAIT & LANDSCAPE, garage PANEL HEIGHT
 
@@ -139,7 +139,7 @@ run at boot to see a settled rotation; on SHARED, the default, it returns at onc
 +340 (PANEL WIDTH 60–150 and the new PANEL HEIGHT knob) and `js/ui/settings-tabs.js` +279
 (`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
 row stay lazy in `js/ui/layout-presets.js`. Fragment:
-`tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+`ratchets.d/claude--appearance-shapes-4529.json (folded)`.
 ## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): #5951 folded in; EXTREME code moved lazy (LAZY_GFX_HI)
 
 `(tree) eagerCodeBytes` 3989027 → **4001631** (+12604). Deliberate raise past the 5,000 B absorb, under Bryce's
