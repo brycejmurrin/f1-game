@@ -71,7 +71,7 @@ test("#6055: resolveLandable keeps an open train in the 4-cap and drops its cars
     number: 99, head: hx("9"), prio: 1, created: "2026-11-20T12:00:00Z", train: true,
     ref: `${TRAIN_PREFIX}20261120T1200-1-2-3-4-5`,
   };
-  const trainCarIds = new Set([1, 2, 3, 4, 5]);
+  const trainCarIds = new Set(cars.map(c => `${c.number}@${c.head}`));
   const picked = resolveLandable([...cars, train], { trainCarIds, cap: RESOLVE_CAP });
   assert.deepEqual(picked.map((r) => r.number), [99], "open train is the only landable PR: cars of that train are not gated or armed alone");
   // A non-car land PR older than the train still yields after the train (prio, then age).
@@ -79,7 +79,7 @@ test("#6055: resolveLandable keeps an open train in the 4-cap and drops its cars
   assert.deepEqual(resolveLandable([...cars, other, train], { trainCarIds }).map((r) => r.number), [99, 50]);
   // priority still beats a non-train; a train still beats priority cars of its own set.
   const prioCar = { number: 2, head: hx("2"), prio: 0, created: "2026-11-20T01:00:00Z" };
-  assert.deepEqual(resolveLandable([prioCar, train], { trainCarIds: new Set([2]) }).map((r) => r.number), [99]);
+  assert.deepEqual(resolveLandable([prioCar, train], { trainCarIds: new Set([`2@${hx("2")}`]) }).map((r) => r.number), [99]);
 });
 
 test("#6055: openTrainCarIds / boardedTrainOf read the open train manifest", () => {
@@ -89,8 +89,8 @@ test("#6055: openTrainCarIds / boardedTrainOf read the open train manifest", () 
     { number: 91, state: "closed", head: { ref: `${TRAIN_PREFIX}y` }, body },
     { number: 8, state: "open", head: { ref: "cursor/x" }, body: "not a train" },
   ];
-  assert.deepEqual([...openTrainCarIds(trains)].sort((a, b) => a - b), [5, 7]);
-  assert.deepEqual([boardedTrainOf(5, trains), boardedTrainOf(7, trains), boardedTrainOf(8, trains), boardedTrainOf(5, [])], [90, 90, null, null]);
+  assert.deepEqual([...openTrainCarIds(trains)], [`5@${sha("b")}`, `7@${sha("c")}`]);
+  assert.deepEqual([boardedTrainOf(5, sha("b"), trains), boardedTrainOf(7, sha("c"), trains), boardedTrainOf(5, sha("d"), trains), boardedTrainOf(5, sha("b"), [])], [90, 90, null, null]);
 });
 
 test("carVerdict: every CAR_ROWS row must pass; base and the merge rows are the train's", () => {

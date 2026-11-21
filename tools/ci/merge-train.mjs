@@ -122,27 +122,28 @@ export function carCandidates(pulls, { exclude = new Set(), gateOk = new Set() }
   return { cars: out.map(({ pr, head, ref }) => ({ pr, head, ref })), skipped };
 }
 
-/** PR numbers boarded on any open `train/` PR (valid manifest). Pure. */
+function eligibleManifest(p, pulls) {
+  const names = labelNames(p?.labels);
+  if (p?.state !== "open" || p.draft || p.mergeable === false || names.includes("hold")
+      || !names.includes("land") || !names.includes(TRAIN_LABEL) || !String(p.head?.ref || "").startsWith(TRAIN_PREFIX)) return null;
+  const m = trainManifest(p.body);
+  if (m?.cars.some(c => {
+    const current = pulls.find(r => r.number === c.pr)?.head?.sha;
+    return current && current !== c.head;
+  })) return null;
+  return m;
+}
+
+/** A car's current head only rides a train whose manifest contains that exact commit. */
 export function openTrainCarIds(pulls) {
   const ids = new Set();
-  for (const p of pulls || []) {
-    if (p?.state && p.state !== "open") continue;
-    if (!String(p?.head?.ref || "").startsWith(TRAIN_PREFIX)) continue;
-    const m = trainManifest(p.body);
-    for (const c of m?.cars || []) if (Number.isFinite(c?.pr)) ids.add(c.pr);
-  }
+  for (const p of pulls || []) for (const c of eligibleManifest(p, pulls)?.cars || []) ids.add(`${c.pr}@${c.head}`);
   return ids;
 }
 
-/** The open train PR number that lists `pr` as a car, or null. Pure. */
-export function boardedTrainOf(pr, pulls) {
-  const n = Number(pr);
-  if (!Number.isFinite(n)) return null;
+export function boardedTrainOf(pr, head, pulls) {
   for (const p of pulls || []) {
-    if (p?.state && p.state !== "open") continue;
-    if (!String(p?.head?.ref || "").startsWith(TRAIN_PREFIX)) continue;
-    const m = trainManifest(p.body);
-    if (m?.cars?.some((c) => c.pr === n)) return p.number;
+    if (eligibleManifest(p, pulls)?.cars.some(c => c.pr === Number(pr) && c.head === head)) return p.number;
   }
   return null;
 }
@@ -158,7 +159,7 @@ export function resolveLandable(rows, { trainCarIds = new Set(), cap = RESOLVE_C
   for (const r of rows || []) {
     if (r?.number == null) continue;
     const isTrain = r.train === true || String(r.ref || "").startsWith(TRAIN_PREFIX);
-    if (!isTrain && trainCarIds.has(r.number)) continue;
+    if (!isTrain && trainCarIds.has(`${r.number}@${r.head}`)) continue;
     const prio = isTrain ? -1 : (r.prio ?? 1);
     out.push({ number: r.number, head: r.head, prio, created: String(r.created || "") });
   }
