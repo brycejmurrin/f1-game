@@ -1277,24 +1277,17 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
 /** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
-    button's content box (padded to the free band by fitPreviewMapBand, #5656). */
+    free band between the caption and stats (#5656). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
-  const btn = map && map.parentElement;
-  if (btn && btn.clientHeight > 0) {
-    fitPreviewMapBand(btn, hero);
-    const bs = getComputedStyle(btn);
-    const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
-    if (room > 0) slotH = Math.min(slotH, room);
-  }
+  if (map && hero.clientHeight > 0) slotH = Math.min(slotH, fitPreviewMapBand(map, hero));
   return { slotW: hero.clientWidth * 0.62, slotH };
 }
-/** Pad the map button to the free band, centred; k = UI SIZE zoom. */
-function fitPreviewMapBand(btn, hero) {
-  // Measure the still: the button's previous padding can outlive a resize.
+/** Position only the outline in the free band; the entire still remains tappable. */
+function fitPreviewMapBand(map, hero) {
   const rect = hero.getBoundingClientRect();
-  if (!(rect.height > 0) || !(hero.offsetHeight > 0)) return;
+  if (!(rect.height > 0) || !(hero.offsetHeight > 0)) return 0;
   const k = rect.height / hero.offsetHeight;
   const top = rect.top + hero.clientTop * k;
   const box = { top, bottom: top + hero.clientHeight * k, left: rect.left, right: rect.right };
@@ -1303,9 +1296,9 @@ function fitPreviewMapBand(btn, hero) {
     if (e) over.push(e.getBoundingClientRect());
   }
   const band = previewMapBand(box, over, Math.round(hero.clientHeight * k * 0.025));
-  btn.style.alignItems = "center";
-  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
-  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
+  map.style.setProperty("--map-band-top", band.top / k + "px");
+  map.style.setProperty("--map-band-bottom", band.bottom / k + "px");
+  return Math.max(0, hero.clientHeight - (band.top + band.bottom) / k);
 }
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
