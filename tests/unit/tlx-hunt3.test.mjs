@@ -206,9 +206,9 @@ test("R4: the lit program built with envCube null declares no cube sampler and t
 });
 
 test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube target when opted out", () => {
-  const optAt = TLX.indexOf('_envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"');
+  const optAt = TLX.indexOf('const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = ');
   const allocAt = TLX.indexOf("envRT = new THREE.CubeRenderTarget(ENV_SIZE");
-  const litAt = TLX.indexOf("lit = TLXShaders.lit(THREE, TSL, {");
+  const litAt = TLX.indexOf("const litCtx = {");   // the context every TLXShaders.lit(...) call is built from
   assert.ok(optAt > 0 && allocAt > 0 && litAt > 0, "needles moved — check this test, not the code");
   assert.ok(optAt < allocAt, "the opt-out is read before the env target is allocated");
   assert.match(TLX.slice(optAt, allocAt), /if \(!_envOptOut\) try \{/, "the allocation is gated on the opt-out");
@@ -910,7 +910,7 @@ test("A2: tlx.js builds batches, mirror views and their materials on the attribu
   const cib = fnSource(TLX, "      function createInstancedBatch(data, matrices, colors, opts) {");
   assert.match(cib, /const cap = _aiInst \? n : /, "no UBO pad on the attribute path");
   assert.match(cib, /const imesh = _aiInst \? _aiMesh\(geo, unlitMat, n\) : new THREE\.InstancedMesh\(geo, unlitMat, cap\);/);
-  assert.match(fnSource(TLX, "      function drawInstanced(batch, opts) {"), /materialFor\(opts, false, batch\.imesh\.isInstancedMesh \? true : 2\)/);
+  assert.match(fnSource(TLX, "      function drawInstanced(batch, opts) {"), /const ai = batch\.imesh\.isInstancedMesh \? true : 2;[\s\S]*?materialFor\(opts, false, ai, false, /);
   const mir = fnSource(TLX, "      function _mirOf(batch) {");
   assert.match(mir, /k !== "instanceTint" && !_AI_ATTR\.test\(k\)/, "the mirror view takes its own stream, never the main one's");
   assert.match(mir, /: _aiMesh\(g, main\.material \|\| unlitMat, main\.instanceMatrix\.count\);/);

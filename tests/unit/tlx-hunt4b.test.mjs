@@ -253,6 +253,7 @@ async function mirrorRig(t, ls = {}) {
     let _mirDead = false, _mirErr, _mirEye, _mirCull, _mirFog, _mirUsed, _dMatUsed, _fxMatUsed, _gpuLastOperation;
     let _instStamp = 0, _poolBatch = 0, _mirFails = 0, _mirFlip = true, _mirGlass = 0;
     const _mirRectScratch = [0, 0, 0, 0];
+    const _mirCapW = 1024, _mirCapH = 512;   // mirrorBegin's clamp below mirrorHi (ULTRA+ raises it to 2048 x 1024)
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     const backend = { ${tslice("        mirrorBegin(frame, w, h) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
     return { backend, prepareMirrorTarget, rt: () => mirRT, cam: () => mirCam, rect(r) { _mirRect = r; }, release: backend.releaseMirror,
@@ -672,7 +673,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     let _mirReady = false;
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
-    ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
+    ${tslice("      let _ssrMrt = null, _ssrMrtV = null;", "      let _poolNow = ")}
     ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
     return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, history: _warmHistory, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
   const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },

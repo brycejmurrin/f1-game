@@ -130,6 +130,86 @@ const GfxDebug = (() => {
       if (strikes === "?" && typeof PerfGov !== "undefined" && PerfGov.strikes) strikes = num(PerfGov.strikes());
     } catch (_) { /* governor not loaded */ }
     lines.push(`mem heap=${heap} rObj=${rObj} geo=${geo} tex=${tex} tier=${tier} crashStrikes=${strikes}`);
+    pushDetail(lines);
+  }
+
+  // The desktop detail level and the governor's upper ladder (docs/GOVERNOR-RATIONALE.md §gov-42); absent pre-boot.
+  function pushDetail(lines) {
+    try {
+      if (typeof GfxQuality === "undefined" || !GfxQuality.detail) return;
+      const max = GfxQuality.SHED_ORDER ? GfxQuality.SHED_ORDER.length : 0;
+      const g = typeof PerfGov !== "undefined" && PerfGov.gpuMs ? PerfGov.gpuMs() : -1;
+      lines.push(`detail=${GfxQuality.detail()} shed=${GfxQuality.shed()}/${max} cinema=${GfxQuality.cinema() ? 1 : 0} gpuMs=${g > 0 ? g.toFixed(2) : "n/a"}`);
+    } catch (_) { /* quality module not up: the rest of the paste stands */ }
+  }
+
+  // TIERS (docs/notes/TIER-CENSUS-TEST-2026-11-20.md): per GfxQuality.FEATURES name, `on` = feature(name) now and
+  // `ran` = what the renderer itself reports it built or ran (true / false), or null with `why` where this path has
+  // no signal. A feature whose build threw falls back to today's path silently; on true + ran false is that case.
+  // tools/gfx/gpu-game-check.mjs stores tiers() beside gpuErrors; tools/gfx/census-verdict.mjs gates on it.
+  const NO = (why) => ({ ran: null, why });
+  const YES = (v) => ({ ran: !!v });
+  // Pure: q is GfxQuality's surface (detail, shed, cinema, feature, FEATURES, SHED_ORDER), probe is tiersProbe().
+  function tiersRecord(q, probe) {
+    const rec = { detail: 0, shed: 0, cinema: false, shedOrder: [], features: {} };
+    if (!q || !q.FEATURES) return rec;
+    rec.detail = q.detail() | 0; rec.shed = q.shed() | 0; rec.cinema = !!q.cinema();
+    rec.shedOrder = Array.from(q.SHED_ORDER || []);
+    const none = (probe && probe._none) || "no signal on this path";
+    for (const name of Object.keys(q.FEATURES)) {
+      const p = (probe && probe[name]) || NO(none);
+      const row = { need: q.FEATURES[name], on: !!q.feature(name), ran: p.ran === true ? true : p.ran === false ? false : null };
+      if (row.ran === null) row.why = p.why || none;
+      rec.features[name] = row;
+    }
+    return rec;
+  }
+  // Read-only, every read guarded: a throw is a null `ran` naming the throw, never a false.
+  function tiersProbe(glx, q) {
+    const p = {}, tlx = glx && glx.__tlx;
+    const T = (f) => { try { return f(); } catch (e) { return NO("read threw: " + String((e && e.message) || e).slice(0, 80)); } };
+    const cine = (() => { try { return !!(q && q.cinema()); } catch (_) { return false; } })();
+    for (const n of ["garageHi", "crewHi"]) p[n] = NO("garage only");
+    // The track extras build in the worker (or a VM) from TrackDetail.page(); the page keeps no record of a build.
+    for (const n of ["crowd3d", "treesHi", "kerbProfile", "farTerrain", "density", "propsHi"]) p[n] = NO("built with the track; no page-side record");
+    p.liveryHi = T(() => { const v = LiveryTex.liveryHiUsed(); return v == null ? NO("no AI livery atlas built yet") : YES(v); });
+    p.packHd = T(() => { const s = Assets.state(); return s.uploaded ? YES(s.tier === "hd") : NO("material pack not uploaded"); });
+    const car = T(() => CarDraw.instance().carDetailUsed);
+    p.meshHi = !car || car.ran === null ? (car || NO("no car built yet")) : YES(car.player >= 1);
+    p.heroCar = !car || car.ran === null ? (car || NO("no car built yet")) : YES(car.hero);
+    if (!tlx) { p._none = "not the three.js renderer (TLX)"; return p; }
+    const post = T(() => tlx.postState()), hi = post && post.hi, r = (hi && hi.ran) || {}, bl = (post && post.blocks) || {};
+    const aa = (post && post.aa) || {};
+    const ext = (base, why, v) => (!base ? NO(why) : YES(!!hi && v));
+    p.ssaoHi = ext(bl.ssao, "no AO pass in the last frame", r.aoHi >= 1);
+    p.gtao = ext(bl.ssao, "no AO pass in the last frame", r.aoHi === 2);
+    p.raysHi = ext(bl.shafts, "no god-ray pass in the last frame", r.rays === 1);
+    p.ssrHi = ext(bl.ssr, "no SSR in the last frame (dry road, no reflection)", !!r.ssrHi);
+    p.ssgi = ext(true, "", !!r.gi);
+    p.dof = ext(cine, "CINEMA only (replay / photo / garage)", !!r.dof);
+    p.motionBlur = ext(cine, "CINEMA only (replay / photo / garage)", !!r.mblur);
+    p.traa = YES(aa.traa && aa.taa);
+    p.hdrOut = T(() => (matchMedia("(dynamic-range: high)").matches ? YES(aa.hdrPeak > 1) : NO("the display is not HDR")));
+    const ceil = T(() => glx.maxRenderScale());
+    p.superSample = typeof ceil !== "number" ? (ceil || NO("no maxRenderScale")) :
+      ((typeof devicePixelRatio === "number" ? devicePixelRatio : 1) > 1.25 ? NO("DPR above 1.25: no supersample headroom") : YES(ceil > 1.001));
+    p.ss2x = !cine ? NO("CINEMA only (replay / photo / garage)") : YES(typeof ceil === "number" && ceil > 1.5);
+    p.mirrorHi = T(() => YES(Array.isArray(glx.mirrorMax) && glx.mirrorMax[0] > 1024));
+    const sx = T(() => (glx.shadowX ? glx.shadowX.state() : null));
+    if (sx && sx.ran === null) { p.csm = sx; p.lampShadows = sx; } else {
+      p.csm = YES(sx && sx.csm.on && sx.csm.builds.reduce((a, b) => a + (+b || 0), 0) > 0);
+      p.lampShadows = YES(sx && sx.lampX.on && sx.lampX.slots.some((s) => s.builds > 0));
+    }
+    p.lightsHi = T(() => YES(LightBudget.hiBuilt()));
+    p.skyAtmo = T(() => YES(tlx.sky && tlx.sky.atmo === true));
+    p.matDetail = T(() => YES(tlx.lit && tlx.lit.detail && tlx.lit.detail.matDetail));
+    p.envAll = T(() => YES(tlx.lit && tlx.lit.detail && tlx.lit.detail.envAll));
+    p.carSurf = T(() => YES(tlx.lit && tlx.lit.carSurf));
+    return p;
+  }
+  function tiers() {
+    if (typeof GfxQuality === "undefined") return null;
+    return tiersRecord(GfxQuality, tiersProbe(typeof GLX !== "undefined" ? GLX : null, GfxQuality));
   }
 
   function sampleSoftLuma(soft, ctx2d) {
@@ -329,8 +409,9 @@ const GfxDebug = (() => {
     else document.addEventListener("DOMContentLoaded", () => setTimeout(install, 0), { once: true });
   }
 
-  // install / stop / wanted stay module-local (auto-install on load); text() is the test/probe seam.
-  return { text: build };
+  // install / stop / wanted stay module-local (auto-install on load); text() is the test/probe seam;
+  // tiers() the census's structured record (tiersRecord / tiersProbe: its pure halves, for the node tests).
+  return { text: build, tiers, tiersRecord, tiersProbe };
 })();
 
 if (typeof window !== "undefined") window.GfxDebug = GfxDebug;

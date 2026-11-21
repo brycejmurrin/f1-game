@@ -305,6 +305,9 @@ const Tracks = (function () {
     // don't inject one: the Node-VM build guard (tools/track/verify-track.cjs) and the
     // VM tests, which install a stub GLX global instead of an opts.gfx.
     track._gfx = G;
+    // Desktop DETAIL (js/track/scenery/detail.js, lazy): sets track._detail / _detailFeatures and returns this
+    // build's hooks (X.far / road / xz / inst / floor); null (detail 0) or no TrackDetail = today's world.
+    const X = typeof TrackDetail !== "undefined" && TrackDetail.attach(track, opts);
     // Keep the upload block scoped; the precondition at entry guarantees it runs.
     {
       track.geometryDiagnostics = [];
@@ -341,10 +344,15 @@ const Tracks = (function () {
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
       const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo"); yield track; _t = _now();
-      track.meshes.floor = G.createMesh(floorGeo); lap("floor", "up"); yield track; _t = _now();
+      // farTerrain uploads the floor after the props (X.floor: its hills keep clear of them); today's slot otherwise.
+      if (!(X && X.far)) track.meshes.floor = G.createMesh(floorGeo);
+      lap("floor", "up"); yield track; _t = _now();
       const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
       lap("road", "geo"); yield track; _t = _now();
-      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
+      // kerbProfile: the DRAWN road carries the profiled kerbs (X.road; track.roadDrawGeo for a later re-chunk);
+      // track.roadGeo (debris collider, agent, shadow caster) stays the flat-kerb geometry every level shares.
+      track.roadGeo = roadGeo; buildRibbon(X ? X.road(roadGeo) : roadGeo, "road");
+      lap("road", "up"); yield track; _t = _now();
       const terrainGeo = yield* inner(buildTerrainSteps(track));
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       lap("terrain", "geo"); yield track; _t = _now();
@@ -394,6 +402,8 @@ const Tracks = (function () {
       // WEBGL_multi_draw is the lever; if it is slower, vertices bind and the
       // query overhead is the thing to fix. Either answer closes a question
       // that has been guessed at twice.
+      // farTerrain's flat-under-props mask (props, glass, water), sampled before an upload may drop the positions.
+      X && X.xz(propsGeo, _props);
       let _unchunked = false;
       try { _unchunked = localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { /* no storage */ }
       track.meshes.props = (G.createChunkedMesh && !_unchunked)
@@ -410,7 +420,8 @@ const Tracks = (function () {
           // Pushed as each one lands, not assigned after the map: a throw or an
           // abandon part-way can then free the batches already on the GPU.
           const pb = track.meshes.propBatches = [];
-          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
+          // X.inst: the crowd3d figures' options (TLX's CROWD LIFE vertex stage) and farTerrain's mask.
+          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, X ? X.inst(b) : { cellSize: 72 }));
         }
       }
       lap("batches", "up"); yield track; _t = _now();
@@ -427,6 +438,7 @@ const Tracks = (function () {
       lap("glassWater", "geo"); yield track; _t = _now();
       track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
       track.meshes.water = G.createMesh(waterGeo);
+      X && X.floor(floorGeo);   // farTerrain's deferred floor, inside the trim lap (its yield follows)
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
       lap("trim", "up"); yield track; _t = _now();
@@ -833,6 +845,7 @@ const Tracks = (function () {
     if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || (opts && opts.retainRibbonCpu) || keepGeometry) return;
     if (!track.roadGeo || !track.terrainGeo) return;
     if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
+    track.roadDrawGeo = null;   // kerbProfile's drawn road: chunked by now (or never will be)
     for (const geo of [track.roadGeo, track.terrainGeo]) {
       geo.nrm = geo.col = geo.mat = null;
       // A main-thread build's push-grown arrays carry slack; typed as the worker posts them (build-worker.js typedRibbon).

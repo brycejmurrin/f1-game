@@ -762,6 +762,15 @@ function _flapPut(cache, order, max, key, data) {
   }
   return mesh;
 }
+// meshHi (ULTRA+): every car's flaps at detail 1 (twice the foil stations each way). The level is boot-time,
+// one per page, so the flap keys need not carry it; 0 below ULTRA, on phones and in node (CarGeometry.detailFor).
+let _flapDetail = -1;
+function _flapGeom(...a) {
+  if (_flapDetail < 0) _flapDetail = typeof CarGeometry !== "undefined" && CarGeometry.detailFor ? CarGeometry.detailFor(false) : 0;
+  const f = () => Car3D.buildFlapGeom(...a);
+  if (!_flapDetail) return f();
+  try { return CarGeometry.withDetail(_flapDetail, f); } catch (_) { return f(); }
+}
 function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
   const c = col || FLAP_DEF_COL;
   // aLvl is passed through RAW — catalog options use fractional levels and the
@@ -770,7 +779,7 @@ function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
   const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
   if (!g) return null;
   const key = _flapKey(g, aLvl, style, c, finish, surface);
-  return _flapUse(_flapMeshes[key]) || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, Car3D.buildFlapGeom(g, c, finish, surface));
+  return _flapUse(_flapMeshes[key]) || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, _flapGeom(g, c, finish, surface));
 }
 // THE WHOLE FLAP SET AS ONE STATIC MESH at a REST pose — closed (zAngle, Z-mode)
 // or `open` (xAngle, X-mode); `only` "front"/"rear" as drawAeroFlaps. Each element
@@ -807,7 +816,7 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only, surface, rearCol) 
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const fg of flaps) {
     if (only && fg.wing !== only) continue;
-    const g = Car3D.buildFlapGeom(fg, fg === pr ? rearCol : c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
+    const g = _flapGeom(fg, fg === pr ? rearCol : c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
     const ca = Math.cos(ang), sa = Math.sin(ang), base = out.pos.length / 3;
     for (let i = 0; i < g.pos.length; i += 3) {
       const y = g.pos[i + 1], z = g.pos[i + 2], ny = g.nrm[i + 1], nz = g.nrm[i + 2];

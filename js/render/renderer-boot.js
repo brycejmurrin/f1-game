@@ -198,7 +198,16 @@ function showGraphicsUnavailable() {
 if (typeof RendererPicker !== "undefined" && RendererPicker.setUnavailableDefaults) {
   RendererPicker.setUnavailableDefaults(graphicsUnavailableOpts());
 }
+// DESKTOP EXTREME / CINEMA (LAZY_GFX_HI): fetched beside the backend and awaited before start() hands it back, so
+// it is resident before the first car build; GfxQuality.detail() is 0 on every phone, which never fetches it.
 async function start() {
+  let hi = 0;
+  try { if (GfxQuality.detail() > 1) hi = loadBackendScripts(ApexRoster.LAZY_GFX_HI); } catch (_) { /* no GfxQuality (a harness): ULTRA */ }
+  const made = await start0();
+  if (hi && (await hi.catch(() => false)) === false) Log.warn("gfx", "EXTREME detail bundle did not load: ULTRA detail this boot");
+  return made;
+}
+async function start0() {
 // Reload once with a session skip so the fresh tab attaches GLX. Read the skip back before
 // reloading: with sessionStorage blocked the write fails silently and the reload replays this
 // claim-and-die boot forever. And ONCE: a latch already set when this boot started means the

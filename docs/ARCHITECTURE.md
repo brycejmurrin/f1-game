@@ -134,6 +134,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 | `puddles.js` | `Puddles` | LAZY_AGENT | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
+| `mesh-detail.js` | `MeshDetail` | LAZY_TRACK_BUILD | MeshDetail: the shared geometry-refinement kit for procedural meshes (subdivide, bevel, normals, simplify). |
+| `gfx-hi.js` | `GfxHi` | LAZY_GFX_HI | GfxHi: the desktop EXTREME / CINEMA render and perf extras (GfxQuality.detail() >= 2). |
 
 **`js/perf/`**
 
@@ -149,7 +151,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |
 | `race-entry-profile.js` | `RaceEntryProfile` | tag | RaceEntryProfile: the race-entry stopwatch OUTSIDE the track build. |
 | `title-warm.js` | `TitleWarm` | tag | TitleWarm: the race world's prep and program warm on an idle TITLE (A·W50, 2026-10-25). |
-| `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
+| `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA / EXTREME) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 | `three-inspector.js` | `ThreeInspector` | LAZY_AGENT | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
@@ -334,6 +336,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
 | `api-wrap.js` | `SceneryApiWrap` | LAZY_TRACK_BUILD | SceneryApiWrap: the scenery(api) coordinate wrap (origin shift, reverse side, authored-frame along/every). |
 | `region.js` | `TrackSceneryRegion` | LAZY_TRACK_BUILD | Optional bounded CPU scenery emission. |
+| `detail.js` | `TrackDetail` | LAZY_TRACK_BUILD | TrackDetail: the desktop DETAIL level a track build runs at (0 = today, HIGH and every phone; 1 = ULTRA; 2 = EXTREME) and the build-time geometry its EXTREME… |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**
@@ -465,6 +468,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |
 | `field-lod.js` | `FieldLod` | tag | FieldLod: distance level-of-detail for the RIVAL cars, draw-side only (nothing here reads or writes physics). |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
+| `car-hero.js` | `CarHero` | LAZY_GFX_HI | CarHero: the desktop EXTREME car detail (GfxQuality feature "heroCar" and the detail-2 tessellation). |
 
 **`js/input/`**
 
@@ -579,6 +583,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `entrance-motion.js` | `GarageEntranceMotion` | LAZY_RACE | Blender-authored entrance motion. |
 | `garage-data.js` | `GarageData` | LAZY_RACE | GarageData: the garage's Blender-authored tables, loaded LAZY. |
 | `arrival-rows.js` | `GarageArrivalRows` | LAZY_RACE | the GARAGE ENTER & LEAVE tuner's extra rows (VISUAL STUDIO, #garrival), out of the eager shell (#5660: each PR pays its boot bytes). |
+| `hi-prims.js` | `GarageHiPrims` | LAZY_RACE | GarageHiPrims: the EXTREME garage's dense primitives (GfxQuality feature "garageHi" / "crewHi", desktop EXTREME only). |
 | `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Cached garage-departure wheel layers; spin is path distance / WHEEL_RADIUS. |
 | `exterior-geometry.js` | `GarageExteriorGeometry` | LAZY_GARAGE_EXTERIOR | Detached circuit pit exterior: build once on selection, never on the render clock. |
 | `exterior.js` | `GarageExterior` | LAZY_GARAGE_EXTERIOR | Selected-world garage exterior. |
@@ -691,10 +696,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `tsl-chunks.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunks: shared TSL leaves for the three.js backend. |
 | `tsl-viewport.js` | `TLXShaders` | DEFERRED:three | TLXShaders.viewport: the ONE place TLX maps a screen position to a texture position when a render target is drawn into a SUB-VIEWPORT of a fixed, larger… |
+| `tsl-carsurf.js` | `TLXCarSurf` | DEFERRED:three | TLXCarSurf: EXTREME car-surface shading detail for the TLX lit program (GfxQuality feature `carSurf`). tsl-lit.js reads GfxQuality.feature("carSurf") ONCE at… |
 | `tsl-lit.js` | `TLXShaders` | DEFERRED:three | TLXShaders.lit: the TSL lit-shader core for the TLX backend (M3). |
 | `tsl-sky.js` | `TLXShaders` | DEFERRED:three | TLXShaders.sky: the procedural sky for the TLX backend (M5). |
 | `tsl-fx.js` | `TLXShaders` | DEFERRED:three | TLXShaders.fx: the FX materials for the TLX backend (M6). |
+| `tsl-gi.js` | `TLXShaders` | DEFERRED:three | TLXShaders.gi: the desktop-tier screen-space passes of the TLX backend (GTAO, SSGI, DoF, motion blur) and their tier plan. |
 | `tsl-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.post: the TSL post-chain shaders for the TLX backend (M8). |
+| `tsl-aa.js` | `TLXAA` | DEFERRED:three | TLXAA: the desktop-tier anti-aliasing and output maths for TLX (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md, features traa / superSample / ss2x / hdrOut). |
 | `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
 | `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |

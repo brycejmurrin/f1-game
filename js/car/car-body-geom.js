@@ -80,11 +80,13 @@ const CarBodyGeom = (function () {
 
   // Continuous closed skin; interior stations carry no overlapping caps.
   function closedSkin(out, rings, col) {
+    const v0 = out.pos.length / 3;
     for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < rings[i].length; j++) {
       const k = (j + 1) % rings[i].length, a = rings[i][j], b = rings[i][k];
       const c = rings[i + 1][j], d = rings[i + 1][k];
       addTri(out, a, c, b, col); addTri(out, b, c, d, col);
     }
+    CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (sides only)
     for (const [ring, reverse] of [[rings[0], false], [rings[rings.length - 1], true]])
       for (let j = 1; j < ring.length - 1; j++)
         addTri(out, ring[0], ring[reverse ? j + 1 : j], ring[reverse ? j : j + 1], col);
@@ -1291,7 +1293,8 @@ const CarBodyGeom = (function () {
   const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
   function buildSharedChassis(out, c1, rideDY, noseStations, ckpt, edgeAt, measure, noseC) {
     const floor = CHASSIS.floor;
-    if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
+    // heroCar: the plate's top and bottom rims rounded 5 mm in two segments (CarGeometry.heroBevel; else today's).
+    if (shadeFlags.round) CarGeometry.heroBevel(out, 0.005, 2, (o) => CarShade.floor(o, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri)); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
     if (nose.curve) {
@@ -1995,7 +1998,7 @@ const CarBodyGeom = (function () {
 
   function sculptPodLoft(out, data, color) {
     for (const side of [-1, 1]) {
-      const rings = data.podStops.map(p => data.podRing(p.z, side));
+      const rings = data.podStops.map(p => data.podRing(p.z, side)), v0 = out.pos.length / 3;
       for (let r = 0; r < rings.length - 1; r++) for (let k = 0; k < rings[r].length; k++) {
         const j = (k + 1) % rings[r].length;
         const q = [rings[r][k], rings[r + 1][k], rings[r + 1][j], rings[r][j]];
@@ -2004,6 +2007,7 @@ const CarBodyGeom = (function () {
           recessedPodExit(out, q, side, data.podSculpt.exitDepth, color);
         else addQuad(out, ...q, color);
       }
+      CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
       for (const [boundary, front] of [[rings[0], true], [rings[rings.length - 1], false]]) {
         let ring = boundary;
         const centre = ring.reduce((m, p) => m.map((v, i) => v + p[i] / ring.length), [0, 0, 0]);
@@ -2051,10 +2055,12 @@ const CarBodyGeom = (function () {
       const p = coverProfile(anchors.coverAt(z), shadeFlags.round && shadeFlags.coverHi).pts;
       return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
     });
+    const v0 = out.pos.length / 3;
     for (let r = 0; r < rings.length - 1; r++) for (let k = 0; k < rings[r].length; k++) {
       const j = (k + 1) % rings[r].length;
       addQuad(out, rings[r][k], rings[r + 1][k], rings[r + 1][j], rings[r][j], color);
     }
+    CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
     for (const [ring, front] of [[rings[0], true], [rings[rings.length - 1], false]]) {
       const c = ring.reduce((a, p) => a.map((v, i) => v + p[i] / ring.length), [0, 0, 0]);
       for (let k = 0; k < ring.length; k++) {

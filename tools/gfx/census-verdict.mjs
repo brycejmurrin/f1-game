@@ -37,6 +37,64 @@ export function capOverride(ls) {
   return v != null && v !== "0" ? v : null;
 }
 
+/** The desktop detail level CENSUS_LS forces (apex26.gfxDetail=1|2, the last one wins), else 0. */
+export function lsDetail(ls) {
+  let d = 0;
+  for (const kv of String(ls || "").split(/\s+/)) {
+    const m = kv.match(/^apex26\.gfxDetail=(.*)$/);
+    if (m) d = m[1] === "1" || m[1] === "2" ? +m[1] : 0;
+  }
+  return d;
+}
+
+// Features a census scene cannot run whatever the build: declared, each with its reason and the condition that
+// lifts it. Everything else that the level turns on must report ran=true, or name why it has no signal.
+export const TIER_SKIPS = Object.freeze({
+  lampShadows: { why: "needs a night build (the floodlight maps only exist with baked lamps)", unless: (o) => o.night },
+});
+
+/** The real test of the desktop tiers (docs/notes/TIER-CENSUS-TEST-2026-11-20.md), TLX WebGPU leg only: when the
+ *  dispatch forced a detail level, every feature that level turns on must have RUN. A feature whose build threw
+ *  falls back to today's path and still reads gpuErrors=0, so on=true + ran=false is a FAIL naming it. Gated only on
+ *  a hardware, non-software, non-lite adapter on three's WebGPU backend; elsewhere the rows are information. */
+export function tierGate(g, { hardware = false, level = 0 } = {}) {
+  const rows = [], bad = [];
+  if (!(level > 0)) return { rows, bad };
+  const gfx = g.gfx || {}, be = gfx.backendState || {}, rec = gfx.tiers;
+  const night = /night/i.test(String(g.timeOfDay || ""));
+  const why = !hardware ? "census found no hardware adapter" : be.softAdapter !== false ? `softAdapter=${be.softAdapter}`
+    : be.liteGpu ? "liteGpu (the lite lab builds no extras)" : be.api !== "webgpu" ? `api=${be.api} (the extras are built for WebGPU)` : "";
+  const gate = !why;
+  if (!rec || !rec.features) {
+    rows.push(`${IND}tiers: NO RECORD — ${gfx.tiersError || "the leg wrote no gfx.tiers"}`);
+    if (gate) bad.push(`detail ${level} was asked but NO tiers record came back — the silent-fallback check would pass vacuously${gfx.tiersError ? " — " + gfx.tiersError : ""}`);
+    return { rows, bad };
+  }
+  const have = rec.detail + (rec.cinema && rec.detail >= 2 ? 1 : 0), order = rec.shedOrder || [];
+  rows.push(`${IND}tiers: detail=${rec.detail} (asked ${level}) shed=${rec.shed}/${order.length} cinema=${rec.cinema ? 1 : 0} tod=${g.timeOfDay || "?"}` +
+    (gate ? "  GATED" : `  informational: ${why}`));
+  if (rec.detail !== level) (gate ? bad : []).push(`detail ${level} was asked (ls apex26.gfxDetail) but GfxQuality.detail() reports ${rec.detail} — the level never applied`);
+  const offLevel = [], shed = [];
+  for (const [name, f] of Object.entries(rec.features)) {
+    const i = order.indexOf(name);
+    if (f.need > have) { offLevel.push(name); continue; }
+    // Shed by the governor, unless the run holds the extras (apex26.gfxHoldExtras=1): then feature() still
+    // answers on and the feature is judged like any other.
+    if (i >= 0 && i >= order.length - rec.shed && !f.on) { shed.push(name); continue; }
+    const skip = TIER_SKIPS[name];
+    let state;
+    if (!f.on) { state = "GATE OFF — feature() answers false at this level"; if (gate) bad.push(`tiers: ${name} is off at detail ${rec.detail} although the level turns it on (feature() answered false)`); }
+    else if (f.ran === true) state = "ran";
+    else if (skip && !skip.unless({ night })) state = `skipped — ${skip.why}`;
+    else if (f.ran === false) { state = "DID NOT RUN — silent fallback to today's path"; if (gate) bad.push(`tiers: ${name} is on at detail ${rec.detail} but did NOT run — its build fell back silently`); }
+    else state = `no signal — ${f.why || "?"}`;
+    rows.push(`${IND}  ${name.padEnd(12)} need=${f.need} on=${f.on ? 1 : 0} ran=${f.ran == null ? "-" : f.ran ? 1 : 0}  ${state}`);
+  }
+  if (shed.length) rows.push(`${IND}  shed by the governor: ${shed.join(" ")}`);
+  if (offLevel.length) rows.push(`${IND}  above this level: ${offLevel.join(" ")}`);
+  return { rows, bad };
+}
+
 /** Read census-<image>.json and game-<leg>-<image>.json from dir; an absent or
  *  unparseable file is null (the gate then names it). */
 export function readArtifacts(dir, image) {
@@ -47,7 +105,7 @@ export function readArtifacts(dir, image) {
 }
 
 /** The whole verdict: { rows, bad }. `cap` is capOverride(CENSUS_LS). */
-export function verdict({ image, census, legs, cap = null }) {
+export function verdict({ image, census, legs, cap = null, level = 0 }) {
   // Only a machine the census called hardware can be held to the hardware
   // expectations; a software image legitimately reports softAdapter true and
   // a skipped (blank) env probe.
@@ -71,7 +129,7 @@ export function verdict({ image, census, legs, cap = null }) {
     const file = `game-${path3}-${image}.json`;
     const g = legs[path3];
     if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
-    const r = legReport(path3, g, { hardware, cap });
+    const r = legReport(path3, g, { hardware, cap, level });
     rows.push(...r.rows);
     bad.push(...r.bad);
   }
@@ -81,7 +139,7 @@ export function verdict({ image, census, legs, cap = null }) {
 }
 
 /** One leg: its report rows and its gate failures. */
-export function legReport(path3, g, { hardware, cap = null }) {
+export function legReport(path3, g, { hardware, cap = null, level = 0 }) {
   const rows = [], bad = [];
   const gfx = g.gfx || {}, env = gfx.envState || {}, be = gfx.backendState || {};
   // The two TLX legs are three.js BY CONSTRUCTION (--backend three), so they
@@ -142,7 +200,7 @@ export function legReport(path3, g, { hardware, cap = null }) {
   }
   // #4783 rows 4 and 6: TLX on WebGPU (Bryce's path). The WGX leg is its own renderer and labels nothing this way.
   if (path3 === "webgpu") {
-    for (const r of [uploadGate(g, { hardware }), shadowGate(g, { hardware })]) {
+    for (const r of [uploadGate(g, { hardware }), shadowGate(g, { hardware }), tierGate(g, { hardware, level })]) {
       rows.push(...r.rows);
       bad.push(...r.bad.map((b) => `${path3}: ${b}`));
     }
@@ -635,7 +693,7 @@ export function main(argv = process.argv.slice(2), env = process.env) {
   }
   if (!o.image) { console.error("census-verdict: no image (--image or IMAGE)"); return 2; }
   const { census, legs } = readArtifacts(o.dir, o.image);
-  const { rows, bad } = verdict({ image: o.image, census, legs, cap: capOverride(o.ls) });
+  const { rows, bad } = verdict({ image: o.image, census, legs, cap: capOverride(o.ls), level: lsDetail(o.ls) });
   if (o.summary) { try { fs.appendFileSync(o.summary, rows.join("\n") + "\n"); } catch (_) { /* summary is best-effort */ } }
   console.log(rows.join("\n"));
   for (const b of bad) console.error(`::error::REAL-GPU GATE: ${b}`);

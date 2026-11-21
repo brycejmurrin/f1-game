@@ -632,3 +632,34 @@ test("drawAeroFlaps resolves the livery once per car, and a warm flap-set hit bu
   assert.equal(r.calls.resolves, 100, "one resolveLivery per draw (was 2: wingColorOf resolved it again)");
   assert.equal(finKeys, 0, "no per-call `finish|surface` lookup key (was 2 per draw: base and rear-paint keys)");
 });
+
+// DESKTOP ULTRA: every cut sits twice as far out; any other preset, and a phone, keep the table.
+test("GRAPHICS: ULTRA on a desktop doubles the rival LOD reach; HIGH and a phone ULTRA do not", () => {
+  const boot = (preset, mobile) => {
+    const store = { get: (k, d) => (k === "gfxPreset" ? preset : d), raw: () => null };
+    const ctx = vm.createContext({ Math, Object, Infinity, GLX: { isMobile: !!mobile }, GameStore: { store }, Log: { info() {} } });
+    vm.runInContext(read("js/perf/quality-preset.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/quality-preset.js") });
+    vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/car/field-lod.js") });
+    ctx.FieldLod.init(store);
+    return ctx.FieldLod;
+  };
+  const hi = boot("high"), ul = boot("ultra"), ph = boot("ultra", true);
+  assert.equal(boot("extreme").mirrorCap(), 12, "EXTREME keeps the ULTRA reach");
+  assert.equal(ph.mirrorCap(), 6, "a phone never takes the desktop detail set");
+  assert.equal(ph.tier(80 * 80), 1);
+  const at = (m) => m * m;
+  assert.equal(hi.tier(at(80)), 1);
+  assert.equal(ul.tier(at(80)), 0, "50 m lite-wheel cut moved to 100 m");
+  assert.equal(ul.tier(at(110)), 1);
+  assert.equal(hi.tier(at(200)), 2);
+  assert.equal(ul.tier(at(200)), 1, "120 m decal cut moved to 240 m");
+  assert.equal(ul.tier(at(250)), 2);
+  assert.equal(hi.farBody(at(400)), true);
+  assert.equal(ul.farBody(at(400)), false, "250 m far body moved to 500 m");
+  assert.equal(hi.castsShadow(at(80)), false);
+  assert.equal(ul.castsShadow(at(80)), true);
+  assert.equal(ul.flame(at(100)), true);
+  assert.equal(ul.flapsM(), 160);
+  assert.equal(hi.mirrorCap(), 6);
+  assert.equal(ul.mirrorCap(), 12);
+});
