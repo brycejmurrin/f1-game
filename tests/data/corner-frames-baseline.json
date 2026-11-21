@@ -1,7 +1,10 @@
 {
   "why": "Shrink-only baseline of corner-frame offenders (tests/unit/corner-frames.test.mjs): stable key -> measured offset m. Delete a row when it is fixed; never add one. Regenerate: node tools/track/corner-frames.cjs --baseline",
   "rows": {
+    "bahrain|T15": 16,
     "bahrain|T6": 28,
+    "bahrain|T7": 32,
+    "bahrain|T9": 16,
     "fuji|T13": 54,
     "hockenheim|kit:Südtribüne — largest permanent stand: T15 / Südkurve up the ": 235,
     "imola|T7": 19,

@@ -58,9 +58,10 @@
     // survey. T5/6/7 are the L/R/L esses, T8 the next right hairpin, T9/10
     // the two lefts before the back straight; T14/15 are BOTH final rights.
     // Racing arc fractions: do not apply _sceneryShift to these markings.
-    // T7/T9/T15 snapped to built |k| peaks (#5316). T6 stays at 0.3244: snapping
-    // it to 0.3192 pushed a T6 prop to 28 m clearance (foundation pin < 25 m).
-    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.2992, 0.3244, 0.3415, 0.3875, 0.4573, 0.4744, 0.6073, 0.6652, 0.7313, 0.8783, 0.8938],
+    // Turn fracs stay at the foundation world-anchor pins (tests/specs/foundation/
+    // bahrain.js officialTurns, ≤25 m). Snapping T6/T7 to |k| peaks moved the
+    // apexes 28–32 m off those pins (#6121 CI). Corner-frames still lists them.
+    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.2992, 0.3244, 0.3474, 0.3875, 0.4543, 0.4744, 0.6073, 0.6652, 0.7313, 0.8783, 0.8968],
     // Sakhir: sparse desert — cool-white lamps, thin palm line (not oasis green)
     furniture: { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [0.88, 0.94, 1.0], sparse: true },
     kit: { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
