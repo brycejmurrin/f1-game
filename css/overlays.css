@@ -1429,7 +1429,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
   position: fixed; z-index: 9999; top: var(--safe-t); left: var(--safe-l); right: var(--safe-r);
   margin-inline: auto; width: max-content; max-width: var(--safe-w); max-height: max(52px, 35svh);
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: calc(var(--gap) / 3);
-  padding: calc(var(--gap) / 3); overflow: auto; overscroll-behavior: contain;
+  padding: calc(var(--gap) / 3); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
   background: var(--plate-opaque); color: var(--text); border-radius: var(--r-md);
 }
 #dock-edit-bar :is(button, select) {
