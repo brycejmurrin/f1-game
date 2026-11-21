@@ -20813,6 +20813,7 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "collect": [
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -20829,6 +20830,7 @@
       ],
       "create": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
@@ -20869,6 +20871,9 @@
       ]
     },
     "js/ui/settings-export.js": {
+      "_bind": [
+        "tests/unit/game-ctx-surface.test.mjs"
+      ],
       "create": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
@@ -20895,6 +20900,7 @@
       ],
       "ready": [
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs"
       ],
       "*": [
