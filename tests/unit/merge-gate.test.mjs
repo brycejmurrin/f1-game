@@ -925,7 +925,7 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   const fn = postRun.slice(start, postRun.indexOf("\n}\n", postRun.indexOf("write_gate() {")) + 3);
   const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
   const stub = `gh() { local q="" a; case "$*" in *actions/runs/*) echo "$FAKE_RUN"; return 0 ;; esac; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
-  const LAND_RUN = JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target", head_branch: "cursor/x" });
+  const LAND_RUN = JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target", head_branch: "cursor/x", run_started_at: "2026-10-27T10:00:06Z" });
   const runGate = (created, url, creator = "github-actions[bot]", run = LAND_RUN) => {
     const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url, creator: { login: creator } }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
     const script = ["set -uo pipefail", `R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null; DEPLOY_BRANCH=${DEPLOY_BRANCH}`, stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
@@ -947,6 +947,17 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
     "POSTED", "a land.yml dispatched on another branch is not this workflow's deploy-branch copy");
   assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/1"), "POSTED",
     "this run's own earlier attempt is replaced (a re-run reuses AT: run 40740152111, #4110)");
+  // Finding 4 (2026-11-21): the other run's status is newer, but its run STARTED before this run read the PR. Its
+  // verdict (a late ci=WAIT, say) measured an older state, so this fresher verdict replaces it.
+  const started = (t) => JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target", head_branch: "cursor/x", run_started_at: t });
+  assert.equal(runGate("2026-10-27T10:00:30Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", started("2026-10-27T09:59:00Z")), "POSTED",
+    "an older run's later status does not survive a fresher verdict");
+  assert.equal(runGate("2026-10-27T10:00:30Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", started("2026-10-27T10:00:05Z")), "POSTED",
+    "started in the same second as this run's read: not provably fresher, replaced");
+  assert.notEqual(runGate("2026-10-27T10:00:30Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", started("2026-10-27T10:00:20Z")), "POSTED",
+    "a run that started after this one read the PR is fresher: kept");
+  assert.equal(runGate("2026-10-27T10:00:30Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target" })), "POSTED",
+    "no start time: not provably fresher, replaced");
 });
 
 // ---- the immediate re-gate: a gate passed on a tip that moved is re-dispatched at once, bounded per head ---------
@@ -1406,7 +1417,7 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   assert.equal(r.out.retry, "[]", "missing rows cannot turn a gen/ratchet refusal into a retry");
   assert.equal(r.out.arm, "");
 
-  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_RUN: JSON.stringify({ path: ".github/workflows/land.yml", event: "workflow_run", head_branch: DEPLOY_BRANCH }),
+  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_RUN: JSON.stringify({ path: ".github/workflows/land.yml", event: "workflow_run", head_branch: DEPLOY_BRANCH, run_started_at: "2026-10-27T10:00:08Z" }),
     FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z", target_url: "https://github.com/o/r/actions/runs/2", creator: { login: "github-actions[bot]" } }]) }), verdict());
   assert.deepEqual(bodies(r), [], "a newer verdict on the head from another land.yml run is kept");
   assert.equal(disarmed(r), false, "and its run owns the arm state");

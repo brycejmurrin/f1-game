@@ -512,12 +512,17 @@ jobs:
           # land_run <target_url>: true when the URL names a run of THIS workflow file (land.yml) on the deploy
           # branch. Every land.yml trigger but workflow_dispatch runs the default branch's copy; a dispatch must name
           # the deploy branch too. The status author must also be the Actions bot (checked by the caller).
+          # It also sets LAND_RUN_T: that run's (latest attempt's) start, epoch seconds, 0 when it names none.
           land_run() {
-            local id
+            local id run
+            LAND_RUN_T=0
             [[ "$1" =~ ^"${GITHUB_SERVER_URL}/${R}/actions/runs/"([0-9]+)$ ]] || return 1
             id=${BASH_REMATCH[1]}
-            gh api "repos/$R/actions/runs/$id" | jq -e --arg b "$DEPLOY_BRANCH" \
-              '((.path // "") | sub("@.*$"; "")) == ".github/workflows/land.yml" and (.event != "workflow_dispatch" or .head_branch == $b)' >/dev/null
+            run=$(gh api "repos/$R/actions/runs/$id") || return 1
+            LAND_RUN_T=$(jq -r '.run_started_at // empty | fromdateiso8601 | floor' <<<"$run" 2>/dev/null) || LAND_RUN_T=0
+            [[ "$LAND_RUN_T" =~ ^[0-9]+$ ]] || LAND_RUN_T=0
+            jq -e --arg b "$DEPLOY_BRANCH" \
+              '((.path // "") | sub("@.*$"; "")) == ".github/workflows/land.yml" and (.event != "workflow_dispatch" or .head_branch == $b)' <<<"$run" >/dev/null
           }
           write_gate() {
             local head=$1 st=$2 c=$3 title=$4 summary=$5 seen seen_t seen_u seen_c state body
@@ -529,9 +534,10 @@ jobs:
             read -r seen_t seen_u seen_c <<<"$seen"
             if [ -n "$seen" ] && [ "$seen_t" -gt "$AT_S" ] && [ "$seen_u" != "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" ]; then
               # A newer verdict is kept only when another land.yml run on the deploy branch posted it, as the Actions
-              # bot; any other newer `gate` status is replaced by this run's verdict.
-              if [ "$seen_c" = "github-actions[bot]" ] && land_run "$seen_u"; then
-                echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch $seen_t > $AT_S = $AT by $seen_u)"; return 0
+              # bot, AND that run started after this run read the PR (finding 4, 2026-11-21): an older run's late write
+              # (a ci=WAIT read before CI finished) measured an older state. Any other `gate` status is replaced.
+              if [ "$seen_c" = "github-actions[bot]" ] && land_run "$seen_u" && [ "$LAND_RUN_T" -gt "$AT_S" ]; then
+                echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch $seen_t by $seen_u, a run started at $LAND_RUN_T > $AT_S = $AT)"; return 0
               fi
               echo "::warning::gate on ${head:0:12}: a newer status ($seen_c, $seen_u) was not posted by a land.yml run on $DEPLOY_BRANCH; posting this run's verdict over it"
             fi
