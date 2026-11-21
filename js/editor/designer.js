@@ -1852,16 +1852,27 @@ const TrackDesigner = (function () {
     // edits, another pick or closing the screen revoke this pending replacement.
     if (def._metaOnly) {
       if (!G || typeof G.ensureCircuit !== "function") { message("Could not load " + def.name, true); return false; }
+      // Pin the map view before "Loading…" reflows the foot: a mid-hydration
+      // resize must not re-fit under a drag the player (or the pending-drag
+      // spec) already aimed — that miss became a pan with no onBegin (#6031).
+      if (cv && cv.holdFit) cv.holdFit(true);
       message("Loading " + def.name + "…");
-      return Promise.resolve().then(() => G.ensureCircuit(Tracks.LIST.indexOf(def))).then(() => {
+      const releaseFit = () => { if (cv && cv.holdFit) cv.holdFit(false); };
+      return Promise.resolve().then(() => G.ensureCircuit(Tracks.LIST.indexOf(def))).then(async () => {
         if (generation !== replacementGeneration) return false;
         if (def._metaOnly) { message("Could not load " + def.name, true); return false; }
+        // A handle press can still become a drag after hydrate resolves; wait
+        // for the map/profile gesture to go idle, then re-check the generation
+        // so a deliberate move revokes and a selection-only tap still applies.
+        if (cv && cv.whenIdle) await cv.whenIdle();
+        if (prof && prof.whenIdle) await prof.whenIdle();
+        if (generation !== replacementGeneration) return false;
         return traceCircuit(I, def);
       }).catch((e) => {
         if (generation === replacementGeneration) message("Could not load " + def.name + " — try again", true);
         Log.warn("track", "start from " + id + " failed: " + (e && e.message || e));
         return false;
-      });
+      }).finally(releaseFit);
     }
     return traceCircuit(I, def);
   }
