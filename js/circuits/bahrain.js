@@ -58,8 +58,9 @@
     // survey. T5/6/7 are the L/R/L esses, T8 the next right hairpin, T9/10
     // the two lefts before the back straight; T14/15 are BOTH final rights.
     // Racing arc fractions: do not apply _sceneryShift to these markings.
-    // T6/T7/T9/T15 snapped to built curvature peaks (#5316; were 16–32 m off).
-    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.2992, 0.3192, 0.3415, 0.3875, 0.4573, 0.4744, 0.6073, 0.6652, 0.7313, 0.8783, 0.8938],
+    // T7/T9/T15 snapped to built |k| peaks (#5316). T6 stays at 0.3244: snapping
+    // it to 0.3192 pushed a T6 prop to 28 m clearance (foundation pin < 25 m).
+    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.2992, 0.3244, 0.3415, 0.3875, 0.4573, 0.4744, 0.6073, 0.6652, 0.7313, 0.8783, 0.8938],
     // Sakhir: sparse desert — cool-white lamps, thin palm line (not oasis green)
     furniture: { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [0.88, 0.94, 1.0], sparse: true },
     kit: { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
