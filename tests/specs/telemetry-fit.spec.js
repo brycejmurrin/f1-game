@@ -17,7 +17,7 @@ const VIEWS = [
   { name: "portrait-390x844", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
 ];
 
-async function openCompare(page, v) {
+async function openTrace(page, v, drivers) {
   await page.addInitScript((css) => {
     const add = () => { const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
     document.head ? add() : document.addEventListener("DOMContentLoaded", add, { once: true });
@@ -57,14 +57,15 @@ async function openCompare(page, v) {
   });
   const chips = page.locator(".dh-dchip");
   await expect(chips.first()).toBeVisible();
-  for (const code of ["VER", "STR", "HUL"]) await chips.filter({ hasText: code }).first().click();
-  await page.locator(".dh-livebtn", { hasText: "COMPARE 3 LAPS" }).evaluate((b) => b.click());
+  for (const code of drivers) await chips.filter({ hasText: code }).first().click();
+  const label = drivers.length === 1 ? "LOAD FASTEST LAP" : `COMPARE ${drivers.length} LAPS`;
+  await page.locator(".dh-livebtn", { hasText: label }).evaluate((b) => b.click());
   await expect(page.locator(".dh-tpopup[open] .dh-dash")).toBeVisible();
   await expect(page.locator(".dh-tpopup[open] canvas.dh-map")).toBeVisible();
 }
 
 async function checkFit(page, v) {
-      await openCompare(page, v);
+      await openTrace(page, v, ["VER", "STR", "HUL"]);
       const r = await page.evaluate((ins) => {
         const q = (s) => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(s)]);
         const box = (e) => e.getBoundingClientRect();
@@ -117,6 +118,17 @@ test.describe("landscape 852x393 notch", () => {
 test.describe("portrait 390x844", () => {
   test.use({ viewport: { width: VIEWS[1].w, height: VIEWS[1].h }, hasTouch: true });
   test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => { await checkFit(page, VIEWS[1]); });
+  test("browser Back closes the trace before the Data Hub and restores the selected driver", async ({ page }) => {
+    await openTrace(page, VIEWS[1], ["VER"]);
+    const hub = page.locator("#datahub");
+    await page.evaluate(() => history.back());
+    await expect(page.locator(".dh-tpopup")).toHaveCount(0);
+    await expect(hub).toBeVisible();
+    await expect(hub.locator(".dh-dchip", { hasText: "VER" })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => history.state?.apexBack)).toBe(1);
+    await page.evaluate(() => history.back());
+    await expect(hub).toHaveAttribute("hidden", "");
+  });
 });
 
 /* ── THE DATA HUB HEAD on a phone held sideways (UI contract gap 15, PR #5156) ──
