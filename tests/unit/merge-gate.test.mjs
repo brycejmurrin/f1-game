@@ -658,6 +658,25 @@ test("a receipt written from a linked worktree also lands in the main checkout t
   } finally { fs.rmSync(wt, { recursive: true, force: true }); fs.rmSync(main, { recursive: true, force: true }); }
 });
 
+test("a receipt from a bare-backed worktree stays in the active checkout", () => {
+  const dir = scratch("rcpt-bare-");
+  const bare = path.join(dir, "repo.git"), linked = path.join(dir, "linked");
+  const git = (cwd, ...args) => {
+    const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+  };
+  try {
+    git(dir, "init", "-q", "seed");
+    git(path.join(dir, "seed"), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "seed", "--allow-empty");
+    git(dir, "clone", "-q", "--bare", "seed", bare);
+    git(bare, "worktree", "add", "-q", "--detach", linked, "HEAD");
+    assert.equal(mainCheckout(linked), null);
+    writeReceipt(linked, "ready", { pr: 9, head: HEAD, ok: true });
+    assert.equal(readReceipt(linked, "ready", 9).pr, 9);
+    assert.equal(fs.existsSync(path.join(dir, "artifacts")), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("a receipt records the gate files' sha256; gateFilesVerdict refuses an edited or uncommitted gate", () => {
   const dir = scratch("gate-files-");
   const g = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
