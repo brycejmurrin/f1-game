@@ -3015,11 +3015,10 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
 let /** @type {ReturnType<typeof LightStore.create> | null} */ ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 
 // ── The shared ctx façade over game.js closure state ─────────────────────────
-// Extracted modules (js/ui/results-sheet.js, hud.js, apex.js, …) can't reach the
-// closure `let`s in this file, so game.js hands them ONE object of live
-// getters/setters + stable helpers. Getters read the current value at call
-// time; setters write back into the closure. Grown as extractions need it —
-// add a getter here rather than passing state ad hoc.
+// Modules can't reach the closure `let`s, so game.js hands them ONE object of
+// live getters/setters + helpers; add a getter here, never pass state ad hoc.
+// CLOSED (#5982): a typo'd new name throws. Not seal: select-screen.js
+// re-defines startRace/state in place.
 let /** @type {ReturnType<typeof RaceSettings.create> | null} */ raceSettings = null, /** @type {ReturnType<typeof CustomTeam.create> | null} */ customTeam = null, /** @type {ReturnType<typeof TitleMenu.create> | null} */ titleMenu = null, /** @type {ReturnType<typeof UiExperience.create> | null} */ uiExperience = null, /** @type {ReturnType<typeof PhotoStudio.create> | null} */ photoStudio = null;
 
 const G = {
@@ -3443,7 +3442,7 @@ const G = {
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu,
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
-};
+}; Object.preventExtensions(G);
 
 // Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
 // the module wires: it reads the saved profiles at construction, and
