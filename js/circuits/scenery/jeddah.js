@@ -768,7 +768,8 @@
           // 0.38 m over the water, so the whole mosque hung (ground-audit).
           addBox(stage, vadd(base, a.u, 1.7), [26, 4.6, 26], [0.90, 0.90, 0.86], b);
           addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
-          addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
+          // The hall rises from the plinth cap at 4.6 m to the dome at 11 m.
+          addBox(stage, vadd(base, a.u, 7.8), [16, 6.4, 16], [0.93, 0.93, 0.90], b);
           addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
           addFrustum(stage, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
           addCone(stage, vadd(base, a.u, 16), 4.7, 5.5, [0.96, 0.96, 0.93], 12, b);

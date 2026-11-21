@@ -449,6 +449,17 @@ test("hairpin circuits keep a node radius of at least 4 m and no folded road sur
   assert.deepEqual(bad, [], "add short-spaced path.pts either side of the hairpin (js/circuits/<id>.js)");
 });
 
+test("Silverstone follows the Stowe to Vale descent and measured lap relief", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(entry => entry.id === "silverstone");
+  const track = tracks.buildCenterline(def);
+  const atTurn = number => track.py[Math.round(def.turns[number - 1] * track.n)];
+  const relief = Math.max(...track.py) - Math.min(...track.py);
+  assert.ok(Math.abs(relief - 11.3) < 0.5, `Silverstone relief ${relief} m`);
+  const drop = atTurn(15) - atTurn(16);
+  assert.ok(drop > 4 && drop < 6.5, `Stowe to Vale drop ${drop} m`);
+});
+
 // Spa and Monaco carry hand-authored cosine bumps. They were authored against
 // an older centreline and sat on the wrong corners: Spa crested +84 m BEFORE
 // Eau Rouge and ran Kemmel downhill; Monaco crested before Massenet with

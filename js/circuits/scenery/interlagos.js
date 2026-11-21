@@ -65,6 +65,10 @@
               const h = 5.5 + hash(k * 7 + r * 11 + c) * 7.5;
               const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
               const base = vadd(ra.c, a.t, off);
+              // The hillside changes height along each row as well as between rows.
+              const ground = terrainYAt(base[0], base[2]) ?? base[1];
+              const rise = Math.max(0, ground - base[1]);
+              base[1] += rise;
               stage._mat = MAT.CONCRETE;
               // Finish state per house: ~46% raw block, ~14% bare screed, the
               // rest painted. Keyed off the house's own hash so it is stable
@@ -77,7 +81,7 @@
                             : FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length];
               // Odd columns foot 5 cm deeper (same top): neighbours overlap and
               // their undersides were one plane (ground-audit flatCoplanar).
-              const foot = (c & 1) * 0.05;
+              const foot = rise + (c & 1) * 0.05;
               addBox(stage, vadd(base, a.u, (h - foot) / 2), [w, h + foot, d], wallCol, bv);
               if (hash(k * 17 + r + c) > 0.50) {
                 const h2 = 2.8 + hash(k + c * 7) * 2.6;

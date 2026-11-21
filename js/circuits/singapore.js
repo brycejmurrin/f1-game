@@ -114,7 +114,8 @@
       { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // racing arc 0.692-0.716 Esplanade
       { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // racing arc 0.578-0.601 final corners
     ],
-    // Flat city tarmac — crown only, 2.5-3°. Nothing here is banked.
+    // These zones tilt the whole road cross-section. Their 2.5–3° angles
+    // are modelling estimates for Marina Bay’s street corners.
     bankZones: [
       { frac: 0.1043, angleDeg: 3.0, widthM: 100 },
       { frac: 0.3562, angleDeg: 3.0, widthM: 130 },

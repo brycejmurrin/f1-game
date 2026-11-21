@@ -265,7 +265,7 @@
         const stadiumFloorY = pyMin;
         const stadiumBase = [a.c[0], stadiumFloorY, a.c[2]];
         for (let i = 0; i < segC; i++) {
-          const ang = i / segC * 6.2832;
+          const ang = i / segC * 2 * Math.PI;
           const ca = Math.cos(ang), sa = Math.sin(ang);
           const ex = ca * RA, ez = sa * RB;
           const c = vadd(vadd([a.c[0], stadiumFloorY, a.c[2]], t, ex), r, ez);
@@ -275,7 +275,9 @@
           const rad2 = [nx / nl, 0, nz / nl];
           const tan = [-rad2[2], 0, rad2[0]];
           const h = 48 + (i % 3) * 5;
-          const segW = 19;
+          // Half a panel ends where the next ellipse tangent meets this one.
+          // A constant 19 m width overlapped every neighbour's underside.
+          const segW = 2 * Math.tan(Math.PI / segC) * Math.hypot(RA * sa, RB * ca);
           addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [12, h + 2, segW], GREYWHITE, [rad2, u, tan]);
           addBox(out, vadd(vadd(c, u, h + 10),   rad2,  9), [11, 18, segW + 1], WHITE,     [rad2, u, tan]);
           // DETAIL: HDR neon rim so the bowl reads at night (survey sheet-04)
@@ -326,7 +328,7 @@
           const baseY = (ty != null ? ty : stadiumFloorY);
           addBox(out, [hc[0], baseY + 5.5, hc[2]], [15, 11, 15],
             (i % 2) ? TEAL : CORAL, null);
-          addBox(out, [hc[0], baseY + 11.7, hc[2]], [15.2, 1.0, 15.2],
+          addBox(out, [hc[0], baseY + 11.5, hc[2]], [15.2, 1.0, 15.2],
             (i % 2) ? NEON_CYAN : NEON_PINK, null);
         }
       }
@@ -487,8 +489,8 @@
         drape(k, 1, 6.075, [0.45, 0.06, 8], WHITE, { res: 0, phase: 0, h: 0.2 });   // painted vinyl boundary
         drape(k, 1, 6.55, [0.7, 0.05, 8], [0.34, 0.34, 0.36], { res: 0.03, phase: 0, h: 0.2 });  // asphalt showing through
       });
-      // Moored rank — denser berth pitch (DETAIL: yacht densify, still instanced)
-      along(0.272, 0.368, 16, (k) => {
+      // Leave clearance between adjacent 14–17 m hulls, including through the bend.
+      along(0.272, 0.368, 20, (k) => {
         const a = anchor(k, 1, 26 + (k & 1) * 10), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 9)) return;
         const L = 14 + hash(k * 3) * 3, W = 4.2 + hash(k * 5) * 0.6;
@@ -548,15 +550,15 @@
         addBox(msc, vadd(a.c, a.u, 13.2), [10.4, 0.9, 38], GLASS,     bv);
         // Top sundeck / helipad
         addBox(msc, vadd(a.c, a.u, 16.2), [8,   2.2, 26], WHITE,      bv);
-        addCyl(msc, vadd(a.c, a.u, 17.6), 5.5, 0.5, [0.50, 0.52, 0.54], 12, bv);
-        addCyl(msc, vadd(a.c, a.u, 18.2), 5.0, 0.3, [0.85, 0.10, 0.10], 12, bv);
+        addCyl(msc, vadd(a.c, a.u, 17.3), 5.5, 0.5, [0.50, 0.52, 0.54], 12, bv);
+        addCyl(msc, vadd(a.c, a.u, 17.8), 5.0, 0.3, [0.85, 0.10, 0.10], 12, bv);
         // Lit porthole strips
         addBox(msc, vadd(a.c, a.u,  4.0), [16.2, 0.9, 74],
           [WIN_AMBER[0] * 0.65, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], bv);
         addBox(msc, vadd(a.c, a.u,  7.8), [15.2, 0.7, 68],
           [WIN_AMBER[0] * 0.60, WIN_AMBER[1] * 0.45, WIN_AMBER[2] * 0.12], bv);
         // Radar / communication mast
-        addCyl(msc, vadd(a.c, a.u, 18.0), 0.22, 14, GREYWHITE, 4, bv);
+        addCyl(msc, vadd(a.c, a.u, 17.85), 0.22, 14, GREYWHITE, 4, bv);
         // MSC blue/teal identity stripe along the hull
         addBox(msc, vadd(a.c, a.u,  2.8), [16.4, 1.0, 76], AQUA, bv);
         }, { required: true });
@@ -616,9 +618,9 @@
           addBox(deck, vadd(vadd(a.c, a.r, -12.7), a.u, 4.4), [0.8, 3.0, 57], GLASS, bv);
           addBox(deck, vadd(a.c, a.u, 8.0), [22, 2.8, 52], GREYWHITE, bv);
           addBox(deck, vadd(vadd(a.c, a.r, -11.2), a.u, 8.1), [0.7, 1.8, 50], GLASS, bv);
-          addBox(deck, vadd(a.c, a.u, 10.0), [25, 0.8, 56], TEAL, bv);
+          addBox(deck, vadd(a.c, a.u, 9.8), [25, 0.8, 56], TEAL, bv);
           for (let i = -2; i <= 2; i++)
-            addBox(deck, vadd(vadd(a.c, a.t, i * 10), a.u, 10.6),
+            addBox(deck, vadd(vadd(a.c, a.t, i * 10), a.u, 10.35),
               [24, 0.35, 4.8], (i % 2) ? CORAL : PINK, bv);
         }, { required: true });
       }
@@ -875,14 +877,15 @@
       wall(0.94, 0.99, -1, 3, 1.2, CONCRETE);
       fence(0.94, 0.99,  1, 3.5, 3.2, [0.78, 0.80, 0.82]);
 
-      for (const [s0, s1] of [[0.32, 0.42], [0.55, 0.635], [0.635, 0.72], [0.83, 0.90]]) {
-        wall(s0, s1,  1, 3, 1.0, CONCRETE);
-        wall(s0, s1, -1, 3, 1.0, CONCRETE);
-        fence(s0, s1,  1, 3.4, 3.0, [0.80, 0.82, 0.84]);
+      // Leave room behind the chicane’s TecPro cushions for the concrete backing wall.
+      for (const [s0, s1, gap] of [[0.32, 0.42, 3], [0.55, 0.635, 3.6], [0.635, 0.72, 3], [0.83, 0.90, 3]]) {
+        wall(s0, s1,  1, gap, 1.0, CONCRETE);
+        wall(s0, s1, -1, gap, 1.0, CONCRETE);
+        fence(s0, s1,  1, gap + 0.4, 3.0, [0.80, 0.82, 0.84]);
       }
       guardrail(0.005, 0.05,  1, 3, GREYWHITE);
       guardrail(0.72,  0.80, -1, 3, GREYWHITE);
-      // Tyre walls at chicane apexes, on the outside, in front of the 3 m wall.
+      // Tyre walls at the chicane apexes, clear of the backing wall.
       tyreWall(0.6040, 0.6160,  1, 2.4, CORAL);   // Turnpike chicane T14 (left)
       tyreWall(0.6130, 0.6250, -1, 2.4, TEAL);    // Turnpike chicane T15 (right)
       tyreWall(0.155, 0.175, -1, 2.4, PINK);

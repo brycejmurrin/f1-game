@@ -56,11 +56,12 @@
         for (const side of [-1, 1]) {
           // ~100 m of relief: past the ribbon a backdrop settles to the lap's
           // low baseline (build-props.js), so where it lands on ANOTHER leg's
-          // hillside that stands above its 20 m top it is wholly buried — the
-          // hill already is the backdrop there; skip it.
+          // hillside its lower frustum can be entirely buried. Let the real
+          // hillside supply the silhouette where it reaches the forest crown.
           const dist = 200 + hash(k * 13 + side) * 100, a = anchor(k, side, dist);
           const gy = terrainYAt(a.c[0], a.c[2]);
-          if (gy != null && gy > pyMin + 18) continue;
+          const crownBase = api.track.surface.floorY - 2 + 22 * 0.5;
+          if (gy != null && gy > crownBase) continue;
           backdrop(k, side, dist, [110, 22, 90], [0.13, 0.30, 0.16]);
         }
       });
@@ -874,8 +875,18 @@
           const L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]) + 0.6;
           // Old road is NARROW: two lanes of a 1960s Ardennes highway.
           addBox(out, vadd(base, uu, 0.08), [8.2, 0.24, L], OLD_TAR, bb);
-          addBox(out, vadd(vadd(base, rr, -4.6), uu, 0.12), [1.2, 0.26, L], OLD_EDGE, bb);
-          addBox(out, vadd(vadd(base, rr,  4.6), uu, 0.12), [1.2, 0.26, L], OLD_EDGE, bb);
+          for (const side of [-1, 1]) {
+            const edge = vadd(base, rr, side * 4.6);
+            // Check both ends as the hillside can climb faster than the chord.
+            let raise = 0;
+            for (const at of [-0.5, 0, 0.5]) {
+              const point = vadd(edge, t, at * L);
+              const ground = terrainYAt(point[0], point[2]);
+              if (ground != null) raise = Math.max(raise, ground - point[1]);
+            }
+            edge[1] += raise;
+            addBox(out, vadd(edge, uu, 0.12), [1.2, 0.26, L], OLD_EDGE, bb);
+          }
           if (i % 2 === 0) {
             const post = seatY(vadd(base, rr, -5.6));
             addBox(out, vadd(post, [0, 1, 0], 0.62), [0.14, 0.34, L - 0.6], ARMCO, bb);

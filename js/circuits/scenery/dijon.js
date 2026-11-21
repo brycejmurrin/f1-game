@@ -381,7 +381,8 @@
           stage._mat = MAT.STONE;
           // Three staggered limestone benches with air gaps — flush joins
           // read as flatCoplanar (134 m²). Each on its own footing height.
-          seat.box(stage, foot, [14, 4.6, 36], LIME, b);
+          const benchHeight = 4.6;
+          seat.box(stage, foot, [14, benchHeight, 36], LIME, b);
           const b2 = vadd(vadd(foot, a.t, 32), a.r, 8);
           const g2 = terrainYAt(b2[0], b2[2]);
           if (g2 != null) b2[1] = g2 + 0.08;
@@ -390,8 +391,8 @@
           const g3 = terrainYAt(b3[0], b3[2]);
           if (g3 != null) b3[1] = g3 + 0.08;
           seat.box(stage, b3, [11, 3.2, 24], LIME, b);
-          // Spoil ledge inset so it is not coplanar with the main cut top.
-          seat.box(stage, vadd(vadd(foot, a.r, 2.5), a.u, 4.9),
+          // Bed the spoil ledge into the main bench by 5 cm.
+          seat.box(stage, vadd(vadd(foot, a.r, 2.5), a.u, benchHeight - 0.05),
             [10, 0.55, 28], LIME2, b);
           stage._mat = 0;
         }, { required: true });

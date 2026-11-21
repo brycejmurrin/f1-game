@@ -230,7 +230,8 @@ const STRIP = {
   // → curveTier drops a sub-10 cm sideways sagitta (2026-11-11, mexico coplanar): same
   //   emission, 34 more enclosed faces stripped: strip-after 255441 → 255407.
   // → merged (#5303 over #5511, 2026-11-11): the deltas add exactly (+36 emitted, +74 strip-after) → 274827 / 255839.
-  monaco: { before: 274827, after: 255839 },
+  // Bank-aware terrain and re-seated scenery change which faces survive.
+  monaco: { before: 274734, after: 255754 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -291,7 +292,8 @@ const STRIP = {
   //   tiers meet on the outside of the Curva Grande / Parabolica bends, fascia
   //   lip at seg. Emission 313768 → 313948, strip-after 284782 → 284931.
   // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+180 emitted) → 314096 / 285079.
-  monza: { before: 314096, after: 285079 },
+  // Bank-aware road edges and ground anchors.
+  monza: { before: 314048, after: 284979 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

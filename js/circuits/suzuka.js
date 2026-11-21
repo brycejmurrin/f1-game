@@ -65,7 +65,7 @@
       { frac: 0.6820, angleDeg: 4.0, widthM: 260 },   // Spoon exit, FIA T14 (turns[13])
       { frac: 0.9504, angleDeg: 3.5, widthM: 220 },   // Casio exit / final corner, FIA T18 (turns[17])
       { frac: 0.1392, angleDeg: 3.5, widthM: 150 },   // FIA T2 (turns[1])
-      { frac: 0.2747, angleDeg: 3.5, widthM: 170 },   // Esses, FIA T6 (turns[5])
+      // T6 (Gyaku Bank) is nearly flat per the Suzuka Circuit Racing Course guide.
       { frac: 0.4213, angleDeg: 4.0, widthM: 80 },    // Degner 2, FIA T9 (turns[8])
       { frac: 0.4760, angleDeg: 7.0, widthM: 100 },   // under-bridge kink before the hairpin, FIA T10 (turns[9])
       { frac: 0.5479, angleDeg: 4.0, widthM: 240 },   // 200R, FIA T12 (turns[11])

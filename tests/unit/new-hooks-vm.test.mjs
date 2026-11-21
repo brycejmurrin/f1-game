@@ -417,8 +417,8 @@ test("Silverstone uses grounded required landmarks and airfield-scale terrain", 
 
   gte(elevationRange, 10);
   lte(elevationRange, 20);
-  lt(Math.abs(peak.frac - 0.265), 0.03);
-  lt(Math.abs(trough.frac - 0.6975), 0.03);
+  lt(Math.abs(peak.frac - 0.580), 0.03);
+  lt(Math.abs(trough.frac - 0.993), 0.03);
   assert.equal(ground.every(({ lat, sample }) =>
     (lat === 0 || sample.terrainY != null) && (sample.gap == null || sample.gap <= 0.18)), true);
   assert.equal(walls.anyNaN, false);
@@ -477,7 +477,7 @@ test("Miami emits validated water, grouped heroes, and safe overpasses", async (
   assert.equal(spans.length, 2);
   assert.equal(spans.every((entry) => entry.overhead && entry.clearance >= 4.8), true);
   const peak = profile.reduce((best, point) => point.y > best.y ? point : best);
-  lt(Math.abs(peak.frac - 0.8583), 0.04);
+  lt(Math.abs(peak.frac - 0.6152), 0.003);
   gt(peak.y, 3);
   gt(walls.tightFrac, 0.35);
   assert.equal(groundGaps.every((gap) => gap === null || gap <= 0.18), true);

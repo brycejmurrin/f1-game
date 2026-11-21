@@ -135,13 +135,18 @@
       }
       // Left verge: island interior from basin entry to back straight
       for (let i = 0; i < 10; i++) {
-        groundPatch(K(0.10 + i * 0.068), -1, 9, [40, 0.35, 38], GRASS,
+        // The Jean-Doré beach and its service path occupy the outer verge here.
+        const lawnWidth = i === 8 || i === 9 ? 24 : 40;
+        groundPatch(K(0.10 + i * 0.068), -1, 9, [lawnWidth, 0.35, 38], GRASS,
           { id: `montreal-park-lawn-l-${i}`, samples: 6 });
       }
 
       // Continuous low clipped hedge / treeline ribbon framing the verges
-      hedge(0.13, 0.19,  1, 9, 1.6, HEDGE);
-      hedge(0.38, 0.50,  1, 9, 1.4, HEDGE);   // mid-island right verge
+      // Leave openings inside the chicanes where successive hedge blocks overlap.
+      hedge(0.13, 0.162, 1, 9, 1.6, HEDGE);
+      hedge(0.175, 0.19, 1, 9, 1.6, HEDGE);
+      hedge(0.38, 0.46, 1, 9, 1.4, HEDGE);
+      hedge(0.468, 0.50, 1, 9, 1.4, HEDGE);
       hedge(0.62, 0.69, -1, 9, 1.6, HEDGE);
       hedge(0.73, 0.78, -1, 9, 1.6, HEDGE);
       hedge(0.78, 0.885, 1, 9, 1.6, HEDGE);
@@ -518,6 +523,7 @@
         }
         for (let i = 0; i < 8; i++) {
           const sf = 0.20 + i * 0.075;
+          if (i === 1) continue; // casino plinth occupies this shed site
           if (sf > 0.57 && sf < 0.64) continue; // foldback keep-out: the two legs run <35 m apart over 0.585-0.655
           const side = (i % 2) ? 1 : -1;
           const gap = 55 + hash(i * 13) * 28;

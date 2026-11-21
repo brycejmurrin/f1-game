@@ -87,7 +87,7 @@
           const tt = (i + 0.5) / segs_ - 0.5;             // -0.5..0.5 along the 150 m stand
           const crown = Math.cos(tt * Math.PI) * 2.6;      // peaks at centre, 0 at the ends
           addBox(out, vadd(vadd(aMain.c, aMain.t, tt * 150), aMain.u, roofY + 1.1 + crown),
-                 [11.6, 0.5, 150 / segs_ + 0.8], [0.30, 0.32, 0.37], mb);
+                 [11.6, 0.5, 150 / segs_], [0.30, 0.32, 0.37], mb);
         }
       }
       // Wave-4 hero: Main Grandstand red/white fascia — COTA's start/finish identity

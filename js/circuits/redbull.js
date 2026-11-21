@@ -48,7 +48,8 @@
       { frac: 0.67625, angleDeg: 4.0, widthM: 160 },  // turns[5] T6 (apex 0.6754; 2nd peak 0.6959)
       { frac: 0.73225, angleDeg: 3.0, widthM: 120 },  // turns[7] T8 (apex 0.7323)
       { frac: 0.85265, angleDeg: 3.5, widthM: 110 },  // turns[8] T9 (apex 0.8526)
-      { frac: 0.90495, angleDeg: 3.5, widthM: 90 },   // turns[9] T10 (apex 0.9058)
+      // F1 Austrian GP driver preview: the final right-hander is off-camber.
+      { turn: 10, angleDeg: -3.5, widthM: 90 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

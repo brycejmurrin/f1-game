@@ -37,8 +37,10 @@
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.34, 0.33, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     elevations: [
-      { s: 0.8605, halfM: 220, rise: 3.5 },   // T17 approach rise (peak y ~3.4 m); not sourced from a real survey — the real circuit is near-flat
-      { s: 0.662, halfM: 95, rise: 3.4 },   // Turnpike chicane crest (~11 ft under 2nd deck)
+      // 2024 qualifying, car 1 lap 14: OpenF1 z aligned at the T13–T17
+      // MultiViewer corner markers. Both knots form the asymmetric chicane hill.
+      { s: 0.6152, halfM: 93, rise: 3.13 },  // access-ramp crest between T14 and T15
+      { s: 0.6322, halfM: 65, rise: 1.67 },  // still above datum at T16, then back down
     ],
     bankZones: [
       { frac: 0.0816, angleDeg: 3.0, widthM: 240 },   // T3

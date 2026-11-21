@@ -36,6 +36,9 @@
       { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
       // (racing 0.108-0.178: the Beau Rivage climb, kept as it ships.)
       { kind: "city", s0: 0.0116, s1: 0.0816 },
+      // The lower terrace at Beau Rivage has a retaining slope within the
+      // generic palm's crown. Its replacement stands on the upper shelf.
+      { kind: "foliage", s0: 0.036, s1: 0.044, side: 1 },
       // Casino Square as BUILT (racing 0.205-0.285, both sides): the Massenet
       // bust, the Hôtel de Paris, the Café, the fountain and the Casino were
       // re-seated here 2026-10-05 (scenery/monaco.js KRACE); the landmarks

@@ -38,18 +38,14 @@
     // the knot rises and the lap closes on itself. Knot j sits at s = j/64 in
     // this def's AUTHORING frame — tracks.js / def.js remap it (fmap about
     // sceneryStartFrac, then + _sceneryShift): racing ≈ s − 0.0298.
-    // Rises are a least-squares fit to SRTM 30 m over the bacinger trace
-    // (Open Topo Data, 2026-10-04, 5-tap smoothed for canopy noise), with the
-    // Eau Rouge/Raidillon section authored where 30 m pixels blunt the climb:
-    // La Source (+5 m) → DESCENT to the Eau Rouge floor (racing ≈0.14, −25 m)
-    // → Raidillon peaks ≈18 % (racing ≈0.165) → Kemmel climbs to Les Combes
-    // (≈0.36, +51 m, the summit) → down through Bruxelles/Pouhon to Stavelot
-    // (≈0.71, −49 m) → back up via Blanchimont to the Bus Stop. Relief ≈101 m.
-    // Refit: scratch tooling, not shipped — re-derive from SRTM, keep 64 knots.
-    // Knots 12/13 eased by 1-2 m (-11/3 → -10/1) so the steepest 20 m of
-    // Raidillon reads 17.7 %, under the 18 % the real climb tops out at
-    // (circuit-def-fields pins it).
-    elevations: [-3, -1, 0, 2, 4, 2, -1, -4, -8, -10, -10, -16, -10, 1, 5, 8, 10, 13, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
+    // The broad profile follows SRTM. Around Eau Rouge, knots 7–17 fit the
+    // SPW 2021–22 0.5 m terrain model along the built road and Leclerc's 2024
+    // qualifying lap (OpenF1 session 9570); 2025 qualifying checks the fit.
+    // These are overlapping basis coefficients. At racing fractions 0.1331,
+    // 0.1491 and 0.1631 the pavement rises about 0, 13 and 23 m from the first
+    // station. Les Combes and Stavelot set the whole-lap relief (~101 m).
+    // https://geoservices.wallonie.be/arcgis/rest/services/RELIEF/WALLONIE_MNT_2021_2022/MapServer
+    elevations: [-3, -1, 0, 2, 4, 2, -1, -8, -5.2, -14.3, -9, -19.8, 9.1, -9.3, 11.9, -2.6, 15.2, 4.7, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
       5, 1, -2, -5, -10, -15, -18, -20, -20, -19, -19, -20, -21, -21, -23, -25, -25, -23, -22, -20, -17, -16, -15, -13, -11, -10, -7, -5, -5, -2, -3, -5]
       .map((rise, j) => ({ s: j / 64, halfM: 217, rise })),
     bankZones: [

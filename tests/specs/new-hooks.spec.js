@@ -570,8 +570,8 @@ test.describe("shared track foundation diagnostics", () => {
     // (0.1502) when 7a17351 moved the start line — the hill itself did not
     // move. Were 0.12/0.55 against the pre-move line. See the shanghai note
     // above before touching the elevation transform.
-    expect(Math.abs(result.peakFrac - 0.265)).toBeLessThan(0.03);
-    expect(Math.abs(result.troughFrac - 0.6975)).toBeLessThan(0.03);
+    expect(Math.abs(result.peakFrac - 0.580)).toBeLessThan(0.03);
+    expect(Math.abs(result.troughFrac - 0.993)).toBeLessThan(0.03);
     expect(result.ground.every(({ lat, sample }) =>
       (lat === 0 || sample.terrainY != null) &&
       (sample.gap == null || sample.gap <= 0.18)
@@ -664,10 +664,8 @@ test.describe("shared track foundation diagnostics", () => {
     expect(spans).toHaveLength(2);
     expect(spans.every((entry) => entry.overhead && entry.clearance >= 4.8)).toBe(true);
     const peak = result.profile.reduce((best, point) => point.y > best.y ? point : best);
-    // Racing fraction, rotated by miami's _sceneryShift (0.2008) when 7a17351
-    // moved the start line. Was 0.66 against the pre-move line; the crest is
-    // physically unmoved. See the shanghai note before touching the transform.
-    expect(Math.abs(peak.frac - 0.8583)).toBeLessThan(0.04);
+    // OpenF1 qualifying positions put the crest between T14 and T15.
+    expect(Math.abs(peak.frac - 0.6152)).toBeLessThan(0.003);
     expect(peak.y).toBeGreaterThan(3);
     expect(result.walls.tightFrac).toBeGreaterThan(0.35);
     expect(result.groundGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);

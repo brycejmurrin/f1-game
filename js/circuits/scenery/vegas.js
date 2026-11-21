@@ -635,7 +635,7 @@
           seat.box(stage, vadd(a.c, a.u, 66), [32, 8, 88], [0.62, 0.56, 0.46], b);
           addBox(stage, vadd(a.c, a.u, 72), [20, 2.5, 60], [1.0, 0.78, 0.28], b);
           // Crown neon band — keep proud of the roof slab (no coplanar fight).
-          addBox(stage, vadd(a.c, a.u, 75.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
+          addBox(stage, vadd(a.c, a.u, 74.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
         }, { required: true });
         // Forecourt apron between the kerb and the lake-edge posts (lateral 4-14): a thin painted verge strip —
         // place() built a collidable 2 m-tall, 95 m-long gold wall here (survey 2026-10-15).
