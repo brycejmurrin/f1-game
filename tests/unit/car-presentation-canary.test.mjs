@@ -195,7 +195,7 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
   // recipe recomputePlayerMods just applied, not makeCars' once-stamped save.
   const setParts = fnSource(cd, "function setPlayerParts(");
   assert.match(setParts, /carVisual\(team, carDecalNum\(team, G\.player\), true, \(\) => recipe\)/, "setPlayerParts restamps via carVisual");
-  assert.match(cd.slice(0, cd.indexOf('"use strict"')), /the six helpers that could not leave game\.js/, "file header counts the six deps helpers");
+  assert.match(cd.slice(0, cd.indexOf('"use strict"')), /the seven helpers that could not leave game\.js through deps \(resolveLivery,\s+factoryLivery,/, "file header counts the seven deps helpers (factoryLivery joined them)");
 });
 
 // game.js resolves the first-person caster right after the grounded transform,

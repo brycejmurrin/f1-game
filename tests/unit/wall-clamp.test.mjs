@@ -126,6 +126,23 @@ test("car past wallR is pinned and wasOnWall set", () => {
   assert.ok(c.speed < 40, "AI scrub bleeds speed");
 });
 
+// AI clamp-frame scrub is ONE constant on streets and permanents (ai-drive.js WALL_AI_SCRUB, audit4 F7):
+// the AI branch asks for it with no street flag and bleeds the same speed on either circuit kind.
+test("AI wall scrub: the same bleed on a street and a permanent circuit, no street flag passed", () => {
+  const { ctx, WallClamp } = load();
+  const asked = [];
+  ctx.AiDrive.wallAiScrub = (...a) => { asked.push(a.length); return 12; };
+  const lost = {};
+  for (const street of [false, true]) {
+    const c = { s: 10, x: 7.5, human: false, isPlayer: false, speed: 40, vLat: 0, head: 0, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0 };
+    WallClamp.apply(c, baseCtx({ track: { ...baseCtx().track, street } }));
+    lost[street] = 40 - c.speed;
+  }
+  assert.ok(Math.abs(lost.false - 12 * DT) < 1e-9, "permanent: 12 m/s² for one step");
+  assert.equal(lost.true, lost.false, "street: the same scrub");
+  assert.deepEqual(asked, [0, 0], "wallAiScrub takes no street flag");
+});
+
 test("human xPinned rebuilds px/pz via worldFromTrack", () => {
   const { WallClamp } = load();
   const c = {

@@ -17,7 +17,7 @@ const AeroZones = (function () {
 //
 // Zones are measured against a fixed reference speed, not the car's own: they
 // are a property of the CIRCUIT, and the OVERALL SPEED slider must not silently
-// add or remove them (PACE scales real m/s — see vTop()/vStd() in game.js).
+// add or remove them (PACE scales real m/s — see vTop()/vStd() in js/race/pace-math.js).
 const X_STRAIGHT_T = 3.0;                       // s of clear road (the FIA's rule)
 const X_ZONE_VREF = 70;                         // m/s — "racing speed" for the 3 s test
 const X_ZONE_MIN = X_STRAIGHT_T * X_ZONE_VREF;  // 210 m — the FIA's three seconds

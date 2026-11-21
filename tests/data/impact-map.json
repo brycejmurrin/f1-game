@@ -7540,6 +7540,9 @@
       ]
     },
     "js/fx/visor-optics.js": {
+      "bind": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "blendMode": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -7565,7 +7568,6 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "sceneFromG": [
-        "tests/unit/global-registry.test.mjs",
         "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
@@ -11834,6 +11836,9 @@
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "bindGame": [
+        "tests/unit/race-entry-cover.test.mjs"
+      ],
       "clearMenuEntrySession": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
@@ -11892,6 +11897,9 @@
       ],
       "stagesFromSnapshot": [
         "tests/unit/race-entry-profile.test.mjs"
+      ],
+      "stallHandoffCover": [
+        "tests/unit/race-entry-cover.test.mjs"
       ],
       "tickFrame": [
         "tests/unit/race-entry-profile.test.mjs"
@@ -18274,6 +18282,9 @@
       "fromRaw": [
         "tests/unit/track-def-factory.test.mjs"
       ],
+      "realPoints": [
+        "tests/unit/circuit-def-fields.test.mjs"
+      ],
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hw-zones.test.mjs"
@@ -20392,6 +20403,7 @@
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ]
     },

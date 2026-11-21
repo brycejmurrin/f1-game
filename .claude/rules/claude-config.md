@@ -46,7 +46,7 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   `mcp-browser-guard.sh` judges an MCP call on its name and input (`apex_eval {vm:true}`, `debugger_node_test`,
   a tree-kind `apex_job_start` are no browser): a subagent never drives one, and the main session opens none beside a
   live Playwright run. `github-mcp-guard.sh` refuses a session merge or arm, an `issue_write` labels list that
-  differs from the live labels by anything but ONE name or touches `config-ok` or Bryce's `hold`, a run cancel, re-run or
+  differs from the live labels by anything but ONE name, removes `config-ok` or adds it on a PROTECTED path (D-042), or drops Bryce's `hold`, a run cancel, re-run or
   `ci.yml` / `pages.yml` dispatch from any session but the orchestrator (skill `steward` §CI), and an unparsable guarded call (the draft→ready flip
   is allowed: the Plan gate and the CI check judge it). `.githooks/pre-commit` owns `test:guards` for every host,
   with no skip (AGENTS.md rule 12); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch

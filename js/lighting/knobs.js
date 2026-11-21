@@ -252,8 +252,8 @@ const TUNE_DEFS = [
 // time-of-day, weather) combination keeps its own set of overrides, so
 // night+wet Monaco and day+dry Monza are tuned independently. Resolution per
 // id, lowest precedence first: TUNE_DEFS default → LightPresets["*"] →
-// LightPresets["*|<tod>|<wx>"] → LightPresets[key] → "*|<tod>" (capability
-// gated) → player "*" → player [key] (player layers live in localStorage).
+// LightPresets["*|<tod>|<wx>"] → LightPresets[key] → "*|<tod>" → knob
+// shippedMax cap → player "*" → player [key] (player layers live in localStorage).
 // Only non-default values are stored.
 const LT = {};
 for (const d of TUNE_DEFS) LT[d.id] = d.def;

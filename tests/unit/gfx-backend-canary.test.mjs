@@ -7315,6 +7315,11 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   G.mirrorRect(rect);
   assert.equal(G.drawMirrorGlass(glass, id, null), true);
   assert.equal(G.mirrorState().glass, 2);
+  // opts: the shared (mesh, model, opts) slot TLX and WGX take too; GLX forwards it and draws the same glass.
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, { lod: 2 }), true, "an opts object is accepted, not a refusal");
+  assert.equal(h.count("drawElements"), 1, "one glass draw, as with null opts");
+  assert.equal(G.mirrorState().glass, 3);
 
   // A dead target (an incomplete framebuffer at a new size): refused for good.
   h.answers.checkFramebufferStatus = () => 0;
@@ -7322,7 +7327,7 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   assert.equal(G.mirrorState().dead, true);
   G.begin(h.frame());
   assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
-  assert.equal(G.mirrorState().glass, 2);
+  assert.equal(G.mirrorState().glass, 3);
 });
 
 // The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's

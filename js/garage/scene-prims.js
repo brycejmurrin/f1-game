@@ -2,7 +2,7 @@
 const GaragePrims = (function () {
   "use strict";
 
-// Interior, metres. The car spans z -2.69..3.18 and x +/-0.95; its nose is +Z,
+// Interior, metres. The car spans z -2.69..2.72 (5.41 m; nose tip 2.60, car3d.js) and x +/-0.95; its nose is +Z,
 // so +Z is the pit-lane end and the deep end of the bay is behind it.
 // THE ROOM IS THE TRACKSIDE GARAGE. js/track/core/pit.js owns the bay's
 // dimensions (TrackPit.BAY, read at eval — a HARD_EDGES pair in the manifest),

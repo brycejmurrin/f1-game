@@ -29,6 +29,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import { parse } from "espree";
 import { analyze } from "eslint-scope";
+import { buildIndex, checkFile } from "./member-check.mjs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -128,6 +129,25 @@ const sourceLanguage = file => /\.(?:[cm]?js|[cm]?ts)$/.test(file);
 const objectName = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed ? `${objectName(n.object)}.${objectName(n.property)}` : "";
 const iife = n => n?.type === "CallExpression" && ["FunctionExpression", "ArrowFunctionExpression"].includes(n.callee?.type) ? n.callee : null;
 
+// B9 (2026-11-20): a typo (`Career.inCarer`, `Carer`) ended at "not found" with no way forward. Near names by edit
+// distance (1 edit under 6 characters, else 2), with the first letter's case kept.
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+export function nearNames(name, pool, max = 3) {
+  const limit = name.length >= 6 ? 2 : 1;
+  const upper = ch => ch !== ch.toLowerCase();   // `Carer` means a global: `care` / `career` locals are noise
+  return [...new Set(pool)].filter(c => c !== name && upper(c[0]) === upper(name[0])).map(c => [c, editDistance(name, c)]).filter(([, d]) => d <= limit)
+    .sort((x, y) => x[1] - y[1] || x[0].localeCompare(y[0])).slice(0, max).map(([c]) => c);
+}
+
 function scopePath(value) {
   if (value === undefined) return null;
   if (path.isAbsolute(value) || /^[\\/]/.test(value) || /^[A-Za-z]:/.test(value)) throw Error("path must be repo-relative");
@@ -156,7 +176,7 @@ export function classify(line, col, next = "") {
   if (/\b(const|let|var)\s*[{[][^}\]]*$/.test(before)) return "alias";
   // `const x = …` and later declarators (`const a = 1, x = …`): a bare member expression is an alias.
   if (/\b(const|let|var)\s+$/.test(before) || (/^\s*(const|let|var)\s/.test(line) && /,\s*$/.test(before) && /^\s*=(?!=)/.test(after)))
-    return /^\s*=\s*(window\.)?[\w$]+(\.[\w$]+)*\s*([;,].*|\/\/.*)?$/.test(after) ? "alias" : "def";
+    return /^\s*=\s*(window\.)?[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*\s*([;,].*|\/\/.*)?$/.test(after) ? "alias" : "def";   // `= 0.03` is a value (2026-11-20)
   const closesDestructure = !/\breturn\b/.test(before) && /^[^;]*?\}\s*=(?![=>])/.test(`${after}\n${next}`);
   if ((/^\s*(async\s+)?(get\s+|set\s+)?$/.test(before) || /[{,]\s*$/.test(before)) && (/^\??\s*:(?!:)/.test(after) || /^\s*\([^)]*\)\s*\{/.test(after)))
     return closesDestructure && /^\s*:\s*[\w$]+\s*[,}]/.test(after) ? "alias" : "def";
@@ -168,7 +188,22 @@ export function classify(line, col, next = "") {
 }
 
 // Is the identifier at `col` a shorthand property (`{ a, name, b }`) — an export, not a declaration?
-const isShorthand = (line, col) => /^[\w$]+\s*[,}]/.test(line.slice(col)) && !/(const|let|var|function)\s+$/.test(line.slice(0, col));
+// The innermost bracket still open before `col` on this line must be `{`: in `addEventListener("click", onX, true)`
+// or `[a, b]` the name is an argument or element, a USE (2026-11-20: ~250 such sites dropped out of lsp_callers).
+// No opener on the line (a multi-line `return {` list) keeps the shorthand reading.
+const openerBefore = (s) => {
+  const stack = [];
+  for (let i = 0, q = null; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { if (ch === "\\") i++; else if (ch === q) q = null; continue; }
+    if (ch === '"' || ch === "'" || ch === "`") q = ch;
+    else if ("({[".includes(ch)) stack.push(ch);
+    else if (")}]".includes(ch)) stack.pop();
+  }
+  return stack.at(-1) || null;
+};
+const isShorthand = (line, col) => /^[\w$]+\s*[,}]/.test(line.slice(col)) && !/(const|let|var|function)\s+$/.test(line.slice(0, col))
+  && !["(", "["].includes(openerBefore(line.slice(0, col)));
 
 // Which characters of a source text are NOT code: comments, string and template text
 // (a template's `${…}` is code again), regex literals. One pass, state carried across
@@ -315,7 +350,7 @@ function configFiles(root, src) {
 export class Lsp {
   // tsc --lsp holds ~400 MB beside SwiftShader runs: it starts on the first tool
   // call, never at session start, and exits after idleMs without one.
-  constructor({ root = ROOT, src = SRC, anchor = ANCHOR, cmd = path.join(ROOT, "node_modules/.bin/tsc"), timeout = 30000,
+  constructor({ root = ROOT, src = SRC, anchor = ANCHOR, cmd = process.env.APEX_LSP_TSC || path.join(ROOT, "node_modules/.bin/tsc"), timeout = 30000,
     idleMs = +(process.env.APEX_LSP_IDLE_MS || 10 * 60000) } = {}) {
     this.root = root; this.src = src; this.anchor = anchor; this.cmd = cmd; this.timeout = timeout; this.idleMs = idleMs; this.idle = null; this.proc = null; this.ready = null;
     this.open = new Map(); this.mtimes = new Map(); this.lines = new Map(); this.syms = new Map(); this.configs = null; this.generation = 0;
@@ -335,7 +370,12 @@ export class Lsp {
         let m;
         try { m = JSON.parse(buf.subarray(h + 4, h + 4 + len).toString()); } catch { buf = buf.subarray(h + 4 + len); continue; }
         buf = buf.subarray(h + 4 + len);
-        if (m.method && m.id != null) this.send({ jsonrpc: "2.0", id: m.id, result: m.method === "workspace/configuration" ? (m.params?.items || []).map(() => null) : null });
+        // A server request that lands after stop() (a CLI error path, an idle or config restart) is answered on
+        // ITS process, or dropped: this.send() threw "tsc --lsp is not running" as an uncaught crash (2026-11-20).
+        if (m.method && m.id != null) {
+          if (this.proc !== proc || proc.stdin.destroyed) continue;
+          try { this.send({ jsonrpc: "2.0", id: m.id, result: m.method === "workspace/configuration" ? (m.params?.items || []).map(() => null) : null }); } catch { /* stopped meanwhile */ }
+        }
         else if (m.id != null && this.pending.has(m.id)) { this.pending.get(m.id)(m); this.pending.delete(m.id); }
       }
     });
@@ -370,11 +410,46 @@ export class Lsp {
     const s = JSON.stringify(o); this.proc.stdin.write(`Content-Length: ${Buffer.byteLength(s)}\r\n\r\n${s}`);
   }
   notify(method, params) { this.send({ jsonrpc: "2.0", method, params }); }
-  request(method, params) {
+  async request(method, params) {
+    const result = await this.rawRequest(method, params);
+    if (method !== "textDocument/references" || (result != null && !Array.isArray(result))) return result;
+    return this.withLexicalRefs(params, result || []);
+  }
+  withLexicalRefs(params, result) {
+    let file;
+    try { file = this.rel(params.textDocument.uri); } catch { return result; }
+    if (!/\.(?:js|mjs|cjs)$/.test(file) || !this.mtimes.has(file)) return result;
+    const t = this.textOf(file), line = t.lines[params.position.line];
+    if (line == null) return result;
+    let col = params.position.character;
+    while (col > 0 && /[\w$]/.test(line[col - 1])) col--;
+    const variable = this.lexicalRefs(file).get(t.starts[params.position.line] + col);
+    if (!variable || !variable.scope || variable.scope.type === "global") return result;
+    const uri = params.textDocument.uri, have = new Set(result.filter(r => r.uri === uri).map(r => `${r.range.start.line}:${r.range.start.character}`));
+    const declared = new Set(variable.identifiers.map(id => id.range[0])), added = [];
+    const ids = [...(params.context?.includeDeclaration === false ? [] : variable.identifiers), ...variable.references.map(r => r.identifier)];
+    for (const id of ids) {
+      if (params.context?.includeDeclaration === false && declared.has(id.range[0])) continue;
+      const start = { line: id.loc.start.line - 1, character: id.loc.start.column }, key = `${start.line}:${start.character}`;
+      if (have.has(key)) continue;
+      have.add(key);
+      added.push({ uri, range: { start, end: { line: id.loc.end.line - 1, character: id.loc.end.column } } });
+    }
+    if (added.length) this.lexicalAdded = (this.lexicalAdded || 0) + added.length;
+    return added.length ? [...result, ...added] : result;
+  }
+  rawRequest(method, params) {
     return new Promise((resolve, reject) => {
       if (!this.proc) return reject(Error("tsc --lsp is not running"));
       const id = ++this.seq;
-      const t = setTimeout(() => { this.pending.delete(id); reject(Error(`${method} timed out after ${this.timeout} ms`)); }, this.timeout);
+      // A tsc that misses one request is hung (B3, 2026-11-20: every later call waited out the same 30 s). Kill it,
+      // so the next call starts a fresh server instead of queueing behind the stuck one.
+      const proc = this.proc;
+      const t = setTimeout(() => {
+        this.pending.delete(id);
+        if (this.proc === proc) { this.kill(); this.reset(); }
+        reject(Error(`${method} timed out after ${this.timeout} ms; tsc --lsp was restarted, so retry the call`));
+      }, this.timeout);
       this.pending.set(id, m => { clearTimeout(t); m.error ? reject(Error(m.error.message)) : resolve(m.result); });
       try { this.send({ jsonrpc: "2.0", id, method, params }); } catch (e) { clearTimeout(t); this.pending.delete(id); reject(e); }
     });
@@ -556,6 +631,9 @@ export class Lsp {
       visitParents(this.astOf(file), (n, parents) => {
         if (!["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(n.type)) return;
         const parent = parents.at(-1), grand = parents.at(-2);
+        // `(async function () { … })();` wrapping a whole file (game.js) is no caller: it prefixed every game.js
+        // row with "callback ›" (2026-11-20).
+        if (parent?.type === "CallExpression" && parent.callee === n && grand?.type === "ExpressionStatement" && parents.at(-3)?.type === "Program") return;
         let name = n.id?.name || "";
         if (!name && parent?.type === "VariableDeclarator" && parent.id.type === "Identifier") name = parent.id.name;
         if (!name && parent?.type === "Property") {
@@ -790,6 +868,22 @@ export class Lsp {
     return `${f}\n${pageRows.join("\n")}${out.length > offset + limit ? `\n… ${out.length - offset - limit} more rows (offset: ${offset + limit})` : ""}`;
   }
 
+  memberIndex() {
+    const stamp = [...this.mtimes].map(([f, m]) => `${f}:${m}`).join("|");
+    if (this._memberIndex && this._memberIndexStamp === stamp) return this._memberIndex;
+    const asts = new Map();
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) { const ast = this.astOf(f); if (ast) asts.set(f, ast); }
+    this._memberIndexStamp = stamp;
+    return this._memberIndex = buildIndex(asts);
+  }
+  memberDiagnostics(text) {
+    let ast;
+    try { ast = parse(text, { ecmaVersion: "latest", sourceType: "script", loc: true, range: true }); } catch { return []; }
+    const lines = text.split("\n");
+    return checkFile(ast, text, this.memberIndex()).filter(m => !m.guarded && m.member !== "_stub").map(m => ({ line0: m.line0, col0: m.col0, code: m.called ? "APX1" : "APX2",
+      msg: m.called ? `${m.owner}.${m.member}() is called, but no declaration of it defines '${m.member}' (TypeError at run time)` : `${m.owner}.${m.member} is read, but no declaration of it defines '${m.member}' (always undefined)`,
+      src: (lines[m.line0] || "").trim() }));
+  }
   // ── Diagnostics an edit introduced: per-file // @ts-check, high-signal codes, minus HEAD's ──
   async diagnose(file, all = false) {
     await this.prepare();
@@ -797,30 +891,34 @@ export class Lsp {
     if (!/\.(c|m)?js$/.test(f)) throw Error(`lsp_diagnostics checks JavaScript (.js/.mjs/.cjs); ${f} is not one`);
     const diagnosticProc = this.proc, generation = this.generation;
     let failed = false;
+    this.stubHidden = 0;
     const ambient = fs.existsSync(path.join(this.root, "types")) ? fs.readdirSync(path.join(this.root, "types")).filter(x => x.endsWith(".d.ts")).map(x => fs.readFileSync(path.join(this.root, "types", x), "utf8")).join("\n") : "";
     const check = async text => {
       const v = this.ensureOpen(f) + 1, lines = text.split("\n");
       this.open.set(f, v);
       this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(f), version: v }, contentChanges: [{ text: "// @ts-check\n" + text }] });
       const r = await this.request("textDocument/diagnostic", { textDocument: { uri: this.uriOf(f) } });
-      return (r?.items || []).filter(d => {
+      const ts = (r?.items || []).filter(d => {
         if (d.code < 2000) return true;   // syntax
         if (!DIAG_CODES.has(d.code)) return false;
         const name = /'([\w$]+)'/.exec(d.message)?.[1];
         if ((d.code === 2304 || d.code === 2552) && name && this.windowDecl(name)) return false;   // a window.X / CommonJS-flagged global: invisible to the checker
         if (d.code === 2451 && name && new RegExp(`declare\\s+(const|let|var|function)\\s+${name}\\b`).test(ambient)) return false;   // the .d.ts contract re-declares it
         return true;
-      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: d.code, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: `TS${d.code}`, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+      const kept = await this.withoutStubArity(f, text, ts);
+      // APX rows add what the checker cannot see; one the checker already flags at that spot (TS2551) is noise.
+      const at = new Set(kept.map(d => `${d.line0}:${d.col0}`));
+      return kept.concat(this.memberDiagnostics(text).filter(d => !at.has(`${d.line0}:${d.col0}`)));
     };
     try {
       const now = await check(fs.readFileSync(path.join(this.root, f), "utf8"));
+      const hiddenNow = this.stubHidden;   // the HEAD check below counts its own; report the working tree's
       let head = null;
-      try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { /* untracked or no git */ }
-      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  TS${d.code} ${d.msg}`;
-      if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
-      // A per-file HEAD overlay cannot reproduce HEAD with edited dependencies.
-      // Report current errors honestly instead of classifying them as old.
-      let dependenciesChanged = true;
+      try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch {  }
+      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  ${d.code} ${d.msg}`;
+      if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}${this.stubNote(hiddenNow)}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      let dependenciesChanged = true, changedOthers = [], added = new Set();
       try {
         // --no-renames reports both ends as ordinary paths, including a
         // dependency moved out of src/. Unlike status -z, no second record
@@ -832,18 +930,48 @@ export class Lsp {
           const rel = path.relative(this.root, file);
           return rel.startsWith("..") || path.isAbsolute(rel) || rel.split(path.sep).includes("node_modules");
         });
-        // A package config has no corresponding blob in this repository's
-        // HEAD, so a per-file overlay can never establish its baseline.
-        dependenciesChanged = externalConfig || changed.some(other => other !== f && (
-          (/\.(?:[cm]?js|ts)$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/"))) ||
+        // A package config has no corresponding blob in this repository's HEAD, and a changed
+        // declaration file or config changes every file's baseline: no trustworthy subtraction.
+        // Other edited JavaScript sources still allow one: the per-file overlay says which
+        // diagnostics this file's own edits added, and names the other files.
+        changedOthers = changed.filter(other => other && other !== f && /\.(?:[cm]?js)$/.test(other) && other.startsWith(`${this.src}/`));
+        // A MODIFIED source is put back to its HEAD text in the overlay, and an ADDED one (untracked or staged, absent at
+        // HEAD) to an empty text, which declares nothing, as at HEAD. A deleted or moved one cannot be put back: tsc no
+        // longer has it open. B4, 2026-11-20: one untracked js/ file switched the subtraction off for every file.
+        const atHead = new Set(gitPaths(["ls-tree", "-r", "--name-only", "-z", "HEAD", "--", this.src]));
+        changedOthers = changedOthers.filter(other => atHead.has(other) || fs.existsSync(path.join(this.root, other)));
+        const overlayable = changedOthers.length <= 40 && changedOthers.every(other => fs.existsSync(path.join(this.root, other)));
+        added = new Set(changedOthers.filter(other => !atHead.has(other)));
+        const baselineChanged = externalConfig || (changedOthers.length && !overlayable) || changed.some(other => other !== f && (
+          (/\.ts$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/"))) ||
           configs.has(path.resolve(this.root, other))
         ));
+        dependenciesChanged = baselineChanged ? true : changedOthers.length ? "sources" : false;
       } catch { /* no trustworthy baseline */ }
-      if (dependenciesChanged) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, JavaScript or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
-      const before = await check(head), key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
+      if (dependenciesChanged === true) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: configuration, package config or declaration dependencies differ from HEAD${this.stubNote(hiddenNow)}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      // Edited sibling sources: put each back to its HEAD text for the baseline, so a dependency's edit
+      // (a new required parameter) still shows as new here, and this file's own edits are not hidden.
+      const restored = [];
+      if (dependenciesChanged === "sources") for (const other of changedOthers) {
+        const old = added.has(other) ? "" : execFileSync("git", ["show", `HEAD:${other}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString();
+        const v = this.ensureOpen(other) + 1;
+        this.open.set(other, v); restored.push(other);
+        this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(other), version: v }, contentChanges: [{ text: old }] });
+      }
+      let before;
+      try { before = await check(head); }
+      finally {
+        for (const other of restored) {
+          const v = this.open.get(other) + 1;
+          this.open.set(other, v);
+          this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(other), version: v }, contentChanges: [{ text: fs.readFileSync(path.join(this.root, other), "utf8") }] });
+        }
+      }
+      const key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
       for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
       const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
-      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax)\n${fresh.map(fmt).join("\n")}`.trim();
+      const others = restored.length ? `; baseline with ${restored.length} other edited file${restored.length === 1 ? "" : "s"} at HEAD (${restored.slice(0, 4).join(", ")}${restored.length > 4 ? ", …" : ""})` : "";
+      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden${others}${this.stubNote(hiddenNow)}; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax + missing module/instance members)\n${fresh.map(fmt).join("\n")}`.trim();
     } catch (error) { failed = true; throw error; }
     finally {
       // Never close an old overlay in a replacement server or mask its failure.
@@ -854,6 +982,57 @@ export class Lsp {
       }
     }
   }
+  // B5 (2026-11-20): 22 of game.js's 26 diagnostics were TS2554 "Expected 0 arguments" against a placeholder the
+  // checker typed first (`reportLap: () => {}`, a session-stub.js `create() {}`), never the module that replaces it.
+  // A row whose callee resolves to such a zero-parameter stub is hidden and counted. `text` is the file WITHOUT the
+  // `// @ts-check` line, which the open document has, so tsc positions are one line lower.
+  async withoutStubArity(f, text, rows) {
+    const arity = rows.filter(d => d.code === "TS2554" && /^Expected 0 arguments/.test(d.msg));
+    if (!arity.length) return rows;
+    let ast;
+    try { ast = parse(text, { ecmaVersion: "latest", sourceType: "script", loc: true }); } catch { return rows; }
+    const calls = [];
+    visit(ast, n => { if (n.type === "CallExpression" || n.type === "NewExpression") calls.push(n); });
+    const inside = (n, d) => (n.loc.start.line - 1 < d.line0 || (n.loc.start.line - 1 === d.line0 && n.loc.start.column <= d.col0)) &&
+      (n.loc.end.line - 1 > d.line0 || (n.loc.end.line - 1 === d.line0 && n.loc.end.column >= d.col0));
+    // A placeholder: no parameters and a trivial body (empty, or a literal). `function qualiNext() { return quali(); }`
+    // is real code, and an argument passed to it is a finding, not noise.
+    const LIT = String.raw`(?:false|true|null|undefined|0|""|''|\[\]|\{\s*\})`;
+    const STUB = new RegExp(String.raw`^\s*(?:async\s+)?[\w$]+\s*(?::\s*(?:async\s*)?(?:\(\s*\)\s*=>\s*(?:\{\s*(?:return\s+${LIT}\s*;?\s*)?\}|${LIT})|function\s*\(\s*\)\s*\{\s*(?:return\s+${LIT}\s*;?\s*)?\})|\(\s*\)\s*\{\s*(?:return\s+${LIT}\s*;?\s*)?\})\s*(?:[,;}]|$)`);
+    const hide = new Set();
+    for (const d of arity) {
+      // The innermost call whose arguments hold the reported position names the callee.
+      const call = calls.filter(c => c.arguments.some(a => inside(a, d))).sort((x, y) => (y.loc.start.line - x.loc.start.line) || (y.loc.start.column - x.loc.start.column))[0];
+      const callee = call && (call.callee.type === "MemberExpression" && !call.callee.computed ? call.callee.property : call.callee.type === "Identifier" ? call.callee : null);
+      if (!callee) continue;
+      let defs;
+      try { defs = await this.rawRequest("textDocument/definition", { textDocument: { uri: this.uriOf(f) }, position: { line: callee.loc.start.line, character: callee.loc.start.column } }); } catch { continue; }
+      const stub = (Array.isArray(defs) ? defs : defs ? [defs] : []).some(loc => {
+        const uri = loc.targetUri || loc.uri, r = loc.targetSelectionRange || loc.range;
+        let rel, lineText;
+        try { rel = this.rel(uri); } catch { return false; }
+        if (rel === f) lineText = text.split("\n")[r.start.line - 1];
+        else try { lineText = this.textOf(rel).lines[r.start.line]; } catch { return false; }
+        if (lineText == null) return false;
+        const at = lineText.slice(r.start.character);
+        // A *stub*.js file (js/race/session-stub.js) is a placeholder by design: any zero-parameter member there is one.
+        return STUB.test(at) || (/(?:^|\/)[\w.-]*stub[\w.-]*\.js$/.test(rel) && /^\s*(?:async\s+)?[\w$]+\s*(?::\s*(?:async\s*)?(?:function\s*)?\(\s*\)|\(\s*\))/.test(at));
+      });
+      if (stub) hide.add(d);
+    }
+    this.stubHidden = (this.stubHidden || 0) + hide.size;
+    return rows.filter(d => !hide.has(d));
+  }
+  lineComments(file, line0, max = 12) {
+    let lines;
+    try { lines = this.textOf(file).lines; } catch { return ""; }
+    const out = [];
+    for (let i = line0 - 1; i >= 0 && out.length < max && /^\s*\/\/(?!\s*(?:eslint|@ts-|#region|#endregion))/.test(lines[i]); i--) out.unshift(lines[i].trim().replace(/^\/\/\s?/, ""));
+    const trailing = /\/\/\s?(.+)$/.exec((lines[line0] || "").replace(/(["'`])(?:\\.|(?!\1).)*\1/g, ""))?.[1];
+    if (trailing) out.push(trailing.trim());
+    return out.join("\n").trim();
+  }
+  stubNote(n) { return n ? `; ${n} TS2554 against a zero-parameter stub hidden` : ""; }
   // Counted from the END of a call, so a slow first query (project load) is never cut off.
   armIdle() {
     clearTimeout(this.idle);
@@ -881,6 +1060,21 @@ export class Lsp {
       // name. Without it the zero notes cut the name from the column ("ineCells") and lost the text-match warning.
       const ln = lines[line - 1], word = (ch) => /[\w$]/.test(ch || "");
       let col0 = Math.max(0, (column || 1) - 1);
+      // No column: ask about the NAME the line declares (`function countCredit(`, `const x =`, `key: v`, a method),
+      // else its first identifier. Column 1 used to sit on the indent or `function` and answer "0 uses" silently.
+      if (column == null) {
+        let best = null;
+        const take = n => { if (n?.type === "Identifier" && n.loc.start.line === line && (!best || n.range[0] < best.range[0])) best = n; };
+        visit(this.astOf(f), n => {
+          if (n.loc?.start.line > line || n.loc?.end.line < line) return;
+          if (["FunctionDeclaration", "FunctionExpression", "ClassDeclaration"].includes(n.type)) take(n.id);
+          else if (n.type === "VariableDeclarator") take(n.id);
+          else if ((n.type === "Property" || n.type === "MethodDefinition") && !n.computed) take(n.key);
+          else if (n.type === "AssignmentExpression") take(n.left.type === "MemberExpression" ? n.left.property : n.left);
+        });
+        const first = /(?<![\w$])(?!(?:function|const|let|var|async|return|class|export|static|get|set|new|await|typeof|if|else|for|while)\b)[A-Za-z_$][\w$]*/.exec(ln);
+        if (best) col0 = best.loc.start.column; else if (first) col0 = first.index;
+      }
       if (!word(ln[col0]) && word(ln[col0 - 1])) col0--;
       while (col0 > 0 && word(ln[col0]) && word(ln[col0 - 1])) col0--;
       return { cands: [{ file: f, line0: line - 1, col0 }], parts: [] };
@@ -894,9 +1088,14 @@ export class Lsp {
         const amb = this.ambientDecl(name);
         if (amb) return { cands: [amb], parts, top: [amb] };
         const near = (await this.symbols(name)).filter(s => s.name.toLowerCase() === name.toLowerCase() && !s.containerName && [5, 12, 13, 14].includes(s.kind)).slice(0, 3);
-        throw Error(`symbol not found: ${name}${near.length ? `; did you mean ${near.map(s => `${s.name} (${this.rel(s.location.uri)}:${s.location.range.start.line + 1})`).join(", ")}?` : " (try lsp_symbols for a prefix)"}`);
+        throw Error(`symbol not found: ${name}${near.length ? `; did you mean ${near.map(s => `${s.name} (${this.rel(s.location.uri)}:${s.location.range.start.line + 1})`).join(", ")}?` : ` (try lsp_symbols for a prefix)${this.didYouMean(name, this.globalNames()) || this.elsewhere(name)}`}`);
       }
-      const top = hits.filter(s => !s.containerName);
+      // tsgo lists `window.X = X` (a self re-export of the script declaration) as a second top-level symbol: one
+      // module read as "2 separate top-level declarations" and its outline came back empty (ApexGpuCapture).
+      const selfAlias = s => new RegExp(`(?:window|self|globalThis)\\.${name.replace(/[$]/g, "\\$")}\\s*=\\s*${name.replace(/[$]/g, "\\$")}\\s*(?:[;,)]|$)`)
+        .test(this.textLines(this.rel(s.location.uri))[s.location.range.start.line] || "");
+      let top = hits.filter(s => !s.containerName);
+      if (top.length > 1 && top.some(s => !selfAlias(s))) top = top.filter(s => !selfAlias(s));
       return { cands: hits.map(at), parts, top: (top.length ? top : hits).map(at) };
     }
     const re = new RegExp(`\\b${parts.map(p => p.replace(/[$]/g, "\\$")).join("\\??\\.")}\\b`, "g");
@@ -933,8 +1132,7 @@ export class Lsp {
   async at(args, method, extra = {}) {
     await this.prepare();
     const c = await this.candidates(args);
-    // Untyped heads never answer from the checker: skip the round-trips.
-    if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length === 2 && this.facadeOf(c.parts[0])) return { ...c, ...(await this.facade(c.parts, method, extra)) };
     if (c.parts.length > 1) {
       const owner = c.parts.slice(0, -1).join(".");
       if (this.windowDecl(owner) || this.repeatedIifeDecl(owner)) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
@@ -951,7 +1149,30 @@ export class Lsp {
       first ??= { p, result };
       if (answered(result)) return { ...c, p, result, note: p.note };
     }
-    if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    // A position on `Head.member` the checker cannot type (`G` is an untyped `create(G)` parameter in most
+    // modules; a window global is `any`): answer as the qualified name, the way a symbol query would.
+    if (args.file && first && !answered(first.result) && !args._qualified) {
+      const ln = this.textLines(first.p.file)[first.p.line0] || "", before = ln.slice(0, first.p.col0);
+      let m = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\??\.\s*$/.exec(before), member = /^[\w$]+/.exec(ln.slice(first.p.col0))?.[0];
+      // `const { IDLE_RPM, MAX_RPM: max } = PhysicsConsts` (or `= window.PhysicsConsts`): the key is Head.member.
+      if (!m && member) {
+        visitParents(this.astOf(first.p.file), (n, parents) => {
+          if (m || n.type !== "Identifier" || n.loc.start.line - 1 !== first.p.line0 || n.loc.start.column !== first.p.col0) return;
+          const prop = parents.at(-1), pattern = parents.at(-2), decl = parents.at(-3);
+          if (prop?.type !== "Property" || pattern?.type !== "ObjectPattern" || decl?.type !== "VariableDeclarator" || decl.id !== pattern) return;
+          const key = !prop.computed && (prop.key.name ?? prop.key.value), head = objectName(decl.init)?.replace(/^(?:window|self|globalThis)\./, "");
+          if (key && head && /^[A-Za-z_$][\w$]*$/.test(head)) { m = [null, head]; member = String(key); }
+        });
+      }
+      if (m && member && (this.facadeOf(m[1]) || /^[A-Z]/.test(m[1]))) {
+        try {
+          const q = await this.at({ symbol: `${m[1]}.${member}`, _qualified: true }, method, extra);
+          if (answered(q.result)) return { ...q, note: [`answered as ${m[1]}.${member} (the checker cannot type ${m[1]} at ${first.p.file}:${first.p.line0 + 1})`, q.note].filter(Boolean).join("; ") };
+        } catch { /* keep the honest empty answer below */ }
+      }
+    }
+    if (c.parts.length === 2 && this.facadeOf(c.parts[0])) return { ...c, ...(await this.facade(c.parts, method, extra)) };
+    if (c.parts.length > 1 && first?.p.note && !(this.windowDecl(c.parts.slice(0, -1).join(".")) || this.repeatedIifeDecl(c.parts.slice(0, -1).join(".")))) return { ...c, ...first, note: first.p.note };
     if (c.parts.length > 1) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
     if (c.parts.length === 1 && method === "textDocument/definition") {
       const p = c.top[0];
@@ -976,18 +1197,19 @@ export class Lsp {
   }
   windowDecl(h, all = false) {
     const esc = h.replace(/[$.]/g, "\\$&"), declarations = [];
-    const win = new RegExp(`(?:^|[;{}])\\s*window\\.${esc}\\s*=`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
+    const win = new RegExp(`(?:^|[;{}(])\\s*(?:window|self|globalThis)\\.${esc}\\s*=(?!=)(?!\\s*${esc}\\s*(?:[;,)]|$))`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
     for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(h)) continue;
       for (const [re, kind] of [[win, "window"], ...(text.includes("module.exports") ? [[cjs, "cjs"]] : [])]) {
         re.lastIndex = 0;
         for (const m of text.matchAll(re)) {
-          const pos = this.posOf(f, m.index + (kind === "window" ? m[0].indexOf("window") : 0));
+          const globalHead = kind === "window" ? /window|self|globalThis/.exec(m[0]) : null;
+          const pos = this.posOf(f, m.index + (globalHead ? globalHead.index : 0));
           if (this.nonCode(f, pos.line0, pos.col0)) continue;
           if (kind === "window") {
             let globalWindow = false;
-            visit(this.astOf(f), n => { if (n.type === "Identifier" && n.name === "window" && n.loc.start.line - 1 === pos.line0 && n.loc.start.column === pos.col0) globalWindow = this.isGlobalHead(f, n, "window"); });
+            visit(this.astOf(f), n => { if (n.type === "Identifier" && n.name === globalHead[0] && n.loc.start.line - 1 === pos.line0 && n.loc.start.column === pos.col0) globalWindow = this.isGlobalHead(f, n, globalHead[0]); });
             if (!globalWindow) continue;
           }
           const d = { file: f, ...pos, kind };
@@ -1028,11 +1250,39 @@ export class Lsp {
     if (declarations.length < 2 || !declarations.some(d => d.iife)) return all ? [] : null;
     return all ? declarations : declarations[0];
   }
+  // Did-you-mean pools, from the js/ text the server already caches.
+  memberNamesOf(h) {
+    const re = new RegExp(`(?<![\\w$.])${h.replace(/[.$]/g, "\\$&")}\\.([A-Za-z_$][\\w$]*)`, "g"), out = new Set();
+    for (const f of this.mtimes.keys()) for (const m of this.textOf(f).text.matchAll(re)) out.add(m[1]);
+    return out;
+  }
+  globalNames() {
+    const out = new Set();
+    for (const f of this.mtimes.keys()) for (const m of this.textOf(f).text.matchAll(/^\s*(?:(?:const|let|var|(?:async\s+)?function\*?|class)\s+([A-Za-z_$][\w$]*)|(?:window|globalThis)\.([A-Za-z_$][\w$]*)\s*=)/gm)) out.add(m[1] || m[2]);
+    return out;
+  }
+  // A name the js/ project never declares may live in tools/ or tests/, outside what the checker loads.
+  elsewhere(name) {
+    try {
+      const hits = execFileSync("git", ["grep", "-l", "-w", "-I", "-e", name, "--", "tools", "tests"], { cwd: this.root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 }).split("\n").filter(Boolean);
+      return hits.length ? `; ${name} appears outside ${this.src}/ in ${hits.slice(0, 3).join(", ")}${hits.length > 3 ? `, +${hits.length - 3}` : ""} (apex-lsp covers ${this.src}/ only: grep those)` : "";
+    } catch { return ""; }
+  }
+  didYouMean(name, pool) {
+    const near = nearNames(name, pool);
+    return near.length ? `; did you mean ${near.join(" / ")}?` : "";
+  }
   async textFallback(parts, method, head, extra = {}) {
     const [h, member] = [parts.slice(0, -1).join("."), parts.at(-1)];
     const d = this.windowDecl(h) || this.repeatedIifeDecl(h);
-    if (!d && head) throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; try lsp_hover ${h} or lsp_symbols ${member}`);
-    if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
+    if (!d && head) {
+      // A lowercase head is usually a LOCAL (`pits`, `track`) declared in many files: the symbol search's first
+      // hit is not the one the caller means. Say so, and point at the position form that names the right one.
+      const local = /^[a-z_]/.test(h) && !this.windowDecl(h);
+      const used = [...this.mtimes.keys()].some(f => this.textOf(f).text.includes(`${h}.${member}`));
+      throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; ${local ? `${h} looks like a local, and the symbol search picked the first file declaring one; ${used ? "" : `no ${h}.${member} text in ${this.src}/; `}ask by position instead (lsp_definition file+line of a ${h}.${member} use, or of ${member}'s declaration), or ` : ""}try lsp_hover ${h} or lsp_symbols ${member}${this.didYouMean(member, this.memberNamesOf(h)).replace(/did you mean /, `did you mean ${h}.`).replace(/ \/ /g, ` / ${h}.`)}`);
+    }
+    if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares${this.didYouMean(h, this.globalNames()) || this.elsewhere(h)}`);
     // Read the actual assignment/initializer and its exported object. A later
     // object or an internal helper is never evidence of a member on this owner.
     const defs = []; let uncertain = false;
@@ -1042,7 +1292,7 @@ export class Lsp {
       const candidates = [];
       visit(this.astOf(owner.file), n => {
         if (n.loc.start.line - 1 !== owner.line0 || n.loc.start.column !== owner.col0) return;
-        if (owner.kind === "window" && n.type === "AssignmentExpression" && objectName(n.left) === `window.${h}`) candidates.push(n.right);
+        if (owner.kind === "window" && n.type === "AssignmentExpression" && [`window.${h}`, `self.${h}`, `globalThis.${h}`].includes(objectName(n.left))) candidates.push(n.right);
         if (["cjs", "script"].includes(owner.kind) && n.type === "VariableDeclaration") for (const v of n.declarations) {
           if (objectName(v.id) !== h) continue;
           if (owner.kind === "script" && (v.id.loc.start.line - 1 !== owner.idLine0 || v.id.loc.start.column !== owner.idCol0)) continue;
@@ -1064,7 +1314,28 @@ export class Lsp {
         }
       }
     }
+    const assigned = new RegExp(`(?:^|[;{}])\\s*(?:(?:window|self|globalThis)\\.)?${h.replace(/[$.]/g, "\\$&")}\\.(${member.replace(/[$]/g, "\\$")})\\s*=(?!=)`, "gm");
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
+      const { text } = this.textOf(f);
+      if (!text.includes(`${h}.${member}`)) continue;
+      for (const m of text.matchAll(assigned)) {
+        const pos = this.posOf(f, m.index + m[0].lastIndexOf(member, m[0].lastIndexOf("=")));
+        if (this.nonCode(f, pos.line0, pos.col0)) continue;
+        if (!defs.some(x => x.uri === this.uriOf(f) && x.range.start.line === pos.line0 && x.range.start.character === pos.col0))
+          defs.push({ uri: this.uriOf(f), range: { start: { line: pos.line0, character: pos.col0 } } });
+      }
+    }
     if (!defs.length) throw Error(`${d.kind === "window" ? `window.${h}` : h} (${d.file}:${d.line0 + 1}) has no member ${member}`);
+    // B2 (2026-11-20): a placeholder global (js/race/session-stub.js `var PitLane = { zoneOf: () => null }`) came first
+    // and was reported as THE declaration, and the real module's shorthand export was never followed to its function
+    // (`PitLane.zoneOf` stopped at the stub; the position query reached PitGeom.zoneOf). Real modules first, then hop.
+    const stubFile = uri => /(?:^|\/)[\w.-]*stub[\w.-]*\.js$/.test(this.rel(uri));
+    defs.sort((x, y) => stubFile(x.uri) - stubFile(y.uri));
+    if (method === "textDocument/definition") {
+      const before = defs.length;
+      await this.followExports(defs);
+      for (const x of defs.slice(before)) if (x.targetUri && !x.uri) { x.uri = x.targetUri; x.range = x.targetSelectionRange || x.targetRange; }
+    }
     const qualifications = [];
     if (owners.length > 1 || defs.length > 1) qualifications.push("multiple assignments/member contributions; candidates shown; runtime load order may determine the winner");
     if (uncertain) qualifications.push("a spread or dynamic source participates in overwrite order; candidates shown in source order");
@@ -1077,6 +1348,10 @@ export class Lsp {
     const refs = await this.textRefs(parts, def, extra.context?.includeDeclaration !== false);
     if (extra.context?.includeDeclaration !== false) for (const other of defs.slice(1)) if (!refs.some(r => r.uri === other.uri && r.range.start.line === other.range.start.line && r.range.start.character === other.range.start.character)) refs.push(other);
     return { p, result: refs, note };
+  }
+  facadeOf(h) {
+    const facade = FACADES[h];
+    return facade && fs.existsSync(path.join(this.root, facade.file)) ? facade : null;
   }
   async facade([h, member], method, extra) {
     // tsgo's workspace/symbol skips .d.ts files: read the interface block, then let the checker type the row.
@@ -1109,7 +1384,111 @@ export class Lsp {
     const at = hits.slice(0, 6).map(h => `${h.file}:${h.line0 + 1}`).join(", ");
     return [`0 semantic uses, but ${hits.length} text match${hits.length === 1 ? "" : "es"} of .${name} (a member on an object the checker cannot type, e.g. a factory's return; verify each): ${at}${hits.length > 6 ? ", …" : ""}`];
   }
+  // A semantic zero whose `.name` text accesses exist: those sites AS ROWS, so the header counts them. A header
+  // reading "0 references" over a note listing 11 sites (refs penaltyWhy, 2026-11-20) taught agents to grep instead.
+  zeroUseRows(a, p) {
+    // A qualified Head.member answer already ran the head-aware text fallback, which drops shadowed and unguarded
+    // heads on purpose: there, every-`.member` rows would add exactly those. Rows only for a bare name or a position.
+    if (a.symbol && a.symbol.includes(".")) return null;
+    const name = a.symbol ? a.symbol.split(".").at(-1) : /^[\w$]+/.exec((this.textLines(p.file)[p.line0] || "").slice(p.col0))?.[0];
+    const hits = this.memberTextHits(name);
+    if (!hits.length) return null;
+    const uses = hits.map(h => ({ uri: this.uriOf(h.file), range: { start: { line: h.line0, character: h.col0 }, end: { line: h.line0, character: h.col0 + name.length } } }));
+    return { uses, note: `0 semantic uses; all ${hits.length} row${hits.length === 1 ? " is a text match" : "s are text matches"} of .${name} (a member on an object the checker cannot type; verify each)` };
+  }
 
+  factoryOf(file, line0, col0) {
+    const ast = this.astOf(file), refs = this.lexicalRefs(file), { starts } = this.textOf(file);
+    if (!ast) return [];
+    const fnTypes = ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"];
+    let target = null;
+    visit(ast, n => { if (!target && n.type === "Identifier" && n.loc.start.line - 1 === line0 && col0 >= n.loc.start.column && col0 <= n.loc.end.column) target = refs.get(n.range[0]) || null; });
+    if (!target) return [];
+    const unwrap = o => o?.type === "CallExpression" && objectName(o.callee) === "Object.freeze" ? o.arguments[0] : o;
+    const returned = fn => (fn.body?.type === "BlockStatement" ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [fn.body]).map(unwrap).filter(o => o?.type === "ObjectExpression");
+    const keyFor = (fn, variable) => {
+      for (const object of returned(fn)) for (const prop of object.properties) {
+        if (prop.type !== "Property" || prop.computed || prop.value.type !== "Identifier") continue;
+        if (refs.get(prop.value.range[0]) === variable) return String(prop.key.name ?? prop.key.value);
+      }
+      return null;
+    };
+    const out = [];
+    for (const statement of ast.body) {
+      if (statement.type !== "VariableDeclaration") continue;
+      for (const declarator of statement.declarations) {
+        const top = declarator.id.type === "Identifier" && iife(declarator.init);
+        if (!top) continue;
+        visit(top.body, fn => {
+          if (!fnTypes.includes(fn.type) || fn.type !== "FunctionDeclaration" || !fn.id) return;
+          const member = keyFor(fn, target);
+          if (!member) return;
+          const made = refs.get(fn.id.range[0]), via = made && keyFor(top, made);
+          if (via && !out.some(x => x.head === declarator.id.name && x.via === via && x.member === member)) out.push({ head: declarator.id.name, via, member });
+        });
+      }
+    }
+    void starts;
+    return out;
+  }
+  factoryUses(file, line0, col0) {
+    const found = this.factoryOf(file, line0, col0);
+    if (!found.length) return null;
+    const esc = x => x.replace(/[$]/g, "\\$"), files = [...this.mtimes.keys()].filter(x => !x.endsWith(".ts")).sort();
+    const all = { head: found[0].head, via: found.map(f => f.via).join("/"), member: found[0].member, instances: [], uses: [] }, seen = new Set();
+    for (const f of found) {
+      const made = new RegExp(`([A-Za-z_$][\\w$]*)\\s*=(?!=)[^;\\n]*?(?<![\\w$.])${esc(f.head)}\\.${esc(f.via)}\\(`, "g"), instances = new Set();
+      for (const x of files) {
+        const { text } = this.textOf(x);
+        if (!text.includes(`${f.head}.${f.via}(`)) continue;
+        for (const m of text.matchAll(made)) { const pos = this.posOf(x, m.index); if (!this.nonCode(x, pos.line0, pos.col0)) instances.add(m[1]); }
+      }
+      if (!instances.size) continue;
+      for (const i of instances) if (!all.instances.includes(i)) all.instances.push(i);
+      const use = new RegExp(`(?<![\\w$])(?:${[...instances].map(esc).join("|")})\\s*\\??\\.\\s*(${esc(f.member)})(?![\\w$])`, "g");
+      for (const x of files) {
+        const { text } = this.textOf(x);
+        if (!text.includes(f.member)) continue;
+        for (const m of text.matchAll(use)) {
+          const pos = this.posOf(x, m.index + m[0].length - f.member.length), key = `${x}:${pos.line0}:${pos.col0}`;
+          if (seen.has(key) || this.nonCode(x, pos.line0, pos.col0)) continue;
+          seen.add(key);
+          all.uses.push({ uri: this.uriOf(x), range: { start: { line: pos.line0, character: pos.col0 }, end: { line: pos.line0, character: pos.col0 + f.member.length } }, factory: true });
+        }
+      }
+    }
+    return all;
+  }
+  factoryNote(f) {
+    return `${f.uses.length} of them are text matches on instances of ${f.head}.${f.via}() (${f.instances.slice(0, 6).join(", ")}${f.instances.length > 6 ? ", …" : ""}).${f.member}; an instance passed on under another name is not followed`;
+  }
+  outsideFiles() {
+    if (this._outside) return this._outside;
+    const out = [];
+    const add = (dir, re) => { try { for (const x of fs.readdirSync(path.join(this.root, dir)).sort()) if (re.test(x)) out.push(path.join(dir, x)); } catch {  } };
+    add("", /\.(?:html|js|mjs)$/); add("worker", /\.(?:js|mjs)$/);
+    return this._outside = out.filter(f => !f.startsWith(`${this.src}/`));
+  }
+  outsideNote(a, p) {
+    const symbol = a.symbol || /^[\w$]+/.exec((this.textLines(p.file)[p.line0] || "").slice(p.col0))?.[0];
+    if (!symbol || !/^[\w$.]+$/.test(symbol)) return [];
+    // A position query names a bare identifier: only a script GLOBAL can be used by another page or the
+    // service worker. A factory local (`update`) used to list every `update` in index.html.
+    if (!a.symbol) {
+      const variable = this.lexicalRefs(p.file).get(this.textOf(p.file).starts[p.line0] + p.col0);
+      if (!variable || variable.scope?.type !== "global") return [];
+    }
+    const parts = symbol.split("."), esc = x => x.replace(/[$]/g, "\\$");
+    const re = new RegExp(`(?<![\\w$])${parts.map(esc).join("\\s*\\??\\.\\s*")}(?![\\w$])`, "g"), hits = [];
+    for (const f of this.outsideFiles()) {
+      let text;
+      try { text = fs.readFileSync(path.join(this.root, f), "utf8"); } catch { continue; }
+      if (!text.includes(parts.at(-1))) continue;
+      for (const m of text.matchAll(re)) hits.push(`${f}:${text.slice(0, m.index).split("\n").length}`);
+    }
+    if (!hits.length) return [];
+    return [`${hits.length} text match${hits.length === 1 ? "" : "es"} of ${symbol} outside ${this.src}/ (inline scripts, service worker, other pages; not indexed, verify each): ${hits.slice(0, 6).join(", ")}${hits.length > 6 ? ", …" : ""}`];
+  }
   /** `.name` member accesses in code (not comments or strings) across the tree: the bounded text cross-check that
    *  keeps a semantic zero from reading as "unused" when the member sits on an object the checker cannot type,
    *  e.g. one a factory returns (`chunkedSys.mergeVisible(`, #5674). Rows: { file, line0, col0 }. */
@@ -1155,12 +1534,14 @@ export class Lsp {
           n.id.loc.start.line - 1 !== (owner.idLine0 ?? owner.line0) || n.id.loc.start.column !== (owner.idCol0 ?? n.id.loc.start.column)) return;
         lexicalOwner = this.lexicalRefs(f).get(n.id.range[0]) || null;
       });
-      const validHead = n => ["cjs", "script"].includes(fallbackOwner?.kind)
+      // The G façade is a `create(G)` PARAMETER in every module, never a global: `const {\n buildSelect, … } = G` in
+      // js/race/race-settings.js was dropped from refs and callers G.buildSelect (B8, 2026-11-20).
+      const validHead = n => this.facadeOf(head) ? n?.type === "Identifier" && n.name === head : ["cjs", "script"].includes(fallbackOwner?.kind)
         ? owner
           ? !!lexicalOwner && n?.type === "Identifier" && this.lexicalRefs(f).get(n.range[0]) === lexicalOwner
           : this.isGlobalHead(f, n, head)
         : this.isGlobalHead(f, n, head);
-      if (parts.length < 2 || FACADES[head]) usesOf(f, direct, name.length);
+      if (parts.length < 2 || this.facadeOf(head)) usesOf(f, direct, name.length);
       else visit(this.astOf(f), n => {
         if (n.type !== "MemberExpression" || !validHead(n.object)) return;
         const member = n.computed && n.property.type === "Literal" ? n.property.value : !n.computed && n.property.type === "Identifier" ? n.property.name : null;
@@ -1239,13 +1620,55 @@ export class Lsp {
       }
     }
   }
+  // One member, whichever module names it: the fixed point over its def, export and alias rows. A def row's
+  // references (the declaring file's own calls), an export row's (the public `Head.member` uses and the
+  // destructures `const { x } = Head` elsewhere), an alias binding's (its uses, tagged `via`), and a definition hop
+  // from each export or alias row. A destructured member re-exported by a shorthand (`return { x }`) is the same
+  // member under the next module's name: `refs TrackSpline.curvature` answered 16 of the 68 sites that
+  // `refs Tracks.curvature` found (B13, 2026-11-20). Bounded rounds; returns only the rows not in `locs`.
+  async memberClosure(locs, { seed = null, includeDeclaration = true, rounds = 6 } = {}) {
+    const norm = l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l;
+    const key = l => `${l.uri}\u0000${l.range.start.line}:${l.range.start.character}`;
+    const tagOf = l => this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character);
+    const js = l => !!l?.uri?.startsWith("file:") && /\.(?:[cm]?js)$/.test(l.uri) && this.mtimes.has(this.rel(l.uri));
+    const all = locs.map(norm), seen = new Set(all.map(key)), added = [], expanded = new Set();
+    const add = (l, next) => { const k = key(l); if (seen.has(k)) return; seen.add(k); added.push(l); next.push(l); };
+    const request = (method, uri, position, extra = {}) => {
+      this.ensureOpen(this.rel(uri));
+      return this.request(method, { textDocument: { uri }, position, ...extra }).then(r => [].concat(r || []).map(norm)).catch(() => []);
+    };
+    const refsAt = (uri, position) => request("textDocument/references", uri, position, { context: { includeDeclaration: true } });
+    const defsAt = async (uri, position) => (await request("textDocument/definition", uri, position)).filter(l => js(l) && tagOf(l) === "def");
+    let frontier = [...all];
+    if (seed) for (const d of await defsAt(this.uriOf(seed.file), { line: seed.line0, character: seed.col0 })) add(d, frontier);
+    for (let round = 0; round < rounds && frontier.length; round++) {
+      const jobs = frontier.filter(l => js(l) && !expanded.has(key(l)) && ["def", "export", "alias"].includes(tagOf(l)));
+      for (const l of jobs) expanded.add(key(l));
+      const found = await Promise.all(jobs.map(async l => {
+        const tag = tagOf(l), out = [];
+        if (tag === "alias") {
+          const f = this.rel(l.uri), binding = this.aliasBindingAt(f, l.range.start.line, l.range.start.character);
+          // A local binding is used only in its own file: its rows there are `via` it; a row elsewhere is public.
+          if (binding) for (const r of await refsAt(l.uri, { line: binding.line, character: binding.character }))
+            if (r.uri !== l.uri || r.range.start.line !== binding.line || r.range.start.character !== binding.character) out.push(r.uri === l.uri ? { ...r, via: binding.name } : r);
+        } else out.push(...await refsAt(l.uri, l.range.start));
+        if (tag !== "def") out.push(...await defsAt(l.uri, l.range.start));
+        return out;
+      }));
+      frontier = [];
+      for (const batch of found) for (const r of batch) if (js(r)) add(r, frontier);
+    }
+    return includeDeclaration ? added : added.filter(l => tagOf(l) !== "def");
+  }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
   // Location rows, paged (offset/limit). References carry the enclosing function
   // (`(GameHud › updateDash)`); format "concise" drops the source text.
   async locRows(locs, { limit = MAX_ROWS, offset = 0, declFirst = false, where = false, concise = false, render = true } = {}) {
     const list = (Array.isArray(locs) ? locs : locs ? [locs] : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l);
     // A definition through an IIFE's `return { …, name, … }` is the export, not the body: list the declaration first.
-    if (declFirst) list.sort((a, b) => this.rank(a) - this.rank(b));
+    // Within a tag, a placeholder (a *stub*.js file) after the real module: the first [def] names the declaration (B2).
+    const stub = l => /(?:^|\/)[\w.-]*stub[\w.-]*\.js$/.test(this.rel(l.uri)) ? 1 : 0;
+    if (declFirst) list.sort((a, b) => this.rank(a) - this.rank(b) || stub(a) - stub(b));
     else list.sort((a, b) => a.uri.localeCompare(b.uri) || a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character);
     const page = render ? list.slice(offset, offset + limit) : [];
     // Pipeline enclosing-function lookups: outlineOf caches per file, but the
@@ -1316,6 +1739,8 @@ export async function callTool(lsp, name, a = {}) {
     if (a.file && a.line == null && !["lsp_diagnostics", "lsp_outline"].includes(name)) throw Error("file needs line");
     if (name === "lsp_outline" && !a.file === !a.symbol) throw Error("lsp_outline takes symbol or file (one of them)");
     const scope = scopePath(a.path);
+    // B8: a mistyped path (`js/phyics`) filtered every row away and answered "0 references", which reads as dead code.
+    if (scope && !fs.existsSync(path.join(lsp.root, scope))) throw Error(`path matches nothing: no file or directory ${scope} in the workspace`);
     const offset = a.offset || 0, limit = a.limit || MAX_ROWS;
     const more = (total, shown) => total > offset + shown ? `\n… ${total - offset - shown} more (offset: ${offset + shown}${a.files === undefined && name === "lsp_references" ? ", or files: true for per-file counts" : ""})` : "";
     let text;
@@ -1343,17 +1768,24 @@ export async function callTool(lsp, name, a = {}) {
       let { p, result, note } = await lsp.at(a, "textDocument/hover");
       const bodyOf = r => { const c = r?.contents; return typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x.value || x).join("\n") : c?.value; };
       const docless = b => !b || !b.replace(/```[\s\S]*?```/g, "").trim();
-      let body = bodyOf(result);
+      let body = bodyOf(result), declAt = p && lsp.tag(p.file, p.line0, p.col0) === "def" ? { file: p.file, line0: p.line0 } : null;
       // A use site (or the export shorthand it resolves to) carries no JSDoc: one hop to the [def] and hover there.
       if (p && docless(body)) {
         const defs = [].concat((await lsp.request("textDocument/definition", { textDocument: { uri: lsp.uriOf(p.file) }, position: { line: p.line0, character: p.col0 } }).catch(() => null)) || []);
         await lsp.followExports(defs);
         const d = defs.map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l).find(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "def");
         if (d) {
+          declAt = { file: lsp.rel(d.uri), line0: d.range.start.line };
           lsp.ensureOpen(lsp.rel(d.uri));
           const there = bodyOf(await lsp.request("textDocument/hover", { textDocument: { uri: d.uri }, position: d.range.start }).catch(() => null));
           if (!docless(there)) { body = there; note = [note, `docs from ${lsp.rel(d.uri)}:${d.range.start.line + 1}`].filter(Boolean).join("; "); }
         }
+      }
+      // B7 (2026-11-20): this codebase documents with `//` blocks, which tsc's hover never shows. With no JSDoc, read the
+      // contiguous `//` lines right above the declaration (and a trailing `// …` on it).
+      if (declAt && docless(body)) {
+        const comments = lsp.lineComments(declAt.file, declAt.line0);
+        if (comments) { body = `${body ? `${body}\n` : ""}${comments}`; note = [note, `// comments at ${declAt.file}:${declAt.line0 + 1}`].filter(Boolean).join("; "); }
       }
       text = `${body || "(no type information)"}${p ? `\nat ${lsp.row(p.file, p.line0, p.col0)}` : ""}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
     } else {
@@ -1379,7 +1811,7 @@ export async function callTool(lsp, name, a = {}) {
         }).find(Boolean);
         // MERGE, never replace: the declaration's own same-file uses (wrapS in
         // game.js) are not uses of the exported member. Rows dedupe below.
-        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra)).result || [])];
+        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra).catch(() => null))?.result || [])];
       }
       if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
@@ -1392,25 +1824,10 @@ export async function callTool(lsp, name, a = {}) {
         const normalized = (Array.isArray(result) ? result : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l);
         const all = [...new Map(normalized.map(l => [locationKey(l), l])).values()];
         const tagOf = l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character);
-        const locs = all.filter(l => tagOf(l) === "use");
-        // An implementation-position query first reaches the IIFE export shorthand.
-        // Query that export to reach the public member's uses. Pipeline: M4.lerp
-        // alone fans out to dozens of alias rows; serial RPCs timed out the MCP
-        // client case on CI (run 39158195670, testTimeoutFailure @ 90 s).
-        const exportRefs = await Promise.all(all.filter(l => tagOf(l) === "export").map(l =>
-          lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])));
-        for (const refs of exportRefs) for (const r of refs || []) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
-        // Direct and destructured aliases hide real callers behind a local binding.
-        const aliasLocs = all.filter(l => tagOf(l) === "alias");
-        const viaAlias = await Promise.all(aliasLocs.map(async l => {
-          const f = lsp.rel(l.uri), binding = lsp.aliasBindingAt(f, l.range.start.line, l.range.start.character);
-          if (!binding) return [];
-          lsp.ensureOpen(f);
-          const refs = (await lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: { line: binding.line, character: binding.character }, context: { includeDeclaration: false } }).catch(() => [])) || [];
-          return refs.filter(r => r.range.start.line !== binding.line || r.range.start.character !== binding.character)
-            .map(r => ({ ...r, via: binding.name }));
-        }));
-        for (const batch of viaAlias) locs.push(...batch);
+        // The same closure refs uses (def, export and alias rows, re-exports in both directions), so callers and
+        // references agree whichever module names the member. A symbol query anchored at an outside use also hops
+        // to the [def]: `callers Career.inCareer` said 21 functions while the declaration's position gave 37.
+        const locs = [...all, ...await lsp.memberClosure(all, { seed: a.symbol && p ? p : null, includeDeclaration: false })];
         // Export and alias routes may reach the same use more than once.
         // Keep distinct columns on a line, and never count declarations as calls.
         const seen = new Set(), uses = locs.filter(l => {
@@ -1419,7 +1836,16 @@ export async function callTool(lsp, name, a = {}) {
           seen.add(key); return true;
         });
         locs.length = 0; locs.push(...uses);
-        if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
+        const made = p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
+        if (made?.uses.length) {
+          const fresh = made.uses.filter(l => !seen.has(locationKey(l)));
+          for (const l of fresh) { seen.add(locationKey(l)); locs.push(l); }
+          if (fresh.length) notes.push(lsp.factoryNote({ ...made, uses: fresh }));
+        }
+        const zero = !locs.length && (a.symbol || p) ? lsp.zeroUseRows(a, p) : null;
+        if (zero) { locs.push(...zero.uses); notes.push(zero.note); }
+        else if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
+        if (p) notes.push(...lsp.outsideNote(a, p));
         const unfiltered = locs.length;
         if (scope) {
           const scopedLocs = locs.filter(l => inScope(lsp.rel(l.uri), scope));
@@ -1448,19 +1874,44 @@ export async function callTool(lsp, name, a = {}) {
         text = `${locs.length} use${locs.length === 1 ? "" : "s"}${calls !== locs.length ? ` (${calls} call${calls === 1 ? "" : "s"})` : ""} in ${groups.size} function${groups.size === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"} ${head.replace("%SELF%", `query at ${p ? pos(p) : "—"}`)}\n${rendered}`;
       } else {
         let resolved = result;
+        // The closure runs over the WHOLE answer, then the scope filters it: a member reached only through another
+        // module's re-export still counts inside the scope.
+        // A repeated `var X` IIFE global (a real module beside its session-stub.js placeholder) is a text match on the
+        // head only: its def rows are real code, and their own-file calls were dropped without the closure (B2).
+        if (!isDef && Array.isArray(resolved) && !(at.note && /text match/.test(at.note) && !/repeated top-level var/.test(at.note))) {
+          const more = await lsp.memberClosure(resolved, { seed: a.symbol && p ? p : null, includeDeclaration: a.includeDeclaration !== false });
+          if (more.length) resolved = [...resolved, ...more];
+        }
         if (scope) {
-          const list = Array.isArray(result) ? result : result ? [result] : [], unfiltered = list.length;
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [], unfiltered = list.length;
           resolved = list.filter(l => inScope(lsp.rel(l.targetUri || l.uri), scope));
           notes.push(`scope path "${scope}": ${resolved.length} of ${unfiltered} resolved ${isDef ? "definitions" : "references"}`);
         }
+        const made = !isDef && p ? lsp.factoryUses(p.file, p.line0, p.col0) : null;
+        if (made?.uses.length) {
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [], key = l => `${l.targetUri || l.uri}\u0000${(l.targetSelectionRange || l.range).start.line}:${(l.targetSelectionRange || l.range).start.character}`;
+          const have = new Set(list.map(key)), fresh = made.uses.filter(l => !have.has(key(l)) && (!scope || inScope(lsp.rel(l.uri), scope)));
+          if (fresh.length) { resolved = [...list, ...fresh]; notes.push(lsp.factoryNote({ ...made, uses: fresh })); }
+        }
+        if (!isDef && p) {
+          const list = Array.isArray(resolved) ? resolved : resolved ? [resolved] : [];
+          const uses = list.filter(l => { const u = l.targetUri || l.uri, s = (l.targetSelectionRange || l.range).start; return lsp.tag(lsp.rel(u), s.line, s.character) === "use"; });
+          const zero = !uses.length ? lsp.zeroUseRows(a, p) : null;
+          if (zero) {
+            const key = l => `${l.targetUri || l.uri}\u0000${(l.targetSelectionRange || l.range).start.line}:${(l.targetSelectionRange || l.range).start.character}`, have = new Set(list.map(key));
+            const fresh = zero.uses.filter(l => !have.has(key(l)) && (!scope || inScope(lsp.rel(l.uri), scope)));
+            if (fresh.length) { resolved = [...list, ...fresh]; notes.push(zero.note); }
+          }
+        }
         const r = await lsp.locRows(resolved, { limit, offset, declFirst: isDef, where: !isDef, concise: a.format === "concise", render: !a.files });
+        if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
         const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : !isDef && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
         const self = isDef && r.total === 1 && p && r.rows[0].startsWith(`${pos(p)} `);
         if (!r.total && a.file && p) {
           const ln = lsp.textLines(p.file)[p.line0] || "", w = /[\w$]+/.exec(ln.slice(p.col0))?.[0];
           notes.push(/^[\w$]/.test(ln[p.col0] || "") ? `nothing resolvable at ${pos(p)} ("${w}")` : `${pos(p)} is not on a name (column ${p.col0 + 1} of "${ln.trim().slice(0, 60)}"); point the column at the symbol`);
         }
-        if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
+        if (!isDef && p) notes.push(...lsp.outsideNote(a, p));
         const viaAlias = r.list.filter(l => l.via).length;
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);
         const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
@@ -1504,6 +1955,19 @@ export async function handleRpc(lsp, msg) {
   return rpcError(id, -32601, "Method not found");
 }
 
+// A long-lived server keeps the code it started with. After a pull, a sync or an edit of the tool, answers came
+// from the old code with no sign (2026-11-20: one session's server missed every fix on its own branch). Say so.
+const SELF_FILES = ["tools/mcp/lsp-mcp.mjs", "tools/mcp/member-check.mjs"].map(f => path.join(ROOT, f));
+const mtimeOf = f => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
+const STARTED = SELF_FILES.map(mtimeOf);
+export function staleNote(r, now = SELF_FILES.map(mtimeOf)) {
+  const changed = SELF_FILES.filter((f, i) => now[i] !== STARTED[i]);
+  const text = r?.result?.content?.[0];
+  if (!changed.length || !text || typeof text.text !== "string") return r;
+  text.text += `\n(apex-lsp: ${changed.map(f => path.relative(ROOT, f)).join(", ")} changed since this server started; this answer comes from the old code. Restart the MCP server, or run node tools/mcp/lsp-mcp.mjs for the current code.)`;
+  return r;
+}
+
 export async function serve() {
   const lsp = new Lsp();
   for (const s of ["SIGINT", "SIGTERM"]) process.once(s, () => { lsp.stop(); process.exit(0); });
@@ -1513,8 +1977,11 @@ export async function serve() {
     if (!line.trim()) continue;
     let msg;
     try { msg = JSON.parse(line); } catch { process.stdout.write(JSON.stringify(rpcError(null, -32700, "Invalid JSON")) + "\n"); continue; }
-    chain = chain.then(() => handleRpc(lsp, msg)).then(r => { if (r) process.stdout.write(JSON.stringify(r) + "\n"); })
-      .catch(e => process.stderr.write(`apex-lsp: ${e.message}\n`));
+    const write = r => { if (r) process.stdout.write(JSON.stringify(staleNote(r)) + "\n"); };
+    const fail = e => process.stderr.write(`apex-lsp: ${e.message}\n`);
+    // Only tools/call talks to tsc; ping, initialize and tools/list never wait behind a slow query (B3).
+    if (msg?.method !== "tools/call") { handleRpc(lsp, msg).then(write).catch(fail); continue; }
+    chain = chain.then(() => handleRpc(lsp, msg)).then(write).catch(fail);
   }
   await chain; lsp.stop();
 }
@@ -1530,7 +1997,9 @@ async function cli([cmd, target, ...rest]) {
     ].join("\n") + "\n");
     return cmd === "--help" ? 0 : 2;
   }
-  const pos = /^(.+\.(?:js|ts)):(\d+)(?::(\d+))?$/.exec(target), file = /\.(js|ts)$/.test(target);
+  // Any `path:line[:col]` is a position (the tool call then names an unsupported language plainly), and .mjs/.cjs
+  // and .mts/.cts files are files: `def <file>.mjs:<line>` used to fail as "symbol must be Name or Head.member".
+  const pos = /^(.+\.[A-Za-z]+):(\d+)(?::(\d+))?$/.exec(target), file = /\.[cm]?[jt]s$/.test(target);
   const args = name === "lsp_symbols" ? { query: target } : name === "lsp_diagnostics" ? { file: target }
     : name === "lsp_outline" ? (file ? { file: target } : { symbol: target })
     : pos ? { file: pos[1], line: +pos[2], ...(pos[3] ? { column: +pos[3] } : {}) } : { symbol: target };

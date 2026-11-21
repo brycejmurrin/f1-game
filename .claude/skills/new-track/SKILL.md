@@ -10,8 +10,8 @@ data object onto the global `window.TrackDefs` list — **the def is the single 
 of everything about that circuit**: its real centreline (`path`), curated markings
 (`sectors`/`turns`) and dressing rows (`barrier`, `furniture`, `kit`,
 `standSet`, `cityStyle`); its `scenery(api)` closure is the second file of the
-pair, `js/circuits/scenery/<id>.js`. The engine (`js/track/tracks.js`) reads
-`TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
+pair, `js/circuits/scenery/<id>.js`. Def factory: `js/track/core/def.js`
+(`TrackDef.fromRaw`); `js/track/tracks.js` reads `TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
 error naming the circuit — there is no hand-authored fallback), and extrudes the
 road, terrain, and prop meshes. Circuit loading, generated picker meta (built at deploy, never committed:
 `npm run gen` or `node tools/gen/ensure-built.mjs` rebuilds `js/track/circuit-meta.js`), and the
@@ -19,9 +19,9 @@ manifest contract live in [AGENTS.md §Layout](../../../AGENTS.md#layout).
 
 ## Track-definition schema
 
-Required keys: `id` (= filename), `name`, `gp`, `country`, `night`, `classic`, `theme`,
+Required keys: `id` (= filename), `name`, `gp`, `country`, `night`, `theme`,
 `lengthKm`, `baseHW`, `tyreSeverity` (`tests/unit/tyre-model.test.mjs` reads it from every def file), and `path: { len, pts }` (the real centreline from
-`tools/track/import-circuit-path.mjs`). Optional: `reverse`/`startFrac`, `street`, `banked`,
+`tools/track/import-circuit-path.mjs`). Optional: `classic` (defaults false via `!!d.classic`), `reverse`/`startFrac`, `street`, `banked`,
 `pal`, `sectors`/`turns` (racing-lap fracs), dressing rows (`furniture`, `kit`, `standSet`,
 `barrier`, `cityStyle`), `bridges`, `elevations`. The annotated def with every field →
 [references/schema.md](references/schema.md).

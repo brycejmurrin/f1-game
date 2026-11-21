@@ -3,7 +3,7 @@
 // engine-only.
 //
 // WHY THIS EXISTS. `Tracks.LIST` is built by an explicit field-by-field copy of
-// each authored def (js/track/tracks.js, `const def = {…}`). That is a good
+// each authored def (js/track/core/def.js `fromRaw`). That is a good
 // design — it keeps the built def a known shape rather than whatever a circuit
 // file happened to set — but it has one failure mode, and the failure is
 // SILENT: author a new field, read it off the built def, and it is `undefined`
@@ -111,7 +111,7 @@ test("the five once-dropped fields carry their authored values", () => {
   assert.equal(at("monza").ownPitStraight, true);
   assert.equal(at("spa").ownPitStraight, false, "unset must copy as false, not undefined");
 
-  // No circuit currently opts out of undulation, but the hatch must be
+  // Only korea opts out of undulation (`undulate: false`, asserted below), but the hatch must be
   // reachable: buildCenterline reads `def.undulate !== false` off the BUILT def.
   assert.ok(Object.prototype.hasOwnProperty.call(at("monza"), "undulate"),
     "undulate must exist on the built def for the opt-out to be takeable");

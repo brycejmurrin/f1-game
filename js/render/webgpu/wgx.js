@@ -152,7 +152,7 @@ const WGX = (function () {
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
   const TRACK_LIGHT_CAP = 1024;                         // lights (64 B each -> 65536 B)
   const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
-  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 48
+  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 96
 
   // Sun / car / lamp map sizes live in WGXShadow.init (wgx-shadow.js). The
   // frame UBO's PCF texel (d[74]) reads SHD.SHADOW_SIZE so it cannot drift
@@ -604,7 +604,7 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
-    let _cssSizeCache = null, _pageListenersOff = null;
+    let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
       try { if (_pageListenersOff) _pageListenersOff(); } catch (_) { /* no document events */ }   // TLX _createUndo parity
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
@@ -984,9 +984,9 @@ const WGX = (function () {
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
-    let SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
-    let CHK = null;   // WGXChunked.init — culled chunked meshes
-    let PST = null;   // WGXPost.init — post pipeline build
+    let /** @type {ReturnType<typeof WGXShadow.init> | null} */ SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
+    let /** @type {ReturnType<typeof WGXChunked.init> | null} */ CHK = null;   // WGXChunked.init — culled chunked meshes
+    let /** @type {ReturnType<typeof WGXPost.init> | null} */ PST = null;   // WGXPost.init — post pipeline build
 
     // Shadow-pass objects.
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
@@ -3540,7 +3540,7 @@ const WGX = (function () {
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
-    let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
+    let encoder = null, litPass = null, currentView = null, _drawSlot = 0, _drawOverflowWarned = false;
     function begin(frame) {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_gpuErrLastPresent >= 0 && _presentCount - _gpuErrLastPresent > GPU_ERR_QUIET_FRAMES) { _gpuErrFrames = 0; _gpuErrRun = 0; }
@@ -3691,6 +3691,7 @@ const WGX = (function () {
       // unclamped length would write past drawRing's end — a synchronous
       // OperationError inside present() reads as a device strike.
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, Math.min(_drawSlot, MAX_DRAWS) * DRAW_F32_STRIDE);
+      if (_drawSlot > MAX_DRAWS && !_drawOverflowWarned) { _drawOverflowWarned = true; Log.warn("gfx", "WGX draw ring overflow: " + (_drawSlot - MAX_DRAWS) + " draw(s) dropped past " + MAX_DRAWS); }
     }
     function _flushQuadFxUBO() {
       if (!quadFxUBO || _fxQuadSlot <= 0) return;

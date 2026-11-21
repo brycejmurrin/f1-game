@@ -1249,7 +1249,7 @@ const TLX = (function () {
               // removeItem()s it on the reload itself, and this file's own
               // refuseTab() removes it too, commented "skipClaim still blocks
               // revert". The reason is the line above: gfxClaimFail forces
-              // skipClaim next boot, so `armed && !skipClaim` (js/game.js) never
+              // skipClaim next boot, so `armed && !skipClaim` (js/render/renderer-boot.js) never
               // fires, the probe is never cleared, and it survives the whole GLX
               // session to fire on the next COLD boot — permanently rewriting
               // apex26.gfxBackend to "webgl2" and discarding the player's THREE

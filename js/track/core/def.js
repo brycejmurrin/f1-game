@@ -241,9 +241,9 @@ const TrackDef = (function () {
       barrier: d.barrier || null, furniture: d.furniture || null, kit: d.kit || null,
       standSet: d.standSet || null, cityStyle: d.cityStyle || null,
     };
-    // PERF-FINDINGS: realPoints for all 40 circuits costs 24.0 ms at boot,
-    // and a session builds exactly one. Keep LIST.length===40 and every
-    // metadata field copied as today; defer points (+ startFrac remaps /
+    // PERF-FINDINGS: realPoints for all circuits was 24.0 ms at boot (measured at 40),
+    // and a session builds exactly one. Keep every metadata field copied
+    // as today; defer points (+ startFrac remaps /
     // elevation fmap / applyHwZones) until first access. The getter replaces
     // itself with a data property after materializing the SAME pipeline —
     // bit-identical once touched. Tracks.build →

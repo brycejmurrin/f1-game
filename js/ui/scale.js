@@ -58,7 +58,7 @@ const UiScale = (() => {
     // consume as a `zoom`:
     //   --ui-scale       the menus    — .sheet (components.css), #overlay (menus.css)
     //   --hud-scale      the readouts — the HUD clusters (hud.css)
-    //   --hud-btn-scale  the dock     — the touch controls (overlays.css)
+    //   --hud-btn-scale  the dock     — the touch controls (css/touch-controls.css)
     //
     // TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
     // rest, with time to spare; the HUD is glanced at while driving, and the size
@@ -420,7 +420,7 @@ const UiScale = (() => {
     return { top: a[0], bot: a[1], dock: a[2], steer: a[3], keep: a[4], floor: a[5] };
   }
   /** One size slider's row on THIS window: { min, max, value, label }; the range and value are what paints.
-   *  `caps` = parseCaps() in a race, `sheetCap` = the settings sheet's zoom (0 = hidden), `phone` = UI SIZE min 70. */
+   *  `caps` = parseCaps() in a race, `sheetCap` = the settings sheet's zoom (0 = hidden), `phone` = UI SIZE min 50 (`UI_PHONE_MIN`). */
   function sizeRow(key, wish, lim, caps, sheetCap, phone) {
     const st = lim.step || 0.25, down = (p) => Math.floor(p / st + 1e-6) * st, up = (p) => Math.ceil(p / st - 1e-6) * st;
     let min = lim.min, max = lim.max, part = "";

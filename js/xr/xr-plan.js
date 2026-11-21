@@ -4,7 +4,8 @@
  * no DOM / navigator reads. The shippable VR path is TLX + forceWebGL
  * (`backendPref:"three"`, path "webgl2"): GLX has no attachXrSession, so a
  * "webgl2" boot override left ENTER VR unable to attach (renderer-boot.js).
- * Experimental WebGPU XR stays opt-in (path "webgpu"). The plan never writes
+ * xrBackend=webgpu records a preference only (xr-session.js ATTACH_WEBGPU is
+ * false — "webgpu" never requested; VR always attaches WebGL2). The plan never writes
  * apex26.gfxBackend. It is advisory: ApexXR.stats() reports it, and
  * ApexXR.bootPick() could only steer a boot that found ApexXR resident, which
  * a real boot never does (LAZY_XR loads after the renderer). What really moves

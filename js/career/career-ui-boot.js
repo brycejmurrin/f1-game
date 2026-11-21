@@ -34,7 +34,7 @@ function ensureScreen() {
 function create(G) {
   Log.info("ui", "CareerUI.create");
   const { $ } = G;
-  let real = null;
+  let /** @type {ReturnType<typeof CareerScreen.create> | null} */ real = null;
   let entryGeneration = 0;
   let goGeneration = 0;
   let entryFailed = false;

@@ -251,7 +251,7 @@ const RENDERER_LS_KEYS = [
   "apex26.packIndex",
   "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
   "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
-  // tlx.js's per-device WebKit kill switch: AUTO on WebKit stays on three WebGL2 until RESET.
+  // tlx.js's per-device WebKit kill switch: AUTO on WebKit stays on three WebGL2 for 7 days or until RESET RENDERER.
   "apex26.tlxWebKitGL",
   // __tlx.roadSplit(false) persists the road-split A/B arm (tlx.js); RESET brings the split back.
   "apex26.tlxRoadSplit",
@@ -654,7 +654,7 @@ function presentStatus() {
     if (api === "webgl2") {
       return "THREE.JS AUTO is three WebGL2 — still TLX, not game WEBGL2. THREE PATH: WEBGPU pins three WebGPU.";
     }
-    return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or the browser is Safari/iOS (WebKit WebGPU drew nothing on a phone — THREE PATH: WEBGPU opts back in).";
+    return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when the browser offers it (Safari/iOS included) and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or WebGPU failed on this device in the last 7 days (RESET RENDERER clears that; THREE PATH: WEBGPU pins it).";
   }
   try {
     if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
@@ -819,7 +819,7 @@ function initPresentControls() {
   // bug-report path, which is backend-agnostic.
   const backendTools = hasBackendFiles("three") || hasBackendFiles("webgpu");
   const pathBtn = backendTools ? addBtn("pm-three-path",
-    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, except on Safari/iOS (three WebGL2). WEBGL2 / WEBGPU pin one path.") : null;
+    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists (Safari/iOS included) and falls back to three WebGL2 after a WebGPU failure. WEBGL2 / WEBGPU pin one path.") : null;
   const envBtn = hasBackendFiles("three") ? addBtn("pm-car-reflect",
     "Mirror the real surroundings in the car paint on the three.js backend. OFF by default: the probe re-renders the world six times per cycle and measured a drop to 10-13 fps with a resolution shed on real hardware, and on the three-WebGPU path it currently darkens the scene. OFF falls back to the analytic mirror.") : null;
   const shotBtn = backendTools ? addBtn("pm-screenshots",

@@ -15,11 +15,11 @@
  * twilight AND damps the corona (at night uSunDir is the MOON key pointing
  * high — without the gate a daytime sun disc paints among the stars).
  *
- * DELIVERY: instead of GLX's fullscreen triangle at far depth, the factory
- * returns a NODE for three's scene.backgroundNode — three renders it on its
- * internal camera-following background mesh (depthTest/Write off, drawn
- * first, vertex z pinned to w == the far plane), which is exactly the GLX
- * draw order. The RAY MATH stays identical to SKY_VS: per-pixel NDC from
+ * DELIVERY: tlx.js nulls scene.backgroundNode; the sky is a scene mesh at
+ * renderOrder 1e6 (far-plane depth, no depth write) AFTER the opaque world —
+ * not three's background pass. This factory's TSL NODE is what that mesh
+ * consumes (same GLX far-depth fullscreen-triangle ray setup). The RAY MATH
+ * stays identical to SKY_VS: per-pixel NDC from
  * screenUV, unprojected through uInvViewProj on both z planes (frameSky
  * carries invViewProj each frame — the env-probe pass in game.js swaps it
  * per face, so update() must NOT derive the ray from three's camera nodes).

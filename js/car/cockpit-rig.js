@@ -25,8 +25,8 @@ function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
 // A bar from (x0,y0) to (x1,y1) in the wheel plane, w across and d deep (z):
 // the one shape _rigBox cannot lie along — round rims and angled spokes. The
 // faces wind like _rigBox's (a rotation of it), so culling treats them alike.
-function _rigBar(out, x0, y0, x1, y1, z, w, d, col) {
-  const L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+function _rigBar(out, x0, y0, x1, y1, z, w, d, col, surface) {
+  const s0 = out.pos.length / 3, L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L;
   const nx = -uy * w / 2, ny = ux * w / 2, za = z - d / 2, zb = z + d / 2;
   const P = [[x0 - nx, y0 - ny], [x1 - nx, y1 - ny], [x1 + nx, y1 + ny], [x0 + nx, y0 + ny]];
   const v = (i, zz) => [P[i][0], P[i][1], zz];
@@ -43,6 +43,7 @@ function _rigBar(out, x0, y0, x1, y1, z, w, d, col) {
     for (let i = 0; i < 4; i++) { const q = f[i]; out.pos.push(q[0], q[1], q[2]); out.nrm.push(n[0], n[1], n[2]); out.col.push(col[0], col[1], col[2]); }
     out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
+  if (surface != null) _rigMark(out, s0, surface);
 }
 // Convex, bevel-cornered fascia / glove panels. Unlike boxes, their silhouette
 // stays rounded when the wheel rolls. Front is -z, toward the driver.
