@@ -275,9 +275,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
 | `results-boot.js` | `GameResults` | tag | results sheet boot stub (FULL). |
-| `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — visual presets, named profiles and a readable preview. |
+| `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — FULL boot stub (#4978 row 5). |
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
-| `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
+| `photo-studio.js` | `PhotoStudio` | tag | PhotoStudio — FULL boot stub (#4978 row 5). |
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
 | `share-code.js` | `ShareCode` | tag | ShareCode: pasteable APX envelopes for setup / livery / daily / card lap (+ #share=). |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
@@ -294,6 +294,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `appearance-studio-ui.js` | `AppearanceStudioBody` | LAZY_UI_PRESETS | AppearanceStudioBody — LAZY_UI_PRESETS (#4978 row 5). |
+| `photo-studio-ui.js` | `PhotoStudioBody` | LAZY_UI_PRESETS | PhotoStudioBody — LAZY_UI_PRESETS (#4978 row 5). |
 | `progress-backup.js` | `ProgressBackup` | LAZY_SAVES_DATA | ProgressBackup: the `progress` section of the SAVES & DATA settings file (#5992). |
 | `settings-export-body.js` | `SettingsExportBody` | LAZY_SAVES_DATA | SAVES & DATA body (SettingsExportBody, LAZY_SAVES_DATA, #4748): collect / apply for the SETTINGS, GARAGE and CAREER files, the optional time-trial ttlb… |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |

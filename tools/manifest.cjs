@@ -438,9 +438,9 @@ const FULL = [
   "js/race/quali-model.js",
   // share-card-data / -layout / -card are LAZY_RESULTS_SHEET (#5821 paid for its re-land with them)
   "js/race/daily-challenge.js",
-  "js/ui/appearance-studio.js",
+  "js/ui/appearance-studio.js", // AppearanceStudio stub; body is LAZY_UI_PRESETS (#4978 row 5)
   "js/ui/home-world.js",
-  "js/ui/photo-studio.js",
+  "js/ui/photo-studio.js",      // PhotoStudio stub; body is LAZY_UI_PRESETS (#4978 row 5)
   "js/ui/experience.js",
   "js/ui/share-code.js", // ShareCode: APXS/APXL/APXD envelopes + #share= (player-a11y slice 4)
   "js/ui/title-menu.js",
@@ -1354,15 +1354,21 @@ const LAZY_CAREER_UI = [
 ];
 const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
 
-// LAYOUT PRESET row (G9, ~14 KB): SETTINGS › APPEARANCE's one-tap whole-UI
-// layout. js/ui/settings-tabs.js loads it on the first APPEARANCE enter; every
-// global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
-// is FULL and read at call time, so it has no edges and no boot stub.
+// LAYOUT PRESET row + APPEARANCE / PHOTO studio bodies (#4978 row 5). The FULL
+// stubs (appearance-studio.js, photo-studio.js) answer scene/homeCamera/background
+// and PhotoStudio.create at eval; the DOM studios land with this group on the
+// first APPEARANCE enter (SettingsNav.presets) or the stub's own ensureBody.
+// look-avail / layout-presets stay first so an APPEARANCE-only visit still gets
+// them without waiting on the studio painters.
 const LAZY_UI_PRESETS = [
-  "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
-  "js/ui/layout-presets.js", // LayoutPresets
+  "js/ui/look-avail.js",           // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
+  "js/ui/layout-presets.js",       // LayoutPresets
+  "js/ui/appearance-studio-ui.js", // AppearanceStudioBody: presets / profiles / preview DOM (#4978 row 5)
+  "js/ui/photo-studio-ui.js",      // PhotoStudioBody: capture UI + photo library (#4978 row 5)
 ];
-const LAZY_UI_PRESETS_EDGES = [];
+const LAZY_UI_PRESETS_EDGES = [
+  ["js/ui/appearance-studio-ui.js", "js/ui/photo-studio-ui.js"], // AppearanceStudioBody.refreshPhotos reads PhotoStudio.album
+];
 
 // SAVES & DATA body (#4748, ~50 KB): SettingsExportBody — collect / apply for the SETTINGS, GARAGE
 // and CAREER files, ttlb, and the SETTINGS › FILES / GARAGE FILE / CAREER FILE UI. The FULL

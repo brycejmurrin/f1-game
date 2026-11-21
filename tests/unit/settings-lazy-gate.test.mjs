@@ -40,6 +40,11 @@ function boot(file, extra = {}) {
     ...extra,
   });
   ctx.globalThis = ctx; ctx.self = ctx;
+  // #4978 row 5: the APPEARANCE studio body is LAZY_UI_PRESETS; the FULL stub's
+  // gated initUI mounts it. Preload the body so flush still finds the panel.
+  if (file === "js/ui/appearance-studio.js") {
+    vm.runInContext(read("js/ui/appearance-studio-ui.js"), ctx, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  }
   vm.runInContext(read(file), ctx, { filename: absSrc(file) });
   const at = { lookups: lookups.slice(), listeners: docListeners.slice(), rows: rowCalls.slice() };
   for (const fn of dcl) fn();

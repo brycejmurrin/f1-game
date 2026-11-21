@@ -212,7 +212,7 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
 // chip — showed no layout selected (review 2026-10-04, verify-core #16).
 test("an unknown HUD layout falls back to the shipped FULL, and the studio jumps to the row that shows AUTO", () => {
   const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
-  const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio.js"), "utf8");
+  const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio-ui.js"), "utf8");
   const exp = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
   assert.match(game, /store\.get\("hudMetricsLayout", "full"\)/);
   assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(hudMetricsLayout\) < 0\) hudMetricsLayout = "full";/);
