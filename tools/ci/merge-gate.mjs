@@ -986,17 +986,27 @@ function checkRunsFor(sha, request) {
 }
 
 /**
- * The check-suite ids of the ci.yml workflow runs on `sha` (the workflow-file endpoint, path re-checked), so the ci
- * row reads only ci.yml's own `CI` check-run. Returns { suites: Set } or { error }.
+ * Which ci.yml run is the PR's own CI: a `pull_request` run, or, for the fold bots' `bot/*` PRs (no LAND_TOKEN, so
+ * they dispatch ci.yml on their branch), a `workflow_dispatch` run on that same head ref. Any other event is refused:
+ * ci.yml names a dispatched run's verdict job `CI` too, and REQUIRE_SUCCESS is empty there. Pure.
  */
-export function ciSuitesFor(sha, request) {
+export function prCiRun(w, headRef = "") {
+  if (w?.event === "pull_request") return true;
+  return w?.event === "workflow_dispatch" && String(headRef).startsWith("bot/") && w.head_branch === headRef;
+}
+
+/**
+ * The check-suite ids of the ci.yml workflow runs on `sha` (the workflow-file endpoint, path re-checked) that are the
+ * PR's own CI (prCiRun), so the ci row reads only ci.yml's own `CI` check-run. Returns { suites: Set } or { error }.
+ */
+export function ciSuitesFor(sha, request, headRef = "") {
   const suites = new Set(), runs = new Map();
   const want = `.github/workflows/${CI_WORKFLOW}`;
   for (let page = 1; page <= 5; page++) {
     const r = request(`actions/workflows/${CI_WORKFLOW}/runs?head_sha=${encodeURIComponent(sha)}&per_page=100${page > 1 ? `&page=${page}` : ""}`);
     if (r.error) return { error: r.error };
     const batch = r.json?.workflow_runs || [];
-    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null) { suites.add(w.check_suite_id); runs.set(w.check_suite_id, w); }
+    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null && prCiRun(w, headRef)) { suites.add(w.check_suite_id); runs.set(w.check_suite_id, w); }
     if (batch.length < 100) break;
   }
   return { suites, runs };
@@ -1043,7 +1053,7 @@ export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
   const ciOf = (sha) => {
     const checks = checkRunsFor(sha, request);
     if (checks.error) return { error: `check-runs on ${sha.slice(0, 8)}: ${checks.error}` };
-    const ci = ciSuitesFor(sha, request);
+    const ci = ciSuitesFor(sha, request, pull.head?.ref || "");
     if (ci.error) return { error: `${CI_WORKFLOW} runs on ${sha.slice(0, 8)}: ${ci.error}` };
     const verdict = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
     if (!verdict.ok) return { verdict };
@@ -1074,7 +1084,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
   if (checks.error) return { error: `check-runs on ${head.slice(0, 8)}: ${checks.error}` };
-  const ci = ciSuitesFor(head, request);
+  const ci = ciSuitesFor(head, request, pull.head?.ref || "");
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
   let ciRun = rows.ci.ok ? ci.runs?.get(rows.ci.suite) : undefined;
