@@ -1,25 +1,7 @@
-/* Apex 26 — the opt-in RELATIVE box (iRacing-style) for GameHud.
-   SETTINGS › DISPLAY › HUD › RELATIVE (js/ui/hud-elements.js, shipped off),
-   placed by MOVE & SIZE (js/ui/hud-layout.js "rel").
-
-   The two cars AHEAD and two BEHIND on the ROAD — by arc position, not race
-   order, so a backmarker you are about to lap is in it and the leader a lap up
-   behind you is too — with the player's own row between them. Each row:
-   race position, 3-letter code on the team's colour bar, the gap in seconds
-   (- in front, + behind), the tyre letter (PIT while in the lane), and a
-   +1L / -1L marker for a car a lap up (red) or down (blue): text first, colour
-   second, so the meaning never rides on hue alone.
-
-   THE GAP IS THE GAP CHIPS' OWN MEASURE (js/ui/hud.js gapText): metres of arc
-   over max(the player's speed, 0.26 x vTop), smoothed per row (EMA 0.3 at the
-   10 Hz HUD tick) and reset when a row's car changes. Nothing is re-derived
-   from physics, and nothing here writes to a car: the HUD only reads.
-
-   Pure core (unit-tested in tests/unit/hud-relative.test.mjs): relDist,
-   lapsApart, select (fixed slots, allocation-free), fmtGap. tick(G, player)
-   is the one js/ui/hud.js call, at the HUD tick. Rows are built at runtime
-   inside the static #hud-rel (index.html) — no shell nodes per row, no class
-   tokens (data-k / data-lap / data-self attributes; css/hud.css). */
+/* Opt-in RELATIVE HUD. Road position selects two neighbours each side of the player,
+ * including lapped cars. Signed gaps use arc distance over max(speed, 0.26 * vTop),
+ * smoothed per row until its car changes. Lap markers carry both text and colour.
+ * The 10 Hz HUD tick builds rows inside #hud-rel the first time they can be shown. */
 const HudRelative = (function () {
   "use strict";
 
@@ -130,12 +112,12 @@ const HudRelative = (function () {
   /** js/ui/hud.js, once per HUD tick (10 Hz). Reads G; never writes a car. */
   function tick(G, player) {
     if (!doc || !player) return;
-    if (!root && !build()) return;
     const cars = G.cars, track = G.track;
     if (!isOn() || G.timeTrial || !track || !cars || cars.length < 2) { hideAll(); return; }
     const b = doc.body;
     // MINIMAL and the broadcast cameras hide it in CSS — skip the work too.
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
+    if (!root && !build()) return;
     if (root.hidden) root.hidden = false;
     select(cars, player, track.total, rows);
     const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);

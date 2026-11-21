@@ -5,7 +5,6 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -375,14 +374,8 @@ test("overlay page explicitly owns transparent and chroma backgrounds and is sta
   assert.match(source("tools/desktop/stage-files.mjs"), /"overlay\.html"/);
 });
 
-// #3108: Broadcast's lazy ScriptLoader branch for the TV graphics was unreachable — every shell that creates a
-// Broadcast loads OverlayFeed and TvGraphics eagerly before it (tools/manifest.cjs FULL); overlay.html loads
-// broadcast.js only for its pure helpers and never calls create(). The branch is gone; this pins why it may be.
-test("TV graphics need no lazy loader: FULL loads feed + tv-graphics before broadcast; overlay.html never creates one", () => {
-  const { FULL } = createRequire(import.meta.url)("../../tools/manifest.cjs");
-  const at = (f) => FULL.indexOf(f);
-  assert.ok(at("js/overlay/feed.js") >= 0 && at("js/race/tv-graphics.js") >= 0, "both are eager");
-  assert.ok(at("js/overlay/feed.js") < at("js/race/broadcast.js") && at("js/race/tv-graphics.js") < at("js/race/broadcast.js"), "and load first");
+test("the overlay companion loads the shared broadcast helpers without the replay graphics", () => {
+  assert.doesNotMatch(source("overlay.html"), /js\/race\/tv-graphics\.js/);
   const shells = fs.readdirSync(ROOT).filter((f) => f.endsWith(".html") && /js\/race\/broadcast\.js/.test(source(f)));
   assert.deepEqual(shells.sort(), ["index.html", "overlay.html"]);
 });

@@ -310,9 +310,49 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = c
     if (patch == null) return { error: `compare ${at}: ${f.filename} has no patch to compare` };
     const mode = f.status === "removed" ? "" : modes.get(f.filename);
     if (f.status !== "removed" && !mode) return { error: `tree ${String(ref).slice(0, 8)} has no mode for ${f.filename}` };
-    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch, mode]) });
+    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch, mode]),
+      // The same change with the line numbers and the head blob left out (#6045 defect A): a clean sync that moved
+      // the tip's lines elsewhere in the PR's own file keeps it; configPushState still proves where each hunk sits.
+      loose: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", hunkBodies(patch), mode]),
+      basePath: f.previous_filename || f.filename, status: f.status || "", patch });
   }
-  return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
+  const mb = String(cmp.json?.merge_base_commit?.sha || "").toLowerCase();
+  return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)), mb };
+}
+
+/** A unified-diff patch with every hunk header reduced to `@@`: the hunk bodies (context, removed and added lines)
+ *  in order, without the line numbers or the section heading a tip edit elsewhere in the file shifts. Pure. */
+export function hunkBodies(patch) {
+  return String(patch || "").split("\n").map((l) => (l.startsWith("@@") ? "@@" : l)).join("\n");
+}
+
+/** Each hunk's old side (its context and removed lines, in order). Pure. */
+export function hunkOldSides(patch) {
+  const hunks = [];
+  for (const l of String(patch || "").split("\n")) {
+    if (l.startsWith("@@")) { hunks.push([]); continue; }
+    if (!hunks.length || l.startsWith("\\")) continue;
+    if (l[0] === " " || l[0] === "-") hunks[hunks.length - 1].push(l.slice(1));
+  }
+  return hunks;
+}
+
+/** Does each hunk's old side occur exactly once in `text` (the file at the merge base)? Then the hunk bodies alone
+ *  pin the head's file: the base is the deploy tip, and every hunk has one place to go. An empty old side (a hunk
+ *  into an empty file) is placed only in an empty file. Pure. */
+export function hunksPlaced(patch, text) {
+  const lines = String(text).split("\n");
+  for (const old of hunkOldSides(patch)) {
+    if (!old.length) { if (String(text).length) return false; continue; }
+    let hits = 0;
+    for (let i = 0; i + old.length <= lines.length && hits < 2; i++) {
+      let k = 0;
+      while (k < old.length && lines[i + k] === old[k]) k++;
+      if (k === old.length) hits++;
+    }
+    if (hits !== 1) return false;
+  }
+  return true;
 }
 
 /**
@@ -320,7 +360,9 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = c
  * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
  * head's first run. Otherwise the head at label time (`from`) is the head of the newest run created before the label,
  * and the PR's OWN config-path changes (ownConfigDiff, three-dot against `base`) must be the same at `from` and at
- * the head: the same files, blob shas, patches and file modes. A merge of the deploy tip that leaves them alone keeps the label
+ * the head: the same files, blob shas, patches and file modes, or (#6045) the same hunk bodies and modes when each
+ * hunk's old side sits exactly once in the file at the head's merge base (a tip that also edited the PR's own config
+ * file elsewhere). A merge of the deploy tip that leaves them alone keeps the label
  * (#5432: 24 of 40 re-clicks in 2026-11-09..11 were such syncs); a commit of the PR, or a conflict resolution, that
  * changes any of them voids it. An unreadable or possibly truncated compare is "unknown" (waits; a fresh click
  * covers it). `pkgGeneratedAt(ref)` → true when package.json's change at `ref` is only the generated test lists:
@@ -350,12 +392,28 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
   if (was.error) return { state: "unknown", evidence: was.error };
   const now = ownConfigDiff({ base, ref: head, request, skipPkg, touches });
   if (now.error) return { state: "unknown", evidence: now.error };
-  const keys = (d) => new Map(d.rows.map((r) => [r.path, r.key]));
-  const a = keys(was), b = keys(now);
-  const differ = [...new Set([...a.keys(), ...b.keys()])].filter((p) => a.get(p) !== b.get(p)).sort();
+  const byPath = (d) => new Map(d.rows.map((r) => [r.path, r]));
+  const a = byPath(was), b = byPath(now);
+  const paths = [...new Set([...a.keys(), ...b.keys()])].sort();
+  const changed = paths.filter((p) => a.get(p)?.key !== b.get(p)?.key);
+  // #6045 defect A: a clean sync of a tip that ALSO edited one of the PR's own config files changes that file's
+  // blob and patch line numbers, never its hunk bodies. Kept only when every hunk's old side sits exactly once in
+  // the file at the head's merge base (the deploy tip): then the head's file is that tip file plus the same hunks.
+  // A hand edit inside the merge, a dropped tip change, a later own commit or a tip edit inside a hunk's context
+  // changes the hunk bodies and voids the label as before.
+  const moved = [];
+  for (const p of changed) {
+    const x = a.get(p), y = b.get(p);
+    if (!x || !y || x.loose !== y.loose || !now.mb || y.status === "added" || y.status === "removed") continue;
+    const r = request(`contents/${y.basePath.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(now.mb)}`);
+    if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") continue;
+    if (hunksPlaced(y.patch, Buffer.from(r.json.content, "base64").toString("utf8"))) moved.push(p);
+  }
+  const differ = changed.filter((p) => !moved.includes(p));
+  const also = moved.length ? `; ${moved.length} moved by the tip only (${moved.slice(0, 3).join(", ")}${moved.length > 3 ? ", …" : ""}: same hunks, one place each on ${now.mb.slice(0, 8)})` : "";
   return differ.length
     ? { state: "after", from, evidence: `a push changing the PR's own ${what} diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
-    : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs, patches and modes)` };
+    : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same ${moved.length ? "hunks" : "blobs, patches"} and modes${also})` };
 }
 
 /**
@@ -928,17 +986,27 @@ function checkRunsFor(sha, request) {
 }
 
 /**
- * The check-suite ids of the ci.yml workflow runs on `sha` (the workflow-file endpoint, path re-checked), so the ci
- * row reads only ci.yml's own `CI` check-run. Returns { suites: Set } or { error }.
+ * Which ci.yml run is the PR's own CI: a `pull_request` run, or, for the fold bots' `bot/*` PRs (no LAND_TOKEN, so
+ * they dispatch ci.yml on their branch), a `workflow_dispatch` run on that same head ref. Any other event is refused:
+ * ci.yml names a dispatched run's verdict job `CI` too, and REQUIRE_SUCCESS is empty there. Pure.
  */
-export function ciSuitesFor(sha, request) {
+export function prCiRun(w, headRef = "") {
+  if (w?.event === "pull_request") return true;
+  return w?.event === "workflow_dispatch" && String(headRef).startsWith("bot/") && w.head_branch === headRef;
+}
+
+/**
+ * The check-suite ids of the ci.yml workflow runs on `sha` (the workflow-file endpoint, path re-checked) that are the
+ * PR's own CI (prCiRun), so the ci row reads only ci.yml's own `CI` check-run. Returns { suites: Set } or { error }.
+ */
+export function ciSuitesFor(sha, request, headRef = "") {
   const suites = new Set(), runs = new Map();
   const want = `.github/workflows/${CI_WORKFLOW}`;
   for (let page = 1; page <= 5; page++) {
     const r = request(`actions/workflows/${CI_WORKFLOW}/runs?head_sha=${encodeURIComponent(sha)}&per_page=100${page > 1 ? `&page=${page}` : ""}`);
     if (r.error) return { error: r.error };
     const batch = r.json?.workflow_runs || [];
-    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null) { suites.add(w.check_suite_id); runs.set(w.check_suite_id, w); }
+    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null && prCiRun(w, headRef)) { suites.add(w.check_suite_id); runs.set(w.check_suite_id, w); }
     if (batch.length < 100) break;
   }
   return { suites, runs };
@@ -985,7 +1053,7 @@ export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
   const ciOf = (sha) => {
     const checks = checkRunsFor(sha, request);
     if (checks.error) return { error: `check-runs on ${sha.slice(0, 8)}: ${checks.error}` };
-    const ci = ciSuitesFor(sha, request);
+    const ci = ciSuitesFor(sha, request, pull.head?.ref || "");
     if (ci.error) return { error: `${CI_WORKFLOW} runs on ${sha.slice(0, 8)}: ${ci.error}` };
     const verdict = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
     if (!verdict.ok) return { verdict };
@@ -1016,7 +1084,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
   if (checks.error) return { error: `check-runs on ${head.slice(0, 8)}: ${checks.error}` };
-  const ci = ciSuitesFor(head, request);
+  const ci = ciSuitesFor(head, request, pull.head?.ref || "");
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
   let ciRun = rows.ci.ok ? ci.runs?.get(rows.ci.suite) : undefined;

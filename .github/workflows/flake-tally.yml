@@ -28,12 +28,12 @@ name: Flake tally
 # Least privilege: issues: write for the issues, actions: read for runs,
 # artifacts and job logs, contents: read for the checkout. The token is
 # GITHUB_TOKEN; an issue edit made with it starts no workflow run.
-run-name: Flake tally (${{ github.event.schedule == '17 */2 * * *' && 'base-red' || inputs.mode || 'daily' }})
+run-name: Flake tally (${{ github.event.schedule == '8 */2 * * *' && 'base-red' || inputs.mode || 'daily' }})
 
 on:
   schedule:
     - cron: "19 6 * * *"
-    - cron: "17 */2 * * *"
+    - cron: "8 */2 * * *"
   workflow_dispatch:
     inputs:
       days:
@@ -72,7 +72,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DAYS: ${{ inputs.days || '2' }}
-          MODE: ${{ github.event.schedule == '17 */2 * * *' && 'base-red' || inputs.mode || 'daily' }}
+          MODE: ${{ github.event.schedule == '8 */2 * * *' && 'base-red' || inputs.mode || 'daily' }}
         run: |
           if [ "$MODE" = base-red ]; then
             node tools/ci/flake-tally.mjs --base-red --since-last-success --issue --work-dir "$RUNNER_TEMP/flake-tally"

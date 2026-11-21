@@ -2404,10 +2404,10 @@ const Input = (function () {
         resetPadDriveState();
         padIsWheel = false;
         padMenu.reset();
-      }
-      if (lostActive) {
+        // A replacement pad starts with its current buttons as the edge baseline.
+        // A spare leaving preserves both held buttons and the active menu repeat.
+        if (padPrevKey !== null) padSnapshotLost = true;
         padPrevButtons.length = 0;
-        padSnapshotLost = true;
       }
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }

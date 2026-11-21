@@ -25,27 +25,9 @@
    fallbacks. Lands on <html data-pause-dim>. An OS asking for reduced
    transparency still wins on the backdrop (its rule is later in the cascade).
 
-   CONFIRM QUIT: ON (shipped) / OFF. With it ON the first press on QUIT TO MENU
-   or RESTART RACE only ARMS the button ("TAP AGAIN", .armed fill, an
-   aria-label that says so). The arm clears on a confirming press, another
-   pause option, pause close, or ARM_MAX_MS of wall-clock idle (setTimeout —
-   never tied to rAF). A real pointer press young on BOTH the wall clock and
-   the trusted event's timeStamp (since arm) is the same double tap,
-   swallowed; the arm stays up. Input queued behind a long frame (software GL)
-   can land in one late batch where the wall gap collapses. pointerdown keeps
-   the input time; the click and pointerup that flush with it are often stamped
-   at dispatch, so the gesture clock is the pointerdown queue, not those
-   stamps. A deliberate second tap still confirms, and expireIfStale will not
-   disarm on wall expiry alone while that gesture is inside ARM_MAX_MS. When
-   the flush pairs both downs before either up, Chrome may synthesize only the
-   first click: the confirming pointerup then quits once on a zero-delay timer
-   if that click never arrives. The idle timer still reverts the label at
-   ARM_MAX_MS, and confirmPending still expires on the wall clock. Keyboard activation (detail 0) and a script's el.click()
-   (untrusted) are deliberate and may confirm. pointerup on the armed button
-   confirms when past ARM_MIN_MS on both clocks (youngTap).
-   A capture-phase click listener on #pausemenu does the gating, so the
-   handlers in js/game.js stay untouched. A disabled button
-   (multiplayer restart) is never armed. Behaviour only, so no attribute.
+   QUIT and RESTART use capture-phase confirmation. A matching pointerdown
+   supplies the input timestamp when a stalled frame delays event dispatch.
+   Keyboard and scripted activations pass through the click handler.
 
    SHIPPED composes: the fold's summary says SHIPPED only while these four AND
    ScreenLooks' lookPause knobs (BUTTONS & CARD, mounted into the same fold)
@@ -157,6 +139,7 @@ const PauseOpts = (function () {
     if (downQ.length) downQ = downQ.filter((d) => now - d.wall < ARM_MAX_MS);
   }
   function noteDown(e) {
+    if (e && e.isTrusted && e.pointerId != null) downQ = downQ.filter((d) => d.released || d.pointerId !== e.pointerId);
     const btn = guardedBtn(e && e.target);
     if (!btn || !e.isTrusted || !Number.isFinite(e.timeStamp)) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -164,7 +147,7 @@ const PauseOpts = (function () {
     // A new press on an armed button starts a new gesture. A down still queued
     // from a ghost whose click never arrived must not become this gesture's clock.
     if (armed && armed.btn === btn) downQ = downQ.filter((d) => d.id !== btn.id);
-    downQ.push({ id: btn.id, ts: e.timeStamp, wall: wallNow() });
+    downQ.push({ id: btn.id, ts: e.timeStamp, wall: wallNow(), pointerId: e.pointerId, released: false });
     if (downQ.length > 6) downQ.shift();
   }
   function peekDown(id) {
@@ -305,7 +288,6 @@ const PauseOpts = (function () {
     if (e.preventDefault) e.preventDefault();
     if (!ghost) arm(btn, e);
   }
-  function onPausePointerDown(e) { noteDown(e); }
   function finishPointerConfirm(btn, stamp) {
     setTimeout(() => {
       if (confirmPending !== btn.id || confirmPendingAt !== stamp) return;
@@ -314,18 +296,20 @@ const PauseOpts = (function () {
     }, 0);
   }
   function onPausePointerUp(e) {
-    if (!e || e.pointerType === "mouse" && e.button !== 0) return;
+    if (!e || !e.isTrusted || e.pointerType === "mouse" && e.button !== 0) return;
+    pruneDowns();
+    const down = downQ.find((d) => !d.released && d.pointerId === e.pointerId);
+    if (!down) return;
+    down.released = true;
+    const btn = guardedBtn(e.target);
+    if (!btn || btn.id !== down.id) { downQ.splice(downQ.indexOf(down), 1); return; }
     expireIfStale(e);
-    const t = e.target;
-    const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
-    if (!btn || !GUARDED[btn.id] || btn.disabled || confirmMode() === "off") return;
-    if (!armed || armed.btn !== btn || !e.isTrusted) return;
+    if (btn.disabled || confirmMode() === "off" || !armed || armed.btn !== btn) return;
     if (youngTap(e)) return;
-    const gesture = peekDown(btn.id);
-    takeDown(btn.id);
+    downQ.splice(downQ.indexOf(down), 1);
     confirmPending = btn.id;
     confirmPendingAt = wallNow();
-    confirmPendingEv = Number.isFinite(gesture) ? gesture : (Number.isFinite(e.timeStamp) ? e.timeStamp : null);
+    confirmPendingEv = down.ts;
     const stamp = confirmPendingAt;
     disarm();
     btn.click();
@@ -382,8 +366,10 @@ const PauseOpts = (function () {
       if (mq.addEventListener) mq.addEventListener("change", stamp);
     }
     pm.addEventListener("click", onPauseClick, true);
-    pm.addEventListener("pointerdown", onPausePointerDown, true);
+    // A mouse can leave the card for its release, then start its next drag outside.
+    document.addEventListener("pointerdown", (e) => { if (!pm.hidden) noteDown(e); }, true);
     pm.addEventListener("pointerup", onPausePointerUp, true);
+    pm.addEventListener("pointercancel", (e) => { downQ = downQ.filter((d) => d.pointerId !== e.pointerId); }, true);
     document.addEventListener("keydown", onPauseKey, true);
     if (typeof MutationObserver !== "undefined") {
       const mo = new MutationObserver(() => { if (pm.hidden) { disarm(); clearPending(); downQ = []; } });

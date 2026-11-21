@@ -1366,7 +1366,7 @@ test("INCIDENTS: one before the first line crossing is LAP 1, never LAP 0 (#5883
 // best the record replaced (meta.prevBest, written by session-records.js before finishLap).
 function bootTT(meta) {
   let cleared = 0;
-  const ghost = { snapshot: () => null, hasGhost: () => true, bestTime: () => 131.055, meta: () => meta, medal: () => null, clear() { cleared++; } };
+  const ghost = { snapshot: () => null, hasGhost: () => true, bestTime: () => 131.055, meta: () => meta, medal: () => null, clear() { cleared++; return true; } };
   const h = bootResults({ season: null, cars: [], seasonMode: false, globals: { Ghost: ghost } });
   const armed = new Set(), labels = [];
   Object.assign(h.G, {

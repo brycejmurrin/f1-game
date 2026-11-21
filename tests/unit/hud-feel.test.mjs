@@ -300,6 +300,26 @@ test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours
   assert.equal(vals[0].style.color, "var(--faster)");
 });
 
+test("a new race clears a sector flash and still flashes its own first split", () => {
+  const { els, G, hud, tick } = boot();
+  tick();
+  const row = els.hudSectors.children[0];
+  G.sectorBests[0] = G.sectorLast[0] = 32;
+  hud.flashSector(0); tick();
+  assert.ok(row.classList.contains("sec-flash-pb"));
+
+  hud.resetRace();
+  assert.ok(!row.classList.contains("sec-flash-pb"));
+  G.sectorLast[0] = null; G.sectorBests[0] = Infinity; tick();
+  assert.equal(row.children[1].textContent, "--");
+  assert.ok(!row.classList.contains("sec-flash"));
+
+  G.sectorBests[0] = G.sectorLast[0] = 31;
+  hud.flashSector(0); tick();
+  assert.ok(row.classList.contains("sec-flash"));
+  assert.ok(row.classList.contains("sec-flash-pb"));
+});
+
 test("a sector split shows its GAIN on the previous best for 3 s, then the split again", () => {
   // The bare split made the driver remember last lap's figure to know whether
   // ▼31.204 was 0.02 s or 0.6 s better. game.js writes sectorLast AND the new

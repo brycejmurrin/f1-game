@@ -607,6 +607,11 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   assert.ok(Math.abs(car.pitT - (held + pits.workS)) < 1e-6,
             `the hold grew by it (${held.toFixed(2)} → ${car.pitT.toFixed(2)})`);
   assert.equal(car.pitWorked, pits.workS, "…and the summary knows what the stop really cost");
+  const chargedHold = car.pitT;
+  a.step(1 / 60, Math.ceil(chargedHold * 60) + 1);
+  assert.equal(car.pitState, "out", "the worked stop releases after the extension");
+  const summary = a.logs({ ns: "race" }).findLast(row => row.msg.startsWith("Pit stop done car=" + car.code));
+  assert.ok(summary && summary.msg.includes("held=" + chargedHold.toFixed(1) + "s"), summary?.msg);
   // Off the jacks, the offer is gone — a menu you could open while rolling down
   // the lane is a menu you can open at 300 km/h. Asked of STUBS, and this test
   // runs LAST on purpose: it drives a whole stop, and with it ahead of the

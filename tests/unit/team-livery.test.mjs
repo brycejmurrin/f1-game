@@ -424,7 +424,7 @@ for (const missingSource of [false, true]) test(`saving a custom edit ${missingS
   const draft = { name: "My edited paint", c1: "#123456", c2: "#abcdef", finish: "chrome" };
   const ctx = vm.createContext({ Teams: { LIST: [team] }, Liveries: { forTeam: () => [] },
     store: { rev: 0, get: (k, d) => disk.has(k) ? disk.get(k) : d, set(k, v) { disk.set(k, v); this.rev++; return true; } },
-    container, team, G: { teamIdx: 0, soundOn: false }, save: {}, csLivTeamId: team.id,
+    container, team, livSaveIds: new WeakMap(), G: { teamIdx: 0, soundOn: false }, save: {}, csLivTeamId: team.id,
     csLivEditId: "old", csLivCreating: true, csLivDraft: draft, d: draft,
     hexToArr: (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255),
     livIdCounter: () => "new", endLivPreview() {}, discardLivDraft() { assert.fail("same-team edit must be saved"); },
@@ -435,7 +435,7 @@ for (const missingSource of [false, true]) test(`saving a custom edit ${missingS
     } });
   const custom = fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8");
   const fields = sheet.slice(sheet.indexOf("const LIV_DRAFT_COLORS"), sheet.indexOf("function csTabId"));
-  vm.runInContext(custom + '\nconst {getCustomLiveries,setCustomLiveries,saveLiveryId,getLiveryId} = CustomLiveries.create({store});\n'
+  vm.runInContext(custom + '\nconst customLiv = CustomLiveries.create({store}); const {getLiveries,getLiveryId} = customLiv;\n'
     + fields + '\n' + fnSource(sheet, "const focusFitted = () => {") + '\n'
     + fnSource(sheet, "save.onclick = () => {") + '\nsave.onclick();', ctx);
   const rows = disk.get("livery.custom.mclaren"), selected = disk.get("livery.mclaren");

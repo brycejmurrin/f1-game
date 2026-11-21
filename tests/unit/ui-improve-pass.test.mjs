@@ -217,7 +217,7 @@ function fakeDaily(extra = {}) {
 
 test("Practice pick hides Time Trial Daily chrome", () => {
   const tt = bootMenus({}, { timeTrial: true, daily: fakeDaily() });
-  assert.ok(tt.dom.has("sel-daily"), "Time Trial keeps Today's Challenge");
+  assert.match(tt.dom.byId("sel-daily").title, /2026-10-05, local date/, "the picker identifies the Daily by the player's local date");
   assert.ok(tt.chips().includes("daily-open"));
   const practice = bootMenus({}, { timeTrial: true, practicePick: true, daily: fakeDaily() });
   assert.ok(!practice.dom.has("sel-daily"), "Practice does not wear the Daily chip");
