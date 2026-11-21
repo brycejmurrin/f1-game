@@ -725,7 +725,7 @@
 }
 #sel-preview-map {
   position: absolute; inset: var(--map-band-top, 0px) 0 var(--map-band-bottom, 0px); margin: auto;
-  display: block; max-width: 100%;
+  display: block; max-width: 100%; object-fit: contain;
   max-height: max(0px, calc(100% - var(--map-band-top, 0px) - var(--map-band-bottom, 0px)));
 }
 /* AN OUTLINE TOO SMALL TO READ IS HIDDEN, NOT SHRUNK FURTHER. The canvas is
