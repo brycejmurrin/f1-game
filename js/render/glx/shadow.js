@@ -404,6 +404,53 @@ const GLXShadow = (function () {
     return S;
   }
 
-  return { init };
+  // F5 (#3115): car blob-shadow batch — one MARK_BATCH_VS+SHADOW_FS draw; own VAO/VBO.
+  // Lives on GLXShadow (one file, one global); glx.js links the program and attach()s.
+  const BLOB_CAP = 64;
+  const BLOB_XZ = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
+  function attachBlobBatch(api) {
+    const { gl, useProg, bindVAO, setBlend, setDepthMask, setPolyOffset, ctxGone, ROAD_BIAS, prog, u, getViewProj, getFrameToken } = api;
+    let vao = null, vbo = null, capF = 0, n = 0, vpTok = -1;
+    const verts = new Float32Array(BLOB_CAP * 30);
+    vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    const st = 5 * 4;
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, st, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, st, 12);
+    gl.bindVertexArray(null);
+    function drawShadow(modelMat, w, l) {
+      if (ctxGone() || !vao) return;
+      if (n >= BLOB_CAP) flush();
+      let o = n * 30; const m = modelMat, dst = verts;
+      for (let i = 0; i < 12; i += 2) {
+        const ax = BLOB_XZ[i], az = BLOB_XZ[i + 1], lx = ax * w, lz = az * l;
+        dst[o++] = m[0] * lx + m[4] * 0.02 + m[8] * lz + m[12];
+        dst[o++] = m[1] * lx + m[5] * 0.02 + m[9] * lz + m[13];
+        dst[o++] = m[2] * lx + m[6] * 0.02 + m[10] * lz + m[14];
+        dst[o++] = ax * 2; dst[o++] = az * 2;
+      }
+      n++;
+    }
+    function flush() {
+      const count = n; n = 0;
+      if (!(count > 0) || !prog || ctxGone()) return;
+      useProg(prog);
+      const tok = getFrameToken();
+      if (vpTok !== tok) {
+        gl.uniformMatrix4fv(u.uViewProj, false, getViewProj()); vpTok = tok;
+      }
+      setBlend(true); setDepthMask(false); setPolyOffset(ROAD_BIAS);
+      bindVAO(vao); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      const nF = count * 30;
+      if (nF > capF) { capF = nF; gl.bufferData(gl.ARRAY_BUFFER, capF * 4, gl.DYNAMIC_DRAW); }
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
+      gl.drawArrays(gl.TRIANGLES, 0, count * 6);
+    }
+    return { drawShadow, flush, pending: () => n > 0, isProg: (p) => !!prog && p === prog, prog };
+  }
+
+  return { init, attachBlobBatch };
 })();
 Object.freeze(GLXShadow);
