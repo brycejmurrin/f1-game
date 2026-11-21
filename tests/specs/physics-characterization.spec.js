@@ -118,7 +118,9 @@ test("the driving model produces the same numbers it did before", async ({ page,
   await pinFactorySeat(page);
   // A3: explicit dry pin — loadTrack defaults wx="dry", but grip-sensitive
   // baselines must not inherit a leftover wet enum / arc from a prior test.
-  await loadTrack("monza", "day", "dry");
+  // This records simulation steps. Rendering between setup calls can advance
+  // presentation-dependent state before the deterministic trace begins.
+  await loadTrack("monza", "day", "dry", { headless: true });
 
   const pin = await page.evaluate(() => {
     const a = window.__apex;

@@ -15,12 +15,15 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-apex
       - uses: ./.github/actions/playwright-chromium
-      - name: Capture and replay the nine scenarios in Chromium
+      - name: Generate the reference in Chromium
         run: |
-          APEX_UPDATE_BASELINE=1 APEX_BASELINE_REASON="Monza's independently measured longitudinal grade corrects the descent between the Lesmos and Ascari, changing gravity along the driving line." npx playwright test tests/specs/physics-characterization.spec.js --project=headless --workers=1
-          npx playwright test tests/specs/physics-characterization.spec.js --project=headless --workers=1
+          APEX_UPDATE_BASELINE=1 APEX_BASELINE_REASON="Monza's independently measured longitudinal grade corrects the descent between the Lesmos and Ascari, changing gravity along the driving line." npx playwright test tests/specs/physics-characterization.spec.js --project=headless --workers=1 --retries=0
+      - name: Replay in Chromium and the VM
+        run: |
+          npx playwright test tests/specs/physics-characterization.spec.js --project=headless --workers=1 --retries=0
           node --test tests/unit/physics-characterization-vm.test.mjs
       - name: Return the browser-generated fixture for review
+        if: always()
         run: |
           payload=$(gzip -cn tests/data/physics-baseline.json | base64 -w0)
           echo "::notice file=tests/data/physics-baseline.json,title=Monza browser reference::$payload"
