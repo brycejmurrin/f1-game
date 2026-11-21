@@ -944,3 +944,76 @@ test("#5256 (Bryce 2026-11-11, option A): in landscape touch the top band's anch
   // of BUTTON SIZE either way: measured 1.12 at 100 / 175 / 237 % on 852x393, HUD 122. In the page, ui-scale.spec.js's
   // BUTTON SIZE row holds #hud-box-pos still (tests/data/control-registry.json, #5256 D).
 });
+
+/* ── mutation pins (read-only hunt tip 46c86e30c1): UI_PHONE_MIN via sizeRow; THUMB popups.btn ── */
+
+function loadUiScale() {
+  const sb = { window: {}, document: {} };
+  vm.runInNewContext(read("js/ui/scale.js") + "\nthis.UiScale = UiScale;", sb, { filename: absSrc("js/ui/scale.js") });
+  return sb.UiScale;
+}
+
+test("phone UI SIZE floor via sizeRow is 50 (#5452 / UI_PHONE_MIN)", () => {
+  // Observable through UiScale.sizeRow(..., phone=true), not a source-text pin.
+  // Mutating UI_PHONE_MIN 50 → 70 survived phone-touch before this assertion.
+  const { sizeRow } = loadUiScale();
+  const lim = { min: 40, max: 200, step: 0.25 };
+  const ph = sizeRow("uiScale", 40, lim, null, 0, true);
+  assert.deepEqual([ph.min, ph.value, ph.label], [50, 50, "50%"],
+    "a wish under the phone floor paints 50 %");
+  assert.equal(sizeRow("uiScale", 61, lim, null, 0, true).value, 61, "a stored 61 % is kept");
+  assert.equal(sizeRow("uiScale", 40, lim, null, 0, false).min, 40, "desktop keeps the 40 % lim");
+});
+
+function loadLayoutPresets() {
+  // Minimal owners so LayoutPresets.PRESETS / apply() resolve against the real registries.
+  const dom = makeDom();
+  const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
+  for (const id of ["pausemenu", "datahub", "race-settings", "standings", "trackdesigner"]) mk("dialog", id).hidden = true;
+  for (const id of ["select", "career", "carsetup", "overlay"]) mk("div", id).hidden = true;
+  const settings = mk("dialog", "pmsettings");
+  const panel = mk("section", "pm-panel-appearance", settings);
+  mk("p", "pm-appearance-help", panel).className = "adv-help";
+  mk("div", "appearance-studio", panel);
+  const pause = mk("details", "pm-pausemenu", panel);
+  mk("summary", "pm-pausemenu-sum", pause); mk("div", "pm-pausemenu-body", pause);
+  const ts = mk("details", "pm-titlescreen", panel);
+  mk("summary", "pm-titlescreen-sum", ts);
+  const tsBody = mk("div", "pm-titlescreen-body", ts); mk("button", "pm-replay-intro", tsBody);
+  dom.body.setAttribute("data-shape", "wide");
+  const get = dom.document.getElementById;
+  dom.document.getElementById = (id) => (dom.has(id) ? get(id) : null);
+  const data = {}, subs = [];
+  const store = {
+    get: (k, d) => (k in data ? data[k] : d),
+    set: (k, v) => { if (v === null) delete data[k]; else data[k] = v; for (const fn of subs) fn({ key: k, local: true }); },
+    subscribe: (fn) => { subs.push(fn); return () => {}; },
+  };
+  const sb = {
+    document: dom.document, GameStore: { store },
+    MutationObserver: class { observe() {} },
+    Log: { info() {}, warn() {} },
+    setTimeout: () => 1, clearTimeout() {},
+    SheetShape: { reclassify() {} }, innerWidth: 844, innerHeight: 390,
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  const run = (f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  for (const f of ["js/ui/setting-row.js", "js/ui/pause-opts.js", "js/ui/title-layout.js", "js/ui/screen-looks.js", "js/ui/layout-presets.js"]) run(f);
+  return {
+    M: vm.runInContext("LayoutPresets", ctx),
+    S: vm.runInContext("ScreenLooks", ctx),
+  };
+}
+
+test("THUMB layout preset pins popups button scale at 150", () => {
+  // layout-presets.test asserts select.btn and popups.vpos for THUMB, but not
+  // popups.btn — and popups.btn=80 is also a VISIBLE value, so 150 → 80 survived.
+  const { M, S } = loadLayoutPresets();
+  const thumb = M.PRESETS.find((p) => p.id === "thumb");
+  assert.ok(thumb, "THUMB is a named preset");
+  assert.ok(thumb.set.some(([screen, k, v]) => screen === "popups" && k === "btn" && v === 150),
+    "THUMB's table sets popups.btn = 150");
+  M.apply("thumb");
+  assert.equal(S.read("popups").btn, 150, "apply() writes the taller popup buttons");
+});
