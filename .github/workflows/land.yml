@@ -616,8 +616,13 @@ jobs:
               # The verdict came from a job that ran PR code: re-read what GitHub itself can say before posting a pass.
               pr=$(gh api "repos/$R/pulls/$n") || pr='{}'
               # ci.yml's own `CI` only: a job named `CI` in another workflow is an Actions-app check-run too (WP-L3e).
-              suites=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" \
-                --jq '[.workflow_runs[] | select((.path | sub("@.*$"; "")) == ".github/workflows/ci.yml") | .check_suite_id]') || suites='[]'
+              # And the PR's own run only (merge-gate.mjs prCiRun): a `pull_request` run, or a `bot/*` fold PR's
+              # dispatch on its own branch; any other dispatched ci.yml names its verdict `CI` with no requirements.
+              ref=$(jq -r '.head.ref // ""' <<<"$pr")
+              suites=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" | jq -c --arg ref "$ref" \
+                '[.workflow_runs[] | select((.path | sub("@.*$"; "")) == ".github/workflows/ci.yml")
+                  | select(.event == "pull_request" or (.event == "workflow_dispatch" and ($ref | startswith("bot/")) and .head_branch == $ref))
+                  | .check_suite_id]') || suites='[]'
               ci=$(gh api "repos/$R/commits/$head/check-runs?check_name=CI&per_page=100" | jq -r --argjson s "$suites" \
                 '[.check_runs[] | select(.app.slug == "github-actions" and (.check_suite.id as $id | $s | index($id) != null))] | sort_by(.id) | last | .conclusion // ""') || ci=""
               if [ "$(jq -r .head.sha <<<"$pr")" != "$head" ] || [ "$(jq -r .draft <<<"$pr")" != false ] || [ "$ci" != success ] \

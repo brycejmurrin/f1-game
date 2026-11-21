@@ -418,7 +418,7 @@ function fakes() {
   const pull = { state: "open", draft: false, labels: [], user: { login: "brycejmurrin" }, head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
   const prRuns = [{ head_sha: HEAD, created_at: "2026-11-03T09:00:00Z", pull_requests: [{ number: 7 }] }];
   const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success", check_suite: { id: 50 } }];
-  const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml", created_at: "2026-11-03T09:01:00Z" }];
+  const runs = [{ id: 500, check_suite_id: 50, event: "pull_request", head_branch: "cursor/x", path: ".github/workflows/ci.yml", created_at: "2026-11-03T09:01:00Z" }];
   const events = [], files = [{ filename: "js/game.js" }, { filename: "docs/TESTING.md" }];
   const calls = [];
   // The deploy tip's newest completed pages.yml run (the base row, #5425): green unless a case says otherwise.
@@ -756,10 +756,29 @@ test("ciVerdict pinned to ci.yml: a `CI` check-run in another workflow's suite i
 
 test("ciSuitesFor: the ci.yml runs on the head (path re-checked, a ref suffix tolerated); an API error is an error", () => {
   const seen = [];
-  const req = (p) => { seen.push(p); return { json: { workflow_runs: [{ check_suite_id: 1, path: ".github/workflows/ci.yml" }, { check_suite_id: 2, path: ".github/workflows/ci.yml@refs/heads/x" }, { check_suite_id: 3, path: ".github/workflows/land.yml" }] } }; };
+  const req = (p) => { seen.push(p); return { json: { workflow_runs: [{ check_suite_id: 1, event: "pull_request", path: ".github/workflows/ci.yml" }, { check_suite_id: 2, event: "pull_request", path: ".github/workflows/ci.yml@refs/heads/x" }, { check_suite_id: 3, event: "pull_request", path: ".github/workflows/land.yml" }] } }; };
   assert.deepEqual([...ciSuitesFor(HEAD, req).suites].sort(), [1, 2]);
   assert.equal(seen[0], `actions/workflows/ci.yml/runs?head_sha=${HEAD}&per_page=100`);
   assert.equal(ciSuitesFor(HEAD, () => ({ error: "HTTP 403" })).error, "HTTP 403");
+});
+
+test("ciSuitesFor: only pull_request runs count; a dispatched CI counts only on the fold bots' own bot/ head ref", () => {
+  // ci.yml names a workflow_dispatch run's verdict job `CI` and sets REQUIRE_SUCCESS='' there: a dispatch on any
+  // branch that happens to carry the PR head must not satisfy the gate (audit 2026-11-21, finding 1).
+  const run = (id, event, head_branch = "cursor/x") => ({ check_suite_id: id, event, head_branch, path: ".github/workflows/ci.yml" });
+  const runs = [run(1, "pull_request"), run(2, "workflow_dispatch"), run(3, "schedule"), run(4, "push"), run(5, "workflow_dispatch", "bot/changelog-fold"), run(6, undefined)];
+  const req = () => ({ json: { workflow_runs: runs } });
+  assert.deepEqual([...ciSuitesFor(HEAD, req).suites], [1], "a dispatched, scheduled, push or event-less run is not the PR's CI");
+  assert.deepEqual([...ciSuitesFor(HEAD, req, "cursor/x").suites], [1], "a dispatch on a non-bot head ref is still refused");
+  assert.deepEqual([...ciSuitesFor(HEAD, req, "bot/changelog-fold").suites].sort(), [1, 5], "the fold bot's dispatched CI on its own branch counts");
+  runs.push(run(7, "workflow_dispatch", "bot/other"));
+  assert.ok(!ciSuitesFor(HEAD, req, "bot/changelog-fold").suites.has(7), "a dispatch on ANOTHER bot branch does not count");
+  // The evaluator: a green dispatched CI on the head is "no CI yet", never a pass.
+  const f = fakes();
+  f.runs[0].event = "workflow_dispatch";
+  const v = evaluate({ pr: 7, ...f.deps });
+  assert.equal(v.rows.ci.ok, false, v.rows.ci.evidence);
+  assert.equal(v.rows.ci.pending, true);
 });
 
 // ---- WP-L2: --trusted runs no PR code; post takes open/hold/plan/ci/config from it, never from the artifact -----
@@ -1059,10 +1078,27 @@ function postFixture() {
   const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok raise=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
   const env = { GH_TOKEN: "read-token", DISARM_TOKEN: "land-token", PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), NOTASKED: "[]", DISARM: "[]",
     PAUSED: "false", AT: "2026-10-27T10:00:05Z", TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 0, line, tip: TIP_A }]),
-    NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1 }] }),
+    NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1, event: "pull_request" }] }),
     FAKE_CHECKS: JSON.stringify({ check_runs: [{ id: 1, app: { slug: "github-actions" }, check_suite: { id: 1 }, conclusion: "success" }] }) };
   return { env, files: { "verdicts/7.json": JSON.stringify({ number: 7, head: HEAD7, code: 0, line, tip: TIP_A, out: "rows" }) } };
 }
+
+test("land.yml post: the pass-time CI re-read counts only the PR's own ci.yml run (pull_request; a bot/ ref's dispatch)", () => {
+  const { env, files } = postFixture();
+  const post = LAND.jobs.post.steps.find(s => s.id === "post");
+  const runs = (o) => JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1, head_branch: "cursor/x", ...o }] });
+  const withRef = (ref) => pr7({ head: { sha: HEAD7, ref } });
+  const ok = runStep(post.run, { ...env, FAKE_PR: withRef("cursor/x"), FAKE_RUNS: runs({ event: "pull_request" }) }, files);
+  assert.ok(ok.out.arm, ok.stdout + ok.stderr);
+  for (const [event, ref, branch] of [["workflow_dispatch", "cursor/x", "cursor/x"], ["schedule", "cursor/x", "cursor/x"], [undefined, "cursor/x", "cursor/x"], ["workflow_dispatch", "bot/fold", "bot/other"]]) {
+    const r = runStep(post.run, { ...env, FAKE_PR: withRef(ref), FAKE_RUNS: runs({ event, head_branch: branch }) }, files);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.out.arm, "", `${event} on ${branch} (PR ref ${ref}) is not the PR's CI: never posted as a pass`);
+    assert.match(r.stdout, /disagrees with GitHub now/);
+  }
+  const bot = runStep(post.run, { ...env, FAKE_PR: withRef("bot/fold"), FAKE_RUNS: runs({ event: "workflow_dispatch", head_branch: "bot/fold" }) }, files);
+  assert.ok(bot.out.arm, "the fold bot's dispatched CI on its own branch still counts");
+});
 
 test("land.yml combined steps: failed post or rejected status write cannot arm", () => {
   const { env, files } = postFixture();
@@ -1327,7 +1363,7 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   const verdict = (code = 0) => ({ "verdicts/7.json": JSON.stringify({ number: 7, head: HEAD7, code, line, tip: TIP_A, out: "rows" }) });
   const env = (o = {}) => ({ GH_TOKEN: "t", DISARM_TOKEN: "lt", PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), NOTASKED: "[]", DISARM: "[]",
     PAUSED: "false", AT: "2026-10-27T10:00:05Z", TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 0, line, tip: TIP_A }]),
-    FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1 }] }),
+    FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1, event: "pull_request" }] }),
     FAKE_CHECKS: JSON.stringify({ check_runs: [{ id: 1, app: { slug: "github-actions" }, check_suite: { id: 1 }, conclusion: "success" }] }), ...o });
   const bodies = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)));
   const disarmed = (r) => r.calls.some((c) => c === "gh pr merge 7 --repo o/r --disable-auto");
