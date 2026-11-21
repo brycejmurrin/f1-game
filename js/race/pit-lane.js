@@ -328,8 +328,9 @@ var PitLane = (function () {
       return Math.max(1, zz.lenM - boxThroughFor(c, zz, t.total) + exitRoadM());
     }
     /** Is a stop worth making for this car right now — any ONE of a used set,
-     *  the wrong tread for the conditions, a free stop under caution. The
-     *  cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
+     *  the wrong tread for the conditions, a free stop under caution, or the
+     *  second dry compound still owed in the last COMPOUND_WARN_LAPS (#5775 R1).
+     *  The cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
      *  marker on the map and the words on the HUD can never disagree. */
     function worthStopping(c) {
       if (!enabled() || !c || c.retired || c.finished) return false;
@@ -337,7 +338,7 @@ var PitLane = (function () {
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
       const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
-      return wear >= CUE_WEAR || wrongTread || free;
+      return wear >= CUE_WEAR || wrongTread || free || compoundDue(c);
     }
     // `frac` is the distance BAR's fill (js/ui/hud.js --pit-dist): 0 at the
     // start of a countdown, 1 at its end. The last cue given to the local car
@@ -1252,15 +1253,23 @@ var PitLane = (function () {
      *  no real team makes. The PLAYER is held to it too: endRace disqualifies
      *  a car that ran one dry compound (js/race/sporting-regs.js), and
      *  compoundDue() is the engineer's warning with COMPOUND_WARN_LAPS left.
+     *  Same exemptions as endRace's cmpOn (#5775 R2): armed practice and a
+     *  free-play DUEL never DSQ, so the planner / compoundDue must not either.
      *  Only where a stop is possible at all (enabled(): a lane and wear on). */
     const TWO_COMPOUND_MIN_LAPS = 8;
     function sprintLeg() {
       return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
     }
+    /** Matches game.js endRace: !isPractice() && !duelOn(). G.duel is the sticky
+     *  setting; duelOn also needs !championship — G.seasonMode covers that. */
+    function compoundExemptSession() {
+      return !!G.practice || (!!G.duel && !G.seasonMode && G.session === "race");
+    }
     function twoCompoundRule(laps) {
       return laps >= TWO_COMPOUND_MIN_LAPS
         && TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) === 0
-        && !sprintLeg();
+        && !sprintLeg()
+        && !compoundExemptSession();
     }
     const COMPOUND_WARN_LAPS = 5;
     function twoCompoundApplies() { return enabled() && twoCompoundRule(G.lapsTarget); }
