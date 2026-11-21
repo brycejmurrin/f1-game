@@ -999,19 +999,21 @@ const AiDrive = (function () {
     return want > hi ? hi : want < lo ? lo : want;
   }
   // A STOPPED CAR IS A HAZARD (W26), not a slow blocker: under 6 % of vTop, not in the pits.
+  // A finished car still on track counts too (#5979); retired / in-pit stay on Collide.parkedAhead.
   const HAZARD_V_FRAC = 0.06;
   function stoppedHazard(o, vTop) {
-    if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
+    if (!o || o.retired || o.inPit || o.inPitLane) return false;
     const frac = Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72);   // a share of the top speed, so PACE-scaled
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
   // A CRAWLING CAR HOLDS THE CLEAR-ROAD LINE OFF (#5330): the line can run through a car crawling or reversing on
   // it (5 m/s, over stoppedHazard's floor) that the blocker box sees too late at 42 m/s. Any running car under
-  // SLOW_V_FRAC of top speed (PACE-scaled) within hazardReach keeps the car in its lane.
+  // SLOW_V_FRAC of top speed (PACE-scaled) within hazardReach keeps the car in its lane. A coasting finisher
+  // after the flag is still on track (#5979); retired / in-pit stay excluded.
   const SLOW_V_FRAC = 0.25;
   function slowHazard(o, vTop) {
-    if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
+    if (!o || o.retired || o.inPit || o.inPitLane) return false;
     return Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72) < SLOW_V_FRAC;
   }
   // THE GAP ROUND A STATIC BODY (#5539): a street's 2.2 m minLatGap left 0.2 m to a car that does
