@@ -1759,6 +1759,90 @@ test("AI retirements require the host and the current receiver epoch", () => {
   hn.stop();
 });
 
+// ---- #4270 §3: retired AI must leave the aged AI relay (stale-handoff proof) ----
+// Tip proof (deploy 0d6e65b783): withAi still relayPush()'s every non-human car,
+// including c.retired. Guests keep posing a parked DNF at 10 Hz. Stopping that
+// needs a proof that a quiet retired host-AI handoff still leaves the car
+// parked (updateCar early-outs on c.retired) while live AI and reconnect stay intact.
+test("the host stops relaying a retired AI car in the aged AI field (#4270)", () => {
+  const G = poseG(5);                 // cars[0] host, [1] guest a, [2..4] AI
+  const net = NetPlay.create(G);
+  const a = stateSession();
+  assert.equal(net.start({ role: "host", session: a }).ok, true);
+  a.feed(9_980, 1, lapPose(50), 9_990);
+  let t = 10_000;
+  for (let k = 0; k < 8; k++, t += 50) { G.netNow = t; net.tick(t); }
+  const before = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
+  assert.ok(before.length >= 2, "AI field was riding before retirement");
+  assert.ok(before.every((p) => p.cars.some((c) => c.id === 2)), "AI wire 2 was in the aged packet");
+  // Park one AI the way retireCar does on the host (terminal; no further motion).
+  Object.assign(G.cars[2], { retired: true, dnf: "engine", dnfAt: null, speed: 0 });
+  a.states.length = 0;
+  for (let k = 0; k < 20; k++, t += 50) { G.netNow = t; net.tick(t); }
+  const aged = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
+  assert.ok(aged.length >= 5, "AI publishes continue after a teammate retires");
+  for (const p of aged) {
+    assert.equal(p.cars.some((c) => c.id === 2), false, "retired AI must leave the aged relay");
+    assert.deepEqual(p.cars.map((c) => c.id).sort(), [0, 3, 4], "live AI + host own car still ride; guest's car never does");
+  }
+  net.stop();
+});
+
+test("stale handoff after a retired host-AI goes quiet: car stays parked, live AI still relays, reconnect resumes (#4270)", () => {
+  const host = poseG(4), guest = poseG(4);
+  host.track.def = guest.track.def = { id: "monza" };
+  guest.cars[0].local = guest.cars[0].human = false;
+  guest.cars[1].local = guest.cars[1].human = true; guest.player = guest.cars[1];
+  const hn = NetPlay.create(host), gn = NetPlay.create(guest);
+  const hs = stateSession(), gs = stateSession();
+  hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
+  const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
+  hs.deliver("model", gm); gs.deliver("model", hm);
+  // Real order: pose while live, then the LAP retirement, then the host stops
+  // the aged relay. A leftover aged packet after retired must not move it.
+  let t = 10_000;
+  gs._state(NetSnapshot.encodeAged([
+    { id: 2, car: { s: 321, x: 0, head: 0, speed: 12, gear: 3, lap: 1 }, at: t },
+    { id: 3, car: lapPose(900), at: t },
+  ]), t + 20);
+  gn.tick(t + 130);
+  assert.ok(Math.abs(guest.cars[2].s - 321) < 1, "live pose lands before retirement: s=" + guest.cars[2].s);
+  const parkedS = guest.cars[2].s;
+  Object.assign(host.cars[2], { retired: true, dnf: "engine", dnfAt: null, s: parkedS, speed: 0 });
+  gs.deliver("lap", { lap: 1, time: null, best: null, code: host.cars[2].code,
+    driverId: host.cars[2].driverId, retired: "engine", invalid: true, epoch: gm.epoch });
+  assert.equal(guest.cars[2].retired, true);
+  // A post-retirement aged leftover must not re-pose the DNF.
+  gs._state(NetSnapshot.encodeAged([
+    { id: 2, car: { s: 999, x: 0, head: 0, speed: 80, gear: 5, lap: 2 }, at: t + 100 },
+    { id: 3, car: lapPose(920), at: t + 100 },
+  ]), t + 120);
+  gn.tick(t + 230);
+  assert.equal(guest.cars[2].s, parkedS, "retired: leftover aged packets are ignored");
+  assert.ok(guest.cars[3].s > 900, "live AI still poses");
+  // Silence past STALE_MS: host-AI remotes goLocal (scrubForHandBack). Retired
+  // must survive that handoff — updateCar early-outs on c.retired — while a
+  // LIVE AI still arrives on the next packet.
+  t += 2500;
+  gs._state(NetSnapshot.encodeAged([{ id: 3, car: lapPose(950), at: t }]), t + 20);
+  gn.tick(t + 130);
+  assert.equal(guest.cars[2].retired, true, "stale handoff must not clear retirement");
+  assert.equal(guest.cars[2].dnf, "engine");
+  assert.equal(guest.cars[2].s, parkedS, "retired car stays where the last live pose left it");
+  assert.ok(guest.cars[3].s > 900, "live AI still poses after the retired car went quiet");
+  // Reconnect: a fresh pose for a LIVE AI after its own silence resumes owns().
+  assert.equal(gn.owns(guest.cars[3]), true, "live AI remains host-owned while packets flow");
+  t += 2500;
+  gn.tick(t);   // quiet long enough that wire 3 would go stale without a packet
+  assert.equal(gn.owns(guest.cars[3]), false, "silence hands a live AI to local until it speaks");
+  gs._state(NetSnapshot.encodeAged([{ id: 3, car: lapPose(980), at: t + 50 }]), t + 70);
+  gn.tick(t + 180);
+  assert.equal(gn.owns(guest.cars[3]), true, "reconnect resumes host ownership of live AI");
+  assert.ok(guest.cars[3].s > 950, "reconnect pose lands");
+  assert.equal(guest.cars[2].retired, true, "retired AI stays out through the live-AI reconnect");
+  hn.stop(); gn.stop();
+});
+
 test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire when it speaks; the race session waits 25 s", () => {
   const G = poseG(3);
   const net = NetPlay.create(G);

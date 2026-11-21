@@ -11006,6 +11006,9 @@
         "tests/unit/net-authority.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
       ],
+      "relayPush": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
