@@ -2203,7 +2203,7 @@ test("D-045 cleanTipSync: only a two-parent, conflict-free merge of a deploy fir
     // A conflict resolved by hand.
     f.g("reset", "-q", "--hard", f.h0); f.tipMove("docs/a.md", "tip-a\n", "tip edits the PR's line");
     spawnSync("git", ["merge", "-q", "--no-ff", "deploy-x"], { cwd: f.W, encoding: "utf8" });
-    f.write("docs/a.md", "resolved\n"); f.g("add", "-A"); f.g("-c", "core.editor=true", "commit", "-q", "--no-edit");
+    f.write("docs/a.md", "resolved\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "resolve the conflict by hand");
     const resolved = cleanTipSync({ cwd: f.W, sha: f.g("rev-parse", "HEAD"), firstParents: fp() });
     assert.deepEqual([resolved.ok, resolved.kind], [false, "conflict"], resolved.why);
     // A merge of a branch that is not on the deploy branch's first-parent line.
