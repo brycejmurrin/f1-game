@@ -4,9 +4,10 @@
  * darker sky) and the render half of js/game.js (strikes, spray).
  *
  * WHAT A STORM IS HERE. On the ROAD it is no wetter than rain, so grip and tread
- * treat it as full rain (asRain; TyreModel is not told about storms). What it
- * takes is VISIBILITY (the spray plume), which is why race control starts a
- * storm race behind the safety car and neutralises one a storm rolls over.
+ * treat it as full rain (TyreModel / WeatherArc map storm→rain locally; TyreModel
+ * is not told about storms). What it takes is VISIBILITY (the spray plume), which
+ * is why race control starts a storm race behind the safety car and neutralises
+ * one a storm rolls over.
  *
  * LIGHTNING IS A FUNCTION OF (seed, clock). The clock is cut into SLOT-second
  * windows; each window holds at most one strike, at an offset hashed from the
@@ -32,8 +33,6 @@ const Storm = (function () {
   const SC_ROLL_S = 150;       // s cap on the SC a storm rolling in mid-race deploys
 
   const is = (w) => w === "storm";
-  /** The weather a storm is FOR grip, tread, temperature and lighting presets. */
-  const asRain = (w) => (w === "storm" ? "rain" : w);
   const rainK = (w) => (w === "storm" ? RAIN_K : RAIN_1);
   const sprayK = (w) => (w === "storm" ? SPRAY_STORM : w === "rain" ? 1 : 0.6);
 
@@ -86,6 +85,6 @@ const Storm = (function () {
 
   return Object.freeze({
     SLOT, P_STORM, P_RAIN, THUNDER_MIN, THUNDER_MAX, SC_START_S, SC_ROLL_S, RAIN_K,
-    is, asRain, rainK, sprayK, strikeAt, strikeIn, schedule, flashOk, h01,
+    is, rainK, sprayK, strikeAt, strikeIn, schedule, flashOk, h01,
   });
 })();

@@ -40,10 +40,9 @@ run-name: >-
 # Re-evaluation after CI finishes is `workflow_run` (`check_suite` is not used: "To prevent recursive workflows,
 # [check_suite] does not trigger workflows if the check suite was created by GitHub Actions", same page; it ran 0
 # times in 14 days, r2 workflows.md). A CI run that ends red re-gates too, so a `gate` posted while CI ran never stays
-# pending. A Pages train finishing re-gates the open `land` PRs because the deploy tip moved (the gen and ratchets
-# rows are measured against the tip), skipping a PR whose head's `gate` is already failure (a push or a label flip
-# re-gates it), and arms at most one
-# of them (`priority` first, then oldest); the next train arms the next.
+# pending. A successful Pages completion for the live tip picks one eligible open train, priority PR, or oldest PR.
+# The trusted checks consider candidates in order; only the first pass starts a merge evaluation. Direct events still
+# invalidate a PR on a new head, body or label, even when a previous queue pass skipped the PR.
 # `workflow_run` "only triggers a workflow run if the workflow file exists on the default branch" (the deploy
 # branch). Its `pull_requests` array is the Pull Request Minimal shape (empty for forks,
 # https://docs.github.com/en/rest/checks/suites), so `resolve` reads each PR's state itself.
@@ -211,7 +210,11 @@ env:
 # a pending CI re-gate and a pending dispatch of one PR do the same work, since resolve reads the PR's live state.
 concurrency:
   group: >-
-    ${{ (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold'
+    ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
+        && github.event.workflow_run.head_repository.full_name == github.repository
+        && (github.event.workflow_run.name != 'Deploy to GitHub Pages' || github.event.workflow_run.conclusion != 'success')
+        && format('land-noise-{0}', github.run_id))
+    || (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold'
         && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land')))
     || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
@@ -232,7 +235,9 @@ jobs:
         || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land')
             && (github.event.action != 'edited' || github.event.changes.body))))
       || (github.event_name == 'workflow_run'
-        && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')
+        && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped'
+        && (github.event.workflow_run.head_branch != 'claude/f1-game-project-26h3ng' || github.event.workflow_run.head_repository.full_name != github.repository
+          || (github.event.workflow_run.name == 'Deploy to GitHub Pages' && github.event.workflow_run.conclusion == 'success')))
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -243,6 +248,7 @@ jobs:
     outputs:
       attempt: ${{ steps.pick.outputs.attempt }}
       landable: ${{ steps.pick.outputs.landable }}
+      validated_tip: ${{ steps.pick.outputs.validated_tip }}
       prs: ${{ steps.pick.outputs.prs }}
       notasked: ${{ steps.pick.outputs.notasked }}
       disarm: ${{ steps.pick.outputs.disarm }}
@@ -255,6 +261,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_REPO: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
@@ -282,39 +289,90 @@ jobs:
               | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
           }
           paused=$(merge_paused)
-          numbers=()
-          train=false   # the tip moved: re-gate every open `land` PR (at most 4 per run)
+          numbers=""
+          queue_pulls='[]'
+          train=false   # a validated deploy tip advances one eligible entry
           attempt=0
           if [ "$EVENT" = pull_request_target ]; then
-            numbers=("$PR_NUMBER")
+            numbers=$PR_NUMBER
           elif [ "$EVENT" = workflow_dispatch ]; then
             # An immediate re-gate (the `retry` job, or a person): one PR, resolved like a land/hold label event.
             if ! [[ "$IN_PR" =~ ^[0-9]{1,7}$ ]]; then echo "::error::workflow_dispatch input pr='$IN_PR' is not a PR number"; exit 1; fi
-            numbers=("$IN_PR")
+            numbers=$IN_PR
             # The budget counts per head: a head that moved since the retry was asked for starts again at 0.
             [[ "$IN_ATTEMPT" =~ ^[0-9]{1,3}$ ]] && attempt=$IN_ATTEMPT
           elif [ "$RUN_BRANCH" = "$DEPLOY_BRANCH" ] && [ "$RUN_REPO" = "$GITHUB_REPOSITORY" ]; then
-            if [ "$RUN_CONCLUSION" = success ]; then
-              # The train (or the tip's own suite) finished: the tip moved, so every open `land` PR is re-gated.
+            if [ "$RUN_NAME" = "Deploy to GitHub Pages" ] && [ "$RUN_CONCLUSION" = success ] && [[ "$RUN_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              # The completed publication triggers one queue pass; the nested CI is a duplicate signal.
               train=true
-              mapfile -t numbers < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label land --limit 50 --json number --jq '.[].number')
+              # The single queue listing supplies the same fields as the per-PR REST read used on direct events.
+              queue_pulls=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label land --limit 50 \
+                --json number,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,autoMergeRequest,labels,createdAt,body \
+                --jq '[.[] | {number, state:(.state|ascii_downcase), draft:.isDraft, base:{ref:.baseRefName},
+                  head:{sha:.headRefOid,ref:.headRefName}, mergeable:(.mergeable != "CONFLICTING"),
+                  auto_merge:.autoMergeRequest, labels, created_at:.createdAt, body}]')
+              numbers=$(jq -r '.[].number' <<<"$queue_pulls")
             else
               echo "::notice::deploy-branch $EVENT concluded '$RUN_CONCLUSION' — nothing to re-gate"
             fi
           else
             # A PR's CI finished, green or red: re-gate it so a `gate` posted while CI ran is settled either way.
-            mapfile -t numbers < <(jq -r --arg base "$DEPLOY_BRANCH" '(. // [])[] | select(.base.ref == $base) | .number' <<<"$CANDIDATES")
-            if [ "${#numbers[@]}" -eq 0 ] && [ -n "$RUN_SHA" ]; then
-              mapfile -t numbers < <(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/pulls" --jq ".[] | select(.base.ref == \"$DEPLOY_BRANCH\") | .number")
+            numbers=$(jq -r --arg base "$DEPLOY_BRANCH" '(. // [])[] | select(.base.ref == $base) | .number' <<<"$CANDIDATES")
+            if [ -z "$numbers" ] && [ -n "$RUN_SHA" ]; then
+              numbers=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/pulls" --jq ".[] | select(.base.ref == \"$DEPLOY_BRANCH\") | .number")
             fi
           fi
           rows='[]'
           notasked='[]'
           disarm='[]'
-          for n in "${numbers[@]}"; do
+          # #6055: reuse the pulls resolve already fetches (no extra `gh pr list --label train`). Pass 1 stores each
+          # open land PR; train_cars come from those with `train` + `train/` ref. Pass 2 classifies (resolveLandable).
+          # Sweep job untouched. Quota follow-ups own other land.yml surfaces.
+          gate_state() {
+            gh api "repos/$GITHUB_REPOSITORY/commits/$1/statuses?per_page=100" \
+              --jq '[.[] | select(.context == "gate")] | first | .state // ""'
+          }
+          fetched='[]'
+          while IFS= read -r n; do
             [ -n "$n" ] || continue
-            pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
-            state=$(jq -r .state <<<"$pr"); draft=$(jq -r .draft <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
+            if [ "$train" = true ]; then
+              pr=$(jq -c --argjson n "$n" '.[] | select(.number == $n)' <<<"$queue_pulls")
+            else
+              pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
+            fi
+            state=$(jq -r .state <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
+            head=$(jq -r .head.sha <<<"$pr")
+            labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
+            echo "PR #$n: state=$state draft=$(jq -r .draft <<<"$pr") base=$base head=${head:0:12} armed=$(jq -r '.auto_merge != null' <<<"$pr") labels=[$labels]"
+            if [ "$state" != open ] || [ "$base" != "$DEPLOY_BRANCH" ]; then continue; fi
+            # On a tip pass inspect the wrapper gate before using its manifest. Its normal status read moves
+            # here; parked cars still cost no status read. A refused or conflicting wrapper cannot claim cars.
+            if [ "$train" = true ] && jq -e '.draft == false and .mergeable != false and (.head.ref // "" | startswith("train/")) and
+                ([.labels[].name] | index("train") != null and index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null; then
+              wrapper_gate=$(gate_state "$head")
+              if [ "$wrapper_gate" = failure ]; then
+                pr=$(jq -c '.unavailableTrain = true' <<<"$pr")
+              else
+                pr=$(jq -c '.trainGateChecked = true' <<<"$pr")
+              fi
+            fi
+            fetched=$(jq -c --argjson p "$pr" '. + [$p]' <<<"$fetched")
+          done <<<"$numbers"
+          # A pushed car invalidates the whole fold. Release its unchanged siblings as well, and let
+          # train cleanup rebuild the wrapper. A direct PR event does not contain the rest of the board.
+          fetched=$(jq -c '
+            (map({key:(.number|tostring), value:.head.sha}) | from_entries) as $heads |
+            map(if .unavailableTrain != true and .draft == false and .mergeable != false and (.head.ref // "" | startswith("train/"))
+                   and ((.labels // [] | map(.name)) | index("train") != null and index("land") != null and index("hold") == null)
+                then ([.body // "" | capture("<!-- merge-train (?<j>\\{[^\\n]*\\}) -->")? | .j | fromjson? | .cars[]?
+                        | select((.pr | type) == "number" and (.head | strings | test("^[0-9a-f]{40}$"))) | {pr,head}]) as $cars |
+                     . + {trainCars:$cars, staleTrain:any($cars[]; ($heads[.pr|tostring] // .head) != .head)}
+                else . end)' <<<"$fetched")
+          train_cars=$(jq -c '[.[] | select(.staleTrain != true) | .trainCars[]?] | unique' <<<"$fetched")
+          while IFS= read -r pr; do
+            [ -n "$pr" ] || continue
+            n=$(jq -r .number <<<"$pr")
+            draft=$(jq -r .draft <<<"$pr")
             head=$(jq -r .head.sha <<<"$pr"); armed=$(jq -r '.auto_merge != null' <<<"$pr")
             if [ "$EVENT" = workflow_dispatch ]; then
               [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::PR #$n: no verifiable head"; exit 1; }
@@ -324,38 +382,48 @@ jobs:
             created=$(jq -r .created_at <<<"$pr")
             labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
             has() { [[ " $labels " == *" $1 "* ]]; }
-            echo "PR #$n: state=$state draft=$draft base=$base head=${head:0:12} armed=$armed labels=[$labels]"
-            if [ "$state" != open ] || [ "$base" != "$DEPLOY_BRANCH" ]; then continue; fi
             why=""
             if has hold; then why="the \`hold\` label is set"
             elif [ "$draft" = true ]; then why="the PR is a draft"
             elif ! has land; then why="no \`land\` label"
+            elif [ "$train" = true ] && jq -e '.unavailableTrain or .mergeable == false or .mergeable_state == "dirty"' <<<"$pr" >/dev/null; then
+              why="conflicting PR or refused train"
+            elif jq -e .staleTrain <<<"$pr" >/dev/null; then why="a boarded head moved; waiting for train cleanup"
+            elif ! has train && jq -e --argjson n "$n" --arg h "$head" 'any(.[]; .pr == $n and .head == $h)' <<<"$train_cars" >/dev/null; then
+              why="car of an open train"
             fi
             # `land` on a DRAFT does nothing until the flip: post (below) says so on `gate` and once per head in a comment.
             dl=false; [ "$draft" = true ] && has land && ! has hold && dl=true
             if [ -z "$why" ]; then
               if [ "$paused" = true ] && [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
-              prio=1; has priority && prio=0
-              if [ "$train" = true ]; then
+              if [ "$train" = true ] && [ "$paused" = true ]; then continue; fi
+              # train label first (prio -1), then priority (0), then oldest (1). Matches resolveLandable.
+              prio=1; has priority && prio=0; has train && prio=-1
+              if [ "$train" = true ] && ! jq -e .trainGateChecked <<<"$pr" >/dev/null; then
                 # A train re-gate skips a head whose `gate` is already failure: a PR refused on every train would
-                # otherwise hold a slot of the 4-PR slice for ever (WP-L3d). A push or a label flip re-gates it.
-                g=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
-                  --jq '[.[] | select(.context == "gate")] | first // {} | {id: (.id // 0), state: (.state // ""), description: (.description // "")}') || g='{}'
-                if [ "$(jq -r '.state // ""' <<<"$g")" = failure ]; then
+                # otherwise consume the next tip pass too (WP-L3d). A push or a label flip re-gates it.
+                latest_gate=$(gate_state "$head")
+                if [ "$latest_gate" = failure ]; then
+                  if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
                   echo "PR #$n: gate is already failure on ${head:0:12}; not re-gated by the train"
                   continue
                 fi
               fi
               rows=$(jq -c --argjson n "$n" --arg h "$head" --argjson p "$prio" --arg c "$created" '. + [{number: $n, head: $h, prio: $p, created: $c}]' <<<"$rows")
             else
+              # A direct event publishes its invalidation. A tip pass only needs to invalidate an armed PR here.
+              if [ "$train" = true ] && [ "$armed" != true ]; then continue; fi
               notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" --argjson d "$dl" '. + [{number: $n, head: $h, why: $w, draft: $d}]' <<<"$notasked")
               if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
             fi
-          done
-          # `priority` first, then oldest; at most 4 gates per run (the rest wait for the next train).
-          prs=$(jq -c 'sort_by(.prio, .created, .number) | .[:4] | map({number, head})' <<<"$rows")
+          done < <(jq -c '.[]' <<<"$fetched")
+          # The trusted checks below walk the sorted tip queue until the first eligible PR, including past the old four-PR window.
+          prs=$(jq -c --argjson train "$train" 'sort_by(.prio, .created, .number) | if $train then . else .[:4] end | map({number, head})' <<<"$rows")
+          validated_tip=""
+          if [ "$train" = true ]; then validated_tip=$RUN_SHA; fi
           landable=false; [ "$prs" != '[]' ] && landable=true
           {
+            echo "validated_tip=$validated_tip"
             echo "landable=$landable"
             echo "prs=$prs"
             echo "notasked=$notasked"
@@ -382,6 +450,7 @@ jobs:
       actions: read
     outputs:
       rows: ${{ steps.rows.outputs.rows }}
+      selected: ${{ steps.rows.outputs.selected }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -396,19 +465,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PRS: ${{ needs.resolve.outputs.prs }}
+          VALIDATED_TIP: ${{ needs.resolve.outputs.validated_tip }}
         run: |
           set -uo pipefail
           rows='[]'
+          if [ -n "$VALIDATED_TIP" ] && [ "$(git rev-parse HEAD)" != "$VALIDATED_TIP" ]; then
+            echo "The completed Pages run belongs to a superseded tip."
+            PRS='[]'
+          fi
+          flags=(--trusted)
+          if [ -n "$VALIDATED_TIP" ]; then flags+=(--queue-candidate); fi
           while IFS= read -r pr <&3; do
             n=$(jq -r .number <<<"$pr"); h=$(jq -r .head <<<"$pr")
-            code=0; out=$(node tools/ci/merge-gate.mjs --pr "$n" --sha "$h" --trusted 2>&1) || code=$?
+            code=0; out=$(node tools/ci/merge-gate.mjs --pr "$n" --sha "$h" "${flags[@]}" 2>&1) || code=$?
             echo "$out"
             line=$(grep -E '^= merge-gate ' <<<"$out" | tail -n 1)
             tip=$(sed -n 's/.* tip=\([0-9a-f]*\).*/\1/p' <<<"$line")
+            if [ -n "$VALIDATED_TIP" ]; then
+              # Read errors and a moving tip end this pass. A real refusal/wait can yield to the next candidate.
+              if [ "$code" = 5 ]; then continue; fi
+              if [ "$tip" != "$VALIDATED_TIP" ]; then break; fi
+              case "$code" in 0) ;; 2|3) continue ;; *) break ;; esac
+            fi
             rows=$(jq -c --argjson n "$n" --arg h "$h" --argjson c "$code" --arg l "$line" --arg t "$tip" \
               '. + [{number: $n, head: $h, code: $c, line: $l, tip: $t}]' <<<"$rows")
             [ "$code" != 4 ] || break   # trusted transport observed quota; leave later heads for the sweep
+            if [ -n "$VALIDATED_TIP" ]; then break; fi
           done 3< <(jq -c '.[]' <<<"$PRS")
+          echo "selected=$(jq -c 'map({number,head})' <<<"$rows")" >> "$GITHUB_OUTPUT"
           echo "rows=$rows" >> "$GITHUB_OUTPUT"
 
   # THE GATE: merge-gate.mjs --check, one fresh runner per PR. The merge result's own scripts run here, so the token
@@ -417,15 +501,15 @@ jobs:
   # would poison ci.yml and pages.yml (r2 landing-design, cache poisoning). No receipt, no bus.
   land-gate:
     name: land-gate (#${{ matrix.pr.number }})
-    needs: resolve
-    if: needs.resolve.outputs.landable == 'true'
+    needs: [resolve, trusted-rows]
+    if: needs.trusted-rows.outputs.selected != '' && needs.trusted-rows.outputs.selected != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        pr: ${{ fromJSON(needs.resolve.outputs.prs) }}
+        pr: ${{ fromJSON(needs.trusted-rows.outputs.selected) }}
     permissions:
       contents: read
       pull-requests: read
@@ -473,7 +557,9 @@ jobs:
     needs: [resolve, trusted-rows, land-gate]
     if: >-
       !cancelled() && needs.resolve.result == 'success'
-      && (needs.resolve.outputs.landable == 'true' || needs.resolve.outputs.notasked != '[]' || needs.resolve.outputs.disarm != '[]')
+      && ((needs.resolve.outputs.validated_tip == '' && needs.resolve.outputs.landable == 'true')
+        || (needs.trusted-rows.outputs.selected != '' && needs.trusted-rows.outputs.selected != '[]')
+        || needs.resolve.outputs.notasked != '[]' || needs.resolve.outputs.disarm != '[]')
     runs-on: ubuntu-latest
     # The 10-minute post phase plus runner and download margin; arm is its own queued job (finding 3).
     timeout-minutes: 13
@@ -500,7 +586,7 @@ jobs:
         timeout-minutes: 1
         run: echo "deadline=$(( $(date -u +%s) + 600 ))" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: needs.resolve.outputs.landable == 'true'
+        if: needs.land-gate.result != 'skipped'
         timeout-minutes: 10
         continue-on-error: true
         with:
@@ -514,7 +600,7 @@ jobs:
           POST_DEADLINE: ${{ steps.post_budget.outputs.deadline }}
           GH_TOKEN: ${{ github.token }}
           DISARM_TOKEN: ${{ secrets.LAND_TOKEN || github.token }}
-          PRS: ${{ needs.resolve.outputs.prs }}
+          PRS: ${{ needs.resolve.outputs.validated_tip && (needs.trusted-rows.outputs.selected || '[]') || needs.resolve.outputs.prs }}
           NOTASKED: ${{ needs.resolve.outputs.notasked }}
           DISARM: ${{ needs.resolve.outputs.disarm }}
           PAUSED: ${{ needs.resolve.outputs.paused }}

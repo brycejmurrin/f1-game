@@ -472,14 +472,36 @@ test("older backup keeps the Grand Prix stage after a zero-point sprint", () => 
   }
 });
 
-test("seasonAhead compares the cleaned round: round 250 is 0, so a local round-5 season stays", () => {
+test("a backup season with round 250 is refused, so a local round-5 season stays", () => {
+  // round>200 is season-invalid (same as recovery), not coerced to 0. Local
+  // progress still stays because validate/apply refuse the whole envelope.
   const h = loadHarness();
   const local = { round: 5, pts: {}, teamPts: {}, driverCodes: {} };
   h.store.write("season", local);
   const envelope = { format: "apex26-career-backup-v1", slots: [], season: { round: 250, pts: {}, teamPts: {}, driverCodes: {} } };
-  assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
-  assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  const preview = h.CareerBackup.preview(envelope);
+  assert.equal(preview.ok, false);
+  assert.equal(preview.reason, "season-invalid");
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "season-invalid");
   assert.equal(h.store.get("season", null).round, 5);
+});
+
+test("a standalone season with round>200 is refused, not silently reset to round 0 with its points", () => {
+  const h = loadHarness();
+  const envelope = {
+    format: h.CareerBackup.FORMAT,
+    slots: [],
+    season: { round: 201, pts: { "haas:0": 400 }, teamPts: { haas: 400 }, driverCodes: {} },
+  };
+  const checked = h.CareerBackup.validate(envelope);
+  assert.equal(checked.ok, false);
+  assert.equal(checked.reason, "season-invalid");
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "season-invalid");
+  assert.equal(h.store.get("season", null), null);
 });
 
 test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {

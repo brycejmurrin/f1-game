@@ -9374,6 +9374,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "defaults": [
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],

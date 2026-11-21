@@ -168,6 +168,11 @@ test("lightning: interval filtering preserves exact strike records and endpoint 
     assert.equal(S.strikeIn(1, t0, t1, 1, "storm"), null);
 });
 
+test("Storm no longer exports asRain (WeatherArc / TyreModel own the storm→rain map)", () => {
+  const { S } = bootArc();
+  assert.equal(Object.prototype.hasOwnProperty.call(S, "asRain"), false);
+});
+
 test("lightning never flashes under reduced motion (source guard on renderLightingPrep strike)", () => {
   const { S } = bootArc();
   assert.equal(S.flashOk(true), false);
