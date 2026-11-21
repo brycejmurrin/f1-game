@@ -1128,6 +1128,24 @@ test("land.yml post: the pass-time CI re-read counts only the PR's own ci.yml ru
   assert.ok(bot.out.arm, "the fold bot's dispatched CI on its own branch still counts");
 });
 
+test("land.yml post (finding 8): every `= merge-gate error, will retry` path hands the PR to retry", () => {
+  const { env, files } = postFixture();
+  const post = LAND.jobs.post.steps.find(s => s.id === "post");
+  const retried = (r) => JSON.parse(r.out.retry || "[]").map((x) => x.number);
+  const titles = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)).description);
+  let r = runStep(post.run, env, {});
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(titles(r)[0].startsWith("= merge-gate error, will retry"), titles(r)[0]);
+  assert.deepEqual(retried(r), [7], "no verdict artifact: retried");
+  r = runStep(post.run, { ...env, NOW_TIP: "" }, files);
+  assert.ok(titles(r)[0].startsWith("= merge-gate error, will retry — could not read the deploy tip"), titles(r)[0]);
+  assert.deepEqual(retried(r), [7], "deploy tip unread: retried");
+  r = runStep(post.run, env, { "verdicts/7.json": JSON.stringify({ number: 7, head: TIP_B, code: 0, line: "x", tip: TIP_A, out: "rows" }) });
+  assert.deepEqual(retried(r), [7], "a verdict for another head: retried");
+  r = runStep(post.run, env, { "verdicts/7.json": JSON.stringify({ number: 7, head: HEAD7, code: 2, line: "= merge-gate refused", tip: TIP_A, out: "rows" }) });
+  assert.deepEqual(retried(r), [], "a refusal is a verdict, never retried");
+});
+
 test("land.yml combined steps: failed post or rejected status write cannot arm", () => {
   const { env, files } = postFixture();
   const missing = { ...env }; delete missing.PAUSED;
@@ -1371,13 +1389,13 @@ test("land.yml post: an empty tip on either leg is refused and re-gated, not equ
   assert.ok(run.indexOf('-z "$ttip"') < run.indexOf('"$ttip" != "$tip"'), "the empty check runs before the equality check");
 });
 
-test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry; other errors are not", () => {
+test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry, and so are the will-retry errors", () => {
   const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
   assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "the trusted-rows/land-gate tip split asks for a re-gate");
   assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "a verdict whose tip is no longer the deploy tip asks for a re-gate");
-  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 4, "no other branch asks for a re-gate");
+  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 6, "the two tip moves, the trusted-rows gap and the three `will retry` errors (finding 8); a refusal never");
   assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
 });

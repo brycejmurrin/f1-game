@@ -573,7 +573,7 @@ jobs:
             fi
           }
           # want_retry <n> <head>: hand the PR to the `retry` job (an immediate re-gate, RETRY_MAX per head).
-          want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '. + [{number: $n, head: $h}]' <<<"$retry"); }
+          want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '(. + [{number: $n, head: $h}]) | unique_by(.number)' <<<"$retry"); }
           # A PR that no longer asks to land: an existing `gate` status turns red ("not asked" is not a pass).
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); why=$(jq -r .why <<<"$row")
@@ -666,6 +666,7 @@ jobs:
                    write_gate "$head" in_progress "" "= merge-gate paused — dispatch:merge-pause is set on the Dispatch issue" "$line"$'\n\n'"$out" || ok=false
                  elif [ -z "$now" ]; then
                    write_gate "$head" in_progress "" "= merge-gate error, will retry — could not read the deploy tip" "$line"$'\n\n'"$out" || ok=false
+                   want_retry "$n" "$head"
                  elif [ "$now" != "$tip" ]; then
                    write_gate "$head" in_progress "" "= merge-gate waiting — the deploy tip moved since the gate measured ${tip:0:12} (now ${now:0:12}): re-gating" "$line"$'\n\n'"$out" || ok=false
                    want_retry "$n" "$head"
@@ -677,7 +678,9 @@ jobs:
               3) write_gate "$head" in_progress "" "$line" "$out" || ok=false ;;
               2) write_gate "$head" completed failure "$line" "$out" || ok=false ;;
               *) echo "::error::PR #$n: merge-gate error (exit $code): ${line:-no verdict}"
-                 write_gate "$head" in_progress "" "= merge-gate error, will retry — ${line:-exit $code}" "$out" || ok=false ;;
+                 # "will retry" is made true here (finding 8): the `retry` job re-gates it, RETRY_MAX per head.
+                 write_gate "$head" in_progress "" "= merge-gate error, will retry — ${line:-exit $code}" "$out" || ok=false
+                 want_retry "$n" "$head" ;;
             esac
             [ "$ok" = true ] || echo "::warning::PR #$n: could not write gate"
             if [ -n "$WROTE" ] && [ "$WROTE" != success ]; then disarm_if_armed "$n" "gate is now $WROTE on ${head:0:12}"; fi
