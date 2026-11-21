@@ -553,6 +553,8 @@ vec3 ssrViewPos(vec2 uv) {
 ${GLXChunks.ignoise}
 void main() {
   outColor = vec4(0.0);
+  // Scene .a is the SSR car tag (same fetch COMPOSITE used before the F3 split).
+  vec4 scn = texture(uScene, vUV);
   float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
     // Opaque .75 porous receivers reject road SSR; .35 car paint keeps its own path.
     float roadPx = smoothstep(0.85, 0.95, scn.a);

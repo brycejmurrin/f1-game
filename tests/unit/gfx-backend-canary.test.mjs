@@ -4776,10 +4776,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(ownershipFlush, "").replace(ownershipDrop, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
-  // one array per skid mark per frame.
-  const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  // one array per skid mark per frame. F5 blob batch is GLXShadow.attachBlobBatch.
+  const glx = (read("js/render/glx/glx.js") + "\n" + read("js/render/glx/shadow.js")).replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
-  // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
+  // Four since 2026-09-08: blob shadow, mark, skid batch, and the DRIVING LINE ribbon.
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
   // TLX: three honours any depthBias a material carries. The fx decals must sit
   // nearer than the road (they were -4/-8 over a [-8,-16] road and vanished,
