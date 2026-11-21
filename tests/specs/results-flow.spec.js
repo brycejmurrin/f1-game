@@ -1,6 +1,7 @@
 // @ts-check
 // Production acceptance must cross the line and use real controls. Missing
 // ceremony support fails; no capability skip or debug-seek proves acceptance.
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS, RACE_BUILD_MS } from "../helpers/fixtures.js";
 import { startCareer, goRacing } from "../helpers/career-boot.js";
 import fs from "node:fs";
@@ -385,8 +386,8 @@ test.describe("results-flow — desktop cooldown ownership", () => {
 // in the pane. The short-touch gate in css/overlays.css holds it compact (probe 2026-11-16 at 0.7: 44 px rows; pins 4 / 1 / 4; 2.4-2.6 / 3.39 / 2.82 scrolling rows in A / C / D).
 const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
 const CONTRACT_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
+  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS.standalone.insets.bottom } },
+  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS["safari-short"].insets.bottom } },
   { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
 ];
 for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells — " + win.name, () => {

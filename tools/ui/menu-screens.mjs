@@ -55,7 +55,7 @@ export const VIEWPORTS = [
   // THE OWNER'S PHONE (tools/lib/bryce-phone.mjs, issue #5262). Named `bryce-*` so an `ios-*` glob never picks them
   // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 70 %),
   // and layout-audit sets real env() insets and prints the PAINTED sizes (tools/lib/paint-floor.mjs).
-  ...["standalone", "safari"].map((w) => {
+  ...["standalone", "safari", "safari-short"].map((w) => {
     const p = brycePhone({ window: w, dpr: 2, profile: false });
     return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w === "standalone" ? "Home Screen app" : "Safari tab"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
       { t: p.insets.top, r: p.insets.right, b: p.insets.bottom, l: p.insets.left }, { bryce: w }];

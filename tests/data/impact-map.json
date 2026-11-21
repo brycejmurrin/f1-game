@@ -1738,7 +1738,8 @@
       ],
       "read": [
         "tests/unit/camera-feel.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "resetFollow": [
         "tests/unit/camera-feel.test.mjs"
@@ -21429,6 +21430,7 @@
       ],
       "*": [
         "tests/unit/load-order.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/settings-tabs.test.mjs"
       ]
     },

@@ -16,7 +16,7 @@ import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 //
 //   node tools/ui/menu-fit.mjs                 # default 852x393 (iPhone 15 Pro landscape)
 //   node tools/ui/menu-fit.mjs 844x390 390x844 932x430
-//   node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21   # simulate notch insets (l,t,r,b)
+//   node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,20   # simulate notch insets (l,t,r,b)
 //   node tools/ui/menu-fit.mjs 852x393 --scale=100,130,150 # ...at each interface size
 //
 // --safe is the point of this tool. Headless Chromium reports every

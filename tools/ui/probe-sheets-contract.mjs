@@ -1,6 +1,7 @@
 // @doc UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the
 // contract windows A/C/D seeded from the owner export, x textSize x uiScale. Parent only (one browser); needs `npx serve -l 3456 .`.
 // Usage: node tools/ui/probe-sheets-contract.mjs [A,C,D] [owner|full] [out.json]. Cells per the UI contract note (PR #5154) §2.
+import { BRYCE_WINDOWS } from "../lib/bryce-phone.mjs";
 import { chromium, devices } from "playwright";
 import fs from "node:fs";
 
@@ -8,8 +9,8 @@ const ROOT = "/home/user/f1-game";
 const EXPORT = JSON.parse(fs.readFileSync(ROOT + "/tests/data/settings-defaults-export.json", "utf8"));
 const EXPORT_UI = EXPORT.uiScale == null ? null : Math.round(100 * EXPORT.uiScale);   // percent for __apex.uiScale; null = the export's default
 const WINDOWS = [
-  { name: "A", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
-  { name: "C", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
+  { name: "A", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS.standalone.insets.bottom },
+  { name: "C", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom },
   { name: "D", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
 const only = process.argv[2] ? process.argv[2].split(",") : null;

@@ -459,7 +459,7 @@ function initUI() {
   if (typeof document === "undefined") return;
   initKeys();
   const gate = typeof SettingsNav !== "undefined" && SettingsNav.lazy;
-  if (gate) SettingsNav.lazy(() => { initRows(); buildSubmenu(); }); else initRows();
+  if (gate) gate(initRows); else initRows();
 }
 
 function initRows() {
@@ -512,6 +512,7 @@ function initRows() {
     );
     insertAfter(host, ins, _logLvlBtn);
   }
+  buildSubmenu();
 }
 
 function initKeys() {
@@ -626,18 +627,6 @@ function buildSubmenu() {
 
   paintSettingBtns();
 }
-
-function scheduleSubmenu() {
-  // A VM harness may hand this file a document with no timers (the metrics
-  // unit test does): the submenu is DOM sugar, so it simply does not build there.
-  if (typeof document === "undefined" || typeof setTimeout !== "function") return;
-  const run = () => setTimeout(buildSubmenu, 0);
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
-  else run();
-  setTimeout(buildSubmenu, 250);
-  setTimeout(buildSubmenu, 1000);
-}
-scheduleSubmenu();
 
 // Read-only Playwright seam: PerfGov.frameStats() + a longtask ring for
 // tests/specs/perf-frametime.spec.js. Does not touch gameplay; reset only

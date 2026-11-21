@@ -1,4 +1,5 @@
 // @ts-check
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { exportStore } from "../helpers/title-fit.mjs";
 
@@ -120,15 +121,15 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
 // with the test above green, because it boots 844x390 on the default profile with no safe-area insets and asserts
 // that a control can be tapped, never how big it paints (#5179: PAUSE ~55 px and CAM ~97x55 at BUTTON 245 %) or
 // whether a sheet's doors can be hit (#5200). This cell is the iPhone Home Screen app in landscape: 852x393, real
-// env() insets 59/21/59 through CDP, touch, and the legacy settings export (tools/lib/bryce-phone.mjs `legacy`:
+// env() insets 59/20/59 through CDP, touch, and the legacy settings export (tools/lib/bryce-phone.mjs `legacy`:
 // HUD 155 %, BUTTON 245 %, large text, high contrast, buttons steering; the October 2026 file, not his phone today). Sizes are asserted with an upper bound
 // and every door by elementFromPoint, opened by a trusted tap on #pausebtn rather than `hidden = false`.
 // Not covered here, by measurement on e808230: at UI SIZE 50 RESUME has an on-screen rect but the tap lands on
 // the sheet (#5200, fixed by its own PR, which owns ui-resize.spec.js); display-mode standalone cannot be emulated.
 // The renderer stays the fixture's pinned GLX: this is a layout cell.
-test.describe("owner phone: 852x393 Home Screen app, insets 59/21/59, exported profile", () => {
+test.describe("owner phone: 852x393 Home Screen app, insets 59/20/59, exported profile", () => {
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
-  const INSETS = { top: 0, left: 59, bottom: 21, right: 59 };
+  const INSETS = BRYCE_WINDOWS.standalone.insets;
 
   test("race chrome keeps a fixed size and the pause doors can be tapped", async ({ page }) => {
     const store = exportStore();

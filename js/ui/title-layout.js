@@ -190,7 +190,7 @@ const TitleLayout = (function () {
       el.style.setProperty("--tf", tf.toFixed(3));
       const r = el.getBoundingClientRect();
       if (r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1)) > availH || r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1)) > availW) return false;
-      // A clipped label span rejects the tier, the .mb-sub ellipsis excepted (#5378: Safari 852×283).
+      // A clipped label span rejects the tier, the .mb-sub ellipsis excepted (#5378: 852×283 stress case).
       for (const b of el.querySelectorAll(".bigbtn")) {
         if (b.hidden || b.closest("[hidden]")) continue;
         if (b.scrollWidth > b.clientWidth + 1) return false;
