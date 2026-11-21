@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 40
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_definition
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -44,7 +44,9 @@ that says where it stopped is safe, one that implies completeness is not.
    There is no `js/game/` directory: the 2026-09 restructure dissolved it, so
    a scope naming it greps nothing and the audit reports a clean tree it
    never read.
-2. Grep `Tracks.curvature(` AND its aliases `kPath`, `c.kCur`, `S.k` (trace the human-branch `k` to its consumers), the other arc derivatives `pathK`, `bankAngle`, `lineAt` / `TrackLine.`, plus racing-line reads under `js/game.js` and the
+2. Start from `lsp_callers {symbol: "Tracks.curvature"}` (and `lsp_references` for each alias binding it names:
+   rows give the enclosing function, comments and strings excluded; Bash fallback `node tools/mcp/lsp-mcp.mjs callers Tracks.curvature`),
+   then grep `Tracks.curvature(` AND its aliases `kPath`, `c.kCur`, `S.k` (trace the human-branch `k` to its consumers), the other arc derivatives `pathK`, `bankAngle`, `lineAt` / `TrackLine.`, plus racing-line reads under `js/game.js` and the
    directories the §Curvature channels table names (re-derive the list from it; it grows).
    A site that reads none of these but derives from the car's own state (its
    bicycle model, road pitch, slip) is not an arc read and takes no column:

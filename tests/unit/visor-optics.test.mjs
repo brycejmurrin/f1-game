@@ -313,9 +313,14 @@ test("visor tick: falls back to camState + lightState without visorScene, and re
 test("visor tick: a Pages build WITHOUT the dev API (__apex null) still paints the glint from game.js's G", () => {
   // Perf hunt 9: readScene() returned null unless window.__apex existed, and only bindAgent (the LAZY_AGENT
   // inject) set visorScene — so a player's build never painted the helmet visor glint (0 paints in 30 ticks).
+  // #5964: that fix read `typeof G` by name, which a browser never satisfies (G is a function-scoped const in
+  // game.js's IIFE; this test used to put G on the VM global, which hid it). game.js now calls VisorOptics.bind(G).
   const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: DAY.fov, _lastFloodEmit: 0,
     frame: { sunDir: DAY.sunDir, sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, lights: null, tailStart: 0 } };
   const { V, calls } = load({ apex: null, G });
+  for (let i = 0; i < 5; i++) V.tick(1 / 60, true, 0, false);
+  assert.equal(V.stats().paints, 0, "a G on the global scope alone is not read: only the bound façade is");
+  V.bind(G);
   for (let i = 0; i < 30; i++) V.tick(1 / 60, true, 0, false);
   const st = V.stats();
   assert.ok(st.paints > 0, `paints from G with no __apex (${st.paints})`);
@@ -583,3 +588,4 @@ test("#5018 visor projects through the lens the world was drawn with: the fitted
     `the glint rolls with the horizon (${rolled.x.toFixed(1)}, ${rolled.y.toFixed(1)})`);
   assert.equal(V.sceneFromG({ ...G, camRoll: 0.2 }).roll, 0.2);
 });
+

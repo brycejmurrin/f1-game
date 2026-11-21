@@ -35,7 +35,7 @@ brief adds only task facts.
 
 ASK (Bryce's words, with the time): "<quote>"
 TASK: <the one unit; what a player or an agent would see when it is done>
-EVIDENCE: <the measurement or repro, its command, the precedent PR to copy>
+EVIDENCE: <the measurement or repro, its command, the precedent PR to copy; name JS symbols as apex-lsp calls, e.g. `lsp_callers Tracks.curvature`>
 STATE: head <sha> at <time>; open PRs that touch the same paths (shared, not a blocker: D-033): <list>; decisions already made: <comment URLs>
 PROFILE (phone UI only): newest `tests/data/settings-live-export-*.json`, dated <date>; quote it, do not trust a
   number in this brief over that file [16]

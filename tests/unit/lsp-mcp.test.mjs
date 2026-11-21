@@ -192,7 +192,8 @@ test("MCP client: wrapS callers keep same-file uses, bounds-checked positions, T
   // The declaration behind Tracks' destructured re-export is a row, and the header names it
   // (never presenting the use-site anchor as the answer).
   assert.deepEqual(rows(refs).filter(r => r.tag === "def").map(r => r.file), ["js/track/core/spline.js"]);
-  assert.equal(/; declared at (\S+):\d+:\d+\)$/.exec(refs.content[0].text.split("\n")[0])?.[1], "js/track/core/spline.js");
+  // Notes may follow (2026-11-20: refs now count uses reached through destructures, as callers did).
+  assert.equal(/; declared at ([^\s;)]+):\d+:\d+[;)]/.exec(refs.content[0].text.split("\n")[0])?.[1], "js/track/core/spline.js");
 });
 
 test("tsc --lsp starts on the first call, exits when idle, and restarts on demand", { timeout: 60000 }, async () => {
@@ -332,8 +333,14 @@ test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are no
   for (const loud of [{ tool_name: "Bash", tool_input: { command: "rg -t js GameHud js/" } }, { tool_name: "Bash", tool_input: { command: "grep -A 3 GameHud js/ui" } },
     { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } },
     { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "./js/ui" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "." } },
-    { tool_name: "Bash", tool_input: { command: "grep -rn GameHud | head" } }])
+    { tool_name: "Bash", tool_input: { command: "grep -rn GameHud | head" } },
+    // 2026-11-20 transcript survey (docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md): alternations, and camelCase locals in js/.
+    { tool_name: "Bash", tool_input: { command: "grep -rn 'chainWindowRaf\\|XrBoot' js" } }, { tool_name: "Bash", tool_input: { command: "grep -n 'penaltyWhy' js/ui/results-sheet.js" } },
+    { tool_name: "Grep", tool_input: { pattern: "wrapS", path: "js/track/core/spline.js" } }, { tool_name: "Bash", tool_input: { command: "rg -n 'mirrorMips|TEXTURE_MAX_LEVEL' js/render" } }])
     assert.equal(hint(loud), true, JSON.stringify(loud));
+  // camelCase only inside an explicit js/ search; prose words never.
+  for (const quiet of [{ tool_name: "Grep", tool_input: { pattern: "wrapS", path: "tools" } }, { tool_name: "Bash", tool_input: { command: "grep -rn 'the race\\|a lap' js/ui" } }])
+    assert.equal(hint(quiet), false, JSON.stringify(quiet));
 });
 
 test("advertised argument constraints and JSON-RPC envelopes fail before starting tsc", async () => {
