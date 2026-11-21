@@ -2928,7 +2928,6 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
     },
@@ -3362,6 +3361,7 @@
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "tracePath": [
@@ -3685,6 +3685,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "drawSpineTop": [
@@ -3777,6 +3778,9 @@
       "inkOn": [
         "tests/unit/crest-marks.test.mjs"
       ],
+      "liveryHi": [
+        "tests/unit/tier-record.test.mjs"
+      ],
       "markBase": [
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/livery-contrast.test.mjs"
@@ -3834,8 +3838,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/legends-team.test.mjs",
-        "tests/unit/tier-record.test.mjs"
+        "tests/unit/legends-team.test.mjs"
       ]
     },
     "js/car/parts.js": {
@@ -3961,6 +3964,7 @@
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/reliability.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tyre-model.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/wait-polling.test.mjs",
@@ -5672,6 +5676,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/stage-minify.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
@@ -5878,6 +5883,7 @@
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/track-foundation.test.mjs",
@@ -6596,6 +6602,7 @@
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/setup-tune.test.mjs",
         "tests/unit/store-null-default.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/tyre-model.test.mjs",
@@ -10339,6 +10346,7 @@
         "tests/unit/pit-canopy-cull.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-carsurf.test.mjs",
         "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
@@ -11807,6 +11815,7 @@
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-mat-detail.test.mjs",
         "tests/unit/tsl-gi.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
@@ -16200,13 +16209,15 @@
         "tests/unit/glx-light-fit.test.mjs"
       ],
       "hiBuilt": [
-        "tests/unit/gfx-hi-absent.test.mjs"
+        "tests/unit/gfx-hi-absent.test.mjs",
+        "tests/unit/tier-record.test.mjs"
       ],
       "setSlots": [
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/gfx-hi-absent.test.mjs",
-        "tests/unit/pit-canopy-cull.test.mjs"
+        "tests/unit/pit-canopy-cull.test.mjs",
+        "tests/unit/tier-record.test.mjs"
       ],
       "slots": [
         "tests/unit/all-lights-fill.test.mjs",
@@ -16229,7 +16240,6 @@
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/mirror-lights.test.mjs",
-        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-carsurf.test.mjs",
         "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -16359,6 +16369,7 @@
       "*": [
         "tests/unit/mip-footprint-lod.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
@@ -16554,6 +16565,7 @@
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
@@ -16607,6 +16619,7 @@
       ],
       "postChain": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
@@ -16699,6 +16712,7 @@
       ],
       "cast": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "castInstanced": [
@@ -16810,6 +16824,7 @@
         "tests/unit/tlx-round2.test.mjs"
       ],
       "shadowSys": [
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-gpumem-leak.test.mjs",
@@ -16827,7 +16842,6 @@
       ],
       "*": [
         "tests/unit/frame-hitch-analyse.test.mjs",
-        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ]
     },
@@ -17022,8 +17036,10 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/three-inspector.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-lite-lab.test.mjs",
+        "tests/unit/tlx-mat-detail.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
@@ -17471,11 +17487,15 @@
       ],
       "sdSegment": [
         "tests/unit/tlx-carsurf.test.mjs"
+      ],
+      "*": [
+        "tests/unit/tier-record.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
       "chunks": [
         "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-carsurf.test.mjs",
         "tests/unit/tlx-crowd-anim.test.mjs",
         "tests/unit/tlx-csm-lampx.test.mjs",
@@ -17529,6 +17549,7 @@
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-glow-instancing.test.mjs"
       ]
     },
@@ -17701,6 +17722,7 @@
       "dispose": [
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tier-record.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
@@ -17731,8 +17753,7 @@
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs",
-        "tests/unit/tier-record.test.mjs"
+        "tests/unit/surface-id-parity.test.mjs"
       ]
     },
     "js/render/three/tsl-viewport.js": {
