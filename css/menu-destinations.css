@@ -69,8 +69,8 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(.6rem, calc(1.25*var(--vwz)), var(--fs-micro)); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
-/* Dense Home: portrait, desktop and tablet (any viewport 520px tall or more, or portrait) share the landscape shape. Groups dissolve into one 2-column grid, so every door is one
-   tile; pairs/threes/utilities are flex rows. Compact-wide (phone landscape) keeps its own rules above. */
+/* Dense Home (portrait, desktop, tablet): one 2-column grid, a tile per door, flex rows for pairs and utilities.
+   Phone landscape keeps its rules above. */
 @media (min-height: 520px), (max-aspect-ratio: 1/1) {
 body #overlay #menu-buttons {
   --hg: calc(var(--gap) * .4); --hrow: clamp(44px, 6.4svh, 64px);
@@ -124,13 +124,14 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
    retain Garage's reserved cell; wider short screens use the grid below. */
 :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   grid-column: 2; grid-row: 1;
-  /* Use the available right-hand track. A 34vwz cluster left usable space
-     empty while wrapping labels and utility buttons on a notched phone. */
+  /* The whole right-hand track (34vwz wrapped labels on a notched phone). */
   width: 100%; max-width: 100%; min-width: 0;
   height: 100%; max-height: 100%; align-self: stretch; justify-self: center;
   align-content: safe center; pointer-events: auto;
   container: title-menu / inline-size;
 }
+/* Skewed door tips; the live plate pads it (#5976). */
+html:not([data-home-live]) :where(body:not(.desktop)[data-shape="wide"]) #overlay #menu-buttons { padding-inline: calc(var(--gap) * .375); }
 /* Button width and layout do not resize the brand or hide its disclaimer (#5167). */
 :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
   align-self: start; margin-top: calc(4 * var(--vhz));

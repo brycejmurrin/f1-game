@@ -183,6 +183,10 @@ test("the title Button Style setting survives rotation and reload", async ({ bro
       const css = getComputedStyle(button);
       return { id: button.id, fill: css.backgroundColor, image: css.backgroundImage, ink: css.color, font: css.fontStyle, transform: css.transform };
     }));
+  // A reference read while a door's colour transition is still running (0.01 ms under reduce, but it ends on
+  // the next animation tick) holds the old shape's colours, and no later poll matches it (#5976, CI 44857761296).
+  const still = () => page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"
+    || !["mb-career", "mb-race", "mb-settings"].includes(/** @type {any} */ (a.effect)?.target?.id)), null, { polling: "raf" });
   const choose = async (current, next) => {
     await page.locator("#mb-settings").tap();
     await page.locator("#pm-open-appearance").tap();
@@ -201,9 +205,11 @@ test("the title Button Style setting survives rotation and reload", async ({ bro
     await load();
     await rotate("standalone");
     await expect(page.locator("#mb-race")).toHaveCSS("font-style", "italic");
+    await still();
     const racing = await paint();
     await rotate("portrait");
     await expect(page.locator("#mb-race")).toHaveCSS("font-style", "normal");
+    await still();
     const flat = await paint();
 
     await choose("auto", "racing");

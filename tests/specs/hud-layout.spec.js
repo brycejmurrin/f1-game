@@ -1046,8 +1046,11 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.go());
-    await page.waitForFunction(() => document.getElementById("hud-sectors").getBoundingClientRect().height > 65,
-      null, { polling: 100, timeout: BOOT_MS }); // first race HUD tick builds the rows: frame-bound on SwiftShader, like the boot waits above
+    // The race HUD is up and has painted the plate: frame-bound on SwiftShader, like the boot waits above. Not a
+    // height: the phone seed (PHONE_STANDARD, js/ui/hud-layout.js) sizes this plate at 70 %, 61 px tall (#5976).
+    await page.waitForFunction(() => window.__apex.info().state === "race" && !document.getElementById("hud").hidden
+      && document.getElementById("hud-sectors").getBoundingClientRect().height > 0,
+      null, { polling: 100, timeout: BOOT_MS });
     // Hold timing content steady while normal HUD ticks continue fitting.
     await page.evaluate(() => { __apex.freeze(true); __apex.headless(true); });
     // DRAGGED THERE, not dropped: the old pass was bistable; a finger drag crosses both positions.
@@ -1889,11 +1892,15 @@ test.describe("unrestricted manual widgets", () => {
     const detached = await page.evaluate(() => {
       const el = document.getElementById("hud-energy"), parent = el.parentNode.id;
       HudLayout.resetEl("energy");
-      const restored = el.parentNode.classList.contains("hud-bottom");
+      // Reset restores the FACTORY placement. On a touch phone's STANDARD HUD that is the PHONE_STANDARD seed
+      // (js/ui/hud-layout.js, Bryce 2026-11-20): #hud owns it, flagged data-hl-seed + data-hl-bottom so the
+      // bottom band's caps still measure it. Anything without a seed goes back into .hud-bottom.
+      const seeded = el.hasAttribute("data-hl-seed");
+      const restored = seeded ? el.parentNode.id === "hud" && el.hasAttribute("data-hl-bottom") : el.parentNode.classList.contains("hud-bottom");
       HudLayout.set("energy", { x: 125.25, y: -110.5, s: 20 });
-      return { parent, restored, detachedAgain: el.parentNode.id };
+      return { parent, seeded, restored, detachedAgain: el.parentNode.id, seedAgain: el.hasAttribute("data-hl-seed") };
     });
-    expect(detached).toEqual({ parent: "hud", restored: true, detachedAgain: "hud" });
+    expect(detached).toEqual({ parent: "hud", seeded: true, restored: true, detachedAgain: "hud", seedAgain: false });
     const mapSizes = await page.evaluate(() => {
       const body = document.body, previous = body.getAttribute("data-density");
       const sizes = ["compact", "normal"].map(density => {
@@ -1932,11 +1939,13 @@ test.describe("unrestricted manual widgets", () => {
     const cameraParents = await page.evaluate(() => {
       const set = HudLayout.shown(), el = document.getElementById("hud-energy");
       HudLayout.setCam(set === "other" ? "helmet" : "chase");
-      const automatic = el.parentNode.classList.contains("hud-bottom");
+      // The other camera set has no stored entry: it paints its factory placement (the phone seed, as above).
+      const seeded = el.hasAttribute("data-hl-seed");
+      const automatic = seeded ? el.parentNode.id === "hud" && el.hasAttribute("data-hl-bottom") : el.parentNode.classList.contains("hud-bottom");
       HudLayout.setCam(set === "other" ? "chase" : set);
-      return { automatic, manualAgain: el.parentNode.id };
+      return { seeded, automatic, manualAgain: el.parentNode.id, seedAgain: el.hasAttribute("data-hl-seed") };
     });
-    expect(cameraParents).toEqual({ automatic: true, manualAgain: "hud" });
+    expect(cameraParents).toEqual({ seeded: true, automatic: true, manualAgain: "hud", seedAgain: false });
     await page.setViewportSize({ width: 390, height: 844 }); await check();
     await page.setViewportSize({ width: 844, height: 390 }); await check();
     await page.reload(); await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

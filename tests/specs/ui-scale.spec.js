@@ -651,6 +651,10 @@ test.describe("UI scale", () => {
         return {
           requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
           brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
+          // The brand's own geometry is TITLE SIZE x its fit (css/menu-destinations.css); a phone ships TITLE SIZE
+          // 108 (js/ui/title-layout.js PHONE_WIDE), so the compact brand is that size, never the 200 % request.
+          brandSize: (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--tl-title-size")) || 1)
+            * (parseFloat(document.getElementById("menu-brand").style.getPropertyValue("--tf")) || 1),
           geometry: getComputedStyle(menu).zoom,
           fit: parseFloat(menu.style.getPropertyValue("--tf")) || 1,
           raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
@@ -666,7 +670,7 @@ test.describe("UI scale", () => {
       scale.baseline = baseline.racePainted;
       const scaleDump = JSON.stringify(scale);
       expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
-      expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
+      expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact (TITLE SIZE x fit)`).toBeCloseTo(scale.brandSize, 3);
       expect(scale.doors, `${name}: destinations are measured ${scaleDump}`).toBeGreaterThan(5);
       if (contract === "fit") {
         expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.doorSize * scale.fit, 2);
