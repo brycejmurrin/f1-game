@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
   configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict, raisesCovered,
-  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof,
+  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
 import { PLATFORM_STEP as DISPATCH_PLATFORM_STEP, platformFailure } from "../../tools/ci/dispatch.mjs";
@@ -235,6 +235,9 @@ test("configPushState: config-ok binds to the PR's own config diff at label time
   assert.equal(s([run(H2, at(11))]), "after", "no run before the label");
   assert.equal(s([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
   assert.equal(s([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+  // D-045: a credited head has no run of its own yet, so its push time is unknown; the own config diff decides.
+  assert.equal(s([run(H0, at(8))], { [H0]: [hook], [H2]: [hook] }, H2, { credited: H0 }), "covered", "a credited clean sync keeps the label");
+  assert.equal(s([run(H0, at(8))], { [H0]: [hook], [H2]: [{ ...hook, sha: "b9", patch: "@@ -1 +1 @@\n-a\n+z" }] }, H2, { credited: H0 }), "after", "credit never loosens: a changed own config diff still needs a fresh label");
   assert.equal(s([run(H2, at(8)), run(H2, at(11))]), "covered", "a re-run on the labelled head dates it by its first run");
 });
 
@@ -285,6 +288,11 @@ test("configPushState on real git (#5432): only a merge that adds nothing but th
         });
         return { json: { merge_base_commit: { sha: mb }, files } };
       }
+      const k = /^contents\/(.+)\?ref=([0-9a-f]{40})$/.exec(p);
+      if (k) {
+        const r = spawnSync("git", ["show", `${k[2]}:${decodeURIComponent(k[1])}`], { cwd: T });
+        return r.status === 0 ? { json: { encoding: "base64", content: r.stdout.toString("base64") } } : { error: "HTTP 404" };
+      }
       const t = /^git\/trees\/([0-9a-f]{40})\?recursive=1$/.exec(p);
       if (t) return { json: { truncated: false, tree: git("ls-tree", "-r", t[1]).split("\n").map((l) => { const [meta, file] = l.split("\t"); return { path: file, mode: meta.split(" ")[0] }; }) } };
       return { error: `unexpected ${p}` };
@@ -302,9 +310,64 @@ test("configPushState on real git (#5432): only a merge that adds nothing but th
     assert.equal(state(head("chmod", T1, null, () => fs.chmodSync(path.join(T, ".githooks/pre-push"), 0o644))), "after: .githooks/pre-push", "a later chmod -x on the PR's own hook (same blob, same patch)");
     assert.equal(state(head("later-config", T1, null, () => edit("tools/ci/ready-gate.mjs", 20, "pr later"))), "after: tools/ci/ready-gate.mjs", "a later commit of the PR to a config path");
     assert.equal(state(head("no-sync-config", null, null, () => edit("tools/ci/merge-gate.mjs", 12, "pr later"))), "after: tools/ci/merge-gate.mjs", "the same without any sync");
-    // Conservative: the tip changed the PR's own config file (T2, another region, a clean auto-merge). The file the click
-    // read is no longer the file that lands, so the click is asked again.
-    assert.equal(state(head("tip-in-own-file", T2)), "after: tools/ci/merge-gate.mjs", "a sync that changes the PR's own config file needs a fresh click");
+    // #6045 defect A (#6036, #6003, #5296 on 2026-11-21): the tip ALSO changed the PR's own config file (T2, another
+    // region, a clean auto-merge). The PR's own hunks are byte-identical, so the click holds; it used to be asked again.
+    const tipInOwn = head("tip-in-own-file", T2);
+    assert.equal(state(tipInOwn), "covered", "a pure sync whose tip also edited the PR's own config file keeps the click");
+    assert.match(configPushState({ pr: 7, head: tipInOwn, headRef: "pr", labelAt: "2026-11-03T10:00:00Z", request: request(tipInOwn), base: "deploy-x" }).evidence,
+      /1 moved by the tip only \(tools\/ci\/merge-gate\.mjs: same hunks, one place each on [0-9a-f]{8}\)/);
+    // ... and everything else still voids it, the same sync included.
+    assert.equal(state(head("tip-own-hand", T2, () => edit("tools/ci/merge-gate.mjs", 12, "by hand"))), "after: tools/ci/merge-gate.mjs", "a hand edit inside that sync merge, to the PR's own file");
+    assert.equal(state(head("tip-own-resolve", T2, () => edit("tools/ci/merge-gate.mjs", 25, "resolved by hand"))), "after: tools/ci/merge-gate.mjs", "a merge that rewrites the tip's own line in the PR's file");
+    assert.equal(state(head("tip-own-later", T2, null, () => edit("tools/ci/merge-gate.mjs", 3, "the PR's change, v2"))), "after: tools/ci/merge-gate.mjs", "a new own commit after the sync");
+    assert.equal(state(head("tip-own-other", T2, null, () => edit(".githooks/pre-push", 20, "pr later"))), "after: .githooks/pre-push", "a new own commit to another config file after the sync");
+    assert.equal(state(head("tip-own-drop", T2, () => git("checkout", H0, "--", "tools/ci/merge-gate.mjs"))), "after: tools/ci/merge-gate.mjs", "a merge that drops the tip's change to the PR's own file");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("configPushState (#6045 A): a tip edit beside the PR's hunk, or a hunk that could sit in two places, still voids the click", () => {
+  const T = scratch("cfg-near-");
+  const git = (...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: T, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.replace(/\n$/, ""); };
+  const F = "tools/ci/merge-gate.mjs";
+  const put = (text) => { fs.mkdirSync(path.join(T, "tools/ci"), { recursive: true }); fs.writeFileSync(path.join(T, F), text); };
+  const lines = () => fs.readFileSync(path.join(T, F), "utf8").split("\n");
+  const edit = (i, text) => { const l = lines(); l[i] = text; put(l.join("\n")); };
+  const commit = (m) => { git("add", "-A"); git("commit", "-q", "-m", m); return git("rev-parse", "HEAD"); };
+  const request = (h, H0) => (p) => {
+    if (p.startsWith("actions/workflows/ci.yml/runs?")) return { json: { workflow_runs: [
+      { head_sha: H0, created_at: "2026-11-03T08:00:00Z", pull_requests: [{ number: 7 }] },
+      { head_sha: h, created_at: "2026-11-03T11:00:00Z", pull_requests: [{ number: 7 }] }] } };
+    const c = /^compare\/deploy-x\.\.\.([0-9a-f]{40})$/.exec(p);
+    if (c) {
+      const mb = git("merge-base", "deploy-x", c[1]);
+      const raw = git("diff", mb, c[1], "--", F);
+      const patch = raw.slice(raw.indexOf("\n@@") + 1);
+      return { json: { merge_base_commit: { sha: mb }, files: [{ filename: F, status: "modified", sha: git("rev-parse", `${c[1]}:${F}`), changes: 2, patch }] } };
+    }
+    const k = /^contents\/(.+)\?ref=([0-9a-f]{40})$/.exec(p);
+    if (k) return { json: { encoding: "base64", content: Buffer.from(git("show", `${k[2]}:${decodeURIComponent(k[1])}`) + "\n").toString("base64") } };
+    const t = /^git\/trees\/([0-9a-f]{40})\?recursive=1$/.exec(p);
+    if (t) return { json: { truncated: false, tree: [{ path: F, mode: "100644" }] } };
+    return { error: `unexpected ${p}` };
+  };
+  const state = (h, H0) => configPushState({ pr: 7, head: h, headRef: "pr", labelAt: "2026-11-03T10:00:00Z", request: request(h, H0), base: "deploy-x" }).state;
+  try {
+    // Lines 10-16 and 30-36 are the same seven lines: a hunk whose old side is that block could sit in either place.
+    const block = Array.from({ length: 7 }, (_, i) => `dup ${i}`);
+    put([...Array.from({ length: 10 }, (_, i) => `a ${i}`), ...block, ...Array.from({ length: 13 }, (_, i) => `b ${i}`), ...block, ...Array.from({ length: 20 }, (_, i) => `c ${i}`)].join("\n") + "\n");
+    git("init", "-q", "-b", "deploy-x"); commit("base");
+    git("checkout", "-q", "-b", "pr"); edit(13, "the PR's change"); const H0 = commit("pr");
+    const sync = (name, tipEdit) => {
+      git("checkout", "-q", "deploy-x"); git("reset", "-q", "--hard", git("rev-list", "--max-parents=0", "HEAD")); tipEdit(); const tip = commit(`tip ${name}`);
+      git("checkout", "-q", "-b", name, H0); git("merge", "-q", "--no-ff", "-m", `sync ${name}`, tip); return git("rev-parse", "HEAD");
+    };
+    // The PR edits line 13, the middle of the first block: its hunk's old side (lines 10-16) IS the block, which also
+    // sits at 30-36. A tip edit far away keeps the hunk bodies, but the hunk has two places: asked again, never guessed.
+    assert.equal(state(sync("far-dup", () => edit(55, "tip far")), H0), "after", "a hunk whose old side sits twice in the tip's file");
+    // The control: the tip removes the second copy far from the hunk, so the same hunk has one place: kept.
+    assert.equal(state(sync("far-unique", () => edit(33, "tip far, unique now")), H0), "covered", "the same sync with the hunk placed once");
+    // A tip edit two lines from the PR's change lands inside its hunk's context: different hunk bodies.
+    assert.equal(state(sync("near", () => edit(11, "tip near")), H0), "after", "a tip edit inside the hunk's context");
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
@@ -442,7 +505,7 @@ function fakes() {
   // The tip's own unit gate (tools/ci/lib/tip-gate.mjs): asked only when no completed pages.yml run covers TIP.
   const tipGate = { state: "green", evidence: "the tip's own unit gate passed" }, tipCalls = [];
   const tipCheck = (a) => { tipCalls.push(a); return { ...tipGate }; };
-  return { pull, checks, runs, prRuns, events, files, calls, pages, compare, compared, tipGate, tipCalls, deps: { request, root: "/nowhere", localMerge, tipCheck } };
+  return { pull, checks, runs, prRuns, events, files, calls, pages, compare, compared, tipGate, tipCalls, deps: { request, root: "/nowhere", localMerge, tipCheck, credit: () => ({ none: "fake: no clean tip-sync chain" }) } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -963,7 +1026,8 @@ function runStep(script, env, files = {}) {
     `      fi;`,
     `      [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
-        `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
+        `    *"/statuses"*) src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
+        `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
     `    *"/actions/runs/"*) data=\${FAKE_RUN:-'{}'} ;;`,
@@ -983,7 +1047,7 @@ function runStep(script, env, files = {}) {
   const r = spawnSync("bash", ["-c", `${stub}\nexport -f gh\n${script}`], { encoding: "utf8", cwd: dir,
     env: { ...process.env, GH_TOKEN: "fixture-read-token", GITHUB_TOKEN: "fixture-read-token", LAND_TOKEN: "", GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
       GITHUB_WORKFLOW_REF: `o/r/.github/workflows/land.yml@refs/heads/${DEPLOY_BRANCH}`,
-      POST_DEADLINE: String(Math.floor(Date.now() / 1000) + 600), RETRY_MAX: String(LAND.env.RETRY_MAX), ...logs, ...env } });
+      GATE_REREAD_S: "0", POST_DEADLINE: String(Math.floor(Date.now() / 1000) + 600), RETRY_MAX: String(LAND.env.RETRY_MAX), ...logs, ...env } });
   const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   const calls = fs.readFileSync(logs.GH_LOG, "utf8").split("\n").filter(Boolean);
   const summary = fs.readFileSync(logs.GITHUB_STEP_SUMMARY, "utf8");
@@ -1313,7 +1377,8 @@ test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs de
     "the trusted-rows/land-gate tip split asks for a re-gate");
   assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "a verdict whose tip is no longer the deploy tip asks for a re-gate");
-  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 4, "no other branch asks for a re-gate");
+  assert.match(run, /posted ci=WAIT but CI is now[^\n]*\n\s*want_retry "\$n" "\$head"/, "#6045: a ci=WAIT posted after CI finished asks for a re-gate");
+  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 5, "no other branch asks for a re-gate");
   assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
 });
@@ -2166,4 +2231,198 @@ test("#5405 a weekly fold (fragments deleted, the table raised by the same amoun
   // The trap: fold-shaped, but the table rises past what the fragments carried.
   const sneaky = side({ tree: { rawGameReads: { ceiling: 310 }, assertPins: { ceiling: 8194 } } }, {});
   assert.deepEqual(treeRaises(a.tree, treeCeilingsAt("z", reqFor(sneaky)).tree), [{ metric: "rawGameReads", from: 304, to: 310 }]);
+});
+
+test("land.yml arm (#6045): a stale status read is re-read; a mismatch that outlasts the re-reads is re-gated, any other skip is not", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
+  const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
+  // #6042, run 44847006825 (2026-11-21): post wrote its success at 00:59:08; arm read the older pending first.
+  const OLD = JSON.stringify([{ context: "gate", state: "pending", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/44845884272" }]);
+  const go = (extra = {}) => runStep(run, { ARM, FAKE_PR: pr7(), NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OLD, ...extra });
+  const reads = (r) => r.calls.filter((c) => c.includes("/statuses")).length;
+  let r = go({ FAKE_STATUSES_AFTER: OWN_GATE });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(reads(r), 2, "re-read once");
+  assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "the second read sees this run's success: arms");
+  assert.equal(r.out.retry, undefined);
+  r = go();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(reads(r), 3, "three reads, then gives up");
+  assert.ok(!r.calls.some((c) => / pr merge /.test(c)), "never arms on a mismatch");
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, "handed to retry (RETRY_MAX per head), not stopped");
+  assert.match(r.summary, /not arming #7: the newest gate status on aaaaaaaaaaaa is not this run's success \(pending .*44845884272\); re-gating within the existing retry budget/);
+  for (const [extra, why] of [
+    [{ FAKE_PR: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) }, "`hold` set"],
+    [{ FAKE_PR: pr7({ head: { sha: "d".repeat(40) } }) }, "head moved"],
+    [{ PAUSED: "true" }, "merge-pause"],
+    [{ GITHUB_WORKFLOW_REF: "o/r/.github/workflows/land.yml@refs/heads/cursor/x" }, "a land.yml from another branch"],
+  ]) {
+    r = go(extra);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.out.retry, undefined, `${why}: no re-gate`);
+    assert.equal(reads(r), 0, `${why}: the gate is not read`);
+    assert.ok(!r.calls.some((c) => / pr merge /.test(c)), `${why}: never arms`);
+  }
+});
+
+test("land.yml post (#6045): a `ci=WAIT` posted after CI finished is re-gated at once; CI still running, or another WAIT, is not", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  const { env, files } = postFixture();
+  const waitLine = (rows) => `= merge-gate waiting — open=ok hold=ok plan=ok ${rows} config=ok raise=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
+  const go = (line, checks) => runStep(run, { ...env, TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 3, line, tip: TIP_A }]),
+    FAKE_CHECKS: JSON.stringify({ check_runs: [{ id: 1, app: { slug: "github-actions" }, check_suite: { id: 1 }, ...checks }] }) }, files);
+  const states = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)).state);
+  // #6040 (2026-11-21): the run read CI at 00:11, CI finished 00:20:25, the run posted ci=WAIT at 00:23:05.
+  let r = go(waitLine("ci=WAIT base=ok"), { status: "completed", conclusion: "success" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(states(r), ["pending"], "the waiting verdict is still posted as measured");
+  assert.deepEqual(JSON.parse(r.out.retry), [{ number: 7, head: HEAD7 }], "CI finished meanwhile: re-gated through retry");
+  assert.equal(r.out.arm, "");
+  r = go(waitLine("ci=WAIT base=ok"), { status: "completed", conclusion: "failure" });
+  assert.deepEqual(JSON.parse(r.out.retry), [{ number: 7, head: HEAD7 }], "a red CI is settled at once too");
+  r = go(waitLine("ci=WAIT base=ok"), { status: "in_progress", conclusion: null });
+  assert.equal(r.out.retry, "[]", "CI still running: its own completion re-gates");
+  r = go(waitLine("ci=ok base=WAIT"), { status: "completed", conclusion: "success" });
+  assert.equal(r.out.retry, "[]", "a WAIT on another row (the tip's Pages lag) is not CI's to settle");
+});
+
+/** A fixture doc path, built so the docs-integrity path scan does not read it as a reference. */
+const D = (name) => ["docs", `${name}.md`].join("/");
+
+/** D-045 fixture: deploy-x with a PR head H0, then the tip moves and the PR syncs it in (a clean merge H1). */
+function syncFixture(T) {
+  const W = path.join(T, "w");
+  const g = (...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: W, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(W, rel)), { recursive: true }); fs.writeFileSync(path.join(W, rel), text); };
+  fs.mkdirSync(W);
+  g("init", "-q", "-b", "deploy-x");
+  write("docs/a.md", "a\n"); write(D("b"), "b\n"); g("add", "-A"); g("commit", "-q", "-m", "base");
+  g("checkout", "-q", "-b", "pr"); write("docs/a.md", "pr\n"); g("commit", "-q", "-am", "the PR");
+  const h0 = g("rev-parse", "HEAD");
+  const tipMove = (file, text, msg) => { g("checkout", "-q", "deploy-x"); write(file, text); g("commit", "-q", "-am", msg); const t = g("rev-parse", "HEAD"); g("update-ref", "refs/remotes/origin/deploy-x", t); g("checkout", "-q", "pr"); return t; };
+  const sync = () => { g("merge", "-q", "--no-ff", "-m", "sync", "deploy-x"); return g("rev-parse", "HEAD"); };
+  return { W, g, write, h0, tipMove, sync };
+}
+
+test("D-045 cleanTipSync: only a two-parent, conflict-free merge of a deploy first-parent commit with no hand edit qualifies", () => {
+  const T = scratch("merge-gate-credit-");
+  try {
+    const f = syncFixture(T);
+    const t1 = f.tipMove(D("b"), "b2\n", "tip 1");
+    const h1 = f.sync();
+    const fp = () => new Set(f.g("rev-list", "--first-parent", "refs/remotes/origin/deploy-x").split("\n"));
+    assert.deepEqual(cleanTipSync({ cwd: f.W, sha: h1, firstParents: fp() }), { ok: true, parent: f.h0, tip: t1 });
+    assert.equal(cleanTipSync({ cwd: f.W, sha: f.h0, firstParents: fp() }).ok, false, "a plain commit is no sync");
+    // A hand edit folded into the merge commit: the tree is not the clean merge's.
+    f.g("reset", "-q", "--hard", f.h0); f.tipMove(D("b"), "b3\n", "tip 2"); f.g("merge", "-q", "--no-ff", "--no-commit", "deploy-x");
+    f.write(D("c"), "hand\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "sync + edit");
+    const edited = cleanTipSync({ cwd: f.W, sha: f.g("rev-parse", "HEAD"), firstParents: fp() });
+    assert.deepEqual([edited.ok, edited.kind], [false, "edited"], edited.why);
+    // A conflict resolved by hand.
+    f.g("reset", "-q", "--hard", f.h0); f.tipMove("docs/a.md", "tip-a\n", "tip edits the PR's line");
+    // A conflicting merge exits 1; it needs an identity too (a runner has none), or it stops before MERGE_HEAD.
+    const conflicted = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "merge", "-q", "--no-ff", "deploy-x"], { cwd: f.W, encoding: "utf8" });
+    assert.equal(conflicted.status, 1, conflicted.stderr);
+    assert.equal(spawnSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: f.W }).status, 0, "the merge is in progress");
+    f.write("docs/a.md", "resolved\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "resolve the conflict by hand");
+    const resolved = cleanTipSync({ cwd: f.W, sha: f.g("rev-parse", "HEAD"), firstParents: fp() });
+    assert.deepEqual([resolved.ok, resolved.kind], [false, "conflict"], resolved.why);
+    // A merge of a branch that is not on the deploy branch's first-parent line.
+    f.g("reset", "-q", "--hard", f.h0); f.g("checkout", "-q", "-b", "side", `${f.h0}~1`); f.write(D("d"), "d\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "side");
+    f.g("checkout", "-q", "pr"); f.g("merge", "-q", "--no-ff", "-m", "merge side", "side");
+    assert.equal(cleanTipSync({ cwd: f.W, sha: f.g("rev-parse", "HEAD"), firstParents: fp() }).kind, "off-deploy");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("D-045 creditPriorCi: a clean sync credits a green prior head; red, a hand edit or the chain cap give no credit; a chain walks pending hops", () => {
+  const T = scratch("merge-gate-credit-");
+  try {
+    const f = syncFixture(T);
+    f.tipMove(D("b"), "b2\n", "tip 1"); const h1 = f.sync();
+    f.tipMove(D("b"), "b3\n", "tip 2"); const h2 = f.sync();
+    const green = { verdict: { ok: true, evidence: "CI success (check-run 9)" }, run: { id: 90, created_at: "2026-11-21T00:00:00Z" } };
+    const pending = { verdict: { ok: false, pending: true, evidence: "no CI check-run on the head yet" } };
+    const red = { verdict: { ok: false, evidence: "CI failure" } };
+    const ciOf = (m) => (sha) => m[sha] || pending;
+    const one = creditPriorCi({ cwd: f.W, head: h1, base: "deploy-x", ciOf: ciOf({ [f.h0]: green }) });
+    assert.equal(one.credit.sha, f.h0); assert.equal(one.credit.hops.length, 1); assert.equal(one.credit.run.id, 90);
+    assert.equal(creditPriorCi({ cwd: f.W, head: h1, base: "deploy-x", ciOf: ciOf({ [f.h0]: red }) }).kind, "red", "a red prior head is never credited");
+    const chain = creditPriorCi({ cwd: f.W, head: h2, base: "deploy-x", ciOf: ciOf({ [f.h0]: green }) });
+    assert.deepEqual([chain.credit.sha, chain.credit.hops.length], [f.h0, 2], "H2 → H1 (pending) → H0 (green)");
+    assert.equal(creditPriorCi({ cwd: f.W, head: h2, base: "deploy-x", ciOf: ciOf({ [h1]: red, [f.h0]: green }) }).kind, "red", "a red hop ends the walk");
+    assert.equal(creditPriorCi({ cwd: f.W, head: h2, base: "deploy-x", max: 1, ciOf: ciOf({ [f.h0]: green }) }).kind, "cap", "the cap");
+    assert.equal(CREDIT_CHAIN_MAX, 5);
+    // A hand edit on top of the sync chain voids it.
+    f.write(D("e"), "e\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "hand edit");
+    assert.equal(creditPriorCi({ cwd: f.W, head: f.g("rev-parse", "HEAD"), base: "deploy-x", ciOf: ciOf({ [f.h0]: green }) }).kind, "not-merge");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("D-045 evaluate: a missing head CI takes the credit and the retest runs against the credited head; a red head CI is never credited; the summary names the credit", () => {
+  const f = fakes();
+  const H0 = "c".repeat(40), run0 = { id: 600, created_at: "2026-11-02T08:00:00Z" };
+  const asked = [];
+  const credit = (a) => { asked.push(a.head); return { credit: { sha: H0, run: run0, hops: [{}], evidence: "CI success (check-run 61)" } }; };
+  f.checks.splice(1, 1); // no CI on the head yet
+  const v = evaluate({ pr: 7, ...f.deps, credit });
+  assert.equal(v.ok, true, JSON.stringify(v.rows));
+  assert.equal(v.rows.ci.credited, H0);
+  assert.deepEqual([f.calls.at(-1).credited, f.calls.at(-1).ciAt], [H0, run0.created_at], "the retest compares against the credited run");
+  assert.deepEqual(rowLines(v).at(-1).split(" ").filter((w) => w.startsWith("credited=")), [`credited=${H0}`], "the summary names the credited head for land.yml post and a human");
+  assert.ok(evaluate({ pr: 7, ...f.deps, credit, trusted: true }).ok, "the trusted rows credit too (land.yml post re-reads the credited head's CI)");
+  const none = evaluate({ pr: 7, ...f.deps, credit: () => ({ none: "x is not a two-parent merge" }) });
+  assert.deepEqual([none.waiting, none.rows.ci.credited], [true, undefined], "no credit: the row still waits for the head's own CI");
+  f.checks.push({ id: 2, name: "CI", app: GHA, status: "completed", conclusion: "failure", check_suite: { id: 50 } });
+  asked.length = 0;
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, credit }).rows[k].ok), ["ci", "retest"]);
+  assert.deepEqual(asked, [], "a finished red CI on the head is evidence: no credit is asked");
+});
+
+test("D-045 evaluate: on a credited head with no run of its own, the config and retest rows resolve against the credited run, not WAIT", () => {
+  const f = fakes();
+  const H0 = "c".repeat(40), run0 = { id: 600, created_at: "2026-11-02T08:00:00Z" };
+  const credit = () => ({ credit: { sha: H0, run: run0, hops: [{}], evidence: "CI success (check-run 61)" } });
+  f.checks.splice(1, 1);
+  f.prRuns.splice(0, f.prRuns.length, { head_sha: H0, created_at: "2026-11-02T08:00:00Z", pull_requests: [{ number: 7 }] });
+  // A routine config path (dispatch.yml), Bryce's config-ok after H0's run; the sync left the PR's own diff alone.
+  const own = { filename: ".github/workflows/dispatch.yml", status: "modified", sha: "d1", changes: 1, patch: "@@ -1 +1 @@\n-a\n+b" };
+  f.files.push({ filename: own.filename });
+  f.pull.labels = [{ name: "config-ok" }]; f.events.push(ev("config-ok", "2026-11-02T09:00:00Z"));
+  const request = (p) => {
+    if (p === `compare/deploy-x...${H0}` || p === `compare/deploy-x...${HEAD}`) return { json: { files: [own] } };
+    if (p === `git/trees/${H0}?recursive=1` || p === `git/trees/${HEAD}?recursive=1`) return { json: { tree: [{ path: own.filename, mode: "100644" }] } };
+    return f.deps.request(p);
+  };
+  const v = evaluate({ pr: 7, ...f.deps, request, credit });
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), [], JSON.stringify(v.rows));
+  assert.equal(v.rows.config.pending, undefined, "config resolved, not waiting on the head's own run");
+  assert.equal(f.calls.at(-1).ciAt, run0.created_at, "the retest window opens at the credited run");
+  // Without the credit, the same head waits on both rows.
+  const plain = evaluate({ pr: 7, ...f.deps, request });
+  assert.deepEqual(ROWS.filter((k) => plain.rows[k].pending), ["ci", "config", "retest"]);
+});
+
+test("D-045 retest: a credited head is never skipped, and a red re-test refuses", () => {
+  const T = scratch("merge-gate-credit-");
+  try {
+    const f = syncFixture(T);
+    f.write(U("x"), "// x\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "PR test");
+    const h0 = f.g("rev-parse", "HEAD");
+    f.g("checkout", "-q", "deploy-x"); f.write(U("y"), "// y\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "tip test");
+    const tip = f.g("rev-parse", "HEAD"); f.g("checkout", "-q", "pr"); const h1 = f.sync();
+    const select = (paths) => ({ files: paths.filter((p) => p.startsWith("tests/unit/")), reason: "matched" });
+    const ran = [];
+    const run = (cmd, argv) => { ran.push(argv); return { status: 0, stdout: "", stderr: "" }; };
+    // The CI run is far newer than every tip commit: without a credit the row would skip ("CI tested this combination").
+    const ciAt = "2099-01-01T00:00:00Z";
+    assert.equal(retestOnMerge({ cwd: f.W, tip, head: h1, ciAt, run, select, estimate: () => null }).ok, true);
+    assert.equal(ran.length, 0, "uncredited, nothing newer than the run: skipped");
+    const forced = retestOnMerge({ cwd: f.W, tip, head: h1, ciAt, credited: h0, run, select, estimate: () => null });
+    assert.equal(forced.ok, true, forced.evidence);
+    assert.deepEqual(ran.map((a) => a.filter((x) => x.startsWith("tests/unit/"))), [[U("x"), U("y")]], "credited: the tip's untested commit is re-tested anyway");
+    const redRun = () => ({ status: 1, stdout: `[tooling-fast] FAIL  1/1 ${U("y")} exit=1\n`, stderr: "" });
+    assert.equal(retestOnMerge({ cwd: f.W, tip, head: h1, ciAt, credited: h0, run: redRun, select, estimate: () => null }).ok, false, "retest red blocks");
+    const empty = retestOnMerge({ cwd: f.W, tip: h0, head: h1, ciAt, credited: h0, run, select, estimate: () => null });
+    assert.deepEqual([empty.ok, empty.kind], [false, "nothing"], empty.evidence);
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });

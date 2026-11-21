@@ -22,7 +22,13 @@
 //             a body with no Plan fails, except a fold bot's PR (author `*[bot]`), whose body has none
 //   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
 //             `success` on the PR's current head, newest attempt; a run that went green only on a re-run after a
-//             failed job (`run_attempt` > 1) fails the row
+//             failed job (`run_attempt` > 1) fails the row. CREDIT ACROSS A CLEAN TIP-SYNC (D-045, Bryce 2026-11-21
+//             ~03:47Z): while the head's own CI is missing or still running, the row passes on a prior head H0's green
+//             CI (attempt 1, same rules) when the head is a chain of at most CREDIT_CHAIN_MAX clean tip-sync merges
+//             of H0 (cleanTipSync: two parents, the second a deploy first-parent commit, `git merge-tree --write-tree`
+//             reproduces the head's tree byte for byte, so no conflict resolution and no hand edit). The row and the
+//             summary (`credited=<sha>`) name H0, and the retest row then always runs against H0. A red head CI is
+//             never credited over.
 //   base      the deploy tip is not red on CODE (#5425, Bryce's decision 1 "Gate holds merges, one fixer"): the newest
 //             completed pages.yml run on the base branch, read through its jobs (tools/ci/lib/deploy-tip.mjs). A
 //             failed job other than a Pages-side publish failure (`deploy` with PLATFORM_STEP failed; run 42880431465)
@@ -304,9 +310,49 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = c
     if (patch == null) return { error: `compare ${at}: ${f.filename} has no patch to compare` };
     const mode = f.status === "removed" ? "" : modes.get(f.filename);
     if (f.status !== "removed" && !mode) return { error: `tree ${String(ref).slice(0, 8)} has no mode for ${f.filename}` };
-    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch, mode]) });
+    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch, mode]),
+      // The same change with the line numbers and the head blob left out (#6045 defect A): a clean sync that moved
+      // the tip's lines elsewhere in the PR's own file keeps it; configPushState still proves where each hunk sits.
+      loose: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", hunkBodies(patch), mode]),
+      basePath: f.previous_filename || f.filename, status: f.status || "", patch });
   }
-  return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
+  const mb = String(cmp.json?.merge_base_commit?.sha || "").toLowerCase();
+  return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)), mb };
+}
+
+/** A unified-diff patch with every hunk header reduced to `@@`: the hunk bodies (context, removed and added lines)
+ *  in order, without the line numbers or the section heading a tip edit elsewhere in the file shifts. Pure. */
+export function hunkBodies(patch) {
+  return String(patch || "").split("\n").map((l) => (l.startsWith("@@") ? "@@" : l)).join("\n");
+}
+
+/** Each hunk's old side (its context and removed lines, in order). Pure. */
+export function hunkOldSides(patch) {
+  const hunks = [];
+  for (const l of String(patch || "").split("\n")) {
+    if (l.startsWith("@@")) { hunks.push([]); continue; }
+    if (!hunks.length || l.startsWith("\\")) continue;
+    if (l[0] === " " || l[0] === "-") hunks[hunks.length - 1].push(l.slice(1));
+  }
+  return hunks;
+}
+
+/** Does each hunk's old side occur exactly once in `text` (the file at the merge base)? Then the hunk bodies alone
+ *  pin the head's file: the base is the deploy tip, and every hunk has one place to go. An empty old side (a hunk
+ *  into an empty file) is placed only in an empty file. Pure. */
+export function hunksPlaced(patch, text) {
+  const lines = String(text).split("\n");
+  for (const old of hunkOldSides(patch)) {
+    if (!old.length) { if (String(text).length) return false; continue; }
+    let hits = 0;
+    for (let i = 0; i + old.length <= lines.length && hits < 2; i++) {
+      let k = 0;
+      while (k < old.length && lines[i + k] === old[k]) k++;
+      if (k === old.length) hits++;
+    }
+    if (hits !== 1) return false;
+  }
+  return true;
 }
 
 /**
@@ -314,7 +360,9 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = c
  * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
  * head's first run. Otherwise the head at label time (`from`) is the head of the newest run created before the label,
  * and the PR's OWN config-path changes (ownConfigDiff, three-dot against `base`) must be the same at `from` and at
- * the head: the same files, blob shas, patches and file modes. A merge of the deploy tip that leaves them alone keeps the label
+ * the head: the same files, blob shas, patches and file modes, or (#6045) the same hunk bodies and modes when each
+ * hunk's old side sits exactly once in the file at the head's merge base (a tip that also edited the PR's own config
+ * file elsewhere). A merge of the deploy tip that leaves them alone keeps the label
  * (#5432: 24 of 40 re-clicks in 2026-11-09..11 were such syncs); a commit of the PR, or a conflict resolution, that
  * changes any of them voids it. An unreadable or possibly truncated compare is "unknown" (waits; a fresh click
  * covers it). `pkgGeneratedAt(ref)` → true when package.json's change at `ref` is only the generated test lists:
@@ -323,7 +371,7 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = c
  * ratchet-raise row reads it). `touches` picks the paths compared (the raise row passes ratchetFiles) and `what`
  * names them. Side effects only through `request` and `pkgGeneratedAt`.
  */
-export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null, touches = configFiles, what = "config path" }) {
+export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null, touches = configFiles, what = "config path", credited = "" }) {
   const t = (iso) => Date.parse(iso || "") || 0;
   const L = t(labelAt);
   if (!L) return { state: "unknown", evidence: "no config-ok label time" };
@@ -331,8 +379,10 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
   if (runs.error) return { state: "unknown", evidence: `${CI_WORKFLOW} runs: ${runs.error}` };
   const mine = runs.rows.filter((w) => (w?.pull_requests || []).some((p) => Number(p?.number) === Number(pr)) && t(w.created_at));
   const onHead = mine.filter((w) => String(w.head_sha || "").toLowerCase() === head);
-  if (!onHead.length) return { state: "unknown", evidence: `no ${CI_WORKFLOW} pull_request run of PR #${pr} on ${head.slice(0, 8)} yet` };
-  const pushedAt = Math.min(...onHead.map((w) => t(w.created_at)));
+  // A credited head (D-045) may have no run of its own yet: its push time is unknown, so skip the "labelled after
+  // the push" shortcut and compare the own config diff with the newest run before the label (never looser).
+  if (!onHead.length && !credited) return { state: "unknown", evidence: `no ${CI_WORKFLOW} pull_request run of PR #${pr} on ${head.slice(0, 8)} yet` };
+  const pushedAt = onHead.length ? Math.min(...onHead.map((w) => t(w.created_at))) : Infinity;
   if (L > pushedAt) return { state: "covered", evidence: `labelled after the head ${head.slice(0, 8)} was pushed` };
   const before = mine.filter((w) => t(w.created_at) < L).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
   if (!before) return { state: "after", evidence: `no run of PR #${pr} predates the label, so the head ${head.slice(0, 8)} was pushed` };
@@ -342,12 +392,28 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
   if (was.error) return { state: "unknown", evidence: was.error };
   const now = ownConfigDiff({ base, ref: head, request, skipPkg, touches });
   if (now.error) return { state: "unknown", evidence: now.error };
-  const keys = (d) => new Map(d.rows.map((r) => [r.path, r.key]));
-  const a = keys(was), b = keys(now);
-  const differ = [...new Set([...a.keys(), ...b.keys()])].filter((p) => a.get(p) !== b.get(p)).sort();
+  const byPath = (d) => new Map(d.rows.map((r) => [r.path, r]));
+  const a = byPath(was), b = byPath(now);
+  const paths = [...new Set([...a.keys(), ...b.keys()])].sort();
+  const changed = paths.filter((p) => a.get(p)?.key !== b.get(p)?.key);
+  // #6045 defect A: a clean sync of a tip that ALSO edited one of the PR's own config files changes that file's
+  // blob and patch line numbers, never its hunk bodies. Kept only when every hunk's old side sits exactly once in
+  // the file at the head's merge base (the deploy tip): then the head's file is that tip file plus the same hunks.
+  // A hand edit inside the merge, a dropped tip change, a later own commit or a tip edit inside a hunk's context
+  // changes the hunk bodies and voids the label as before.
+  const moved = [];
+  for (const p of changed) {
+    const x = a.get(p), y = b.get(p);
+    if (!x || !y || x.loose !== y.loose || !now.mb || y.status === "added" || y.status === "removed") continue;
+    const r = request(`contents/${y.basePath.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(now.mb)}`);
+    if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") continue;
+    if (hunksPlaced(y.patch, Buffer.from(r.json.content, "base64").toString("utf8"))) moved.push(p);
+  }
+  const differ = changed.filter((p) => !moved.includes(p));
+  const also = moved.length ? `; ${moved.length} moved by the tip only (${moved.slice(0, 3).join(", ")}${moved.length > 3 ? ", …" : ""}: same hunks, one place each on ${now.mb.slice(0, 8)})` : "";
   return differ.length
     ? { state: "after", from, evidence: `a push changing the PR's own ${what} diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
-    : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs, patches and modes)` };
+    : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same ${moved.length ? "hunks" : "blobs, patches"} and modes${also})` };
 }
 
 /**
@@ -452,14 +518,14 @@ export function raisesCovered(now, then) {
  *  Bound to what Bryce labelled: a push after his click that touches a ratchet file still counts as covered when the
  *  PR's own raise at the head is no wider than its own raise at the head he labelled, so a sync that brings in other
  *  PRs' ratchets.d fragments does not need a fresh click, and any further raise does. */
-export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request }) {
+export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request, credited = "" }) {
   if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
   const now = prRaisesAt(head, base, request);
   if (now.error) return { error: now.error };
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
   let push = raises.length && configLabelKind(last, owner)
-    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file" }) : null;
+    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file", credited }) : null;
   if (push?.state === "after" && push.from) {
     const then = prRaisesAt(push.from, base, request);
     if (then.error) return { error: then.error };
@@ -565,6 +631,60 @@ export function ciRetryVerdict(run, request) {
   }
   if (!red.length) return row(true, `attempt ${attempt}; earlier attempts had no failed job`);
   return row(false, `${REQUIRED_CHECK} passed only on re-run ${attempt} of ${CI_WORKFLOW} run ${run.id}: ${red.slice(0, 3).join(", ")}${red.length > 3 ? ", …" : ""} failed before — a pass that needed a retry is a red: push a fresh commit, or quarantine the test by name in tests/data/flaky-quarantine.json`);
+}
+
+// ---- ci credit across a clean tip-sync (D-045) ---------------------------------------------------------------
+
+/** How many clean tip-sync merges the credit walks back through (H2 → H1 → H0). */
+export const CREDIT_CHAIN_MAX = 5;
+
+/**
+ * Is `sha` a CLEAN tip-sync of its first parent? → { ok: true, parent, tip } | { ok: false, why }. All four hold:
+ * exactly two parents; the second is a first-parent commit of the deploy branch (`firstParents`, a Set) and not
+ * already in the first; and `git merge-tree --write-tree <parent> <tip>` merges without a conflict to the SAME tree
+ * as `sha`, so the commit carries no conflict resolution and no hand edit. Git objects only, in `cwd`.
+ */
+export function cleanTipSync({ cwd, sha, firstParents, gitRun = git }) {
+  const short = String(sha).slice(0, 8);
+  const p = gitRun(["rev-list", "--parents", "-n", "1", sha], cwd);
+  if (p.status !== 0) return { ok: false, kind: "unknown", why: `${short} is not in this clone` };
+  const [, parent, tip, ...more] = String(p.stdout || "").trim().split(/\s+/);
+  if (!parent || !tip || more.length) return { ok: false, kind: "not-merge", why: `${short} is not a two-parent merge` };
+  if (!firstParents.has(tip)) return { ok: false, kind: "off-deploy", why: `${short}'s second parent ${tip.slice(0, 8)} is not a first-parent commit of the deploy branch` };
+  if (gitRun(["merge-base", "--is-ancestor", tip, parent], cwd).status === 0) return { ok: false, kind: "noop", why: `${short} merges nothing new (${tip.slice(0, 8)} is already in ${parent.slice(0, 8)})` };
+  const m = gitRun(["merge-tree", "--write-tree", "--no-messages", parent, tip], cwd);
+  if (m.status !== 0) return { ok: false, kind: "conflict", why: `${short}: merging ${tip.slice(0, 8)} into ${parent.slice(0, 8)} conflicts (a resolved merge needs its own CI)` };
+  const want = String(m.stdout || "").trim().split("\n")[0];
+  const have = gitRun(["rev-parse", `${sha}^{tree}`], cwd);
+  if (have.status !== 0 || String(have.stdout || "").trim() !== want) return { ok: false, kind: "edited", why: `${short}'s tree differs from the clean merge of ${parent.slice(0, 8)} and ${tip.slice(0, 8)}: a hand edit needs its own CI` };
+  return { ok: true, parent, tip };
+}
+
+/**
+ * The ci row's credit (D-045, Bryce 2026-11-21 ~03:47Z "Credit CI across sync"): when the head's own ci.yml `CI` is
+ * missing or still running, walk back first parents through CLEAN tip-sync merges only (cleanTipSync), at most
+ * CREDIT_CHAIN_MAX hops, and credit the first prior head whose CI is green under the SAME rules the row applies to a
+ * head (ciVerdict on ci.yml's suites, ciRetryVerdict: attempt 1 or no earlier red job). A red CI on a hop, a hop that
+ * is not a clean sync, or the cap ends the walk with no credit. The retest row must then run against the credited
+ * head (evaluate passes `credited`). `ciOf(sha)` → { verdict, run } | { error }. → { credit } | { none } | { error }.
+ */
+export function creditPriorCi({ cwd, head, base, ciOf, gitRun = git, max = CREDIT_CHAIN_MAX }) {
+  const fp = gitRun(["rev-list", "--first-parent", `refs/remotes/origin/${base}`], cwd);
+  if (fp.status !== 0) return { error: `git rev-list --first-parent ${base}: ${(fp.stderr || "").trim().split("\n")[0]}` };
+  const firstParents = new Set(String(fp.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean));
+  const hops = [];
+  let cur = head;
+  for (let i = 1; i <= max; i++) {
+    const s = cleanTipSync({ cwd, sha: cur, firstParents, gitRun });
+    if (!s.ok) return { none: s.why, kind: s.kind };
+    hops.push(s);
+    cur = s.parent;
+    const c = ciOf(cur);
+    if (c.error) return { error: c.error };
+    if (c.verdict.ok) return { credit: { sha: cur, run: c.run, hops, evidence: c.verdict.evidence } };
+    if (!c.verdict.pending) return { kind: "red", none: `prior head ${cur.slice(0, 8)}'s CI is not green (${c.verdict.evidence})` };
+  }
+  return { kind: "cap", none: `no green CI within ${max} clean tip-syncs of the head` };
 }
 
 // ---- git-backed rows --------------------------------------------------------------------------------------
@@ -735,9 +855,17 @@ export function retestPlan({ newer = [], pr = [], selection, sides = {}, exists 
  * anything; otherwise run the planned unit files (retestPlan) with the merge result's tooling-fast, stripped environment, once.
  * Every failure to read, select or run refuses (never a silent pass). → { ok, evidence }.
  */
-export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSync, gitRun = git, select = gateSelection, estimate = gateEstimate } = {}) {
-  const t = newerTipPaths({ cwd, tip, head, ciAt, ciBase, gitRun });
+export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", credited = "", run = spawnSync, gitRun = git, select = gateSelection, estimate = gateEstimate } = {}) {
+  // A credited CI (D-045) tested the prior head, not this one: compare the tip against THAT head, and never skip. When
+  // the run's window and base leave nothing, every tip commit not in the credited head is re-tested (stricter only).
+  const tested = credited || head;
+  let t = newerTipPaths({ cwd, tip, head: tested, ciAt, ciBase, gitRun });
   if (t.error) return row(false, `re-test not runnable: ${t.error}`);
+  if (credited && !t.commits.length) {
+    t = newerTipPaths({ cwd, tip, head: tested, ciAt: "2000-01-01T00:00:00Z", gitRun });
+    if (t.error) return row(false, `re-test not runnable: ${t.error}`);
+    if (!t.commits.length) return { ...row(false, `re-test not runnable: the credited head ${String(credited).slice(0, 8)} already holds the tip ${String(tip).slice(0, 8)}, so the credit has nothing to stand for`), kind: "nothing" };
+  }
   if (!t.commits.length) return row(true, `no tip merge since the CI run's base (created ${ciAt}, margin ${RETEST_MARGIN_MIN} min${t.base ? `; recorded base ${t.base.slice(0, 8)}` : "; no recorded base"}): CI tested this combination`);
   const sel = select([...new Set([...t.newer, ...t.pr])].sort());
   if (sel?.error) return row(false, `re-test not runnable: ${sel.error}`);
@@ -746,7 +874,7 @@ export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSy
   const sideError = sides.newer?.error || sides.pr?.error;
   if (sideError) return row(false, `re-test not runnable: ${sideError}`);
   const plan = retestPlan({ newer: t.newer, pr: t.pr, selection: sel, sides, exists: (f) => fs.existsSync(path.join(cwd, f)) });
-  const since = `${t.commits.length} tip merge(s) since the CI run (${t.commits.slice(0, 3).map((c) => c.slice(0, 8)).join(", ")}${t.commits.length > 3 ? ", …" : ""})`;
+  const since = `${t.commits.length} tip merge(s) since the CI run${credited ? ` of the credited head ${String(credited).slice(0, 8)}` : ""} (${t.commits.slice(0, 3).map((c) => c.slice(0, 8)).join(", ")}${t.commits.length > 3 ? ", …" : ""})`;
   if (!plan.files.length) return row(true, `${since}: ${plan.how} names no unit test — nothing to re-test`);
   // Too broad to finish inside the cap (tooling-fast's measured timings): refuse now instead of burning the runner
   // into the same refusal. The cure is the one a timeout gets: sync, push, and the fresh CI run tests the combination.
@@ -798,7 +926,7 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
 
 /** Built on demand, never tracked (ON_DEMAND_PATHS): the gate builds it on the merge. */
 const SCENERY_CATALOG = "tools/shot/scenery-locations.json";
-export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", retest = retestOnMerge } = {}) {
+export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", credited = "", retest = retestOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
   const fetched = fetchForGate({ pr, head, headRef, cwd, base });
@@ -836,7 +964,7 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   }
   const rat = ratchets({ cwd: wt, run });
   // `ciAt` null: the ci row has no green run to compare against, so the re-test waits for it (evaluate says so).
-  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run });
+  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run, ...(credited ? { credited } : {}) });
   cleanup();
   return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat, retest: re };
 }
@@ -907,7 +1035,27 @@ export function trainGate({ pr, pull, head, base, request, root = ROOT, owner = 
   });
 }
 
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate } = {}) {
+/** The ci row's credit with real GitHub and git (D-045): fetch the base and the head's objects, then creditPriorCi
+ *  reading each prior head's ci.yml CI through the same ciVerdict and ciRetryVerdict as the head's own. */
+export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
+  const fetched = fetchForGate({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
+  if (fetched.error) return { error: `ci credit: ${fetched.error}` };
+  const ciOf = (sha) => {
+    const checks = checkRunsFor(sha, request);
+    if (checks.error) return { error: `check-runs on ${sha.slice(0, 8)}: ${checks.error}` };
+    const ci = ciSuitesFor(sha, request);
+    if (ci.error) return { error: `${CI_WORKFLOW} runs on ${sha.slice(0, 8)}: ${ci.error}` };
+    const verdict = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
+    if (!verdict.ok) return { verdict };
+    const run = ci.runs?.get(verdict.suite);
+    const retry = ciRetryVerdict(run, request);
+    if (retry.error) return { error: retry.error };
+    return retry.ok && (Number(run?.run_attempt) || 1) <= 1 ? { verdict, run } : { verdict: row(false, retry.ok ? `${REQUIRED_CHECK} green only on attempt ${run.run_attempt}` : retry.evidence) };
+  };
+  return creditPriorCi({ cwd: root, head, base, ciOf });
+}
+
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -929,11 +1077,22 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const ci = ciSuitesFor(head, request);
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
-  const ciRun = rows.ci.ok ? ci.runs?.get(rows.ci.suite) : undefined;
+  let ciRun = rows.ci.ok ? ci.runs?.get(rows.ci.suite) : undefined;
   if (rows.ci.ok) {
     const retry = ciRetryVerdict(ci.runs?.get(rows.ci.suite), request);
     if (retry.error) return { error: retry.error };
     rows.ci = retry.ok ? row(true, rows.ci.evidence) : retry;
+  }
+  // D-045: the head's own CI missing or still running → a clean tip-sync chain may carry a prior head's green CI.
+  let credited = null;
+  if (!rows.ci.ok && rows.ci.pending && rows.open.ok && !String(pull.head?.ref || "").startsWith(TRAIN_PREFIX)) {
+    const c = credit({ pr, pull, head, base, request, root });
+    if (c.error) return { error: c.error };
+    if (c.credit) {
+      credited = c.credit;
+      const n = c.credit.hops.length;
+      rows.ci = { ...row(true, `credited H0 ${c.credit.sha} across clean tip-sync${n > 1 ? ` (a chain of ${n})` : ""}: ${c.credit.evidence}, first attempt, on ${c.credit.sha.slice(0, 8)}; the head's own: ${rows.ci.evidence}; the retest row runs against the credited head`), credited: c.credit.sha };
+    } else rows.ci = { ...rows.ci, evidence: `${rows.ci.evidence} (no CI credit: ${c.none})` };
   }
   const pages = readDeployTip(base, request);
   if (pages.error) return { error: pages.error };
@@ -972,11 +1131,11 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
   const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
   const pkgGeneratedAt = generated?.ok ? (ref) => (ref === head ? true : generatedPkgCheck({ head: ref, base, request }).ok) : null;
-  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt }) : null;
+  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt, ...(credited ? { credited: credited.sha } : {}) }) : null;
   if (!isTrain) {
     rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
     // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
-    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });
+    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request, credited: credited?.sha || "" });
     if (raise.error) return { error: raise.error };
     rows.raise = raise;
   }
@@ -990,9 +1149,10 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     tip = baseTip;
   } else {
     // The re-test compares against the green CI run's creation (the merge ref it tested is that old or newer).
+    if (credited) ciRun = credited.run;
     const ciAt = rows.ci.ok ? String(ciRun?.created_at || "") : null;
     const ciBase = rows.ci.ok ? ciRecordedBase(ciRun, request) : "";
-    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt, ciBase });
+    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt, ciBase, ...(credited ? { credited: credited.sha } : {}) });
     if (g.error) return { error: g.evidence };
     tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);
@@ -1013,7 +1173,8 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
 export function rowLines(v) {
   const mark = (r) => (r.ok ? "ok" : r.pending ? "WAIT" : "FAIL");
   const lines = ROWS.filter((k) => v.rows?.[k]).map((k) => `= gate ${k}: ${mark(v.rows[k])} ${v.rows[k].evidence}`);
-  lines.push(`= merge-gate ${v.ok ? "passed" : v.waiting ? "waiting" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${mark(v.rows[k])}`).join(" ")} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
+  const credit = v.rows?.ci?.credited ? ` credited=${v.rows.ci.credited}` : "";
+  lines.push(`= merge-gate ${v.ok ? "passed" : v.waiting ? "waiting" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${mark(v.rows[k])}`).join(" ")}${credit} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
   return lines;
 }
 
@@ -1023,7 +1184,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
   final \`= merge-gate passed|refused …\` line (the check title):
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
     only by a later click of his own, an agent's hold by anyone), plan (Plan present and closed; \`land:\` items exempt), ci (\`CI\` success on
-    the head), base (the deploy tip's newest completed pages.yml run is not red on code; waits otherwise, unless
+    the head, or on a prior head across clean tip-sync merges while the head's own CI is missing or running, D-045), base (the deploy tip's newest completed pages.yml run is not red on code; waits otherwise, unless
     the PR is the fixer: \`deploy:red\` on a head that contains the red commit, or \`deploy:red\` / \`priority\` added by ${OWNER} in person), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
     \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), raise (a tree-wide ratchet ceiling
     rises only with \`${RAISE_LABEL}\` added by ${OWNER} in person after the last push touching a ratchet file), gen (clean merge onto the current base tip + gen:check), ratchets (on
@@ -1032,7 +1193,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
   A row still waiting (CI, a red deploy tip) prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other
   row ok, CI not finished or the tip red on code), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
 
-export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, write = fs.writeFileSync, owner = OWNER } = {}) {
+export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, write = fs.writeFileSync, owner = OWNER, credit = ciCredit } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
@@ -1041,7 +1202,7 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
     log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)");
     return 1;
   }
-  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner });
+  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner, credit });
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");

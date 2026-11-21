@@ -67,6 +67,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 - The floor is AGENTS.md rule 3: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit);
   the PR's tiers prove the rest. Then ONE push per verified batch: a push over a live run cancels it and a killed job
   runs no `if: always()` step, so its failures are lost.
+- Never push while a CI run on your head is still running: batch every fix of the round, wait for that run to finish,
+  then push once (D-046; 77% of the 140 cancelled CI wall-hours in 48 h were heads replaced mid-run).
 - Refresh the Plan with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line),
   add discovered work, strike a dropped item with why, never delete one. Refresh the Hand-off block at every push
   and whenever you add `land`, `needs-owner` or `needs-decision`.
@@ -107,7 +109,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 1. Tick or strike every Plan item except `- [ ] land: …`, the `**now:**` item included (an open `now:` fails the
    gate's plan row): tick it with its evidence, or move what is left of it into the `land:` item. An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
-   on a dirty PR starts no CI.
+   on a dirty PR starts no CI. Flip only after the draft CI run on this head has FINISHED (D-046): the ready run
+   shares the `ci-pr-<n>` group and cancels a draft run still in flight.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in

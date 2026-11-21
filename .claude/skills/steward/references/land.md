@@ -5,6 +5,8 @@ Read when you need the detail behind SKILL.md §Land (the steps themselves are t
 - `land.yml` runs `merge-gate.mjs --check` as the commit status named `gate` and arms auto-merge pinned to your head;
   the ruleset merges when `gate` is green. Its ci row requires the newest check named exactly `CI` green on your head,
   and refuses one that went green only on a re-run after a failed job (push a fresh commit, or quarantine the test).
+  A clean `sync-pr` merge (no conflict, no hand edit) keeps the prior head's first-attempt green while the new run
+  works (D-045): the row says `credited H0 <sha>` and the retest row re-runs the crossing unit tests at the gate.
 - Adding `land` while CI still runs is fine: `gate` shows in progress ("waiting") and re-evaluates when CI ends. Going
   back to draft or removing `land` turns `gate` red.
 - `land` on a draft does nothing until the flip (`gate` reads "draft: flip ready first", one comment per head).
