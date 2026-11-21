@@ -762,3 +762,22 @@ for (const fault of ['refuseBuffer', 'refuseAllocation', 'submitThrows', 'refuse
     const retry = h.capture(); await h.tick(); await retry;
   });
 }
+
+// #5986 (Bryce's decision: A2): an EXPLICIT capture — a spec that owns the camera arms
+// invalidateSoftPresent({ capture: true }) and reads #game-soft next — gets real pixels inside the
+// software-GL defer (the race intro window #5965 made live), not the blank generation the passive arm gets.
+test("GLX soft-present draws an explicit capture inside the software-GL defer, and the flag is single-use (A2)", () => {
+  const { soft, reads, ctx2d } = glxSoftDeferHarness({ deferUi: true });
+  soft.invalidateSoftPresent({ capture: true });
+  soft.blitIfDue();
+  assert.deepEqual(reads, [{ w: 4, h: 2, asked: true }], "the explicit capture reaches readPixels past the defer");
+  assert.equal(ctx2d.drawn.data[0], 120, "its generation carries drawn pixels");
+  assert.equal(soft.gen(), 1);
+  // The next bare arm is passive again: the explicit flag does not linger.
+  ctx2d.drawn = undefined;
+  soft.invalidateSoftPresent();
+  soft.blitIfDue();
+  assert.equal(reads.length, 1, "no readPixels for the passive arm that follows");
+  assert.equal(ctx2d.drawn, undefined);
+  assert.equal(soft.gen(), 2, "the passive arm is consumed with a generation bump, as before (#3589)");
+});

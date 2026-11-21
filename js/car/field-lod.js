@@ -94,8 +94,8 @@ const FieldLod = (function () {
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
-  function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
-  function castsShadow(dist2) { return !on || dist2 < sq(T.SHADOW_CAST_M); }
+  function flame(dist2, fovY) { return !on || dist2 * lensK2(fovY) < sq(T.FLAME_M); }
+  function castsShadow(dist2, fovY) { return !on || dist2 * lensK2(fovY) < sq(T.SHADOW_CAST_M); }
   function mirrorCap() { return on ? T.MIRROR_CARS : Infinity; }
   // Keep the `cap` smallest of dist2s[0..n): writes keep[i] = 1/0 and returns
   // how many are kept. `force` (an index, or -1) is always kept first — the

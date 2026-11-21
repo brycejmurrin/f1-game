@@ -387,7 +387,7 @@ var RaceEngineer = (function () {
       out.rejoin = rejoin; out.planned = !!plan;
       out.ahead = noStop ? null : ahead; out.aheadGap = ahead ? aheadGap : null;
       out.setLaps = tyres.lapsLeft ? tyres.lapsLeft(c) : null;
-      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (lapsTarget || 0) - lap + 1);
+      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (lapsTarget || 0) - Math.max(1, lap) + 1);
       out.marginS = pit ? pit.marginS : null;
       out.axle = wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0;
       out.front = c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r;
@@ -410,7 +410,7 @@ var RaceEngineer = (function () {
       // the flag. With neither, "box under the caution" is a stop the race
       // does not need, however cheap.
       const stopDue = lapsToStop != null
-        || (out.setLaps != null && lapsTarget > 0 && out.setLaps + 0.5 < lapsTarget - lap + 1);
+        || (out.setLaps != null && lapsTarget > 0 && out.setLaps + 0.5 < lapsTarget - Math.max(1, lap) + 1);
       out.cheapStop = !noStop && stopDue && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35;
       out.wet = wantTread > 0;
       out.noStop = noStop; out.finalLap = finalLap;

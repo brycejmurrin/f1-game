@@ -100,12 +100,20 @@ if ($("pm-fullscreen")) {
     msg.textContent = NOTE;
   } else if (store.get("iosInstallSeen", false)) return;
   else if (wakeBroken && msg) msg.append(" " + NOTE);
+  // The title pads itself by the banner's height (css/touch-controls.css, clean-room fix 50).
+  const root = typeof document !== "undefined" ? document.documentElement : null;
+  const measure = () => { if (root && !el.hidden) root.style.setProperty("--ios-install-h", el.offsetHeight + "px"); };
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
   const dismiss = () => {
+    if (ro) ro.disconnect();
+    if (root) root.style.removeProperty("--ios-install-h");
     el.hidden = true;
     if (!standalone) store.set("iosInstallSeen", true);
     if (wakeBroken) store.set("iosWakeNoteSeen", true);
   };
   el.hidden = false;
+  measure();
+  if (ro) ro.observe(el);
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;
   // It is a suggestion, not a gate: the first title-menu choice dismisses it,
@@ -228,7 +236,7 @@ function phoneLink(url) {
   if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
   return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
 }
-let phonePad = null;
+let /** @type {ReturnType<typeof PhonePad.host> | null} */ phonePad = null;
 let phonePadLoading = false, phonePadGeneration = 0;
 let recoveryOwner = null;
 const recoveryNote = document.createElement("p"), newPhoneCode = document.createElement("button");

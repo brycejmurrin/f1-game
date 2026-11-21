@@ -153,7 +153,6 @@ const FULL = [
   "js/render/shared/gltf.js",
   "js/render/shared/assets.js",
   "js/render/shared/driving-line.js",
-  "js/render/shared/puddles.js",   // Puddles: the ONE reference for the standing-water mask the three lit shaders mirror (tests/unit/puddles.test.mjs)
   "js/data/teams.js",
   "js/data/driver-ratings.js",
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
@@ -240,7 +239,6 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
-  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -712,7 +710,6 @@ const HARD_EDGES = [
   // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
   // to be orderable by tag position.
   ["js/core/mat4.js", "js/render/shared/driving-line.js"],           // binds M4.clamp at eval
-  ["js/core/mat4.js", "js/render/shared/puddles.js"],                // binds M4.clamp at eval
   // Reads the stored palette / opacity into DrivingLine AT EVAL, so the first
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
@@ -1024,6 +1021,9 @@ const DEFERRED = {
 // ?apex=1 / ?debug= / ?report=, or apex26.devApi=1. Players on Pages skip
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
+  // Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror
+  // (tests/unit/puddles.test.mjs). No runtime reader, so off the boot wall (#5900); M4 is FULL.
+  "js/render/shared/puddles.js",
   "js/agent/agentview-raster.js",
   "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
@@ -1364,6 +1364,7 @@ const LAZY_UI_PRESETS_EDGES = [];
 // garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
 // it at idle, at the garage door, with the agent surface and with the career screen.
 const LAZY_SAVES_DATA = [
+  "js/ui/progress-backup.js",      // ProgressBackup (#5992): the settings file's `progress` section; read at call time
   "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
 ];
 const LAZY_SAVES_DATA_EDGES = [];

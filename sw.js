@@ -21,8 +21,8 @@ const CACHE_PREFIX = "apex26-";
 // RECORDED VOICES LIVE OUTSIDE THE GENERATIONS (audit4 B8). A voice pack is 2-7 MB
 // and unversioned; filed into apex26-<build> it was re-written into every new
 // generation and doubled while a prior settled one was retained. cacheBuild()
-// reads this name as NaN, so the stale sweep never deletes it; the shell's own
-// recovery reset (index.html) deletes apex26-<n> only and leaves it (#4479).
+// reads this name as NaN, so the stale sweep never deletes it; index.html's own
+// recovery reset deletes one failed asset per apex26-<n> and leaves apex26-voice (#4479).
 const VOICE_CACHE = CACHE_PREFIX + "voice";
 // VOICE_CACHE IS A BOUNDED LRU of voice ids (#4219 B): a persona is ~14-18 MB and
 // assets/voice ~111 MB, so every pack ever ensured must not stay forever. Keep
@@ -672,6 +672,7 @@ async function precacheAssetLists() {
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
     // LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade
+    "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
     "js/share/share-card-data.js",
@@ -738,7 +739,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
+  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -998,7 +999,7 @@ self.addEventListener("install", (event) => {
     // manifest or relying on the first online boot loses the pack after an update.
     const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport|settings-export-body|hud-inputs)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport|progress-backup|settings-export-body|hud-inputs)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.

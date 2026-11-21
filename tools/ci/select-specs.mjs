@@ -80,6 +80,20 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  40 Linux runners were busy; 28 + GROUP_LANES (8, remote-group.mjs) = 36 at worst, so 4 runners
  *  stay free for land, Pages and the fast tier. */
 export const LANES = 28;
+/** THE LANE COUNT AS A REPO VARIABLE (D-LANES, 2026-11-20). LANES above budgets GitHub's 40-slot pool. A run whose
+ *  legs go to the variable runner (`vars.APEX_CI_BROWSER_RUNNER`, ci.yml `selected` runs-on) takes no slot of that
+ *  pool, so ci.yml's select step hands `APEX_CI_LANES` (`vars.APEX_CI_LANES`) to this planner ONLY under the same
+ *  condition as that runs-on: not pull_request_target, not a fork PR, and the runner variable set. A fork or unset
+ *  case gets '' and stays at LANES, so it can never flood the GitHub-hosted pool. An integer in [1, MAX_LANES];
+ *  anything else (empty, 0, 3.5, "64x", 200) is LANES. Only runs planned after the variable is set use it.
+ *  docs/TESTING.md §CI runners. */
+export const MAX_LANES = 128;
+export function ciLanes(env = process.env) {
+  const s = String(env.APEX_CI_LANES ?? "").trim();
+  if (!/^\d+$/.test(s)) return LANES;
+  const n = Number(s);
+  return n >= 1 && n <= MAX_LANES ? n : LANES;
+}
 
 /** SMALL RUNS SKIP THE LANES (#5536, 2026-11-18). A plan of at most this many legs
  *  gets lane NO_LANE, and ci.yml gives each of its legs a group of its own
@@ -101,13 +115,13 @@ export function trainHead(env = process.env) {
   return String(env.GITHUB_HEAD_REF || "").startsWith("train/");
 }
 
-/** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
+/** First lane of a run's legs: GITHUB_RUN_NUMBER mod the lane count (ciLanes, LANES by default). With every run
  *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
  *  queued every ready PR while the high ones idled. Rotating the start spreads
  *  legs evenly; a run's own legs still land in distinct lanes. */
 export function laneBase(env = process.env) {
   const n = Number(env.GITHUB_RUN_NUMBER);
-  return Number.isInteger(n) && n > 0 ? n % LANES : 0;
+  return Number.isInteger(n) && n > 0 ? n % ciLanes(env) : 0;
 }
 
 // These specs already have their own jobs with runner-measured timeout
@@ -626,6 +640,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
   const costOf = (r) => r.tests * specSecPerTest(r.file, db).sec;
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
+  const outOfScope = [];
   const unreadable = [];
   for (const file of specs) {
     const tests = scope ? declaredTestsIn(file, scope) : declaredTests(file);
@@ -635,6 +650,9 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     // in a file whose whole contract is that nothing is dropped silently.
     // Reachable today: hand fit() a path that does not exist and it disappears.
     if (tests == null) { unreadable.push({ file, tests: null }); continue; }
+    // A roster spec whose own APEX_CIRCUITS loop holds none of the scoped circuits (tracks-walls-a when the circuit
+    // is in b's half) would run ZERO tests: a leg of its own fails the verdict, so it runs nowhere, by name (#6036).
+    if (scope && tests === 0 && declaredTests(file) > 0) { outOfScope.push({ file, tests: 0, circuits: scope.join(",") }); continue; }
     if (FIXED_GATE_SPECS.has(file)) {
       coveredByFixedGates.push({ file, tests });
       continue;
@@ -850,7 +868,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     skipped.push(...keep);
   }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
-    unreadable,
+    unreadable, outOfScope,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
 
@@ -880,7 +898,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  cache key (two "Unable to reserve cache") and uploaded three artifacts
  *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
  *  `selected-<i>`, and a final pass suffixes any repeat. */
-export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase(), train = false) {
+export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase(), train = false, lanes = ciLanes()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
@@ -983,10 +1001,10 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(","),
       // The leg's concurrency lane on a pull request (ci.yml `selected`): legs
-      // cycle through LANES groups from laneBase(), so a run's own legs never
+      // cycle through `lanes` groups (ciLanes) from laneBase(), so a run's own legs never
       // queue behind each other and runs do not all pile into lane 0. A plan of
       // SMALL_RUN_LEGS or fewer legs gets NO_LANE below.
-      lane: (base + i) % LANES };
+      lane: (base + i) % lanes };
   });
   // Unique names: a matrix name keys ci.yml's timings artifact, and a repeat
   // there is an upload that collides.

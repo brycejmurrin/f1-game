@@ -78,15 +78,15 @@ const TrackDesigner = (function () {
   const COACH_KEY = "designerCoached";
 
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
-  let cv = null, canvas = null;
+  let /** @type {ReturnType<typeof DesignerCanvas.create> | null} */ cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
   let lineage = 0;   // which loaded design a history entry belongs to (restore)
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
-  let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
+  let spanArm = false, selectionMode = "point", /** @type {ReturnType<typeof DesignerSelection.create> | null} */ selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null, workspace = null, seatFootFn = null;
+  let propKind = "stand", /** @type {ReturnType<typeof DesignerScenery.create> | null} */ scenery = null, sceneryView = false, /** @type {ReturnType<typeof DesignerFollowup.repairPanel> | null} */ repair = null, /** @type {ReturnType<typeof DesignerBridges.create> | null} */ bridges = null, /** @type {ReturnType<typeof DesignerWorkspace.create> | null} */ workspace = null, seatFootFn = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
@@ -2073,7 +2073,7 @@ const TrackDesigner = (function () {
   // Control points stay [x, z]; heights[i] is metres at point i (0.25 m lattice).
   // Presets write heights and clear legacy cosine elevations so the strip matches
   // the road. Old saves without heights load flat (ensureHeights).
-  let prof = null;
+  let /** @type {ReturnType<typeof DesignerProfile.create> | null} */ prof = null;
   function buildProfile(stage) {
     if (typeof DesignerProfile === "undefined" || !stage) return;
     ui.profile = el("canvas");

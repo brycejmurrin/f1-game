@@ -10,7 +10,7 @@ function create(G) {
   const { $, els } = G;
 
   let draft = null;
-  let draftFrom = null;   // the live slot before an EMPTY slot was opened; restored if the draft is abandoned
+  let /** @type {ReturnType<typeof Career.slot> | null} */ draftFrom = null;   // the live slot before an EMPTY slot was opened; restored if the draft is abandoned
   // Where CAREER MODES was opened from. Esc/BACK must return to the title when
   // the title opened the picker (openSlots from title-flow), and only climb to
   // the CAREER hub when the hub's own CAREER MODES door opened it. Without this,

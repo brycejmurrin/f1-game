@@ -79,7 +79,9 @@
     // peak, 0.4105, is 44 m away; tests/specs/foundation/spa.js pins the
     // station matched to the F1 map within 25 m).
     turns: [0.0351, 0.1307, 0.1434, 0.1618, 0.3258, 0.3374, 0.3598, 0.4168, 0.4502, 0.5227, 0.5567, 0.6200, 0.6505, 0.6857, 0.7150, 0.8152, 0.8653, 0.9436, 0.9516],
-    furniture: { tree: "fir", bakedPines: true, fol: [0.14, 0.31, 0.21], lamp: "none" },  // shared authored/forest pine registry
+    // bakedPines stays OFF: pack pine_lod0 is a square trunk with six leaf slivers, no canopy (#6035);
+    // tests/unit/baked-model-instancing.test.mjs refuses the flag until the model is rebaked with a crown.
+    furniture: { tree: "fir", fol: [0.14, 0.31, 0.21], lamp: "none" },  // shared authored/forest pine registry
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "steel", "concrete"],
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

@@ -419,6 +419,7 @@ var RadioVoice = (function () {
      * exactly how this defect survived three attempts to fix it from the
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
+    const unrecorded = {};   // #5991: RECORDED misses, "speaker|text" -> times; each logged once
     let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
     let squelchEpoch = 0;   // a mute invalidates even a line still waiting for its speech task
     let noiseBuf = null, poolCtx = null, poolDest = null;
@@ -759,6 +760,7 @@ var RadioVoice = (function () {
       if (recordedOk() && pack && packOn && PACK_VOICE[p.speaker]) {
         activeKind = "";
         last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
+        if (last.reason === "not-recorded") noteUnrecorded(p.speaker + "|" + p.text);
         return false;
       }
       if (!api) { last.reason = "no-api"; return false; }
@@ -768,6 +770,10 @@ var RadioVoice = (function () {
       // game tick (see synthTask above). The cancel stop() scheduled runs first.
       pending = setTimeout(() => { pending = null; speakPlanned(p); }, Math.max(0, p.leadMs));
       return true;
+    }
+    function noteUnrecorded(key) {
+      if (!unrecorded[key]) Log.info("audio", "RadioVoice: no clip for " + key + " (written only)");
+      unrecorded[key] = (unrecorded[key] || 0) + 1;
     }
     /* THE RECORDED PATH. Same contract as speakPlanned: claims `current`,
      * ducks the music, and the card's deadline is the hard stop. The pack
@@ -1069,6 +1075,7 @@ var RadioVoice = (function () {
       },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
+        unrecorded,
         pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,
         synth: { calls: synthStat.calls, maxMs: +synthStat.maxMs.toFixed(1), slow: synthStat.slow },
         squelch: lastSquelch && { play: lastSquelch.play, reason: lastSquelch.reason, openMs: lastSquelch.openMs,

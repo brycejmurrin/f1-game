@@ -704,7 +704,7 @@ interface GameCtx {
    * line (a cooldown, a wear step) must spend it only on true.
    */
   readonly announce: (msg: string, dur?: number, kind?: string, still?: () => boolean) => boolean;
-  readonly applyCaution: (d: unknown) => void;
+  readonly applyCaution: (d: unknown) => boolean;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   /** The interpolated pose a car is drawn at this frame (pooled; read it at once): the TV director's subject. */
   readonly camPoseOf: (c: CarState) => { s: number; x: number; carPos: number[] | null; carHead: number };

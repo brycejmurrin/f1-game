@@ -32,6 +32,7 @@ Then follow skill `steward` (§Lane) in this repository exactly: claim first (th
 id>` comment and the `claimed` label on an issue; set `owner:` in the handoff block of a CONTINUE PR); branch from the
 deploy branch; a draft PR at the first commit; make all edits, verify once with the floor, push; keep the PR Plan and
 its ```handoff block live; when `ready-gate` passes, flip ready and add `land`. GitHub lands the PR, never you.
+A JS symbol: apex-lsp (rule `.claude/rules/js-nav.md`, skill `code-nav`).
 
 Ending: after your last push, `subscribe_pr_activity` on your PR, then end the turn. A PR event (CI, a comment, a
 label) wakes you; act on it, refresh the handoff block, and end again. No timed check-ins while the subscription

@@ -5042,7 +5042,7 @@ test("driving feel: the player tows with the AI's window and gain, the fronts lo
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
   // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
   assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
-  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
+  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2, fovY\)\)/, "for every drawn car");
   const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
 });
@@ -7334,6 +7334,11 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   G.mirrorRect(rect);
   assert.equal(G.drawMirrorGlass(glass, id, null), true);
   assert.equal(G.mirrorState().glass, 2);
+  // opts: the shared (mesh, model, opts) slot TLX and WGX take too; GLX forwards it and draws the same glass.
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, { lod: 2 }), true, "an opts object is accepted, not a refusal");
+  assert.equal(h.count("drawElements"), 1, "one glass draw, as with null opts");
+  assert.equal(G.mirrorState().glass, 3);
 
   // A dead target (an incomplete framebuffer at a new size): refused for good.
   h.answers.checkFramebufferStatus = () => 0;
@@ -7341,7 +7346,7 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   assert.equal(G.mirrorState().dead, true);
   G.begin(h.frame());
   assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
-  assert.equal(G.mirrorState().glass, 2);
+  assert.equal(G.mirrorState().glass, 3);
 });
 
 // The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's

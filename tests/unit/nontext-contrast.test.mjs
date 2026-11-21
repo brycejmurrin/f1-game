@@ -551,3 +551,20 @@ test("colour vision: a WARNING never reads as a HIT, and damage levels 1 / 2 / 3
   }
   assert.deepEqual(bad, []);
 });
+
+// #5900: the CAR SETUP sheet's two dim text styles read under WCAG AA (1.4.3, text 4.5:1): the tab's
+// current-part line was --text at 40 % (~3.3:1) and the FREE price white at 30 % (~2.6:1). Both
+// sit on the sheet's plates, which composite over the page; measure over every opaque ground.
+test("car setup's dim text (.cs-tab-cur, .cs-opt-cost.free) clears 4.5:1 on every ground (#5900)", () => {
+  const sheet = cssRules(read("css/carsetup.css")), bad = [];
+  for (const sel of [".cs-tab-cur", ".cs-opt-cost.free"]) {
+    const v = decl(sheet, sel, "color");
+    assert.ok(v, `css/carsetup.css must declare color on ${sel}`);
+    for (const [name, ground] of Object.entries(grounds())) {
+      if (name === "--red") continue;   // no setup text sits on the brand red
+      const r = ratio(over(resolve(v), ground), ground);
+      if (r < 4.5) bad.push(`${sel} ${r.toFixed(2)}:1 over ${name}`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});

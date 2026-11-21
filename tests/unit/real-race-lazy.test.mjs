@@ -134,7 +134,7 @@ test("the Data Hub opens only once the real-race engine has landed (WATCH & DRIV
   w.release();
   await p;
   assert.equal(opened, true);
-  assert.equal(vm.runInContext('TvGraphics.diff([{ code: "NOR", pos: 2 }], [{ code: "NOR", pos: 1 }]).lower.code', w.ctx), "NOR");
+  assert.equal(vm.runInContext('TvGraphics.diff([{ code: "VER", pos: 1 }, { code: "NOR", pos: 2 }], [{ code: "NOR", pos: 1 }, { code: "VER", pos: 2 }]).lower.code', w.ctx), "NOR");
   assert.equal(vm.runInContext("typeof RealRaceBody.create", w.ctx), "function");
   await w.lb.ensureRealRace();
   assert.equal(w.loads.filter((l) => l.includes("js/race/real-race.js")).length, 1, "one inject, memoised");

@@ -138,6 +138,7 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
 
 // [data-say] cards are spoken once per result after the sheet shows (a pre-filled role=status is silent).
 let saidFor = null, saidWatch = null, saidMo = null;   // saidFor holds the finished race's car array: dropped when the sheet closes
+let saidPending = null;   // the ONE read waiting for the sheet to show: a newer result replaces it (clean-room audit fix 54, #5898)
 function spokenText(n) {
   const kids = n.children ? Array.from(n.children) : [];
   return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
@@ -145,6 +146,7 @@ function spokenText(n) {
 function sayCards(sheet, table, key) {
   if (!table || typeof LiveRegion === "undefined" || key === saidFor) return;
   saidFor = key;
+  if (saidPending) { saidPending.disconnect(); saidPending = null; }
   if (sheet && saidWatch !== sheet && typeof MutationObserver !== "undefined") {
     if (saidMo) { saidMo.disconnect(); saidMo = null; }
     saidWatch = sheet;
@@ -155,7 +157,13 @@ function sayCards(sheet, table, key) {
   if (!text) return;
   const say = () => LiveRegion.say(text, "save");
   if (!sheet || !sheet.hidden || typeof MutationObserver === "undefined") { setTimeout(say, 0); return; }
-  const mo = new MutationObserver(() => { if (!sheet.hidden) { mo.disconnect(); say(); } });
+  const mo = new MutationObserver(() => {
+    if (sheet.hidden) return;
+    mo.disconnect();
+    if (saidPending === mo) saidPending = null;
+    say();
+  });
+  saidPending = mo;
   mo.observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
 }
 
@@ -289,6 +297,9 @@ function stintStrip(c) {
   });
   const details = document.createElement("details"); details.setAttribute("data-stint-details", "");
   const summary = document.createElement("summary"); summary.textContent = tr("results.stints.title", null, "TYRE STINTS");
+  // 22 disclosures with one name are 22 identical tab stops: name each for its driver.
+  const who = c && (c.name || c.code);
+  if (who) summary.setAttribute("aria-label", summary.textContent + " — " + who);
   const text = document.createElement("div"); text.setAttribute("data-stint-text", ""); text.textContent = description;
   details.append(summary, text);
   return { strip, details };
@@ -623,7 +634,7 @@ function buildResults(order, race) {
       hint.className = "res-personal";
       hint.setAttribute("data-results-part", "room");
       const note = document.createElement("span");
-      note.textContent = tr("results.friendRoomClosed", null, "The friend room closes when you leave. NEW FRIEND ROOM, or VS FRIEND on the title screen, starts another.");
+      note.textContent = tr("results.friendRoomClosed", null, "The friend room closes when you leave. NEW FRIEND ROOM, or RACE A FRIEND on the title screen, starts another.");
       hint.appendChild(note);
       els.resultsTable.appendChild(hint);
     }

@@ -1,5 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-20 — PR #6017 (claude/port-cleanroom-46-53-5973): clean-room fix 45, the two-dry-compound rule in HOW TO PLAY
+
+`(tree) shellNodes` 2321 → **2323** (+2). Deliberate raise past the absorb, on Bryce's `ratchet-raise` (decision issue
+#6016). The game disqualifies a driver who finishes a dry race of eight laps or more on one compound
+(`SportingRegs.applyCompoundRule`), but HOW TO PLAY never said so. One `dt`/`dd` pair under PIT STOPS is the
+two nodes; `tests/unit/help-rules-facts.test.mjs` reads the figures in it from the code that enforces them.
+Fragment: `tests/data/ratchets.d/claude--port-cleanroom-46-53-5973.json`.
 ## 2026-11-20 — PR #6024 (claude/ratchet-pin-absorb): pin counts get a 5-pin absorb (Bryce's "Pin slack", D-037)
 
 `(tree) assertPins` ceiling **8140** and `(tree) assertPinsAll` ceiling **10366** are unchanged; each entry gains
@@ -21,6 +28,18 @@ position + index alone (about 8 to 10 MB of `carSh` geometry saved per race). Th
 Fragment: `tests/data/ratchets.d/claude--render-caster-position-only-1118.json`.
 
 ## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
+
+## 2026-11-19 — PR #5971 (claude/lsp-tool-fixes-1120): apex-lsp factory typing and the G hand-off (#5964, #5965)
+
+`(tree) eagerBytes` 7972011 → **7974642** (+2631). Deliberate raise past the absorb: 54 comment-only
+`/** @type {ReturnType<typeof M.create> | null} */` annotations on null-initialised factory variables in eager
+files (+2,027; member reads on them resolve 0/626 → 610/626 for apex-lsp, docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md),
+and the one game.js line that hands `G` to `VisorOptics.bind` and getters to `RaceEntryProfile.bindGame` (+604):
+their `typeof G` reads never saw game.js's IIFE-local const. Bryce chose to keep the comments (`decision: A` on #5971,
+2026-11-20 07:58Z) and applied `ratchet-raise`.
+`js/game.js codeLines` 5417 → **5418** (+1). Deliberate raise past the absorb: the bind line above.
+`js/game.js lines` 9594 → **9595** (+1). Deliberate raise past the absorb: the bind line above.
+Fragment: `ratchets.d/claude--lsp-tool-fixes-1120.json`.
 
 ## 2026-11-20 — PR #5953 (claude/batch-5896-5878-5877): share-link undo, repair stop, season points; absorbs #5954 records and drills (#5896, #5878, #5877, #5895, #5888)
 

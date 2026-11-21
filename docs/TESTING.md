@@ -804,11 +804,15 @@ before:
 | variable | job | events that read it |
 |---|---|---|
 | `APEX_BROWSER_RUNNER` | `browser-group.yml` `group` (every shard) | `workflow_dispatch` (its only trigger) |
-| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request`, the pages.yml train, schedule, dispatch |
+| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request` and ci.yml's own dispatch only; the pages.yml train (any event) and the nightly stay on `ubuntu-latest` so a managed-runner outage never blocks a deploy |
 
 The value is ONE `runs-on` label string. Nothing else reads a variable for its runner. Land, the gate, Pages, the
 deploy, the structural guards and the fast tier stay literal `ubuntu-latest`, and so does `renderer-macos`
 (`tests/unit/ci-runner-variable.test.mjs` pins the list).
+
+**Train stays hosted (2026-11-20).** Pages run 44835564654 redded in mesa-xvfb setup on a Ubicloud leg (no apt mirror
+answered), so the train and the nightly no longer read the variable. Bryce deleted `APEX_CI_BROWSER_RUNNER` as a
+stopgap the same day; with this rule merged it is safe to re-add.
 
 **Fork code never runs there.** The repo is public and takes fork PRs. In `ci.yml`, a `pull_request` whose head
 repository is not this one, and any `pull_request_target`, falls back to `ubuntu-latest` whatever the variable says.
@@ -837,6 +841,23 @@ First measurement (browser-group run 44823706583, 2026-11-20, `ubicloud-standard
 orchestrator): the runner was picked up 21 s after dispatch. Shard wall time was `logging` 96 s against 68–95 s on
 GitHub-hosted and `boot-guard` 90 s against 51–63 s. So a 2-vCPU leg runs up to ~1.5x slower than this repo's 4-vCPU
 `ubuntu-latest`. If legs near their budget, `ubicloud-standard-4` is the fallback.
+
+**Lane counts (D-LANES, 2026-11-20).** The lanes cap how many browser legs hold a runner at once. They were sized for
+GitHub's 40-slot pool: `LANES` 28 (`tools/ci/select-specs.mjs`) plus `GROUP_LANES` 8 (`tools/ci/remote-group.mjs`).
+A leg on the variable runner takes no slot of that pool, so two more repository variables can raise the counts:
+
+| variable | read by | used only when | unset or invalid |
+|---|---|---|---|
+| `APEX_CI_LANES` | ci.yml's select step → select-specs `ciLanes` | the run's `selected` legs resolve to `APEX_CI_BROWSER_RUNNER` (same condition as their `runs-on`: own `pull_request` or ci.yml dispatch, never the train or nightly, the runner variable set) | 28 |
+| `APEX_GROUP_LANES` | remote-group.mjs `groupLanes` (env, or `--group-lanes <n>`) | the dispatcher sets it only when the target branch's browser-group.yml reads `APEX_BROWSER_RUNNER` (synced past 0575bc45) and that variable is set | 8 |
+
+Each value is an integer in [1, 128]; anything else falls back to the default. A fork or unset case can never get more
+lanes than the GitHub-hosted pool was budgeted for (`tests/unit/ci-runner-variable.test.mjs` pins the condition).
+Lanes are assigned when a run is planned, so only runs planned after a change use it; runs already queued keep their
+lanes. Bryce's values with Ubicloud (2026-11-20): `APEX_CI_LANES` 64, `APEX_GROUP_LANES` 24.
+**Cost:** more lanes means more legs billed at once on the provider. The lane cap no longer throttles spend, so
+the Ubicloud bill scales with the legs that would otherwise have queued. Watch the provider console after raising them.
+**Rollback:** delete the variable (or unset the env). The next planned run is back at 28 / 8, with no commit.
 
 **What the image must provide.** The jobs assume GitHub's Ubuntu runner image:
 - passwordless `sudo` and `apt` for `.github/actions/mesa-xvfb` (`mesa-utils libgl1-mesa-dri libegl1 libgles2
@@ -1053,7 +1074,7 @@ Two always-judged checks give the PR verdict fixed names:
   `select`, so the browser legs start as soon as the plan exists instead of
   queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
   still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
-  cancel fails the aggregator. `baseline-trial` is advisory (`continue-on-error`) and never fails it.
+  cancel fails the aggregator. `baseline-trial` is not advisory (`ADVISORY` is empty in `tools/ci/ci-verdict.mjs`): where it runs (nightly and `workflow_dispatch` only) its job blocks `CI`.
   It carries the FAILURES of smoke, the sweeps, renderer-macos and xr, not their
   execution: only the `REQUIRE_SUCCESS` set (full-tier PR runs) must have run, and
   the job summary lists which jobs executed vs were skipped (#3507). From 2026-10-15 it was the deploy branch's one required check; since
@@ -1082,7 +1103,7 @@ Two always-judged checks give the PR verdict fixed names:
 | **Draft PR** | `pull_request` + draft (`opened` / `synchronize` / `reopened`) | Fast tier on EVERY push, no opt-in (2026-11-03: the `run-ci` label, the `CI: run` body line, the `labeled`/`edited` triggers, their noise groups and the `Draft push (CI skipped)` notice are retired): Structural guards A–D (ratchets, test:audit, ci-coverage and behind-ship at the end of tooling B) + `Select specs for this change` (node-slice plan, spec selection, ship / renderer / xr path filters in one job since 2026-10-15) + parts census + driving-model (when `select` routes it) + the `selected` browser legs on the draft budget (`BUDGET_MIN` on the select step: ONE budgeted shard plus whatever oversize rows the selector derives, overflow off — `OVERFLOW_SHARDS` 0; `Selected specs (verdict)` WARNS, never reds, on a spec that budget dropped — the ready run's full plan runs it (a whole group, `remote-group.mjs`, is Bryce's opt-in)). NOT the node slices (decision D1, PR #2560 §6: 0 unique catches on drafts in 40 h). Heavy jobs skipped: geometry sweeps, smoke, staged-boot, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. The verdict job is named `CI (draft fast tier)`, so its success can never satisfy the required `CI` while the ready-for-review full tier is still running (#2664); on a non-draft PR run `ci-verdict.mjs` also requires `guards-a`…`guards-d`, `guards`, `select`, `smoke` and `staged-boot` to be `success`, not skipped (`REQUIRE_SUCCESS`). |
 | **Ready PR** | `pull_request` + not draft / `ready_for_review` | Full tier on the same head: smoke + sweeps (ship filter is a step of `select`), every node-slice name when planned, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
 
-**Check names (GitHub UI)** — fast tier on a **draft** PR or a **deploy-branch push** (`ci.yml` jobs unless noted):
+**Check names (GitHub UI)** — fast tier on a **draft** PR (`ci.yml` has no push trigger; a deploy-branch push is judged by the Pages release train's `ci / …` rows):
 
 - `Structural guards (tooling A)` … `(tooling D)` (jobs `guards-a` … `guards-d`), `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
 - `Pure-node unit suites (<slice>)` (the needed legs on a READY PR only — planned by `Select specs for this change`, which replaced `Plan node unit slices` on 2026-10-15; drafts and the Pages train skip them since 2026-10-16, the nightly and a dispatch run every leg)

@@ -87,7 +87,9 @@ const PitSigns = (function () {
     const cw = S.cellW / div, ch = S.cellH / div;
     const side = opts && opts.side != null ? opts.side : 1;
     const lim = Math.round((opts && opts.limitKph) || 80);
-    const texts = [(side < 0 ? "◀ " : "") + "PIT ENTRY" + (side > 0 ? " ▶" : ""), "PIT LANE " + lim + " km/h"];
+    const AO = typeof AppearanceOpts !== "undefined" && AppearanceOpts.unitLabel ? AppearanceOpts : null;   // SPEED UNITS (#5897)
+    const texts = [(side < 0 ? "◀ " : "") + "PIT ENTRY" + (side > 0 ? " ▶" : ""),
+      "PIT LANE " + (AO && AO.unitLabel() === "MPH" ? AO.speed(lim) + " MPH" : lim + " km/h")];
     for (let b = 0; b < S.boards && b < texts.length; b++) {
       const cell = cellRect(S.cells + b), x = cell.x / div, y = cell.y / div;
       clipCell(ctx, x, y, cw, ch);

@@ -1,0 +1,1 @@
+Fixed: the THREE PATH help text in Settings › Graphics said Safari and iPhone always use WebGL2; it now says what the game does — it tries WebGPU there too and falls back to WebGL2 only after a WebGPU failure.

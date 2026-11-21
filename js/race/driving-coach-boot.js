@@ -15,7 +15,7 @@ const DrivingCoach = (function () {
   const PANELS = ["driving", "practice", "strategy", "review"];
 
   function create(G) {
-    let mine = null, goal = "free", asked = false;   // goal: a GOAL picked before the body landed, handed over at creation
+    let /** @type {ReturnType<typeof DrivingCoachBody.create> | null} */ mine = null, goal = "free", asked = false;   // goal: a GOAL picked before the body landed, handed over at creation
     const $ = G.$;
     /** The guarded creation: the body, made ONCE, the first time anything asks after LAZY_RACE_SESSION evaluated. */
     const body = () => {

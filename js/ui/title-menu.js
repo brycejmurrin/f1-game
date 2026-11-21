@@ -147,6 +147,8 @@ const TitleMenu = (function () {
   }
 
   // Historical medals are not stored; keep each record class separate instead.
+  // m:ss.mmm like every other lap (#5897).
+  function lapStr(t) { return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "") : t.toFixed(3) + "s"; }
   function dailyHistory(daily) {
     const data = daily && daily.data ? daily.data() : null, days = data && data.days;
     if (!days || typeof days !== "object" || Array.isArray(days)) return [];
@@ -157,10 +159,25 @@ const TitleMenu = (function () {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
       const classes = entry.classes && typeof entry.classes === "object" && !Array.isArray(entry.classes)
         ? Object.entries(entry.classes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).filter(([, value]) => value && positive(value.best)) : [];
-      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + value.best.toFixed(3) + "s")
-        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + entry.best.toFixed(3) + "s"] : [];
+      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + lapStr(value.best))
+        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + lapStr(entry.best)] : [];
       return results.length ? [{ day, text: results.join(" · ") }] : [];
     });
+  }
+
+  // BOOT TAP (index.html, #5995): the door tapped before boot is clicked once
+  // game.js has wired it (the rest of this task), if the bare title is still
+  // on top; a consent sheet or first-run layer over it drops the tap.
+  function replayBootTap($, doc) {
+    const btn = doc && doc.querySelector ? doc.querySelector("#menu-buttons [aria-busy]") : null;
+    if (!btn) return;
+    btn.removeAttribute("aria-busy");
+    setTimeout(() => {
+      const overlay = $("overlay"), top = UiLayers.top();
+      const live = overlay && !overlay.hidden && !UiLayers.inRace() && (!top || top.id === "overlay");
+      if (live && !btn.hidden && !btn.disabled) btn.click();
+      else Log.info("game", "boot tap dropped (" + btn.id + ")");
+    }, 0);
   }
 
   function create(G) {
@@ -171,6 +188,7 @@ const TitleMenu = (function () {
     // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
     // does something; game.js wires the handlers in this same task.
     if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
+    replayBootTap($, typeof document !== "undefined" ? document : null);
 
     const history = $("daily-history"), historyList = $("daily-history-list");
     const doc = typeof document !== "undefined" ? document : null;
@@ -231,7 +249,7 @@ const TitleMenu = (function () {
       const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
       if (dailyBtn && dailySub) {
         const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
-        setText(dailySub, p.trackName + " · " + p.weather.toUpperCase()
+        setText(dailySub, p.trackName + " · " + (typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase())
           + (streak > 0 ? " · STREAK " + streak : ""));
         // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
         setAttr(dailyBtn, "aria-label", "Daily time trial — " + dailySub.textContent);
@@ -300,6 +318,6 @@ const TitleMenu = (function () {
     return { refresh };
   }
 
-  return { create, organize, repairDestinations, CORE_PLAY_DOORS };
+  return { create, organize, repairDestinations, replayBootTap, CORE_PLAY_DOORS };
 })();
 Object.freeze(TitleMenu);
