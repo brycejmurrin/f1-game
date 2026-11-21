@@ -14577,6 +14577,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/ui-experience.test.mjs"
       ],
       "debrief": [
@@ -14618,6 +14619,7 @@
         "tests/unit/radio-voice.test.mjs"
       ],
       "*": [
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ]
     },
@@ -20225,6 +20227,7 @@
       "*": [
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs"

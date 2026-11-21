@@ -442,11 +442,21 @@ const CustomTracks = (function () {
       known.set(it.id, it); items.push(it); added++;
     }
     if (items.length > LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items, needed: items.length };
-    if (!added) return { ok: true, added, skipped, durable: true };
-    const selected = selectedId(), result = write(items);
+    return commitCollection(items, added, skipped);
+  }
+
+  function commitCollection(items, added, skipped) {
+    const receipt = { ok: true, added, skipped, durable: true };
+    if (!added) {
+      if (!skipped || !store.failedKeys().some((f) => f.key === KEY)) return receipt;
+      // A duplicate in GameStore's session cache may still be absent on disk.
+      receipt.retried = true;
+    }
+    const selected = added && selectedId(), result = write(items);
     if (!result || !result.ok) return { ok: false, reason: "write" };
-    if (sync() >= 0 && selected) reselect(selected);
-    return { ok: true, added, skipped, durable: !!result.durable };
+    if (added && sync() >= 0 && selected) reselect(selected);
+    receipt.durable = !!result.durable;
+    return receipt;
   }
 
   // Prepared imports own private sanitized data. UI summaries are inspectable
@@ -499,11 +509,7 @@ const CustomTracks = (function () {
     if (!prepared) return { ok: false, reason: "canceled" };
     collectionPlans.delete(plan);   // one explicit approval can write at most once
     if (prepared.revision !== collectionRevision()) return { ok: false, reason: "changed" };
-    if (!prepared.added) return { ok: true, added: 0, skipped: prepared.skipped, durable: true };
-    const selected = selectedId(), result = write(prepared.items);
-    if (!result || !result.ok) return { ok: false, reason: "write" };
-    if (sync() >= 0 && selected) reselect(selected);
-    return { ok: true, added: prepared.added, skipped: prepared.skipped, durable: !!result.durable };
+    return commitCollection(prepared.items, prepared.added, prepared.skipped);
   }
 
   /** Make a custom circuit the current selection (what the picker click does). */

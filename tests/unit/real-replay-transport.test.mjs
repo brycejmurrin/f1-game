@@ -9,6 +9,27 @@ import vm from "node:vm";
 import { ROOT, line, transportReplay, visibleTransportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("WATCH steps from the same retirement slot after a paused seek or continuous playback", () => {
+  for (const path of ["play", "seek", "seek twice"]) for (const direction of [-1, 1]) {
+    const { replay, cars, drivers, options } = transportReplay();
+    const car = { code: "CCC" }, driver = { code: "CCC", num: 3, pos: 3, lapStart: [0] };
+    cars.push(car); drivers.push(driver); options.seats.set(car, driver);
+    options.camera = "heli";
+    // CCC starts third, overtakes BBB, then retires in second behind AAA.
+    options.traces.cars = { 1: line(-14, 58, 0, 0, 30), 2: line(-22, 25, 0, 0, 30), 3: line(-30, 53, 0, 0, 10) };
+    replay.start(options); replay.follow("CCC"); replay.setLocked(true);
+    if (path === "play") {
+      for (let i = 0; i < 80; i++) replay.tick(0.25);
+    } else {
+      replay.setPaused(true);
+      if (path === "seek twice") replay.seek(9);
+      replay.seek(20);
+    }
+    assert.equal(car.retired, true);
+    assert.equal(replay.follow(direction), direction < 0 ? "AAA" : "BBB", path + " / " + direction);
+  }
+});
+
 test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns the picture", () => {
   for (const owner of ["auto", "manual", "locked", "fixed"]) {
     const { replay, G, options, drivers } = transportReplay();

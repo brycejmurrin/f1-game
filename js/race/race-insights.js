@@ -68,6 +68,24 @@ const RaceInsights = (function () {
   const unit = () => (typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph" ? " mph" : " km/h");
   const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
   const boundedPush = (a, v, n) => { a.push(v); if (a.length > n) a.shift(); };
+  const classOf = (circuit, team) => "c2|" + circuit + "|" + team;
+  // A pre-#5888 key began with its TT class JSON: it moves to that class's circuit + team (min best, runs summed).
+  function migrate(e) {
+    const m = /^(\{.*\})(:[a-z]+:.*)$/.exec(e.key); let c = null;
+    try { c = m && JSON.parse(m[1]); } catch (_) { /* not a class key */ }
+    return c && typeof c.circuit === "string" && Array.isArray(c.car) ? { ...e, key: classOf(c.circuit, c.car[0]) + m[2] } : e;
+  }
+  function normalizeMasteryEntries(entries) {
+    const out = new Map();
+    for (const e of entries) {
+      if (!e || typeof e.key !== "string") continue;
+      const n = migrate(e), o = out.get(n.key), bests = o ? [o.best, n.best].filter(Number.isFinite) : null;
+      out.set(n.key, o ? { key: n.key, best: bests.length ? Math.min(...bests) : null,
+        completed: Math.min(9999, (Math.floor(o.completed) || 0) + (Math.floor(n.completed) || 0)) } : n);
+    }
+    return [...out.values()];
+  }
+
   function create(G) {
     const kmh = (v) => kmhOf(G.dashKph, v), brakingRef = () => kmh(BRAKE_REF) + unit();
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
@@ -163,7 +181,6 @@ const RaceInsights = (function () {
     }
     // #5888: circuit + team in EVERY session (G.records.key() is the TT class: null or stale in a race).
     // Braking scores are speed-scaled (`:v2`); a raw-metre legacy best stays stored, never compared.
-    const classOf = (circuit, team) => "c2|" + circuit + "|" + team;
     const masteryKey = (mode, sectorIdx) => {
       const key = classOf(G.track && G.track.def && G.track.def.id || "", G.player && G.player.team && G.player.team.id || "")
         + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all") + (mode === "braking" ? ":v2" : "");
@@ -208,22 +225,9 @@ const RaceInsights = (function () {
       if (ah && ah._vmaxNow > 0 && c._vmaxNow > 0) boundedPush(paceWin, ah._vmaxNow / c._vmaxNow, 20);
     }
     const paceParity = () => (paceWin.length >= PARITY_MIN ? median(paceWin) : null);
-    // A pre-#5888 key began with its TT class JSON: it moves to that class's circuit + team (min best, runs summed).
-    function migrate(e) {
-      const m = /^(\{.*\})(:[a-z]+:.*)$/.exec(e.key); let c = null;
-      try { c = m && JSON.parse(m[1]); } catch (_) { /* not a class key */ }
-      return c && typeof c.circuit === "string" && Array.isArray(c.car) ? { ...e, key: classOf(c.circuit, c.car[0]) + m[2] } : e;
-    }
     function masteryEntries() {
-      const raw = G.store.get("circuitMastery", null), out = new Map();
-      if (!raw || raw.version !== 1 || !Array.isArray(raw.entries)) return [];
-      for (const e of raw.entries) {
-        if (!e || typeof e.key !== "string") continue;
-        const n = migrate(e), o = out.get(n.key), bests = o ? [o.best, n.best].filter(Number.isFinite) : null;
-        out.set(n.key, o ? { key: n.key, best: bests.length ? Math.min(...bests) : null,
-          completed: Math.min(9999, (Math.floor(o.completed) || 0) + (Math.floor(n.completed) || 0)) } : n);
-      }
-      return [...out.values()].slice(-63);
+      const raw = G.store.get("circuitMastery", null);
+      return raw && raw.version === 1 && Array.isArray(raw.entries) ? normalizeMasteryEntries(raw.entries).slice(-63) : [];
     }
     function mastery(mode) {
       const found = masteryEntries().find(e => e.key === masteryKey(mode, G.sectorIdx));
@@ -636,6 +640,6 @@ const RaceInsights = (function () {
     return { update, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })), brakingRef };
   }
-  return Object.freeze({ create, DRILLS, needsRivals });
+  return Object.freeze({ create, DRILLS, needsRivals, normalizeMasteryEntries });
 })();
 Object.freeze(RaceInsights);

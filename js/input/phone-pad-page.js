@@ -120,7 +120,7 @@ const PhonePadPage = (function () {
       dom.rim.style.transform = "rotate(" + r.toFixed(1) + "deg)";
     }
     function onOrient(e) {
-      if (steeringMode !== "tilt") return;
+      if (steeringMode !== "tilt" || (typeof document !== "undefined" && document.hidden)) return;
       const r = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
       if (r === null) return;
       roll = r;
@@ -157,7 +157,12 @@ const PhonePadPage = (function () {
     // it landed eases it off. An absolute "height on the pedal" mapping gave a
     // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
     const releases = [], pointerReleases = [];
-    const releaseAll = (pointersOnly) => { for (const r of releases) r(pointersOnly === true); };
+    const releaseAll = (pointersOnly) => {
+      const clearRoll = pointersOnly !== true && roll !== null;
+      if (clearRoll) { roll = null; paintRoll(); }
+      for (const r of releases) r(pointersOnly === true);
+      if (clearRoll && session) session.sample(true);
+    };
     function hold(el, on, off, travel) {
       if (!el) return;
       const ids = new Set();
@@ -248,6 +253,7 @@ const PhonePadPage = (function () {
     function setSteeringMode(mode) {
       if (mode !== "tilt" && mode !== "touch") return false;
       if (mode === "touch" && (!session || !session.health().touchSupported)) { say("Touch steering needs an updated game. Reload the game and reconnect.", true); return false; }
+      if (mode !== steeringMode) { roll = null; paintRoll(); }
       steeringMode = mode; steer = 0; push();
       if (dom.steeringMode) dom.steeringMode.value = mode;
       if (dom.steer) dom.steer.hidden = mode !== "touch";
@@ -476,11 +482,11 @@ const PhonePadPage = (function () {
       connecting = false;
       const active = session;
       steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.steer) dom.steer.hidden = true;
-      if (active) { steer = 0; thr = brk = held = 0; active.sample(true); }
       session = null;
-      if (active) active.close();
+      releaseAll();
+      if (active) { steer = 0; thr = brk = held = 0; active.sample(true); active.close(); }
       else if (old && old.transport) { try { old.transport.close(); } catch (_) { /* already closed */ } }
-      dropWake(); releaseAll();
+      dropWake();
       if (dom.body) { dom.body.classList.remove("linked"); dom.body.classList.remove("awaiting"); }
       if (dom.connect) dom.connect.disabled = false;
     }

@@ -2123,10 +2123,15 @@ test("fix 70: a newer local season survives an older file's season", async () =>
 });
 
 // #5992: the settings file's `progress` section (js/ui/progress-backup.js rides LAZY_SAVES_DATA before the body).
+function loadProgressBackup(ctx) {
+  for (const path of ["js/race/race-insights.js", "js/ui/progress-backup.js"]) {
+    vm.runInContext(read(path), ctx, { filename: absSrc(path) });
+  }
+}
 test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it", () => {
   const withProgress = (disk) => {
     const b = boot({ realStore: true, disk });
-    vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+    loadProgressBackup(b.sb);
     return b;
   };
   const a = withProgress({ "apex26.circuitMastery": JSON.stringify({ version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] }), "apex26.pitTaught": "1" });
@@ -2138,4 +2143,115 @@ test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it",
   assert.equal(r.ok, true); assert.equal(r.rejectedProgress, 0);
   assert.equal(JSON.parse(b.disk.get("apex26.circuitMastery")).entries[0].best, 81);
   assert.equal(b.disk.get("apex26.pitTaught"), "1");
+});
+
+test("practice mastery keeps signed scores through a Settings export and merge", () => {
+  function entry(mode, best, completed) {
+    return { key: "c2|monza|ferrari:" + mode + ":all", best, completed };
+  }
+  function device(entries) {
+    const b = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify({ version: 1, entries }) } });
+    loadProgressBackup(b.sb);
+    return b;
+  }
+  const incoming = [entry("slipstream", -24, 2), entry("start", -2, 3), entry("lap", 81, 1)];
+  const file = JSON.parse(JSON.stringify(device(incoming).collect("all")));
+  assert.deepEqual(file.progress.circuitMastery.entries, incoming);
+  file.progress.circuitMastery.entries.push(entry("launch", -1, 1));   // a negative launch time is invalid
+  const dst = device([entry("defend", -5, 2), entry("start", -4, 1)]);
+  assert.equal(dst.loadSettings(file).failed, 0);
+  assert.deepEqual(JSON.parse(dst.disk.get("apex26.circuitMastery")).entries, [
+    entry("defend", -5, 2), entry("start", -4, 3), entry("slipstream", -24, 2), entry("lap", 81, 1),
+  ]);
+});
+
+test("historical mastery classes add on one device and take the larger count across devices", () => {
+  const current = "c2|bahrain|ferrari:lap:all";
+  const historical = tune => JSON.stringify({ circuit: "bahrain", car: ["ferrari", 1], tune: [tune] }) + ":lap:all";
+  const entry = (key, best, completed) => ({ key, best, completed });
+  function device(entries) {
+    const b = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify({ version: 1, entries }) } });
+    loadProgressBackup(b.sb);
+    return b;
+  }
+  const oldEntries = [entry(historical(1), 90, 2), entry(historical(2), 88, 3)];
+  const file = JSON.parse(JSON.stringify(device(oldEntries).collect("all")));
+  assert.deepEqual(file.progress.circuitMastery.entries, [entry(current, 88, 5)]);
+  // A file exported before normalization still has one row per historical class.
+  file.progress.circuitMastery.entries = oldEntries;
+  const dst = device([entry(historical(3), 86, 1), entry(current, 89, 3)]);
+  assert.equal(dst.loadSettings(file).failed, 0);
+  const saved = () => JSON.parse(dst.disk.get("apex26.circuitMastery")).entries;
+  assert.deepEqual(saved(), [entry(current, 86, 5)]);
+  assert.equal(dst.loadSettings(file).skipped, 1);
+  assert.deepEqual(saved(), [entry(current, 86, 5)]);
+});
+
+test("a full legacy TT mastery key survives backup and repeated import, with bounded stored keys", () => {
+  // SessionRecords.config() from a fitted Monza/McLaren time trial, before #5888 shortened mastery keys.
+  const ttClass = {
+    car: ["mclaren", 0.9674, { accel: 0.991, braking: 0.9864999999999999, cornering: 0.994, speed: 0.9895 },
+      0.40740740740740733, 0.2173913043478263, 0.2857142857142857, 0, 0.56, 0],
+    circuit: "monza", controls: { aero: "manual", autoThrottle: false, gearsManual: false, steerMode: "buttons" },
+    difficulty: "hard", layout: [1, 1444, 5777.579011126656], physics: "2026-09-ai-mistakes-1", tod: "day",
+    tune: [0.8396192830323017, 0, 0.94, 1.15, 0, 2.111111111111111, 0.35, 55, 4.2, 1, 0.58, 0],
+    tyreWear: "off", weather: "dry", weatherPlan: null,
+  };
+  const key = JSON.stringify(ttClass) + ":lap:all";
+  assert.ok(key.length > 512);
+  const entry = (key, completed) => ({ key, best: 81, completed });
+  const old = { version: 1, entries: [entry(key, 6)] };
+  const expected = { version: 1, entries: [entry("c2|monza|mclaren:lap:all", 6)] };
+  const source = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify(old) } });
+  loadProgressBackup(source.sb);
+  const file = JSON.parse(JSON.stringify(source.collect("all")));
+  assert.deepEqual(file.progress?.circuitMastery, expected);
+
+  const target = boot({ realStore: true });
+  loadProgressBackup(target.sb);
+  file.progress.circuitMastery = { version: 1, entries: [
+    ...old.entries, entry("x".repeat(513), 12),
+    entry(JSON.stringify({ ...ttClass, circuit: "x".repeat(512) }) + ":lap:all", 12),
+    entry(JSON.stringify({ ...ttClass, tune: ["x".repeat(4096)] }) + ":lap:all", 12),
+  ] };
+  assert.equal(target.loadSettings(file).failed, 0);
+  assert.equal(target.loadSettings(file).failed, 0);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.circuitMastery")), expected);
+});
+
+test("retrying a mixed settings and progress backup saves cache-only merges before reload", async () => {
+  const b = bootImportUI({ realStore: true });
+  loadProgressBackup(b.sb);
+  const samples = [0, 1, 2, 3, 4, 5, 6, 7];
+  const progress = {
+    circuitMastery: { version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] },
+    ghosts: { monza: { time: 80, t: samples, s: samples, x: samples.map(() => 0) } },
+    onboardRaces: 4,
+  };
+  const file = { format: b.SettingsExport.FORMAT, settings: { audio: { volMusic: 0.8 } }, progress };
+  const progressKeys = ["apex26.circuitMastery", "apex26.ghost.v1", "apex26.onboardRaces"];
+  const setItem = b.sb.localStorage.setItem;
+  let refuse = true, progressWrites = 0;
+  b.sb.localStorage.setItem = (k, v) => {
+    if (progressKeys.includes(k)) {
+      progressWrites++;
+      if (refuse) throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" });
+    }
+    return setItem(k, v);
+  };
+  const choose = async () => { b.choose(Promise.resolve(JSON.stringify(file))); await Promise.resolve(); b.flushReloads(); };
+  await choose();
+  assert.equal(b.reloads(), 0);
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+  assert.deepEqual(progressKeys.filter((k) => b.disk.has(k)), []);
+  await choose();
+  assert.equal(b.reloads(), 0, "retry still refuses to reload while the progress lives only in memory");
+  refuse = false;
+  await choose();
+  assert.equal(b.reloads(), 1);
+  assert.deepEqual(progressKeys.map((k) => JSON.parse(b.disk.get(k))), [progress.circuitMastery, progress.ghosts, 4]);
+  const before = progressWrites;
+  const again = b.loadSettings(file);
+  assert.deepEqual([again.applied, again.skipped, again.failed], [1, 3, 0]);
+  assert.equal(progressWrites, before, "already-durable progress is left alone");
 });
