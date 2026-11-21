@@ -7,6 +7,8 @@ import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { ROOT, MCP, rpc, callCli, callTools } from "../helpers/apex-tools-mcp.mjs";
 
 // 2026-10-10: a tool must say what it needs. Ten first calls in one session came back bad_args with no way forward
@@ -45,19 +47,64 @@ test("every tool answers a minimal valid call (mock): ok, not a bad_args refusal
 });
 
 test("bad_args names the way forward: required hint, did-you-mean, valid keys, got-type", () => {
-  const [needs, anyOf, key, en, type] = callTools([
+  const [needs, parity, key, en, type] = callTools([
     ["apex_unit_test", {}],
-    ["apex_graph_parity", {}],
+    ["apex_graph_parity", { base: "HEAD" }],
     ["apex_shot", { track: "monza", fracc: 0.1 }],
     ["apex_shot", { track: "monza", cam: "orbt" }],
     ["apex_shot", { track: "monza", frac: "x" }],
   ]).map((r) => r.body);
   assert.match(needs.fix, /Pass "file": string/, "required key: what to pass");
-  assert.match(anyOf.message, /id or all:true/, "anyOf: the alternatives, not 'one of the advertised types'");
-  assert.match(anyOf.fix, /Required: base/);
+  assert.match(parity.message, /id or all:true/);
+  assert.match(parity.fix, /"base":"HEAD","id":"monza"/);
   assert.match(key.fix, /Did you mean "frac"\?.*Valid: track, frac, cam/, "unknown key: nearest + the valid list");
   assert.match(en.fix, /Did you mean "orbit"\?/);
   assert.match(type.message, /frac must be number, got string/);
+});
+
+test("parity, survey and spec selectors survive local discovery and the configured host-facing adapter", async (t) => {
+  const local = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  const client = new Client({ name: "selector-schema-test", version: "1" });
+  const { command, args } = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers["apex-tools"];
+  t.after(() => client.close());
+  await client.connect(new StdioClientTransport({ command, args, cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1" } }));
+  const published = (await client.listTools()).tools;
+  const parity = "apex_graph_parity", survey = "apex_shot_survey", specs = "apex_select_specs";
+  for (const [name, keys] of [[parity, ["base", "id", "all"]], [survey, ["track", "tracks", "reports"]], [specs, ["files", "since"]]]) {
+    for (const list of [local, published]) {
+      const schema = list.find(tool => tool.name === name).inputSchema;
+      assert.equal(schema.type, "object");
+      assert.equal(schema.anyOf, undefined, "host projection would discard the root fields");
+      assert.deepEqual(schema.required || [], name === parity ? ["base"] : []);
+      for (const key of [...keys, "dryRun", ...(list === published ? ["outputLevel"] : [])]) assert.ok(schema.properties[key], key);
+    }
+  }
+  for (const [name, selectors] of [
+    [parity, { base: "HEAD", id: "spa", all: false }], [parity, { base: "HEAD", all: true }],
+    [survey, { track: "spa" }], [survey, { tracks: ["spa", "monza"] }],
+    [survey, { reports: ["artifacts/track-survey/spa/findings.json"] }],
+    [specs, { files: ["js/ui/hud.js"] }], [specs, { since: "HEAD" }], [specs, { since: "HEAD", files: ["js/ui/hud.js"] }],
+  ]) {
+    const result = await client.callTool({ name, arguments: { ...selectors, dryRun: true, outputLevel: "full" } });
+    assert.equal(result.structuredContent.ok, true, JSON.stringify(result.content));
+    assert.equal(result.structuredContent.dryRun, true);
+  }
+});
+
+test("parity and survey reject missing or conflicting selectors before dispatch", () => {
+  const parity = "apex_graph_parity", survey = "apex_shot_survey";
+  const cases = [
+    [parity, { id: "spa" }, /needs base/],
+    [parity, { base: "HEAD", all: false }, /exactly one of id or all:true/],
+    [parity, { base: "HEAD", id: "spa", all: true }, /exactly one of id or all:true/],
+    ...[{}, { track: "spa", tracks: ["monza"] }, { track: "spa", reports: ["scratch/a.json"] },
+      { tracks: ["monza"], reports: ["scratch/a.json"] }].map(args => [survey, args, /exactly one of track, tracks or reports/]),
+  ];
+  const results = callTools(cases.map(([name, args]) => [name, { ...args, dryRun: true }]));
+  for (const [i, result] of results.entries()) {
+    assert.equal(result.body.error, "bad_args");
+    assert.match(result.body.message, cases[i][2]);
+  }
 });
 
 test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of ok:true, out:null", () => {
@@ -79,6 +126,39 @@ test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near m
   assert.equal(miss.ok, false);
   assert.equal(miss.error, "bad_args");
   assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
+});
+
+test("menu and HUD shots resolve shared viewport names to the same CSS dimensions", async () => {
+  const { VIEWPORTS } = await import("../../tools/ui/menu-screens.mjs");
+  const { DEVICES } = await import("../../tools/lib/hud-survey-matrix.mjs");
+  const names = ["ios-iphone-landscape", "ios-iphone-landscape-safari", "ios-iphone-portrait", "ios-iphone-landscape-844",
+    "bryce-standalone", "bryce-safari", "ios-ipad-landscape", "ios-ipad-portrait",
+    "desktop-1280x800", "desktop-1440x900", "desktop-1920x1080", "desktop-windowed-1920x937"];
+  const results = callTools(names.flatMap((name) => [
+    ["apex_ui_shot", { screen: "title", viewport: name, dryRun: true }],
+    ["apex_hud_shot", { device: name, dryRun: true }],
+  ]));
+  for (const [i, name] of names.entries()) {
+    const menu = results[2 * i].body, hud = results[2 * i + 1].body;
+    assert.deepEqual(menu.argv.filter(arg => arg.startsWith("--viewport=")), [`--viewport=${name}`]);
+    const device = DEVICES[hud.argv[hud.argv.indexOf("--device") + 1]];
+    const [, context, , , owner] = VIEWPORTS.find(([id]) => id === name);
+    assert.deepEqual({ width: device.w, height: device.h }, context.viewport, name);
+    assert.equal(device.owner, owner?.bryce, name);
+  }
+});
+
+test("explicit legacy HUD devices keep their original sizes", async () => {
+  const { DEVICES } = await import("../../tools/lib/hud-survey-matrix.mjs");
+  const cases = [["phone-landscape-844x390", 844, 390], ["phone-short-734x343", 734, 343],
+    ["phone-portrait-390x844", 390, 844], ["desktop-1280", 1280, 720], ["desktop-1920", 1920, 1080],
+    ["tablet-1180x820", 1180, 820]];
+  const shots = callTools(cases.map(([device]) => ["apex_hud_shot", { device, dryRun: true }]));
+  for (const [i, [id, w, h]] of cases.entries()) {
+    const { argv } = shots[i].body;
+    assert.equal(argv[argv.indexOf("--device") + 1], id);
+    assert.deepEqual([DEVICES[id].w, DEVICES[id].h], [w, h], id);
+  }
 });
 
 test("image and inlineImage are aliases across shot / ui_shot / hud_shot", () => {
