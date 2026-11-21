@@ -1,0 +1,26 @@
+name: Capture Monza driving reference
+on:
+  push:
+    branches:
+      - cursor/monza-profile-ci-f821
+permissions:
+  contents: read
+jobs:
+  characterize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - uses: ./.github/actions/playwright-chromium
+      - name: Capture and replay the nine scenarios in Chromium
+        run: |
+          APEX_UPDATE_BASELINE=1 APEX_BASELINE_REASON="Monza's independently measured longitudinal grade corrects the descent between the Lesmos and Ascari, changing gravity along the driving line." npx playwright test tests/specs/physics-characterization.spec.js --project=headless --workers=1
+          npx playwright test tests/specs/physics-characterization.spec.js --project=headless --workers=1
+          node --test tests/unit/physics-characterization-vm.test.mjs
+      - name: Return the browser-generated fixture for review
+        run: |
+          payload=$(gzip -cn tests/data/physics-baseline.json | base64 -w0)
+          echo "::notice file=tests/data/physics-baseline.json,title=Monza browser reference::$payload"
