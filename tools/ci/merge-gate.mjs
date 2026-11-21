@@ -1080,7 +1080,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   // No new open-PR listing here (quota): only when the caller injects `openPulls` (tests). land.yml resolve already
   // drops boarded cars from its landable list using the pulls it fetched for this run.
   if (rows.open.ok && !forTrainCar && !String(pull.head?.ref || "").startsWith(TRAIN_PREFIX) && openPulls !== undefined) {
-    const train = boardedTrainOf(pr, openPulls);
+    const train = boardedTrainOf(pr, head, openPulls);
     if (train != null) rows.open = row(false, `car of open train #${train}: lands with the train, not alone`);
   }
   // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).

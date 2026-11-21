@@ -1681,12 +1681,13 @@ test("#6055: land.yml tip-moved resolve prefers an open train over its older car
   };
   const prs = Object.fromEntries([...cars, trainPr].map((p) => [p.number, p]));
   const lands = [...cars, trainPr].map((p) => ({ number: p.number }));
-  const r = runStep(RESOLVE_RUN, {
+  const resolve = (pulls, statuses = {}) => runStep(RESOLVE_RUN, {
     EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null",
     PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "",
     // train_cars come from the same FAKE_PRS resolve already fetches (pass 1); no second listing.
-    FAKE_LANDS: JSON.stringify(lands), FAKE_PRS: JSON.stringify(prs), FAKE_STATUSES: "{}",
+    FAKE_LANDS: JSON.stringify(lands), FAKE_PRS: JSON.stringify(pulls), FAKE_STATUSES: JSON.stringify(statuses),
   });
+  const r = resolve(prs);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.deepEqual(JSON.parse(r.out.prs), [{ number: 99, head: trainHead }], "train is the only landable PR; its cars are notasked");
   const notasked = JSON.parse(r.out.notasked);
@@ -1694,6 +1695,20 @@ test("#6055: land.yml tip-moved resolve prefers an open train over its older car
   assert.equal(r.calls.filter((c) => /\bpr list\b/.test(c) && /--label train\b/.test(c)).length, 0,
     "resolve must not list --label train; train_cars come from the land pulls already fetched");
   assert.equal(r.calls.filter((c) => /pulls\?state=open/.test(c)).length, 0, "resolve must not paginate pulls?state=open");
+  const changedCar = { ...cars[0], head: { ...cars[0].head, sha: hx("a") } };
+  const changed = resolve({ ...prs, 1: changedCar, 99: { ...trainPr, auto_merge: {} } });
+  assert.deepEqual(JSON.parse(changed.out.prs).map(p => p.number), [1, 2, 3, 4], "one superseded head releases the entire train");
+  assert.deepEqual(JSON.parse(changed.out.disarm), [99], "already-armed stale wrapper must disarm");
+  for (const [why, wrapper, statuses] of [
+    ["held", { ...trainPr, labels: [...trainPr.labels, { name: "hold" }] }],
+    ["draft", { ...trainPr, draft: true }],
+    ["conflicting", { ...trainPr, mergeable: false }],
+    ["refused", trainPr, { [trainHead]: [{ context: "gate", state: "failure" }] }],
+  ]) {
+    const result = resolve({ ...prs, 99: wrapper }, statuses);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.out.prs).map(p => p.number), [1, 2, 3, 4], why + " train releases its cars");
+  }
 });
 
 // ---- 2026-10-30 landing gaps: edited body, draft + land, the stale-gate sweep, ship-pr --------------------------

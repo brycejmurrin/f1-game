@@ -310,6 +310,12 @@ jobs:
           # #6055: reuse the pulls resolve already fetches (no extra `gh pr list --label train`). Pass 1 stores each
           # open land PR; train_cars come from those with `train` + `train/` ref. Pass 2 classifies (resolveLandable).
           # Sweep job untouched. Quota follow-ups own other land.yml surfaces.
+          gate_refused() {
+            local latest
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/commits/$1/statuses?per_page=100" \
+              --jq '[.[] | select(.context == "gate")] | first // {} | {state: (.state // "")}') || return 1
+            [ "$(jq -r .state <<<"$latest")" = failure ]
+          }
           fetched='[]'
           for n in "${numbers[@]}"; do
             [ -n "$n" ] || continue
@@ -319,17 +325,26 @@ jobs:
             labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
             echo "PR #$n: state=$state draft=$(jq -r .draft <<<"$pr") base=$base head=${head:0:12} armed=$(jq -r '.auto_merge != null' <<<"$pr") labels=[$labels]"
             if [ "$state" != open ] || [ "$base" != "$DEPLOY_BRANCH" ]; then continue; fi
+            # On a tip pass inspect the wrapper gate before using its manifest. Its normal status read moves
+            # here; parked cars still cost no status read. A refused or conflicting wrapper cannot claim cars.
+            if [ "$train" = true ] && jq -e '.draft == false and (.head.ref // "" | startswith("train/")) and
+                ([.labels[].name] | index("train") != null and index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null; then
+              if jq -e '.mergeable == false' <<<"$pr" >/dev/null || gate_refused "$head"; then continue; fi
+              pr=$(jq -c '.trainGateChecked = true' <<<"$pr")
+            fi
             fetched=$(jq -c --argjson p "$pr" '. + [$p]' <<<"$fetched")
           done
-          train_cars=$(jq -c '
-            [.[]
-              | select(((.labels // []) | map(.name) | index("train")) != null)
-              | select((.head.ref // "") | startswith("train/"))
-              | .body // ""
-              | capture("<!-- merge-train (?<j>\\{[^\\n]*\\}) -->")? | .j // empty
-              | fromjson? | .cars[]?.pr // empty]
-            | map(select(type == "number")) | unique' <<<"$fetched") || train_cars='[]'
-          [ -n "$train_cars" ] || train_cars='[]'
+          # A pushed car invalidates the whole fold. Release its unchanged siblings as well, and let
+          # train cleanup rebuild the wrapper. A direct PR event does not contain the rest of the board.
+          fetched=$(jq -c '
+            (map({key:(.number|tostring), value:.head.sha}) | from_entries) as $heads |
+            map(if .draft == false and .mergeable != false and (.head.ref // "" | startswith("train/"))
+                   and ((.labels // [] | map(.name)) | index("train") != null and index("land") != null and index("hold") == null)
+                then ([.body // "" | capture("<!-- merge-train (?<j>\\{[^\\n]*\\}) -->")? | .j | fromjson? | .cars[]?
+                        | select((.pr | type) == "number" and (.head | strings | test("^[0-9a-f]{40}$"))) | {pr,head}]) as $cars |
+                     . + {trainCars:$cars, staleTrain:any($cars[]; ($heads[.pr|tostring] // .head) != .head)}
+                else . end)' <<<"$fetched")
+          train_cars=$(jq -c '[.[] | select(.staleTrain != true) | .trainCars[]?] | unique' <<<"$fetched")
           while IFS= read -r pr; do
             [ -n "$pr" ] || continue
             n=$(jq -r .number <<<"$pr")
@@ -342,7 +357,8 @@ jobs:
             if has hold; then why="the \`hold\` label is set"
             elif [ "$draft" = true ]; then why="the PR is a draft"
             elif ! has land; then why="no \`land\` label"
-            elif ! has train && jq -e --argjson n "$n" 'index($n) != null' <<<"$train_cars" >/dev/null; then
+            elif jq -e .staleTrain <<<"$pr" >/dev/null; then why="a boarded head moved; waiting for train cleanup"
+            elif ! has train && jq -e --argjson n "$n" --arg h "$head" 'any(.[]; .pr == $n and .head == $h)' <<<"$train_cars" >/dev/null; then
               why="car of an open train"
             fi
             # `land` on a DRAFT does nothing until the flip: post (below) says so on `gate` and once per head in a comment.
@@ -351,12 +367,10 @@ jobs:
               if [ "$paused" = true ] && [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
               # train label first (prio -1), then priority (0), then oldest (1). Matches resolveLandable.
               prio=1; has priority && prio=0; has train && prio=-1
-              if [ "$train" = true ]; then
+              if [ "$train" = true ] && ! jq -e .trainGateChecked <<<"$pr" >/dev/null; then
                 # A train re-gate skips a head whose `gate` is already failure: a PR refused on every train would
                 # otherwise hold a slot of the 4-PR slice for ever (WP-L3d). A push or a label flip re-gates it.
-                g=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
-                  --jq '[.[] | select(.context == "gate")] | first // {} | {id: (.id // 0), state: (.state // ""), description: (.description // "")}') || g='{}'
-                if [ "$(jq -r '.state // ""' <<<"$g")" = failure ]; then
+                if gate_refused "$head"; then
                   echo "PR #$n: gate is already failure on ${head:0:12}; not re-gated by the train"
                   continue
                 fi
