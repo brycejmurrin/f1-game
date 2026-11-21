@@ -42,6 +42,9 @@ async function stepToRace(a, max = 600) {
   }
 }
 
+// Mutation hunt 2026-11-20: muting G.announce survived the +5s pin alone.
+// Keep the announce check INSIDE this twin test — a 5th test() breaks twinned-specs
+// (jump-start.spec.js declares 4). Exact banner copy avoids source-pin shapes.
 test("throttle held at lights-out adds +5 s", async () => {
   await onGrid();
   const a = g.apex;
@@ -50,6 +53,7 @@ test("throttle held at lights-out adds +5 s", async () => {
   a.clearInput();
   assert.equal(a.info().state, "race");
   assert.ok(penTime(a) >= 5);
+  assert.equal(g.sandbox.document.getElementById("announce-text").textContent, "+5s FALSE START");
 });
 
 test("waiting for green before throttle accrues no false-start penalty", async () => {

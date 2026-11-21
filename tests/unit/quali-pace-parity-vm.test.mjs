@@ -62,6 +62,30 @@ async function medianRatio(track, pace) {
   } finally { g.close(); }
 }
 
+// Mutation hunt 2026-11-20: QUALI_TRIM 0.92→0.80 survived the pace-parity suites.
+// AI pole = QUALI_TRIM × raw top lap; the player medal pole is calibrated (no trim).
+test("QUALI_TRIM pins AI pole scale vs player medal pole", { timeout: 120000 }, async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G, sb = g.sandbox;
+    await g.race("monza", "day", "dry", { laps: 3 });
+    g.apex.headless(true);
+    const quali = sb.Quali.create(G);
+    const grip = typeof sb.TyreModel !== "undefined"
+      ? sb.TyreModel.weatherGrip(sb.TyreModel.treadFor(G.raceWeather, G.trackWetness()), G.trackWetness())
+      : G.gripMult();
+    const top = { tierV: sb.Teams.TIER_V[0], skill: 1 };
+    const raw = quali.carLap(top, G.track, grip, true);
+    const ai = quali.referencePole();
+    const medal = quali.referencePole("medal");
+    assert.ok(raw > 0 && ai > 0 && medal > 0);
+    assert.ok(Math.abs(ai / raw - 0.92) < 1e-12, `AI pole ${ai} / raw ${raw} = ${ai / raw}, want QUALI_TRIM 0.92`);
+    // Medal pole stays on the calibrated flying lap (×0.9915), not QUALI_TRIM.
+    assert.ok(Math.abs(medal - 0.9915 * quali.carLap(top, G.track, grip, false)) < 1e-9);
+    assert.ok(Math.abs(ai / medal - (0.92 * raw) / medal) < 1e-12, "AI:medal ratio carries the 0.92 trim only on the AI side");
+  } finally { g.close(); }
+});
+
 // A MODEL CHANGE MOVES THE TARGETS, NEVER A MEDAL ALREADY WON. The medal is decided
 // once, at the line (SessionRecords.finish -> Quali.medalFor(lap, pole)), and stored
 // with the ghost lap beside the pole it was measured against; Ghost.medal() reads that
