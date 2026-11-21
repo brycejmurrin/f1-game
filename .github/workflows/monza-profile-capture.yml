@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: f78d2b228f64d2219e07478aef3b82f4e014a557
           persist-credentials: false
       - uses: ./.github/actions/setup-apex
       - uses: ./.github/actions/playwright-chromium
