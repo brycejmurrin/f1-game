@@ -262,17 +262,25 @@ const RaceEntryProfile = (() => {
   function bindGame(hooks) {
     _game = { state: hooks && hooks.state || (() => null), loadPhase: hooks && hooks.loadPhase || (() => null) };
   }
+  function gameState() {
+    try { return _game.state(); } catch (_) { return null; }   // mid-boot
+  }
+
+  /** The entry window, the countdown and the loading phases: the software-GL readback defer's cover
+   *  (PerfGov.softwareGlUiReadbackDefer). Not the live-race intro leg below: a capture in the first 45 s of a
+   *  software-GL race must read real pixels (camera / hud-mirror specs read #game-soft there). */
+  function readbackCover() {
+    if (armed) return true;
+    if (gameState() === "count") return true;
+    let ph = null;
+    try { ph = _game.loadPhase(); } catch (_) { /* loading screen mid-build */ }
+    if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
+    return false;
+  }
 
   /** True while race-entry handoff should use the stall watchdog's relaxed cover (#3510). */
   function stallHandoffCover() {
-    if (armed) return true;
-    let state = null, ph = null;
-    try { state = _game.state(); } catch (_) { /* mid-boot */ }
-    if (state === "count") return true;
-    try { ph = _game.loadPhase(); } catch (_) { /* mid-boot */ }
-    if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
-    if (softwareRaster() && state === "race" && introBudgetLeft() > 0) return true;
-    return false;
+    return readbackCover() || (softwareRaster() && gameState() === "race" && introBudgetLeft() > 0);
   }
 
   /** Yield so #loading can paint before ensure* / intro sync work.
@@ -446,7 +454,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover, bindGame,
+    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover, readbackCover, bindGame,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,

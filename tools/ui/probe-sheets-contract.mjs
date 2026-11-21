@@ -1,5 +1,5 @@
 // @doc UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the
-// contract windows A/C/D seeded from the owner export, x textSize x uiScale. Parent only (one browser); needs `npx serve -l 3456 .`.
+// contract windows A/C/D seeded from the owner export, x textSize x uiScale. Parent only (one browser); needs `node tools/serve.mjs`.
 // Usage: node tools/ui/probe-sheets-contract.mjs [A,C,D] [owner|full] [out.json]. Cells per the UI contract note (PR #5154) §2.
 import { chromium, devices } from "playwright";
 import fs from "node:fs";

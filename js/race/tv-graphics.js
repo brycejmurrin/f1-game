@@ -1,5 +1,6 @@
 /* Apex 26 — broadcast-profile lower thirds, battle bar and fastest-lap banner.
-   Reads G.ranked only; shares OverlayFeed's v1 battle/gap frame. */
+   Reads G.ranked; shares OverlayFeed's v1 battle/gap frame; the fastest-lap
+   holder comes from opts.fastest() (Broadcast). */
 const TvGraphics = (function () {
   "use strict";
 
@@ -7,16 +8,17 @@ const TvGraphics = (function () {
   const LOWER_S = 5;
 
   function codeOf(c) { return String(c && (c.code || c.id || c.num) || "—"); }
-  // Live cars carry only c.best (#5941): the lowest holds FASTEST LAP.
-  function snapshot(ranked) {
+  // Live cars carry only c.best (#5941): the lowest holds FASTEST LAP. `holder` (Broadcast's script code) overrides.
+  function snapshot(ranked, holder) {
     const rows = (ranked || []).map((c, i) => ({ code: codeOf(c), pos: Number.isFinite(c.pos) ? c.pos : i + 1,
-      fastest: !!(c.fastest || c.fastestLap), best: c.best > 0 ? c.best : Infinity }));
+      fastest: holder ? codeOf(c) === holder : !!(c.fastest || c.fastestLap), best: c.best > 0 ? c.best : Infinity }));
+    if (holder) return rows;
     const top = rows.reduce((a, r) => (r.best < (a ? a.best : Infinity) ? r : a), null);
     if (top) top.fastest = true;
     return rows;
   }
-  function diff(previous, ranked) {
-    const next = snapshot(ranked), old = new Map(), now = new Map();
+  function diff(previous, ranked, holder) {
+    const next = snapshot(ranked, holder), old = new Map(), now = new Map();
     for (const row of previous || []) old.set(row.code, row.pos);
     for (const row of next) now.set(row.code, row.pos);
     let lower = null, fastest = null, held = Infinity;
@@ -30,7 +32,7 @@ const TvGraphics = (function () {
         if (over) lower = { code: row.code, from, to: row.pos, over: over.code };
       }
       const was = (previous || []).find((r) => r.code === row.code);
-      if (row.fastest && (!was || !was.fastest) && (row.best === Infinity || row.best < held)) fastest = { code: row.code };
+      if (row.fastest && (!was || !was.fastest) && (holder || row.best === Infinity || row.best < held)) fastest = { code: row.code };
     }
     return { snapshot: next, lower, fastest };
   }
@@ -51,7 +53,9 @@ const TvGraphics = (function () {
     doc.head.appendChild(style);
   }
 
-  function create(G, parent) {
+  /** opts.fastest(): holder code or null. */
+  function create(G, parent, opts) {
+    const holderOf = opts && typeof opts.fastest === "function" ? opts.fastest : () => null;
     const doc = typeof document !== "undefined" ? document : null;
     if (!doc) return { tick() {}, stop() {}, reset() {}, status: () => null, element: () => null };
     addStyle(doc);
@@ -87,7 +91,9 @@ const TvGraphics = (function () {
         fieldSectorBests: G.fieldSectorBests,
         vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,
       });
-      const change = diff(previous, ranked);
+      let holder = null;
+      try { holder = holderOf() || null; } catch (_) { /* replay mid-seek: per-car flags */ }
+      const change = diff(previous, ranked, holder);
       previous = change.snapshot;
       if (change.lower) {
         lower.textContent = change.lower.code + "  P" + change.lower.from + " → P" + change.lower.to

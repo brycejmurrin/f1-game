@@ -22,6 +22,7 @@ const { syncBuiltinESMExports } = require("module");
 const ROOT = path.resolve(__dirname, process.env.APEX_VM_DEBUG_ROOT || "../..");
 const sha = (s) => crypto.createHash("sha1").update(s).digest("hex");
 
+const VENDORED_DIR = /^(?:vendor|node_modules|three-\d[\w.-]*)$/;
 let index = null;
 function byHash(src) {
   if (!index) {
@@ -30,7 +31,9 @@ function byHash(src) {
       for (const e of fs.readdirSync(d, { withFileTypes: true })) {
         const p = path.join(d, e.name);
         if (e.isDirectory()) {
-          if (!/vendor|three/.test(e.name)) walk(p);
+          // Skip only vendored library trees (vendor/, three-<version>/), never the game's own
+          // js/render/three/ (the default TLX renderer).
+          if (!VENDORED_DIR.test(e.name)) walk(p);
           continue;
         }
         if (!e.name.endsWith(".js")) continue;
@@ -98,4 +101,4 @@ if (process.env.APEX_VM_DEBUG_STATS) {
   process.on("exit", () => process._rawDebug("vm-debug-preload " + JSON.stringify(stats)));
 }
 
-module.exports = { ROOT, stats, fix, byHash };
+module.exports = { ROOT, stats, fix, byHash, VENDORED_DIR };

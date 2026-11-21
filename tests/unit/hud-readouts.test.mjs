@@ -24,6 +24,8 @@ function load(extra = {}) {
   const timers = [];
   const ctx = { console, Math, Number, Float32Array, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, ...extra };
   vm.createContext(ctx);
+  // The page loads js/race/sporting-regs.js first (FULL order); blueFlag shares its predicate.
+  vm.runInContext(src("js/race/sporting-regs.js"), ctx, { filename: absSrc("js/race/sporting-regs.js") });
   vm.runInContext(SRC + "; this.HudReadouts = HudReadouts;", ctx);
   return { R: ctx.HudReadouts, timers };
 }
@@ -126,6 +128,18 @@ test("blueFlag: only a car a lap up, physically just behind, within ~1.2 s", () 
   assert.equal(R.blueFlag({ ...p, finished: true }, [lapper], L, 25), null);
 });
 
+test("blueFlag: no HUD blue flag where race control has none — pit lane on either car", () => {
+  // SportingRegs.blueFlagCar exempts a car in the pit lane; the HUD chip and its spoken
+  // "BLUE FLAG, LET … THROUGH" used to show for one race control said did not apply.
+  const { R } = load();
+  const L = 5000;
+  const p = { prog: 2000, speed: 60, pitState: "none" };
+  const lapper = { code: "VER", prog: 2000 + L - 50, speed: 70, pitState: "none" };
+  assert.equal(R.blueFlag(p, [p, lapper], L, 25), lapper, "control: on track, flagged");
+  assert.equal(R.blueFlag(p, [p, { ...lapper, pitState: "entry" }], L, 25), null, "the lapper is in the pit lane");
+  assert.equal(R.blueFlag({ ...p, pitState: "box" }, [lapper], L, 25), null, "the player is in the pit lane");
+});
+
 test("blueFlag holds a flagged lapper out to 1.6 s: a gap hovering at 1.2 s flags once, not every corner (perf hunt 8)", () => {
   const { R } = load();
   const L = 5000, p = { prog: 2000, speed: 60 };
@@ -225,6 +239,7 @@ function boot(opts = {}) {
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
+  vm.runInNewContext(src("js/race/sporting-regs.js"), sb, { filename: absSrc("js/race/sporting-regs.js") });   // blueFlag's one predicate (FULL loads it first)
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
