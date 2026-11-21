@@ -9,6 +9,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 const source = fs.readFileSync(new URL("../../js/ui/photo-studio.js", import.meta.url), "utf8").replace(/^const PhotoStudio/m, "var PhotoStudio");
+const bodySource = fs.readFileSync(new URL("../../js/ui/photo-studio-ui.js", import.meta.url), "utf8").replace(/^const PhotoStudioBody/m, "var PhotoStudioBody");
 // The light-store deps game.js passes to PhotoStudio.create, read from its one call site.
 const GAME_JS = gameSource();
 const GAME_CALL = GAME_JS.slice(GAME_JS.indexOf("PhotoStudio.create(G, {"), GAME_JS.indexOf("function openExperiencePhoto("));
@@ -56,7 +57,7 @@ function boot(options = {}) {
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
+    Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     NativeDownload: options.nativeDownload,
@@ -77,7 +78,7 @@ function boot(options = {}) {
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
-  vm.runInContext(source, ctx);
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/photo-studio-ui.js") }); vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
   // LightStore.set's shape: the live LT plus whatever profiles object G._ltStore holds right now.
   const ltStore = { set: (id, v) => {
     ltWrites.push([id, v]); LT[id] = v;

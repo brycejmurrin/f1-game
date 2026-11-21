@@ -835,9 +835,16 @@
   ],
     LAZY_UI_PRESETS: [
     "js/ui/look-avail.js",
-    "js/ui/layout-presets.js"
+    "js/ui/layout-presets.js",
+    "js/ui/appearance-studio-ui.js",
+    "js/ui/photo-studio-ui.js"
   ],
-    LAZY_UI_PRESETS_EDGES: [],
+    LAZY_UI_PRESETS_EDGES: [
+    [
+      "js/ui/appearance-studio-ui.js",
+      "js/ui/photo-studio-ui.js"
+    ]
+  ],
     LAZY_SAVES_DATA: [
     "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js"
