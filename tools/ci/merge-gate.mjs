@@ -1065,7 +1065,7 @@ export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
   return creditPriorCi({ cwd: root, head, base, ciOf });
 }
 
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit, openPulls, forTrainCar = false } = {}) {
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, queueCandidate = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit, openPulls, forTrainCar = false } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -1083,11 +1083,20 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     const train = boardedTrainOf(pr, head, openPulls);
     if (train != null) rows.open = row(false, `car of open train #${train}: lands with the train, not alone`);
   }
+  // A Pages queue scan can reject this candidate as soon as a required row fails.
+  // Direct events still collect all rows so their published verdict explains each refusal.
+  const plan = planRow(pull.body, pull.user?.login || "");
+  if (trusted && queueCandidate) {
+    if (!rows.open.ok || pull.mergeable === false || pull.mergeable_state === "dirty") return { skip: "closed, draft, conflicting or superseded" };
+    if (!(pull.labels || []).some(l => (l.name || l) === "land")) return { skip: "land removed" };
+    if (!plan.ok) return { skip: plan.evidence };
+  }
   // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).
   const ev = listAll(`issues/${pr}/events`, request, (j) => j, 10);
   if (ev.error) return { error: `events of PR #${pr}: ${ev.error}` };
   rows.hold = holdVerdict(pull.labels, ev.rows, owner);
-  rows.plan = planRow(pull.body, pull.user?.login || "");
+  rows.plan = plan;
+  if (trusted && queueCandidate && !rows.hold.ok) return { skip: rows.hold.evidence };
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
   if (checks.error) return { error: `check-runs on ${head.slice(0, 8)}: ${checks.error}` };
@@ -1111,6 +1120,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
       rows.ci = { ...row(true, `credited H0 ${c.credit.sha} across clean tip-sync${n > 1 ? ` (a chain of ${n})` : ""}: ${c.credit.evidence}, first attempt, on ${c.credit.sha.slice(0, 8)}; the head's own: ${rows.ci.evidence}; the retest row runs against the credited head`), credited: c.credit.sha };
     } else rows.ci = { ...rows.ci, evidence: `${rows.ci.evidence} (no CI credit: ${c.none})` };
   }
+  if (trusted && queueCandidate && !rows.ci.ok) return { skip: rows.ci.evidence };
   const pages = readDeployTip(base, request);
   if (pages.error) return { error: pages.error };
   // The tip itself (#5714 + #5634, 2026-11-19): Pages lags the tip by hours in a backlog, so when no completed run
@@ -1206,6 +1216,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), raise (a tree-wide ratchet ceiling
     rises only with \`${RAISE_LABEL}\` added by ${OWNER} in person after the last push touching a ratchet file), gen (clean merge onto the current base tip + gen:check), ratchets (on
     that merge result), retest (the unit tests both the tip merges since the CI run and the PR select, re-run on that merge result).
+  --queue-candidate with --trusted: stop at an ineligible candidate (exit 4) before reading the remaining rows.
   --trusted: only the rows that run no PR code (open, hold, plan, ci, base, config, raise); land.yml's trusted-rows job.
   A row still waiting (CI, a red deploy tip) prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other
   row ok, CI not finished or the tip red on code), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
@@ -1219,7 +1230,8 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
     log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)");
     return 1;
   }
-  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner, credit });
+  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), queueCandidate: argv.includes("--queue-candidate"), owner, credit });
+  if (v.skip) { log(`= merge-gate skipped — ${v.skip}`); return 4; }
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");

@@ -964,7 +964,16 @@ test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates neve
   assert.equal(group(prt("synchronize")), "land-7");
   const wr = (head_branch, prs) => ({ event_name: "workflow_run", run_id: 5, event: { workflow_run: { head_branch, head_sha: "abc123", pull_requests: prs } } });
   assert.equal(group(wr("cursor/x", [{ number: 7 }])), "land-7", "a PR's CI re-gate queues behind that PR's events");
-  assert.equal(group(wr(DEPLOY_BRANCH, [])), "land-tip");
+  const deploy = (name, conclusion, branch = DEPLOY_BRANCH) => {
+    const e = wr(branch, []);
+    return { ...e, repository: "o/r", event: {workflow_run: {...e.event.workflow_run, head_repository: {full_name: "o/r"}, name, conclusion}} };
+  };
+  for (const [name, conclusion, entersQueue] of [["Deploy to GitHub Pages", "success", true], ["CI", "success", false], ["Deploy to GitHub Pages", "failure", false]]) {
+    const e = deploy(name, conclusion);
+    assert.equal(group(e), entersQueue ? "land-tip" : "land-noise-5");
+    assert.equal(!!ghExpr(LAND.jobs.resolve.if, e), entersQueue);
+  }
+  assert.equal(!!ghExpr(LAND.jobs.resolve.if, deploy("CI", "failure", "cursor/x")), true, "red PR CI still invalidates");
   assert.equal(group(wr("fork-branch", [])), "land-sha-abc123", "a CI run naming no PR never shares land-tip");
   const cfg = (action, labels) => ({ event_name: "pull_request_target", run_id: 99, event: { action, label: { name: "config-ok" }, pull_request: { number: 7, labels: labels.map((name) => ({ name })) } } });
   assert.equal(group(cfg("labeled", ["land", "config-ok"])), "land-7", "Bryce's config-ok click on a `land` PR re-gates it in the PR's own group (#5432)");
@@ -1638,6 +1647,64 @@ test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's ow
   assert.equal(sw(ev("o")), 0, "the owner's pause does");
 });
 
+test("tip-candidate mode stops on open Plan and unfinished CI before reading deployment or config", () => {
+  const f = fakes(), reads = [];
+  f.pull.labels = [{ name: "land" }];
+  const probe = () => main(["--pr", "7", "--sha", HEAD, "--trusted", "--queue-candidate"], {
+    ...f.deps, log() {}, request(path) { reads.push(path); return f.deps.request(path); },
+  });
+  f.pull.body = "## Plan\n- [ ] fix coverage";
+  assert.equal(probe(), 4);
+  assert.deepEqual(reads, ["pulls/7"], "unfinished Plan uses only the pull read");
+  f.pull.body = "## Plan\n- [x] fixed coverage";
+  f.checks[1].status = "in_progress";
+  assert.equal(probe(), 4);
+  assert.ok(reads.every(p => !p.includes("/pages.yml/") && !p.startsWith("pulls/7/files")));
+  f.checks[1].status = "completed";
+  assert.equal(probe(), 0, "selection still requires all trusted rows");
+});
+
+test("a validated Pages tip schedules one trusted candidate and stops scanning after the first pass", () => {
+  const job = LAND.jobs["trusted-rows"];
+  const run = job.steps.find(s => s.id === "rows").run;
+  const prs = [7, 8, 9, 10, 11, 12].map(number => ({ number, head: HEAD7 }));
+  const check = (codes, tip = TIP_A, checkout = TIP_A) => {
+    const mock = `git() { echo "$CHECKOUT"; }
+node() {
+  local n=$3
+  echo "checked $n" >> "$GH_LOG"
+  local code; code=$(jq -r --arg n "$n" '.[$n] // 0' <<<"$CODES")
+  echo "= merge-gate fixture pr=#$n tip=$MEASURED"
+  return "$code"
+}`;
+    return runStep(mock + "\n" + run, { PRS: JSON.stringify(prs), VALIDATED_TIP: tip, CHECKOUT: checkout,
+      MEASURED: TIP_A, CODES: JSON.stringify(codes) });
+  };
+  let r = check({ 7: 4, 8: 3, 9: 2, 10: 3 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.selected), [prs[4]], "refused and waiting candidates do not consume the pass");
+  assert.deepEqual(r.calls, [7,8,9,10,11].map(n => "checked " + n), "no trusted or merge run on lower-ranked PRs");
+  r = check({ 7: 1 });
+  assert.deepEqual(JSON.parse(r.out.selected), [], "an unreadable API ends this pass");
+  assert.deepEqual(r.calls, ["checked 7"]);
+  r = check({}, TIP_B, TIP_A);
+  assert.deepEqual(r.calls, [], "older Pages completion cannot start gates against another tip");
+  r = check({}, TIP_B, TIP_B);
+  assert.deepEqual(JSON.parse(r.out.selected), [], "a concurrent tip change invalidates selection");
+  r = check({ 7: 2, 8: 3 }, "");
+  assert.deepEqual(JSON.parse(r.out.selected), prs, "regular PR events still publish invalidations");
+  assert.equal(LAND.jobs["land-gate"].strategy.matrix.pr, "${{ fromJSON(needs.trusted-rows.outputs.selected) }}");
+});
+
+// GraphQL fields returned by the tip pass's single PR listing.
+function tipListing(pulls) {
+  return JSON.stringify(Object.values(pulls).map(p => ({
+    number: p.number, state: p.state.toUpperCase(), isDraft: p.draft, baseRefName: p.base.ref,
+    headRefName: p.head.ref, headRefOid: p.head.sha, mergeable: p.mergeable === false ? "CONFLICTING" : "MERGEABLE",
+    autoMergeRequest: p.auto_merge, labels: p.labels, createdAt: p.created_at, body: p.body,
+  })));
+}
+
 // ---- AUTO-SYNC retired 2026-11-03 with merge-gate's distance row (plan §6): land.yml never update-branches ----------
 
 test("land.yml has no sync job, no SYNC_MAX, no sync input and no update-branch call; a train re-gate skips a failed gate without syncing it", () => {
@@ -1655,8 +1722,8 @@ test("land.yml has no sync job, no SYNC_MAX, no sync input and no update-branch 
   const prs = { 7: pr(7), 11: pr(11) };
   const statuses = { [H[7]]: [{ id: 107, context: "gate", state: "failure", description: `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=FAIL pr=#7 sha=${H[7]} tip=${TIP_A}` }],
     [H[11]]: [{ id: 111, context: "gate", state: "pending", description: "= merge-gate waiting" }] };
-  const r = runStep(RESOLVE_RUN, { EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null",
-    PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", FAKE_LANDS: JSON.stringify([{ number: 7 }, { number: 11 }]), FAKE_PRS: JSON.stringify(prs), FAKE_STATUSES: JSON.stringify(statuses) });
+  const r = runStep(RESOLVE_RUN, { EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_NAME: "Deploy to GitHub Pages", RUN_CONCLUSION: "success", RUN_SHA: TIP_A, CANDIDATES: "null",
+    PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", FAKE_LANDS: tipListing(prs), FAKE_PRS: JSON.stringify(prs), FAKE_STATUSES: JSON.stringify(statuses) });
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.out.prs), [{ number: 11, head: H[11] }], "a head whose gate is not failure is re-gated by the train");
   assert.match(r.stdout, /PR #7: gate is already failure/);
@@ -1665,7 +1732,7 @@ test("land.yml has no sync job, no SYNC_MAX, no sync input and no update-branch 
   assert.equal(ghExpr(LAND.concurrency.group, disp({ pr: "7" })), "land-7");
 });
 
-test("#6055: land.yml tip-moved resolve prefers an open train over its older cars (4-cap)", () => {
+test("#6055: tip-pass candidates omit an eligible train’s own cars", () => {
   const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
   const hx = (c) => c.repeat(40);
   const car = (n, created) => ({
@@ -1680,24 +1747,23 @@ test("#6055: land.yml tip-moved resolve prefers an open train over its older car
     auto_merge: null, created_at: "2026-11-20T12:00:00Z", labels: [{ name: "land" }, { name: "train" }], body: manifest,
   };
   const prs = Object.fromEntries([...cars, trainPr].map((p) => [p.number, p]));
-  const lands = [...cars, trainPr].map((p) => ({ number: p.number }));
   const resolve = (pulls, statuses = {}) => runStep(RESOLVE_RUN, {
-    EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null",
+    EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_NAME: "Deploy to GitHub Pages", RUN_CONCLUSION: "success", RUN_SHA: TIP_A, CANDIDATES: "null",
     PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "",
-    // train_cars come from the same FAKE_PRS resolve already fetches (pass 1); no second listing.
-    FAKE_LANDS: JSON.stringify(lands), FAKE_PRS: JSON.stringify(pulls), FAKE_STATUSES: JSON.stringify(statuses),
+    FAKE_LANDS: tipListing(pulls), FAKE_PRS: JSON.stringify(pulls), FAKE_STATUSES: JSON.stringify(statuses),
   });
   const r = resolve(prs);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.deepEqual(JSON.parse(r.out.prs), [{ number: 99, head: trainHead }], "train is the only landable PR; its cars are notasked");
+  assert.equal(r.calls.filter(call => call.includes("/pulls/")).length, 0, "tip pass reads the PR board in one listing");
   const notasked = JSON.parse(r.out.notasked);
-  assert.deepEqual(notasked.map((row) => row.why), Array(5).fill("car of an open train"));
+  assert.deepEqual(notasked, [], "unarmed cars do not need five redundant invalidation writes on a tip pass");
   assert.equal(r.calls.filter((c) => /\bpr list\b/.test(c) && /--label train\b/.test(c)).length, 0,
     "resolve must not list --label train; train_cars come from the land pulls already fetched");
   assert.equal(r.calls.filter((c) => /pulls\?state=open/.test(c)).length, 0, "resolve must not paginate pulls?state=open");
   const changedCar = { ...cars[0], head: { ...cars[0].head, sha: hx("a") } };
   const changed = resolve({ ...prs, 1: changedCar, 99: { ...trainPr, auto_merge: {} } });
-  assert.deepEqual(JSON.parse(changed.out.prs).map(p => p.number), [1, 2, 3, 4], "one superseded head releases the entire train");
+  assert.deepEqual(JSON.parse(changed.out.prs).map(p => p.number), [1, 2, 3, 4, 5], "one superseded head releases the entire train");
   assert.deepEqual(JSON.parse(changed.out.disarm), [99], "already-armed stale wrapper must disarm");
   for (const [why, wrapper, statuses] of [
     ["held", { ...trainPr, labels: [...trainPr.labels, { name: "hold" }] }],
@@ -1705,9 +1771,10 @@ test("#6055: land.yml tip-moved resolve prefers an open train over its older car
     ["conflicting", { ...trainPr, mergeable: false }],
     ["refused", trainPr, { [trainHead]: [{ context: "gate", state: "failure" }] }],
   ]) {
-    const result = resolve({ ...prs, 99: wrapper }, statuses);
+    const result = resolve({ ...prs, 99: { ...wrapper, auto_merge: {} } }, statuses);
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.out.prs).map(p => p.number), [1, 2, 3, 4], why + " train releases its cars");
+    assert.deepEqual(JSON.parse(result.out.prs).map(p => p.number), [1, 2, 3, 4, 5], why + " train releases its cars");
+    assert.deepEqual(JSON.parse(result.out.disarm), [99], why + " armed wrapper is disarmed");
   }
 });
 
