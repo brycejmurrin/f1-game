@@ -15332,6 +15332,9 @@
       "restoreBase": [
         "tests/unit/weather-arc-plan.test.mjs"
       ],
+      "segs": [
+        "tests/unit/weather-arc-rain.test.mjs"
+      ],
       "setTimeOfDay": [
         "tests/unit/weather-arc-plan.test.mjs"
       ],
