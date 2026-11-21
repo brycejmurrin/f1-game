@@ -384,7 +384,7 @@ interface GameCtx {
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
-  readonly openDailyPicker: () => void;
+  readonly openTimeTrialPicker: (request: { kind: "daily"; day?: string; mode?: "standard" | "open" } | { kind: "lap"; track: string }) => void;
   readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
@@ -429,7 +429,7 @@ interface GameCtx {
   readonly setupTrialRestart: (options: { teamId: string; tune: Record<string, number>; mode: "launch"; isCurrent: () => boolean }) => Promise<{ ok: boolean; context?: Record<string, unknown>; reason?: string }>;
   readonly setupTrialContext: () => Record<string, unknown> | null;
   readonly setupTrialCancel: () => void;
-  readonly realRace: { status(): { active: boolean } };
+  readonly realRace: { status(): { active: boolean; watch?: boolean }; isWatch(): boolean; isActive(): boolean; owns(car: CarState): boolean };
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;
@@ -609,7 +609,6 @@ interface GameCtx {
   readonly getLiveryId: (teamId: string) => string;
   readonly saveLiveryId: (teamId: string, id: string) => void;
   readonly getCustomLiveries: (teamId: string) => unknown[];
-  readonly setCustomLiveries: (teamId: string, arr: unknown[]) => void;
   readonly getLiveries: (team: TeamDef) => unknown[];
   readonly invalidateDecalTextures: (teamId: string) => void;
   /** Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds through Car3D.build. */
@@ -705,7 +704,7 @@ interface GameCtx {
    * line (a cooldown, a wear step) must spend it only on true.
    */
   readonly announce: (msg: string, dur?: number, kind?: string, still?: () => boolean) => boolean;
-  readonly applyCaution: (d: unknown) => void;
+  readonly applyCaution: (d: unknown) => boolean;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   /** The interpolated pose a car is drawn at this frame (pooled; read it at once): the TV director's subject. */
   readonly camPoseOf: (c: CarState) => { s: number; x: number; carPos: number[] | null; carHead: number };
@@ -790,8 +789,8 @@ interface GameCtx {
   raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
   /** A championship's grid with qualifying off: "champ" (standings, FIA 2026 SR B2.5.4(a)) | "tier" | "revchamp" | "random". */
   champGrid: "champ" | "tier" | "revchamp" | "random";
-  /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
-  readonly referencePole: () => number;
+  /** The modelled pole (Quali.referencePole): at QUALI_TRIM, the lap pit loss and the replay scale use; "medal": the calibrated time-trial / daily medal target. */
+  readonly referencePole: (kind?: "medal") => number;
   /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
   readonly redFlagRestart: () => boolean;
   /** The day's time-trial plan (js/race/daily-challenge.js). */

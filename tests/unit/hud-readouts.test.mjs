@@ -736,3 +736,27 @@ test("hud.js: hidden blue-flag changes preserve per-car/per-lap speech across sh
   h.els.hud.hidden = false; h.frame(1);
   assert.equal(said.length, 2, "show does not repeat the same lapping");
 });
+
+test("hud.js: the gap chip is a time gap, steady under the player's own braking (#5678)", () => {
+  const { els, rival, player, G, tick } = boot();
+  G.track.total = 5000; G.raceT = 0; player.prog = 0; rival.prog = 1500; player.speed = rival.speed = 50;
+  for (let n = 0; n < 400; n++) { tick(); G.raceT += 0.1; player.prog += 5; rival.prog += 5; }
+  tick();
+  assert.equal(els.gapA.textContent, "▲ BEA 30.0s", "1500 m at 50 m/s");
+  player.speed = 15;   // braking: metres ÷ max(15, 0.26·vTop) read 64.1 s here
+  for (let n = 0; n < 20; n++) { G.raceT += 0.1; player.prog += 1.5; rival.prog += 5; tick(); }
+  const s = +els.gapA.textContent.match(/([\d.]+)s$/)[1];
+  assert.ok(s >= 30 && s < 30 * 1.15, "within 15 % of the steady gap after 2 s at 15 m/s: " + els.gapA.textContent);
+});
+
+test("hud.js: LAP 1/N and TIME agree from lights out — the grid-to-line run is off the lap clock (#5678)", () => {
+  const { els, player, G, tick } = boot();
+  G.fmtTime = (t) => t.toFixed(2);
+  player.lap = 0; player.lapTime = 3.33; tick();
+  assert.equal(els.lap.textContent, "1/5");
+  assert.equal(els.time.textContent, "0.00", "lap 0 shows the lap clock (0), not a run-up that rewinds at the line");
+  player.lap = 1; player.lapTime = 0.6; tick();
+  assert.equal(els.time.textContent, "0.60", "from the line the lap clock counts");
+  G.session = "quali"; player.lap = 0; player.lapTime = 3.33; tick();
+  assert.equal(els.time.textContent, "3.33", "qualifying's out-lap clock is untouched");
+});

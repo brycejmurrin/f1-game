@@ -1039,7 +1039,6 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.match(rs, /\(!isChampionship\(\) && gridFromQuali\(\) && !qualiResults\(\)\)\) \{ dismissSheet\(\); openQuali\(\); \}/, "…except a qualifying grid, whose sheet leads to startRaceFromSheet");
   assert.match(game, /const gridFromQuali = \(\) => \(isChampionship\(\) \? SeasonCal\.quali\(\) : \(qualiGrid\(\) && !isTimeTrial\(\)/, "a time trial never detours through the qualifying sheet");
   // The DAILY button only SELECTS today's plan and opens the circuit picker (so its GO is the same sheet); it starts nothing itself.
-  assert.match(game, /openDailyPicker: \(\) => openTimeTrial\(true\)/);
   assert.doesNotMatch(read("js/ui/title-flow.js").match(/function openTimeTrial[\s\S]*?\n\}/)[0], /startRace|raceIntro/, "the title's TT / DAILY open the picker, they never start");
   // The Data Hub's JUMP IN opts in to the pre-race screen, and RealRace.launch runs the raw raceIntro (not the sheet variant: no sheet to hold).
   const tab = read("js/data/real-race-tab.js");
@@ -1244,4 +1243,11 @@ test("fitCard runs after every reveal and whenever the card's geometry or the wi
   assert.equal(h.els["ld-card"].style.props["--ld-fit"], undefined, "the stub card is never scaled by a guessed fit");
   const cap = read("js/ui/captions.js");
   assert.match(cap.slice(cap.indexOf("function paintLoading("), cap.indexOf("function applyDom()")), /el\.hidden = false;\n\s*refitCard\(\);[\s\S]*if \(el\) el\.hidden = true;\n\s*refitCard\(\);/, "the radio caption is the card's tallest late arrival: captions.js re-fits on show and hide");
+});
+
+// #5897 row 3 (Bryce, via the orchestrator 2026-11-20 07:21Z: CLOUDY wins): one weather word for
+// overcast. The Daily sub-line and the track-select Daily chip printed p.weather.toUpperCase(), "OVERCAST".
+// Its two callers (title-menu.js refresh, select-screen.js trackFilterBar) were checked with apex-lsp lsp_callers.
+test("wxWord names overcast CLOUDY", () => {
+  assert.deepEqual(["overcast", "rain", "dry", "hail", ""].map(LC.wxWord), ["CLOUDY", "RAIN", "DRY", "HAIL", ""]);
 });

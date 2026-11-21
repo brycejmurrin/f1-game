@@ -17,14 +17,15 @@
 
    Loading any one overwrites what is stored and reloads the page, so the
    button asks twice. SETTINGS may carry time-trial leaderboards in an optional
-   `ttlb` section (merged on import, never overwriting blindly). GARAGE and
-   SETTINGS still never carry career or season saves, ghosts, replays, or anything
-   account-shaped, in either direction.
+   `ttlb` section and player progress in an optional `progress` section
+   (js/ui/progress-backup.js, #5992; both merged on import, never overwriting
+   blindly). GARAGE and SETTINGS still never carry career or season saves,
+   replays, or anything account-shaped, in either direction.
 
    SPEC below is the allowlist — every player-facing preference, tuner and
    control binding under the `apex26.` prefix, grouped the way SETTINGS is.
    Nothing else is ever read: the garage (parts, liveries, setup sheets, MY
-   TEAM), saves (career, season, ghosts, replays, daily bests), accounts
+   TEAM), saves (career, season, replays, daily bests), accounts
    and network (Spotify tokens, TURN credentials, relays) and the renderer's
    self-healing latches stay out by construction, and the unit test asserts
    that a poisoned store leaks none of them. Two lanes, like the store: `json`
@@ -88,7 +89,7 @@ const SPEC = [
   { k: "radioFocusDb", lane: "json", group: "audio", def: 0, src: "js/audio/panel.js", oneOf: [0, 4, 8, 12] },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
-  { k: "spokenLang", lane: "json", group: "audio", def: "auto", src: "js/audio/radio-voice.js", oneOf: ["auto", "en", "es", "pt", "it", "de", "fr", "ja", "nl"] },
+  { k: "spokenLang", lane: "json", group: "audio", def: "auto", src: "js/audio/radio-voice.js", oneOf: ["auto", "en"] },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -107,7 +108,8 @@ const SPEC = [
   // the honest default to report — a stored number is the change.
   { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; 109% on touch, 70% on a phone)" },
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, 70 ui on a phone, scale.js scaleDefault)" },
-  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
+  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = independent: 125 % on touch, 100 % otherwise)" },
+  { k: "hudBotKeep", lane: "json", group: "display", def: null, src: "js/ui/scale.js gear row kept on BUTTON SIZE moves (null = none)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
@@ -132,7 +134,7 @@ const SPEC = [
   { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookDesigner", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js TRACK DESIGNER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "layoutPreset", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js LAYOUT PRESET (null = none recorded; the last preset applied — it reads CUSTOM once the knobs above no longer match it)", oneOf: ["shipped", "thumb", "compact", "big"] },
-  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (MED on a touch device)", perDevice: true },
+  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (AUTO everywhere; a phone's AUTO is capped at MED's scale)", perDevice: true },
   { k: "resSchema", lane: "json", group: "display", def: 1, info: true, src: "js/ui/scale.js RES_SCHEMA (migration version — boot writes the current one, so never a change)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
@@ -180,7 +182,8 @@ const SPEC = [
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
   { k: "camTuneTrack", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js per-track framing/comfort overrides (track > car > mode/global)" },
   { k: "camTuneCar", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js per-car framing/comfort overrides (track > car > mode/global)" },
-  { k: "motionBlur", lane: "json", group: "camera", def: 5, src: "js/camera/cam-comfort.js MOTION BLUR (1 = off)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
+  { k: "blurNotch", lane: "json", group: "camera", def: 1, src: "js/camera/cam-comfort.js MOTION BLUR (1 = off)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
+  { k: "motionBlur", lane: "json", group: "camera", def: 5, src: "js/camera/cam-comfort.js legacy MOTION BLUR notch before #5990 (never drew; inert since blurNotch, kept so old files round-trip)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
   { k: "speedLines", lane: "json", group: "camera", def: 5, src: "js/camera/cam-comfort.js SPEED LINES (1 = off)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
   { k: "cockpitHalo", lane: "raw", group: "camera", def: "fairing", src: "js/camera/cockpit-opts.js HALO_VALUES (\"1\" = standard, \"0\" = off)", oneOf: ["0", "slim", "1", "thick", "fairing"] },
   { k: "cockpitWheelFinish", lane: "raw", group: "camera", def: "carbon", src: "js/camera/cockpit-finishes.js", oneOf: ["carbon", "livery", "anodised", "suede", "stock"] },
@@ -292,6 +295,7 @@ const SPEC = [
   // preferences by the file's own definition, beside difficulty/raceGrid/caution.
   { k: "drivingCoach", lane: "json", group: "driving", def: false, src: "js/race/driving-coach.js" },
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
+  { k: "pedalSlide", lane: "json", group: "driving", def: "instant", oneOf: ["instant", "ease"], src: "js/input/steer-tuning.js PEDAL SLIDE row → Input.setPedalSlide (#5996)" },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
   { k: "wind", lane: "json", group: "driving", def: "real", oneOf: ["off", "real"], src: "js/race/race-settings.js WIND row → Wind.setLevel" },
@@ -543,7 +547,7 @@ function garageValue(k, v) {
 const CAREER_FORMAT = "apex26-career-v1";
 const CAREER_FLAVOURS = ["driver", "myteam"];
 const CAREER_SLOT_N = 3;
-const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), standalone season, lap records, ghosts, daily challenge, accounts";
+const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), lap records, ghosts, accounts";
 const CAREER_SLOT_RE = /^career\.(driver|myteam)\.([0-2])$/;
 function isCareerKey(k) {
   return k === "careerSlot" || CAREER_SLOT_RE.test(k);

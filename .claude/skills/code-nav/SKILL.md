@@ -24,6 +24,11 @@ use `node tools/mcp/lsp-mcp.mjs` with the table's commands (the `tools/mcp/lsp-m
 wrapper runs the same thing, but a reporter subagent's read-only hook refuses it); do not rebuild the
 server or change global host configuration to perform a lookup.
 
+In Claude Code `.mcp.json` marks apex-lsp `alwaysLoad`, so its `lsp_*` tools arrive loaded. A host that
+still lists them as deferred names loads them once with ToolSearch
+`select:mcp__apex-lsp__lsp_definition,mcp__apex-lsp__lsp_references,mcp__apex-lsp__lsp_callers,mcp__apex-lsp__lsp_diagnostics`
+(measured 2026-11-20: 0 lsp calls in 13 workers, none of which loaded them).
+
 ## Which call
 
 For output levels and saved-result retrieval, follow the
@@ -70,9 +75,11 @@ bare JS symbol. Take it for the next lookup.
    errors the edit **introduced**: per-file `// @ts-check`, high-signal codes
    (unknown name, "did you mean" typo, too many arguments, assign to const,
    calling a non-function, redeclare, syntax), minus the same file at git HEAD.
-   `all: true` lists the pre-existing ones as well. If project configuration or another JS/declaration
-   dependency differs from HEAD, subtraction is skipped and the output says so:
-   a per-file HEAD overlay cannot establish whether a cross-file/config error is old.
+   `all: true` lists the pre-existing ones as well. Other edited js/ files are put back to their HEAD text
+   for the baseline (the header names them), so a dependency's edit still shows as new here. If configuration,
+   a declaration file, or an added/deleted/moved source differs from HEAD, subtraction is skipped and the output says so.
+   Rows `APX1`/`APX2` are a call or read of a `Module.member` (or factory-instance member) that no declaration
+   defines (`tools/mcp/member-check.mjs`): a TypeError or an always-undefined read the checker cannot see.
    Configuration edits (including locally resolved extends chains) reload the persistent project before answering.
    This is a fast first check, not a substitute for the tests.
 

@@ -86,6 +86,7 @@ run-name: "browser group ${{ inputs.group }} on ${{ github.ref_name }} (${{ inpu
 
 permissions:
   contents: read
+  pull-requests: read   # the fork check reads a `pr` input's head repository (D-RUNNER)
 
 # A second dispatch of the same group on the same branch supersedes the first.
 # (remote-group.mjs reuses a live or green run of the same sha instead.)
@@ -96,7 +97,12 @@ concurrency:
 jobs:
   group:
     name: "${{ inputs.group }} (${{ matrix.shard }}/${{ matrix.total }})"
-    runs-on: ubuntu-latest
+    # THE RUNNER IS A REPO VARIABLE (D-RUNNER, 2026-11-20). Unset or empty, the shard runs on `ubuntu-latest` exactly as
+    # before; set `APEX_BROWSER_RUNNER` to a managed provider's single `runs-on` label to trial it, delete it to roll
+    # back (docs/TESTING.md §CI runners). Only a `workflow_dispatch` may read it, and only this repo's code runs on
+    # it: a `pr` input whose head is a fork stops at "Fork code never runs on a trial runner" below, before checkout.
+    # tests/unit/ci-runner-variable.test.mjs pins both.
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && vars.APEX_BROWSER_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -106,7 +112,9 @@ jobs:
     # group shards hold runners at once across every dispatch; the rest wait PENDING, holding no runner. Before this,
     # nine group runs could fill the account's 40-slot pool and land.yml's gate jobs queued behind them (measured by
     # tools/ci/pool-share.mjs). remote-group.mjs gives each shard `lane` 1..8 (withLanes, GROUP_LANES); a plan
-    # without one (a hand dispatch) falls back to its shard number. `queue: max` holds up to 100 pending jobs per
+    # without one (a hand dispatch) falls back to its shard number. With the shards on APEX_BROWSER_RUNNER (outside
+    # that pool) the dispatcher may raise the count (APEX_GROUP_LANES / --group-lanes, D-LANES): a lane above 8 is
+    # just another group. `queue: max` holds up to 100 pending jobs per
     # group and cannot be combined with cancel-in-progress in one block; the workflow-level group above still
     # replaces a superseded dispatch, pending shards included.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
@@ -120,6 +128,18 @@ jobs:
           PR: ${{ inputs.pr }}
         run: |
           case "$PR" in ""|[1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9]) ;; *) echo "::error::pr must be a PR number or empty"; exit 1;; esac
+      # FORK CODE NEVER RUNS ON A TRIAL RUNNER (D-RUNNER). `runs-on` is fixed before any step, so a fork's merge ref
+      # cannot fall back there; it is refused here instead, before checkout, whenever the shard is not on
+      # `ubuntu-latest`. The repo is public and its PRs may come from forks. Unset the variable to test a fork PR.
+      - name: Fork code never runs on a trial runner
+        if: ${{ inputs.pr != '' && vars.APEX_BROWSER_RUNNER != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          REPO: ${{ github.repository }}
+        run: |
+          head="$(gh api "repos/$REPO/pulls/$PR" --jq .head.repo.full_name)" || { echo "::error::could not read PR #$PR's head repository"; exit 1; }
+          if [ "$head" != "$REPO" ]; then echo "::error::PR #$PR's head is $head, not $REPO: fork code does not run on APEX_BROWSER_RUNNER; unset the variable to test it on ubuntu-latest"; exit 1; fi
       # With `pr`: the PR's merge ref, so the shard records (base, head) = the merge commit's parents and a ready
       # verdict on that PR can count this run for a spec its plan dropped (tools/ci/dropped-group-runs.mjs).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

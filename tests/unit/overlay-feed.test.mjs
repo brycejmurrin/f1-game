@@ -5,7 +5,6 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -306,11 +305,59 @@ test("TV graphics diffs ranked order into a pass lower-third and fastest-lap ban
   assert.deepEqual(JSON.parse(JSON.stringify(changed.fastest)), { code: "NOR" });
 });
 
+// #5981: the frame read G.flag, G.lap and G.laps, none of which is a G member, so
+// every overlay frame carried flag "" and the stream overlay never showed a caution.
+// The flag now comes from G.cautionLevel(); the fake holds only GameCtx members.
+test("TV graphics frame carries the race-control flag and the player's lap", () => {
+  const dom = makeDom();
+  const Tv = loadTv(dom.document);
+  let level = 1;
+  const G = { hudProfile: "broadcast", ranked: cars(.4), state: "race", raceT: 4,
+    player: { lap: 3 }, lapsTarget: 12, cautionLevel: () => level };
+  const graphics = Tv.create(G, dom.document.body);
+  const yellow = graphics.tick(.25, true).frame;
+  assert.equal(yellow.flag, "yellow", "a yellow under race control reaches the overlay frame");
+  assert.equal(yellow.lap, 3);
+  assert.equal(yellow.laps, 12);
+  level = 3;
+  assert.equal(graphics.tick(.25, true).frame.flag, "sc");
+  level = 0;
+  assert.equal(graphics.tick(.25, true).frame.flag, "green");
+  assert.deepEqual([0, 1, 2, 3, 4].map((l) => Tv.flagOf({ cautionLevel: () => l })), ["green", "yellow", "vsc", "sc", "red"]);
+});
+
+// #5885 item 2: G.ranked drops retired cars, so when the car ahead retires the one behind moves up a
+// place by array index. That is no overtake: the lower third said "NOR PASSED LEC" for a retirement.
+test("TV graphics show no OVERTAKE when the place was gained because the car ahead retired", () => {
+  const Tv = loadTv(makeDom().document);
+  const first = Tv.diff(null, [{ code: "LEC" }, { code: "NOR" }, { code: "PIA" }]);
+  const retired = Tv.diff(first.snapshot, [{ code: "LEC" }, { code: "PIA" }]);   // NOR retired
+  assert.equal(retired.lower, null);
+  // A real pass in the same frame as a retirement still names the car actually passed.
+  const a = Tv.diff(null, [{ code: "LEC" }, { code: "NOR" }, { code: "PIA" }, { code: "RUS" }]);
+  const b = Tv.diff(a.snapshot, [{ code: "RUS" }, { code: "LEC" }, { code: "PIA" }]);   // NOR out, RUS past LEC and PIA
+  assert.deepEqual(JSON.parse(JSON.stringify(b.lower)), { code: "RUS", from: 4, to: 1, over: "LEC" });
+});
+
+// #5941: live cars carry their best lap as c.best and never a .fastest flag, so the FASTEST LAP card
+// never showed. The car with the lowest best lap holds it; a lap that beats it moves the card.
+test("TV graphics show FASTEST LAP from the live cars' best laps, and move it when a lap beats it", () => {
+  const Tv = loadTv(makeDom().document);
+  const a = Tv.diff(null, [{ code: "LEC", best: 0 }, { code: "NOR", best: 0 }]);
+  assert.equal(a.fastest, null, "no lap set yet");
+  const b = Tv.diff(a.snapshot, [{ code: "LEC", best: 81.2 }, { code: "NOR", best: 0 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.fastest)), { code: "LEC" });
+  const c = Tv.diff(b.snapshot, [{ code: "LEC", best: 81.2 }, { code: "NOR", best: 80.9 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.fastest)), { code: "NOR" });
+  const d = Tv.diff(c.snapshot, [{ code: "LEC", best: 81.2 }]);   // NOR retires: the mark is not LEC's
+  assert.equal(d.fastest, null);
+});
+
 test("TV graphics paint only in the broadcast HUD profile", () => {
   const dom = makeDom();
   const Tv = loadTv(dom.document);
   const ranked = cars(.4);
-  const G = { hudProfile: "standard", ranked, state: "race", raceT: 4, lap: 2, laps: 10 };
+  const G = { hudProfile: "standard", ranked, state: "race", raceT: 4, player: { lap: 2 }, lapsTarget: 10 };
   const graphics = Tv.create(G, dom.document.body);
   graphics.tick(.25, true);
   assert.equal(graphics.element().hidden, true);
@@ -327,14 +374,8 @@ test("overlay page explicitly owns transparent and chroma backgrounds and is sta
   assert.match(source("tools/desktop/stage-files.mjs"), /"overlay\.html"/);
 });
 
-// #3108: Broadcast's lazy ScriptLoader branch for the TV graphics was unreachable — every shell that creates a
-// Broadcast loads OverlayFeed and TvGraphics eagerly before it (tools/manifest.cjs FULL); overlay.html loads
-// broadcast.js only for its pure helpers and never calls create(). The branch is gone; this pins why it may be.
-test("TV graphics need no lazy loader: FULL loads feed + tv-graphics before broadcast; overlay.html never creates one", () => {
-  const { FULL } = createRequire(import.meta.url)("../../tools/manifest.cjs");
-  const at = (f) => FULL.indexOf(f);
-  assert.ok(at("js/overlay/feed.js") >= 0 && at("js/race/tv-graphics.js") >= 0, "both are eager");
-  assert.ok(at("js/overlay/feed.js") < at("js/race/broadcast.js") && at("js/race/tv-graphics.js") < at("js/race/broadcast.js"), "and load first");
+test("the overlay companion loads the shared broadcast helpers without the replay graphics", () => {
+  assert.doesNotMatch(source("overlay.html"), /js\/race\/tv-graphics\.js/);
   const shells = fs.readdirSync(ROOT).filter((f) => f.endsWith(".html") && /js\/race\/broadcast\.js/.test(source(f)));
   assert.deepEqual(shells.sort(), ["index.html", "overlay.html"]);
 });

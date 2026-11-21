@@ -86,9 +86,15 @@ var PitLane = (function () {
     const tt = () => !!G.timeTrial;
     // wear-off TT: no service (a TT with wear on stops as a race does)
     const ttStop = () => tt() && !enabled();
-    function laneOpen() { return enabled() || !!(z() && tt()); }
+    /** #5878 (decision A): DAMAGE HANDLING with wear off opens the lane for a REPAIR-ONLY stop (the release
+     *  edge repairs it); no tyres are fitted, and strategy stays on enabled(). */
+    const damageOn = () => typeof DamageHandling !== "undefined" && DamageHandling.isEnabled();
+    function laneOpen() { return enabled() || !!(z() && (tt() || damageOn())); }
+    // A stop that fits no tyres: a wear-off Time Trial or a repair-only stop.
+    const noService = () => !enabled();
     /** How long a Time Trial holds the car in its box: the stop plus time to tap END TIME TRIAL (#5789). */
     const TT_DECIDE_S = 4;
+    function boxHoldSeconds(zz) { return zz.boxS + (ttStop() ? TT_DECIDE_S : 0); }
 
     /** The speed cap inside the lane, in m/s at the CURRENT pace scale. */
     function limit() {
@@ -405,7 +411,7 @@ var PitLane = (function () {
         // …AND WHAT WILL BE FITTED. The stop is booked by a gesture, and a
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
-        const next = ttStop() ? null : nextFor(c);
+        const next = noService() ? null : nextFor(c);
         // "BOX BOX" as the engineer says it (see the note in engineer.js): the
         // repeat is the call, and it reads as a radio instruction rather than
         // as a label on the screen.
@@ -539,16 +545,16 @@ var PitLane = (function () {
      *  also ends the teach. */
     function release(c, zz) {
       c.pitOutT = SERVED_S;
+      const held = boxHoldSeconds(zz) + (c.pitWorked || 0);
       // One line per stop: the player at info, the AI field at debug (20 cars).
       Log[c.local ? "info" : "debug"]("race", "Pit stop done car=" + c.code + " lap=" + c.lap + " stop=" + (c.pitStops || 0) +
-        " held=" + ((zz ? zz.boxS : 0) + (c.pitWorked || 0)).toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
+        " held=" + held.toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
       if (!c.local) return;
       const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
       const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
       // The stop's REAL length, work included: a summary that reported 2.2 s
       // after twenty seconds in the garage would be the one number the driver
       // knows is wrong.
-      const held = zz.boxS + (c.pitWorked || 0);
       if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
       c.pitPos0 = 0; c.pitWorked = 0;
       // Only the FIRST stop writes: a store write bumps store.rev, which re-resolves every team's
@@ -876,7 +882,7 @@ var PitLane = (function () {
     function commitNow(c) {
       c.pitCommitT = 0; c.pitCommitted = true;
       arm(c, true);
-      const next = ttStop() ? null : nextFor(c);
+      const next = noService() ? null : nextFor(c);
       if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
     }
     function update(c, dt) {
@@ -949,13 +955,13 @@ var PitLane = (function () {
         // at latch: fitting at latch made the compound stripe change before
         // anything moved, so the axle slide read as "no tyre swap". Ensure a
         // fit still lands before release if the hold is cut short.
-        if (!c.pitFitted && !ttStop()) {
+        if (!c.pitFitted && !noService()) {
           const a = stopAnim(c);
           if (a.u >= 0.50) { serviceCar(c); c.pitFitted = true; }
         }
         c.pitT = (c.pitT || 0) - dt;
         if (c.pitT <= 0) {
-          if (!c.pitFitted && !ttStop()) serviceCar(c);
+          if (!c.pitFitted && !noService()) serviceCar(c);
           c.pitFitted = true;
           c.pitState = "out"; c.pitT = 0; release(c, zz);
         }
@@ -1014,7 +1020,7 @@ var PitLane = (function () {
         Tracks.sample(G.track, c.s, _smp);
         if (!boxSquare(c, _smp, zz.side)) return;
         c.pitState = "box";
-        c.pitT = zz.boxS + (ttStop() ? TT_DECIDE_S : 0);
+        c.pitT = boxHoldSeconds(zz);
         c.pitArmed = false;
         c.pitStops = (c.pitStops || 0) + 1;
         // The set is fitted mid-hold (see the box branch above) so the wheels

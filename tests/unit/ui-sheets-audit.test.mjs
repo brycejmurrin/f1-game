@@ -1043,7 +1043,7 @@ test("friend-race results are honest: RACE AGAIN (SOLO), a NEW FRIEND ROOM door,
   assert.equal(friend.els.resMenu.textContent, "NEW FRIEND ROOM");
   const hint = friend.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room");
   assert.ok(hint, "the sheet says the room is gone");
-  assert.match(hint.children[0].textContent, /VS FRIEND/);
+  assert.match(hint.children[0].textContent, /RACE A FRIEND on the title screen/);
   const solo = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => false, ownsClassification: () => false, peerResult: () => null } });
   solo.api.buildResults(cars.slice());
   assert.equal(solo.els.resNext.textContent, "RACE AGAIN");
@@ -1366,7 +1366,7 @@ test("INCIDENTS: one before the first line crossing is LAP 1, never LAP 0 (#5883
 // best the record replaced (meta.prevBest, written by session-records.js before finishLap).
 function bootTT(meta) {
   let cleared = 0;
-  const ghost = { snapshot: () => null, hasGhost: () => true, bestTime: () => 131.055, meta: () => meta, medal: () => null, clear() { cleared++; } };
+  const ghost = { snapshot: () => null, hasGhost: () => true, bestTime: () => 131.055, meta: () => meta, medal: () => null, clear() { cleared++; return true; } };
   const h = bootResults({ season: null, cars: [], seasonMode: false, globals: { Ghost: ghost } });
   const armed = new Set(), labels = [];
   Object.assign(h.G, {
@@ -1393,4 +1393,44 @@ test("TIME TRIAL: CLEAR GHOST arms on the first tap and clears only on the secon
   assert.deepEqual([t.cleared(), btn().textContent, t.labels], [0, "TAP AGAIN TO CLEAR", ["TAP AGAIN TO CLEAR"]]);
   btn().onclick();
   assert.equal(t.cleared(), 1);
+});
+
+// Clean-room audit fixes 54 and 72 (results sheet, screen-reader side).
+function bootSpoken(extra = {}) {
+  const said = [], observers = [], timers = [];
+  const MutationObserver = class {
+    constructor(fn) { this.fn = fn; this.on = false; observers.push(this); }
+    observe(target) { this.target = target; this.on = true; }
+    disconnect() { this.on = false; }
+  };
+  const h = bootResults({ season: null, cars: [], seasonMode: false, globals: {
+    LiveRegion: { say: (text) => said.push(text) }, MutationObserver, setTimeout: (fn) => { timers.push(fn); return timers.length; }, ...extra } });
+  h.els.results.hidden = true;
+  const show = () => { h.els.results.hidden = false; for (const o of observers.slice()) if (o.on && o.target === h.els.results) o.fn([]); };
+  const hide = () => { h.els.results.hidden = true; for (const o of observers.slice()) if (o.on && o.target === h.els.results) o.fn([]); };
+  return { ...h, said, show, hide };
+}
+const raceOf = (winner) => {
+  const team = { id: "red", name: "RED", color: [1, 0, 0] };
+  return [winner, "B", "C"].map((code, i) => ({ driverId: code + i, code: code.padEnd(3, "X"), name: code, team, best: 80 + i,
+    finished: true, lap: 5, finishT: 400 + i, penalty: 0, gridPos: i + 1, isPlayer: i === 1 }));
+};
+
+test("results announcements from races quit while the sheet was hidden do not pile up on the next one", () => {
+  const h = bootSpoken();
+  for (const w of ["VER", "NOR", "LEC"]) { const cars = raceOf(w); h.G.player = cars[1]; h.api.buildResults(cars); }
+  const cars = raceOf("HAM"); h.G.player = cars[1]; h.api.buildResults(cars);
+  h.show();
+  assert.deepEqual(h.said.map((t) => /HAM/.test(t)), [true], "one announcement, for the sheet shown: " + JSON.stringify(h.said));
+});
+
+test("each driver's tyre-stint disclosure is named for that driver", () => {
+  const stints = () => [{ code: "M", laps: 5, lap0: 1, lap1: 5, colour: [1, 1, 1] }];
+  const h = bootSpoken();
+  h.G.tyres = { on: () => true, stints };
+  const cars = raceOf("VER"); h.G.player = cars[1]; h.api.buildResults(cars);
+  const names = [];
+  const walk = (n) => { if (n.tagName && n.tagName.toLowerCase() === "summary") names.push(n.getAttribute("aria-label") || n.textContent); (n.children || []).forEach(walk); };
+  walk(h.els.resultsTable);
+  assert.deepEqual(names, ["TYRE STINTS — VER", "TYRE STINTS — B", "TYRE STINTS — C"]);
 });

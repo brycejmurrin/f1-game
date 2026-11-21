@@ -1,30 +1,11 @@
-/* Apex 26 — MirrorPass: the HUD REAR-VIEW MIRROR. A second camera sits on the
-   player's car looking back down its own heading and redraws the world and
-   the rival cars into a small target of the backend's own (gfx.mirrorBegin /
-   mirrorEnd — GLX, TLX and WGX each implement the pair), which present()
-   composites, flipped left-right like glass, into the rect of the #hud-mirror
-   frame. The frame is plain DOM laid out by css/hud.css, so the HUD scale,
-   the safe-area insets and the profiles place the mirror exactly as they
-   place every other widget; this module only measures it.
-   The pass runs BEFORE the main begin(), in the env probe's slot: present()
-   reads the post matrices from whichever begin() ran last, and TLX / WGX
-   defer their draws to it — a mirror recorded after the main pass would
-   corrupt the one the player is looking at.
-   Setting HUD > MIRROR (apex26.hudMirror): AUTO shows it in the onboard views
-   (where nothing behind is visible), ON in every view, OFF never. The MIRROR
-   key flips it on / off. A TAP on the mirror collapses it to a small MIRROR
-   chip for the rest of the session (phones have no M key), and a tap on the
-   chip brings it back; the stored setting is untouched. Performance never HIDES it — a slower device gets a
-   cheaper mirror instead (QUALITY below).
-   BROADCAST PICTURE-IN-PICTURE: in a REAL RACE WATCH (body.bc-on, js/race/
-   broadcast.js) the mirror stands down and its one target is re-aimed — a
-   SECOND car on a TV shot (setSubject), unflipped, into the #bc-pip frame.
-   Setting apex26.bcPip: AUTO (off on a software renderer, like the mirror),
-   ON, OFF. The two are never up together, so one target serves both.
-   One MirrorPass.create(G, deps) at boot; the render loop calls render().
-   Reads G.gfx / G.state / G.player / G.cars / G.track / G.camMode / G.dbgCam /
-   G.hideMeshes / G.store; the world draw, the car draw (CarDraw.drawMirrorCar:
-   the main pass's own body + wheel meshes) and the pose helpers come through deps. */
+/* Apex 26 — HUD rear-view mirror and broadcast picture-in-picture.
+   Render before the main begin(): present() uses the last main pass matrices.
+   GLX, TLX and WGX share one inset target between the rear camera (flipped)
+   and the broadcast subject (unflipped). CSS places the frame; this pass
+   measures it and draws the world and cars through the supplied callbacks.
+   MIRROR AUTO selects onboard views. Tapping the frame or chip collapses or
+   restores it for the session. Performance tiers reduce resolution, reach
+   and update rate while preserving the player's setting. */
 "use strict";
 
 const MirrorPass = (function () {
@@ -95,6 +76,7 @@ const MirrorPass = (function () {
   // 0.25 s at 120, and never at all on a software frame that runs at 1 Hz).
   const MEASURE_MS = 500;
   const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+  const byDistance = (a, b) => a.distance - b.distance;
   // SUPERSAMPLED, then mip-filtered down by the composite (every backend builds
   // the target's mip chain after the pass). A small image with no anti-aliasing
   // of its own shimmers as the car moves — kerb stripes, fences, grandstand
@@ -102,8 +84,8 @@ const MirrorPass = (function () {
   // frame to frame: the "flashy" mirror reported from a phone. The fragments
   // are cheap at this size (a phone's frame is ~8k pixels; the mirror's cost is
   // its draw calls), so the rungs keep their draw-distance / cadence savings and
-  // resolution buys the steadiness. MAX_W/MAX_H are every backend's own clamp,
-  // applied here with the aspect kept (a per-axis clamp would stretch it).
+  // resolution buys the steadiness. MAX_W/MAX_H (or gfx.mirrorMax) is the
+  // backend's own clamp, kept to aspect here (a per-axis clamp stretches it).
   const SS = 2, MAX_W = 1024, MAX_H = 512;
   // A RUNG HOLDS ~1.5 s before the governor may move it. On a phone the tier
   // moves on its own measurements, and every move swapped resolution, draw
@@ -155,6 +137,7 @@ const MirrorPass = (function () {
     // call, where and which way it ranked from, and how many frames it has served.
     const _vlBuf = [], _vlEye = [0, 0, 0], _vlAim = [0, 0, 0];
     const _capBuf = [];
+    const _capRanks = [];
     const _vlOut = { lights: null, tailStart: 0, tailCount: 0 };
     let _vlLamps = 0, _vlAge = Infinity, _vlTrack = null, _vlSrc = null, _vlRanks = 0, _vlHeld = 0;
     function mirrorLights(frame) {
@@ -187,20 +170,31 @@ const MirrorPass = (function () {
       for (let i = 0; i < 3; i++) { _vlEye[i] = _eye[i]; _vlAim[i] = _aim[i]; }
       return vl;
     }
-    // Rear-ranked lamps are nearest-first. Keep that prefix plus the
-    // tail-lights and drop the rest, so the inset's lamp loop stops at
-    // the cap on every backend. A list already inside the cap is returned
-    // as-is (same array the re-rank cache holds).
-    function capMirrorLights(src, tailStart, tailCount) {
+    // Keep the rear-ranked prefix or rank the small, unsorted list that fit
+    // the main view's budget. The tail lights keep their order in both cases.
+    function capMirrorLights(src, tailStart, tailCount, ranked) {
       if (!(_lampCap > 0) || !src) return null;
       const tc = tailCount | 0;
       const nRec = (src.length / 15) | 0;
       const ts = tc > 0 ? (tailStart | 0) : nRec;
       if (ts <= _lampCap) return null;
-      const keepLamps = Math.min(_lampCap, ts);
+      const keepLamps = _lampCap;
+      if (!ranked) {
+        for (let i = 0; i < ts; i++) {
+          const offset = i * 15;
+          const dx = src[offset] - _eye[0], dy = src[offset + 1] - _eye[1], dz = src[offset + 2] - _eye[2];
+          const entry = _capRanks[i] || (_capRanks[i] = {});
+          entry.offset = offset;
+          entry.distance = dx * dx + dy * dy + dz * dz;
+        }
+        _capRanks.length = ts;
+        _capRanks.sort(byDistance);
+      }
       let j = 0;
-      const endLamps = keepLamps * 15;
-      for (let i = 0; i < endLamps; i++) _capBuf[j++] = src[i];
+      for (let i = 0; i < keepLamps; i++) {
+        const offset = ranked ? i * 15 : _capRanks[i].offset;
+        for (let k = 0; k < 15; k++) _capBuf[j++] = src[offset + k];
+      }
       const tailFrom = ts * 15;
       const tailTo = Math.min(src.length, (ts + tc) * 15);
       for (let i = tailFrom; i < tailTo; i++) _capBuf[j++] = src[i];
@@ -230,16 +224,15 @@ const MirrorPass = (function () {
     // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped as
     // the main canvas is: 1.5 on a mobileTier phone, else 2 — glx.js / tlx.js
     // DPR_CAP) x the rung's res (x the render scale, scaledRes) x SS. A flat cap
-    // of 2 gave an iPhone (DPR 3) (2/1.5)^2 = 1.78x the lite rung's designed
-    // pixels in the mirror pass and its mips. It reallocates when the frame
-    // resizes, the rung changes or the main frame's scale moves.
+    // of 2 gave an iPhone (DPR 3) 1.78 times the lite rung's designed pixels. It reallocates
+    // when the frame resizes, the rung changes or the main frame's scale moves.
     function targetSize(cssW, cssH, res) {
       const cap = G.gfx && G.gfx.mobileTier ? 1.5 : 2;
       const dpr = Math.min(cap, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
       res = scaledRes(res);
       const ss = _q.ss || SS;
       let w = cssW * dpr * res * ss, h = cssH * dpr * res * ss;
-      const k = Math.min(1, MAX_W / (w || 1), MAX_H / (h || 1));
+      const m = (G.gfx && G.gfx.mirrorMax) || [MAX_W, MAX_H], k = Math.min(1, m[0] / (w || 1), m[1] / (h || 1));
       w = Math.round(w * k); h = Math.round(h * k);
       _sz[0] = w; _sz[1] = h;
       return _sz;
@@ -761,9 +754,9 @@ const MirrorPass = (function () {
       sv.lights = frame.lights; sv.tailStart = frame.tailStart; sv.tailCount = frame.tailCount;
       _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
       const vl = mirrorLights(frame);
-      if (vl) {
-        const capped = capMirrorLights(vl.lights, vl.tailStart, vl.tailCount);
-        const use = capped || vl;
+      const source = vl || frame;
+      const use = capMirrorLights(source.lights, source.tailStart, source.tailCount, !!vl) || vl;
+      if (use) {
         frame.lights = use.lights; frame.tailStart = use.tailStart; frame.tailCount = use.tailCount;
       }
       sv.lampCap = frame.mirrorLampCap;

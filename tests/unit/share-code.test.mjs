@@ -311,7 +311,7 @@ test("continueHint never offers yesterday's daily", () => {
   assert.equal(none, null, "no streak and no last session: no CONTINUE card");
   const live = h.ShareCode.continueHint({ store: h.store, daily: daily(2) });
   assert.equal(live.kind, "daily");
-  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what openDailyPicker() opens");
+  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what the title stages");
   assert.doesNotMatch(live.sub, /YESTERDAY/);
 });
 
@@ -423,6 +423,40 @@ test("a setup code keeps the player's previous sheet and UNDO restores it", asyn
   assert.equal(bag.get("setup.mercedes"), undefined);
 });
 
+// #5896 (decision A): each link overwrote the one undo record, so a second link (or the same
+// link twice) left UNDO restoring the first link's sheet and the player's own was gone.
+test("a second or repeated link keeps the player's own setup as the undo point", () => {
+  const { ShareCode, store } = harness();
+  const own = { arbF: 3, arbR: 4, rideF: 30, rideR: 70, brakeBias: 58 };
+  const a = { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 };
+  const b = { arbF: 7, arbR: 2, rideF: 20, rideR: 50, brakeBias: 55 };
+  const link = (tune) => ShareCode.decode(ShareCode.encode("setup", { team: "ferrari", tune }).code);
+  store.set("setup.ferrari", own);
+  assert.equal(ShareCode.apply(link(a), { store }).ok, true);
+  const first = j(store.get("shareUndo"));
+  assert.equal(ShareCode.apply(link(a), { store }).ok, true, "the same link again still loads");
+  assert.deepEqual(j(store.get("shareUndo")), first, "a link that changes nothing leaves the undo record alone");
+  assert.equal(ShareCode.apply(link(b), { store }).ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), b);
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), own, "UNDO restores the player's own sheet, not link A");
+});
+
+test("a sheet the player edited after a link is the new undo point; other links' keys stay undoable", () => {
+  const { ShareCode, store, bag } = harness();
+  const own = { arbF: 3, arbR: 4, rideF: 30, rideR: 70, brakeBias: 58 };
+  const edited = { arbF: 9, arbR: 9, rideF: 25, rideR: 45, brakeBias: 60 };
+  const link = (team, tune) => ShareCode.decode(ShareCode.encode("setup", { team, tune }).code);
+  store.set("setup.ferrari", own);
+  ShareCode.apply(link("ferrari", { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 }), { store });
+  store.set("setup.ferrari", edited);   // the player's own garage edit confirms the import
+  ShareCode.apply(link("ferrari", { arbF: 1, arbR: 1, rideF: 10, rideR: 30, brakeBias: 50 }), { store });
+  ShareCode.apply(link("mercedes", own), { store });
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), edited, "their edit, not the pre-link sheet");
+  assert.equal(bag.get("setup.mercedes"), undefined, "the later link's team is undone too");
+});
+
 // Round-3 hunt 6-F3: lastSession kept any flow string and CONTINUE restored it into the
 // FREE picker — a season round came back with seasonMode on, a deleted career's "career"
 // with isCareer() true and no save. Only free play's flow is recorded or restored.
@@ -530,7 +564,7 @@ test("Undo retains recovery across failed restore and failed cleanup, then retri
   assert.equal(q.reload().store.get("shareUndo", null), null);
 });
 
-test("partial multi-key Undo blocks replacement after reload; completed imports stay one-deep", () => {
+test("partial multi-key Undo blocks replacement after reload; completed imports keep the undo point", () => {
   const q = quotaHarness();
   let { ShareCode, store } = q.reload();
   const own = [{ id: "own", c1: [1, 0, 0], c2: [0, 0, 1] }];
@@ -552,7 +586,8 @@ test("partial multi-key Undo blocks replacement after reload; completed imports 
   assert.equal(ShareCode.undo(store).ok, true);
   assert.equal(ShareCode.apply(decoded, { store }).ok, true);
   assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).ok, true, "completed recovery can be replaced");
-  assert.deepEqual(j(store.get("shareUndo").keys), ["setup.ferrari"]);
+  // #5896: the livery link's keys stay undoable beside the setup link's.
+  assert.deepEqual(j(store.get("shareUndo").keys), ["livery.custom.ferrari", "livery.ferrari", "setup.ferrari"]);
 });
 
 test("failed completion marker leaves durable pending recovery; failed Undo marker changes no values", () => {
@@ -651,15 +686,6 @@ test("consuming a lap link stages only: never startRace or gridUp, and a past da
     assert.deepEqual(calls, [expectDaily ? "daily.select" : "track:spa"], day);
     assert.equal(location.hash, "", "the fragment is consumed");
   }
-});
-
-test("title-flow's lap staging hook never starts a race or re-selects a past Daily", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
-  const hook = src.slice(src.indexOf("openTrack: (decoded) =>"), src.indexOf("}),", src.indexOf("openTrack: (decoded) =>")));
-  assert.ok(hook.length > 40, "openTrack hook present");
-  assert.doesNotMatch(hook, /startRace|gridUp|daily\.select/);
-  assert.match(hook, /G\.daily\.stop\(\)/);
-  assert.match(src, /today:\s*DailyChallenge\.dayKey\(\)/);
 });
 
 // #5879: a career's sheet lives under careerSetup.<flavour>.<slot>.<team>; the restore filter skipped it, so UNDO

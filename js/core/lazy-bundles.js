@@ -189,7 +189,9 @@ const _sceneryLoads = new Map();
 function sceneryModels(def) {
   if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
   const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
-  return Assets.modelsReady(0, typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, window.TrackScenery) : fn ? String(fn) : "");
+  let hint = "";   // treesHi's tree models (EXTREME page builds; "" below it)
+  try { if (typeof TrackDetail !== "undefined") hint = TrackDetail.modelHint(TrackDetail.page().features); } catch (_) { /* none */ }
+  return Assets.modelsReady(0, (typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, window.TrackScenery) : fn ? String(fn) : "") + hint);
 }
 // One fetch of the closure, shared by every caller in flight. The loader RESOLVES
 // false on an error (offline, a CDN 404, a refused stale-build request), so the
@@ -328,6 +330,7 @@ const DATA_READY = {
 const REAL_RACE_FILES = ApexRoster.LAZY_REAL_RACE || [];
 const REAL_RACE_EDGES = ApexRoster.LAZY_REAL_RACE_EDGES || [];
 const REAL_RACE_READY = {
+  "js/race/tv-graphics.js": () => typeof TvGraphics !== "undefined",
   "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined",
   "js/race/real-replay.js": () => typeof RealReplay !== "undefined",
   "js/race/real-race-pace.js": () => typeof RealRacePace !== "undefined",

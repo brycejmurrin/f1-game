@@ -25,9 +25,10 @@ const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_S
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
   // the boot-group nightly. Stagger them (ci.yml 04:17, gpu-census 05:47) and
-  // keep neither on the old 03:17 pin.
-  assert.match(ciWorkflow, /- cron: "17 4 \* \* \*"/,
-    "ci.yml nightly must leave 03:17 (staggered to 04:17 UTC)");
+  // keep neither on the old 03:17 pin. 2026-11-20: the nightly moved to 16:17
+  // so GitHub's ~8 h delay starts it in the quiet hours (CI-CRON-DELAY-2026-11-20).
+  assert.match(ciWorkflow, /- cron: "17 16 \* \* \*"/,
+    "ci.yml nightly must stay staggered from gpu-census (16:17 UTC)");
   assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "47 5 \* \* \*"\s*\n  workflow_dispatch:/m,
     "gpu-census.yml nightly must be staggered (05:47 UTC), not shared with ci.yml");
   assert.doesNotMatch(ciWorkflow, /- cron: "17 3 \* \* \*"/);
@@ -112,7 +113,10 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch", "mem_cycles"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch", "mem_cycles", "detail"]);
+  // detail (#5951 follow-up): appended last; 0 keeps the census as it was, 1 / 2 ride `ls` as apex26.gfxDetail.
+  assert.deepEqual(inputs.detail.options, ["0", "1", "2"]);
+  assert.equal(inputs.detail.default, "0");
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
   assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
@@ -151,7 +155,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
 test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
-  assert.equal(Object.keys(inputs).at(-3), "entry", "appended last (before relaunch, #3235, and mem_cycles, A·H12): every earlier input keeps its position");
+  assert.equal(Object.keys(inputs).at(-4), "entry", "appended last (before relaunch, #3235, mem_cycles, A·H12, and detail, #5951): every earlier input keeps its position");
   assert.equal(inputs.entry.type, "choice");
   assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
   assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");

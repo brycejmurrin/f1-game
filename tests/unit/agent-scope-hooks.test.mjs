@@ -373,10 +373,10 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
   // The `labels` field REPLACES the list, so the guard makes it a one-label operation: the list must differ from the
   // live labels (a fake gh prints them) by exactly ONE name. Owner decision 2026-11-13, option 1A on PR #5524.
   const fakeGh = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-gh-"));
-  fs.writeFileSync(path.join(fakeGh, "gh"), "#!/bin/sh\ncase \"$*\" in *events*) echo \"$FAKE_HOLD_BY\";; *) printf \"$FAKE_LABELS\";; esac\n"); fs.chmodSync(path.join(fakeGh, "gh"), 0o755);
+  fs.writeFileSync(path.join(fakeGh, "gh"), "#!/bin/sh\ncase \"$*\" in *events*) echo \"$FAKE_HOLD_BY\";; *pulls*files*) [ -n \"$FAKE_FILES_FAIL\" ] && exit 1; printf \"$FAKE_FILES\";; *) printf \"$FAKE_LABELS\";; esac\n"); fs.chmodSync(path.join(fakeGh, "gh"), 0o755);
   try {
-    const lab = (labels, liveLabels, holdBy = "owner") => gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels },
-      { PATH: `${fakeGh}:${process.env.PATH}`, FAKE_LABELS: liveLabels.join("\\n"), FAKE_HOLD_BY: holdBy });
+    const lab = (labels, liveLabels, holdBy = "owner", files = ["js/core/log.js"], filesFail = "") => gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels },
+      { PATH: `${fakeGh}:${process.env.PATH}`, FAKE_LABELS: liveLabels.join("\\n"), FAKE_HOLD_BY: holdBy, FAKE_FILES: files.join("\\n"), FAKE_FILES_FAIL: filesFail });
     const LIVE = ["config-ok", "hold", "land", "needs-decision", "lane:claude"];
     const table = [
       ["the live list itself (a no-op)", LIVE, LIVE, "allow"],
@@ -390,12 +390,15 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
       ["one added and one removed", ["lane:claude", "needs-owner"], ["lane:claude", "claimed"], "deny"],
       ["two added", [...LIVE, "priority", "blocked"], LIVE, "deny"],
       ["a stale list after an Action labelled", ["lane:claude", "land"], ["lane:claude", "deploy:red"], "deny"],
-      ["config-ok added", ["lane:claude", "config-ok"], ["lane:claude"], "deny"],
+      ["config-ok added on a routine diff (D-042)", ["lane:claude", "config-ok"], ["lane:claude"], "allow", ["js/core/log.js", "tools/ci/pick-tests.mjs", ".claude/memory/MEMORY.md"]],
+      ["config-ok added on a PROTECTED diff", ["lane:claude", "config-ok"], ["lane:claude"], "deny", ["js/core/log.js", ".claude/hooks/lsp-hint.py"]],
+      ["config-ok added, a rename FROM a protected path", ["lane:claude", "config-ok"], ["lane:claude"], "deny", ["tools/ci/pick-tests.mjs", "tools/ci/merge-gate.mjs"]],
+      ["config-ok added, the PR's files unreadable (fail closed)", ["lane:claude", "config-ok"], ["lane:claude"], "exit2", [], "1"],
       ["config-ok removed", LIVE.filter((x) => x !== "config-ok"), LIVE, "deny"],
       ["Bryce's hold removed", LIVE.filter((x) => x !== "hold"), LIVE, "deny"],
       ["a hold added", ["lane:claude", "hold"], ["lane:claude"], "allow"],
     ];
-    assert.deepEqual(table.map(([why, labels, live]) => [why, lab(labels, live)]), table.map(([why, , , want]) => [why, want]));
+    assert.deepEqual(table.map(([why, labels, live, , files, fail]) => [why, lab(labels, live, "owner", files, fail)]), table.map(([why, , , want]) => [why, want]));
     // Who set the hold: one line per `labeled hold` event across every page, oldest first; the LAST one decides.
     const holds = [["an agent's own hold: any removal", "claude", "allow"], ["who set the hold is unreadable", "", "deny"],
       ["Bryce's hold after an agent's, on a later page", "claude\nowner", "deny"], ["an agent's hold after Bryce lifted his", "owner\nclaude", "allow"]];

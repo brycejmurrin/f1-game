@@ -23,7 +23,7 @@ import { specsAffectedByImpact } from "../../tools/lib/impact-map.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
-import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
+import { MEASURED, capacity, declaredTests, declaredTestsIn, honoursCircuitScope } from "../../tools/ci/select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
@@ -359,7 +359,7 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + (x.spill || []).length + x.oversize.length
     + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length
-    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length;
+    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length + x.outOfScope.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
 });
 
@@ -1945,13 +1945,30 @@ test("the CI select step leaves the tree it diffs untouched (a chmod there made 
 
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
   const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
-  assert.equal(LANES, 24);
+  assert.equal(LANES, 28);
   assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
   assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
   // One leg per probe spec: each costs a whole shard, so none pack together.
   const lanes = shards(probePlan(4), EMPTY, new Set(), LANES - 1).map((j) => [j.name, j.lane]);
-  assert.deepEqual(lanes, [["oversize-lane-probe-0", 23], ["oversize-lane-probe-1", 0],
+  assert.deepEqual(lanes, [["oversize-lane-probe-0", 27], ["oversize-lane-probe-1", 0],
     ["oversize-lane-probe-2", 1], ["oversize-lane-probe-3", 2]], "starts at the rotated lane and wraps");
+});
+
+// D-LANES: the lane count comes from APEX_CI_LANES (ci.yml hands it over only on the variable runner); bounds and
+// fallback. ci-runner-variable.test.mjs pins the condition that keeps fork / unset runs at LANES.
+test("lanes: APEX_CI_LANES sets the lane count in [1, MAX_LANES]; anything else is LANES", async () => {
+  const { LANES, MAX_LANES, ciLanes, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(MAX_LANES, 128);
+  assert.equal(ciLanes({}), LANES, "unset: 28");
+  for (const v of ["", " ", "0", "-4", "3.5", "64x", "0x40", "1e2", "129", "999", "NaN"]) assert.equal(ciLanes({ APEX_CI_LANES: v }), LANES, `'${v}' falls back`);
+  assert.equal(ciLanes({ APEX_CI_LANES: "64" }), 64);
+  assert.equal(ciLanes({ APEX_CI_LANES: " 1 " }), 1);
+  assert.equal(ciLanes({ APEX_CI_LANES: "128" }), 128);
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633", APEX_CI_LANES: "64" }), 12633 % 64, "the start rotates over the raised count");
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633", APEX_CI_LANES: "bogus" }), 12633 % LANES);
+  const lanes = shards(probePlan(4), EMPTY, new Set(), 62, false, 64).map((j) => j.lane);
+  assert.deepEqual(lanes, [62, 63, 0, 1], "legs use lanes above 28 and wrap at the raised count");
+  assert.ok(shards(probePlan(4), EMPTY, new Set(), 27).every((j) => j.lane < LANES), "the default count is unchanged");
 });
 
 // #5536: a plan of at most SMALL_RUN_LEGS legs gets NO_LANE, which ci.yml's `selected` job maps to the
@@ -2303,4 +2320,106 @@ test("W31 row 12: a renderer, loop or vendor edit runs the unpinned shipped-defa
     const got = [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
     assert.equal(got.filter((x) => x === "tests/specs/shipped-defaults.spec.js").length, 1, `${f}: ${got.length} planned`);
   }
+});
+
+// A CIRCUIT-SCOPED PLAN NEVER CARRIES A ZERO-TEST LEG (#6036). props-over-road is one test per circuit, filtered by
+// APEX_CIRCUITS, but the count billed it for all 52: a Spa-only diff split it into --shard=1/2 + 2/2 of a 1-test
+// run, and the empty 2/2 failed the selected verdict as "ran zero tests" (run 44833050900). The roster now counts
+// the scoped circuits a spec's own loop holds; a spec whose loop holds none (tracks-walls-a for a circuit in b's
+// half) goes to outOfScope instead of a leg.
+test("a roster spec that honours APEX_CIRCUITS is billed for the scoped circuits it holds", () => {
+  const por = "tests/specs/props-over-road.spec.js", tr = "tests/specs/terrain-over-road.spec.js";
+  assert.equal(honoursCircuitScope(por), true);
+  assert.equal(declaredTestsIn(por, ["spa"]), 1);
+  assert.equal(declaredTestsIn(por, ["spa", "monza"]), 2);
+  assert.ok(declaredTests(por) > 40, "unscoped it is still the whole roster");
+  const halves = ["a", "b"].map((h) => declaredTestsIn(`tests/specs/tracks-walls-${h}.spec.js`, ["spa"]));
+  assert.deepEqual(halves.slice().sort(), [0, 1], `spa sits in exactly one tracks-walls half: ${halves}`);
+  assert.equal(honoursCircuitScope(tr), false, "terrain-over-road's audit roster ignores APEX_CIRCUITS");
+  assert.equal(declaredTestsIn(tr, ["spa"]), declaredTests(tr), "so it keeps the whole-roster count");
+});
+// The oracle is NOT the counter: each roster spec's real scoped count, read from js/circuits the way its loop reads it.
+const ROSTER = fs.readdirSync(path.join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
+const half = (i) => { const n = Math.ceil(ROSTER.length / 2); return ROSTER.slice(i * n, (i + 1) * n); };
+const REAL_SCOPED = {
+  "tests/specs/props-over-road.spec.js": (ids) => ROSTER.filter((id) => ids.includes(id)).length,
+  "tests/specs/tracks-walls-a.spec.js": (ids) => half(0).filter((id) => ids.includes(id)).length,
+  "tests/specs/tracks-walls-b.spec.js": (ids) => half(1).filter((id) => ids.includes(id)).length,
+};
+for (const file of ["js/circuits/spa.js", "js/circuits/scenery/spa.js", "js/circuits/bahrain.js"]) {
+  test(`a ${file}-only diff plans no leg that runs zero tests`, () => {
+    for (const budget of [5, DEFAULT_BUDGET_MIN]) {
+      const r = select(undefined, budget, { files: [file], overflowShards: 0 });
+      assert.equal(r.circuits.length, 1, `scoped to one circuit: ${r.circuits}`);
+      for (const j of shards(r)) {
+        const specs = j.specs.split(" ");
+        const real = specs.reduce((n, f) => n + (REAL_SCOPED[f] ? REAL_SCOPED[f](r.circuits) : declaredTests(f) ?? 1), 0);
+        const pieces = j.shard ? Number(j.shard.split("/")[1]) : 1;
+        assert.ok(real >= pieces, `${j.name} (${j.specs} ${j.shard}) runs ${real} test(s) across ${pieces} piece(s)`);
+      }
+      for (const x of r.outOfScope) assert.equal(REAL_SCOPED[x.file](r.circuits), 0, `${x.file} is out of scope`);
+    }
+  });
+}
+
+// THE NO-DROP TAIL (2026-11-21): a wide PR's ready plan dropped routed specs with overflow and spill full
+// (#5978, #5296, #5617), and each drop cost a hand-dispatched browser-group run plus a draft->ready flip.
+test("noDrop: a synthetic wide diff that drops N routed specs under the bounded caps now schedules them all", () => {
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  // Every spec measured at 300 s: far more work than overflow + spill + the over-budget pool can afford.
+  const row = (n) => ({ s: [1, 2, 3].map((i) => [`2026-11-1${i}T00:00:00Z`, "llvmpipe", 300, n]) });
+  const db = { specs: Object.fromEntries(all.map((f) => [f, row(declaredTests(f) || 1)])) };
+  const opts = { db, rank: () => 3 };
+  const bounded = fit(all, DEFAULT_BUDGET_MIN, opts);
+  const dropped = (r) => [...r.skipped, ...r.overBudgetSpecs].map((s) => s.file).sort();
+  const lost = dropped(bounded);
+  assert.ok(lost.length > 5, `fixture: the bounded plan drops several routed specs (${lost.length})`);
+  const tail = fit(all, DEFAULT_BUDGET_MIN, { ...opts, noDrop: true });
+  assert.deepEqual(dropped(tail), [], "nothing routed is dropped");
+  const tailed = [...tail.spill, ...tail.overBudgetRun].filter((s) => s.tail).map((s) => s.file).sort();
+  assert.deepEqual(tailed, lost, "exactly the specs the caps dropped ride the tail");
+  // Everything the bounded plan scheduled is scheduled the same way: the tail only adds.
+  for (const k of ["selected", "overflow", "oversize", "unreachable", "unreadable"])
+    assert.deepEqual(tail[k].map((s) => s.file), bounded[k].map((s) => s.file), `${k} unchanged`);
+  assert.deepEqual(tail.spill.filter((s) => !s.tail).map((s) => s.file), bounded.spill.map((s) => s.file));
+  assert.deepEqual(tail.overBudgetRun.filter((s) => !s.tail).map((s) => s.file), bounded.overBudgetRun.map((s) => s.file));
+  // And shards() gives every tail spec a leg.
+  const planned = new Set(shards(tail, db).flatMap((j) => j.specs.split(" ")));
+  for (const f of lost) assert.ok(planned.has(f), `${f} has a matrix leg`);
+  // A tail over-budget spec keeps its declared per-test figure (its job's kill timer derives from it).
+  for (const s of tail.overBudgetRun.filter((x) => x.tail)) assert.ok(s.ownTimeoutSec > 0, `${s.file} keeps ownTimeoutSec`);
+});
+
+test("noDrop: select() turns it on for every plan but the draft's --overflow-shards 0", () => {
+  const files = ["tests/helpers/fixtures.js"]; // the whole-suite route
+  const dropped = (r) => r.skipped.length + r.overBudgetSpecs.length;
+  // Starve the pools so the bounded cut drops on the committed timings, whatever they say.
+  const tight = { files, overflowShards: 1, overBudgetShards: 0 };
+  const off = select(undefined, DEFAULT_BUDGET_MIN, { ...tight, noDrop: false });
+  assert.ok(dropped(off) > 0, `fixture: the starved bounded plan drops (${dropped(off)})`);
+  const on = select(undefined, DEFAULT_BUDGET_MIN, tight);
+  assert.equal(dropped(on), 0, "the default ready/nightly plan drops nothing");
+  // The draft plan (overflow 0) keeps the bounded cut: its drop only warns, by design.
+  const draft = select(undefined, 5, { files, overflowShards: 0 });
+  const draftBounded = select(undefined, 5, { files, overflowShards: 0, noDrop: false });
+  assert.deepEqual(draft.shards, draftBounded.shards, "the draft plan is unchanged");
+  assert.deepEqual(draft.skipped, draftBounded.skipped);
+  // A small PR's plan has nothing to drain: identical with or without the tail.
+  for (const f of ["js/ui/hud.js", "js/core/log.js"]) {
+    const a = select(undefined, DEFAULT_BUDGET_MIN, { files: [f] });
+    const b = select(undefined, DEFAULT_BUDGET_MIN, { files: [f], noDrop: false });
+    assert.deepEqual(a.shards, b.shards, `${f}: the plan is unchanged`);
+  }
+});
+
+test("noDrop: the plan is deterministic for a given input (same head, base, timings and failed list)", () => {
+  // #5986's second ready run dropped a different set; with no drops the set cannot drift, and for a fixed input the
+  // plan itself must not drift either (what can still differ between runs is the INPUT: the bot/spec-timings
+  // overlay and the .selected-failed.txt cache).
+  const files = ["tests/helpers/fixtures.js"];
+  const a = select(undefined, DEFAULT_BUDGET_MIN, { files });
+  const b = select(undefined, DEFAULT_BUDGET_MIN, { files });
+  assert.deepEqual(a.shards, b.shards, "identical matrix");
+  assert.deepEqual([a.skipped, a.overBudgetSpecs], [[], []], "and a whole-suite route drops nothing");
 });

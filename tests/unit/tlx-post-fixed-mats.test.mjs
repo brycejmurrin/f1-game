@@ -117,7 +117,9 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
     const context = vm.createContext({ P, presentW, presentH, phonePost: true,
       fixed: true, fixedActive: () => true, spatialUpscale: false,
       dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0, _warmFlipUp: false,
+      AA: null, taaLive: () => false,   // traa off: the FXAA / SGSR branches below are today's
       presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false,
+      cinemaPost: (rt) => rt, F: {}, o: {},   // the desktop-tier CINEMA hook: off below EXTREME (tsl-gi.js)
       vset(p, w, h) { p.V.set(w, h); },
       runPass(mat, target) { draws.push({ mat, target, view: P[mat].V.values.slice() }); },
       enabled: true, screenCoordinate: { xy: [presentW / 2, presentH / 2] },

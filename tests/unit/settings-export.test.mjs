@@ -238,6 +238,43 @@ test("Files share feedback stays visible and accessible with Undo instructions",
   assert.match(b.dom.byId("pm-share-code-help").textContent, /Ghost recording codes and links are imported separately/);
 });
 
+test("FILES imports a Daily result into the correct class and explains an expired code", () => {
+  const b = bootImportUI({ globals: { Tracks: { LIST: [{ id: "monza", name: "Monza" }] }, TextEncoder, TextDecoder, btoa, atob } });
+  vm.runInContext(read("js/ui/share-code.js"), b.sb, { filename: absSrc("js/ui/share-code.js") });
+  const codes = vm.runInContext("ShareCode", b.sb), today = "2026-10-10";
+  b.G.store = b.GameStore.store;
+  b.G.daily = { dayKey: () => today };
+  let staged, notice, closed = false;
+  b.G.closeSettings = () => { closed = true; };
+  b.G.announce = text => { assert.equal(closed, true); notice = text; };
+  b.G.openTimeTrialPicker = plan => { staged = plan; };
+  for (const [day, cls, expected] of [[today, "open", "open"], [today, undefined, "standard"], ["2026-10-09", "open", "standard"]]) {
+    const code = codes.encode("daily", { day, track: "monza", class: cls });
+    assert.equal(code.ok, true);
+    b.dom.byId("pm-share-code-in").value = code.code;
+    b.dom.byId("pm-share-code-import").click();
+    assert.equal(staged.day, today);
+    assert.equal(staged.mode, expected);
+    assert.equal(notice,
+      day === today ? "Daily challenge — MONZA." : "That daily challenge has ended — here is today's.");
+  }
+  for (const day of [undefined, "2026-10-09", today]) {
+    staged = notice = null; closed = false;
+    const code = codes.encode("lap", { day, track: "monza", time: 80 });
+    b.dom.byId("pm-share-code-in").value = code.code;
+    b.dom.byId("pm-share-code-import").click();
+    assert.equal(closed, true);
+    if (day === today) assert.equal(staged.mode, "standard");
+    else assert.equal(staged.track, "monza");
+    assert.match(notice, /Lap challenge.*BEAT/);
+  }
+  b.G.paused = true; closed = false; staged = null;
+  b.dom.byId("pm-share-code-import").click();
+  assert.equal(closed, false);
+  assert.equal(staged, null);
+  assert.match(b.dom.byId("pm-share-code-status").textContent, /Return to the main menu/);
+});
+
 for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files ${kind} share import releases the Settings modal only when navigating`, () => {
   const events = [];
   const b = bootImportUI({ globals: { ShareCode: {
@@ -256,7 +293,7 @@ for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files 
   settings.close = () => { settings.open = false; events.push("native-close"); };
   b.G.closeSettings = () => { settings.hidden = true; settings.close(); events.push("settings-cleanup"); };
   b.G.openGarage = (from) => { events.push("garage:" + from); garage.hidden = false; };
-  b.G.openDailyPicker = () => { events.push("daily"); };
+  b.G.openTimeTrialPicker = () => { events.push("daily"); };
 
   b.dom.byId("pm-share-code-in").value = "share code";
   b.dom.byId("pm-share-code-import").click();
@@ -546,6 +583,32 @@ test("SAVE ALL from a desktop does not pin desktop defaults on a phone", () => {
   const phone = boot({ mobile: true });
   phone.SettingsExport.applySettings(file, phone.G);
   assert.equal(phone.collect("all").settings.display.resMode, null, "the phone keeps its own resolution default");
+});
+
+test("SAVE ALL restores unpinned adaptive settings for the same device class", () => {
+  const source = boot({ mobile: true });
+  const target = boot({ mobile: true, disk: {
+    "apex26.resMode": JSON.stringify("high"), "apex26.gfxPreset": JSON.stringify("high"), "apex26.buildWorker": "0",
+  } });
+  const file = source.collect("all");
+  assert.equal(file.settings.display.resMode, null);
+  assert.equal(file.settings.display.gfxPreset, null);
+  assert.equal(file.settings.display.buildWorker, null);
+  assert.equal(target.loadSettings(file).failed, 0);
+  for (const k of ["resMode", "gfxPreset", "buildWorker"]) assert.equal(target.disk.has(`apex26.${k}`), false, k);
+});
+
+test("adaptive pins survive cross-device, unknown-device and CHANGED imports", () => {
+  const source = boot({ mobile: true });
+  const all = source.collect("all");
+  const changes = source.collect("changes");
+  assert.equal(changes.settings.display?.resMode, undefined);
+  const disk = { "apex26.resMode": JSON.stringify("high"), "apex26.gfxPreset": JSON.stringify("high"), "apex26.buildWorker": "0" };
+  for (const file of [{ ...all, device: { desktop: true } }, { ...all, device: undefined }, changes, { ...all, mode: "changes" }]) {
+    const target = boot({ mobile: true, disk });
+    assert.equal(target.loadSettings(file).failed, 0);
+    for (const [key, value] of Object.entries(disk)) assert.equal(target.disk.get(key), value, key);
+  }
 });
 
 // UI hunt 3: a device-picked BUILD IN BACKGROUND was pinned ON by an ALL file,
@@ -1367,7 +1430,10 @@ test("the career file carries the six slots and the live pointer, and nothing el
   assert.equal(f.careers["career.myteam.1"].flavour, "myteam");
   assert.equal(f.careers["career.driver.0"].money, 4200);
   assert.ok(!("career.driver.1" in f.careers), "empty slots are omitted");
-  assert.equal(f.count, 3);
+  // Fix 70: the poison store's daily.v1 object travels as the daily extra (CareerBackup cleans it on
+  // import); its array-shaped season does not.
+  assert.equal(f.count, 4);
+  assert.deepEqual(f.daily, { best: 1 }); assert.equal(f.season, undefined); assert.equal(f.badges, undefined);
   const text = JSON.stringify(f).replace(/"excluded":"[^"]*"/, "");
   assert.ok(!/SECRET|parts\.mercedes|spotify|ghost|ttlb|wss:/.test(text), "career export leaks nothing else");
   // SETTINGS and GARAGE still refuse career keys.
@@ -1671,7 +1737,7 @@ test("Saves and Data explains separate backup scopes and reuses storage health",
   const scope = b.dom.byId("pm-settings-file-scope");
   assert.equal(scope.getAttribute("data-help"), "keep");
   assert.match(scope.textContent, /Both files also include saved time-trial leaderboards/);
-  assert.match(scope.textContent, /loading merges those boards/);
+  assert.match(scope.textContent, /loading merges them with yours/);
   for (const excluded of ["career", "season", "photos", "personal background images", "ghosts", "replays", "accounts", "network credentials"]) assert.ok(scope.textContent.includes(excluded));
   const other = b.dom.byId("pm-other-save-files");
   assert.match(other.textContent, /GARAGE → TEAM → SAVE GARAGE FILE/);
@@ -1954,4 +2020,58 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
     const same = boot({ mobile }).loadSettings(file({ device: { desktop: !mobile } }));
     assert.deepEqual([same.applied, same.skipped], [2, 0], "same kind of device: everything applies");
   }
+});
+
+// Clean-room fix 70: SAVE CAREER FILE carried only career slots, so a player with a standalone season,
+// licence badges or daily history but no career backed up nothing (count 0).
+// CareerBackup writes extras through store.write (the real store's structured set).
+const WRITE = { write(k, v) { this.set(k, v); return { ok: true, durable: true }; } };
+const FIX70 = {
+  season: { round: 3, pts: { "haas:0": 25 }, teamPts: { haas: 25 }, driverCodes: {} },
+  "badges": { v: 1, got: { first_win: 50 } },
+  "daily.v1": { days: { "2026-09-22": { best: 70.5, laps: 2 } } },
+};
+test("fix 70: the career file carries the season save, badges and daily history without any career", async () => {
+  const a = boot({ career: true, store: WRITE, disk: Object.fromEntries(Object.entries(FIX70).map(([k, v]) => ["apex26." + k, JSON.stringify(v)])) });
+  const file = a.career();
+  assert.equal(file.count, 3);
+  assert.deepEqual(file.careers, {});
+  assert.deepEqual(file.season, FIX70.season); assert.deepEqual(file.badges, FIX70.badges); assert.deepEqual(file.daily, FIX70["daily.v1"]);
+  assert.doesNotMatch(file.excluded, /season|daily/, "the exclusion note no longer says season or daily");
+  const b = boot({ career: true, store: WRITE });
+  const r = await b.loadCareer(file);
+  assert.equal(r.ok, true); assert.equal(r.applied, 3);
+  assert.equal(JSON.parse(b.disk.get("apex26.season")).round, 3);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.badges")).got, { first_win: 50 });
+  assert.equal(JSON.parse(b.disk.get("apex26.daily.v1")).days["2026-09-22"].best, 70.5);
+});
+test("fix 70: an old career file without extras still applies nothing and writes nothing", async () => {
+  const b = boot({ career: true, store: WRITE });
+  const r = await b.loadCareer({ format: "apex26-career-v1", careers: {} });
+  assert.equal(r.ok, true); assert.equal(r.applied, 0);
+  assert.equal(b.disk.size, 0);
+});
+test("fix 70: a newer local season survives an older file's season", async () => {
+  const b = boot({ career: true, store: WRITE, disk: { "apex26.season": JSON.stringify({ round: 7, pts: { "haas:0": 90 }, teamPts: {}, driverCodes: {} }) } });
+  const r = await b.loadCareer({ format: "apex26-career-v1", careers: {}, season: FIX70.season });
+  assert.equal(r.ok, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.season")).round, 7, "the local round-7 season is kept");
+});
+
+// #5992: the settings file's `progress` section (js/ui/progress-backup.js rides LAZY_SAVES_DATA before the body).
+test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it", () => {
+  const withProgress = (disk) => {
+    const b = boot({ realStore: true, disk });
+    vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+    return b;
+  };
+  const a = withProgress({ "apex26.circuitMastery": JSON.stringify({ version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] }), "apex26.pitTaught": "1" });
+  const file = a.collect("all");
+  assert.deepEqual(Object.keys(file.progress).sort(), ["circuitMastery", "pitTaught"]);
+  assert.match(file.excluded, /progress section/);
+  const b = withProgress({});
+  const r = b.loadSettings(JSON.parse(JSON.stringify(file)));
+  assert.equal(r.ok, true); assert.equal(r.rejectedProgress, 0);
+  assert.equal(JSON.parse(b.disk.get("apex26.circuitMastery")).entries[0].best, 81);
+  assert.equal(b.disk.get("apex26.pitTaught"), "1");
 });

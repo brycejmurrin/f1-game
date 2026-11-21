@@ -43,6 +43,10 @@ const require = createRequire(import.meta.url);
 // where the phantom stand stood (mexico +17 trees, cota +2); and curved stand rows
 // span midpoint to midpoint instead of stopping short (#2204: fuji's back terraces
 // gapped up to 28.8 m). Compaction stays identical on every circuit.
+// 2026-11-21 (#6035/#6036): spa 348438 -> 390048 (+11.9 %). Spa's furniture.bakedPines is OFF, so every pine is
+// the procedural tiered cone again, as players had it before #5782. The VM always saw the pack models, so this row
+// had measured the baked pine (a square trunk with six leaf slivers: no crown) that players got only on 2026-11-20.
+// Compaction stays identical (props-tris.cjs spa: identical true).
 // 2026-11-18 (#5303, Bryce `decision: A`): hungaroring 213167 -> 214279 (+0.52 %). The
 // deploy tip alone measured 214232 (+0.4996 %); this PR's midpoint-to-midpoint stand
 // rows (stands.js, #2204) add the last 47 tris.
@@ -85,6 +89,12 @@ const require = createRequire(import.meta.url);
 // cota 303352 -> 301674 and mexico 344035 -> 343891: the W21 ceilings sat above the current
 // build, so they are pinned to the measured post-strip counts. hungaroring stays 215237.
 // Measured, not widened.
+// 2026-11-20 (#5998, PR #6006, Bryce `decision: A` 15:01Z): the pit-straight crowd moves behind
+// the run-off and yields to the circuit's own stand. Lowered to the measured count:
+// brands_hatch 322469, mosport 245130, jacarepagua 177137, magny_cours 237733, indianapolis
+// 267530. buenos_aires 226645 -> 227818 (+0.52 %): pre-strip 239587 on the tip and on this PR
+// (fence or banks put back alike), so nothing is added; the strip removes 475 fewer faces once
+// the crowd emits after def.scenery().
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

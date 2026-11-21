@@ -5,7 +5,7 @@
  * changes the md5, so the URL changes and a stale entry can never be served.
  */
 import assert from "node:assert/strict";
-import { webcrypto } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
@@ -16,6 +16,8 @@ const ASSETS_SOURCE = await readFile(new URL("../../js/render/shared/assets.js",
 const ORIGIN = "https://apex.test";
 const H1 = "a".repeat(32);
 const H2 = "b".repeat(32);
+// sw.js verifies a hashed miss against its md5 (#5970), so a miss fixture names its true digest.
+const md5 = (s) => createHash("md5").update(s).digest("hex");
 const key = (r) => (typeof r === "string" ? new URL(r, `${ORIGIN}/`).href : r.url);
 
 function swHarness({ net, stores0 = {}, immediateTimeoutMs } = {}) {
@@ -85,15 +87,16 @@ test("a ?h=<md5> pack URL is answered from the cache with no network request", a
 });
 
 test("a ?h= pack miss fetches once and stores under the hashed URL; the next request is a hit", async () => {
+  const HF = md5("fresh");
   const h = swHarness({ net: () => new Response("fresh", { status: 200 }) });
-  const first = h.fetchEvent(`${BIN}?h=${H1}`);
+  const first = h.fetchEvent(`${BIN}?h=${HF}`);
   assert.equal(await (await first.responsePromise).text(), "fresh");
   await Promise.all(first.lifetimes);
-  assert.equal(await h.stores.get("apex26-321").get(`${BIN}?h=${H1}`).clone().text(), "fresh");
-  const second = h.fetchEvent(`${BIN}?h=${H1}`);
+  assert.equal(await h.stores.get("apex26-321").get(`${BIN}?h=${HF}`).clone().text(), "fresh");
+  const second = h.fetchEvent(`${BIN}?h=${HF}`);
   assert.equal(await (await second.responsePromise).text(), "fresh");
   await Promise.all(second.lifetimes);
-  assert.deepEqual(h.calls, [`/assets/pack/models/x.bin?h=${H1}`], "one network request for two loads");
+  assert.deepEqual(h.calls, [`/assets/pack/models/x.bin?h=${HF}`], "one network request for two loads");
 });
 
 test("the manifest and bare pack URLs stay network-first", async () => {
@@ -118,7 +121,7 @@ test("a rebaked md5 is a different URL, so the old cached entry cannot answer it
     net: () => new Response("rebaked", { status: 200 }),
     stores0: { "apex26-321": { [`${BIN}?h=${H1}`]: new Response("old bake", { status: 200 }) } },
   });
-  const ev = h.fetchEvent(`${BIN}?h=${H2}`);
+  const ev = h.fetchEvent(`${BIN}?h=${md5("rebaked")}`);
   assert.equal(await (await ev.responsePromise).text(), "rebaked");
   await Promise.all(ev.lifetimes);
   assert.equal(await h.stores.get("apex26-321").get(`${BIN}?h=${H1}`).clone().text(), "old bake", "old entry untouched");

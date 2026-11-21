@@ -178,3 +178,15 @@ test("the ceremony meta shape (no points table) never reads a scorer's 0 points"
   assert.match(headText(), /P1 · 25 points/, "a real table still prints");
   PodiumBeat.dismount();
 });
+
+// Clean-room audit fix 56: a one-point finish read "P10 · 1 points".
+test("a one-point finish reads 1 point, singular, classified or retired", () => {
+  const { ResultsStory } = boot();
+  const field = (over) => Array.from({ length: 4 }, (_, i) => ({ driverId: "d" + i, code: "D" + i, classified: true, ...(i === 3 ? over : {}) }));
+  const head = (order) => {
+    const story = ResultsStory.render({}, order, { points: [4, 3, 2, 1] });
+    return Array.from(story.querySelector('[data-results-part="head"]').children, (n) => n.textContent).join(" | ");
+  };
+  assert.equal(head(field({ isPlayer: true })), "Across the line | P4 · 1 point");
+  assert.equal(head(field({ isPlayer: true, retired: true, dnf: "DNF" })), "A tough finish | DNF · 1 point");
+});

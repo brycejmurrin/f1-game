@@ -1,0 +1,1 @@
+Fixed: The stream overlay's flag state was always blank because the TV graphics feed read a flag the game never published; it now carries the race-control flag (green, yellow, VSC, safety car, red) and the player's lap count (#5981).

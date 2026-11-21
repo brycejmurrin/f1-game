@@ -255,6 +255,17 @@
      what the comment above this rule has always asked for. */
   pointer-events: none;
 }
+/* Click-through alone still HID title buttons under the box (390x664: SETTINGS, CONTROLLER, HOW TO
+   PLAY, SAVES; 1280x720: SAVES). Wide screens: sit bottom-left, clear of the right-hand button column.
+   Tall screens: the title reserves the banner's height (--ios-install-h, measured by
+   js/ui/platform-session.js) so no button sits under it. */
+:where(body[data-shape="wide"]) #ios-install {
+  right: auto; margin: 0;
+  width: min(30rem, calc(50% - var(--safe-l) - var(--gap)));
+}
+body:not([data-shape="wide"]):has(> #ios-install:not([hidden])) #overlay {
+  padding-bottom: calc(var(--safe-b) + var(--ios-install-h, 0rem) + var(--gap));
+}
 /* Title landscape: the door column is the right half, and a centred 30rem
    banner still paints over RACE A FRIEND / SEASON (layout-audit ios-iphone-
    landscape, 2026-10-06). Park it under the brand column; Share stays in the
@@ -265,6 +276,18 @@
   width: min(22rem, calc(50% - var(--safe-l) - var(--gap)));
   max-width: none;
   margin: 0;
+}
+/* Short landscape (any wide shape, not only the compact title): a narrow
+   banner parked bottom-left under the brand column. Here, not in a
+   route-loaded sheet: the banner auto-dismisses within seconds of boot. No
+   height cap: the message wraps to its own height at every UI SIZE. */
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
+  body[data-shape="wide"] #ios-install:not([hidden]) {
+    right: auto; left: var(--safe-l); bottom: var(--safe-b); margin: 0;
+    width: min(18rem, calc(42% - var(--safe-l) - var(--gap))); max-width: none;
+    padding: calc(var(--gap) * 0.45) calc(var(--gap) * 0.6);
+    font-size: calc(var(--fs-micro) * 0.85); line-height: 1.25;
+  }
 }
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
 /* THE DISMISS X IS A TAP TARGET: 20px glyph + 4/8 padding was a ~27px box,
@@ -798,6 +821,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     #hud-gear { font-size: 40px; }
     #hud-tach { width: 84px; }
     body:not(.desktop) #hud-energy { width: 108px; }
+    body:not(.desktop) .hud-energy-label { white-space: nowrap; letter-spacing: 0; }
+    body:not(.desktop) #hud-energy-n { margin-left: 0.25em; }
     body:not(.desktop) #hud-speed { font-size: calc(30px * var(--hud-text-boost, 1)); }
     body:not(.desktop) #hud-gear { font-size: 28px; }
     body:not(.desktop) #hud-ot,

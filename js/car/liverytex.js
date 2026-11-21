@@ -52,12 +52,23 @@ const LiveryTex = (function () {
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
   // tests/unit/livery-tier.test.mjs holds it to these numbers headlessly.
   // hiRes: desktop player only; ignored for AI and mobile (no larger upload).
-  function atlasDiv(isPlayer, mobile, hiRes) {
+  // aiHi (feature liveryHi, desktop ULTRA+): an AI atlas uploads at 2 (1024x1280, ~7.0 MB with mips, x21 rivals
+  // ~147 MB against ~37 MB at 512x640: +110 MB). Full 2048 for the nearest rivals is NOT done: 26.7 MB each,
+  // and it would need a per-distance upgrade/free cycle like photo mode's (car-draw planPhotoAtlases).
+  function atlasDiv(isPlayer, mobile, hiRes, aiHi) {
     if (mobile) return isPlayer ? 4 : 8;
-    if (!isPlayer) return 4;
+    if (!isPlayer) return aiHi ? 2 : 4;
     return hiRes ? 1 : 2;
   }
   // True when a desktop player preview can be upgraded to a larger atlas.
+  // Boot-time (GfxQuality.detail is): read once. False when GfxQuality is absent (node) or throws.
+  let _livHi = null;
+  function liveryHi() {
+    if (_livHi === null) {
+      try { _livHi = !!GfxQuality.feature("liveryHi"); } catch (_) { _livHi = false; }   // absent (node): the ReferenceError
+    }
+    return _livHi;
+  }
   function playerHiResDeferred(mobile) {
     return atlasDiv(true, !!mobile, false) > atlasDiv(true, !!mobile, true);
   }
@@ -1655,7 +1666,7 @@ const LiveryTex = (function () {
   function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
     const mobile = atlasMobile(!!isPlayer, IS_MOBILE, IS_PHONE);
-    const div = atlasDiv(!!isPlayer, mobile, !!hiRes);
+    const div = atlasDiv(!!isPlayer, mobile, !!hiRes, !isPlayer && !mobile && liveryHi());
     // ALWAYS the element, never an OffscreenCanvas — including the deferred hi-res paint that
     // car-draw.js hands to createImageBitmap() (C-P3). An ImageBitmap made from an OffscreenCanvas
     // stalled the WebGL upload on Chromium over Mesa llvmpipe (the car group's DAILY garage-out spec
@@ -2588,13 +2599,14 @@ const LiveryTex = (function () {
   // repainted the paint + crest lockup: 370-450 ms of a phone-throttled pick (CPU x4,
   // B·H13 2026-10-21). A card's pixels depend only on (team, livery fields, size), so
   // the first paint lands in an offscreen canvas and later ones blit it. Cached only
-  // once web fonts are in (a lockup painted in the fallback face must not stick);
+  // once its NUM_FONTS faces are in (not fonts.status: any page font load flips it, #5983);
   // a logo install or removal (markChanged) drops every card.
   const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0, reused: 0 };
+  let _fIn = false;
+  const fontsOk = () => _fIn || (_fIn = typeof document !== "undefined" && (!document.fonts || Object.values(NUM_FONTS).every((r) => document.fonts.check(r.font(9)))));
   markReady.push(() => { _swatchCache.clear(); _cardCanvas.clear(); });
   function paintSwatch(ctx, teamId, liv, w, h) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
-    if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
+    if (!fontsOk() || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = _swatchCache.get(key);
     if (!c) {
@@ -2607,15 +2619,15 @@ const LiveryTex = (function () {
     }
     ctx.drawImage(c, 0, 0); _swatchStats.blits++;
   }
-  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick still made 113 new canvases, each with
+  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick made 113 new canvases, each
   // a getContext and a drawImage: ~74 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21).
   // swatchCanvas hands back the painted canvas a card used last build, for the new card to adopt
   // (appendChild moves it out of the discarded sheet). `build` names the sheet build: a second card
   // with the same look in one build gets a fresh canvas instead of stealing the first one's.
-  // Kept only once fonts are in, and dropped with the swatch cache on markChanged.
+  // Kept only once fonts are in; dropped with the swatch cache on markChanged.
   const _cardCanvas = new Map();
   function swatchCanvas(teamId, liv, w, h, build) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    const fontsIn = fontsOk();
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = fontsIn ? _cardCanvas.get(key) : null;
     if (c && c.__swatchBuild !== build) {
@@ -2660,7 +2672,7 @@ const LiveryTex = (function () {
   // what ink separates it" decision buildAtlas makes for the car.
   // CREST_DISC stays internal: crestKeepsPlate / markPalette / crestExtent and
   // LiveryCrests.create consume it; nothing outside this file reads LiveryTex.CREST_DISC.
-  return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  return { SIZE, SIZE_H, atlasDiv, liveryHi, liveryHiUsed: () => _livHi, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchCanvas, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,

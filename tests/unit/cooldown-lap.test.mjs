@@ -46,7 +46,9 @@ test("sessionEligible: GP/sprint on; TT/quali/practice/duel/friend/WATCH off", (
   assert.equal(C.sessionEligible(raceG({ session: "practice" })), false);
   assert.equal(C.sessionEligible(raceG({ duel: true })), false);
   assert.equal(C.sessionEligible(raceG({ netPlay: { active: () => true } })), false);
-  assert.equal(C.sessionEligible(raceG({ watchMode: true })), false);
+  // #5981: `watchMode` is not a G member (types/game-ctx.d.ts); WATCH is realRace.isWatch().
+  assert.equal(C.sessionEligible(raceG({ watchMode: true, realRace: { isWatch: () => false } })), true,
+    "a phantom G.watchMode must not decide eligibility");
   assert.equal(C.sessionEligible(raceG({ realRace: { isWatch: () => true } })), false);
 });
 

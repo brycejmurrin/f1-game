@@ -20,8 +20,9 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
 - Settle every human step before launch (a device check, a `config-ok` the diff will need, a decision) and cite the
   comment URL, so the worker verifies it instead of waiting [10].
-- `config-ok` on a ROUTINE config path you add yourself, after you have read the PR's config diff (D-034); never let
-  the PR's own worker add it. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
+- `config-ok` on a ROUTINE config path and `ratchet-raise` you add yourself, after you have read the PR's config diff
+  or its raise and the CEILING-HISTORY reason, with one comment per add naming them (D-034, D-042); never let the
+  PR's own worker add either. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
   `land.yml`, every host's hooks and settings) needs Bryce's own tap (#5455); `ci.yml`, `pick-tests`, `preflip-probe`
   and the other `tools/ci/` files are routine. The gate cannot tell you from the worker: this half is a rule, not a check.
 - A TAKEOVER brief states evidence, not a verdict: the lease line, the newest commit trailer and comment time on the
@@ -35,7 +36,7 @@ brief adds only task facts.
 
 ASK (Bryce's words, with the time): "<quote>"
 TASK: <the one unit; what a player or an agent would see when it is done>
-EVIDENCE: <the measurement or repro, its command, the precedent PR to copy>
+EVIDENCE: <the measurement or repro, its command, the precedent PR to copy; name JS symbols as apex-lsp calls, e.g. `lsp_callers Tracks.curvature`>
 STATE: head <sha> at <time>; open PRs that touch the same paths (shared, not a blocker: D-033): <list>; decisions already made: <comment URLs>
 PROFILE (phone UI only): newest `tests/data/settings-live-export-*.json`, dated <date>; quote it, do not trust a
   number in this brief over that file [16]
@@ -53,6 +54,8 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
   reset). Six PRs sat ownerless 7.8–9.1 h on 2026-11-18 because nothing read the children between waves.
 - Messages reach a busy worker when its turn ends (median 0.3 min, p90 7.5, max 78). Send a hold or stop with
   priority "now", name its exceptions in the same message, and expect a push to cross it [12].
+- Push rules for every worker (D-046): one push per fix round, never while CI runs on that head; flip draft→ready only
+  after the draft CI run has finished. A flip or push that cancels a live run is the orchestrator's to name in the PR.
 - Never push to, flip or label a live owner's PR, nor edit its body beyond ticking a Plan line: message the owner
   [11, 17]. What you may do unasked and report after: AGENTS.md §Coordination.
 - A base red: one message naming the failing leg and the one fix PR; workers hold, the fixer lands, then one release

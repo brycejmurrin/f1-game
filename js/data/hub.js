@@ -1,4 +1,4 @@
-/* Apex 26 — DataHub: F1 data overlay (#datahub). Tabs: SCHEDULE | STANDINGS | RESULTS | LIVE | TELEMETRY | EXPORT. All API-derived DOM is built with createEleme… */
+/* Apex 26 — DataHub: F1 data overlay (#datahub). Tabs: SCHEDULE | STANDINGS | RESULTS | LIVE | TELEMETRY | WATCH & DRIVE | EXPORT (dev-only). API DOM via createElement… */
 const DataHub = (function () {
   "use strict";
 

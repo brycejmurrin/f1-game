@@ -276,6 +276,30 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   assert.match(nope[0], /cannot read tests\/data\/ratchets\.json at 0{40}/);
 });
 
+test("D-037: a tree absorb widened passes --base only with a CEILING-HISTORY line naming that metric", () => {
+  // From the commit hook during a sync merge, HEAD is still the branch's own pre-merge commit, which can predate the
+  // first absorb entry (#5975); the merged working tree is then the file being committed, so the cases run on it,
+  // compared against itself (`base`), exactly as they run on HEAD otherwise.
+  const hasAbsorb = (r) => Object.values(r.tree).some((v) => typeof v === "object" && Number(v.absorb) > 0);
+  const atHead = loadAt("HEAD");
+  const head = hasAbsorb(atHead) ? atHead : load();
+  const [metric, raw] = Object.entries(head.tree).find(([, v]) => typeof v === "object" && Number(v.absorb) > 0) || [];
+  assert.ok(metric, "ratchets.json carries at least one tree entry with an absorb");
+  const wider = { ...head, tree: { ...head.tree, [metric]: { ...raw, absorb: raw.absorb + 1 } } };
+  const named = [];
+  assert.equal(compareToBase("HEAD", { base: head, current: wider, print: (l) => named.push(l), historyNamesFn: (_ref, m) => m === metric }), 0, named.join("\n"));
+  assert.ok(named.some((l) => l.includes(`LOOSEN (tree) ${metric}: absorb`) && /reason recorded/.test(l)), named.join("\n"));
+  const unnamed = [];
+  assert.equal(compareToBase("HEAD", { base: head, current: wider, print: (l) => unnamed.push(l), historyNamesFn: () => false }), 1, "no history line: fatal");
+  assert.ok(unnamed.some((l) => new RegExp(`add a .*CEILING-HISTORY.* line naming \\(tree\\) ${metric}`).test(l)), unnamed.join("\n"));
+  // A line naming another metric does not cover this one.
+  assert.equal(compareToBase("HEAD", { base: head, current: wider, print: () => {}, historyNamesFn: (_ref, m) => m !== metric }), 1);
+  // A slack loosen stays fatal even when the history names the metric.
+  const exact = Object.entries(head.tree).find(([, v]) => typeof v === "object" && v.slack === 0)?.[0];
+  const slackLoose = { ...head, tree: { ...head.tree, [exact]: head.tree[exact].ceiling } };
+  assert.equal(compareToBase("HEAD", { base: head, current: slackLoose, print: () => {}, historyNamesFn: () => true }), 1, "slack loosen is never recorded away");
+});
+
 test("15-F10: --base blocks a loosened slack and a deleted entry whose file still exists", () => {
   const head = loadAt("HEAD");
   const exact = Object.entries(head.tree).find(([, v]) => typeof v === "object" && v.slack === 0)?.[0];
@@ -475,6 +499,33 @@ test("#4257: a topic branch lowers a tree ceiling by its OWN reduction (merge-ba
   // Every colour re-added: the delta nets to zero and goes; a stale negative with no ownMin still drops (#3996).
   assert.deepEqual(mergeFragment({ tree: { rawColor: -13 } }, [{ ...back, value: 334, over: 13, ownMin: 0 }]), { tree: {} });
   assert.deepEqual(mergeFragment({}, [{ tree: true, metric: "rawColor", value: 321, ceiling: 334 }]), { tree: {} });
+});
+
+test("#6032: a topic branch lowers its OWN positive tree fragment (down to 0), with no AT_REF form needed", async () => {
+  const { attributeTree } = await import("../../tools/check/ratchets.mjs");
+  // The branch's fragment raised eagerCodeBytes +933; removing a dead line left the row 35 B under its ceiling.
+  const row = { tree: true, metric: "eagerCodeBytes", value: 3994456, ceiling: 3994491, slack: 35, slackMax: 0 };
+  const got = await attributeTree([row], { name: "x.json", base: "BASE", at: {}, own: { eagerCodeBytes: 933 } });
+  assert.equal(got[0].ownFrag, 933);
+  assert.deepEqual(scopeToBranch(got, new Set()).map((r) => r.metric), ["eagerCodeBytes"], "the branch's own raise is its to lower");
+  assert.deepEqual(mergeFragment({ tree: { eagerCodeBytes: 933 } }, scopeToBranch(got, new Set())), { tree: { eagerCodeBytes: 898 } });
+  // A shrink past the branch's own raise stops at 0: the rest is the deploy branch's to lower.
+  const big = { ...got[0], value: 3993000 };
+  assert.deepEqual(mergeFragment({ tree: { eagerCodeBytes: 933 } }, [big]), { tree: {} });
+  // No own raise: the loose row still drops (#3996).
+  const none = await attributeTree([row], { name: "x.json", base: "BASE", at: {}, own: {} });
+  assert.deepEqual(scopeToBranch(none, new Set()), []);
+});
+
+test("#6023: a pin counter lowers by the branch's OWN pin delta (pinDelta), never by the tip's looseness", async () => {
+  const { attributeTree } = await import("../../tools/check/ratchets.mjs");
+  const row = { tree: true, metric: "assertPins", value: 8158, ceiling: 8193, slack: 35, slackMax: 200 };
+  const loose = row;                                          // inside slackMax: a pin row is still measured
+  const got = await attributeTree([loose], { name: "x.json", base: "BASE", at: {}, own: {}, pinGrowth: async () => -32 });
+  assert.equal(got[0].ownMin, -32);
+  assert.deepEqual(mergeFragment({}, scopeToBranch(got, new Set())), { tree: { assertPins: -32 } }, "−32, not −35");
+  const grew = await attributeTree([loose], { name: "x.json", base: "BASE", at: {}, own: {}, pinGrowth: async () => 3 });
+  assert.deepEqual(scopeToBranch(grew, new Set()), [], "a branch that added pins lowers nothing");
 });
 
 test("#4257: own tree lowerings add under a merge, so siblings stay at ceiling == value (no #3996 sibling-OVER)", () => {

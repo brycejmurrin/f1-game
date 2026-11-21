@@ -288,6 +288,8 @@ const TLX = (function () {
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
+      let _ultra = false;   // desktop ULTRA detail
+      try { _ultra = GfxQuality.detail() > 0; } catch (_) { /* HIGH */ }
 
       // PHONES GET TLX WHEN THEY PICK IT. three retains the CPU copy of every
       // geometry attribute (71.5 MB / 5,665 buffers vs GLX 17.8 MB / 253) and
@@ -622,9 +624,24 @@ const TLX = (function () {
       // FIRST on this canvas and its attributes are the ones that take (a
       // second getContext returns the existing context and silently drops
       // them).
+      // DESKTOP TIERS (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): GfxQuality.feature(name), false on any throw
+      // or without the module, so every extra below falls back to today's path.
+      const _gfxx = (n) => { try { return typeof GfxQuality !== "undefined" && !!GfxQuality.feature(n); } catch (_) { return false; } };
+      const _deskTier = !isMobile && !isWebKit && !_softAdapter;
+      let _hdrPeak = 1;   // hdrOut: 1 = SDR; set after init from what the canvas reports (TLXAA.hdrPeak)
+      // mirrorHi (ULTRA+): the mirror target's clamp, 2048x1024 (js/render/shared/mirror-pass.js targetSize).
+      const _mirHi = !isMobile && _gfxx("mirrorHi");
+      const _mirCapW = _mirHi ? 2048 : 1024, _mirCapH = _mirHi ? 1024 : 512;
       let ownGL = null;
       async function bootRenderer(forceWebGL) {
         let glCtx = null;
+        // hdrOut: ask three for an rgba16float canvas with toneMapping "extended" (WebGPUBackend configure); whether
+        // the browser and display honour it is checked after init. Never on WebKit (#269582), a phone or software.
+        let hdrAsk = false;
+        try {
+          hdrAsk = !forceWebGL && !_liteGpu && typeof GfxQuality !== "undefined" && !!GfxQuality.feature("hdrOut")
+            && typeof matchMedia === "function" && matchMedia("(dynamic-range: high)").matches;
+        } catch (_) { hdrAsk = false; }
         if (forceWebGL) {
           try {
             // Flat players (iOS / mobile / CI): do NOT set xrCompatible here —
@@ -667,6 +684,7 @@ const TLX = (function () {
           ...(!forceWebGL && (isMobile || isWebKit)
             ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
             : {}),
+          ...(hdrAsk ? { outputType: THREE.HalfFloatType } : {}),   // hdrOut (above); !_liteGpu excludes the branch above
           forceWebGL,
           // Phase 0 XR uses XRWebGLLayer + manual per-eye present — not three's
           // multiview ArrayCamera path. Keep multiview off: three #32538
@@ -815,6 +833,17 @@ const TLX = (function () {
       _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
+      // hdrOut: the canvas configuration the browser reports back decides (TLXAA.hdrPeak); anything short of a
+      // confirmed rgba16float + "extended" canvas on an HDR display keeps the SDR composite (peak 1).
+      const _hdrWant = !!(renderer.backend && renderer.backend.parameters && renderer.backend.parameters.outputType === THREE.HalfFloatType);
+      if (_hdrWant && !forceWebGL && window.TLXAA) {
+        try {
+          const be = renderer.backend, gctx = be && be.isWebGPUBackend ? be.context : null;
+          _hdrPeak = TLXAA.hdrPeak({ want: true, webgpu: !!gctx, soft: _softBlit, displayHdr: true,
+            config: gctx && typeof gctx.getConfiguration === "function" ? gctx.getConfiguration() : null });
+        } catch (_) { _hdrPeak = 1; }
+        try { Log.info("gfx", "TLX hdrOut: peak " + _hdrPeak); } catch (_) { /* harness */ }
+      }
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
       // or call getContext("2d"|"webgl2") on three's node — init() has not
       // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads
@@ -1220,7 +1249,7 @@ const TLX = (function () {
               // removeItem()s it on the reload itself, and this file's own
               // refuseTab() removes it too, commented "skipClaim still blocks
               // revert". The reason is the line above: gfxClaimFail forces
-              // skipClaim next boot, so `armed && !skipClaim` (js/game.js) never
+              // skipClaim next boot, so `armed && !skipClaim` (js/render/renderer-boot.js) never
               // fires, the probe is never cleared, and it survives the whole GLX
               // session to fire on the next COLD boot — permanently rewriting
               // apex26.gfxBackend to "webgl2" and discarding the player's THREE
@@ -1282,6 +1311,29 @@ const TLX = (function () {
 
       // lifecycle state
       let renderScale = 1;
+      // superSample (ULTRA+) / ss2x (CINEMA): renderScale may exceed 1 up to _ssCeil() (TLXAA.ssCeil: 1.5 at DPR <=
+      // 1.25, 2 while GfxQuality.cinema()). Desktop, not a software adapter. The governor steps it down like any
+      // scale; begin() re-reads the ceiling every 32 frames (a shed or a cinema flip) and clamps or raises to it.
+      const _ssOk = !isMobile && !_softAdapter && !!window.TLXAA;
+      let _ssN = 0, _ssCine = false, _ssPrev = 1, _ssCineNow = false;
+      function _ssCeil() {
+        _ssCineNow = false;
+        if (!_ssOk) return 1;
+        try {
+          const cine = _ssCineNow = !!(typeof GfxQuality !== "undefined" && GfxQuality.cinema && GfxQuality.cinema() && _gfxx("ss2x"));
+          const dev = renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device;
+          return TLXAA.ssCeil({ superSample: _gfxx("superSample"), ss2x: !!cine, dpr: window.devicePixelRatio || 1,
+            presentW, presentH, maxDim: (dev && dev.limits && dev.limits.maxTextureDimension2D) || 8192 });
+        } catch (_) { return 1; }
+      }
+      function _ssTick() {
+        if (!_ssOk || ((++_ssN) & 31) !== 1) return;
+        const ceil = _ssCeil(), cine = _ssCineNow && ceil > 1;
+        if (cine && !_ssCine) { _ssCine = true; _ssPrev = renderScale; renderScale = ceil; }
+        else if (!cine && _ssCine) { _ssCine = false; renderScale = Math.min(_ssPrev, ceil); }
+        else if (renderScale > ceil + 1e-6) renderScale = ceil;
+        else if (_ssN === 1 && ceil > 1 && renderScale === 1) renderScale = ceil;   // first frame: boot at the ceiling unless something already lowered it
+      }
       let W = 1, H = 1;
       // Present size (css×dpr) vs render size (×renderScale). With
       // apex26.spatialUpscale=1 and scale < ~1, canvas/soft display is present
@@ -1457,8 +1509,9 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : 0,
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : (_ultra && !softContent("shadow") ? 4096 : 0), carSize: _ultra ? 2048 : 0,
             isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
+            extras: _ultra && !_lite,   // EXTREME csm / lampShadows may build (tlx-shadow.js asks GfxQuality.feature)
           });
         }
       } catch (e) {
@@ -1516,6 +1569,8 @@ const TLX = (function () {
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
               postSubmitHold: function () { return _postSubmitOn; },
+              // Desktop tiers (tsl-aa.js): TRAA on native WebGPU in place of FXAA; the HDR composite peak (1 = SDR).
+              traa: !forceWebGL && _deskTier && _gfxx("traa"), hdrPeak: _hdrPeak,
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -1550,7 +1605,7 @@ const TLX = (function () {
         _postHealth = { state: _postRebuild ? "recovering" : "degraded", attempts: _postStrikes, maxAttempts: 3,
           reason: String(reason || "Post-processing failed").replace(/\s+/g, " ").slice(0, 160) };
       }
-      const ENV_SIZE = 64;
+      const ENV_SIZE = _ultra ? 128 : 64;
       const ENV_CULL_M = 150;
       let envRT = null, envDummy = null;
       // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
@@ -1560,6 +1615,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
+      let _mirReleaseWait = null, _mirReady = false;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
@@ -1616,7 +1672,10 @@ const TLX = (function () {
       function prepareMirrorTarget(w, h, forWarm) {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         const lv = _mirLevels(w, h);
-        if (!mirRT || mirRT.width !== w || mirRT.height !== h || lv > _mirLevelsNow(w, h)) prepareMirrorTarget.allocs = (prepareMirrorTarget.allocs | 0) + 1;   // census: WGX/GLX's renders restart on one
+        if (!mirRT || mirRT.width !== w || mirRT.height !== h || lv > _mirLevelsNow(w, h)) {
+          _mirReady = false;   // a new allocation has no image, even when it retains the same Texture object
+          prepareMirrorTarget.allocs = (prepareMirrorTarget.allocs | 0) + 1;
+        }
         if (!mirRT) {
           mirRT = _mirTarget(post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType, w, h, _mirMrtWant());
           _mirSetLevels(lv, w, h);
@@ -1729,7 +1788,7 @@ const TLX = (function () {
       // binding out of every lit program. Pixel-identical: with the probe off
       // uEnvStr is 0, so every tap was mix(a, cube, 0) = a.
       let _envOptOut = true;
-      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = ep === "0" || (ep !== "1" && !(_ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
       if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -1859,10 +1918,25 @@ const TLX = (function () {
           // the lit shader fails to LINK on iOS Safari and every lit surface
           // draws nothing. Same _liteGpu gate as antialias/outputType above.
           // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
+          const litCtx = { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
             sharedUniforms: _sharedUniforms,
-            maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
+            // EXTREME lightsHi: 128 slots on three's WebGPU backend only (LightBudget.tlxSlots).
+            maxLights: _liteGpu ? LightBudget.LITE : LightBudget.tlxSlots(isWebGPU()) };
+          // EXTREME material detail / env-everywhere (tsl-lit.js MAT_DETAIL, ENV_ALL): desktop WebGPU only; a
+          // factory that throws with them retries as today's program.
+          let litDetail = null;
+          try {
+            if (!isMobile && typeof GfxQuality !== "undefined" && renderer.backend && renderer.backend.isWebGPUBackend) {
+              litDetail = { matDetail: GfxQuality.feature("matDetail"), envAll: GfxQuality.feature("envAll"), envLods: Math.log2(ENV_SIZE) };
+              if (!litDetail.matDetail && !litDetail.envAll) litDetail = null;
+            }
+          } catch (_) { litDetail = null; }
+          try { lit = TLXShaders.lit(THREE, TSL, litDetail ? Object.assign({ detail: litDetail }, litCtx) : litCtx); } catch (e) {
+            if (!litDetail) throw e;
+            Log.warn("gfx", "TLX: detail lit factory failed, today's program —", e);
+            lit = TLXShaders.lit(THREE, TSL, litCtx);
+          }
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
@@ -2139,8 +2213,9 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
-      const _fxKeys = new Map();
-      function materialFor(opts, chunked, instanced, fx) {
+      const _fxKeys = new Map(), _crKeys = new Map();
+      // crowd: the seated-figure batches' variant (tsl-lit.js CROWD LIFE), attribute-instanced only; its own key.
+      function materialFor(opts, chunked, instanced, fx, crowd) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
@@ -2148,6 +2223,7 @@ const TLX = (function () {
         const o = opts;
         let key = matKeyFor(o, chunked, instanced);
         if (fx) { let fk = _fxKeys.get(key); if (fk === undefined) _fxKeys.set(key, fk = key + "|fx"); key = fk; }   // one string per key, not one per draw
+        if (crowd) { let ck = _crKeys.get(key); if (ck === undefined) _crKeys.set(key, ck = key + "|cr"); key = ck; }
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
@@ -2171,6 +2247,7 @@ const TLX = (function () {
               const v = matCache.get(k);
               matCache.delete(k);
               if (k.endsWith("|fx")) _fxKeys.delete(k.slice(0, -3));   // its memoised fx key goes with it (#5699 row 14)
+              else if (k.endsWith("|cr")) _crKeys.delete(k.slice(0, -3));
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
               _matEvict++;
@@ -2178,7 +2255,7 @@ const TLX = (function () {
           }
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
-            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
+            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null, crowd ? { crowd: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
           if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
@@ -2199,9 +2276,15 @@ const TLX = (function () {
       // regrew it 17 -> 334 twice a frame (young-gen garbage, perf hunt A5).
       const drawList = _recPool;    // {geo, matrix, material} in submission order
       drawList.n = 0;
+      // Pool indices have no geometry references and keep the lamp scans proportional to chunked submissions.
+      const chunkSlots = [];
+      let chunkCount = 0;
+      // UNGUARDED ON PURPOSE: callers index the record this wrote. A position-only shadow caster (geo.__tlxCasterOnly)
+      // is refused by every ENTRY that takes a mesh instead; a new lit entry point must refuse it too (casterRefused).
       function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
         let r = _recPool[drawList.n];
         if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null, split: null };
+        if (chunked) chunkSlots[chunkCount++] = drawList.n;
         drawList.n++;
         r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
         // THE ROAD SPLIT (tlx-chunked.js splitRanges): its AABBs are world-space, so only an identity draw
@@ -2296,6 +2379,7 @@ const TLX = (function () {
       // pooled slot never pins an evicted material or a freed geometry.
       function resetRecs() {
         for (let i = 0; i < drawList.n; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; r.split = null; }
+        chunkCount = 0;
         drawList.n = 0;
       }
       // Model matrices are COPIED into this per-frame pool at draw() time.
@@ -2490,6 +2574,7 @@ const TLX = (function () {
           packMatrices: imesh.instanceMatrix.array.subarray(0, matrices.length),
           packColors: colors && colors.length ? _instColorAttr(imesh, n).array.subarray(0, colors.length) : null,
           cells: null,
+          crowd: !!(opts && opts.crowd),   // the seated-figure batches (tracks.js, EXTREME crowd3d): CROWD LIFE
         };
         if (opts && opts.cellSize > 0 && n) {
           const cell = opts.cellSize;
@@ -2622,7 +2707,9 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        const mat = materialFor(opts, false, batch.imesh.isInstancedMesh ? true : 2);   // A2: the attribute-instanced variant
+        const ai = batch.imesh.isInstancedMesh ? true : 2;   // A2: the attribute-instanced variant
+        // CROWD LIFE reads the instance axes from iM0..3, so only the attribute path animates the figures.
+        const mat = materialFor(opts, false, ai, false, ai === 2 && batch.crowd === true);
         if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
@@ -2721,7 +2808,7 @@ const TLX = (function () {
           srcMatrices: batch.srcMatrices, srcColors: batch.srcColors,
           packMatrices: im.instanceMatrix.array.subarray(0, batch.srcMatrices.length),
           packColors: batch.srcColors && tint ? tint.array.subarray(0, batch.srcColors.length) : null,
-          cells: batch.cells,
+          cells: batch.cells, crowd: batch.crowd,
         });
       }
       function _passBatch(batch) {
@@ -2801,8 +2888,16 @@ const TLX = (function () {
       //
       // The node's contents are frame-invariant (output, a constant 1.0), so
       // building it once is not a cache — it is the correct lifetime.
-      let _ssrMrt = null;
+      let _ssrMrt = null, _ssrMrtV = null;
+      // EXTREME: a chain whose scene target carries the "velocity" attachment (tlx-post.js velocityOn) gets the same
+      // MRT plus three's VelocityNode (TLXAA.velocityMrt), also built ONCE; _velProj is the unjittered projection
+      // begin() copies before the TRAA jitter, so the vectors carry motion only. A build failure keeps the plain node.
+      const _velProj = new THREE.Matrix4();
       function _ssrMrtNode() {
+        if (post && post.velocityOn && post.velocityOn() && _ssrMrtV !== false) {
+          if (!_ssrMrtV) { try { _ssrMrtV = TLXAA.velocityMrt(THREE, TSL, _velProj) || false; } catch (_) { _ssrMrtV = false; } }
+          if (_ssrMrtV) return _ssrMrtV;
+        }
         if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
         return _ssrMrt;
       }
@@ -3064,7 +3159,7 @@ const TLX = (function () {
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
-        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || geo.__tlxCasterOnly || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
         const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
         // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
@@ -3197,12 +3292,14 @@ const TLX = (function () {
       // object is read in begin(), the chunk draw happens in present().
       let frameAllLights = null;    // frame.allLights — the full baked track set
       let framePerChunk = 0;        // frame.perChunkLights — the 0..1 knob
-      let _lgKey = null, _lgSrc = null, _lgChunks = null, _lgKP = [NaN, NaN, NaN, NaN, NaN];   // bake-once cache (+ key parts)
+      let _lgKey = null, _lgSrc = null, _lgKP = [NaN, NaN, NaN, NaN, NaN];   // bake-once cache (+ key parts)
       // The flattened lamp-cell list handed to LampChunks.resolve. KEPT across
       // rebakes: resolve() caches its full-cap bake in a WeakMap keyed on this
       // ARRAY, so a fresh [] per rebake re-ran the O(chunks x lamps) bake on
       // every PER-CHUNK LAMPS slider step. Rebuilt only when its inputs change.
-      let _lgChs = null, _lgChsFirst = null, _lgChsTotal = -1, _lgChsNrec = -1;
+      let _lgChs = null;
+      const _lgGroups = [], _lgGroupSizes = [];
+      let frameAllLightsStaticGen = -1, _lgStaticGen = -1;
       let frameAllLightsGen = -1, _lgGen = -1;   // colour-only refresh (allLightsGen)
       // READ-BACK, not a log line. docs/ARCHITECTURE.md §Boot evidence: a unit
       // test of a renderer backend is not evidence that it RUNS, and no
@@ -3752,7 +3849,7 @@ const TLX = (function () {
             await compileWarmProbe(_glassProbeGeo, gm, sx);
           }
         }
-        if (post.warmMirror) await post.warmMirror(mirRT.texture);
+        if (post && post.warmMirror) await post.warmMirror(mirRT.texture);
       }
       // garageSceneOnly: stamp present()'s noEnv target (softOutRT, MRT null) after a full post warm — B·H16 on SwiftShader WebGPU.
       async function runProgramWarmStages(usePost, useTag, opts, garageSceneOnly) {
@@ -4024,7 +4121,7 @@ const TLX = (function () {
         });
       }
       function _captureRec(mesh, model, opts) {
-        if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
+        if (!mesh || !mesh.geo || (opts && opts.coalesce) || mesh.geo.__tlxCasterOnly) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1,
@@ -4698,7 +4795,10 @@ const TLX = (function () {
         const pos = data.pos.length ? data.pos : [0, 0, 0];
         const verts = pos.length / 3;
         g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
-        if (_pk) {
+        // A CAR SHADOW CASTER (car-draw.js data._casterOnly) is position + index: the depth pass reads nothing else
+        // (tlx-shadow.js depthMat), so normal / colour / mat / trk are never allocated. casterRefused keeps it unlit.
+        if (data._casterOnly) g.__tlxCasterOnly = true;
+        else if (_pk) {
           // fmt24: WebGPU has no 1- or 3-wide 8/16-bit vertex format, and
           // three names 'float16x3' / 'uint32' for them — pipeline refused
           // (tlx-chunked.js packAttr, PERF-FINDINGS 2n). Same rule, same arg.
@@ -4728,6 +4828,12 @@ const TLX = (function () {
         const ids = data.mat;
         if (ids) for (let i = 0; i < ids.length; i++) { const v = Math.round(ids[i]); if (v >= 60 && v <= 85) { g.userData.tlxFx = true; break; } }
         return _regGeo(g, "mesh");
+      }
+      let _casterWarned = false;
+      function casterRefused(geo) {   // a lit material on a position-only geometry binds attributes it does not have
+        if (!geo || !geo.__tlxCasterOnly) return false;
+        if (!_casterWarned) { _casterWarned = true; try { Log.warn("gfx", "TLX: a position-only shadow caster was offered to a lit pass; not drawn"); } catch (_) { /* no Log in the node harness */ } }
+        return true;
       }
       const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
 
@@ -4842,8 +4948,13 @@ const TLX = (function () {
           presentW = Math.max(1, Math.floor(presentW * k));
           presentH = Math.max(1, Math.floor(presentH * k));
         }
-        const rw = Math.max(1, Math.round(presentW * renderScale));
-        const rh = Math.max(1, Math.round(presentH * renderScale));
+        let rw = Math.max(1, Math.round(presentW * renderScale));
+        let rh = Math.max(1, Math.round(presentH * renderScale));
+        // superSample: a scale above 1 must not push the render size past the device limit (presentW is clamped).
+        if (renderScale > 1 && maxDim && (rw > maxDim || rh > maxDim)) {
+          const k = Math.min(maxDim / rw, maxDim / rh);
+          rw = Math.max(1, Math.floor(rw * k)); rh = Math.max(1, Math.floor(rh * k));
+        }
         const fixedNow = fixedActive();
         const up = fixedNow ? (rw !== presentW || rh !== presentH) : wantSpatialUpscale();
         // Fixed: the drawing buffer is present-sized at EVERY scale (it is never resized by a step).
@@ -4864,8 +4975,8 @@ const TLX = (function () {
           _gpuLastResize = { at: performance.now(), width: rw, height: rh };
           // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
           // canvas is present-sized while post RTs stay at W×H (render).
-          // Fixed: setSize rewrites canvas.width (a drawing-buffer reallocation) — only when it differs.
-          if (!fixedNow || !renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
+          // setSize rewrites both canvas dimensions even on a logical-only upscale step.
+          if (!renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
             renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
           }
           if (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) {
@@ -5231,8 +5342,8 @@ const TLX = (function () {
       // the backend object (the ~40-member seam contract)
       function materialArrayAnisotropy() {
         if (materialArrayDetail !== null) return materialArrayDetail;
-        let requested = 4;
-        try { if (localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
+        let requested = _ultra ? 16 : 4;
+        try { if (!_ultra && localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
         let cap = 1;
         try {
           const b = renderer.backend;
@@ -5265,11 +5376,13 @@ const TLX = (function () {
         init() { return true; },             // already initialised by create()
         resize,
         setRenderScale(s) {
-          const v = Math.min(1, Math.max(0.5, +s || 0));
+          const v = Math.min(_ssOk ? _ssCeil() : 1, Math.max(0.5, +s || 0));   // superSample: the ceiling above 1
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
           renderScale = v; resizeNow(); return true;
         },
         getRenderScale() { return renderScale; },
+        maxRenderScale() { return _ssCeil(); },
+        mirrorMax: _mirHi ? [_mirCapW, _mirCapH] : null,   // mirrorHi: mirror-pass.js targetSize's cap (GLX/WGX: none, 1024x512)   // superSample / ss2x ceiling (1 everywhere else): the governor's climb
         // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
         capDpr(n) {
           if (!(n >= 1) || n >= DPR_CAP) return false;
@@ -5329,6 +5442,7 @@ const TLX = (function () {
         // Read by the producer before resolving/packing casters; mobile Begin hooks are no-ops.
         get carShadowEnabled() { return !!(shadowSys && shadowSys.S.carEnabled); },
         get lampShadowEnabled() { return !!(shadowSys && shadowSys.S.lampEnabled); },
+        get shadowX() { return (shadowSys && shadowSys.x) || null; },   // EXTREME cascades + extra lamps; .state() for __apex
         carShadowState() {
           const s = shadowSys && shadowSys.S;
           return s ? { enabled: s.carEnabled, arms: s.carArms, armed: s.carArmed } : { enabled: false, arms: 0, armed: false };
@@ -5947,7 +6061,7 @@ const TLX = (function () {
           if (_softBlit && _softReadPending) return false;
           if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
           if (mirrorWarmGate()) return false;   // B-F3.1: its programs first (startMirrorWarm), never a cold link mid-frame
-          w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
+          w = Math.max(16, Math.min(_mirCapW, w | 0)); h = Math.max(8, Math.min(_mirCapH, h | 0));   // mirrorHi: 2048x1024 (mirror-pass.js HI_W)
           try {
             prepareMirrorTarget(w, h);
           } catch (e) {
@@ -5974,6 +6088,9 @@ const TLX = (function () {
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
           _instStamp++;
+          // A real pass can claim the target after warm-up clears but before
+          // a previous session's queued quit callback runs. Warm draws cannot claim it.
+          _mirReleaseWait = null;
           _mirActive = true;
           _mirUsed = true;
           return true;
@@ -6004,6 +6121,7 @@ const TLX = (function () {
             // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
             // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
             if (hinted || (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt)))) _mirDiscards++;
+            _mirReady = true;
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -6018,7 +6136,7 @@ const TLX = (function () {
         },
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
-          return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
+          return { ready: _mirReady, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders, allocs: prepareMirrorTarget.allocs | 0,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
@@ -6027,13 +6145,27 @@ const TLX = (function () {
         // garage. The post / FXAA texture nodes and the glass material drop it first (WebKit keeps a freed GPU
         // texture while a bind group names it); prepareMirrorTarget re-allocates on the next mirrorBegin.
         releaseMirror() {
-          if (_mirActive || _warmPending) return false;
+          if (_mirActive) return false;
+          const pending = _warmPending;
+          if (pending) {
+            // Quit asks once. Wait for the warm to stop using the target even
+            // if the menu never presents another frame.
+            if (_mirReleaseWait !== pending) {
+              _mirReleaseWait = pending;
+              const retry = () => {
+                if (_mirReleaseWait === pending) backend.releaseMirror();
+              };
+              pending.then(retry, retry);
+            }
+            return false;
+          }
+          _mirReleaseWait = null;
           if (!mirRT) return true;
           const t = mirRT.texture;
           try { if (post && post.releaseMirror) post.releaseMirror(); } catch (_) { /* node values only */ }
           try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
           try { mirRT.dispose(); } catch (_) { /* already gone */ }
-          mirRT = null; mirCam = null; _mirRenders = 0;
+          mirRT = null; mirCam = null; _mirReady = false; _mirRenders = 0;
           return true;
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
@@ -6043,8 +6175,8 @@ const TLX = (function () {
         // (flip false), or a mirror pass still recording (it would sample the
         // target it is about to render into).
         drawMirrorGlass(mesh, model, opts) {
-          if (_mirActive || _mirDead || !mirRT || _mirRenders <= 0 || !_mirFlip || !fx || !fx.mirrorGlassMaterial
-              || !mesh || !mesh.geo || !model) return false;
+          if (_mirActive || _mirDead || !mirRT || !_mirReady || !_mirFlip || !fx || !fx.mirrorGlassMaterial
+              || !mesh || !mesh.geo || !model || mesh.geo.__tlxCasterOnly) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
           _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
@@ -6314,6 +6446,8 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           // three's per-frame tick (info.reset, nodeFrame.update), once per drawn frame — see pumpAnimation.
           if (renderer.__apexPump) renderer.__apexPump.drain();
+          // superSample / ss2x: the renderScale ceiling, before the resize that applies it
+          _ssTick();
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // Existing bounded retry remains synchronous. Fully warmed recovery
@@ -6362,13 +6496,20 @@ const TLX = (function () {
             camera.matrixWorld.identity();
           }
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+          // traa: this frame's sub-pixel jitter on the MAIN camera only (the mirror builds mirCam from frame.proj, the
+          // HUD is DOM), and only on a frame the post chain will resolve (post.taaJitter answers null otherwise).
+          if (post && post.velocityOn && post.velocityOn()) _velProj.copy(camera.projectionMatrix);
+          if (post && post.taaJitter && frame && frame.proj && frame.viewProj && !frame.noEnv && !_xrActive) {
+            const j = post.taaJitter(W, H);
+            if (j) { TLXAA.applyJitter(camera.projectionMatrix.elements, j[0], j[1]); camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert(); }
+          }
           if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
           if (lit && frame) {
             lit.updateFrame(frame);
             if (lit.setEnvStr) {
               const _T = frame.tune;
               const _envOn = envRT && envReady && !_envBlank && !frame.noEnv && !_envActive;
-              lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0);
+              lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0, _envOn);
             }
           }
           if (fx && frame) fx.updateFrame(frame);
@@ -6380,6 +6521,7 @@ const TLX = (function () {
           // frame-lights.js fills allLights only while the knob is on, so a null
           // here is the feature being OFF rather than data going missing.
           frameAllLights = (frame && frame.allLights) || null;
+          frameAllLightsStaticGen = frame && frame.allLightsStaticGen != null ? +frame.allLightsStaticGen : -1;
           frameAllLightsGen = frame && frame.allLightsGen != null ? +frame.allLightsGen : -1;
           framePerChunk = +(frame && frame.perChunkLights) || 0;
           if (lit && lit.uniforms && lit.uniforms.lgRoad)
@@ -6433,14 +6575,14 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
-          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
+          if (mesh && mesh.geo && !casterRefused(mesh.geo)) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
             pushRec(null, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, mesh, null);
-          } else if (mesh.geo) {
+          } else if (mesh.geo && !casterRefused(mesh.geo)) {
             pushRec(mesh.geo, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, null, null);
           }
         },
@@ -6562,7 +6704,7 @@ const TLX = (function () {
           _fxFrame.particles += verts / 6;
         },
         drawDecal(mesh, modelMat, tex, opts) {
-          if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
+          if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat || mesh.geo.__tlxCasterOnly) return;
           const mat = fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0);
           _fxFrame.decals++;
           if (opts && opts.batch && _decalAppend(mesh.geo, modelMat, mat)) return;
@@ -6600,24 +6742,28 @@ const TLX = (function () {
           if (lit && lit.setLampGrid) {
             const AL = frameAllLights;
             const knob = framePerChunk;
-            let total = 0, nrec = 0, cell = 0, cellSplit = false, first = null;
-            // Both chunked-only walks may cover the whole pool: a slot past the
-            // live count is a record resetRecs already nulled (chunked null).
-            for (let k = 0; k < drawList.length; k++) {
-              const ck = drawList[k].chunked;
+            let total = 0, nrec = 0, cell = 0, cellSplit = false, groupsChanged = false;
+            for (let k = 0; k < chunkCount; k++) {
+              const ck = drawList[chunkSlots[k]].chunked;
               if (!ck || !ck.chunks || !ck.chunks.length) continue;
-              if (!first) first = ck.chunks;
-              nrec++; total += (ck.lampCells || ck.chunks).length;
+              const cells = ck.lampCells || ck.chunks;
+              if (_lgGroups[nrec] !== cells || _lgGroupSizes[nrec] !== cells.length) groupsChanged = true;
+              nrec++; total += cells.length;
               const c = ck.cellSize > 0 ? ck.cellSize : 72;
               if (cell && c !== cell) cellSplit = true;
               cell = c;
             }
+            groupsChanged ||= nrec !== _lgGroups.length;
             // One lgCell uniform serves every chunk, and gx/gz were binned with
             // each record's own cell - records that disagree cannot share a
             // grid. Refuse rather than build a silently wrong one.
             if (!AL || !(knob > 0) || !total || cellSplit) {
               if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
-              if (first !== _lgChsFirst) _lgChs = _lgChsFirst = _lgChunks = _lgSrc = null;   // ANY off cause on new chunks: do not pin the old track's cells/lamps
+              _lgSrc = null;
+              if (groupsChanged && _lgChs) {
+                _lgChs = null;
+                _lgGroups.length = _lgGroupSizes.length = 0;
+              }
               const lamps = AL ? (AL.length / 15) | 0 : 0;
               const why = cellSplit ? "chunked records disagree on cellSize"
                 : !(knob > 0) ? "knob is 0"
@@ -6626,35 +6772,40 @@ const TLX = (function () {
               if (!st || st.on || st.lamps !== lamps || st.chunks !== total || st.idx !== 0 || st.why !== why)
                 _lampGridState = { on: false, lamps, chunks: total, idx: 0, why };
             } else {
-              // `first` stands in for chunk-array identity; a track reload also
-              // replaces frameAllLights, which _lgSrc already catches.
-              // + the lamp bake gen: its LIVE-ONLY lane is packed into the lamp texture.
+              // The lamp bake generation covers the LIVE-ONLY lane packed into the lamp texture.
               // The knob enters as capFor(knob), the only way the bake depends on
               // it: the slider is step 0.001, so keying the raw float rebuilt the
               // grid on every drag step that mapped to the same cap.
               // Compared as numbers first: the string is built only when a part moves.
-              const kp = _lgKP, kCap = LampChunks.capFor(knob), kGen = typeof LampBake !== "undefined" ? LampBake.gen() : 0;
+              const kp = _lgKP, kCap = LampChunks.capFor(knob, LightBudget.bakeChunk()), kGen = typeof LampBake !== "undefined" ? LampBake.gen() : 0;
               if (kp[0] !== kCap || kp[1] !== total || kp[2] !== nrec || kp[3] !== cell || kp[4] !== kGen) {
                 kp[0] = kCap; kp[1] = total; kp[2] = nrec; kp[3] = cell; kp[4] = kGen;
                 kp.str = kCap + "|" + total + "|" + nrec + "|" + cell + "|" + kGen;
               }
               const key = kp.str;
-              if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
+              if (_lgKey !== key || _lgSrc !== AL || _lgStaticGen !== frameAllLightsStaticGen || groupsChanged) {
                 let note;
                 try {
-                  if (!_lgChs || _lgChsFirst !== first || _lgChsTotal !== total || _lgChsNrec !== nrec) {
+                  if (!_lgChs || groupsChanged) {
+                    _lgGroups.length = _lgGroupSizes.length = 0;
                     const fresh = [];
-                    for (let k = 0; k < drawList.length; k++) {
-                      const ck = drawList[k].chunked;
+                    for (let k = 0; k < chunkCount; k++) {
+                      const ck = drawList[chunkSlots[k]].chunked;
                       if (!ck || !ck.chunks || !ck.chunks.length) continue;
                       const cells = ck.lampCells || ck.chunks;   // lamp cells, not merged draws
+                      _lgGroups.push(cells); _lgGroupSizes.push(cells.length);
                       for (let j = 0; j < cells.length; j++) fresh.push(cells[j]);
                     }
-                    _lgChs = fresh; _lgChsFirst = first; _lgChsTotal = total; _lgChsNrec = nrec;
+                    _lgChs = fresh;
                   }
                   const chs = _lgChs;
-                  const table = LampChunks.resolve(AL, chs, knob);
-                  const grid = LampChunks.buildGrid(table, chs);
+                  // lightsHi bakes 48 a cell; a grid that outgrows the 256^2 index texture re-bakes at 24.
+                  let table = LampChunks.resolve(AL, chs, knob, LightBudget.bakeChunk());
+                  let grid = LampChunks.buildGrid(table, chs);
+                  if (LightBudget.bakeChunk() > LampChunks.CAP && (grid.concat || table.concat).length > LG_IDX * LG_IDX) {
+                    table = LampChunks.resolve(AL, chs, knob);
+                    grid = LampChunks.buildGrid(table, chs);
+                  }
                   const okG = lit.setLampGrid({ lights: AL, table, grid, cell });
                   _lampGridState = { on: !!okG, lamps: (AL.length / 15) | 0,
                                      chunks: chs.length, recs: nrec, idx: (grid.concat || table.concat).length,
@@ -6670,7 +6821,7 @@ const TLX = (function () {
                   note = "TLX per-chunk lamp bake failed - " + e;
                 }
                 try { Log.info("gfx", note); } catch (_) {}
-                _lgKey = key; _lgSrc = AL; _lgChunks = first; _lgGen = frameAllLightsGen;
+                _lgKey = key; _lgSrc = AL; _lgStaticGen = frameAllLightsStaticGen; _lgGen = frameAllLightsGen;
               } else if (_lgGen !== frameAllLightsGen && lit.setLampGridColors) {
                 // Same set, new VALUES (warm-up, twilight, flicker, LAMP LEVEL):
                 // colours only — the tables and positions are still valid.
@@ -6786,7 +6937,7 @@ const TLX = (function () {
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               if (post.setMirror) {
                 // Pixels of the present target (the SGSR output size when upscaling).
-                const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirRenders > 0 && !_mirDead);
+                const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirReady && !_mirDead);
                 post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
               }
               try {
@@ -7414,7 +7565,7 @@ const TLX = (function () {
     try {
       let p = localStorage.getItem("apex26.gfxPreset");
       try { p = JSON.parse(p); } catch (_) { /* not JSON: compare the raw string */ }
-      ultra = p === "ultra" || (p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+      ultra = p === "ultra" || p === "extreme" || (p == null && localStorage.getItem("apex26.gfxHigh") === "1");
     } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
     if (!ultra && s > 2) s = 2;
     return s < 2 ? 0 : s;

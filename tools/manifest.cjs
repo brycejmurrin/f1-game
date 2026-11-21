@@ -153,7 +153,6 @@ const FULL = [
   "js/render/shared/gltf.js",
   "js/render/shared/assets.js",
   "js/render/shared/driving-line.js",
-  "js/render/shared/puddles.js",   // Puddles: the ONE reference for the standing-water mask the three lit shaders mirror (tests/unit/puddles.test.mjs)
   "js/data/teams.js",
   "js/data/driver-ratings.js",
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
@@ -240,7 +239,6 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
-  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -361,7 +359,6 @@ const FULL = [
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/overlay/feed.js",        // OverlayFeed: shared v1 frame schema + 2 s full-frame diff
-  "js/race/tv-graphics.js",    // TvGraphics: broadcast-profile pass/battle/fastest-lap cards
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
   "js/overlay/bridge.js",      // OverlayBridge: BroadcastChannel game ⇄ overlay.html (overlay.html loads it too)
   "js/overlay/publisher.js",   // OverlayPublisher: 4 Hz __apex sampler + #announce caption tap, only while an overlay listens
@@ -413,7 +410,6 @@ const FULL = [
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
-  "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
@@ -612,6 +608,7 @@ const TRACK_VM = [
   // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
   // Leaving it out is how the track engine ended up with four private lerps.
   "js/core/mat4.js",
+  "js/render/shared/mesh-detail.js", // MeshDetail for the build worker and Node VM builds
   "js/track/core/geom.js",
   "js/track/core/pit.js",
   "js/track/scenery/data.js",
@@ -639,6 +636,7 @@ const TRACK_VM = [
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
   "js/track/scenery/region.js",
+  "js/track/scenery/detail.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -714,7 +712,6 @@ const HARD_EDGES = [
   // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
   // to be orderable by tag position.
   ["js/core/mat4.js", "js/render/shared/driving-line.js"],           // binds M4.clamp at eval
-  ["js/core/mat4.js", "js/render/shared/puddles.js"],                // binds M4.clamp at eval
   // Reads the stored palette / opacity into DrivingLine AT EVAL, so the first
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
@@ -810,6 +807,7 @@ const HARD_EDGES = [
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as
   // js/game.js destructures the rest of them.
   ["js/physics/consts.js", "js/garage/setup-camera.js"],
+  ["js/physics/consts.js", "js/physics/ai-drive.js"],   // AiDrive reads PhysicsConsts.AI_WING_GRIP at eval
   ["js/track/core/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval
@@ -1003,10 +1001,13 @@ const DEFERRED = {
   three: [
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-viewport.js",
+    "js/render/three/tsl-carsurf.js",   // TLX car surface detail (EXTREME carSurf): read by tsl-lit at factory time
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-gi.js",   // TLXShaders.gi: desktop-tier post passes + plan (read inside post(), not at eval)
     "js/render/three/tsl-post.js",
+    "js/render/three/tsl-aa.js",   // TLXAA: TRAA / supersample / HDR-out maths (desktop tiers)
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
@@ -1025,6 +1026,9 @@ const DEFERRED = {
 // ?apex=1 / ?debug= / ?report=, or apex26.devApi=1. Players on Pages skip
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
+  // Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror
+  // (tests/unit/puddles.test.mjs). No runtime reader, so off the boot wall (#5900); M4 is FULL.
+  "js/render/shared/puddles.js",
   "js/agent/agentview-raster.js",
   "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
@@ -1085,6 +1089,7 @@ const LAZY_PERF_EDGES = [];
 // Broadcast stays FULL: the live director and RIVAL LOCK read Broadcast.battles.
 // Order is the old FULL order; the stub and mat4 / Broadcast are FULL.
 const LAZY_REAL_RACE = [
+  "js/race/tv-graphics.js",    // TvGraphics: broadcast-profile pass/battle/fastest-lap cards
   "js/ui/watch-transport.js",  // WatchTransport.create(G, replay): the WATCH transport bar (RealReplay makes one)
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race-pace.js", // RealRacePace: pure timing-script helpers RealRace drives (lap maps, tables, pace multiplier)
@@ -1121,6 +1126,7 @@ const LAZY_RACE = [
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
   "js/garage/arrival-rows.js",   // the GARAGE ENTER & LEAVE tuner's extra rows (#5660: off the boot wall)
+  "js/garage/hi-prims.js",       // GarageHiPrims: EXTREME garage/crew dense primitives (garageHi / crewHi); absent = today's room
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,
@@ -1158,6 +1164,7 @@ const LAZY_RACE_SESSION = [
   "js/race/stopped-cars.js", // StoppedCars: cars stopped on the road, RaceControl's second hazard source (W34)
   "js/race/retired-card.js", // RetiredCard: a retired solo player's RETIRED card + SKIP TO RESULTS (W34); RaceControl typeof-guards it
   "js/race/driving-coach.js", // DrivingCoachBody: the coach (#4748); the FULL façade js/race/driving-coach-boot.js creates it once it lands
+  "js/ui/hud-inputs.js",     // HudInputs: opt-in INPUTS trace + pause REVIEW INPUTS (mounts itself); GameHud typeof-guards it (#5682)
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat
@@ -1363,6 +1370,7 @@ const LAZY_UI_PRESETS_EDGES = [];
 // garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
 // it at idle, at the garage door, with the agent surface and with the career screen.
 const LAZY_SAVES_DATA = [
+  "js/ui/progress-backup.js",      // ProgressBackup (#5992): the settings file's `progress` section; read at call time
   "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
 ];
 const LAZY_SAVES_DATA_EDGES = [];
@@ -1382,6 +1390,16 @@ const LAZY_RESULTS_SHEET = [
 ];
 const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/share-card.js"]];
 
+// DESKTOP DETAIL ABOVE ULTRA (EXTREME / CINEMA, docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md; Bryce's B for
+// #6003, 2026-11-20: the tier code rides a lazy bundle, not a boot-wall raise). RendererBoot.start fetches it beside
+// the backend, so it is resident before Gfx.create and the first car build, and only when GfxQuality.detail() >= 2:
+// a phone (detail 0 always) and ULTRA and below never fetch a byte. Absent, every seam keeps the ULTRA path.
+const LAZY_GFX_HI = [
+  "js/render/shared/gfx-hi.js", // GfxHi: the EXTREME render / perf extras (governor upper ladder, cascades, lamp maps, light slots)
+  "js/car/car-hero.js",         // CarHero: the EXTREME car detail (hero refine, modelled parts, bevels, loft UVs)
+];
+const LAZY_GFX_HI_EDGES = [];
+
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
 // the eval order. TRACK_VM keeps the same files for verify-track / the build
@@ -1389,6 +1407,7 @@ const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/sh
 // eval (hunt-2 T5). Race-only scripts (race-insights, flyby-seq) stay FULL;
 // real-replay and the coach body went lazy in their own groups (#4978, #4748).
 const LAZY_TRACK_BUILD = [
+  "js/render/shared/mesh-detail.js", // MeshDetail: subdivide / bevel / normals / simplify kit for the detail tiers above ULTRA (call-time only)
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",
   "js/track/scenery/landmark-kit.js",
@@ -1406,6 +1425,7 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
   "js/track/scenery/region.js",
+  "js/track/scenery/detail.js", // TrackDetail: crowd figures, dense trees, kerb profile, far terrain for the detail tiers above ULTRA
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
@@ -1869,6 +1889,7 @@ module.exports = {
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
   LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
+  LAZY_GFX_HI, LAZY_GFX_HI_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,

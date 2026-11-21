@@ -4,7 +4,8 @@
    parked on the racing line never raised a flag. scan() lists every car that is
    unfinished, below STOP_V, inside the road's half-width and out of the pit lane
    — retired, crashed or stalled, human or AI alike — as plain { id, frac, sector }
-   rows; RaceControl's machine owns the timers (yellow, then VSC, then marshalled).
+   rows; StoppedCars.create() owns the per-car stop timers and returns the flag
+   picture, which RaceControl's machine turns into yellow, then VSC, then marshalled.
    retireCar pushes a retirement past the verge where there is room; such a car,
    RETIRED and parked in the runoff (past the half-width, inside the barrier), is
    an `off` row: a local YELLOW only, never a VSC (#5784 decision B, the FIA

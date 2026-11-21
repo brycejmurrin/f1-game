@@ -914,7 +914,7 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
 test("TLX composite skips ACES and HDR grade on an 8-bit scene target", () => {
   const tsl = read("js/render/three/tsl-post.js");
   assert.match(tsl, /sceneHdr: uniform\(1\)/);
-  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?acesTonemap/);
+  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?toneMap\(/);
   assert.match(tsl, /C\.hdrGradeOn\.greaterThan\(0\.5\)\.and\(C\.sceneHdr\.greaterThan\(0\.5\)\)/);
   const post = read("js/render/three/tlx-post.js");
   assert.match(post, /P\.composite\.U\.sceneHdr\.value = _sceneHdr/);
@@ -1038,6 +1038,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
+    "apex26.tlxAgx",   // the EXTREME AgX tone-map opt-in: a RESET returns the picture to ACES (#6003)
+    "apex26.tlxCsmCars", "apex26.tlxCsmDither",   // the EXTREME cascade A/B switches (#6003)
     // The boot canary's latch. gfxProbeStrikes counts loads that died before
     // presenting a frame — one is a memory kill, two retires the pick. A RESET
     // that left a strike behind would hand the next boot a strike it did not
@@ -1055,7 +1057,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // assets.js remembers the last pack's model file+md5 (a js/render write, so
     // RESET must clear it). The next visit relearns the hint from the manifest.
     "apex26.packIndex",
-    "apex26.envProbeOff", "apex26.perChunkOff",
+    "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
     "apex26.tlxWebKitGL",
@@ -2793,7 +2795,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /queue\.writeBuffer\(\s*buf\s*,\s*0\s*,\s*staging\s*\)/);
   assert.match(tlx, /function\s+_instColorAttr\b/);
   assert.match(tlx, /\bisInstancedBufferAttribute\b/);
-  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
+  // hdrOut: a half-float LDR is copied to RGBA8 first (cap8 is the identity on an 8-bit target).
+  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*cap8\(ldrRT\)/);
 });
 
 test("TLX coalesces window resize to one target realloc per frame", () => {
@@ -4686,6 +4689,8 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
     "a raw (unencoded) 'ultra' — a probe's --ls or an older writer — still reads as ULTRA");
   assert.equal(msaaFor({}), 2,
     "unset = the desktop default HIGH = capped");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("extreme") }), 4,
+    "EXTREME is capped at ULTRA on GLX, never below it");
   assert.equal(msaaFor({ "apex26.gfxHigh": "1" }), 4,
     "the legacy phone key is honoured only when the preset was never stored");
   assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
@@ -4693,7 +4698,7 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
   // WGX makes the same decision at module scope; pin that it decodes too.
   const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
-  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
+  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| _p === "extreme" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
     "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
 });
 
@@ -5042,7 +5047,7 @@ test("driving feel: the player tows with the AI's window and gain, the fronts lo
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
   // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
   assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
-  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
+  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2, fovY\)\)/, "for every drawn car");
   const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
 });
@@ -5570,7 +5575,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
   // can read it (eligible phone LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
-  assert.match(post, /count:\s*tagOn \? 2 : 1/,
+  assert.match(post, /count:\s*tagOn \? \(velOn \? 3 : 2\) : 1/,   // +velocity (EXTREME motion vectors, #6003): a third attachment only with the tag
     "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
     "MRTNode.setup matches attachments by texture.name");
@@ -6262,6 +6267,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
 });
 
 test("TLX post warm compiles serially and holds each target across awaits", async () => {
+  const disposed = false;
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
@@ -6328,7 +6334,8 @@ test("TLX defers resize during compilation and applies the latest requested size
       return { width: cssW, height: cssH };
     },
   };
-  const wantSpatialUpscale = () => false, calls = [];
+  let spatialUpscale = false;
+  const wantSpatialUpscale = () => spatialUpscale, calls = [];
   const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
   } };
@@ -6350,6 +6357,30 @@ test("TLX defers resize during compilation and applies the latest requested size
   assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
   assert.equal(_softReadPending, false, "the voided old-size read must not hold the gate");
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
+
+  // With spatial upscaling the post chain owns render-scale steps and the
+  // canvas stays at presentation size on both Three backends.
+  spatialUpscale = true;
+  for (const backend of [
+    { isWebGPUBackend: true, device: { limits: { maxTextureDimension2D: 8192 } } },
+    { isWebGPUBackend: false, gl: { getParameter: () => 8192 } },
+  ]) {
+    renderer.backend = backend;
+    _layoutCanvas.clientWidth = 1100; _layoutCanvas.clientHeight = 500;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1650, 750], ["post", 1238, 563]]);
+    calls.length = 0;
+    for (const scale of [0.6, 0.7, 0.8, 0.7, 0.6, 0.5]) {
+      renderScale = scale; resize();
+    }
+    assert.deepEqual(calls, [0.6, 0.7, 0.8, 0.7, 0.6, 0.5].map(scale =>
+      ["post", Math.round(1650 * scale), Math.round(750 * scale)]));
+    _layoutCanvas.clientWidth = 1000; renderScale = 0.75;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1500, 750], ["post", 1125, 563]]);
+  }
 });
 
 function tlxTimerFixture(webgl = false) {
@@ -6519,6 +6550,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
+  const carDetail = () => ({ player: 0, rival: 0, hero: false, key: "" });   // desktop detail: HIGH (CarGeometry.detailFor 0)
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
   let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
@@ -7308,6 +7340,11 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   G.mirrorRect(rect);
   assert.equal(G.drawMirrorGlass(glass, id, null), true);
   assert.equal(G.mirrorState().glass, 2);
+  // opts: the shared (mesh, model, opts) slot TLX and WGX take too; GLX forwards it and draws the same glass.
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, { lod: 2 }), true, "an opts object is accepted, not a refusal");
+  assert.equal(h.count("drawElements"), 1, "one glass draw, as with null opts");
+  assert.equal(G.mirrorState().glass, 3);
 
   // A dead target (an incomplete framebuffer at a new size): refused for good.
   h.answers.checkFramebufferStatus = () => 0;
@@ -7315,7 +7352,7 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   assert.equal(G.mirrorState().dead, true);
   G.begin(h.frame());
   assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
-  assert.equal(G.mirrorState().glass, 2);
+  assert.equal(G.mirrorState().glass, 3);
 });
 
 // The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's
@@ -7327,7 +7364,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   const run = (st) => {
     const recs = [];
     const make = new Function("st", "recs", `
-      let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let { _mirActive, _mirDead, mirRT, _mirReady, _mirFlip, fx } = st, _mirGlass = 0;
       let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
       const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
@@ -7338,13 +7375,13 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     return { ok, recs, glass: t.glass() };
   };
   const tex = { rt: true }, mat = { glassMat: true };
-  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirRenders: 3, _mirFlip: true,
+  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirReady: true, _mirFlip: true,
     fx: { mirrorGlassMaterial: (t) => (t === tex ? mat : null) } };
   const r = run(live);
   assert.equal(r.ok, true);
   assert.equal(r.glass, 1);
   assert.deepEqual(r.recs, [["glassGeo", "model", mat, undefined, undefined, 0, null, null]], "one opaque, un-lit record on mirRT's texture");
-  for (const [why, over] of [["no image yet", { _mirRenders: 0 }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
+  for (const [why, over] of [["no image yet", { _mirReady: false }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
     ["the PiP", { _mirFlip: false }], ["an open mirror pass", { _mirActive: true }], ["no fx", { fx: null }]]) {
     const x = run(Object.assign({}, live, over));
     assert.equal(x.ok, false, why);
@@ -7352,7 +7389,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   }
   const tlx = code("js/render/three/tlx.js");
   assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
-  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
+  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post && post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
   // useTag (perf hunt 3 R3) = usePost on a chain that has the ssrTag attachment.
   const mrt = spanBack(tlx, "renderer.setMRT(useTag ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");

@@ -132,7 +132,9 @@ export const TREE_METRICS = {
  * fails only when the change makes it WORSE than its base: over(head) >
  * over(base), where the base count is head minus the delta of the files the
  * change touched (only those blobs are read at the base, so a blob:none clone
- * fetches a handful, not a thousand). An inherited overage warns and stays green. */
+ * fetches a handful, not a thousand). An inherited overage warns and stays green.
+ * assertPins and assertPinsAll carry `absorb: 5` (D-037, eagerCodeBytes' mechanism): the commit hook writes a
+ * branch's own growth of up to 5 since its merge base (pinDelta) as its fragment; past 5 it is `ratchet-raise`. */
 const RAW_GAME = /game\.js(?:"|'(?!s\b))/g;
 // `assert.ok(x.includes(` is the same source pin as `assert.match(x, /…/)`: counting
 // both keeps "includes() instead of assert.match" from lowering the number.
@@ -505,18 +507,28 @@ export function mergeBase(root = ROOT) {
  * delta this branch's fragment already carries: an over row that only gives
  * back part of it (a colour re-added) re-snaps instead of blocking as a raise.
  * Rows outside AT_REF, or with no base, pass unchanged (the old rule). */
-export async function attributeTree(rows, { name, base = mergeBase(), at } = {}) {
+export async function attributeTree(rows, { name, base = mergeBase(), at, own, pinGrowth = pinDelta } = {}) {
   if (!name || !base) return rows;
   const file = path.join(FRAG_DIR, name);
-  const own = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")).tree || {} : {};
+  own ||= fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")).tree || {} : {};
   const out = [];
   for (const r of rows) {
-    const ownFrag = own[r.metric] || 0;
-    if (!(r.tree && (r.slack > r.slackMax || (r.over > 0 && ownFrag < 0)))) { out.push(r); continue; }
+    const ownFrag = r.tree ? own[r.metric] || 0 : 0;
+    // Any tree row this fragment already moves carries ownFrag, AT_REF form or not (#6032).
+    const row = ownFrag ? { ...r, ownFrag } : r;
+    // A pin row is measured at any slack: its slackMax (200) is a band, and a branch's own cut is its to book (#6023).
+    const pin = r.tree && Object.hasOwn(PIN_METRICS, r.metric) && r.slack > 0;
+    if (!(pin || (r.tree && (r.slack > r.slackMax || (r.over > 0 && ownFrag < 0))))) { out.push(row); continue; }
+    // A pin counter (D-037) measures the branch's own delta from the files it changed, as ownGrowth does (#6023).
+    if (Object.hasOwn(PIN_METRICS, r.metric)) {
+      try { out.push({ ...row, ownMin: Math.min(0, await pinGrowth(r.metric, base)) }); }
+      catch { out.push(row); /* base not readable: the old rule */ }
+      continue;
+    }
     at ||= (await import("./tree-counts.mjs")).AT_REF;   // only when a tree row needs it
-    if (!Object.hasOwn(at, r.metric)) { out.push(r); continue; }
-    try { out.push({ ...r, ownMin: Math.min(0, r.value - await at[r.metric](base)), ownFrag }); }
-    catch { out.push(r); /* base not readable (a shallow clone): the old rule */ }
+    if (!Object.hasOwn(at, r.metric)) { out.push(row); continue; }
+    try { out.push({ ...row, ownMin: Math.min(0, r.value - await at[r.metric](base)) }); }
+    catch { out.push(row); /* base not readable (a shallow clone): the old rule */ }
   }
   return out;
 }
@@ -531,15 +543,18 @@ export function scopeToBranch(rows, touched = changedFiles()) {
   // result (2026-10-27, PRs #3970/#3981/#3985). Tree lowering is the deploy
   // branch's `--update` / `--fold`, never a topic branch's (#2583 for files) —
   // except by the branch's OWN reduction, measured at its merge-base (#4257:
-  // attributeTree sets ownMin < 0, and mergeFragment bounds the delta by it).
-  const treeOk = (r) => r.value >= r.ceiling || r.ownMin < 0;
+  // attributeTree sets ownMin < 0, and mergeFragment bounds the delta by it) —
+  // or by giving back its own fragment's raise (#6032: ownFrag > 0; mergeFragment
+  // stops the fragment at 0, the rest is the deploy branch's to lower).
+  const treeOk = (r) => r.value >= r.ceiling || r.ownMin < 0 || r.ownFrag > 0;
   if (!touched) return rows.filter((r) => !r.tree || treeOk(r));
   return rows.filter((r) => (r.tree ? treeOk(r) : r.value >= r.ceiling || touched.has(r.file)));
 }
 
 /** Add `rows`' (value - ceiling) to fragment `frag` in place. A tree delta that
  *  nets below zero is dropped, not kept, unless the row carries the branch's own
- *  reduction (`ownMin`, attributeTree): then it is kept, never below ownMin.
+ *  reduction (`ownMin`, attributeTree): then it is kept, never below ownMin. A
+ *  lowering of the branch's own raise (`ownFrag` > 0, #6032) stops at zero.
  *  Before #3996 the commit hook wrote stale lowerings (assertPins −50) into open fragments; re-snapping one kept it
  *  negative at zero slack, so each pin the tip gained turned the PR red again
  *  (2026-10-27, #3970/#3981/#3985). Dropping it leaves the deploy's ceiling.
@@ -751,9 +766,9 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
   if (r.missing) return "the file is missing";
   // Giving back part of this branch's own tree lowering is not a raise (attributeTree).
   if (r.tree && r.ownFrag < 0 && r.over <= -r.ownFrag) return null;
-  // The entry's absorb (eagerCodeBytes, B+D): the branch's own growth from its merge base, not the tip's, up to it.
+  // The entry's absorb (eagerCodeBytes, B+D; assertPins/assertPinsAll, D-037): the branch's own growth from its merge base, not the tip's, up to it.
   if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth) && r.ownGrowth <= r.absorb) return null;
-  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth)) return `the branch grows it by ${r.ownGrowth}, past its ${r.absorb} absorb — lazy-load it, or raise it as a fragment under Bryce's ratchet-raise`;
+  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth)) return `the branch grows it by ${r.ownGrowth}, past its ${r.absorb} absorb — ${Object.hasOwn(PIN_METRICS, r.metric) ? "convert a source pin to a behaviour assertion" : "lazy-load it"}, or raise it as a fragment under Bryce's ratchet-raise`;
   if (r.tree) return "a tree-wide metric is shrink-only — never auto-raised";
   if (!AUTO_RAISE_METRICS.has(r.metric)) return `${r.metric} is not a line count — never auto-raised`;
   if (r.slackMax === 0) return "its entry carries slack 0 (exact) — never auto-raised";
@@ -762,11 +777,17 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
 }
 
 /** Set `ownGrowth` (value minus the value at the merge base) on each over tree row whose entry has an absorb and
- *  whose metric tree-counts AT_REF can measure at a ref. A row it cannot measure keeps no ownGrowth and blocks as
+ *  whose metric tree-counts AT_REF can measure at a ref, or that is a pin counter (pinDelta). A row it cannot measure keeps no ownGrowth and blocks as
  *  before. Mutates and returns `rows`. */
-export async function ownGrowth(rows, { base = mergeBase(), at } = {}) {
+export async function ownGrowth(rows, { base = mergeBase(), at, pinGrowth = pinDelta } = {}) {
   for (const r of rows) {
     if (!(r.tree && r.absorb > 0) || !base) continue;
+    // A pin counter (assertPins/assertPinsAll, D-037) reads only the files the branch changed since the base, so a
+    // tip that moved on after the merge base adds nothing to the branch's own growth.
+    if (Object.hasOwn(PIN_METRICS, r.metric)) {
+      try { r.ownGrowth = await pinGrowth(r.metric, base); } catch { /* base unreadable: no absorb */ }
+      continue;
+    }
     at ||= (await import("./tree-counts.mjs")).AT_REF;
     if (!Object.hasOwn(at, r.metric)) continue;
     try { r.ownGrowth = r.value - await at[r.metric](base); } catch { /* base unreadable: no absorb */ }
@@ -862,6 +883,18 @@ export function ceilingHistoryReasoned(ref) {
   } catch { return false; }
 }
 
+/** True when CEILING-HISTORY.md gains (since `ref`) a line that names the tree metric, e.g. `(tree) assertPins`:
+ *  the recorded reason a tree entry's `absorb` may widen (D-037, Bryce's "Pin slack"). Narrower than
+ *  ceilingHistoryReasoned: the added line must name THIS metric. */
+export function historyNamesTree(ref, metric) {
+  try {
+    const out = cp.execFileSync("git", ["diff", "-U0", `${ref}`, "--", "docs/notes/CEILING-HISTORY.md"],
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const re = new RegExp(`\\(tree\\)\\s+${metric.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+    return out.split("\n").some((l) => l.startsWith("+") && !l.startsWith("+++") && re.test(l));
+  } catch { return false; }
+}
+
 /**
  * How much a sync file metric grew between `ref` and the working tree.
  * Returns null when the metric is async/tree-scoped or the file is missing at
@@ -922,10 +955,12 @@ export const EXACT_CURE = "exact ceiling (slack 0): measure against the TIP (syn
  *  `historyReasoned` are injectable for tests. Returns the exit code. */
 export function compareToBase(ref, {
   maxRaise = 40, current = load(), print = console.log, advisory = false,
-  sourceGrowthFn = sourceGrowth, historyReasoned = undefined,
+  sourceGrowthFn = sourceGrowth, historyReasoned = undefined, historyNamesFn = historyNamesTree, base: given = undefined,
 } = {}) {
-  let base;
-  try { base = loadAt(ref); }
+  // `base` (tests only): the ceilings to compare against instead of loadAt(ref). The merge gate's retest worktree has
+  // the TIP as HEAD and the merge result only in the working tree, so a test that reads HEAD sees the tip's ceilings.
+  let base = given;
+  try { base ??= loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
@@ -967,12 +1002,17 @@ export function compareToBase(ref, {
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
+      // ONE recorded escape (D-037): a TREE entry's absorb widened, with a CEILING-HISTORY line naming that metric in
+      // the same diff. The ceiling itself is unmoved and merge-gate's raise row still needs ratchet-raise. Every other
+      // loosen (slack, a per-file absorb, an absorb with no history line) stays fatal.
+      const recorded = r.what === "absorb" && r.file === "(tree)" && historyNamesFn(ref, r.metric);
       blocked++;
-      if (!advisory) fatal++;
+      if (!advisory && !recorded) fatal++;
       const msg = (r.what === "absorb"
         ? `LOOSEN ${where}: absorb ${r.base} -> ${r.now} — a wider absorb hands out room; this needs a reason in the PR`
+          + (recorded ? ` (reason recorded in ${HISTORY_REL}; the gate's raise row still needs ratchet-raise)` : r.file === "(tree)" ? ` — add a ${HISTORY_REL} line naming (tree) ${r.metric} in the same push` : "")
         : `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR`) + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
-      print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
+      print(gh ? `::${advisory || recorded ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
     } else {
       // A deleted entry for a file/metric that still exists removes a guard; one whose
       // file is gone (or a whole tree metric dropped with its tool) is a normal cleanup.

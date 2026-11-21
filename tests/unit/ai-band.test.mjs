@@ -73,6 +73,15 @@ test("catchup stays quiet once lapped", () => {
   }), 0);
 });
 
+// #5900: the cut-off was half a lap, so CATCH-UP gave nothing to the cars that most needed it and
+// spread the field. Past GAP_REF_M the factor saturates at bandAuth until the car is lapped.
+test("catchup saturates for a car more than half a lap back, short of a full lap", () => {
+  const ctx = { mode: "catchup", raceT: 60, launchT0: 0, carProg: 100, trackTotal: 5793, bandAuth: 0.08 };
+  assert.equal(AiBand.factor({ ...ctx, leadProg: 100 + 5793 * 0.6 }), 0.08);
+  assert.equal(AiBand.factor({ ...ctx, leadProg: 100 + 5793 * 0.99 }), 0.08);
+  assert.equal(AiBand.factor({ ...ctx, leadProg: 100 + 5793 }), 0, "a full lap down is lapped: no band");
+});
+
 test("catchup never slows an AI ahead of the human (forward band is off)", () => {
   assert.equal(AiBand.factor({
     mode: "catchup", raceT: 60, launchT0: 0,

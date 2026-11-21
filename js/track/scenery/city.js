@@ -23,7 +23,7 @@ const SceneryCity = (function () {
             seat,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             rejBox, blockAt, onTrack, hash, vadd, kitOf,
-            anchor, along, massBlocked, massAdd, terrainYAt, treeInFootprint } = ctx;
+            anchor, along, massBlocked, massAdd, terrainYAt, treeInFootprint, norm } = ctx;
     Log.info("scenery", "scenery-city dress " + (def && def.id));
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
@@ -72,6 +72,41 @@ const SceneryCity = (function () {
       return MAT.CONCRETE;
     };
 
+    // EXTREME props detail (TrackModels.propsHi; sources in models.js). The day facade grid gains
+    // real depth: window jambs splitting each bay in the reveal between pane and spandrel rail,
+    // a two-step cornice under the roofline, chamfered corner piers, and balconies on a hash.
+    // Every piece is a detail() unit box (instanced, sunk-checked) or a guarded primitive.
+    const HI = typeof TrackModels !== "undefined" && TrackModels.propsHi(ctx.track);   // VM harnesses may omit models.js
+    const hiFacade = (p, b, k, side, yBase, sw, sh, sd, rows, fh, railH, winH, nm, mull) => {
+      const jBase = vadd(p.c, p.r, -side * (sw / 2 + 0.20));
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c <= nm; c++) {
+          const off = -sd / 2 + ((c + 0.5) / (nm + 1)) * sd;
+          detail({ o: vadd(vadd(jBase, p.u, yBase + (r + 0.5) * fh), p.t, off), r: p.r, u: p.u, t: p.t,
+              s: [0.26, winH, 0.16], col: mull }, { kind: "facadeMullion", k, side });
+        }
+      }
+      const top = yBase + sh;
+      detail({ o: vadd(p.c, p.u, top - 0.30), r: p.r, u: p.u, t: p.t,
+          s: [sw + 1.24, 0.42, sd * 1.02 + 0.6], col: mull }, { kind: "facadeRail", k, side });
+      detail({ o: vadd(p.c, p.u, top - 0.62), r: p.r, u: p.u, t: p.t,
+          s: [sw + 1.12, 0.12, sd * 1.02 + 0.48], col: mull }, { kind: "facadeRail", k, side });
+      const rr = norm([p.r[0] + p.t[0], p.r[1] + p.t[1], p.r[2] + p.t[2]]);
+      const tt = norm([p.t[0] - p.r[0], p.t[1] - p.r[1], p.t[2] - p.r[2]]);
+      for (const sr of [-1, 1]) for (const st of [-1, 1])
+        detail({ o: vadd(vadd(vadd(p.c, p.r, sr * sw / 2), p.t, st * sd / 2), p.u, yBase + (sh - 0.9) / 2 + 0.02),
+            r: rr, u: p.u, t: tt, s: [0.86, sh - 0.94, 0.86], col: mull }, { kind: "facadeMullion", k, side });
+      if (rows < 3 || hash(k * 2.3 + side * 5.1 + yBase * 0.37) > 0.45) return;
+      const bw = sd / (nm + 1) * 0.8, slabX = -side * (sw / 2 + 1.13), railX = -side * (sw / 2 + 1.69);
+      for (let r = 1; r < rows; r++) {
+        for (const c of [0, nm]) {
+          const off = -sd / 2 + ((c + 0.5) / (nm + 1)) * sd, y = yBase + r * fh + railH / 2 + 0.07;
+          const at = (x, dy) => vadd(vadd(vadd(p.c, p.r, x), p.t, off), p.u, y + dy);
+          detail({ o: at(slabX, 0), r: p.r, u: p.u, t: p.t, s: [1.2, 0.14, bw], col: mull }, { kind: "facadeRail", k, side });
+          detail({ o: at(railX, 0.52), r: p.r, u: p.u, t: p.t, s: [0.08, 0.92, bw], col: mull }, { kind: "facadeRail", k, side });
+        }
+      }
+    };
     // Curtain wall: js/track/scenery/facade.js. detail() stays here for the day grid.
     const neonFacade = SceneryFacade.create(ctx, detail);
     const building = (k, side, gap, w, h, d, opts) => {
@@ -131,6 +166,8 @@ const SceneryCity = (function () {
         : [0.34, 0.40, 0.50];
       const glass = nightLit ? litGlass : dayGlass;
       const floorH = opts.floor || 4.0;
+      // EXTREME props detail, near the road only (TrackModels.HI_NEAR): farther blocks keep today's mesh.
+      const hiNear = HI && !nightLit && gap < TrackModels.HI_NEAR;
       const section = (yBase, sw, sh, sd) => {
         if (nightLit) {
           // NIGHT = a dark neutral-grey concrete mass (NOT tinted by the neon, so
@@ -217,6 +254,7 @@ const SceneryCity = (function () {
               s: [0.5, sh - 0.08, sd * 1.02], col: dayMull },
             { kind: "facadeMullion", k, side });
         }
+        if (hiNear) hiFacade(p, b, k, side, yBase, sw, sh, sd, rows, fh, railH, winH, nm, dayMull);
         out._mat = 0; glassBuf._mat = 0;
         return ok;
       };
@@ -320,6 +358,22 @@ const SceneryCity = (function () {
           }
         }
         // else: clean chamfered cap, no finial
+        if (hiNear && h < 40) {
+          // Hi roof plant: a water tank on legs with its conical lid, and two vent stacks,
+          // all inside the cap's top disc (radius capR * 0.45).
+          const rr = capR * 0.45, tr = Math.min(1.2, rr * 0.35);
+          if (rr > 1.2) {
+            const ang = hash(k * 8.7 + side * 4.4) * 6.2832;
+            const tc = vadd(vadd(vadd(p.c, p.u, topY), p.r, Math.cos(ang) * rr * 0.45), p.t, Math.sin(ang) * rr * 0.45);
+            const steel = [0.42, 0.42, 0.45];
+            for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+              addCyl(out, vadd(vadd(vadd(tc, p.r, dr * tr * 0.6), p.t, dt * tr * 0.6), p.u, -0.1), 0.06, 1.3, steel, 4, b);
+            addCyl(out, vadd(tc, p.u, 1.1), tr, tr * 1.6, [0.48, 0.40, 0.32], 8, b);
+            addCone(out, vadd(tc, p.u, 1.1 + tr * 1.6), tr * 1.05, tr * 0.5, [0.36, 0.30, 0.25], 8, b);
+            for (const sg of [-1, 1])
+              addCyl(out, vadd(vadd(vadd(p.c, p.u, topY - 0.1), p.r, -Math.cos(ang) * rr * 0.5), p.t, sg * rr * 0.3), 0.18, 1.6, steel, 6, b);
+          }
+        }
       }
       // Night signage: a bright HDR neon band wrapping the crown of lit buildings
       // — the casino / strip glow. Hue varies per building (warm gold, ice cyan,

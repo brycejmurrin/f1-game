@@ -244,6 +244,22 @@ test("the shell's Content-Security-Policy is generated, first, and strict where 
   assert.ok(dir["connect-src"].includes("https:") && dir["connect-src"].includes("wss:"));
 });
 
+// #5993: every other ROOT page ships the same generated policy, with its own
+// inline-script hashes (none for overlay and cockpit-view), before its first <script>.
+for (const page of ["overlay.html", "bench.html", "cockpit-view.html"]) {
+  test(`${page}: carries the shell's generated CSP before any script`, async () => {
+    const { cspFor } = await import("../../tools/gen/gen-shell.mjs");
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const { at, text, dir } = cspOf(html);
+    assert.equal(text, cspFor(html), "the meta is the generated one (run `node tools/gen/gen-shell.mjs`)");
+    assert.ok(at < html.indexOf("<script"), "before the first <script>, or that script is ungoverned");
+    assert.ok(!dir["script-src"].includes("'unsafe-inline'") && !dir["script-src"].includes("'unsafe-eval'"));
+    assert.deepEqual(dir["object-src"], ["'none'"]);
+    assert.deepEqual(dir["script-src"].filter((s) => s.startsWith("'sha256-")).sort(),
+      [...new Set(inlineBodies(html).map(sha))].sort(), "script-src hashes == the inline scripts' hashes");
+  });
+}
+
 // SEC2-7: an injected <img onerror=…> or <script> is the stored-XSS class the
 // 2026-09-24 sweep fixed; 'unsafe-inline' in script-src would let it run again.
 for (const page of ["index.html", "controller.html"]) {
@@ -514,7 +530,7 @@ function lazyFiles() {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -564,7 +580,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
                    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])]) {
+                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -588,7 +604,7 @@ test("sw.js stamps every injected asset it seeds", () => {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -685,6 +701,7 @@ test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the build files", () => {
     "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
     "js/track/scenery/guards.js",
     "js/track/scenery/region.js",
+    "js/track/scenery/detail.js", "js/render/shared/mesh-detail.js",   // the detail tiers above ULTRA (#5951)
   ];
   assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, want.length);
   for (const f of want) {

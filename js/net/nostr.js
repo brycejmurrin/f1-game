@@ -117,7 +117,9 @@ const NetNostr = (function () {
   // tools/net/nostr-probe.mjs (the only criterion that decides this: does the
   // relay OK an ephemeral kind-22222 event from an unknown pubkey?): nos.lol
   // (502) and relay.mostr.pub (301 on the WebSocket upgrade) fail;
-  // relay.damus.io is back after its 503s.
+  // relay.damus.io is back after its 503s. Dropped 2026-11-20 (#5989, decision
+  // B2): nostr-pub.wellorder.net (NIP-11 503) and nostr.oxtr.dev (EVENT writes
+  // failing "No space left on device"); none added in their place.
   //
   // They will all rot eventually — free infrastructure does — which is why the
   // list is overridable at runtime and why room codes are the BACKUP way in.
@@ -126,10 +128,8 @@ const NetNostr = (function () {
     "wss://relay.primal.net",
     "wss://nostr.mom",
     "wss://relay.snort.social",
-    "wss://nostr-pub.wellorder.net",
     "wss://relay.damus.io",
     "wss://nostr.bitcoiner.social",
-    "wss://nostr.oxtr.dev",
   ];
 
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,

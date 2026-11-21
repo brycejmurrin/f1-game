@@ -195,7 +195,7 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
   // recipe recomputePlayerMods just applied, not makeCars' once-stamped save.
   const setParts = fnSource(cd, "function setPlayerParts(");
   assert.match(setParts, /carVisual\(team, carDecalNum\(team, G\.player\), true, \(\) => recipe\)/, "setPlayerParts restamps via carVisual");
-  assert.match(cd.slice(0, cd.indexOf('"use strict"')), /the six helpers that could not leave game\.js/, "file header counts the six deps helpers");
+  assert.match(cd.slice(0, cd.indexOf('"use strict"')), /the seven helpers that could not leave game\.js through deps \(resolveLivery,\s+factoryLivery,/, "file header counts the seven deps helpers (factoryLivery joined them)");
 });
 
 // game.js resolves the first-person caster right after the grounded transform,
@@ -205,7 +205,7 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
 test("the first-person caster is pinned to the car loop's cockpit branch", () => {
   const game = read("js/game.js");
   assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\)\); \}/);
-  assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster \}\)/);
+  assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster, sharedRivalBody: carDraw\.sharedRivalBodyMesh \}\)/);
   assert.match(game, /if \(c\.isPlayer && _plBodyOk\) \{\s*\/\/[^\n]*\n\s*const S = _smpPlayer, p = smp2\.p, t = smp2\.t, r = smp2\.r;/,
     "the car loop restores the player's smp2 from _smpPlayer");
   assert.match(game, /const yv = yawVisInterp\(c\);/);

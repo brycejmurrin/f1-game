@@ -20,6 +20,7 @@ const RaceEntryProfile = (() => {
   let legs = [];
   let marks = [];
   let longTasks = [];
+  let blockMs = 0, maxBlockMs = 0;
   let lapT0 = 0;
   let winT0 = 0, winT1 = 0;
   let observer = null;
@@ -75,18 +76,14 @@ const RaceEntryProfile = (() => {
     marks.push({ n, t: +(now() - winT0).toFixed(2) });
   }
 
-  function onLongTask(list) {
+  function recordLongTasks(entries) {
     if (!armed) return;
-    for (const e of list.getEntries()) {
-      if (longTasks.length >= MAX_TASKS) break;
-      const start = +e.startTime;
+    for (const e of entries) {
+      const start = Math.max(winT0, e.startTime);
       // Only tasks that overlap this window (observer may be buffered).
-      if (start + e.duration < winT0) continue;
-      longTasks.push({
-        start: +start.toFixed(2),
-        ms: +e.duration.toFixed(2),
-        name: e.name || "unknown",
-      });
+      const ms = e.startTime + e.duration - start;
+      if (ms <= 0) continue;
+      appendTask(start, ms, e.name || "unknown");
     }
   }
 
@@ -97,7 +94,7 @@ const RaceEntryProfile = (() => {
       const types = PerformanceObserver.supportedEntryTypes;
       if (types && types.indexOf && types.indexOf("longtask") < 0) return;
       const mine = generation;
-      observer = new PerformanceObserver((list) => { if (mine === generation) onLongTask(list); });
+      observer = new PerformanceObserver((list) => { if (mine === generation) recordLongTasks(list.getEntries()); });
       observer.observe({ type: "longtask", buffered: true });
       supported = true;
     } catch (_) {
@@ -212,6 +209,7 @@ const RaceEntryProfile = (() => {
     legs = [];
     marks = [];
     longTasks = [];
+    blockMs = maxBlockMs = 0;
     sawWarming = false;
     sawReady = false;
     endAfterReady = 0;
@@ -256,23 +254,22 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
+  // game.js hands in live getters (bindGame): its G and loadingScreen are function-scoped consts inside its IIFE,
+  // which a `typeof G` / `typeof loadingScreen` read from this script never sees (#5965).
+  let _game = { state: () => null, loadPhase: () => null };
+  function bindGame(hooks) {
+    _game = { state: hooks && hooks.state || (() => null), loadPhase: hooks && hooks.loadPhase || (() => null) };
+  }
+
   /** True while race-entry handoff should use the stall watchdog's relaxed cover (#3510). */
   function stallHandoffCover() {
     if (armed) return true;
-    try {
-      if (typeof G !== "undefined" && G.state === "count") return true;
-    } catch (_) { /* harness */ }
-    try {
-      if (typeof loadingScreen !== "undefined" && loadingScreen.phase) {
-        const ph = loadingScreen.phase();
-        if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
-      }
-    } catch (_) { /* harness */ }
-    if (softwareRaster()) {
-      try {
-        if (typeof G !== "undefined" && G.state === "race" && introBudgetLeft() > 0) return true;
-      } catch (_) { /* harness */ }
-    }
+    let state = null, ph = null;
+    try { state = _game.state(); } catch (_) { /* mid-boot */ }
+    if (state === "count") return true;
+    try { ph = _game.loadPhase(); } catch (_) { /* mid-boot */ }
+    if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
+    if (softwareRaster() && state === "race" && introBudgetLeft() > 0) return true;
     return false;
   }
 
@@ -296,6 +293,7 @@ const RaceEntryProfile = (() => {
     if (!armed) return;
     winT1 = now();
     pushMark("end");
+    if (observer && observer.takeRecords) recordLongTasks(observer.takeRecords());
     armed = false;
     disarmObserver();
   }
@@ -413,16 +411,12 @@ const RaceEntryProfile = (() => {
     return request;
   }
 
-  function blockMs() {
-    let s = 0;
-    for (const t of longTasks) s += t.ms;
-    return +s.toFixed(2);
-  }
-
-  function maxBlockMs() {
-    let m = 0;
-    for (const t of longTasks) if (t.ms > m) m = t.ms;
-    return +m.toFixed(2);
+  function appendTask(start, ms, name) {
+    blockMs += ms;
+    maxBlockMs = Math.max(maxBlockMs, ms);
+    if (longTasks.length < MAX_TASKS) {
+      longTasks.push({ start: +start.toFixed(2), ms: +ms.toFixed(2), name });
+    }
   }
 
   function snapshot() {
@@ -432,8 +426,8 @@ const RaceEntryProfile = (() => {
       legs: legs.slice(),
       marks: marks.slice(),
       longTasks: longTasks.slice(),
-      blockMs: blockMs(),
-      maxBlockMs: maxBlockMs(),
+      blockMs: +blockMs.toFixed(2),
+      maxBlockMs: +maxBlockMs.toFixed(2),
       supported,
       armed,
       windowMs: armed || marks.length ? +((armed ? now() : winT1) - winT0).toFixed(2) : 0,
@@ -447,7 +441,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover,
+    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover, bindGame,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,
@@ -455,12 +449,7 @@ const RaceEntryProfile = (() => {
     supported: () => supported,
     // Test / probe seam: inject synthetic longtasks without a real observer.
     _injectTask(ms, start, name) {
-      if (longTasks.length >= MAX_TASKS) return;
-      longTasks.push({
-        start: +(start != null ? start : now()).toFixed(2),
-        ms: +(+ms).toFixed(2),
-        name: name || "synthetic",
-      });
+      appendTask(start != null ? start : now(), +ms, name || "synthetic");
     },
   };
 })();

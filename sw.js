@@ -21,8 +21,8 @@ const CACHE_PREFIX = "apex26-";
 // RECORDED VOICES LIVE OUTSIDE THE GENERATIONS (audit4 B8). A voice pack is 2-7 MB
 // and unversioned; filed into apex26-<build> it was re-written into every new
 // generation and doubled while a prior settled one was retained. cacheBuild()
-// reads this name as NaN, so the stale sweep never deletes it; the shell's own
-// recovery reset (index.html) deletes apex26-<n> only and leaves it (#4479).
+// reads this name as NaN, so the stale sweep never deletes it; index.html's own
+// recovery reset deletes one failed asset per apex26-<n> and leaves apex26-voice (#4479).
 const VOICE_CACHE = CACHE_PREFIX + "voice";
 // VOICE_CACHE IS A BOUNDED LRU of voice ids (#4219 B): a persona is ~14-18 MB and
 // assets/voice ~111 MB, so every pack ever ensured must not stay forever. Keep
@@ -65,8 +65,9 @@ const offlineRetries = new Map();
 // @gen-shell:sw-required-lazy
 const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js"];
 // /@gen-shell:sw-required-lazy
+const PACK_MANIFEST_KEY_PREFIX = "assets/pack/manifest.json?b=";
 function isInstallCriticalOptional(u) {
-  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
+  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u) || u.startsWith(PACK_MANIFEST_KEY_PREFIX);
 }
 // Default-off / explicit opt-in: still seeded in `optional` when gen-shell
 // requires lockstep, but never install-precached. WGX + LAZY_EDITOR / LAZY_XR /
@@ -397,10 +398,13 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-viewport.js",
+    "js/render/three/tsl-carsurf.js",
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-gi.js",
     "js/render/three/tsl-post.js",
+    "js/render/three/tsl-aa.js",
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
@@ -412,6 +416,7 @@ async function precacheAssetLists() {
     "js/lighting/presets.js",
     "js/garage/garage-data.js",
     "js/garage/arrival-rows.js",
+    "js/garage/hi-prims.js",
     // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
@@ -439,7 +444,9 @@ async function precacheAssetLists() {
     "js/race/stopped-cars.js",
     "js/race/retired-card.js",
     "js/race/driving-coach.js",
+    "js/ui/hud-inputs.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
+    "js/render/shared/mesh-detail.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
@@ -457,6 +464,7 @@ async function precacheAssetLists() {
     "js/track/scenery/guards.js",
     "js/track/scenery/api-wrap.js",
     "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
     "js/track/scenery/build-props.js",
     // LAZY_GARAGE_EXTERIOR — optional selected-circuit pit slice
     "js/garage/exterior-geometry.js",
@@ -670,6 +678,7 @@ async function precacheAssetLists() {
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
     // LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade
+    "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
     "js/share/share-card-data.js",
@@ -678,6 +687,9 @@ async function precacheAssetLists() {
     "js/share/share-card-chips.js",
     "js/ui/results-sheet.js",
     "js/ui/quali-sheet.js",
+    // LAZY_GFX_HI — desktop EXTREME / CINEMA detail, fetched beside the backend when GfxQuality.detail() >= 2
+    "js/render/shared/gfx-hi.js",
+    "js/car/car-hero.js",
     // LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
@@ -686,6 +698,7 @@ async function precacheAssetLists() {
     "js/perf/bench-run.js",
     "js/perf/metrics-panel.js",
     // LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)
+    "js/race/tv-graphics.js",
     "js/ui/watch-transport.js",
     "js/race/real-replay.js",
     "js/race/real-race-pace.js",
@@ -735,7 +748,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
+  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -844,6 +857,9 @@ function isCarriedRuntime(url) {
 }
 async function carryEntry(cache, req, old) {
   const url = new URL(req.url);
+  // A previous worker may have stored a newer response under an older hash.
+  // Even a matching HTTP validator would only authenticate those wrong bytes.
+  if (isHashedPackRequest(url) && !(await packResponseMatches(old, url.search.slice(3)))) return;
   const etag = old.headers.get("ETag"), modified = old.headers.get("Last-Modified");
   if (!etag && !modified) {
     // Nothing to ask with: only an address that names its content is safe to keep.
@@ -913,6 +929,7 @@ async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
     // loads; an engine without Fetch Priority ignores the unknown member
     // (https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#priority).
     const init = { priority: "low" };
+    if (url.startsWith(PACK_MANIFEST_KEY_PREFIX)) init.cache = "no-store";
     if (ctrl) init.signal = ctrl.signal;
     const res = await Promise.race([fetch(url, init), expired]);
     if (res && res.ok) {
@@ -987,13 +1004,16 @@ self.addEventListener("install", (event) => {
     // Keep both path classes.
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
+    // Seed the new build's own manifest before activation. Carrying the older
+    // manifest or relying on the first online boot loses the pack after an update.
+    const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport|settings-export-body)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|quali-sheet|watch-transport|progress-backup|settings-export-body|hud-inputs)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
           return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
-        });
+        }).concat(packManifest);
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (in the seed's order: race-entry bundles, then circuits +
     // scenery, then data / net — not runtime-only doors), then
@@ -1189,13 +1209,60 @@ function packNetworkFirst(event, req, fixedCache, staleFirst) {
 }
 
 // Content-addressed pack files: assets.js asks for `assets/pack/<file>?h=<md5>`
-// with the md5 the (network-first) manifest records. The URL IS the content, so
+// with the md5 the manifest records. The URL names the content, so
 // a cached copy is always right and no revalidation round trip is owed; a
 // rebake changes the md5, hence the URL, hence misses the old entry.
 const PACK_HASHED = /^\?h=[0-9a-f]{32}$/;
 function isHashedPackRequest(url) {
   return PACK_HASHED.test(url.search) && url.pathname.includes("/assets/pack/") &&
     !url.pathname.endsWith("/manifest.json");
+}
+
+// The baked manifest uses MD5 to identify bytes. Web Crypto has no MD5, so
+// compute the RFC 1321 digest here before returning or storing a cache miss.
+const MD5_SHIFTS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+const MD5_CONSTANTS = Int32Array.from({ length: 64 }, (_, i) => Math.floor(2 ** 32 * Math.abs(Math.sin(i + 1))));
+function packDigest(bytes) {
+  const body = new DataView(bytes);
+  const state = new Int32Array([0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]);
+  const words = new Int32Array(16);
+  function processBlock(input, offset) {
+    for (let i = 0; i < 16; i++) words[i] = input.getInt32(offset + i * 4, true);
+    let a = state[0], b = state[1], c = state[2], d = state[3];
+    for (let i = 0; i < 64; i++) {
+      let mix, word;
+      if (i < 16) { mix = (b & c) | (~b & d); word = i; }
+      else if (i < 32) { mix = (d & b) | (~d & c); word = (5 * i + 1) % 16; }
+      else if (i < 48) { mix = b ^ c ^ d; word = (3 * i + 5) % 16; }
+      else { mix = c ^ (b | ~d); word = (7 * i) % 16; }
+      const shift = MD5_SHIFTS[(i >> 4) * 4 + (i % 4)];
+      const sum = (a + mix + MD5_CONSTANTS[i] + words[word]) | 0;
+      a = d;
+      d = c;
+      c = b;
+      b = (b + ((sum << shift) | (sum >>> (32 - shift)))) | 0;
+    }
+    state[0] += a; state[1] += b; state[2] += c; state[3] += d;
+  }
+  const end = bytes.byteLength - bytes.byteLength % 64;
+  for (let offset = 0; offset < end; offset += 64) processBlock(body, offset);
+  const remainder = bytes.byteLength - end;
+  const tail = new Uint8Array(remainder < 56 ? 64 : 128);
+  tail.set(new Uint8Array(bytes, end));
+  tail[remainder] = 0x80;
+  const padded = new DataView(tail.buffer);
+  const bits = bytes.byteLength * 8;
+  padded.setUint32(tail.length - 8, bits, true);
+  padded.setUint32(tail.length - 4, Math.floor(bits / 2 ** 32), true);
+  for (let offset = 0; offset < tail.length; offset += 64) processBlock(padded, offset);
+  let hex = "";
+  for (const word of state) {
+    for (let shift = 0; shift < 32; shift += 8) hex += ((word >>> shift) & 0xff).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+async function packResponseMatches(response, hash) {
+  return packDigest(await response.clone().arrayBuffer()) === hash;
 }
 // THE PACK MANIFEST UNDER THE PAGE'S BUILD (#5629): assets.js asks for
 // `assets/pack/manifest.json?b=<shell build>`. One deploy ships one manifest, so
@@ -1210,7 +1277,7 @@ const PACK_BUILD_KEY = /^\?b=[1-9][0-9]{0,9}$/;
 function isBuildKeyedManifest(url) {
   return PACK_BUILD_KEY.test(url.search) && url.pathname.endsWith("/assets/pack/manifest.json");
 }
-function packCacheFirst(event, req) {
+function packCacheFirst(event, req, hash) {
   let cacheWrite = Promise.resolve();
   const response = (async () => {
     const hit = await matchPreferCurrent(req);
@@ -1218,6 +1285,7 @@ function packCacheFirst(event, req) {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
+        if (!(await packResponseMatches(res, hash))) return Response.error();
         const copy = res.clone();
         cacheWrite = (async () => {
           const cache = await openCache(await currentCacheName());
@@ -1376,7 +1444,10 @@ self.addEventListener("fetch", (event) => {
       // (controller.html — the "Phone controller" shortcut and the QR landing
       // page — bench.html, cockpit-view.html) that lost the race used to open
       // the game instead; let its late network answer win, else fail honestly.
-      if (isShellDocument(url)) return (await matchPreferCurrent("index.html")) || Response.error();
+      if (isShellDocument(url)) {
+        const shell = await matchPreferCurrent("index.html");
+        if (shell) return shell;
+      }
       try { const late = await network; if (late) return late; } catch (_) { /* offline: nothing to show */ }
       return Response.error();
     })());
@@ -1391,9 +1462,10 @@ self.addEventListener("fetch", (event) => {
   // revalidation makes an unchanged file a 304), the cache when the network
   // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
   // The exception is a `?h=<md5>` file (isHashedPackRequest): content-addressed,
-  // so cache-first. The manifest that names the hashes stays network-first.
+  // so cache-first. The build-keyed manifest also answers from cache while
+  // revalidating in the background.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
-    if (isHashedPackRequest(url)) packCacheFirst(event, req);
+    if (isHashedPackRequest(url)) packCacheFirst(event, req, url.search.slice(3));
     else packNetworkFirst(event, req, null, isBuildKeyedManifest(url));
     return;
   }

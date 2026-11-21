@@ -62,9 +62,13 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 ## Push
 
+- Before the floor, on each edited js/ file: `lsp_diagnostics {file}` (shell `node tools/mcp/lsp-mcp.mjs diag <file>`);
+  symbol lookup: `.claude/rules/js-nav.md`.
 - The floor is AGENTS.md rule 3: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit);
   the PR's tiers prove the rest. Then ONE push per verified batch: a push over a live run cancels it and a killed job
   runs no `if: always()` step, so its failures are lost.
+- Never push while a CI run on your head is still running: batch every fix of the round, wait for that run to finish,
+  then push once (D-046; 77% of the 140 cancelled CI wall-hours in 48 h were heads replaced mid-run).
 - Refresh the Plan with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line),
   add discovered work, strike a dropped item with why, never delete one. Refresh the Hand-off block at every push
   and whenever you add `land`, `needs-owner` or `needs-decision`.
@@ -95,7 +99,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
    The orchestrator's infra re-run (§CI) gives a verdict only; the PR still lands on a fresh commit.
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
-   and only when `needs-sync` says so (`conflict | union-conflict | stale-red | retest-refused | gate-refused`; `tip-red` waits for the fix to land);
+   and only when `needs-sync` says so (`conflict | union-conflict | stale-red | retest-refused | gate-refused | tip-crossed`; `tip-red` waits for the fix to land);
    never to "refresh" a cancelled run and never for clean-behind. `retest-refused` is the gate's `retest` row
    refusing this head: the sync is that row's cure, no force flag. Red AND conflicting: a `stale-red` syncs first, any other red
    is fixed first, then sync once and ONE push. A PR whose Plan waits on an unmerged PR does not sync on each
@@ -105,7 +109,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 1. Tick or strike every Plan item except `- [ ] land: …`, the `**now:**` item included (an open `now:` fails the
    gate's plan row): tick it with its evidence, or move what is left of it into the `land:` item. An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
-   on a dirty PR starts no CI.
+   on a dirty PR starts no CI. Flip only after the draft CI run on this head has FINISHED (D-046): the ready run
+   shares the `ci-pr-<n>` group and cancels a draft run still in flight.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in

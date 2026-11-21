@@ -2,6 +2,29 @@
 "use strict";
 
 const CarGeometry = (function () {
+  // DESKTOP DETAIL (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): the tessellation level of the build in
+  // progress, 0 = today's mesh (HIGH and below, every phone, every node test), 1 = meshHi (ULTRA), 2 = EXTREME.
+  // Set only for the span of one build by withDetail(); every builder that reads it keeps its detail-0 grid
+  // lines, so a level only ADDS vertices between today's ones. _hero: the EXTREME player car's modelled detail
+  // (heroCar); _luv: it also records loft UVs. Level 2 and both flags need the lazy CarHero (js/car/car-hero.js,
+  // EXTREME only, where every hero builder lives): without it a build is exactly ULTRA's.
+  let _lvl = 0, _hero = false, _luv = false;
+  const HX = () => typeof CarHero !== "undefined";
+  const clampDetail = (d) => { d = Math.round(+d || 0); return d >= 2 && HX() ? 2 : d >= 1 ? 1 : 0; };
+  // withDetail(d, fn, hero, luv): fn() at level d, a hero build if `hero`, recording loft UVs if `luv` too.
+  function withDetail(d, fn, h, l) {
+    const a = _lvl, b = _hero, c = _luv; _lvl = clampDetail(d); _hero = !!h && HX(); _luv = _hero && !!l;
+    try { return fn(); } finally { _lvl = a; _hero = b; _luv = c; }
+  }
+  // The detail a car gets: the player the boot-time level, a rival at most 1 (meshHi), 0 when meshHi is off or
+  // GfxQuality is absent (node tests: the ReferenceError is caught) or throws. heroOn: the EXTREME hero pass,
+  // player only, and only with CarHero resident.
+  function detailFor(isPlayer) {
+    try { return GfxQuality.feature("meshHi") ? Math.min(isPlayer ? 2 : 1, clampDetail(GfxQuality.detail())) : 0; } catch (_) { return 0; }
+  }
+  function heroOn() {
+    try { return HX() && !!GfxQuality.feature("heroCar"); } catch (_) { return false; }
+  }
   function create(context) {
     const { SURFACES, CARBON, DARK, INTAKE, TYRE, RIM, HUB, HALO, VISOR, PANEL } = context;
 
@@ -57,9 +80,9 @@ const CarGeometry = (function () {
     }
 
     function addBox(out, cx, cy, cz, sx, sy, sz, col, surface) {
+      if (_hero) return CarHero.box(G, ...arguments);   // heroCar: a bevelled box
       addLoft(out, cz-sz/2, cx, cy, sx, sy, cz+sz/2, cx, cy, sx, sy, col, surface);
     }
-
     // Any n-corner section (a chined pod has five), front to rear, capped: CarShade.loftRings'
     // faces and winding (CCW from +Z, fixed by signed area so either side's mirror lofts outward).
     function addSectionLoft(out, secs, col, frontCol, surface, frontSurface) {
@@ -113,6 +136,7 @@ const CarGeometry = (function () {
     // knife rather than a 40 % linear fade from mid-chord to the TE (the look
     // that read as a rounded plank, especially on GLX/WGX paint).
     const FOIL_T = [0, 0.08, 0.28, 0.60, 0.84, 1];
+    const FOIL_T_HI = FOIL_T.flatMap((t, i) => i ? [(FOIL_T[i - 1] + t) / 2, t] : [t]);
     const FOIL_PEAK = Math.pow(0.5 / 1.6, 0.5) * Math.pow(1 - 0.5 / 1.6, 1.1);
     const foilThick = (t) => Math.pow(t, 0.5) * Math.pow(1 - t, 1.1) / FOIL_PEAK;
     const FOIL_CAMBER = 0.05;
@@ -169,12 +193,15 @@ const CarGeometry = (function () {
     function addWingFoil(out, spec, col, surface) {
       const half = spec.half, mid = half * 0.67, inner = half * 0.34;
       const at = (x, t) => foilAt(spec, x, t);
-      const segments = spec.wave || spec.bowl ? Array.from({ length: 6 }, (_, i) =>
+      let segments = spec.wave || spec.bowl ? Array.from({ length: 6 }, (_, i) =>
         [-half + 2 * half * i / 6, -half + 2 * half * (i + 1) / 6])
         : [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
+      // meshHi (detail >= 1): every span and chord interval halved; the detail-0 stations stay on the grid.
+      const ft = _lvl ? FOIL_T_HI : FOIL_T;
+      if (_lvl) segments = segments.flatMap(([a, b]) => [[a, (a + b) / 2], [(a + b) / 2, b]]);
       for (const [x0, x1] of segments) {
-        for (let i = 0; i < FOIL_T.length - 1; i++) {
-          const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
+        for (let i = 0; i < ft.length - 1; i++) {
+          const t0 = ft[i], t1 = ft[i + 1];
           const a0 = at(x0, t0), b0 = at(x1, t0), b1 = at(x1, t1), a1 = at(x0, t1);
           const up = (p) => [p.x, p.y + p.h, p.z], dn = (p) => [p.x, p.y - p.h, p.z];
           // Upper surface wound so the normal points +Y, lower reversed.
@@ -221,6 +248,7 @@ const CarGeometry = (function () {
     }
 
     function addBeamBetween(out, p0, p1, th, col, surface) {
+      if (_hero) return CarHero.rod(G, ...arguments);   // heroCar: a round rod
       let dx = p1[0]-p0[0], dy = p1[1]-p0[1], dz = p1[2]-p0[2];
       const len = Math.hypot(dx, dy, dz) || 1; dx /= len; dy /= len; dz /= len;
       let ux = -dz, uy = 0, uz = dx;
@@ -239,6 +267,7 @@ const CarGeometry = (function () {
     }
 
     function addFairedArm(out, p0, p1, th, col, surface) {
+      if (_hero) return CarHero.arm(G, ...arguments);   // heroCar: an aerofoil leg
       let dx = p1[0] - p0[0], dy = p1[1] - p0[1], dz = p1[2] - p0[2];
       const len = Math.hypot(dx, dy, dz) || 1;
       dx /= len; dy /= len; dz /= len;
@@ -270,6 +299,7 @@ const CarGeometry = (function () {
       ];
       const a = p(inLead, outer, 0.40), b = p(inTrail, outer, 0.40);
       const c = p(inTrail, outer, 0.70), d = p(inLead, outer, 0.70);
+      if (_hero && CarHero.web(G, out, a, b, c, d, col, surface)) return;   // a 4 mm plate
       addQuad(out, a, b, c, d, col, surface);
       addQuad(out, a, d, c, b, col, surface);
     }
@@ -280,6 +310,7 @@ const CarGeometry = (function () {
     // the tangent crosses the hoop apex. No end caps: both halo ends bury in the
     // pillar / collar. Cost: path.length*sides verts, (path.length-1)*sides*2 tris.
     function addTube(out, path, r, sides, col, surface) {
+      if (_lvl && sides >= 6) sides *= 2;   // meshHi: round tubes rounder (square 4-sided ones stay square)
       const i0 = out.pos.length / 3;
       const material = surfaceOf(col, surface);
       const rgb = material === SURFACES.paint
@@ -317,9 +348,10 @@ const CarGeometry = (function () {
       }
     }
 
-    return { addTri, addQuad, addLoft, addBox, addBlock, addSpan, foilThick, FOIL_CAMBER,
+    const G = { addTri, addQuad, addLoft, addBox, addBlock, addSpan, foilThick, FOIL_CAMBER,
       foilAt, addWingFoil, addStationLoft, addTopBevel, addBeveledSpan, addBeamBetween,
       addFairedArm, addWishboneWeb, addTube };
+    return G;
   }
 
   // WELD: merge vertices that are identical in every attribute the GPU reads
@@ -332,6 +364,7 @@ const CarGeometry = (function () {
   function weld(out) {
     const n = out.pos.length / 3;
     if (!n || out.nrm.length !== n * 3 || out.col.length !== n * 3 || (out.mat && out.mat.length !== n)) return out;
+    if (out.luv) return CarHero.weld(out);   // a hero build's loft UVs join the key (js/car/car-hero.js)
     let cap = 1; while (cap < n * 2) cap <<= 1;
     const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * 10), remap = new Int32Array(n);
     const pos = [], nrm = [], col = [], mat = out.mat ? [] : null;
@@ -442,6 +475,9 @@ const CarGeometry = (function () {
     return out;
   }
 
-  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT };
+  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
+           withDetail, level: () => _lvl, hero: () => _hero, clampDetail, detailFor, heroOn,
+           // hero-build hooks (CarBodyGeom, CarShade): loft UVs while one records them, a bevelled part
+           loftUv: (o, v, r) => _luv && CarHero.loftUv(o, v, r), heroBevel: (o, w, n, e) => _hero ? CarHero.bevel(o, w, n, e) : e(o) };
 })();
 Object.freeze(CarGeometry);

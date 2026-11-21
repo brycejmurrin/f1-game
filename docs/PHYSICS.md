@@ -512,7 +512,7 @@ field, not the gap to the player.
 | mode | behaviour |
 |---|---|
 | `scripted` (default) | No live boost from how far the player is ahead. Fair racing driven by car/driver data — Pure / Black Rock race-scripted intent ([Pure Advantage](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai), [GI: rubber banding](https://www.gamesindustry.biz/rubber-banding-is-not-fair-and-not-fun-black-rock)). |
-| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead by less than half a lap, AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and at half a lap or more behind (`gap < total * 0.5`; not only once lapped). Melder / Game AI Pro ch.42. |
+| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead by less than a full lap, AI vmax and corner authority rise by up to `DIFF.band` (saturating past `GAP_REF_M` 700 m), gated off the start (8 s) and once lapped (`gap < total`; the half-lap cut, `total * 0.5`, left the far cars nothing, #5900). Melder / Game AI Pro ch.42. |
 
 `DIFF.band` magnitudes stay frozen; catch-up reuses them. AI-only benches
 (`ai-pace` / `ai-field` / `ai-line`) have no human, so the band never fires
@@ -1104,7 +1104,8 @@ but a different tyre model) and GRIP STEER above OFF each give a lap its own lea
 and ghost class: `SessionPhys.controls` adds `wheelState: "on"` / `gripSteer: <level>` to
 `recordControls()` only when not OFF, so every key recorded before them stays valid. A
 STANDARD daily runs with both OFF (`prepareDaily`, session-only, restored after) and
-`accept()` refuses a lap if either is turned back on.
+`accept()` refuses a lap if either is turned back on. WIND OFF is its own class the same way
+(#5895): `config()` adds `wind: "off"` only then, so keys recorded at the default REAL stay valid.
 
 ### Wear, and the stop
 

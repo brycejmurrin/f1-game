@@ -66,9 +66,11 @@ function excerpt(text, max) {
     let used = 0, first = 0, last = lines.length;
     while (first < lines.length && used + lines[first].length + 1 <= head) used += lines[first++].length + 1;
     while (last > first && used + lines[last - 1].length + 1 <= max) used += lines[--last].length + 1;
-    if (first > 0 && last > first) return [...lines.slice(0, first), `[omitted ${last - first} lines]`, ...lines.slice(last)].join('\n');
+    // B6 (2026-11-20): a bare marker above the producer's own "… N more (offset:K)" footer read as if paging reached
+    // every row. The gateway's cut is not the producer's page: name the retrieval tool for the hidden rows.
+    if (first > 0 && last > first) return [...lines.slice(0, first), `[omitted ${last - first} lines from this page: output_read on artifact.path returns them; the paging below is separate]`, ...lines.slice(last)].join('\n');
   }
-  return text.slice(0, head) + `\n[omitted ${text.length - max} characters]\n` + (tail ? text.slice(-tail) : '');
+  return text.slice(0, head) + `\n[omitted ${text.length - max} characters: output_read on artifact.path returns them]\n` + (tail ? text.slice(-tail) : '');
 }
 const important = /status|verdict|count|total|error|fail|warn|message|fix|cause|stack|exit|signal|timed?out|unknown|pass|skip|dirty|unpushed|retriev|artifact|omitt|stdout|stderr|valid|unit|threshold|baseline|control|sample|hardware|renderer|provenance|manifest|duration|elapsed|pending|not.?run|summary|environment|adapter|config|settings|seed|sha|image|camera|frame|metric/i;
 export function summarizeOutput(value, { level = 'compact' } = {}) {

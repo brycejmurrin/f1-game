@@ -131,7 +131,6 @@ function setConfig(next) {
   Log.info("game", `SeasonCal.setConfig rounds=${cfg.trackIds.length}`);
   return cfg;
 }
-function resetConfig() { return setConfig(null); }
 
 function frozenConfig(raw) {
   const out = normalize(raw);
@@ -178,10 +177,10 @@ function track(round) { return list()[round] || null; }
  *  Barcelona-Catalunya GP now that the Spanish GP is Madrid's. Only an unedited
  *  2026 calendar (the preset's ids, in order) takes those names. */
 const REAL_2026_GP = Object.freeze({ sepang: "Bahrain GP", catalunya: "Barcelona-Catalunya GP" });
-function gpName(t) {
+function gpName(t, calIds) {
   if (!t) return "";
-  if (fmtActive() && REAL_2026_GP[t.id]) {
-    const ids = rulesConfig().trackIds || [];
+  if (REAL_2026_GP[t.id] && (calIds || fmtActive() || flow === "career")) {
+    const ids = calIds || (fmtActive() ? rulesConfig().trackIds || [] : list().map((x) => x.id));
     if (ids.length === REAL_2026.length && REAL_2026.every((r, i) => r.id === ids[i])) return REAL_2026_GP[t.id];
   }
   return t.gp || "";
@@ -340,11 +339,8 @@ function load() {
   // but NOT for a season this build could not read whole: a circuit id it does
   // not know (a stale cached shell, a renamed circuit) shrank the calendar, and
   // writing that back erased the circuit for good, or blanked a finished season.
-  // LOSSY MEANS AN UNKNOWN CIRCUIT ID, nothing else. `season !== copy` is also
-  // true when resume() fell back to restart() for a round out of range, and that
-  // clean rebuilt season was then refused by every later save ("unknown circuit")
-  // although this build knew every id. A collapsed duplicate only counts when the
-  // save was repaired in place (the restart() config is not the stored one).
+  // A bad round alone restarts cleanly. Protect unknown IDs and a repaired
+  // calendar that collapsed duplicates.
   const lossy = !!raw && rawIds != null && (knownIds(rawIds).length !== rawIds.length
     || (season === copy && season.config.trackIds.length !== rawIds.length));
   lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
@@ -355,16 +351,16 @@ function load() {
   if (raw && !lossy) save(season, { migration: true });
   return season;
 }
+function refuseLossyWrite() {
+  Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
+  return (lastSave = { ok: false, durable: false, reason: "unknown circuit" });
+}
 function save(season, options) {
   if (!season || typeof season !== "object") {
     lastSave = { ok: false, durable: false, reason: "invalid" };
     return lastSave;
   }
-  if (lossySeasons.has(season)) {
-    lastSave = { ok: false, durable: false, reason: "unknown circuit" };
-    Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
-    return lastSave;
-  }
+  if (lossySeasons.has(season)) return refuseLossyWrite();
   const now = currentRevision();
   if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
     seasonConflict = true;
@@ -382,6 +378,8 @@ function save(season, options) {
   return lastSave;
 }
 function clear() {
+  // The last known circuit may precede another round in the stored calendar.
+  if (lossySeasons.has(activeSeason)) return refuseLossyWrite();
   const now = currentRevision();
   if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
     seasonConflict = true;
@@ -575,6 +573,30 @@ function netPts(season, id) {
   return sum;
 }
 
+// #5877: points follow the player. `you` is the seat holding their tally; a new seat moves it
+// there and parks that seat's AI; a save without `you` adopts the current seat (no point lost).
+const PARK = ":parked";
+const SEAT_MAPS = ["pts", "roundPts", "finishes", "driverCodes"];
+function moveId(season, from, to) {
+  for (const k of SEAT_MAPS) {
+    const m = season[k];
+    if (!m || typeof m !== "object") continue;
+    if (from in m) m[to] = m[from];
+    delete m[from];
+  }
+  if (season.lastFl === from) season.lastFl = to;
+}
+function seatPlayer(season, seatId) {
+  if (!season || typeof seatId !== "string" || !seatId) return false;
+  const was = typeof season.you === "string" && season.you ? season.you : null;
+  season.you = seatId;
+  if (!was || was === seatId) return false;
+  moveId(season, seatId, seatId + PARK);
+  moveId(season, was, seatId);
+  moveId(season, was + PARK, was);
+  return true;
+}
+
 function rank(season, a, b) {
   const d = netPts(season, b) - netPts(season, a);
   if (d) return d;
@@ -727,12 +749,12 @@ function shuffled(ids, seed) {
 // SHORT_POINTS / resetWeekend stay module-local (payTable / restart / applyConfig).
 return {
   SPRINT_POINTS, CLASSIC_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
-  config, setConfig, resetConfig, applyConfig, matchesConfig, fresh, normalize,
+  config, setConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
-  award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
+  award, scored, rank, rankTeams, netPts, drawRound, luckSeed, seatPlayer,
   presetIds, preset, shuffled, gpName, legacyIds,
 };
 })();

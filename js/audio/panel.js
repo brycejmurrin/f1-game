@@ -76,7 +76,15 @@ var AudioPanel = (() => {
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
     }
-    els.soundbtn.onclick = () => setSound(!G.soundOn, true);
+    els.soundbtn.onclick = () => {
+      // A context that has not yet run (or only started in this very press) has made no sound:
+      // SOUND ON was not true yet, so this press unlocks audio instead of muting it (clean-room
+      // fix 46: the first press muted and saved the mute). An engine without context() toggles.
+      const c = GameAudio.context ? GameAudio.context() : undefined;
+      const silent = c === null || (!!c && !(c.state === "running" && c.currentTime > 0.3));
+      if (G.soundOn && silent) { setSound(true, true); return; }
+      setSound(!G.soundOn, true);
+    };
 
     // TEAM RADIO — the banner spoken aloud (js/audio/radio-voice.js). Same shape
     // as SOUND EFFECTS above, including the ordering: the master gates it, so
@@ -114,8 +122,10 @@ var AudioPanel = (() => {
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
     // The language the system voice speaks (RadioVoice.spokenLang); captions follow the UI language, not this.
-    const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"], ["es", "ESPAÑOL"], ["pt", "PORTUGUÊS"], ["it", "ITALIANO"], ["de", "DEUTSCH"], ["fr", "FRANÇAIS"], ["ja", "日本語"], ["nl", "NEDERLANDS"]];
+    // AUTO/ENGLISH only until radio.* lines are translated (#5946, #1607); another stored pick migrates to AUTO.
+    const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"]];
     const slangNow = () => { const v = String(store.get("spokenLang", "auto")); return SLANG_VALUES.some((x) => x[0] === v) ? v : "auto"; };
+    if (store.get("spokenLang", "auto") !== slangNow()) store.set("spokenLang", "auto", { migration: true });
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");

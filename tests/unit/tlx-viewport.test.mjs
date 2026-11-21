@@ -29,7 +29,9 @@ test("canary: screenUV appears only as the import and the identity fallback", ()
   // tsl-sky.js: the destructure, the `: screenUV` fallback of imageUV, and the cloud-cache
   // fill — it draws into its OWN full S x S target, never a sub-viewport.
   // tsl-viewport.js: the destructure + the disabled return.
-  assert.deepEqual(hits, { "tsl-post.js": 2, "tsl-sky.js": 3, "tsl-viewport.js": 2 });
+  // tsl-aa.js: the destructure + the TRAA resolve and copy, full-target passes only (tlx-post taaLive is false
+  // whenever targets are fixed or orient-covered, the only sub-viewport mode).
+  assert.deepEqual(hits, { "tsl-aa.js": 3, "tsl-post.js": 2, "tsl-sky.js": 3, "tsl-viewport.js": 2 });
 });
 
 test("canary: every texture node in tsl-post is a VP.tex wrapper or on the explicit list", () => {

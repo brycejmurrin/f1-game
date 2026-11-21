@@ -49,6 +49,351 @@
     return ctx.isMobile ? 1024 : (ctx.softwareGL ? 512 : 2048);   // the pre-B8 rule, exactly
   }
 
+  // ── GRAPHICS: EXTREME EXTRAS (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md; GfxQuality features "csm" and
+  // "lampShadows"). Desktop TLX only, and only when tlx.js passes ctx.extras: everything below is inert otherwise,
+  // and the lit shader compiles the exact pre-extras program (tsl-lit.js gates on shadowSys.x at build time).
+  // CSM: the existing sun map stays cascade 0 untouched; N far cascades of SIZE² each cover MULT x the SHADOW
+  // DISTANCE box (240 / 600 m at the default 80), texel-snapped on the light basis like cascade 0 (step = half/4 =
+  // SIZE/8 texels), snap-cached, and rebuilt on their own cadence: cascade i only on frames where
+  // frameNo % PERIOD[i] === i % PERIOD[i] (never both on one frame), never on a frame the near map rebuilt, unless a
+  // rebuild has waited STARVE periods. FADE[i] is the [lo, hi] band (x half) over which cascade i fades out; the
+  // near map keeps its own 0.62..0.84 band and the lit shader blends each band into the next cascade.
+  // FAR CARS: the first CARS cascades (the mid one only: the outer one's 0.6 m texel makes a car 3 x 9 texels and its
+  // 4-frame cadence would strobe a moving shadow) carry a CAR LAYER: the static depth is cached in its own target and
+  // every rebuild on the cascade's cadence copies it and draws the rivals within reach on top (the lamp map's L1).
+  // Rivals take the FieldLod shadow gate (castsShadow) rescaled to CAR_M reference metres (x2 on ULTRA+: 200 m).
+  // DITHER: each fade band's distance is jittered by +-DITHER x the band width on a world-anchored 0.25 m noise cell
+  // (the shader's ignoise), breaking the ring line without a single extra tap; 0 = the plain smoothstep bands.
+  const CSM = Object.freeze({
+    N: 2, SIZE: 2048, MULT: Object.freeze([3, 7.5]), CAP: Object.freeze([400, 1000]), PERIOD: Object.freeze([2, 4]), STARVE: 3,
+    FADE: Object.freeze([Object.freeze([0.62, 0.84]), Object.freeze([0.70, 0.92])]),
+    BACK_MIN: 150, BACK_MAX: 1200, RECV: 170, BOX0: 80,
+    CARS: 1, CAR_M: 100, CAR_PAD: 8, DITHER: 0.15, DITHER_CELL: 0.25,
+  });
+  const LAMPX = Object.freeze({ N: 2, HANDOVER: 1.2, PAD_IN: 36, PAD_OUT: 72 });   // shadow-pass.js's lamp constants
+  // Cascade half-sizes: out[0] = the near box, then each far cascade, strictly growing (>= 1.5x the previous).
+  function csmHalves(sBox, out) {
+    out[0] = sBox;
+    for (let i = 0; i < CSM.N; i++) out[i + 1] = Math.max(out[i] * 1.5, Math.min(CSM.CAP[i], sBox * CSM.MULT[i]));
+    return out;
+  }
+  // Depth span [back, far] for a cascade of half-size h: shadow-pass.js sunSpan's rule (casters up to
+  // hypot(propTop, h) toward the sun, unknown propTop = the max) and its 170 m receiver side, scaled with the box.
+  function csmSpan(propTop, h, out) {
+    const k = Math.max(1, h / CSM.BOX0);
+    out[0] = (typeof propTop === "number" && propTop >= 0)
+      ? Math.min(CSM.BACK_MAX, Math.max(CSM.BACK_MIN, Math.ceil(Math.hypot(propTop, h)) + 10)) : Math.min(CSM.BACK_MAX, 400 * k);
+    out[1] = out[0] + CSM.RECV * k;
+    return out;
+  }
+  const UP_X = [1, 0, 0], UP_Y = [0, 1, 0];
+  const _m4 = () => (typeof M4 !== "undefined" ? M4 : null);   // js/core/mat4.js, resolved at call time
+  // The light basis exactly as M4.lookAtTo (and shadow-pass.js sunPass) derives it: b[0..2] = x, b[3..5] = y,
+  // b[6..8] = z = sd. Returns the up vector the view must be built with.
+  function lightBasis(sd, b) {
+    const up = Math.abs(sd[1]) > 0.98 ? UP_X : UP_Y;
+    const zx = sd[0], zy = sd[1], zz = sd[2];
+    let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+    const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+    b[0] = xx; b[1] = xy; b[2] = xz;
+    b[3] = zy * xz - zz * xy; b[4] = zz * xx - zx * xz; b[5] = zx * xy - zy * xx;
+    b[6] = zx; b[7] = zy; b[8] = zz;
+    return up;
+  }
+  // The anchor snapped to a whole `step` on the light's x / y axes (sunPass's lu / lv).
+  function csmSnap(b, c, step, out) {
+    out[0] = Math.round((b[0] * c[0] + b[1] * c[1] + b[2] * c[2]) / step) * step;
+    out[1] = Math.round((b[3] * c[0] + b[4] * c[1] + b[5] * c[2]) / step) * step;
+    return out;
+  }
+  // The lit shader's near-map bias is in normalised depth; this scales it so its WORLD size follows the cascade's
+  // texel (half / size) instead of the near map's: x (h / h0) (size0 / size), and x far0 / far for the depth span.
+  function csmBiasK(h0, far0, size0, h, far, size) { return (h / h0) * (size0 / size) * (far0 / far); }
+  const _sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  // The dither's distance offset for band k at noise n in [0, 1) (the shader's ignoise); n undefined = none.
+  function csmJitter(half, k, n) {
+    return n === undefined ? 0 : (n - 0.5) * 2 * CSM.DITHER * (CSM.FADE[k][1] - CSM.FADE[k][0]) * half;
+  }
+  // JS twin of the shader's per-cascade fade (tsl-lit.js csmFar): 1 inside, 0 past FADE[k][1] x half (+ the dither).
+  function csmWeight(aDist, half, k, n) { return 1 - _sstep(half * CSM.FADE[k][0], half * CSM.FADE[k][1], aDist + csmJitter(half, k, n)); }
+  // The largest HORIZONTAL distance² (+ CAR_PAD, squared) of a cascade box point from its centre: shadow-pass.js
+  // sunPass's _csH2 corner walk for the car map, on the cascade's ±h x/y and its [back - 1, back - far] depth.
+  function csmReach2(b, h, back, far) {
+    let m = 0;
+    for (let v = 0; v < 8; v++) {
+      const x = v & 1 ? h : -h, y = v & 2 ? h : -h, z = v & 4 ? back - 1 : back - far;
+      const hx = x * b[0] + y * b[3] + z * b[6], hz = x * b[2] + y * b[5] + z * b[8];
+      if (hx * hx + hz * hz > m) m = hx * hx + hz * hz;
+    }
+    const r = Math.sqrt(m) + CSM.CAR_PAD;
+    return r * r;
+  }
+  // The factor on a rival's camera distance² that turns FieldLod.castsShadow(d2 x K) (a SHADOW_CAST_M gate) into the
+  // cascade's CAR_M one. 1 when castM is unknown (the gate then stays the near one: never wider than asked).
+  function csmGateK(castM) { return castM > 0 ? (castM / CSM.CAR_M) * (castM / CSM.CAR_M) : 1; }
+  // Is a changed cascade allowed to rebuild this frame?
+  function csmDue(i, waited, frameNo, sunRebuilt) {
+    const p = CSM.PERIOD[i];
+    if (waited >= CSM.STARVE * p) return true;
+    if (sunRebuilt) return false;
+    return (frameNo % p) === (i % p);
+  }
+  // The far-cascade planner. io: { M4, size0, begin(i, vp, half, biasK) -> bool, end(i) -> bool ok, invalidate(),
+  // and for the car layer (all optional): carsOn(i) -> bool, staticBegin(i, vp, half, biasK) -> bool,
+  // staticEnd(i) -> bool ok, carsBegin(i, fresh) -> bool (copies the static depth into the live map), carsEnd(i) -> bool }.
+  // pass(inp) runs once per frame from shadow-pass.js sunPass with inp: { sd, ctr, box, far, propTop, frameNo,
+  // sunRebuilt, read, cast(i), carKey(i, ctr, r2) -> int, castCars(i, ctr, r2) -> n cast }; it builds at most ONE
+  // cascade (a static rebuild or a car-layer refresh) per frame and returns how many it built.
+  // CACHE KEYS. Static: the snapped anchor (lu, lv), the half-size and the sun direction (unchanged = the static depth
+  // is current). Car layer: carKey over the casters inside the cascade's reach (0 = none); a change with the static
+  // key unchanged refreshes on the cascade's phase (csmDue) as copy + cars. A failed copy dirties the static key.
+  function csmPlanner(io) {
+    const key = [], waited = new Array(CSM.N).fill(0), carWait = new Array(CSM.N).fill(0), carK = new Array(CSM.N).fill(NaN);
+    const halves = new Array(CSM.N + 1).fill(0);
+    for (let i = 0; i < CSM.N; i++) key.push({ lu: NaN, lv: NaN, h: NaN, sx: NaN, sy: NaN, sz: NaN, cw: [0, 0, 0], r2: 0 });
+    const b = new Float64Array(9), lu = [0, 0], span = [0, 0], eye = [0, 0, 0], ctrW = [0, 0, 0];
+    const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16);
+    const z = () => new Array(CSM.N).fill(0);
+    const st = { builds: z(), deferred: z(), halves, carBuilds: z(), carDeferred: z(), carCasts: z(), cached: z() };
+    function dirty(i) { const k = key[i]; if (k) k.lu = NaN; carK[i] = NaN; }
+    // A throw out of castCars is the CAR LAYER's failure, not the cascades': it is caught here, the pass still ends,
+    // and io.carsFail drops the layer (shadowSys csmCarsOff), so the cascade is rebuilt static-only.
+    let carErr = null;
+    function runCars(inp, i, cw, r2) {
+      carErr = null;
+      try { return inp.castCars(i, cw, r2) | 0; } catch (e) { carErr = e; return 0; }
+    }
+    function carsFailed(i) {
+      if (!carErr) return false;
+      if (io.carsFail) io.carsFail(i, carErr);
+      carErr = null;
+      return true;
+    }
+    function reset() {
+      for (let i = 0; i < CSM.N; i++) { const k = key[i]; k.lu = k.lv = k.h = k.sx = k.sy = k.sz = NaN; waited[i] = 0; carWait[i] = 0; carK[i] = NaN; }
+      if (io.invalidate) io.invalidate();
+    }
+    function pass(inp) {
+      if (!inp.read) { reset(); return 0; }   // nothing reads the sun maps (sunPass's _shadowsRead): rebuild on reopen
+      const M = io.M4 || _m4(), sd = inp.sd, c = inp.ctr;
+      if (!M) return 0;
+      const up = lightBasis(sd, b);
+      csmHalves(inp.box, halves);
+      let built = 0;
+      for (let i = 0; i < CSM.N; i++) {
+        const h = halves[i + 1], k = key[i];
+        const cars = !!(io.carsOn && io.carsOn(i) && inp.castCars);
+        csmSnap(b, c, h / 4, lu);
+        if (lu[0] === k.lu && lu[1] === k.lv && h === k.h && sd[0] === k.sx && sd[1] === k.sy && sd[2] === k.sz) {
+          waited[i] = 0;
+          if (!cars) continue;
+          const ck = inp.carKey ? inp.carKey(i, k.cw, k.r2) | 0 : 0;
+          if (ck === carK[i]) { carWait[i] = 0; continue; }
+          if (built > 0 || !csmDue(i, carWait[i], inp.frameNo, inp.sunRebuilt)) { carWait[i]++; st.carDeferred[i]++; continue; }
+          if (!io.carsBegin(i, false)) { dirty(i); continue; }   // no valid static copy: a static rebuild on the next due frame
+          const n = runCars(inp, i, k.cw, k.r2), ok = io.carsEnd(i) && !carsFailed(i);
+          if (ok) { carK[i] = ck; carWait[i] = 0; st.carBuilds[i]++; st.carCasts[i] = n; built++; } else dirty(i);
+          continue;
+        }
+        if (built > 0 || !csmDue(i, waited[i], inp.frameNo, inp.sunRebuilt)) { waited[i]++; st.deferred[i]++; continue; }
+        csmSpan(inp.propTop, h, span);
+        const lw = b[6] * c[0] + b[7] * c[1] + b[8] * c[2];
+        for (let a = 0; a < 3; a++) { ctrW[a] = b[a] * lu[0] + b[3 + a] * lu[1] + b[6 + a] * lw; eye[a] = ctrW[a] + sd[a] * span[0]; }
+        M.lookAtTo(view, eye, ctrW, up);
+        M.orthoTo(proj, -h, h, -h, h, 1.0, span[1]);
+        M.mulTo(vp, proj, view);
+        const bk = csmBiasK(inp.box, inp.far, io.size0, h, span[1], CSM.SIZE);
+        const r2 = cars ? csmReach2(b, h, span[0], span[1]) : 0;
+        const ck = cars && inp.carKey ? inp.carKey(i, ctrW, r2) | 0 : 0;
+        let ok = false, viaCopy = false, n = 0;
+        // Car layer: the static depth into its cache, then copy + cars into the live map.
+        if (cars && io.staticBegin && io.staticBegin(i, vp, h, bk)) {
+          let sok = false;
+          try { inp.cast(i); } finally { sok = io.staticEnd(i); }
+          if (sok) {
+            st.cached[i]++;
+            if (io.carsBegin(i, true)) { viaCopy = true; n = runCars(inp, i, ctrW, r2); ok = io.carsEnd(i) && !carsFailed(i); }
+          }
+        }
+        // Today's direct pass (no car layer, or the copy could not run): everything into the live map at once.
+        if (!viaCopy) {
+          if (!io.begin(i, vp, h, bk)) continue;
+          try { inp.cast(i); if (cars) n = runCars(inp, i, ctrW, r2); } finally { ok = io.end(i); }
+          if (carsFailed(i)) ok = false;
+        }
+        if (ok) {
+          k.lu = lu[0]; k.lv = lu[1]; k.h = h; k.sx = sd[0]; k.sy = sd[1]; k.sz = sd[2]; k.cw[0] = ctrW[0]; k.cw[1] = ctrW[1]; k.cw[2] = ctrW[2]; k.r2 = r2;
+          waited[i] = 0; carWait[i] = 0; carK[i] = cars ? ck : NaN; if (cars) st.carCasts[i] = n; st.builds[i]++; built++;
+        }
+      }
+      return built;
+    }
+    return { pass, reset, dirty, state: st };
+  }
+  // The extra floodlights: n slots, each holding the lamp it had while that lamp is still within HANDOVER of the
+  // n-th best score (distance² / level, lower wins: shadow-pass.js lampPass's score), the free slots taking the best
+  // lamps not already held. `primary` (the one-lamp map's) and tail lights (>= tailFrom) and radius < 12 never count.
+  // slots[k].x/y/z: the held lamp's position (NaN = none). out[k] = frame.lights record index, or -1.
+  let _pkS = new Float64Array(64), _pkI = new Int32Array(64);
+  function lampPick(L, nRec, tailFrom, lum, eye, primary, slots, out, handover) {
+    const n = out.length;
+    if (_pkS.length < nRec) { _pkS = new Float64Array(nRec); _pkI = new Int32Array(nRec); }
+    let m = 0;
+    for (let i = 0; i < nRec && i < tailFrom; i++) {
+      const o = i * 15;
+      if (i === primary || L[o + 6] < 12) continue;
+      const dx = L[o] - eye[0], dy = L[o + 1] - eye[1], dz = L[o + 2] - eye[2];
+      _pkS[m] = (dx * dx + dy * dy + dz * dz) / Math.max(lum ? lum[i] : Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
+      _pkI[m++] = i;
+    }
+    // the n-th best score (insertion into a tiny sorted list)
+    const top = [];
+    for (let j = 0; j < m; j++) {
+      const s = _pkS[j];
+      if (top.length < n || s < top[top.length - 1]) { top.push(s); top.sort((a, b) => a - b); if (top.length > n) top.pop(); }
+    }
+    const T = top.length < n ? Infinity : top[n - 1];
+    for (let k = 0; k < n; k++) {
+      out[k] = -1;
+      const sl = slots[k];
+      for (let j = 0; j < m; j++) {
+        const o = _pkI[j] * 15;
+        if (L[o] === sl.x && L[o + 1] === sl.y && L[o + 2] === sl.z) { if (_pkS[j] <= T * handover) out[k] = _pkI[j]; break; }
+      }
+    }
+    for (let k = 0; k < n; k++) {
+      if (out[k] >= 0) continue;
+      let best = -1, bs = Infinity;
+      for (let j = 0; j < m; j++) {
+        if (_pkS[j] >= bs) continue;
+        let taken = false;
+        for (let q = 0; q < n; q++) if (out[q] === _pkI[j]) { taken = true; break; }
+        if (!taken) { bs = _pkS[j]; best = _pkI[j]; }
+      }
+      out[k] = best;
+    }
+    return out;
+  }
+  // The extra-lamp driver. io: { n, M4, begin(k, vp, idx) -> bool, end(k), keep(k, idx) }. pass(inp) runs from
+  // shadow-pass.js lampPass (night, tier < 2) with inp: { L, nRec, tailFrom, lum, eye, primary, frameNo,
+  // carKey(lx, ly, lz, r2), cast(reach, r2) }. Per slot it mirrors the one-lamp map's content key (the lamp's
+  // position + VP inputs, and the cars within rad + 8): unchanged = keep; a car-only change rebuilds on alternate
+  // frames per slot (slot k on frames where frameNo + k is even); a lamp change rebuilds now.
+  // STATIC-PROPS CACHE (the one-lamp map's L1, per slot; io.staticBegin / staticEnd / carsBegin, inp.castProps /
+  // castCars): a lamp change renders the props once into the slot's static map, then every rebuild of that lamp
+  // copies it (carsBegin -> false when the copy cannot run: no valid static map for exactly this VP, or the live map
+  // never rendered) and draws only the cars. Without the hooks, or when carsBegin declines, the full pass as before.
+  function lampXDriver(io) {
+    const n = io.n, slots = [], pick = new Int32Array(n), reach = [0, 0, 0, 0];
+    const view = new Float32Array(16), proj = new Float32Array(16), eye = [0, 0, 0], tgt = [0, 0, 0];
+    for (let k = 0; k < n; k++) slots.push({ x: NaN, y: NaN, z: NaN, r: NaN, c: NaN, dx: NaN, dy: NaN, dz: NaN, car: 0, near: false, vp: new Float32Array(16) });
+    const st = { builds: new Array(n).fill(0), keeps: new Array(n).fill(0), pick, staticBuilds: new Array(n).fill(0), carOnly: new Array(n).fill(0) };
+    function reset() { for (const s of slots) { s.x = s.y = s.z = s.r = s.c = s.dx = s.dy = s.dz = NaN; s.car = 0; s.near = false; } }
+    function pass(inp) {
+      const L = inp.L, M = io.M4 || _m4();
+      if (!M) return 0;
+      lampPick(L, inp.nRec, inp.tailFrom, inp.lum, inp.eye, inp.primary, slots, pick, LAMPX.HANDOVER);
+      let built = 0;
+      for (let k = 0; k < n; k++) {
+        const idx = pick[k], s = slots[k];
+        if (idx < 0) { s.near = false; continue; }
+        const o = idx * 15, rad = L[o + 6];
+        const ex = L[o] - inp.eye[0], ey = L[o + 1] - inp.eye[1], ez = L[o + 2] - inp.eye[2];
+        const lim = rad + (s.near ? LAMPX.PAD_OUT : LAMPX.PAD_IN);
+        if (ex * ex + ey * ey + ez * ez > lim * lim) { s.near = false; continue; }
+        s.near = true;
+        const lx = L[o], ly = L[o + 1], lz = L[o + 2];
+        const same = lx === s.x && ly === s.y && lz === s.z && rad === s.r && L[o + 11] === s.c &&
+          L[o + 7] === s.dx && L[o + 8] === s.dy && L[o + 9] === s.dz;
+        const r = rad + 8, r2 = r * r;
+        const ck = inp.carKey(lx, ly, lz, r2);
+        if (same && (ck === s.car || ((inp.frameNo + k) & 1) === 1)) { if (io.keep(k, idx)) st.keeps[k]++; continue; }
+        if (!same) {
+          // shadow-pass.js lampPass's lamp camera, verbatim (near 2.5 m clips the fixture's own geometry)
+          const fov = Math.min(2.6, 2 * Math.acos(M.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
+          const up = Math.abs(L[o + 8]) > 0.95 ? UP_X : UP_Y;
+          eye[0] = lx; eye[1] = ly; eye[2] = lz;
+          tgt[0] = lx + L[o + 7]; tgt[1] = ly + L[o + 8]; tgt[2] = lz + L[o + 9];
+          M.lookAtTo(view, eye, tgt, up);
+          M.perspectiveTo(proj, fov, 1, 2.5, Math.max(rad, 10));
+          M.mulTo(s.vp, proj, view);
+        }
+        s.x = lx; s.y = ly; s.z = lz; s.r = rad; s.c = L[o + 11]; s.dx = L[o + 7]; s.dy = L[o + 8]; s.dz = L[o + 9]; s.car = ck;
+        reach[0] = lx; reach[1] = ly; reach[2] = lz; reach[3] = r;
+        const split = !!(io.carsBegin && io.staticBegin && inp.castCars && inp.castProps);
+        let carsOnly = split && same && io.carsBegin(k, s.vp, idx);
+        if (split && !carsOnly && io.staticBegin(k, s.vp)) {
+          let sok = false;
+          try { inp.castProps(reach); } finally { sok = io.staticEnd(k); }
+          if (sok) { st.staticBuilds[k]++; carsOnly = io.carsBegin(k, s.vp, idx); }
+        }
+        if (carsOnly) {
+          try { inp.castCars(reach, r2); } finally { io.end(k); }
+          st.carOnly[k]++;
+        } else {
+          if (!io.begin(k, s.vp, idx)) continue;
+          try { inp.cast(reach, r2); } finally { io.end(k); }
+        }
+        st.builds[k]++; built++;
+      }
+      return built;
+    }
+    return { pass, reset, state: st };
+  }
+  // One caster folded into a set key: position at 0.25 m, the forward axis at 1/8 (shadow-pass.js _lampCasterKey's
+  // quantisation; the keys here only ever compare with themselves).
+  function csmCarHash(k, m) {
+    k = (k * 31 + Math.round(m[12] * 4)) | 0; k = (k * 31 + Math.round(m[13] * 4)) | 0; k = (k * 31 + Math.round(m[14] * 4)) | 0;
+    k = (k * 31 + Math.round(m[8] * 8)) | 0; k = (k * 31 + Math.round(m[9] * 8)) | 0;
+    return (k * 31 + Math.round(m[10] * 8)) | 0;
+  }
+  // THE FIELD'S CASTERS for one extra map. f is shadow-pass.js's pooled view (_fld: n, eye, player, mats, cars, ok,
+  // pm(), castP(), castR(j, far)); c the map's centre, r2 its reach². lamp = an extra floodlight: 3-D reach, the
+  // pooled FieldLod flag (ok[j]), the silhouette (castR(j, null)) — the one-lamp map's set. Otherwise a far cascade:
+  // horizontal reach, FieldLod.castsShadow at the cascade's CAR_M (csmGateK), the shared rival body (decimated past
+  // FieldLod.farBody). The player's stale pooled entry never counts; `live` adds the live player (castP).
+  // castIt false = the set's key (0 = none), true = cast it; returns the key / the count.
+  function fieldCars(f, live, c, r2, lamp, castIt) {
+    let k = 0, n = 0;
+    if (live) {
+      const pm = f.pm(), dx = pm[12] - c[0], dy = lamp ? pm[13] - c[1] : 0, dz = pm[14] - c[2];
+      if (dx * dx + dy * dy + dz * dz <= r2) { if (castIt) f.castP(); else k = csmCarHash(1, pm); n++; }
+    }
+    const FL = !lamp && typeof FieldLod !== "undefined" && FieldLod.castsShadow ? FieldLod : null;
+    const gk = FL ? csmGateK(FL.T && FL.T.SHADOW_CAST_M) : 1, e = f.eye;
+    for (let j = 0; j < f.n; j++) {
+      if (f.cars[j] === f.player || (lamp && !f.ok[j])) continue;
+      const m = f.mats[j], dx = m[12] - c[0], dy = lamp ? m[13] - c[1] : 0, dz = m[14] - c[2];
+      if (dx * dx + dy * dy + dz * dz > r2) continue;
+      let far = null;
+      if (!lamp) {
+        const ex = m[12] - e[0], ey = m[13] - e[1], ez = m[14] - e[2], d2 = ex * ex + ey * ey + ez * ez;
+        if (FL && !FL.castsShadow(d2 * gk)) continue;
+        far = !!(FL && FL.farBody && FL.farBody(d2));
+      }
+      if (castIt) f.castR(j, far); else k = csmCarHash(k, m);
+      n++;
+    }
+    return castIt ? n : k;
+  }
+  // Give a shadow-pass.js input its field hooks once (it is a persistent object): the planner's carKey / castCars
+  // (empty while inp.carsOk is down) or the lamp driver's carKey / castCars / cast. Inputs without a field are left.
+  function bindField(inp, lamp) {
+    if (!inp || !inp.f || inp.carKey) return inp;
+    if (lamp) {
+      const c3 = [0, 0, 0];
+      inp.carKey = (lx, ly, lz, r2) => { c3[0] = lx; c3[1] = ly; c3[2] = lz; return fieldCars(inp.f, inp.live, c3, r2, true, false); };
+      inp.castCars = (reach, r2) => { fieldCars(inp.f, inp.live, reach, r2, true, true); };
+      inp.cast = (reach, r2) => { inp.castCars(reach, r2); inp.castProps(reach); };
+    } else {
+      inp.carKey = (i, cw, r2) => (inp.carsOk ? fieldCars(inp.f, inp.live, cw, r2, false, false) : 0);
+      inp.castCars = (i, cw, r2) => (inp.carsOk ? fieldCars(inp.f, inp.live, cw, r2, false, true) : 0);
+    }
+    return inp;
+  }
+  const csmMath = Object.freeze({ CSM, LAMPX, csmHalves, csmSpan, lightBasis, csmSnap, csmBiasK, csmWeight, csmJitter, csmReach2, csmGateK,
+    csmDue, csmPlanner, lampPick, lampXDriver, csmCarHash, fieldCars, bindField });
+
   function shadowSys(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
     // Keyed on the DEVICE, not the memory tier — js/render/glx/shadow.js's rule,
@@ -78,7 +423,7 @@
     const softwareGL = !!ctx.softwareGL;
 
     const SUN_SIZE = sunMapSize(ctx);   // 1024² saves 12 MB on every phone (GLX parity)
-    const CAR_SIZE = softwareGL ? 256 : 1024;                      // dynamic car-only map (true desktop only)
+    const CAR_SIZE = softwareGL ? 256 : (ctx.carSize || 1024);                      // dynamic car-only map (true desktop only)
     const LAMP_SIZE = softwareGL ? 256 : 512;                      // nearest-floodlight spot map (true desktop only)
 
     const S = {
@@ -194,6 +539,64 @@
     const lampStaticRT = lampStaticOn ? makeDepthTarget(LAMP_SIZE, "TLXLampStatic", false, true) : null;
     const _lampStaticVP = new Float32Array(16);
     let _lampStaticValid = false, _lampRendered = false;
+    // EXTREME extras (csmMath above): the far cascades and the extra lamp maps. Built only when tlx.js passes
+    // ctx.extras (desktop ULTRA+, not the lite lab) AND GfxQuality turns the feature on; any failure here leaves
+    // both lists empty, i.e. today's three maps exactly.
+    const _xFeat = (name) => {
+      try { return !!ctx.extras && !isMobile && !softwareGL && typeof GfxQuality !== "undefined" && !!GfxQuality.feature(name); } catch (_) { return false; }
+    };
+    const csmRT = [], lampXRT = [], csmStaticRT = [], lampXStaticRT = [];
+    // The copy-backed caches (the cascade car layer, the extra lamps' static props) need the copy L1 needs:
+    // copyTextureToTexture between depth32float targets, and on WebGL the seeded UNPACK cache (seedUnpackCache).
+    // apex26.tlxCsmCars=0 drops the cascade car layer (the far cascades stay static-only, as before).
+    // WebGPU: also float32-filterable. three's WGSL builder counts a FloatType texture unfilterable without it
+    // (isUnfilterable) and then declares no comparison sampler for the depth32float map the lit program samples
+    // with one: an invalid lit program, on every material. (The one-lamp L1 map carries the same exposure.)
+    const _f32Filt = () => { try { return !!(renderer.hasFeature && renderer.hasFeature("float32-filterable")); } catch (_) { return false; } };
+    const _canCopy = () => typeof renderer.copyTextureToTexture === "function" && (isWebGPU ? _f32Filt() : seedUnpackCache());
+    let csmCarsOn = false;
+    const _disposeAll = (list) => { for (const rt of list) { try { rt.dispose(); } catch (_) { /* */ } } list.length = 0; };
+    if (sunRT && _xFeat("csm")) {
+      let carsWanted = true;
+      try { carsWanted = localStorage.getItem("apex26.tlxCsmCars") !== "0"; } catch (_) { /* no storage: on */ }
+      carsWanted = carsWanted && _canCopy();
+      try { for (let i = 0; i < CSM.N; i++) csmRT.push(makeDepthTarget(CSM.SIZE, "TLXSunCascade" + (i + 1), false, carsWanted && i < CSM.CARS)); } catch (e) {
+        try { Log.warn("gfx", "TLX: cascade targets failed, one sun map —", e); } catch (_) { /* Log absent */ }
+        _disposeAll(csmRT);
+      }
+      if (csmRT.length === CSM.N && carsWanted) {
+        try { for (let i = 0; i < CSM.CARS; i++) csmStaticRT.push(makeDepthTarget(CSM.SIZE, "TLXSunCascadeStatic" + (i + 1), false, true)); csmCarsOn = true; } catch (e) {
+          try { Log.warn("gfx", "TLX: cascade static cache failed, no far car shadows —", e); } catch (_) { /* Log absent */ }
+          _disposeAll(csmStaticRT);
+        }
+      }
+    }
+    if (lampRT && _xFeat("lampShadows")) {
+      const lxCache = lampStaticOn && _canCopy();
+      try { for (let k = 0; k < LAMPX.N; k++) lampXRT.push(makeDepthTarget(LAMP_SIZE, "TLXLampShadowX" + (k + 1), false, lxCache)); } catch (e) {
+        try { Log.warn("gfx", "TLX: extra lamp targets failed, one lamp map —", e); } catch (_) { /* Log absent */ }
+        _disposeAll(lampXRT);
+      }
+      if (lampXRT.length === LAMPX.N && lxCache) {
+        try { for (let k = 0; k < LAMPX.N; k++) lampXStaticRT.push(makeDepthTarget(LAMP_SIZE, "TLXLampStaticX" + (k + 1), false, true)); } catch (e) {
+          try { Log.warn("gfx", "TLX: extra lamp static caches failed, full lamp passes —", e); } catch (_) { /* Log absent */ }
+          _disposeAll(lampXStaticRT);
+        }
+      }
+    }
+    const _csmStaticVP = csmStaticRT.map(() => new Float32Array(16)), _csmStaticValid = csmStaticRT.map(() => false);
+    const _csmPending = csmStaticRT.map(() => ({ half: 0, biasK: 1 }));
+    const _lxStaticVP = lampXStaticRT.map(() => new Float32Array(16)), _lxStaticValid = lampXStaticRT.map(() => false);
+    const _xRendered = new Set();   // csm / lampX live targets an endPass has rendered (the copy's _lampRendered rule)
+    let _csmCarsOpen = false;       // a cascade car-layer pass is open (a throw drops the layer, not the cascades)
+    // The debug / lit record (tsl-lit.js reads vp, half, biasK, valid; __apex reads the rest via gfx.shadowX.state()).
+    S.csm = { on: csmRT.length === CSM.N, n: csmRT.length, sizes: [SUN_SIZE].concat(csmRT.map(() => CSM.SIZE)),
+      vp: csmRT.map(() => new Float32Array(16)), half: csmRT.map(() => 0), biasK: csmRT.map(() => 1), valid: csmRT.map(() => false), fails: 0,
+      // the far car layer (cascade 1): static-cache renders, copy + cars passes, copy failures
+      carsOn: csmCarsOn, carLayers: csmStaticRT.length, staticBuilds: csmStaticRT.map(() => 0), carPasses: csmStaticRT.map(() => 0), copyFails: 0,
+      dither: (() => { try { return localStorage.getItem("apex26.tlxCsmDither") === "0" ? 0 : CSM.DITHER; } catch (_) { return CSM.DITHER; } })() };   // build-time (tsl-lit.js)
+    S.lampX = { on: lampXRT.length === LAMPX.N, n: lampXRT.length, size: LAMP_SIZE, staticOn: lampXStaticRT.length === LAMPX.N,
+      slots: lampXRT.map(() => ({ enabled: true, armed: false, idx: -1, arms: 0, builds: 0, lightVP: new Float32Array(16), staticBuilds: 0, carOnly: 0 })) };
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
@@ -216,7 +619,7 @@
     // phone, against the fixed-R phone rule at colorPcss and §2q's
     // accounting (the shadow pass is already 40.4 MB of TLX's phone
     // excess, and jetsam headroom is the phone constraint).
-    const BLOCKER_SIZE = 512;
+    const BLOCKER_SIZE = SUN_SIZE > 2048 ? 1024 : 512;
     let blockerRT = null, blockerQuad = null;
     if (sunRT && !isMobile && (isWebGPU || colorPcss)) {
       try {
@@ -730,6 +1133,7 @@
         // while the FBO three just rendered into is still bound. WebGPU never writes it (colorWrite).
         if (!(wasSun && colorPcss) && discardColor(target)) S.colorDiscards++;
         if (target === lampRT) _lampRendered = true;
+        else if (csmRT.indexOf(target) >= 0 || lampXRT.indexOf(target) >= 0) _xRendered.add(target);
         _lastPassOk = true;
       } catch (e) {
         // Depth TSL compile must not escape into tick() (full-screen overlay).
@@ -741,6 +1145,12 @@
         // takes over), never the lamp shadow for the session (#5699 row 13).
         else if (target === lampStaticRT) { lampStaticOn = false; _lampStaticValid = false; }
         else if (target === lampRT) S.lampEnabled = false;
+        // EXTREME extras fail alone: the cascades all go (the near map stays), an extra lamp slot goes by itself.
+        // Their caches are optimisations: a static-cache or car-layer failure drops only that cache.
+        else if (csmStaticRT.indexOf(target) >= 0 || (_csmCarsOpen && csmRT.indexOf(target) >= 0)) csmCarsOff();
+        else if (lampXStaticRT.indexOf(target) >= 0) lampXStaticOff();
+        else if (csmRT.indexOf(target) >= 0) { S.csm.on = false; S.csm.fails++; for (let i = 0; i < S.csm.valid.length; i++) S.csm.valid[i] = false; }
+        else if (lampXRT.indexOf(target) >= 0) { const sl = S.lampX.slots[lampXRT.indexOf(target)]; sl.enabled = false; sl.armed = false; }
         else S.enabled = false;
         S.depthPassOn = false;
       } finally { renderer.autoClear = autoClear0; }
@@ -765,7 +1175,7 @@
       shadowCam.projectionMatrix.identity();
       shadowCam.projectionMatrixInverse.identity();
       const prev = renderer.getRenderTarget();
-      const rts = [sunRT, carRT, lampRT];
+      const rts = [sunRT, carRT, lampRT].concat(csmRT, lampXRT, csmStaticRT, lampXStaticRT);
       for (let i = 0; i < rts.length; i++) {
         if (!rts[i]) continue;
         renderer.setRenderTarget(rts[i]);
@@ -869,6 +1279,7 @@
     function clearArmed() {
       S.carArmed = false;
       S.lampArmed = false;
+      for (let k = 0; k < S.lampX.slots.length; k++) S.lampX.slots[k].armed = false;
     }
 
     try { Log.info("gfx", "TLX shadow init"); } catch (_) { /* harness */ }
@@ -897,6 +1308,208 @@
       S.lampArmed = true;
       return true;
     }
+
+    // EXTREME extras: the seam shadow-pass.js drives through gfx.shadowX (null when neither feature is on).
+    function csmBegin(i, vp, half, biasK) {
+      const rt = csmRT[i];
+      if (!S.csm.on || !rt) return false;
+      S.csm.valid[i] = false;   // being redrawn: the lit pass must not trust the old VP with the new depth
+      S.castCullVP = null;
+      beginPass(rt, vp, S.csm.vp[i]);
+      S.castCullVP = S.csm.vp[i];   // chunked / instanced casters cull to THIS cascade
+      S.csm.half[i] = half; S.csm.biasK[i] = biasK;
+      _lastPassOk = false;
+      return true;
+    }
+    function csmEnd(i) {
+      S.castCullVP = null;
+      endPass(csmRT[i]);
+      S.csm.valid[i] = !!(_lastPassOk && S.csm.on);
+      return S.csm.valid[i];
+    }
+    function lampXBegin(k, vp, idx) {
+      const sl = S.lampX.slots[k];
+      if (!S.lampX.on || !sl || !sl.enabled) return false;
+      sl.idx = idx | 0;
+      S.castCullVP = null;
+      beginPass(lampXRT[k], vp, sl.lightVP);
+      S.castCullVP = sl.lightVP;
+      sl.armed = true; sl.arms++;
+      _lastPassOk = false;
+      return true;
+    }
+    function lampXEnd(k) {
+      S.castCullVP = null;
+      endPass(lampXRT[k]);
+      const sl = S.lampX.slots[k];
+      if (sl && _lastPassOk) sl.builds++;
+    }
+    function lampXKeep(k, idx) {
+      const sl = S.lampX.slots[k];
+      if (!S.lampX.on || !sl || !sl.enabled || sl.arms <= 0 || !(idx >= 0)) return false;
+      sl.idx = idx | 0; sl.armed = true;
+      return true;
+    }
+    const _vpEq = (a, b) => { for (let i = 0; i < 16; i++) if (Math.fround(a[i]) !== b[i]) return false; return true; };
+    // The cascade CAR LAYER (csmPlanner's car hooks). Any failure drops the layer for the session; the cascade it
+    // sat on is invalidated and rebuilt as today's static-only map on its next due frame.
+    function csmCarsOff() {
+      if (!csmCarsOn) return;
+      csmCarsOn = false; S.csm.carsOn = false; _csmCarsOpen = false; S.castCullVP = null;
+      for (let i = 0; i < _csmStaticValid.length; i++) {
+        _csmStaticValid[i] = false; S.csm.valid[i] = false;
+        if (_csmPlan) _csmPlan.dirty(i);
+      }
+    }
+    function csmStaticBegin(i, vp, half, biasK) {
+      const rt = csmStaticRT[i];
+      if (!csmCarsOn || !S.csm.on || !rt) return false;
+      _csmStaticValid[i] = false;
+      S.castCullVP = null;
+      beginPass(rt, vp, _csmStaticVP[i]);
+      S.castCullVP = _csmStaticVP[i];   // the props cull to this cascade, as in the direct pass
+      _csmPending[i].half = half; _csmPending[i].biasK = biasK;
+      _lastPassOk = false;
+      return true;
+    }
+    function csmStaticEnd(i) {
+      S.castCullVP = null;
+      endPass(csmStaticRT[i]);
+      _csmStaticValid[i] = !!(_lastPassOk && csmCarsOn && S.csm.on);
+      if (_csmStaticValid[i]) S.csm.staticBuilds[i]++;
+      return _csmStaticValid[i];
+    }
+    // fresh = right after its static render (the VP may be new); otherwise a car-only refresh, which needs the live
+    // map to hold exactly the static map's VP. false: no copy ran, the caller takes the direct pass.
+    function csmCarsBegin(i, fresh) {
+      const rt = csmRT[i], srt = csmStaticRT[i];
+      if (!csmCarsOn || !S.csm.on || !rt || !srt || !_csmStaticValid[i] || !_xRendered.has(rt)) return false;
+      if (!fresh && !(S.csm.valid[i] && _vpEq(_csmStaticVP[i], S.csm.vp[i]))) return false;
+      try {
+        renderer.copyTextureToTexture(srt.depthTexture, rt.depthTexture);
+      } catch (e) {
+        try { Log.warn("gfx", "TLX: cascade static depth copy failed, no far car shadows —", e); } catch (_) { /* Log absent */ }
+        S.csm.copyFails++;
+        csmCarsOff();
+        return false;
+      }
+      S.castCullVP = null;
+      S.csm.valid[i] = false;
+      beginPass(rt, _csmStaticVP[i], S.csm.vp[i]);
+      S.castCullVP = S.csm.vp[i];
+      S.csm.half[i] = _csmPending[i].half; S.csm.biasK[i] = _csmPending[i].biasK;
+      _passKeepsDepth = true;
+      _csmCarsOpen = true;
+      _lastPassOk = false;
+      return true;
+    }
+    function csmCarsEnd(i) {
+      S.castCullVP = null;
+      endPass(csmRT[i]);
+      _csmCarsOpen = false;
+      S.csm.valid[i] = !!(_lastPassOk && S.csm.on);
+      if (S.csm.valid[i]) S.csm.carPasses[i]++;
+      return S.csm.valid[i];
+    }
+    // The extra lamps' STATIC-PROPS cache (lampXDriver's split hooks; L1's lampStaticBegin / lampCarsBegin per slot).
+    function lampXStaticOff() {
+      for (let k = 0; k < _lxStaticValid.length; k++) _lxStaticValid[k] = false;
+      S.lampX.staticOn = false;
+    }
+    function lampXStaticBegin(k, vp) {
+      const rt = lampXStaticRT[k], sl = S.lampX.slots[k];
+      if (!S.lampX.staticOn || !lampStaticOn || !rt || !S.lampX.on || !sl || !sl.enabled) return false;
+      _lxStaticValid[k] = false;
+      S.castCullVP = null;
+      beginPass(rt, vp, _lxStaticVP[k]);
+      S.castCullVP = _lxStaticVP[k];
+      _lastPassOk = false;
+      return true;
+    }
+    function lampXStaticEnd(k) {
+      S.castCullVP = null;
+      endPass(lampXStaticRT[k]);
+      _lxStaticValid[k] = !!(_lastPassOk && S.lampX.staticOn);
+      if (_lxStaticValid[k]) S.lampX.slots[k].staticBuilds++;
+      return _lxStaticValid[k];
+    }
+    function lampXCarsBegin(k, vp, idx) {
+      const rt = lampXRT[k], srt = lampXStaticRT[k], sl = S.lampX.slots[k];
+      if (!S.lampX.staticOn || !rt || !srt || !_lxStaticValid[k] || !_xRendered.has(rt) || !sl || !sl.enabled) return false;
+      if (!_vpEq(vp, _lxStaticVP[k])) return false;   // the props were drawn under another VP
+      try {
+        renderer.copyTextureToTexture(srt.depthTexture, rt.depthTexture);
+      } catch (e) {
+        try { Log.warn("gfx", "TLX: extra lamp static depth copy failed, full lamp passes —", e); } catch (_) { /* Log absent */ }
+        lampXStaticOff();
+        return false;
+      }
+      if (!lampXBegin(k, vp, idx)) return false;
+      _passKeepsDepth = true;
+      sl.carOnly++;
+      return true;
+    }
+    const _csmPlan = S.csm.on ? csmPlanner({
+      M4: null, size0: SUN_SIZE, begin: csmBegin, end: csmEnd,
+      invalidate() { for (let i = 0; i < S.csm.valid.length; i++) S.csm.valid[i] = false; for (let i = 0; i < _csmStaticValid.length; i++) _csmStaticValid[i] = false; },
+      carsOn: (i) => csmCarsOn && i < csmStaticRT.length,
+      staticBegin: csmStaticBegin, staticEnd: csmStaticEnd, carsBegin: csmCarsBegin, carsEnd: csmCarsEnd,
+      carsFail(i, e) { try { Log.warn("gfx", "TLX: far car casts failed, no far car shadows —", e); } catch (_) { /* Log absent */ } csmCarsOff(); },
+    }) : null;
+    const _lampDrv = S.lampX.on ? lampXDriver(Object.assign({ n: LAMPX.N, M4: null, begin: lampXBegin, end: lampXEnd, keep: lampXKeep },
+      S.lampX.staticOn ? { staticBegin: lampXStaticBegin, staticEnd: lampXStaticEnd, carsBegin: lampXCarsBegin } : null)) : null;
+    // Null when neither extra is on: shadow-pass.js and tsl-lit.js then take today's paths, byte for byte.
+    const X = (_csmPlan || _lampDrv) ? {
+      get csmOn() { return !!(_csmPlan && S.csm.on); },
+      get lampOn() { return !!(_lampDrv && S.lampX.on); },
+      csmN: csmRT.length, csmSize: CSM.SIZE, csmFade: CSM.FADE,
+      csmTex: csmRT.map((rt) => rt.depthTexture),
+      // build-time constants for tsl-lit.js (the band dither)
+      csmDither: S.csm.dither, csmDitherCell: CSM.DITHER_CELL,
+      lampN: lampXRT.length, lampSize: LAMP_SIZE,
+      lampTex: lampXRT.map((rt) => rt.depthTexture),
+      csmPass(inp) {
+        if (!_csmPlan || !S.csm.on) return 0;
+        try { return _csmPlan.pass(bindField(inp, false)); } catch (e) {
+          // A planner / cast throw must not take the race down: the cascades go, the near map stays.
+          try { Log.warn("gfx", "TLX: cascade pass failed, cascades off —", e); } catch (_) { /* Log absent */ }
+          S.csm.on = false; S.csm.fails++; S.depthPassOn = false; S.castCullVP = null; _csmCarsOpen = false;
+          for (let i = 0; i < S.csm.valid.length; i++) S.csm.valid[i] = false;
+          return 0;
+        }
+      },
+      lampPass(inp) {
+        if (!_lampDrv || !S.lampX.on) return 0;
+        try { return _lampDrv.pass(bindField(inp, true)); } catch (e) {
+          try { Log.warn("gfx", "TLX: extra lamp pass failed, one lamp map —", e); } catch (_) { /* Log absent */ }
+          S.lampX.on = false; S.depthPassOn = false; S.castCullVP = null;
+          for (const sl of S.lampX.slots) sl.armed = false;
+          return 0;
+        }
+      },
+      reset() { if (_csmPlan) _csmPlan.reset(); if (_lampDrv) _lampDrv.reset(); },
+      // A/B writers for the two kill switches (both read at build: reload after). gfx.shadowX.setCsmCars(false).
+      setCsmCars(on) { try { localStorage.setItem("apex26.tlxCsmCars", on ? "1" : "0"); } catch (_) { /* no storage */ } return !!on; },
+      setCsmDither(on) { try { localStorage.setItem("apex26.tlxCsmDither", on ? "1" : "0"); } catch (_) { /* no storage */ } return !!on; },
+      state() {
+        return {
+          csm: { on: S.csm.on, n: S.csm.n, sizes: S.csm.sizes.slice(), half: S.csm.half.slice(), biasK: S.csm.biasK.slice(),
+            valid: S.csm.valid.slice(), fails: S.csm.fails,
+            builds: _csmPlan ? _csmPlan.state.builds.slice() : [], deferred: _csmPlan ? _csmPlan.state.deferred.slice() : [],
+            halves: _csmPlan ? _csmPlan.state.halves.slice() : [],
+            // far car layer: carBuilds = car-only refreshes, carCasts = cars in the last layer pass, cached = static
+            // renders into the cache (planner); staticBuilds / carPasses = the same, counted by the targets
+            carsOn: S.csm.carsOn, carLayers: S.csm.carLayers, dither: S.csm.dither, copyFails: S.csm.copyFails,
+            staticBuilds: S.csm.staticBuilds.slice(), carPasses: S.csm.carPasses.slice(),
+            carBuilds: _csmPlan ? _csmPlan.state.carBuilds.slice() : [], carDeferred: _csmPlan ? _csmPlan.state.carDeferred.slice() : [],
+            carCasts: _csmPlan ? _csmPlan.state.carCasts.slice() : [], cached: _csmPlan ? _csmPlan.state.cached.slice() : [] },
+          lampX: { on: S.lampX.on, n: S.lampX.n, size: S.lampX.size, staticOn: S.lampX.staticOn,
+            slots: S.lampX.slots.map((s) => ({ enabled: s.enabled, armed: s.armed, idx: s.idx, arms: s.arms, builds: s.builds,
+              staticBuilds: s.staticBuilds, carOnly: s.carOnly })),
+            pick: _lampDrv ? Array.from(_lampDrv.state.pick) : [] },
+        };
+      },
+    } : null;
 
     // Every caster that holds real geometry, shown for a warm (compile or draw); hideCasters undoes it.
     function showAllCasters() {
@@ -1004,6 +1617,7 @@
             if (!rt || rt === sunRT) continue;
             renderer.setRenderTarget(rt); await renderer.compileAsync(castScene, shadowCam);
           }
+          for (const rt of csmRT.concat(lampXRT, csmStaticRT, lampXStaticRT)) { renderer.setRenderTarget(rt); await renderer.compileAsync(castScene, shadowCam); }   // EXTREME extras
           if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
           compiled = true;
         } finally {
@@ -1031,7 +1645,7 @@
         const prev = renderer.getRenderTarget(), shown = showAllCasters(), seen = new Set();
         let n = 0;
         try {
-          for (const rt of [sunRT, carRT, lampRT, lampStaticRT]) {
+          for (const rt of [sunRT, carRT, lampRT, lampStaticRT].concat(csmRT, lampXRT, csmStaticRT, lampXStaticRT)) {
             if (!rt) continue;
             const hdr = !!(rt.texture && rt.texture.type === THREE.FloatType), fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
             const key = hdr + "|" + fd;
@@ -1084,8 +1698,9 @@
       lampStaticBegin, lampStaticEnd, lampCarsBegin,
       get lampStaticOn() { return !!(lampStaticRT && lampStaticOn); },
       clearArmed,
+      x: X,   // EXTREME extras (csm / lampShadows), or null
     };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap, sunMapSize });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap, sunMapSize, csmMath });
 })();

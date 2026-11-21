@@ -872,6 +872,34 @@ test("flicker re-uploads the baked track set at most 30 times a second; a new se
   assert.equal(uploads(), held + 10, "a frozen clock (renderClock hold) is never paced — a slider move must land");
 });
 
+test("a static refill of the shared track light buffer immediately updates the WebGPU records", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const sbo = h.buffers.find((buffer) => buffer.desc.size === 1024 * 64);
+  const lights = new Array(15).fill(0);
+  let gen = 0;
+  function submit(staticGen, time, perChunkLights = 1) {
+    gfx.begin({ perChunkLights, allLights: lights, allLightsGen: ++gen, allLightsStaticGen: staticGen, time });
+    return h.writes.filter((write) => write.buffer === sbo);
+  }
+  lights[0] = 15;
+  assert.equal(submit(1, 1).at(-1).values[0], 15);
+  lights[0] = 42;
+  lights[6] = 88;
+  const replaced = submit(2, 1.001);
+  assert.equal(replaced.length, 2, "static changes bypass flicker pacing");
+  assert.deepEqual(replaced.at(-1).values.slice(0, 4), [42, 0, 0, 88]);
+  lights.length = 0;
+  assert.equal(submit(3, 1.002).length, 2);
+  lights.push(...new Array(30).fill(0));
+  lights[15] = 123;
+  assert.equal(submit(4, 1.003, 0).length, 2);
+  const grown = submit(4, 1.004);
+  assert.equal(grown.at(-1).values.length, 32);
+  assert.equal(grown.at(-1).values[16], 123, "the added lamp is packed when per-chunk lights resume");
+});
+
 test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads", async () => {
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*wetDark/);
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
@@ -1330,6 +1358,36 @@ test("the WGX shadow-lamp absolute index follows an in-place refill of the baked
   allLights.push(...lampRecs([0, 5, 0], [20, 5, 0]));
   frame.allLightsGen = 4;
   assert.equal(frameOn()[140], 1, "the refill that brings it in is seen");
+});
+
+test("a shadow caster missing from the track set stays cached across RGB updates and mirror passes", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const fb = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const records = lampRecs(...Array.from({ length: 64 }, (_, i) => [i, 5, 0]));
+  let reads = 0;
+  const allLights = new Proxy(records, { get(target, key) {
+    if (typeof key === "string" && /^\d+$/.test(key)) reads++;
+    return target[key];
+  } });
+  const frame = { lights: lampRecs([100, 5, 0]), allLights, allLightsGen: 1, allLightsStaticGen: 1 };
+  const render = () => {
+    gfx.lampShadowBegin(IDENT16, 0); gfx.lampShadowEnd();
+    assert.equal(gfx.mirrorBegin(frame, 64, 16), true); gfx.mirrorEnd();
+    assert.equal(gfx.begin(frame), true);
+    const index = h.writes.filter((w) => w.buffer === fb).at(-1).values[140];
+    gfx.present({});
+    return index;
+  };
+  assert.equal(render(), -1);
+  assert.ok(reads >= 64);
+  reads = 0;
+  for (let i = 0; i < 8; i++) { frame.allLightsGen++; assert.equal(render(), -1); }
+  assert.equal(reads, 0, "unchanged lamp positions never rescan the track");
+  records[15] = 100;
+  frame.allLightsStaticGen++; frame.allLightsGen++;
+  assert.equal(render(), 1, "a static refill retries the missing caster");
 });
 
 test("god-ray uploads nearest lamps and remaps the shadowed index", async () => {
@@ -3957,6 +4015,17 @@ for (const info of [{ reason: "unknown" }, { reason: "out-of-memory" }]) {
   });
 }
 
+test("a stale timeout preserves the next queued capture", async () => {
+  const h = makeGpuHarness(); const gfx = await h.create();
+  const owner = {}, stale = {};
+  const pending = gfx.capturePixels(owner);
+  const rejection = assert.rejects(pending, /current timeout/);
+  gfx.cancelCapture("old timeout", stale);
+  await assert.rejects(gfx.capturePixels(), /already pending/);
+  gfx.cancelCapture("current timeout", owner);
+  await rejection;
+});
+
 test("queued capture settles at the JS-error strike cap", async () => {
   const h = makeGpuHarness(); const gfx = await h.create();
   const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
@@ -4093,7 +4162,7 @@ for (const fullPost of [false, true]) test(`capture submission releases readback
     assert.ok(a >= 0 && b > a, start);
     return source.slice(a, b);
   };
-  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels() {", "    // Destroy buffers AND textures") +
+  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels(owner) {", "    // Destroy buffers AND textures") +
     between(WGX_MAIN_SOURCE, "    // Before submission the encoded readback", "    //    (SSAO -> godray");
   const shadow = between(WGX_SHADOW_SOURCE, "    function _frameSubmitList(mainEnc) {", "    // Same-model dedupe.");
   const declaration = fullPost ? "      const _cap = _capEncode();" : "        const cap = _capEncode();";

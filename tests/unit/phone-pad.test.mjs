@@ -815,8 +815,11 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const ok = await ctl.connect("abc234");
   assert.deepEqual(ok, { ok: true });
   assert.deepEqual(seen, ["swap:ABC234", "accept:OFFER"], "the code is normalised, the offer answered");
-  assert.ok(ctl.state().linked && dom.body.classes.has("linked"), "the wheel shows once the channel is open");
+  assert.ok(ctl.state().linked && dom.body.classes.has("awaiting") && !dom.body.classes.has("linked"),
+    "the channel is open, but no wheel until the game's first dash says which surface it wants");
   const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); desk.Input.steer(); };
+  frame(); frame();
+  assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the first dash shows the wheel");
   // GAS: STAMP THEN EASE, the game's own touch pedals' gesture (hold-buttons.js wireHold).
   // RE-PINNED DELIBERATELY (R3-PHONE-2): this used to assert "a thumb 2/3 down the zone is
   // 2/3 travel" — an absolute mapping that gave a thumb aimed at a ~150 px pedal's label half
@@ -1422,7 +1425,7 @@ test('closed phone sessions ignore late packets and open callbacks', () => {
 
 test('a phone connecting before hostRoom returns still closes the late room without losing the link', async () => {
   let resolve, callbacks, stopped = 0;
-  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}});
+  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}, freshMs: -1});   // outside the fresh window: the ALLOW path
   await settle(); await callbacks.onJoiner(null,'ANSWER');
   assert.equal(h.ctl.state().phase,'confirming','the channel is up, the phone waits for ALLOW');
   await settle();
@@ -1703,7 +1706,7 @@ function wakePad(over = {}, extra = {}) {
     rtc: () => {
       let close;
       const t = { status: "open", send: () => true, pump() {}, onMessage() {}, onClose(f) { close = f; },
-        close() { t.status = "closed"; if (close) close(); } };
+        close(why) { t.status = "closed"; if (close) close(why); } };
       transports.push(t); return t;
     }, swap: async () => ({ ok: true }), ...over,
   } });
@@ -1749,6 +1752,8 @@ test("page exit cancels pending pairing; its late lock and answer cannot affect 
   const first = h.ctl.connect("ABC234"); await settle();
   h.fire("pagehide");
   assert.equal(h.transports[0].status, "closed");
+  h.fire("pageshow"); await settle();
+  assert.equal(swaps, 1, "a first pairing cancelled by page exit is not retried");
   await h.ctl.connect("ABC234");
   const current = h.lock(); h.requests[1].resolve(current); await settle();
   const stale = h.lock(); h.requests[0].resolve(stale); finish({ ok: true });
@@ -2214,8 +2219,10 @@ function handConfirm() {
 const PEER_A = "a".repeat(32), PEER_B = "b".repeat(32);
 
 test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT closes it; cancel dismisses the ask (W26 row 11a)", async () => {
+  // STALE: freshMs -1 puts every code outside decision B's fresh-code window, so the gate asks.
+  const STALE = { freshMs: -1 };
   const c = handConfirm();
-  const h = hostHarness({ confirm: c.confirm });
+  const h = hostHarness({ confirm: c.confirm, ...STALE });
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
   assert.equal(h.ctl.state().phase, "confirming");
   assert.equal(c.asks.length, 1); assert.equal(h.ui.linkedN, 0, "not linked before the player says so");
@@ -2236,7 +2243,7 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   h.ctl.cancel();
 
   const r = handConfirm();
-  const no = hostHarness({ confirm: r.confirm });
+  const no = hostHarness({ confirm: r.confirm, ...STALE });
   await settle(); await no.room.onJoiner(null, "ANSWER"); await settle();
   r.asks[0].answer(false); await settle();
   assert.equal(no.ctl.state().phase, "lost"); assert.equal(no.ui.lostN, 1);
@@ -2245,12 +2252,12 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   assert.equal(no.ui.linkedN, 0);
 
   const d = handConfirm();
-  const gone = hostHarness({ confirm: d.confirm });
+  const gone = hostHarness({ confirm: d.confirm, ...STALE });
   await settle(); await gone.room.onJoiner(null, "ANSWER"); await settle();
   gone.ctl.cancel();
   assert.equal(d.asks[0].dismissed, 1, "STOP PAIRING takes the ALLOW card down");
   const e = handConfirm();
-  const drop = hostHarness({ confirm: e.confirm });
+  const drop = hostHarness({ confirm: e.confirm, ...STALE });
   await settle(); await drop.room.onJoiner(null, "ANSWER"); await settle();
   drop.padEnd.close(); await settle();
   assert.equal(e.asks[0].dismissed, 1, "a phone that leaves while asked takes the card with it");
@@ -2265,21 +2272,20 @@ test("host(): a re-link from the ALLOWed phone is let back in; another peer on t
   const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
   const h = hostHarness({ rtc, confirm: c.confirm });
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
-  assert.equal(c.asks.length, 1);
-  c.asks[0].answer(true); await settle();
-  hello(pairs[0], PEER_A);   // the phone names itself after ALLOW: still bound to this link
+  assert.equal(c.asks.length, 0, "decision B: the first phone on the code this screen just minted is not asked");
+  hello(pairs[0], PEER_A);   // the phone names itself after it was admitted: still bound to this link
   assert.equal(h.ctl.state().phase, "linked");
   drop(pairs[0]); await settle();
   assert.equal(h.ctl.state().phase, "waiting", "the same code is hosted again");
   await h.room.onJoiner(null, "ANSWER-2"); await settle();
   assert.equal(h.ctl.state().phase, "connecting", "the re-link waits for the phone to name itself");
   hello(pairs[1], PEER_A); await settle();
-  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 1, "the same phone is not asked twice");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 0, "the same phone's re-link is not asked");
   drop(pairs[1]); await settle();
   await h.room.onJoiner(null, "ANSWER-3"); await settle();
   hello(pairs[2], PEER_B); await settle();
-  assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked");
-  assert.equal(c.asks.length, 2);
+  assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked, fresh or not");
+  assert.equal(c.asks.length, 1);
   h.clock.t = 100;
   pairs[2][0].send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
   pairs[2][1].pump(20);
@@ -2412,7 +2418,9 @@ test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH tran
     assert.equal(made[0].closed, 1, "the superseded transport is closed");
     assert.equal(ctl.state().linked, true, "the session moved to the fresh transport");
     made[1].status = "open"; made[1].handlers.open();
-    assert.ok(dom.body.classes.has("linked"), "and it opens there");
+    assert.ok(dom.body.classes.has("awaiting"), "and it opens there");
+    made[1].handlers.message(NetTransport.STATE, PhonePad.encodeHud({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: 0, caution: 0, lastLapMs: 0, state: "menu", team: "" }));
+    assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the game's first dash shows its surface");
     assert.equal(JSON.parse(made[1].sent[0]).id, PEER_A, "its hello names the page");
     assert.equal(swapOpts.token.cancelled, true, "a link that is up stops the rendezvous");
     assert.equal(await swapOpts.reply("OFFER-3"), null, "an open link keeps its offer");
@@ -2431,7 +2439,7 @@ test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH tran
 test("#5739 row 3: host() tells the shell the ALLOW card is coming BEFORE it covers the screen", async () => {
   const c = handConfirm();
   const order = [];
-  const h = hostHarness({ confirm: (t) => { order.push("confirm"); return c.confirm(t); } });
+  const h = hostHarness({ confirm: (t) => { order.push("confirm"); return c.confirm(t); }, freshMs: -1 });   // a code outside the fresh window asks
   h.ui.asking = () => order.push("asking");
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
   assert.equal(h.ctl.state().phase, "confirming");
@@ -2515,6 +2523,61 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   h.ctl.cancel();
 });
 
+for (const stage of ["hidden", "backoff", "negotiating"]) {
+  test(`pagehide preserves the established phone pairing during reconnect: ${stage}`, async () => {
+    const codes = [];
+    let resolveOld;
+    const h = wakePad({ swap: async ({ code }) => {
+      codes.push(code);
+      if (codes.length === 2 && stage === "backoff") return { ok: false, error: "expired" };
+      if (codes.length === 2 && stage === "negotiating") return new Promise(r => { resolveOld = r; });
+      return { ok: true };
+    } });
+    await h.ctl.connect("ABC234");
+    if (stage === "hidden") h.doc.visibilityState = "hidden";
+    h.transports[0].close("disconnected"); await settle();
+    const beforeHide = stage === "hidden" ? 1 : 2;
+    assert.equal(codes.length, beforeHide);
+    h.doc.visibilityState = "hidden"; h.fire("pagehide");
+    h.doc.visibilityState = "visible"; h.fire("pageshow"); h.fire("visibilitychange"); await settle();
+    if (resolveOld) { resolveOld({ ok: false, error: "expired" }); await settle(); }
+    assert.deepEqual(codes, Array(beforeHide + 1).fill("ABC234"));
+    assert.equal(h.ctl.state().linked, true);
+    assert.equal(h.timeouts.some(t => !t.cleared && t.ms === 5000), false);
+    h.ctl.cancel();
+  });
+}
+
+test("explicit cancel while waiting to reconnect keeps the controller unpaired on return", async () => {
+  let swaps = 0;
+  const h = wakePad({ swap: async () => { swaps++; return { ok: true }; } });
+  await h.ctl.connect("ABC234");
+  h.doc.visibilityState = "hidden";
+  h.transports[0].close("disconnected"); await settle();
+  h.ctl.cancel(); h.fire("pagehide");
+  h.doc.visibilityState = "visible"; h.fire("pageshow"); await settle();
+  assert.equal(swaps, 1);
+  assert.equal(h.ctl.state().linked, false);
+});
+
+test("page exit after publishing the first answer but before RTC opens cancels pairing", async () => {
+  const wires = [], codes = [];
+  const h = wakePad({
+    rtc: () => {
+      const wire = { status: "connecting", send: () => false, pump() {}, onMessage() {}, onOpen() {}, onClose() {},
+        close() { wire.status = "closed"; } };
+      wires.push(wire); return wire;
+    },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async o => { codes.push(o.code); return { ok: !!await o.reply("OFFER") }; },
+  });
+  assert.equal((await h.ctl.connect("ABC234")).ok, true);
+  h.fire("pagehide"); h.fire("pageshow"); await settle();
+  assert.deepEqual(codes, ["ABC234"]);
+  assert.equal(wires[0].status, "closed");
+  assert.equal(h.dom.connect.disabled, false);
+});
+
 test("#5739 row 5: an answer whose link never opens ends at the connect deadline, says so and frees CONNECT", async () => {
   const wires = [];
   const h = wakePad({
@@ -2568,4 +2631,136 @@ test("#5739 row 6: a hash-only #pad= navigation into an open controller tab is r
   h.fire("hashchange");
   assert.equal(h.dom.codeIn.value, "BBBB2345", "the same link again changes nothing");
   h.ctl.cancel();
+});
+
+/* PAIRED FROM SETTINGS (Bryce, 2026-11-20): "it connects and on my phone it shows the wheel
+ * display but buttons don't work until on desktop I leave settings go to title and have to
+ * click a pop up to allow connection. Once I allow then my phone switched to menu navigation
+ * mode." Three defects, one test each: the ALLOW card was a <body> child under the modal
+ * Settings <dialog> (top layer), so it was hidden and inert until Settings closed; the phone
+ * showed its default wheel before the game had admitted it (no dash yet); and the desktop
+ * had no title door to the pairing at all. */
+test("ALLOW card opens in the TOP LAYER, over an open modal Settings, and Escape does not answer it", async () => {
+  const topLayer = [];
+  const mk = (tag) => {
+    const n = { tagName: tag.toUpperCase(), style: {}, attrs: {}, kids: [], listeners: {}, parentNode: null, textContent: "", id: "", open: false,
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      appendChild(c) { c.parentNode = this; this.kids.push(c); return c; },
+      removeChild(c) { this.kids = this.kids.filter((k) => k !== c); c.parentNode = null; },
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
+      fire(t, e) { for (const f of this.listeners[t] || []) f(e); },
+      click(e) { this.fire("click", e); } };
+    if (n.tagName === "DIALOG") {
+      n.showModal = function () { if (!this.parentNode) throw new Error("not connected"); this.open = true; topLayer.push(this); };
+      n.close = function () { this.open = false; topLayer.splice(topLayer.indexOf(this), 1); };
+    }
+    return n;
+  };
+  const doc = { body: mk("body"), createElement: mk };
+  const settings = mk("dialog"); settings.id = "pmsettings"; doc.body.appendChild(settings); settings.showModal();
+  const ask = PhonePad.askOnScreen(doc, "A phone joined with this game's room code. Let it steer this game?");
+  const box = doc.body.kids.at(-1);
+  assert.equal(box.tagName, "DIALOG", "the card is a dialog of its own");
+  assert.equal(topLayer.at(-1), box, "shown modal AFTER Settings: it is on top of it, not under it");
+  let prevented = 0; box.fire("cancel", { preventDefault() { prevented++; } });
+  assert.equal(prevented, 1, "Escape is not an answer");
+  // modal.js shows a dialog from a MutationObserver: the pause menu that asking() opened lands AFTER the card.
+  const pause = mk("dialog"); pause.id = "pausemenu"; doc.body.appendChild(pause); pause.showModal();
+  assert.equal(topLayer.at(-1), pause, "(the late pause menu is over the card for a moment)");
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(topLayer.at(-1), box, "a tick later the card is raised back over it");
+  const allow = box.kids[0].kids[2].kids[0];
+  let settled = null; ask.result.then((v) => { settled = v; });
+  allow.click({ isTrusted: true }); await settle();
+  assert.equal(settled, true);
+  assert.equal(box.open, false); assert.deepEqual(topLayer, [settings, pause], "ALLOW takes the card out of the top layer; the screens under it stay");
+});
+
+test("the phone's surface follows the game's screen from the first frame it is admitted: no dead wheel, menu pad in menus, wheel in a race", async () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(21) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  const screen = { state: "menu", paused: false };
+  const dashOf = () => ({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: screen.paused ? PhonePad.DASH.paused : 0,
+    caution: 0, lastLapMs: 0, state: screen.state, team: "" });
+  let allow;
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: dashOf, doc: null,
+    admit: () => new Promise((r) => { allow = r; }) });
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+  const ctl = PhonePad.pad(dom, { now: () => clock.t, timers: fakeTimers(), deps: {
+    rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+    swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+  } });
+  try {
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); padEnd.pump(clock.t); hostEnd.pump(clock.t); };
+    for (let i = 0; i < 6; i++) frame();
+    assert.ok(dom.body.classes.has("awaiting"), "open but not admitted: the page waits");
+    assert.ok(!dom.body.classes.has("linked"), "and shows no wheel or pad the game would ignore");
+    assert.equal(dom.status.textContent, "Connected — waiting for the game… If it asks, tap ALLOW on its screen.", "it says what to do on the game's screen");
+    allow(true); await settle();
+    frame(); frame();
+    assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "admitted: the controls appear");
+    assert.ok(dom.hud.body.classes.has("menu"), "the game is on a menu: the first surface is the MENU PAD, not the wheel");
+    screen.state = "race";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(!dom.hud.body.classes.has("menu"), "a race starts: the wheel");
+    screen.paused = true;
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "paused: the menu pad drives the pause menu");
+    screen.paused = false; screen.state = "results";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "the race ends: back to the menu pad");
+  } finally { ctl.cancel(); link.close(); }
+});
+
+test("PlatformSession: the desktop's title door PHONE CONTROLLER opens Settings › CONTROLS and starts the pairing once", async () => {
+  const elements = new Map(), hosts = [], pages = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    openSettingsPage: (p) => pages.push(p),
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h; } },
+  });
+  vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
+  vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true), openSettingsPage }).wirePhone();", context);
+  const door = G.$("mb-steerphone");
+  assert.equal(typeof door.onclick, "function", "the title door is wired");
+  door.onclick(); await settle();
+  assert.deepEqual(pages, ["controls"], "it opens the CONTROLS page");
+  assert.equal(hosts.length, 1, "and starts the pairing: the code and QR are up");
+  assert.equal(G.$("pm-phonepad").textContent, "STOP PAIRING");
+  door.onclick(); await settle();
+  assert.equal(hosts.length, 1, "a second click shows the running pairing, it does not restart it");
+  assert.equal(hosts[0].cancelled, 0);
+
+});
+
+test("host(): decision B — the first phone on a code this screen just minted steers with no ALLOW; an old code still asks", async () => {
+  const clock = { t: 1_000_000 };
+  const c = handConfirm();
+  const h = hostHarness({ confirm: c.confirm, now: () => clock.t });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "no ALLOW card for the pairing the player just started");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
+  h.clock.t = 100;
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  h.hostEnd.pump(50);
+  assert.ok(h.Input.remoteActive() && h.Input.throttle(), "its inputs are accepted at once");
+  await h.room.onJoiner(null, "SECOND-ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "a second answer to the same code is ignored outright (one phone per room), never admitted");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1, "the first phone keeps the link");
+  h.ctl.cancel();
+
+  const clock2 = { t: 1_000_000 };
+  const o = handConfirm();
+  const old = hostHarness({ confirm: o.confirm, now: () => clock2.t });
+  await settle();
+  clock2.t += 5 * 60000 + 1;   // the code was shown more than five minutes ago
+  await old.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(old.ctl.state().phase, "confirming", "a code past the fresh window is asked");
+  assert.equal(o.asks.length, 1);
+  old.ctl.cancel();
 });

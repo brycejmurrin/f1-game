@@ -1691,6 +1691,8 @@ try {
     // rung closed it. Recording neither is what left the 30 % luma gap between
     // three's two backends an open lead after run 25 (docs/PERF-FINDINGS.md 2t).
     try { const a = window.__apex; if (a && a.renderScale) r.gov = a.renderScale(); } catch (e) { r.govError = String(e && e.message); }
+    // DESKTOP TIERS: per GfxQuality feature, on vs ran (js/perf/gfx-debug-overlay.js tiers(); census-verdict.mjs tierRows).
+    try { r.tiers = typeof GfxDebug !== "undefined" && GfxDebug.tiers ? GfxDebug.tiers() : null; if (!r.tiers) r.tiersError = "GfxDebug.tiers absent (no ?gfxdebug=1 overlay)"; } catch (e) { r.tiersError = String(e && e.message).slice(0, 160); }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
     // I-3 (#1648). Counts the renderer already tracks; no extra allocation.
     r.mem = {};

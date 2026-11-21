@@ -1,25 +1,7 @@
-/* Apex 26 — the opt-in RELATIVE box (iRacing-style) for GameHud.
-   SETTINGS › DISPLAY › HUD › RELATIVE (js/ui/hud-elements.js, shipped off),
-   placed by MOVE & SIZE (js/ui/hud-layout.js "rel").
-
-   The two cars AHEAD and two BEHIND on the ROAD — by arc position, not race
-   order, so a backmarker you are about to lap is in it and the leader a lap up
-   behind you is too — with the player's own row between them. Each row:
-   race position, 3-letter code on the team's colour bar, the gap in seconds
-   (- in front, + behind), the tyre letter (PIT while in the lane), and a
-   +1L / -1L marker for a car a lap up (red) or down (blue): text first, colour
-   second, so the meaning never rides on hue alone.
-
-   THE GAP IS THE GAP CHIPS' OWN MEASURE (js/ui/hud.js gapText): metres of arc
-   over max(the player's speed, 0.26 x vTop), smoothed per row (EMA 0.3 at the
-   10 Hz HUD tick) and reset when a row's car changes. Nothing is re-derived
-   from physics, and nothing here writes to a car: the HUD only reads.
-
-   Pure core (unit-tested in tests/unit/hud-relative.test.mjs): relDist,
-   lapsApart, select (fixed slots, allocation-free), fmtGap. tick(G, player)
-   is the one js/ui/hud.js call, at the HUD tick. Rows are built at runtime
-   inside the static #hud-rel (index.html) — no shell nodes per row, no class
-   tokens (data-k / data-lap / data-self attributes; css/hud.css). */
+/* Opt-in RELATIVE HUD. Road position selects two neighbours each side of the player,
+ * including lapped cars. Signed gaps use arc distance over max(speed, 0.26 * vTop),
+ * smoothed per row until its car changes. Lap markers carry both text and colour.
+ * The 10 Hz HUD tick builds rows inside #hud-rel the first time they can be shown. */
 const HudRelative = (function () {
   "use strict";
 
@@ -130,12 +112,12 @@ const HudRelative = (function () {
   /** js/ui/hud.js, once per HUD tick (10 Hz). Reads G; never writes a car. */
   function tick(G, player) {
     if (!doc || !player) return;
-    if (!root && !build()) return;
     const cars = G.cars, track = G.track;
     if (!isOn() || G.timeTrial || !track || !cars || cars.length < 2) { hideAll(); return; }
     const b = doc.body;
     // MINIMAL and the broadcast cameras hide it in CSS — skip the work too.
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
+    if (!root && !build()) return;
     if (root.hidden) root.hidden = false;
     select(cars, player, track.total, rows);
     const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
@@ -147,7 +129,9 @@ const HudRelative = (function () {
       // profile and precision boundaries, the rest compare their source values.
       let dirty = false;
       if (i !== SELF) {
-        const raw = Math.abs(r.rel) / vFloor;
+        // Time at a line on the shared clock (#5678), the lapped car at the same track point; distance ÷ speed until both cross one.
+        const gc = typeof HudReadouts !== "undefined" && HudReadouts.gaps, fb = Math.abs(r.rel) / vFloor;
+        const raw = !gc ? fb : r.rel > 0 ? gc.gapOr(car, player, fb, r.laps) : gc.gapOr(player, car, fb, -r.laps);
         if (smWho[i] !== car || !Number.isFinite(sm[i])) { smWho[i] = car; sm[i] = raw; }
         else sm[i] += (raw - sm[i]) * EMA;
         const gap = fmtGap(sm[i], r.rel > 0, G.hudProfile);
@@ -294,7 +278,7 @@ const HudRelative = (function () {
       for (let pass = 0; pass < 3; pass++) {
         const rr = root.getBoundingClientRect();
         if (!(rr.width && rr.height)) break;
-        let cap = Infinity, slide = 0, hit = false;
+        let cap = Infinity, slide = 0, hit = false, inSteer = false;
         for (let i = 0; i < CLEAR_IDS.length; i++) {
           const el = doc.getElementById(CLEAR_IDS[i]);
           if (!el || el.hidden) continue;
@@ -313,6 +297,7 @@ const HudRelative = (function () {
             && (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7);
           const centreSlide = CENTRE_SLIDE_IDS.indexOf(id) >= 0;
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          if (!doCap && id.indexOf("btn-steer") === 0) inSteer = true;
           if (leftish) slide = Math.max(slide, (box.right + 8) / z);
           else if (centreSlide && !doCap) {
             // Slide past OT/aero only while the card stays left of the right dock
@@ -332,6 +317,9 @@ const HudRelative = (function () {
           }
         }
         if (!hit) break;
+        // A home that STARTS inside the steer arrows (a taller top band, #5256 D) goes to the allocator, which lifts it
+        // above the pad: the slide parked it mid-screen in INPUTS' column (hud-layout.spec, HUD / BUTTON 150 %).
+        if (inSteer && typeof HudLayout !== "undefined" && HudLayout.clearReadouts) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";
         // Apply any positive doCap (phoneL 150%: OT/aero room is ~6–15px — the
         // old >28 gate left the full card painted on OT after the leftish slide).

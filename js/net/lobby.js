@@ -574,12 +574,8 @@ const NetLobby = (function () {
         for (const s of allSessions()) s.pump(now);
       }, 25);
 
-      // PER-CONNECTION RATE LIMIT on the two events a peer can fire at will.
-      // Every HELLO re-renders the room, re-resolves seat clashes and — on
-      // the host — is RELAYED to every other guest; every READY re-renders.
-      // Nothing legitimate sends more than a handful a second (a seat clash
-      // settles in one round trip), so past HELLO_RATE in a rolling second
-      // the rest are dropped on the floor. Separate windows per event.
+      // Keep separate rolling windows for expensive room updates.
+      // Guests coalesce relay traffic, while the host caps each sender.
       const helloTimes = [], readyTimes = [], qualiTimes = [], settingsTimes = [], qabortTimes = [];
       const rosterWindows = new Map(), pendingRoster = new Map();
       const underRate = (times, limit = HELLO_RATE) => {
@@ -603,26 +599,25 @@ const NetLobby = (function () {
           if (rosterWindows.size >= 2 * (MAX_GUESTS + 1)) return;
           rosterWindows.set(key, []);
         }
-        const window = rosterWindows.get(key);
-        if (underRate(window)) { pendingRoster.delete(key); apply(data); return; }
+        applyLatest(key, rosterWindows.get(key), data, apply);
+      }
+      function applyLatest(key, window, data, apply) {
+        if (underRate(window)) {
+          if (pendingRoster.delete(key)) { clearTimeout(rosterTimers.get(key)); rosterTimers.delete(key); }
+          apply(data); return;
+        }
         pendingRoster.set(key, data);
         if (rosterTimers.has(key)) return;
         const timer = setTimeout(() => {
           rosterTimers.delete(key);
           if (sessions.get(id) !== made || !pendingRoster.has(key)) return;
           const latest = pendingRoster.get(key); pendingRoster.delete(key);
-          window.length = 0; underRate(window); apply(latest);
+          applyLatest(key, window, latest, apply);
         }, Math.max(1, EVENT_WINDOW_MS - (performance.now() - window[0]) + 1));
         rosterTimers.set(key, timer);
       }
-      // The LATEST hello wins, not the first: a profile is re-sent every time
-      // someone changes team or livery in the waiting room, and keeping the
-      // first would race the rival's car in whatever they happened to be
-      // driving when the connection opened.
-      // Filed under the id of the CONNECTION it arrived on, never a `from` in
-      // the payload. With three guests every profile would otherwise collide
-      // into one slot — and a peer that can name itself is a peer that can name
-      // somebody else.
+      // Refresh the profile when a driver changes seat or livery. The host
+      // keys it by connection so a guest cannot claim another driver's ID.
       made.onEvent(NetPlay.EV.HELLO, (p) => rosterEvent("hello", p, (p) => {
         p = LobbyRoster.cleanHello(p);
         if (!p) { renderRoom(); return; }
@@ -661,7 +656,27 @@ const NetLobby = (function () {
         resolveSeatClash();
         renderRoom();
       }, helloTimes));
-      made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest" && underRate(settingsTimes)) applySettings(d); });
+      // The host sends complete snapshots. After a burst, the final revision
+      // must reach the guest or its READY can never match the host's grid.
+      /** @type {(() => void) | null} */
+      let pendingStart = null;
+      function receiveSettings(d) {
+        applySettings(d);
+        const start = pendingStart; pendingStart = null;
+        if (start) start();
+      }
+      made.onEvent(NetPlay.EV.SETTINGS, (d) => {
+        if (role === "guest") applyLatest("settings", settingsTimes, d, receiveSettings);
+      });
+      // A GO follows its SETTINGS on the ordered channel. Preserve that
+      // order across throttling, even when the snapshot repeats approved rules.
+      function onGuestStart(type, start) {
+        made.onEvent(type, (d) => {
+          if (role !== "guest") return;
+          if (pendingRoster.has("settings")) pendingStart = () => start(d);
+          else start(d);
+        });
+      }
       made.onEvent(NetPlay.EV.READY, (d) => rosterEvent("ready", d, (d) => {
         // Mirror HELLO: guests have no peer link, so the host must relay READY
         // with `from`. Key by who the ready belongs to, not the connection id
@@ -682,16 +697,15 @@ const NetLobby = (function () {
         }
         renderRoom();
       }, readyTimes));
-      made.onEvent(NetPlay.EV.GO, (d) => {
-        if (role !== "guest") return;
-        if (!settingsAccepted || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
+      onGuestStart(NetPlay.EV.GO, (d) => {
+        if (!settingsCurrent() || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
           say("Review the host’s race settings and press READY before starting.", true); return;
         }
         beginRace();
       });
       // A guest that left the quali sheet never reaches finishStart on its own; the host's qgo is its GO.
-      made.onEvent(QGO, () => {
-        if (role !== "guest" || !qualiAborted || !settingsAccepted) return;
+      onGuestStart(QGO, () => {
+        if (!qualiAborted || !settingsCurrent() || settingsNeedsReady) return;
         qualiAborted = false;
         close();
         finishStart();
@@ -826,6 +840,7 @@ const NetLobby = (function () {
     let selfReady = false;
     let settingsRevision = 0, settingsFingerprint = null, settingsAccepted = true, settingsNeedsReady = false;
     const rosterTimers = new Map();
+    const settingsCurrent = () => settingsAccepted && !rosterTimers.has("settings");
 
     function openRoom() {
       // ONLY A FRESH ROOM STARTS UNREADY. openRoom() is onConnected()'s last
@@ -995,7 +1010,7 @@ const NetLobby = (function () {
 
     function setReady(v) {
       selfReady = !!v;
-      if (role === "guest" && !settingsAccepted) {
+      if (role === "guest" && !settingsCurrent()) {
         selfReady = false; if (v) say("Waiting for the host’s complete race settings before READY.", true);
       }
       const unticked = selfReady && unverified()[0];
@@ -1192,7 +1207,7 @@ const NetLobby = (function () {
       if (!e.roomStep || e.roomStep.hidden) return;
       const host = role === "host";
       const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
-      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Overcast", fog: "Fog", storm: "Storm" };
+      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Cloudy", fog: "Fog", storm: "Storm" };
       const arc = G.raceChangeable && G.wxArcPlan;
       const wx = (WX_LABEL[G.raceWeather] || "Mixed") + (arc && WX_LABEL[arc.to] ? " → " + WX_LABEL[arc.to] : "");
       const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"

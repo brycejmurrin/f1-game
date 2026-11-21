@@ -123,7 +123,7 @@ const Onboard = (function () {
       // the TV cameras and on a full queue and says so (false); the bit used to
       // be saved first, so a first race watched on a TV camera spent the marks
       // unseen, for good. A refusal leaves the mark armed and retries after a
-      // beat (not every frame).
+      // beat, not per frame.
       if (G.announce(`${verb(key)} — ${TAIL[key]}`, 2.5, "coach") === false) { cool = RETRY; return false; }
       shown |= BIT[key];
       store.set(KEY, shown);
@@ -133,12 +133,12 @@ const Onboard = (function () {
     }
 
     // One call per frame from the game loop, before the pause gate. Everything
-    // it reads is a REPORT — the brake cue's own urgency, the overtake arm flag
-    // the HUD already draws, the car's own active-aero arm state — so nothing
-    // here can reach the car (docs/PHYSICS.md: broadcast-only).
+    // it reads is a REPORT (brake-cue urgency, the overtake arm flag the HUD
+    // draws, the car's active-aero arm state), so nothing here can reach the
+    // car (docs/PHYSICS.md: broadcast-only).
     function tick(dt) {
       if (G.state !== lastState) {
-        // A red-flag standing restart also runs count -> race, and it must not
+        // A red-flag grid restart also runs count -> race and must not
         // burn one of the two races these marks get. A genuine start has the
         // race clock at zero; a restart resumes the clock the flag stopped.
         if (G.state === "race" && lastState === "count" && !(G.raceT > 1) && !done()) { races++; store.set(RACES_KEY, races); }
@@ -151,7 +151,7 @@ const Onboard = (function () {
       if (cool > 0) cool = Math.max(0, cool - (dt || 0));
       if (cool > 0) return false;
       const p = G.player;
-      if (!p || G.announceBusy) return false;
+      if (!p || p.finished || p.retired || G.announceBusy) return false;
       if (!(shown & BIT.brake)) {
         const bc = typeof BrakeCue !== "undefined" && BrakeCue.debug ? BrakeCue.debug() : null;
         if (bc && bc.on && bc.urgency > 0.35) return fire("brake");

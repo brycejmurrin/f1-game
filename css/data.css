@@ -1476,32 +1476,4 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
   }
 }
 
-/* mobile-ui hunt — deferred overlays layer (beats career/howto/touch). */
-#howtoplay-inner #htp-contents {
-  padding-inline-end: calc(var(--pad) + var(--chip-h));
-  scroll-padding-inline-end: calc(var(--pad) + var(--chip-h));
-  mask-image: linear-gradient(90deg, black 0, black calc(100% - 1.1rem), transparent);
-}
-#howtoplay-inner[data-density="compact"] #htp-contents > :first-child,
-#howtoplay-inner[data-shape="tall"] #htp-contents > :first-child { margin-inline-start: 0; }
-@container sheet (min-width: 420px) {
-  #quali .sheet:not([data-shape="tall"]) #q-table {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap);
-  }
-  #quali .sheet:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
-}
-#quali .sheet:not([data-shape="tall"]) .res-row {
-  padding-block: calc(var(--gap) * 0.2);
-  min-height: max(var(--chip-h), calc(36px / var(--ui-scale)));
-}
-@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
-  body[data-shape="wide"] #ios-install:not([hidden]) {
-    right: auto; left: var(--safe-l); bottom: var(--safe-b); margin: 0;
-    width: min(18rem, calc(42% - var(--safe-l) - var(--gap))); max-width: none;
-    padding: calc(var(--gap) * 0.45) calc(var(--gap) * 0.6);
-    font-size: calc(var(--fs-micro) * 0.85); line-height: 1.25;
-    max-height: 4.5rem; overflow: hidden;
-  }
-}
-
 } /* @layer overlays */

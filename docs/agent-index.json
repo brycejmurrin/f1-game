@@ -810,6 +810,7 @@
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
+        "tests/unit/race-leave-guard-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
@@ -824,10 +825,13 @@
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/redbull-orbit-clear.test.mjs",
+        "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
@@ -920,6 +924,7 @@
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
+        "tests/unit/race-leave-guard-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
@@ -934,10 +939,13 @@
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/redbull-orbit-clear.test.mjs",
+        "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
@@ -1042,14 +1050,18 @@
         "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
+        "tests/unit/race-leave-guard-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
+        "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tt-pit-lane-vm.test.mjs",
@@ -1265,7 +1277,9 @@
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/lsp-navigation-efficiency.test.mjs",
+        "tests/unit/lsp-port-cleanroom.test.mjs",
         "tests/unit/lsp-reference-fixes.test.mjs",
+        "tests/unit/lsp-stress-fixes.test.mjs",
         "tests/unit/lsp-workflow-fixes.test.mjs",
         "tests/unit/mcp-listing-cost.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
@@ -1565,6 +1579,7 @@
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
+        "tests/unit/hud-race-keep-5678.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
@@ -1628,6 +1643,7 @@
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
@@ -1676,6 +1692,7 @@
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
+        "tests/unit/props-hi-detail.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/road-under-floor.test.mjs",
@@ -1686,6 +1703,7 @@
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/stand-curve-gap-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
+        "tests/unit/track-detail.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
         "tests/unit/track-themes-build.test.mjs",
         "tests/unit/track-validate-fleet.test.mjs",
@@ -2423,6 +2441,11 @@
       "path": "js/car/car-geometry.js",
       "global": "CarGeometry",
       "roster": "tag"
+    },
+    {
+      "path": "js/car/car-hero.js",
+      "global": "CarHero",
+      "roster": "LAZY_GFX_HI"
     },
     {
       "path": "js/car/car-material-shade.js",
@@ -3240,11 +3263,6 @@
       "roster": "LAZY_DATA"
     },
     {
-      "path": "js/data/flyby-overrides.js",
-      "global": "FlybyOverrides",
-      "roster": "tag"
-    },
-    {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
       "roster": "tag"
@@ -3547,6 +3565,11 @@
     {
       "path": "js/garage/garage-data.js",
       "global": "GarageData",
+      "roster": "LAZY_RACE"
+    },
+    {
+      "path": "js/garage/hi-prims.js",
+      "global": "GarageHiPrims",
       "roster": "LAZY_RACE"
     },
     {
@@ -4327,7 +4350,7 @@
     {
       "path": "js/race/tv-graphics.js",
       "global": "TvGraphics",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/weather-arc.js",
@@ -4430,6 +4453,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/render/shared/gfx-hi.js",
+      "global": "GfxHi",
+      "roster": "LAZY_GFX_HI"
+    },
+    {
       "path": "js/render/shared/gltf.js",
       "global": "GLTF",
       "roster": "tag"
@@ -4455,6 +4483,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/render/shared/mesh-detail.js",
+      "global": "MeshDetail",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/render/shared/mirror-pass.js",
       "global": "MirrorPass",
       "roster": "tag"
@@ -4467,7 +4500,7 @@
     {
       "path": "js/render/shared/puddles.js",
       "global": "Puddles",
-      "roster": "tag"
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/render/shared/shadow-pass.js",
@@ -4505,12 +4538,27 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tsl-aa.js",
+      "global": "TLXAA",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-carsurf.js",
+      "global": "TLXCarSurf",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tsl-chunks.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-fx.js",
+      "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-gi.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
     },
@@ -4690,6 +4738,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/track/scenery/detail.js",
+      "global": "TrackDetail",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/track/scenery/facade.js",
       "global": "SceneryFacade",
       "roster": "LAZY_TRACK_BUILD"
@@ -4867,7 +4920,7 @@
     {
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/ui/hud-layout.js",
@@ -4988,6 +5041,11 @@
       "path": "js/ui/post-fx-opts.js",
       "global": "PostFxOpts",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/progress-backup.js",
+      "global": "ProgressBackup",
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/quali-sheet.js",

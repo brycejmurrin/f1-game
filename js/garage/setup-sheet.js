@@ -2,7 +2,7 @@
 const SetupUI = (function () {
   "use strict";
 
-function create(G) {
+function create(G, customLiv) {
 Log.info("ui", "SetupUI.create");
 const tuneExperiments = SetupExperiments.create(G, (team) => renderStatBars($("cs-stats-inner"), team));
 let surfaceControls = null;
@@ -18,7 +18,7 @@ function propIf(el, k, v) {
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
-        getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures } = G;
+        getCustomLiveries, getLiveries, invalidateDecalTextures } = G;
 
 // The stat list and the display curve now live in Parts, because the in-world
 // stats board on the garage wall reads the same numbers and a second copy of
@@ -77,6 +77,7 @@ function renderStatBars(container, team) {
 // rail's selected tab not the first one and LIVERY 14th behind a horizontal scroll.
 let csVisitGeneration = 0;
 let csActiveCat = null;   // id of the tab currently open in the GARAGE
+const livSaveIds = new WeakMap();   // one candidate per draft, including retries after a refused fit
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 let csLivDirty = null;     // () => unsaved design edits? (set with the editor, cleared with the draft)
@@ -971,6 +972,11 @@ function livSwatch(team, liv, tags) {
 // tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
 function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
 
+function paintStatus(text) {
+  const note = document.createElement("p"); note.className = "cs-opt-desc";
+  note.setAttribute("role", "status"); note.textContent = text;
+  const list = $("cs-options"); list.insertBefore(note, list.firstChild);
+}
 function makeLiveryRow(team, liv, cur, isCustom) {
   const active = liv.id === cur;
   const row = document.createElement("button");
@@ -1020,9 +1026,9 @@ function makeLiveryRow(team, liv, cur, isCustom) {
       // one tap from destroying a one-of-a-kind paint job with no undo.
       if (G.soundOn) GameAudio.uiTick();
       G.armConfirm(del, "✕?", () => {
-        setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
-        if (active) saveLiveryId(team.id, "default");
+        const removed = customLiv.removeCustomLivery(team.id, liv.id);
         buildSetup();
+        if (!removed) paintStatus("Could not delete this paint job. It is still in your library.");
       });
     };
     rowWrap.appendChild(del);
@@ -1049,9 +1055,10 @@ function makeLiveryRow(team, liv, cur, isCustom) {
 
   row.onclick = () => {
     if (active) return;
-    saveLiveryId(team.id, liv.id);
-    if (G.soundOn) GameAudio.uiSelect();
+    const fitted = saveLiveryId(team.id, liv.id) !== false;
+    if (G.soundOn) { if (fitted) GameAudio.uiSelect(); else GameAudio.uiReject(); }
     buildSetup();
+    if (!fitted) paintStatus("Could not fit this paint job. Your previous selection is still fitted.");
     // IDs can come from imported paint jobs: compare data, never interpolate
     // an untrusted id into a CSS selector.
     const choices = $("cs-options")?.querySelectorAll("[data-cs-livery]") || [];
@@ -1200,7 +1207,7 @@ function buildLiveryCreator(container, team) {
   // not a number; NUMBER FONT and the mark colours are always live (the nose
   // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
-  let designTools = null;
+  let /** @type {ReturnType<typeof GarageLiveryDesignEditor.attach> | null} */ designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
   const wheelParts = Parts.getVisualTiers(getTeamParts(team.id), team);
@@ -1560,21 +1567,20 @@ function buildLiveryCreator(container, team) {
     // meshes with the new atlas — a mismatched car with no error. A new id
     // makes every id-keyed cache miss naturally; bounded caches evict the
     // orphans, and saveLiveryId below re-points the selection.
-    const id = "custom_" + livIdCounter();
+    let id = livSaveIds.get(d);
+    if (!id) {
+      const ids = new Set(getLiveries(team).map(row => row.id));
+      do { id = "custom_" + livIdCounter(); } while (ids.has(id));
+      livSaveIds.set(d, id);
+    }
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     Object.assign(liv, livDraftTo(d, false));
-    const existing = getCustomLiveries(team.id);
-    // Another tab may already have replaced/deleted the old id. Keep its work
-    // and save this draft as a new copy rather than fitting an unstored id.
-    const replacing = csLivEditId && existing.some((l) => l.id === csLivEditId);
-    const saved = setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
-    // The session cache can accept a write the disk refused. Retry replaces
-    // that candidate; a wholly rejected career write keeps the original id.
-    if (getCustomLiveries(team.id).some((l) => l.id === id)) csLivEditId = id;
-    if (saved === false || saveLiveryId(team.id, id) === false) { retrySave(); return; }
+    const result = customLiv.saveAndFitLivery(team.id, csLivEditId, liv);
+    if (!result.ok) { retrySave(); return; }
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
+    if (result.keptCopy) paintStatus("New paint fitted. The previous copy was kept. Use its Delete button to remove it.");
     focusFitted();
   };
   btns.append(cancel, save);

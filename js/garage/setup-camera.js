@@ -589,7 +589,7 @@ const SP_VIEWS = {
 // POINT, AND IT IS THE CAR'S CENTRE. These used to be [0, 0.35, -1.0] and
 // [0, 0.35, 0] — a camera circling a point 1 m BEHIND the one it looked at,
 // swinging the car across the frame instead of rotating it in place. The drawn
-// body spans z -2.69..3.18 (measured), so its centre is z +0.245, not 0 and not -1.
+// body spans z -2.69..2.72, centre z ≈ +0.015, not 0 and not -1.
 const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
@@ -828,7 +828,8 @@ function getSetupPreviewMesh() {
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
-    const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
+    // Car3D.heroCopy / garageDetail: the EXTREME (heroCar) body here, the car seen closest; an unchanged build below.
+    const ent = GarageScene.previewMesh(key, hullKey, () => (Car3D.heroCopy || ((d) => d))(_spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
       : (_spBase = { key: baseKey, hullKey, data: Car3D.build(liv.c1, liv.c2, {
         livery: liv, refinish: true, noWheels: split,
         // Same hull key = same geometry (a colour-only livery change): the last build's smoothing prep carries
@@ -838,7 +839,8 @@ function getSetupPreviewMesh() {
         num: seat && seat.num,
         helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-      }) }).data);
+        ...(Car3D.garageDetail ? Car3D.garageDetail() : null),
+      }) }).data));
     if (split) {
       if (!departureWheels) {
         departureWheels = (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.create)
@@ -852,7 +854,7 @@ function getSetupPreviewMesh() {
   return _spMesh;
 }
 // Optional, detached circuit slice shared by every garage camera/animation.
-let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
+let /** @type {ReturnType<typeof GarageExterior.create> | null} */ exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
 // OUTSIDE (#5660): a drive-out / pit drive-in shows the session's circuit (trackIdx), not the garage's next race;

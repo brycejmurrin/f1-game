@@ -24,6 +24,10 @@ const _tlPool = [];
 // every slot for track lamps. The red spill on the road is a decal
 // (CarMesh.drawTailGlow). Reused buffer: this runs every lit frame.
 const _tlGlowBuf = [];
+// EXTREME lightsHi (GfxHi, lazy): the bound backend compiled past MAX. Only GfxHi lets it (LightBudget.setSlots),
+// so while this is false every budget below is today's expression exactly.
+function _hb() { return LightBudget.slots() > LightBudget.MAX; }
+function _hiExtra() { return _hb() ? GfxHi.hiExtra(tierShed) : 0; }   // the slots above MAX this frame may use
 function tailLightsEmit() { return +LT.tailLightEmit > 0; }
 function appendCarTailLights(frame, track, cars, player, mobileTier) {
   const L = frame.lights;
@@ -103,7 +107,7 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // GLX.init / WGX.create / TLX.create): TLX-lite compiles a 16-slot loop, and
   // measuring room against 48 there meant the tail-lights appended below never
   // reached the shader at all.
-  const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX, LightBudget.slots()));
+  const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX + _hiExtra(), LightBudget.slots()));
   const room = SLOTS - ((L.length / 15) | 0);
   if (emit && room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
@@ -151,7 +155,7 @@ const _lightScaleBuf = [];
 // _allLightsGen is the change signal for consumers that cache by identity
 // (WGX's trackLightSBO upload) — it moves when the VALUES move.
 const _allLightsBuf = [];
-let _allLightsGen = 0;
+let _allLightsGen = 0, _allLightsStaticGen = 0;
 // frame.lampSetGen: moves when the lamp SET or its SCALE moves (a new source
 // array, a length change, a new time-of-day / LAMP LEVEL scale) and never for
 // flicker or warm-up. game.js's env-probe hold latches on it: latched on
@@ -284,12 +288,15 @@ function lampCap(carCount, mobileTier) {
   // ...and never above the bound backend's slot count (LightBudget.slots()):
   // appendCarTailLights evicts against SLOTS, so a cap above it would only
   // be trimmed again there.
+  // EXTREME lightsHi: `hi` is the slots above MAX this frame (80 at full HI, sliding to 0 on a shed;
+  // always 0 at detail 0). LAMP COUNT keeps its 8-slot tail-light reserve on top (40 + 80 = 120).
+  const hi = _hiExtra();
   let cap = Math.min(
     // LAMP COUNT applies with traffic in BOTH tail-light modes: it is a player
     // slider (and a per-fragment cost), not only the tail-light reserve. Paint
     // mode's gain is that no lamp is EVICTED for a tail-light (appendCarTailLights).
-    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
-    mobileTier ? LightBudget.MOBILE : LightBudget.MAX,
+    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) + hi : LightBudget.MAX + hi,
+    mobileTier ? LightBudget.MOBILE : LightBudget.MAX + hi,
     LightBudget.slots());
   // Shed the nearest-lamp budget under PerfGov load before the fragment loop
   // pays for distant slots (tier 1 drops env probe; tier 2 drops lamp shadow).
@@ -309,7 +316,9 @@ function lampCap(carCount, mobileTier) {
 // one at a time through the guard band and return through the entry ramp.
 const SHED_HOLD_MS = 1500, SHED_DOWN = 16, SHED_UP = 32, GLOW_FADE_S = 0.4;
 let _shTier = 0, _shTierT = -1e9, _shHeld = 0, _shLim = NaN, _shT = NaN, _glowF = 1;
-function _shedLimit(tier) { return tier >= 2 ? LightBudget.MOBILE : tier >= 1 ? 32 : LightBudget.MAX; }
+// Tier 0 is MAX, or GfxHi.frameMax() (the lightsHi slots). A lightsHi shed drops it 128 -> 48 at once and the
+// limit slides down at 160/s above MAX (about half a second), SHED_DOWN below.
+function _shedLimit(tier) { return tier >= 2 ? LightBudget.MOBILE : tier >= 1 ? 32 : _hb() ? GfxHi.frameMax() : LightBudget.MAX; }
 function _shedTick() {
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   if (now === _shT) return;
@@ -319,7 +328,7 @@ function _shedTick() {
   const target = _shedLimit(_shHeld);
   const dt = _shT === _shT ? Math.min(0.25, Math.max(0, (now - _shT) * 0.001)) : 1e9;
   if (_shLim !== _shLim) _shLim = target;
-  else if (_shLim > target) _shLim = Math.max(target, _shLim - SHED_DOWN * dt);
+  else if (_shLim > target) _shLim = Math.max(target, _shLim - (_shLim > LightBudget.MAX ? 160 : SHED_DOWN) * dt);
   else if (_shLim < target) _shLim = Math.min(target, _shLim + SHED_UP * dt);
   // Halos are dropped outright at tier >= 3 (game.js drawGlow); fade them instead.
   const gT = _shHeld >= 3 ? 0 : 1, gStep = dt / GLOW_FADE_S;
@@ -331,6 +340,7 @@ function tierShed(cap) {
   _shedTick();
   return Math.min(cap, Math.ceil(_shLim));
 }
+function _lim() { _shedTick(); return _shLim; }   // GfxHi.chunkCap's view of the slide
 // Halo strength multiplier under the held governor tier (1 = full, 0 = off).
 function glowFade() {
   if (typeof PerfGov === "undefined") return 1;
@@ -365,6 +375,8 @@ function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
+  if (fresh) _allLightsStaticGen++;
+  frame.allLightsStaticGen = _allLightsStaticGen;
   // DIRTY-ONLY (R2-2, #3104): the steady factor (flicker 0 and warm-up done; 52 preset
   // rows ship lampFlicker 0) is a constant, so the same source and scale
   // mean nothing moved: skip the whole-set re-tint outright, not every 50 ms.
@@ -680,6 +692,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
   // cull, against the same budget (see lampCap).
   const CAP = lampCap(cars.length, mobileTier);
+  frame.chunkLampCap = _hb() ? GfxHi.chunkCap(_lim) : 0;   // lightsHi cell cap; 0 = tsl-lit keeps its own
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   let sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);

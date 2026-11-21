@@ -495,6 +495,7 @@ const DrivingCoachBody = (function () {
     function captureWorld() {
       const cars = (G.cars || []).map((c) => captureCar(c));
       return { cars, raceT: G.raceT, sectorIdx: G.sectorIdx, sectorStartT: G.sectorStartT,
+        fieldSectorBests: G.fieldSectorBests?.slice(),
         sectorBests: Array.isArray(G.sectorBests) ? G.sectorBests.slice() : null,
         sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
     }
@@ -513,6 +514,7 @@ const DrivingCoachBody = (function () {
       if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
       if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
       if (w.sectorBests) G.sectorBests = w.sectorBests.slice();
+      if (w.fieldSectorBests) G.fieldSectorBests.splice(0, G.fieldSectorBests.length, ...w.fieldSectorBests);
       // sectorLast has no setter — mutate the live array in place.
       if (w.sectorLast && Array.isArray(G.sectorLast)) {
         G.sectorLast.length = 0;
@@ -677,7 +679,7 @@ const DrivingCoachBody = (function () {
         // `start` is stored NEGATED so mastery's Math.min ranks more places
         // higher (js/race/race-insights.js). The sign is undone here, once, at
         // the only place a human reads the number.
-        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
+        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m from " + insights.brakingRef() : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
           : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]

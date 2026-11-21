@@ -43,7 +43,7 @@ function createHarness(opts = {}) {
   const sandbox = {
     localStorage: mockLocalStorage,
     module: { exports: {} },
-    TextEncoder,
+    TextEncoder: opts.TextEncoder || TextEncoder,
     queueMicrotask: (fn) => { microtasks.push(fn); },
     console,
   };
@@ -288,6 +288,24 @@ test("ghost quota failures flow through GameStore persistence health", () => {
   assert.equal(GameStore.store.broken, "QuotaExceededError", "persistState can report the failed ghost write");
 });
 
+test("circuit browsing checks the ghost store byte budget once per loaded store", () => {
+  let checks = 0;
+  class CountingEncoder extends TextEncoder {
+    encode(value) { checks++; return super.encode(value); }
+  }
+  const h = createHarness({ TextEncoder: CountingEncoder });
+  for (const circuit of ["spa", "monza", "silverstone"]) {
+    h.Ghost.setTrack(circuit);
+    h.flushMicrotasks();
+  }
+  assert.equal(checks, 1);
+  h.store.setItem("apex26.ghost.v1", "{}");
+  h.GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+  h.Ghost.setTrack("spa");
+  h.flushMicrotasks();
+  assert.equal(checks, 2, "a replacement from another tab gets a new budget check");
+});
+
 test("loading an inherited over-budget store trims it before other saves compete for quota", () => {
   const inherited = {};
   for (let n = 0; n < 100; n++) {
@@ -299,18 +317,22 @@ test("loading an inherited over-budget store trims it before other saves compete
       _used: n,
     };
   }
-  const { Ghost, store, flushMicrotasks } = createHarness({
-    disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
-  });
-
-  Ghost.setTrack("track-0");
-  Ghost.setTrack("track-0", "setup-0");
-  flushMicrotasks();
-
-  const raw = store.getItem("apex26.ghost.v1");
-  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "first load repairs the inherited blob");
-  assert.ok(JSON.parse(raw)["v2:track-0:setup-0"],
-    "repair waits for the final comparable context and promotes it before LRU eviction");
+  for (const foreign of [false, true]) {
+    const key = "apex26.ghost.v1";
+    const json = JSON.stringify(inherited);
+    const { Ghost, GameStore, store, flushMicrotasks } = createHarness({ disk: foreign ? {} : { [key]: json } });
+    Ghost.setTrack("track-0");
+    Ghost.setTrack("track-0", "setup-0");
+    if (foreign) {
+      flushMicrotasks();
+      store.setItem(key, json);
+      GameStore.store.onForeignWrite({ key });
+    }
+    flushMicrotasks();
+    const raw = store.getItem(key);
+    assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024);
+    assert.ok(JSON.parse(raw)["v2:track-0:setup-0"], "the active rival survives local and foreign budget repair");
+  }
 });
 
 test("one oversized valid trace is thinned to fit instead of evicting its own personal best", () => {
@@ -448,6 +470,33 @@ test("clearing an exact context key preserves sibling contexts and clears the se
   const saved = JSON.parse(h.store.getItem("apex26.ghost.v1"));
   assert.equal(saved["v2:monza:dry"], undefined);
   assert.equal(saved["v2:monza:wet"].time, 42);
+});
+
+test("refused ghost deletion preserves the disk PB and a faster pending lap until retry", () => {
+  for (const id of ["monza", "v2:monza:dry", null]) {
+    const opts = { deferWrites: true };
+    const h = createHarness(opts);
+    const coldBest = () => {
+      const cold = createHarness({ disk: Object.fromEntries(h.disk) });
+      cold.Ghost.setTrack("monza", "dry");
+      return cold.Ghost.bestTime();
+    };
+    h.Ghost.setTrack("monza", "dry");
+    recordLap(h.Ghost, 42);
+    h.Ghost.flush();
+    recordLap(h.Ghost, 40);
+    opts.failWrites = true;
+    assert.equal(h.Ghost.clear(id), false);
+    assert.equal(h.Ghost.bestTime(), 40, "the pending PB is still playable");
+    assert.equal(coldBest(), 42, "the prior durable PB survives reload");
+    opts.failWrites = false;
+    h.Ghost.flush();
+    assert.equal(coldBest(), 40, "the refused clear preserved the pending save");
+    assert.equal(h.Ghost.clear(id), true);
+    h.flushTimers();
+    assert.equal(h.Ghost.hasGhost(), false);
+    assert.equal(coldBest(), Infinity, "retry commits the clear through reload");
+  }
 });
 
 function recordLap(Ghost, time) {

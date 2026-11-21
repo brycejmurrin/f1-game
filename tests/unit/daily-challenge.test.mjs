@@ -139,7 +139,7 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   for (const file of ["js/race/quali-model.js", "js/race/daily-challenge.js", "js/ui/share-code.js"]) {
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   }
-  ctx.G = { ...G, referencePole: () => 82, player: { best: 80 },
+  ctx.G = { ...G, referencePole: (k) => (k === "medal" ? 82 : NaN), player: { best: 80 },
     records: { key: () => context, prepareDaily() {}, restoreDaily() {} } };
   ctx.G.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
   const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
@@ -259,6 +259,34 @@ test("the streak counts the player's local days: LA 3 pm then 6 pm the next day 
     d.stop();
   } finally {
     if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz;
+  }
+});
+
+test("an open challenge keeps its day across UTC and local midnight; the next challenge uses the new local day", () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    let now = "2026-11-20T23:59:59Z";
+    class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } }
+    const { d } = load({ Date: Clock });
+    const started = d.open();
+    assert.equal(started.day, "2026-11-20");
+    now = "2026-11-21T00:00:01Z";
+    assert.equal(d.dayKey(), started.day);
+    d.record(85);
+    now = "2026-11-21T08:00:01Z";
+    assert.equal(d.dayKey(), "2026-11-21");
+    d.record(80);
+    assert.equal(d.shareResult().day, started.day);
+    assert.equal(d.shareResult().best, 80);
+    assert.equal(d.today(), null);
+    d.stop();
+    assert.equal(d.open().day, "2026-11-21");
+    d.record(89);
+    assert.equal(d.shareResult().best, 89);
+    assert.equal(d.liveStreak(), 2);
+  } finally {
+    if (previousZone === undefined) delete process.env.TZ; else process.env.TZ = previousZone;
   }
 });
 
@@ -438,7 +466,7 @@ test("with no medal passed, the share line carries TODAY's — from today's best
   });
   seedLog(ctx); seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
-  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
+  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: (k) => (k === "medal" ? 82 : NaN) });
   d.open("2026-09-03");
   d.record(84);                                   // within 3 % of pole: silver
   assert.match(d.shareText(), / · SILVER( · |$)/);

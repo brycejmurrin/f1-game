@@ -148,10 +148,8 @@ if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
 if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
-// Graphics context loss: GLX may reload with lighter settings, or game.js may
-// quit to the menu mid-start. Stash apex26.ctxLostNotice before either path;
-// consume it once here so the title explains the hitch instead of looking like
-// a silent kick to the menu.
+// At boot, only a persisted reset explains a reload. In-page recovery
+// calls showCtxLostNotice directly even if session storage is unavailable.
 const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
 const CTX_LOST_NEED_RELOAD_KEY = "apex26.ctxLostNeedReload";
 const CTX_LOST_EXHAUSTED_KEY = "apex26.ctxLostExhausted";
@@ -180,10 +178,10 @@ if (!ctxLostNotice) {
   dismiss.textContent = "DISMISS";
   dismiss.setAttribute("aria-expanded", "true");
   ctxLostNotice.append(title, detail, retry, dismiss);
-  document.body.appendChild(ctxLostNotice);
+  els.overlay.appendChild(ctxLostNotice);
   // Match #save-warning placement when overlays.css has no dedicated rule yet.
   Object.assign(ctxLostNotice.style, {
-    position: "fixed", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
+    position: "fixed", zoom: "normal", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
     transform: "translateX(-50%)", width: "min(48rem, calc(100vw - 16px))", display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "8px", padding: "8px",
     border: "1px solid rgba(255, 209, 128, 0.72)", borderRadius: "8px",
@@ -207,13 +205,14 @@ const hideCtxLostNotice = () => {
   }
   ctxLostSpoken = false;
 };
-const showCtxLostNotice = () => {
+const showCtxLostNotice = (onlyIfStashed = false) => {
+  if (!ctxLostNotice || G.state !== "menu") return;
   let pending = false;
   try {
     pending = sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1";
     if (pending) sessionStorage.removeItem(CTX_LOST_NOTICE_KEY);
-  } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
-  if (!pending || !ctxLostNotice || G.state !== "menu") return;
+  } catch (_) { /* no persisted notice */ }
+  if (onlyIfStashed && !pending) return;
   ctxLostNotice.hidden = false;
   let exhausted = false;
   try { exhausted = sessionStorage.getItem(CTX_LOST_EXHAUSTED_KEY) === "1"; } catch (_) { /* blocked storage */ }
@@ -272,7 +271,7 @@ const bindCtxLostNoticeOnMenuExit = () => {
   }
 };
 bindCtxLostNoticeOnMenuExit();
-showCtxLostNotice();
+showCtxLostNotice(true);
 
 /** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
 const restoreMenuAfterGraphicsReset = () => {
@@ -626,23 +625,22 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
 }, true);
 
-function applyTrackSearch(value) {
+function applyTrackSearch(value, pick) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
-  for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
-  // A divider shows while ITS run of tiles, not its group, has a match ("spa" finds Spain).
+  for (const r of rows) r.hidden = !!trackQuery && !r.dataset.search.includes(trackQuery);
+  // A divider shows while ITS run (not group) has a match ("spa" finds Spain).
   for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
     let live = false;
-    for (let el = head.nextElementSibling; el && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
-      if (el.classList.contains("track-row") && !el.hidden) { live = true; break; }
+    for (let el = head.nextElementSibling; el && !live && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
+      live = el.classList.contains("track-row") && !el.hidden;
     }
     head.hidden = !live;
   }
   const empty = document.getElementById("sel-track-empty");
-  if (empty) empty.hidden = rows.some((row) => !row.hidden);
-  // A hidden active circuit still raced (#5889): take the first match.
-  const on = rows.find((r) => r.classList.contains("active"));
-  if (trackQuery && (!on || on.hidden)) rows.find((r) => !r.hidden)?.click();
+  if (empty) empty.hidden = rows.some((r) => !r.hidden);
+  // Typing hid the active circuit (#5889): take the 1st match.
+  if (pick && trackQuery && !rows.some((r) => r.classList.contains("active") && !r.hidden)) rows.find((r) => !r.hidden)?.click();
   ScrollFadeRefresh();
 }
 
@@ -756,7 +754,7 @@ function trackFilterBar() {
     const selected = !!current && current.day === p.day && current.class === "standard";
     b.className = "sel-chip" + (selected ? " active" : "");
     b.id = "sel-daily";
-    const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
+    const extraBits = [typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase(), p.tod.toUpperCase()];
     if (done && done.best != null) extraBits.push("ALL SETUPS ★ " + fmtTime(done.best));
     b.textContent = (selected ? "DAILY STANDARD" : "TODAY'S CHALLENGE") + " · " + p.trackName.toUpperCase();
     const extra = document.createElement("span");
@@ -764,9 +762,10 @@ function trackFilterBar() {
     b.appendChild(extra);
     b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
     b.setAttribute("aria-pressed", selected ? "true" : "false");
-    b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
+    b.title = "Today's challenge (" + p.day + ", local date): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => {
       e.stopPropagation();
+      trackQuery = "";
       G.daily.select();
       leavePracticePick();
       setTrackFilter("all", false, true);
@@ -784,7 +783,7 @@ function trackFilterBar() {
   search.placeholder = "Search circuit";
   search.setAttribute("aria-label", "Search circuits");
   search.autocomplete = "off";
-  search.oninput = () => applyTrackSearch(search.value);
+  search.oninput = () => applyTrackSearch(search.value, true);
   bar.appendChild(search);
   return bar;
 }

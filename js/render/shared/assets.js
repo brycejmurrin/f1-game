@@ -23,7 +23,7 @@ const Assets = (function () {
   let _uploaded = false;
   let _err = null;                       // last failure reason, for __apex.assets()
   let _bytes = 0;                        // bytes fetched for the material arrays
-  let _tier = null;                      // "high" | "low" | "off"
+  let _tier = null;                      // "hd" | "high" | "low" | "off" | "browser-bake"
   const _models = Object.create(null);   // id -> {pos,nrm,col,mat,idx} | null (miss)
   const _modelPromises = Object.create(null);
   const _requests = new Set();
@@ -611,6 +611,15 @@ const Assets = (function () {
     } catch (_) { return true; }
   }
 
+  // opts.tier wins (a missing variant reads "high"), then low-data / phone LOW, then hd: packHd (EXTREME,
+  // desktop TLX: GfxHi.hd, lazy) wants materials.hd (512 px), fetched only here, never precached. Else 256 px.
+  function _wantTier(mats, tier) {
+    if (tier) return tier === "low" && mats.low ? "low" : tier === "hd" && mats.hd ? "hd" : "high";
+    if (mats.low && (_phoneLowPreset() || _lowDataLink())) return "low";
+    return mats.hd && typeof GfxHi !== "undefined" && GfxHi.hd(_gfx) ? "hd" : "high";
+  }
+  let _lastWant = null;
+
   // Load + upload the baked material arrays. Resolves to true only when the
   // arrays are prepared and handed to the backend; false (never a rejection)
   // otherwise. TLX schedules lazy GPU upload, so true is not presentation evidence.
@@ -644,16 +653,17 @@ const Assets = (function () {
     if (_retried || _uploaded || _loadPromise || _tier !== "off" || !_err || _err === "backend") return false;
     _retried = true;
     Log.info("assets", "retrying the material pack after: " + _err);
-    load(_err.indexOf("asset request " + TIMED_OUT) === 0 ? { tier: "low" } : undefined);
+    // A failed hd load retries at 256 px.
+    load(_err.indexOf("asset request " + TIMED_OUT) === 0 ? { tier: "low" } : _lastWant === "hd" ? { tier: "high" } : undefined);
     return true;
   }
 
   // Reload the material tier the GRAPHICS preset wants, off track only (#5561); a forced tier stays.
   let _pinned = false;
   function followQuality() {
-    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high")) return false;
+    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high" && _tier !== "hd")) return false;
     const mats = _manifest && _manifest.materials;
-    const want = (_phoneLowPreset() || _lowDataLink()) && mats && mats.low ? "low" : "high";
+    const want = mats ? _wantTier(mats, null) : "high";
     if (want === _tier) return false;
     Log.info("assets", "pack tier " + _tier + " -> " + want);
     if (_gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
@@ -670,9 +680,9 @@ const Assets = (function () {
     if (!m || !m.materials) { _tier = "off"; return false; }
     const mats = m.materials;
 
-    const wantLow = opts.tier ? opts.tier === "low"
-                              : !!(_phoneLowPreset() || _lowDataLink());
-    const variant = (wantLow && mats.low) ? mats.low : mats;
+    const want = _wantTier(mats, opts.tier);
+    _lastWant = want;
+    const variant = want === "low" ? mats.low : want === "hd" ? mats.hd : mats;
     const size = variant.size | 0;
     if (!size || !variant.albedo) { _err = "bad-materials"; _tier = "off"; return false; }
 
@@ -750,7 +760,7 @@ const Assets = (function () {
 
     _gfx.setMaterialMaps({ albedo: albedoTex, normal: normalTex, scales: scales });
     _uploaded = true;
-    _tier = wantLow && mats.low ? "low" : "high";
+    _tier = want;
     _err = null;
     let n = 0;
     for (let i = 0; i < present.length; i++) if (present[i]) n++;

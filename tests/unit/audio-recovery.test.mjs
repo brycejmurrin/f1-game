@@ -612,6 +612,25 @@ test("music duck is held per source: a WATCH clip, the engineer and the replay f
   assert.ok(Math.abs(target - full) < 1e-9, "the last holder lifts it");
 });
 
+test("a hide during the mute glide keeps the context asleep across foreground and input", () => {
+  const timers = [];
+  const { A, contexts, document, listeners, resumes } = boot({
+    setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout() {},
+  });
+  A.init();
+  A.setEnabled(false);
+  document.hidden = true; listeners.visibilitychange();
+  assert.equal(contexts[0].state, "suspended");
+  timers.find(t => t.ms === 150).fn();
+  document.hidden = false; listeners.visibilitychange();
+  contexts[0].onstatechange();  // a late suspension event may arrive after returning
+  listeners.touchend({ type: "touchend", isTrusted: true });
+  assert.equal(resumes(), 0);
+  A.setEnabled(true);
+  assert.equal(resumes(), 1);
+});
+
 test("a quick hide -> show does not rebuild a healthy context (late 'suspended' statechange)", async () => {
   for (const announce of [true, false]) {
     const { A, contexts, document, listeners } = boot({ userActivation: sticky });

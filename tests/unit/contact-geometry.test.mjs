@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import {readFileSync} from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = new URL("../../", import.meta.url);
 function setup(options = {}) {
   const ctx = vm.createContext({Math:options.math || Math,Number,Object,WeakMap,
@@ -304,4 +305,28 @@ test("unyawed pairContact matches the trig extents Object.is for a grid of poses
       assert.ok(Object.is(ct.penLat,penLat),`penLat ${ct.penLat} vs ${penLat} at dX=${dX}`);
     }
   }
+});
+test("AI aim stays a pad inside the pit / exit wall line the contact clamp uses (#5997)",()=>{
+  const ctx=vm.createContext({Math,Number,Object,WeakMap,TrackPit:{EXIT_WALL_W:.75},
+    Tracks:{wallAt:()=>100,postLimits(){}}});
+  vm.runInContext(readFileSync(new URL("js/physics/contact-geometry.js",root),"utf8"),ctx,{filename:absSrc("js/physics/contact-geometry.js")});
+  const CG=vm.runInContext("ContactGeometry",ctx);
+  const n=100,hw=new Array(n).fill(6),v=new Array(n).fill(0),w=new Array(n).fill(0);
+  for(let k=10;k<20;k++)v[k]=1;                       // the pit wall beside the lane
+  for(let k=20;k<30;k++){v[k]=.5;w[k]=1;}             // the exit road: wall still standing
+  for(let k=30;k<40;k++){v[k]=.2;w[k]=.5;}            // the wall has ended
+  const tr={total:1000,n,hw,pit:{painted:false,side:1,v,w,sOut:200,exitRoadM:150,bands:{verge:2},off:{fastIn:1}}};
+  const lim={r:0,l:0,laneMin:0,side:0};
+  for(const s of [150,250]){
+    CG.wallLimits(tr,s,0,lim,null);
+    close(CG.pitWallX(tr,s),lim.r);                    // the same line the clamp holds
+    close(CG.pitWallAim(tr,s,s,lim.r+3),lim.r-.35);    // an aim across it comes back inside
+    assert.equal(CG.pitWallAim(tr,s,s,-2),-2);         // the far side of the road is untouched
+  }
+  assert.equal(CG.pitWallX(tr,350),0);                 // no wall: no limit
+  assert.equal(CG.pitWallAim(tr,350,350,5.9),5.9);
+  close(CG.pitWallAim(tr,350,250,5.9),CG.pitWallX(tr,250)-.35);   // the wall a lead ahead counts
+  tr.pit.side=-1;CG.wallLimits(tr,150,0,lim,null);
+  close(CG.pitWallAim(tr,150,150,-9),-(lim.l-.35));    // mirrored on a left-hand pit
+  tr.pit.painted=true;assert.equal(CG.pitWallAim(tr,150,150,5.9),5.9);   // painted lane: no wall
 });

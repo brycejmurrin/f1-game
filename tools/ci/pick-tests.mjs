@@ -303,7 +303,7 @@ export const RULES = [
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
-  [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
+  [/^js\/net\//, ["net-unit", "net"], "wire logic first (node only, no browser), then the browser session"],
   [/^vendor\/trystero-[^/]+\//, ["net-unit"], "vendored action framing, payload bounds and peer cleanup — net-trystero-api.test.mjs"],
   // Same-named suite: real-race-script.test.mjs lives in state-unit. The
   // directory rule below names hooks and lifecycle-unit, which do not run it.
@@ -366,7 +366,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
     ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_GFX_HI || []),
     ...(manifest.LAZY_PERF || []),
     ...(manifest.LAZY_REAL_RACE || []),
   ];
@@ -705,7 +705,7 @@ An unknown option prints this usage and exits 2.`;
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
       specs,
       // An empty list read as "no spec needed" to a cold agent (MCP-REFINE-2026-10-30): name where the spec comes from.
-      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: for the ONE pre-push spec run select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field)` }),
+      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: the browser specs CI routes for these files: select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field is the cheapest; agents never run it locally, AGENTS.md rule 5)` }),
     }));
     process.exit(0);
   }

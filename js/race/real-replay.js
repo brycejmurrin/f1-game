@@ -274,7 +274,7 @@ const RealReplay = (function () {
   function create(G) {
     let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey}
     let captionGeneration = 0;
-    let transport = null;
+    let /** @type {ReturnType<typeof WatchTransport.create> | null} */ transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
     // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
@@ -677,6 +677,7 @@ const RealReplay = (function () {
     }
 
     const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, seekEvent, isRunning: () => !!run,
+             isPausedAt: (t) => !!run && run.paused && run.T === t,
              describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", startT: run.startT, drivers: [...run.cars.entries()].filter(([, f]) => f.tr && f.d).map(([c, f]) => ({ code: f.d.code, name: f.d.name, get available() { return !c.retired; } })), events: run.events, speeds: SPEEDS } : null,
              setLocked: (v) => (bc && run ? bc.setLocked(v) : false),
              // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the

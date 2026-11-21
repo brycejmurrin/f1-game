@@ -217,7 +217,7 @@ function fakeDaily(extra = {}) {
 
 test("Practice pick hides Time Trial Daily chrome", () => {
   const tt = bootMenus({}, { timeTrial: true, daily: fakeDaily() });
-  assert.ok(tt.dom.has("sel-daily"), "Time Trial keeps Today's Challenge");
+  assert.match(tt.dom.byId("sel-daily").title, /2026-10-05, local date/, "the picker identifies the Daily by the player's local date");
   assert.ok(tt.chips().includes("daily-open"));
   const practice = bootMenus({}, { timeTrial: true, practicePick: true, daily: fakeDaily() });
   assert.ok(!practice.dom.has("sel-daily"), "Practice does not wear the Daily chip");
@@ -608,7 +608,7 @@ test("circuit search: a divider survives only while ITS run of tiles does", () =
   // finds Spain) drew vertical labels between empty runs. The real function,
   // run against a stand-in list.
   const src = fs.readFileSync(path.join(ROOT, "js/ui/select-screen.js"), "utf8");
-  const fn = /function applyTrackSearch\(value\) \{[\s\S]*?\n\}\n/.exec(src);
+  const fn = /function applyTrackSearch\(value(?:, pick)?\) \{[\s\S]*?\n\}\n/.exec(src);
   assert.ok(fn, "applyTrackSearch is in select-screen.js");
   const mk = (kind, group, search) => {
     const classes = new Set([kind]);

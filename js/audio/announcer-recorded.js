@@ -12,7 +12,9 @@ var RecordedAnnouncer = (() => {
         // generic session cue still gives the introduction its finish.
         spoken = text.replace(/^the sprint\.\s+\d+ laps,\s*/i, "the sprint, ")
           .replace(/^a duel with [^.]+\.\s*(?=just the two of you)/i, "a duel. ")
-          .replace(/^\d+ laps\.\s*(?=let's go racing)/i, "");
+          .replace(/^\d+ laps\.\s*(?=let's go racing)/i, "")
+          // The packs record the length alone; the corner count stays on the card.
+          .replace(/^(\d+\.\d{3} kilometres), \d+ corners\.$/i, "$1.");
         if (spoken !== text) plan = p.plan(id, spoken);
       }
       return { text: spoken, original: text, plan };
@@ -66,7 +68,7 @@ var RecordedAnnouncer = (() => {
               onStart: () => {
                 if (!valid() || captioned) return;
                 captioned = true;
-                if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(row.text);
+                if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(row.text, true);
               },
               onEnd: () => { if (valid()) timer = setTimeout(next, 250); } });
             if (!ok) next();

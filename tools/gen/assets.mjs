@@ -11,7 +11,7 @@
  * and the game is an offline-first PWA on static hosting.  So every byte is
  * pulled here, at author time, verified, credited and committed.
  *
- *   node tools/gen/assets.mjs bake-synthetic [--size N]   generate a pack, no network
+ *   node tools/gen/assets.mjs bake-synthetic [--size N] [--hd N | --no-hd]   generate a pack, no network
  *   node tools/gen/assets.mjs bake-atlas [--preset generated]   slice 4x4 atlases → MAT layers
  *   node tools/gen/assets.mjs search <textures|models|hdris> <query>
  *   node tools/gen/assets.mjs fetch <mat> <source> [--res 1k]   download CC0 source maps
@@ -58,6 +58,11 @@ const MANIFEST = path.join(PACK, "manifest.json");
 // Total baked-asset budget.  This is not a soft target: the repo has been fast
 // to clone and an asset pack is the classic way to quietly lose that.
 const BUDGET_BYTES = 8 * 1024 * 1024;
+// The DESKTOP HD tier (materials.hd, 512 px; js/render/shared/assets.js fetches it only on EXTREME + TLX) is
+// budgeted on its own: it is never downloaded by a phone or a default preset, so it must not eat the shipped
+// pack's 8 MB, and it must not grow unbounded either. BUDGET_BYTES counts everything else in assets/pack/.
+const HD_BUDGET_BYTES = 12 * 1024 * 1024;
+const HD_SIZE = 512;
 
 // Licences we will ship.  CC0 needs no attribution and imposes no downstream
 // obligation, which is the only thing that composes cleanly with a game that
@@ -545,10 +550,14 @@ function stampMaterialHashes(tier) {
 }
 
 function bakeSynthetic(args) {
-  // Default: bake BOTH tiers (256 high + 128 low) so phones get the small
-  // strip without a second authoring pass. Pass --size N to bake only one.
+  // Default: bake ALL THREE tiers (256 high + 128 low + 512 desktop hd) so phones get the small
+  // strip and EXTREME the large one without a second authoring pass. Pass --size N to bake only one
+  // (no hd unless --hd is given too), --hd N to pick the hd size, --no-hd to drop the hd tier.
   const only = intArg(args, "--size", 0);
   const sizes = only ? [only] : [256, 128];
+  const hdSize = args.includes("--no-hd") ? 0 : intArg(args, "--hd", only ? 0 : HD_SIZE);
+  if (hdSize && hdSize <= (only || 256)) fail(`--hd ${hdSize} must be larger than the ${only || 256} px high tier`);
+  if (hdSize) sizes.push(hdSize);
   for (const s of sizes) {
     if (s < 8 || (s & (s - 1)) !== 0)
       fail(`--size must be a power of two >= 8 (got ${s})`);
@@ -562,6 +571,7 @@ function bakeSynthetic(args) {
 
   const high = baked[256] || baked[sizes[0]];
   const low = baked[128] && high.size !== 128 ? baked[128] : null;
+  const hd = hdSize ? baked[hdSize] : null;
 
   const m = readManifest();
   m.materials = {
@@ -574,8 +584,11 @@ function bakeSynthetic(args) {
   };
   if (low) m.materials.low = low;
   else delete m.materials.low;
+  if (hd) m.materials.hd = hd;
+  else delete m.materials.hd;
   stampMaterialHashes(m.materials);
   if (m.materials.low) stampMaterialHashes(m.materials.low);
+  if (m.materials.hd) stampMaterialHashes(m.materials.hd);
   m.credits = buildCredits(m);
   writeManifest(m);
   credits();
@@ -788,6 +801,7 @@ function importPack(args) {
       console.log(`removed stale ${f}`);
     }
   }
+  delete out.materials.hd;   // import-pack writes high + low only, and removed the hd strips above
   stampMaterialHashes(out.materials);
   if (out.materials.low) stampMaterialHashes(out.materials.low);
   out.credits = buildCredits(out);
@@ -1394,6 +1408,9 @@ async function bakeMaterial(args) {
   layers.sort((a, b) => a.mat - b.mat);
   out.materials.layers = layers;
   if (out.materials.low) out.materials.low.layers = layers;
+  // This command does not rebake the desktop hd strip, whose pixels would keep the old layer: drop the tier
+  // (EXTREME then loads 256 px) until bake-synthetic rebuilds it.
+  delete out.materials.hd;
   stampMaterialHashes(out.materials);
   if (out.materials.low) stampMaterialHashes(out.materials.low);
   out.models = out.models || {};
@@ -1548,6 +1565,7 @@ function bakeAtlas(args) {
   layersOut.sort((a, b) => a.mat - b.mat);
   out.materials.layers = layersOut;
   if (out.materials.low) out.materials.low.layers = layersOut;
+  delete out.materials.hd;   // not rebaked here (see bake-material)
   stampMaterialHashes(out.materials);
   if (out.materials.low) stampMaterialHashes(out.materials.low);
   out.models = out.models || {};
@@ -1602,7 +1620,7 @@ function verify() {
     return 0;
   }
   const m = readManifest();
-  let bytes = 0;
+  let bytes = 0, hdBytes = 0;
 
   const checkEntry = (what, e) => {
     if (!e.licence || !ALLOWED_LICENCES.has(e.licence))
@@ -1612,7 +1630,8 @@ function verify() {
 
   const mats = m.materials;
   if (mats) {
-    const tiers = [["materials", mats], ...(mats.low ? [["materials.low", mats.low]] : [])];
+    const tiers = [["materials", mats], ...(mats.low ? [["materials.low", mats.low]] : []),
+      ...(mats.hd ? [["materials.hd", mats.hd]] : [])];
     const counted = new Set();
     for (const [name, tier] of tiers) {
       if (!Number.isSafeInteger(tier.size) || tier.size <= 0) problems.push(`${name}: size must be a positive integer`);
@@ -1623,7 +1642,7 @@ function verify() {
         if (!p.startsWith(PACK + path.sep)) { problems.push(`${name}: file outside pack ${f}`); continue; }
         if (!fs.existsSync(p)) { problems.push(`${name}: missing file ${f}`); continue; }
         const buf = fs.readFileSync(p);
-        if (!counted.has(p)) { bytes += buf.length; counted.add(p); }
+        if (!counted.has(p)) { if (tier === mats.hd) hdBytes += buf.length; else bytes += buf.length; counted.add(p); }
         try {
           const png = decodePNG(buf);
           if (png.w !== tier.size || png.h !== tier.size * MAT_LAYERS)
@@ -1652,12 +1671,20 @@ function verify() {
         if (!Number.isFinite(L.scale) || L.scale <= 0) problems.push(`${name} material ${L.id}: scale must be finite and > 0`);
       }
     }
+    const layerKeys = (tier) => (Array.isArray(tier.layers) ? tier.layers : []).map((L) => L &&
+      JSON.stringify([L.mat, L.id, L.scale, L.source, L.licence])).sort();
     if (mats.low) {
       if (!(mats.low.size <= mats.size)) problems.push("materials.low: size must not exceed high tier");
-      const layerKeys = (tier) => (Array.isArray(tier.layers) ? tier.layers : []).map((L) => L &&
-        JSON.stringify([L.mat, L.id, L.scale, L.source, L.licence])).sort();
       if (JSON.stringify(layerKeys(mats)) !== JSON.stringify(layerKeys(mats.low)))
         problems.push("materials.low: layer identity, scale, source and licence must match high tier");
+    }
+    if (mats.hd) {
+      if (!(mats.hd.size > mats.size)) problems.push("materials.hd: size must exceed the high tier");
+      if (JSON.stringify(layerKeys(mats)) !== JSON.stringify(layerKeys(mats.hd)))
+        problems.push("materials.hd: layer identity, scale, source and licence must match high tier");
+      const shipped = [mats.albedo, mats.normal, mats.low && mats.low.albedo, mats.low && mats.low.normal];
+      if ([mats.hd.albedo, mats.hd.normal].some((f) => f && shipped.includes(f)))
+        problems.push("materials.hd: strips must be their own files (the hd budget is counted separately)");
     }
   }
 
@@ -1689,7 +1716,11 @@ function verify() {
   if (bytes > BUDGET_BYTES)
     problems.push(`pack is ${(bytes / 1048576).toFixed(2)} MB — over the ${(BUDGET_BYTES / 1048576).toFixed(0)} MB budget`);
 
-  console.log(`pack: ${(bytes / 1024).toFixed(0)} KB / ${(BUDGET_BYTES / 1048576).toFixed(0)} MB budget`);
+  if (hdBytes > HD_BUDGET_BYTES)
+    problems.push(`hd tier is ${(hdBytes / 1048576).toFixed(2)} MB — over its ${(HD_BUDGET_BYTES / 1048576).toFixed(0)} MB budget`);
+
+  console.log(`pack: ${(bytes / 1024).toFixed(0)} KB / ${(BUDGET_BYTES / 1048576).toFixed(0)} MB budget` +
+              (hdBytes ? `; hd tier ${(hdBytes / 1024).toFixed(0)} KB / ${(HD_BUDGET_BYTES / 1048576).toFixed(0)} MB` : ""));
   if (!problems.length) { console.log("verify: OK"); return 0; }
   for (const p of problems) console.error(`  ✗ ${p}`);
   return 1;
@@ -1748,6 +1779,14 @@ function report(m) {
   for (const r of Object.values(m.models || {})) add(r.file);
   console.log(`pack: ${(bytes / 1024).toFixed(0)} KB (budget ${(BUDGET_BYTES / 1048576).toFixed(0)} MB)`);
   if (bytes > BUDGET_BYTES) console.error("  ✗ OVER BUDGET — see tools/gen/assets.mjs BUDGET_BYTES");
+  const hd = m.materials && m.materials.hd;
+  if (hd) {
+    const before = bytes;
+    add(hd.albedo); add(hd.normal);
+    const hdBytes = bytes - before;
+    console.log(`hd tier: ${(hdBytes / 1024).toFixed(0)} KB (budget ${(HD_BUDGET_BYTES / 1048576).toFixed(0)} MB, separate)`);
+    if (hdBytes > HD_BUDGET_BYTES) console.error("  ✗ HD TIER OVER BUDGET — see tools/gen/assets.mjs HD_BUDGET_BYTES");
+  }
 }
 
 const strArg = (a, k, d) => { const i = a.indexOf(k); return i >= 0 && a[i + 1] ? a[i + 1] : d; };
@@ -1868,7 +1907,7 @@ async function main() {
   // Per-command known flags. Anything else used to be shrugged off — and a
   // mistaken `bake-synthetic --dry-run` rewrote the committed pack in place.
   const KNOWN = {
-    "bake-synthetic": ["--size", "--models"],
+    "bake-synthetic": ["--size", "--hd", "--no-hd", "--models"],
     "bake-synthetic-models": [],
     "bake-atlas": ["--preset", "--size", "--grid", "--inset", "--low", "--albedo", "--normal", "--map"],
     "search": [],

@@ -207,7 +207,7 @@ argument-hint: "[auto|ask|ask+] <task, #issue or goal>"
 
 ### Build notes for the `.claude/skills/**` owner
 
-- Each skill body should be short and link, not restate: `AGENTS.md` rules 4, 10, 12, 13; WORKERS.md items 6–7; `docs/notes/EFFICIENCY-REVIEW-2026-10-30.md` findings 1, 3, 7; `dispatch.mjs` header for the launch gate.
+- Each skill body should be short and link, not restate: `AGENTS.md` rules 4, 10, 12, 13; WORKERS.md items 6–7; `docs/archive/notes/EFFICIENCY-REVIEW-2026-10-30.md` findings 1, 3, 7; `dispatch.mjs` header for the launch gate.
 - Add both names to `.claude/skills/README.md` and the user-invocable routing evals (`agent-config`).
 - Trim ≥600 chars of existing descriptions or raise `skillDescriptionChars` with the reason, since these two add ≈0.85k.
 - `challenge` needs a test that its frontmatter keeps `disable-model-invocation: true`; `orchestrate` likewise (a cost-bearing skill that Claude may fire on its own is the main risk).
@@ -245,4 +245,4 @@ Read 2026-10-30.
 - OpenAI Agents SDK handoffs: https://openai.github.io/openai-agents-python/handoffs/
 - LangGraph supervisor (search result only): https://pypi.org/project/langgraph-supervisor/
 
-Repo: `docs/WORKERS.md`, `docs/AGENT-SURFACE.md`, `docs/notes/ORCHESTRATION-REVIEW-2026-10-29.md`, `docs/notes/EFFICIENCY-REVIEW-2026-10-30.md`, `tools/ci/dispatch.mjs` (header), `tools/ci/cursor-agents.mjs`, `tests/data/agent-config-budgets.json`, `.claude/agents/worker.md`, `.codex/hooks.json`, `.claude/skills/phone-browser/SKILL.md`.
+Repo: `docs/WORKERS.md`, `docs/AGENT-SURFACE.md`, `docs/notes/ORCHESTRATION-REVIEW-2026-10-29.md`, `docs/archive/notes/EFFICIENCY-REVIEW-2026-10-30.md`, `tools/ci/dispatch.mjs` (header), `tools/ci/cursor-agents.mjs`, `tests/data/agent-config-budgets.json`, `.claude/agents/worker.md`, `.codex/hooks.json`, `.claude/skills/phone-browser/SKILL.md`.

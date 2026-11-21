@@ -209,7 +209,7 @@ const GLXPost = (function () {
           try {
             let _p = localStorage.getItem("apex26.gfxPreset");
             try { _p = JSON.parse(_p); } catch (_) { /* not JSON: compare the raw string */ }
-            _ultra = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+            _ultra = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
           } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
           if (!_ultra && msaaSamples > 2) msaaSamples = 2;
         }
@@ -1319,7 +1319,7 @@ const GLXPost = (function () {
     // or a mirror pass still open (sampling the bound target is a feedback loop).
     // The texture rides spare unit 5 like drawDecal's; unit 0 stays the shadow map.
     let glassProg = null, glassU = null, glassFailed = false;
-    function mirrorGlass(mesh, model) {
+    function mirrorGlass(mesh, model, _opts) {   // _opts: the shared slot; unread, as in TLX/WGX
       if (mirActive || mirDead || !mirTex || !mirRenders || !mirFlip || !mesh || !mesh.vao || !mesh.count || !model || core.ctxGone()) return false;
       if (!glassProg) {
         if (glassFailed) return false;

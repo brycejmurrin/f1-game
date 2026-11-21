@@ -152,7 +152,7 @@ const WGX = (function () {
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
   const TRACK_LIGHT_CAP = 1024;                         // lights (64 B each -> 65536 B)
   const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
-  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 48
+  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 96
 
   // Sun / car / lamp map sizes live in WGXShadow.init (wgx-shadow.js). The
   // frame UBO's PCF texel (d[74]) reads SHD.SHADOW_SIZE so it cannot drift
@@ -232,7 +232,7 @@ const WGX = (function () {
   try {
     let _p = localStorage.getItem("apex26.gfxPreset");
     try { _p = JSON.parse(_p); } catch (_) { /* raw string */ }
-    _wgxMsaa4 = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+    _wgxMsaa4 = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
   } catch (_) { /* blocked storage: the cheaper of the two */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
@@ -479,7 +479,8 @@ const WGX = (function () {
     // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
     let _capReq = null;
-    function _rejectCapture(reason) {
+    function _rejectCapture(reason, owner) {
+      if (owner && _capReq?.owner !== owner) return;
       const req = _capReq; _capReq = null;
       if (req) req.reject(new Error(reason || "device lost"));
     }
@@ -604,7 +605,7 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
-    let _cssSizeCache = null, _pageListenersOff = null;
+    let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
       try { if (_pageListenersOff) _pageListenersOff(); } catch (_) { /* no document events */ }   // TLX _createUndo parity
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
@@ -941,7 +942,7 @@ const WGX = (function () {
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
     let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
-    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
+    let _tlSrc = null, _tlStaticGen = -1, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
     // A VALUES-only change of the baked track set (allLightsGen: lamp flicker,
     // the warm-up ramp, a LAMPS slider) re-uploads at most this often. The
     // shipped flicker (lampFlicker 0.011-0.10, def 0.10) moves the gen EVERY
@@ -953,8 +954,7 @@ const WGX = (function () {
     const TL_VALUES_DT = 1 / 30;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1, _asGen = -1;
-    // Which source array _tlScratch's STATIC lanes were packed from.
-    let _tlFullPack = null, _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
+    let _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
     // Lamp-mask generation keys, per pass kind (0 forward/env, 1 mirror): each pass's last
@@ -985,9 +985,9 @@ const WGX = (function () {
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
-    let SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
-    let CHK = null;   // WGXChunked.init — culled chunked meshes
-    let PST = null;   // WGXPost.init — post pipeline build
+    let /** @type {ReturnType<typeof WGXShadow.init> | null} */ SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
+    let /** @type {ReturnType<typeof WGXChunked.init> | null} */ CHK = null;   // WGXChunked.init — culled chunked meshes
+    let /** @type {ReturnType<typeof WGXPost.init> | null} */ PST = null;   // WGXPost.init — post pipeline build
 
     // Shadow-pass objects.
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
@@ -3339,7 +3339,7 @@ const WGX = (function () {
       // is ONE buffer refilled in place (js/lighting/frame-lights.js), so a
       // rebuild:true edit (LAMP DENSITY, POOL RADIUS) re-orders it under the same
       // identity. A hit is therefore re-checked against the record it names (O(1));
-      // a cached miss (-1) holds only while allLightsGen stands still. GLX keys
+      // a cached miss holds across RGB-only changes until the static set changes. GLX keys
       // the same lookup on the LampChunks table (chunked.js _shadowAllIdx).
       // Never in the mirror: the forward slot names another lamp there.
       let _absShadowIdx = -1;
@@ -3349,14 +3349,15 @@ const WGX = (function () {
         const so = SHD.lampIdx * 15;
         const lx = L[so], ly = L[so + 1], lz = L[so + 2];
         const ho = _asIdx * 15;
+        const positionGen = f.allLightsStaticGen ?? f.allLightsGen;
         if (_AL === _asAL && lx === _asX && ly === _asY && lz === _asZ &&
-            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === f.allLightsGen)) {
+            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === positionGen)) {
           _absShadowIdx = _asIdx;
         } else {
           for (let p = 0; p < _AL.length; p += 15) {
             if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
           }
-          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = f.allLightsGen;
+          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = positionGen;
         }
       }
       d[140] = _absShadowIdx;
@@ -3431,24 +3432,12 @@ const WGX = (function () {
       frameRoadChunkLamps = +f.roadChunkLamps || 0;
       frameAllLightsGen = +f.allLightsGen || 0;
       frameAllLights = f.allLights || null;
-      // (Re)upload the baked track set when the (lights identity, knob) pair
-      // moves — rgb × knob applied here ONCE (per-chunk sets render raw baked
-      // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
-      // the buffer is static until the next bake. A moved pair also resets
-      // the chunkIdx segment allocator: every mesh re-appends on next draw.
-      // (frame.allLights is ONE reused buffer, so identity rarely moves: the
-      // allocator also rewinds in freeChunkedMesh when the last mesh holding a
-      // segment is freed — wgx-chunked.js — or each track build would leak.)
-      // Re-upload when the SET changes (identity/knob) or when its VALUES change
-      // (allLightsGen — flicker, warm-up, a LAMPS slider). The two are kept
-      // apart deliberately: the segment allocator below may only be reset for
-      // the former. Gen moves every frame while flicker runs, and resetting the
-      // allocator there would re-bake every chunk table every frame.
-      // The knob is deliberately NOT in this key: the loop below copies AL
-      // verbatim, so a knob move cannot change one byte here. It moves only the
-      // per-chunk TABLES, and only via capFor() — 1000 slider steps, <=17 caps.
+      // A new source or a static refill of the shared buffer must update the
+      // records and chunk segments immediately. RGB-only changes are paced.
+      // The slider only changes the table cap, never the packed lamp records.
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
-      const _tlSetMoved = _tlSrc !== frameAllLights;
+      const staticGen = +f.allLightsStaticGen || 0;
+      const _tlSetMoved = _tlSrc !== frameAllLights || _tlStaticGen !== staticGen;
       const _lbGen = f.lampBake ? f.lampBake.gen | 0 : 0;
       // Values-only: the same set and bake, only rgb moved — paced by TL_VALUES_DT
       // on the frame clock (frame.time, game.js's render clock). A clock that went
@@ -3466,7 +3455,7 @@ const WGX = (function () {
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp; keying on it alone would
         // rewrite all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
-        if (_tlFullPack !== AL || _tlLoGen !== _lbGen) {
+        if (_tlSetMoved || _tlLoGen !== _lbGen) {
           for (let i = 0; i < tn; i++) {
             const o = i * 15, b = i * 16;
             td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
@@ -3475,7 +3464,7 @@ const WGX = (function () {
             td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14];
             td[b+15] = _hasLB ? LampBake.liveOnlyAt(AL, o) : 0;
           }
-          _tlFullPack = AL; _tlLoGen = _lbGen;
+          _tlLoGen = _lbGen;
         }
         for (let i = 0; i < tn; i++) {
           const o = i * 15, b = i * 16;
@@ -3485,7 +3474,7 @@ const WGX = (function () {
         // contiguous range and the upload itself cannot shrink. Only the CPU
         // pack does — which is the half that scales with lamp count.
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
+        _tlSrc = frameAllLights; _tlStaticGen = staticGen; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
       }
       // Allocator tracks the TABLES: reset on a set or CAP change, never on a
       // colour-only gen bump (tables key on positions, which flicker leaves
@@ -3552,7 +3541,7 @@ const WGX = (function () {
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
-    let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
+    let encoder = null, litPass = null, currentView = null, _drawSlot = 0, _drawOverflowWarned = false;
     function begin(frame) {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_gpuErrLastPresent >= 0 && _presentCount - _gpuErrLastPresent > GPU_ERR_QUIET_FRAMES) { _gpuErrFrames = 0; _gpuErrRun = 0; }
@@ -3703,6 +3692,7 @@ const WGX = (function () {
       // unclamped length would write past drawRing's end — a synchronous
       // OperationError inside present() reads as a device strike.
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, Math.min(_drawSlot, MAX_DRAWS) * DRAW_F32_STRIDE);
+      if (_drawSlot > MAX_DRAWS && !_drawOverflowWarned) { _drawOverflowWarned = true; Log.warn("gfx", "WGX draw ring overflow: " + (_drawSlot - MAX_DRAWS) + " draw(s) dropped past " + MAX_DRAWS); }
     }
     function _flushQuadFxUBO() {
       if (!quadFxUBO || _fxQuadSlot <= 0) return;
@@ -4285,10 +4275,10 @@ const WGX = (function () {
     // frame encoder; _capFinish maps after onSubmittedWorkDone. Optional
     // readback oracle — visible #game is the soft-present 2D blit; prefer
     // gfx-probe.mjs for the primary visible-canvas gate. One request in flight.
-    function capturePixels() {
+    function capturePixels(owner) {
       if (_lost) return Promise.reject(new Error("device lost"));
       if (_capReq) return Promise.reject(new Error("capture already pending"));
-      return new Promise((resolve, reject) => { _capReq = { resolve, reject }; });
+      return new Promise((resolve, reject) => { _capReq = { resolve, reject, owner }; });
     }
     // Encode the readback copy into the FRAME'S OWN encoder (call just before
     // its finish/submit), then start the map after submit. Split in two
@@ -6045,7 +6035,7 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       // The caller gave up on a pending capture (photo studio's timeout): free the one slot (#5743 P3).
-      cancelCapture: (why) => _rejectCapture(why || "capture cancelled"),
+      cancelCapture: (why, owner) => _rejectCapture(why || "capture cancelled", owner),
       awaitSoftPresent,
       invalidateSoftPresent,
       holdSoftPresent,

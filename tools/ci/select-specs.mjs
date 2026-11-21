@@ -75,8 +75,25 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  24, measured 2026-10-15 22:43Z: 17 ready runs held 2–22 legs each (median
  *  ~9, not the ~4 the first value of 12 assumed), 55 legs sat pending in lanes
  *  while only 17–22 of the 40 Linux slots ran. 24 lanes + the train's own legs
- *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
-export const LANES = 24;
+ *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40.
+ *  28 since 2026-11-20 (D-038): at ~18:18Z 21 legs ran while 411 waited in lanes and only 26 of the
+ *  40 Linux runners were busy; 28 + GROUP_LANES (8, remote-group.mjs) = 36 at worst, so 4 runners
+ *  stay free for land, Pages and the fast tier. */
+export const LANES = 28;
+/** THE LANE COUNT AS A REPO VARIABLE (D-LANES, 2026-11-20). LANES above budgets GitHub's 40-slot pool. A run whose
+ *  legs go to the variable runner (`vars.APEX_CI_BROWSER_RUNNER`, ci.yml `selected` runs-on) takes no slot of that
+ *  pool, so ci.yml's select step hands `APEX_CI_LANES` (`vars.APEX_CI_LANES`) to this planner ONLY under the same
+ *  condition as that runs-on: not pull_request_target, not a fork PR, and the runner variable set. A fork or unset
+ *  case gets '' and stays at LANES, so it can never flood the GitHub-hosted pool. An integer in [1, MAX_LANES];
+ *  anything else (empty, 0, 3.5, "64x", 200) is LANES. Only runs planned after the variable is set use it.
+ *  docs/TESTING.md §CI runners. */
+export const MAX_LANES = 128;
+export function ciLanes(env = process.env) {
+  const s = String(env.APEX_CI_LANES ?? "").trim();
+  if (!/^\d+$/.test(s)) return LANES;
+  const n = Number(s);
+  return n >= 1 && n <= MAX_LANES ? n : LANES;
+}
 
 /** SMALL RUNS SKIP THE LANES (#5536, 2026-11-18). A plan of at most this many legs
  *  gets lane NO_LANE, and ci.yml gives each of its legs a group of its own
@@ -98,13 +115,13 @@ export function trainHead(env = process.env) {
   return String(env.GITHUB_HEAD_REF || "").startsWith("train/");
 }
 
-/** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
+/** First lane of a run's legs: GITHUB_RUN_NUMBER mod the lane count (ciLanes, LANES by default). With every run
  *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
  *  queued every ready PR while the high ones idled. Rotating the start spreads
  *  legs evenly; a run's own legs still land in distinct lanes. */
 export function laneBase(env = process.env) {
   const n = Number(env.GITHUB_RUN_NUMBER);
-  return Number.isInteger(n) && n > 0 ? n % LANES : 0;
+  return Number.isInteger(n) && n > 0 ? n % ciLanes(env) : 0;
 }
 
 // These specs already have their own jobs with runner-measured timeout
@@ -336,6 +353,13 @@ export const MAX_SPILL_SHARDS = 8;
 // change (whole-suite route, tip 7ad0ee9) DROPPED new-hooks.spec.js (540 s/test) with
 // the pool full at 8. Measured with MAX_SPILL_SHARDS 8: over-budget 8 -> 1 dropped, 9 -> 0.
 export const MAX_OVER_BUDGET_SHARDS = 9;
+// THE NIGHTLY'S POOL (2026-11-20). The schedule run routes a day's union diff (reason=infra: near the whole
+// suite), and at 9 the pool was full: nightly 44739348355 (322c63a3) DROPPED perf-boost-press-pipelines and
+// race-cycle-memory and its verdict went red with no test failing (three red nightlies, 11-18..11-20). Measured on
+// tip a671f12b with the bot/spec-timings overlay, `--files tests/helpers/fixtures.js` (the whole-suite route) at
+// 60 min / 12 overflow: 9 -> 1 dropped (quali, 3148 s run), 11 -> 0 (3608 s of 3960). 12 = 4320 s, ~20 % headroom.
+// ci.yml passes it ONLY on `schedule` (OVER_BUDGET_SHARDS); PR, train and dispatch plans keep MAX_OVER_BUDGET_SHARDS.
+export const NIGHTLY_OVER_BUDGET_SHARDS = 12;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
@@ -610,12 +634,13 @@ export function measuredCheap(file, db = timings()) {
  *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
   overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false,
-  includeTwinned = false, scope = null } = {}) {
+  includeTwinned = false, scope = null, noDrop = false } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
   const costOf = (r) => r.tests * specSecPerTest(r.file, db).sec;
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
+  const outOfScope = [];
   const unreadable = [];
   for (const file of specs) {
     const tests = scope ? declaredTestsIn(file, scope) : declaredTests(file);
@@ -625,6 +650,9 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     // in a file whose whole contract is that nothing is dropped silently.
     // Reachable today: hand fit() a path that does not exist and it disappears.
     if (tests == null) { unreadable.push({ file, tests: null }); continue; }
+    // A roster spec whose own APEX_CIRCUITS loop holds none of the scoped circuits (tracks-walls-a when the circuit
+    // is in b's half) would run ZERO tests: a leg of its own fails the verdict, so it runs nowhere, by name (#6036).
+    if (scope && tests === 0 && declaredTests(file) > 0) { outOfScope.push({ file, tests: 0, circuits: scope.join(",") }); continue; }
     if (FIXED_GATE_SPECS.has(file)) {
       coveredByFixedGates.push({ file, tests });
       continue;
@@ -839,8 +867,25 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     skipped.length = 0;
     skipped.push(...keep);
   }
+  // THE NO-DROP TAIL (2026-11-21, Bryce: "Fix the issues now"). The caps above size the pools; they no
+  // longer decide what runs. In 48 h the orchestrator hand-dispatched 85 browser-group runs plus a draft->ready
+  // flip each, because a wide PR's ready plan DROPPED routed specs with overflow and spill full (#5978: gamepad,
+  // menu-keyboard, time-trial, props-over-road, ui-button-touch). Measured on tip d1f9eafc with the
+  // bot/spec-timings overlay, `--files tests/helpers/fixtures.js`: 6 skipped + new-hooks over the pool. The
+  // lanes (LANES / APEX_CI_LANES, ciLanes) already bound how many legs run at once, so an extra leg queues;
+  // it cannot flood the runner pool. With `noDrop` every leftover rides on: an ordinary spec in its own
+  // spill job(s), a declared-slow spec in its own over-budget job(s), each marked `tail`. select() turns it on
+  // for every plan but the draft's (`--overflow-shards 0`: the 5-min draft plan warns on a drop by design).
+  // `unreachable` (the fan-out guard against a mis-billed spec) and `unreadable` are untouched.
+  if (noDrop) {
+    for (const r of skipped) spill.push({ ...r, tail: true });
+    skipped.length = 0;
+    const poolByFile = new Map(overBudgetPool.map((r) => [r.file, r]));
+    for (const s of overBudgetSpecs) overBudgetRun.push({ ...(poolByFile.get(s.file) || s), tail: true });
+    overBudgetSpecs.length = 0;
+  }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
-    unreadable,
+    unreadable, outOfScope,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
 
@@ -870,7 +915,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  cache key (two "Unable to reserve cache") and uploaded three artifacts
  *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
  *  `selected-<i>`, and a final pass suffixes any repeat. */
-export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase(), train = false) {
+export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase(), train = false, lanes = ciLanes()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
@@ -973,10 +1018,10 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(","),
       // The leg's concurrency lane on a pull request (ci.yml `selected`): legs
-      // cycle through LANES groups from laneBase(), so a run's own legs never
+      // cycle through `lanes` groups (ciLanes) from laneBase(), so a run's own legs never
       // queue behind each other and runs do not all pile into lane 0. A plan of
       // SMALL_RUN_LEGS or fewer legs gets NO_LANE below.
-      lane: (base + i) % LANES };
+      lane: (base + i) % lanes };
   });
   // Unique names: a matrix name keys ci.yml's timings artifact, and a repeat
   // there is an upload that collides.
@@ -1696,8 +1741,12 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
     : (standalone.includes(f) || imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
   // The plan's APEX_CIRCUITS (circuits, below): a registry spec is billed for the cases it will register.
-  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst,
-    scope: circ.scoped ? circ.ids : null };
+  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS,
+    overBudgetShards: opts.overBudgetShards ?? MAX_OVER_BUDGET_SHARDS, staleFirst: !!opts.staleFirst,
+    scope: circ.scoped ? circ.ids : null,
+    // No routed spec is dropped (fit()'s NO-DROP TAIL) unless the caller asked for no overflow at all: the
+    // draft plan (`--overflow-shards 0`) keeps the bounded cut and its drop warns. opts.noDrop overrides.
+    noDrop: opts.noDrop ?? (opts.overflowShards ?? MAX_OVERFLOW_SHARDS) > 0 };
   let cut = fit(candidates, budgetMin, fitOpts);
   // THE FLOOR: infra and partial diffs always carry it; any other non-docs diff
   // whose plan came out with nothing to run gets it too. Never an empty plan
@@ -1737,7 +1786,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
-  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--over-budget-shards N] [--failed-from file] [--stale-first] [--json]";
   if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   const fl = argv.indexOf("--files");
   const files = fl >= 0 && argv[fl + 1] ? argv[fl + 1].split(",").map((f) => f.trim()).filter(Boolean) : undefined;
@@ -1756,7 +1805,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const oi = argv.indexOf("--overflow-shards");
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
-  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first"), files });
+  const ui = argv.indexOf("--over-budget-shards");
+  const overBudgetShards = ui >= 0 && Number.isInteger(Number(argv[ui + 1])) ? Number(argv[ui + 1]) : undefined;
+  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, overBudgetShards, staleFirst: argv.includes("--stale-first"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
@@ -1791,7 +1842,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `UNREACHABLE (declares ${s.tests} tests, over the whole ${r.secFit} s budget — this gate can ` +
     `NEVER run it): ${s.file}`);
   for (const s of r.spill || []) console.error(
-    `SPILL (overflow full; runs in a spill job, ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s max): ${s.file} (${s.tests} tests)`);
+    s.tail ? `SPILL TAIL (overflow and spill full; runs in its own spill job past the ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s pool, never dropped): ${s.file} (${s.tests} tests)`
+      : `SPILL (overflow full; runs in a spill job, ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s pool): ${s.file} (${s.tests} tests)`);
   for (const s of r.skipped) console.error(
     `ERROR: NOT RUN ANYWHERE (overflow and spill are both full — the verdict reds on this): ${s.file} (${s.tests} tests)`);
   for (const s of r.overBudgetRun || []) console.error(

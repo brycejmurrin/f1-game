@@ -78,15 +78,15 @@ const TrackDesigner = (function () {
   const COACH_KEY = "designerCoached";
 
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
-  let cv = null, canvas = null;
+  let /** @type {ReturnType<typeof DesignerCanvas.create> | null} */ cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
   let lineage = 0;   // which loaded design a history entry belongs to (restore)
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
-  let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
+  let spanArm = false, selectionMode = "point", /** @type {ReturnType<typeof DesignerSelection.create> | null} */ selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null, workspace = null, seatFootFn = null;
+  let propKind = "stand", /** @type {ReturnType<typeof DesignerScenery.create> | null} */ scenery = null, sceneryView = false, /** @type {ReturnType<typeof DesignerFollowup.repairPanel> | null} */ repair = null, /** @type {ReturnType<typeof DesignerBridges.create> | null} */ bridges = null, /** @type {ReturnType<typeof DesignerWorkspace.create> | null} */ workspace = null, seatFootFn = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
@@ -473,11 +473,13 @@ const TrackDesigner = (function () {
     if (was && next.lin === was.lin) {
       next.name = was.name;
       for (const k of ["id", "originId", "country"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
-    }
+    } else invalidateShares();
     design = next; sel = -1; span = -1; nudge = null;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
+  // A drag in flight holds its own copy of the points: drop it first, or the
+  // release would commit that stale copy over the restored design (and wipe redo).
+  function doUndo() { if (!undo.length) return false; if (cv) cv.reset(); redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; if (cv) cv.reset(); undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -638,6 +640,7 @@ const TrackDesigner = (function () {
     ++replacementGeneration;
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
+    invalidateShares();
     design = copy(item);
     design.lin = ++lineage;
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
@@ -679,12 +682,68 @@ const TrackDesigner = (function () {
   }
 
   // ── save / race ───────────────────────────────────────────────────────────
-  function save(forRace) {
+  /** The saved circuit this design's SHAPE already is (the id is a hash of the shape), when saving would relabel
+   *  it: another name or country, and not the entry this design was opened from (#5947 A). Else null. */
+  function labelClash() {
+    const it = custom.get && custom.sanitize(design);
+    const mine = it && it.id !== design.originId ? custom.get(it.id) : null;
+    return mine && (mine.name !== it.name || (mine.country || "") !== (it.country || "")) ? mine : null;
+  }
+  /** Ask before a shared copy of your own circuit renames it: KEEP MINE / USE THEIRS. The house modal (a
+   *  `dialog.screen` sheet, like the share-card preview) over the designer; Escape keeps yours. Each door paints
+   *  at least 44 px at any UI SIZE (the pause menu's floor, css/dialogs.css #3274). */
+  function askLabel(mine, done) {
+    const dlg = el("dialog", "screen dim");
+    dlg.id = "td-label-ask";
+    dlg.setAttribute("aria-labelledby", "td-label-ask-title");
+    dlg.setAttribute("data-esc-close", "td-label-keep");
+    const sheet = el("div", "sheet"); sheet.style.setProperty("--sheet-w", "460px");
+    const head = el("div", "sheet-head"), title = el("h2", "", "SAME CIRCUIT");
+    title.id = "td-label-ask-title"; head.appendChild(title);
+    const body = el("div", "sheet-body pane");
+    body.appendChild(el("p", "", "You already have this circuit as " + mine.name + "."));
+    const foot = el("div", "sheet-foot");
+    const finish = (keep) => {
+      if (dlg.open && typeof dlg.close === "function") dlg.close();
+      dlg.remove();
+      done(keep);
+    };
+    const door = (id, label, cls, keep) => {
+      const b = btn(label, cls, () => finish(keep)); b.id = id;
+      b.style.minHeight = b.style.minWidth = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
+      foot.appendChild(b);
+      return b;
+    };
+    const keepBtn = door("td-label-keep", "KEEP MINE", "bigbtn", true);
+    door("td-label-theirs", "USE THEIRS", "bigbtn alt", false);
+    sheet.append(head, body, foot);
+    dlg.appendChild(sheet);
+    dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); finish(true); });
+    document.body.appendChild(dlg);
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+    keepBtn.focus();
+    return dlg;
+  }
+  function save(forRace, after, asked) {
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before " + (forRace ? "racing" : "saving"), true); return { ok: false, reason: "red" }; }
     design.turns = verdict.turns.slice();
     design.lengthM = Math.round(verdict.tr.total);
     design.name = CustomTracks.sanitizeName(ui.name ? ui.name.value : design.name);
+    const mine = asked ? null : labelClash();
+    if (mine) {
+      askLabel(mine, (keep) => {
+        if (keep) {
+          design.name = mine.name;
+          if (mine.country) design.country = mine.country; else delete design.country;
+          if (ui.name) ui.name.value = design.name;
+          if (ui.country) ui.country.value = design.country || "";
+        }
+        const r = save(forRace, null, true);
+        if (r.ok && after) after(r);
+      });
+      return { ok: false, reason: "ask" };
+    }
     const r = custom.upsert(design, { replace: design.originId });
     if (!r.ok) {
       // A race runs a SAVED circuit, so a full library blocks racing a new design too.
@@ -703,7 +762,7 @@ const TrackDesigner = (function () {
     return r;
   }
   function race(mode) {
-    const r = save(true);
+    const r = save(true, (saved) => raceId(saved.id, mode));
     if (!r.ok) return false;
     return raceId(r.id, mode);
   }
@@ -1201,22 +1260,38 @@ const TrackDesigner = (function () {
 
   // ── share out / in ────────────────────────────────────────────────────────
   let lastCode = null;
-  /** The APXT1 code for the current design (null when it does not sanitise). */
-  async function shareCode() {
-    if (!design || !design.pts.length) return null;
-    lastCode = await TrackCodec.encode(design);
-    return lastCode;
+  let codeGeneration = 0, shareGeneration = 0, shareSession = 0;
+  // Replacing the loaded document or changing visits withdraws every pending
+  // share. Edits within one document keep the snapshot chosen at the click.
+  function invalidateShares() {
+    ++codeGeneration; ++shareGeneration; ++shareSession;
   }
+  let clipboardWrite = Promise.resolve(false);
+  /** The APXT1 code for the current design (null when it does not sanitise). */
+  async function encodeShareItem(item) {
+    const generation = ++codeGeneration;
+    const code = item && item.pts.length ? await TrackCodec.encode(item) : null;
+    if (generation === codeGeneration) lastCode = code;
+    return code;
+  }
+  const shareCode = () => encodeShareItem(design);
   /** Copy the share link; the code also lands in the SHARE CODE field for a long-press copy. */
   async function share() {
+    const generation = ++shareGeneration;
+    const current = () => generation === shareGeneration;
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     const code = await shareCode();
+    if (!current()) return null;
     if (!code) { message("This design cannot be encoded", true); return null; }
     const url = TrackCodec.shareUrl(code);
     if (ui.code) ui.code.value = url;
-    let copied = false;
-    try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
+    // An OS clipboard write already in progress cannot be cancelled. Let it
+    // settle before writing a newer link, and skip superseded queued links.
+    clipboardWrite = clipboardWrite.then(() => current() && typeof ApexClipboard !== "undefined" &&
+      ApexClipboard.write && ApexClipboard.write(url, { mayFallback: current })).catch(() => false);
+    const copied = await clipboardWrite;
+    if (!current()) return null;
     if (!copied) {
       showPane("design"); setMode("test"); ui.sharingGroup.open = true;
       ui.code.focus(); ui.code.select(); ui.code.scrollIntoView({ block: "nearest" });
@@ -1593,6 +1668,7 @@ const TrackDesigner = (function () {
     if (first) first.focus();
   }
   function open(opts) {
+    invalidateShares();
     ++replacementGeneration;
     if (!built && !init()) return false;
     // A share link opened while the screen is up (hashchange) must not make
@@ -1635,6 +1711,7 @@ const TrackDesigner = (function () {
   }
   function close() {
     if (!root || !openFlag) return;
+    invalidateShares();
     ++replacementGeneration;   // pending single-circuit reads/decodes no longer own this visit
     saveDraft();
     cancelLibraryImport(false);
@@ -1996,7 +2073,7 @@ const TrackDesigner = (function () {
   // Control points stay [x, z]; heights[i] is metres at point i (0.25 m lattice).
   // Presets write heights and clear legacy cosine elevations so the strip matches
   // the road. Old saves without heights load flat (ensureHeights).
-  let prof = null;
+  let /** @type {ReturnType<typeof DesignerProfile.create> | null} */ prof = null;
   function buildProfile(stage) {
     if (typeof DesignerProfile === "undefined" || !stage) return;
     ui.profile = el("canvas");
@@ -2331,13 +2408,14 @@ const TrackDesigner = (function () {
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
   async function cardCanvas() {
+    const started = shareSession;
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok || !verdict.tr) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     // The encoder yields to compression; editing can continue meanwhile. One
     // snapshot owns the link, drawing, filename AND native share-sheet title.
     const item = copy(design), preview = verdict;
-    const code = await TrackCodec.encode(item);
-    lastCode = code;
+    const code = await encodeShareItem(item);
+    if (started !== shareSession) return null;
     if (!code) { message("This design cannot be encoded", true); return null; }
     const url = TrackCodec.shareUrl(code), tr = preview.tr, st = preview.stats || {}, COL = DesignerCanvas.COL;
     const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
@@ -2365,29 +2443,43 @@ const TrackDesigner = (function () {
    *  sheet (AbortError) is the player's choice — no fallback, no message.
    *  Re-entry while a draw/share is in flight is refused (double-click used to
    *  fire two downloads). */
-  let cardBusy = false;
+  let busyCardSession = null;
   async function shareCard() {
-    if (cardBusy) return false;
-    cardBusy = true;
+    const started = shareSession;
+    if (busyCardSession === started) return false;
+    busyCardSession = started;
     try {
       const card = await cardCanvas();
-      if (!card) return false;
+      if (!card || started !== shareSession) return false;
       let blob = null;
-      try { blob = await blobOf(card.canvas); } catch (e) { message("Could not draw the card: " + (e && e.message || e), true); return false; }
+      try { blob = await blobOf(card.canvas); } catch (e) {
+        if (started === shareSession) message("Could not draw the card: " + (e && e.message || e), true);
+        return false;
+      }
+      if (started !== shareSession) return false;
       const nav = typeof navigator !== "undefined" ? navigator : null;
       const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
       if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
         try {
           await nav.share({ files: [file], title: card.title, text: card.url });
+          if (started !== shareSession) return false;
           message("Card shared"); Log.info("track", "designer card shared");
           return true;
         } catch (e) {
-          if (e && e.name === "AbortError") return false;
+          if (started !== shareSession || (e && e.name === "AbortError")) return false;
           Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
         }
       }
-      try { await saveFile(blob, card.name); message("Card saved as " + card.name); return true; } catch (e) { message("Could not save the card: " + (e && e.message || e), true); return false; }
-    } finally { cardBusy = false; }
+      try {
+        await saveFile(blob, card.name);
+        if (started !== shareSession) return false;
+        message("Card saved as " + card.name);
+        return true;
+      } catch (e) {
+        if (started === shareSession) message("Could not save the card: " + (e && e.message || e), true);
+        return false;
+      }
+    } finally { if (busyCardSession === started) busyCardSession = null; }
   }
   /** Arc s (m) of the preview build's node nearest control point i, or -1. */
   function builtS(i) {
@@ -2452,7 +2544,7 @@ const TrackDesigner = (function () {
   async function testHere(i) {
     const at = Number.isInteger(i) ? i : sel;
     if (!design || !(at >= 0 && at < design.pts.length)) { message("Select a point to test drive from", true); return false; }
-    const r = save(true);
+    const r = save(true, () => testHere(at));   // after a KEEP MINE / USE THEIRS answer, drive from the same point
     if (!r.ok) return false;
     const idx = custom.select(r.id);
     if (idx < 0) { message("That circuit is not in the list any more", true); return false; }

@@ -45,8 +45,9 @@ var RetiredCard = (function () {
   }
 
   function show(on) {
+    if (on === shown) return;
     const card = els();
-    if (!card || on === shown) return;
+    if (!card) return;
     shown = on;
     card.hidden = !on;
     document.body.toggleAttribute("data-retired-wait", on);
@@ -73,9 +74,8 @@ var RetiredCard = (function () {
   // RaceControl's adapter: the view off the façade, one reused object per frame.
   const view = { state: "", session: "", timeTrial: false, net: false, watch: false, player: null };
   function tickG(G) {
-    const rr = G.realRace && G.realRace.status ? G.realRace.status() : null;
     view.state = G.state; view.session = G.session; view.timeTrial = !!G.timeTrial;
-    view.net = !!(G.netPlay && G.netPlay.active()); view.watch = !!(rr && rr.watch); view.player = G.player;
+    view.net = !!(G.netPlay && G.netPlay.active()); view.watch = !!(G.realRace && G.realRace.isWatch()); view.player = G.player;
     tick(view);
   }
 
