@@ -274,7 +274,7 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     if (kind === "android" || kind === "ios") sandbox.Capacitor = { isNativePlatform: () => true, getPlatform: () => kind };
     sandbox.window = sandbox;
     const ctx = vm.createContext(sandbox);
-    for (const file of ["js/core/native.js", "js/net/handshake.js", "js/car/ghost-share.js", "js/ui/share-code.js"])
+    for (const file of ["js/core/hash32.js", "js/core/native.js", "js/net/handshake.js", "js/car/ghost-share.js", "js/ui/share-code.js"])
       vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     const base = kind === "web" ? origin + "/custom/index.html" : publicBase;
     assert.equal(vm.runInContext("Native.shareBase()", ctx), base);

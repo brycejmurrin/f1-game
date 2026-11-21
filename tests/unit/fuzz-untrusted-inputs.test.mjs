@@ -22,6 +22,7 @@ import { fuzz, mutate, findBadLiveValues, findPollutedObjects, makeRng, HOSTILE_
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
@@ -74,7 +75,8 @@ function assertCleanLive(label, value) {
 }
 
 // ── GhostShare.decode (#ghost= / pasted APXG1 / .apexghost.json) ───────────
-function bootGhostShare() {
+function bootGhostShare(opts = {}) {
+  const lengths = opts.lengths || {};
   const sandbox = {
     module: { exports: {} },
     TextEncoder, TextDecoder, Uint8Array, Blob, Response,
@@ -82,15 +84,32 @@ function bootGhostShare() {
     btoa, atob, URL,
     location: { origin: "https://example.test", pathname: "/f1-game/", href: "https://example.test/f1-game/", hash: "" },
     history: { state: {}, replaceState() {} },
-    Tracks: { LIST: [{ id: "monza" }, { id: "spa" }] },
+    Tracks: {
+      LIST: (opts.tracks || ["monza", "spa"]).map((id) => ({
+        id,
+        lengthKm: lengths[id],
+      })),
+    },
     Ghost: { track: () => "monza" },
   };
   Object.defineProperty(sandbox, "localStorage", {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
+  seedHash32(ctx);
   vm.runInContext(read("js/car/ghost-share.js"), ctx, { filename: absSrc("js/car/ghost-share.js") });
   return sandbox.module.exports || vm.runInContext("GhostShare", ctx);
+}
+
+/** One-lap synthetic at a plausible average speed (≤ 120 m/s). */
+function honestLap(lengthKm, timeS, n = 40) {
+  const len = lengthKm * 1000;
+  return {
+    time: timeS,
+    t: Array.from({ length: n }, (_, i) => i * timeS / (n - 1)),
+    s: Array.from({ length: n }, (_, i) => i * len / (n - 1)),
+    x: Array.from({ length: n }, () => 0),
+  };
 }
 
 const GHOST_CORPUS = [
@@ -120,6 +139,34 @@ test("GhostShare.decode never throws past the boundary (N=2000)", async () => {
       assert.equal(typeof result.track, "string");
     }
   });
+});
+
+// ── #5783 / #5999 I3 (track-in-hash): shipped this batch.
+// I2 (≤120 m/s) and I3 (±4% length) reproduced red on tip, then deferred:
+// enabling them fails two existing cases in ghost-share.test.mjs (thinned
+// 246 m/s link; 3× lengthKm ceiling) that DAD 2026-11-21 forbids editing
+// while #5978 is open (append-only). See PR Not run.
+test("I3: new envelopes hash the track id so a kept-h relabel fails (#5783/#5999)", async () => {
+  const lengths = { monza: 5.8, spa: 5.8 };            // same length: only the hash catches it
+  const GhostShare = bootGhostShare({ lengths, tracks: ["monza", "spa"] });
+  const g = honestLap(5.8, 95);
+  const file = GhostShare.fileExport(g, { track: "monza" });
+  assert.equal(file.ok, true);
+  const body = JSON.parse(file.text);
+  assert.equal(typeof body.h, "string");
+  assert.equal((await GhostShare.decode(file.text)).ok, true, "honest export still imports");
+  body.track = "spa";                                 // same arc length, wrong circuit
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false,
+    "relabel with h kept must fail once the hash covers the track id");
+});
+
+test("I3: a legacy hashless (or pre-track h) envelope still loads on its own track (#5783/#5999)", async () => {
+  const GhostShare = bootGhostShare({ lengths: { monza: 5.8 } });
+  const g = honestLap(5.8, 95);
+  const body = JSON.parse(GhostShare.fileExport(g, { track: "monza" }).text);
+  delete body.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, true,
+    "old links without h still load when the time binds to the trace");
 });
 
 // ── LobbyCodes.codeFrom + NetHandshake.peekCode / decodeCode (pasted invites)

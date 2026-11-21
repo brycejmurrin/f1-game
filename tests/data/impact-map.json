@@ -3525,6 +3525,7 @@
         "tests/unit/ghost-share.test.mjs"
       ],
       "fileExport": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/ghost-share.test.mjs"
       ],
       "guest": [
@@ -5488,6 +5489,7 @@
         "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/desktop-native.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/forecast.test.mjs",
