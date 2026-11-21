@@ -2,7 +2,7 @@
 const GarageExterior = (function () {
   "use strict";
   const IDENTITY = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  const MESHES = ["ground", "terrain", "road", "props", "scenery", "sceneryLights", "glass", "water"];
+  const MESHES = ["ground", "terrain", "road", "props", "laneBays", "scenery", "sceneryLights", "glass", "water"];
   const wetWeather = weather => /^(wet|rain|storm)$/.test(weather || "");
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
@@ -244,9 +244,9 @@ const GarageExterior = (function () {
       queue = mine.promise;
       notify(); return mine.promise;
     }
-    function draw() {
+    function draw(showLaneBays = false) {
       if (!ready()) return false;
-      for (const name of MESHES) if (readySet[name]) gfx.draw(readySet[name], IDENTITY, material[name]);
+      for (const name of MESHES) if (readySet[name] && (name !== "laneBays" || showLaneBays)) gfx.draw(readySet[name], IDENTITY, name === "laneBays" ? material.props : material[name]);
       return true;
     }
     function drawWeather(sceneNow, reducedMotion) {

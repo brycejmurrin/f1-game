@@ -27,6 +27,26 @@ const GarageExteriorGeometry = (function () {
       bands: Object.assign({}, pit.bands), door: { width: pit.bay.doorW, height: pit.bay.doorH, z: pit.bay.depth / 2 } };
   }
 
+  // Divide the compressed inside of a curved row at each pair's midpoint.
+  // Reserve the parked team's complete rectangle: its cutaway never narrows.
+  function fitRowSeam(a, b) {
+    const dx = b.center[0] - a.center[0], dz = b.center[2] - a.center[2], gap = Math.hypot(dx, dz);
+    if (!(gap > 0)) throw new Error("Coincident circuit garage bays");
+    const nx = dx / gap, nz = dz / gap;
+    const across = yaw => nx * Math.cos(yaw) - nz * Math.sin(yaw);
+    const depth = yaw => GaragePrims.Z_DOOR * Math.abs(nx * Math.sin(yaw) + nz * Math.cos(yaw));
+    const adjust = (bay, neighbor, direction) => {
+      if (bay.selected) return;
+      const x = across(bay.yaw) * direction;
+      const boundary = neighbor.selected ? gap - depth(neighbor.yaw) - GaragePrims.HALF_W * Math.abs(across(neighbor.yaw)) : gap / 2;
+      const limit = (boundary - depth(bay.yaw) - TrackGeom.MIN_SEP) / Math.abs(x);
+      const side = x < 0 ? "left" : "right";
+      bay[side] = Math.min(bay[side], Math.max(TrackPit.BAY.doorW / 2, limit));
+    };
+    adjust(a, b, 1);
+    adjust(b, a, -1);
+  }
+
   function vertex(source, i, a) {
     const j = i * 3, dx = source.pos[j] - a.position[0], dz = source.pos[j + 2] - a.position[2];
     const c = Math.cos(a.yaw), s = Math.sin(a.yaw);
@@ -219,11 +239,28 @@ const GarageExteriorGeometry = (function () {
     const terrain = yield* clipSteps(track.terrainGeo, anchor, limits, budget);
     yield { phase: "terrain-clipped" };
     raw = empty();
-    const pitStats = SceneryPits.build({ track, out: raw, night: track._night, exteriorOnly: true,
+    const rowWorld = empty(), frames = [];
+    function neighborBay(index, box, center, yaw) {
+      const selected = index === anchor.row;
+      frames.push({ center, yaw, col: box.col, left: GaragePrims.HALF_W, right: GaragePrims.HALF_W, selected });
+      return selected ? null : rowWorld;
+    }
+    const pitStats = yield* SceneryPits.buildSteps({ track, out: raw, night: track._night, exteriorOnly: true, neighborBay,
       rawBox: TrackGeom.addBox, rawEmit: TrackGeom.emit, upOf: TrackMesh.upOf,
       bankOffsetAt: TrackMesh.bankOffsetAt, curvature: s => TrackSpline.curvature(track, s) });
+    for (let i = 1; i < frames.length; i++) fitRowSeam(frames[i - 1], frames[i]);
+    for (const frame of frames) {
+      if (frame.selected) continue;
+      const bay = empty(), [x, y, z] = frame.center;
+      GaragePrims.buildLaneBay(bay, 0, frame.col, frame.left, frame.right);
+      TrackGeom.addMesh(rowWorld, bay, { x, y, z, rotY: frame.yaw });
+    }
     yield { phase: "pit" };
     const props = yield* clipSteps(raw, anchor, limits, budget); raw = null;
+    // The ordinary scenery stops at the active doorway. The garage row alone
+    // extends behind it, at its own exact per-box yaw and banked origin.
+    const rowLimits = limits.slice(); rowLimits[4] = -Infinity;
+    const laneBays = yield* clipSteps(rowWorld, anchor, rowLimits, budget);
     yield { phase: "pit-clipped" };
     const ground = yield* clipSteps(TrackMesh.buildFloor(track), anchor, floorLimits, budget);
     const c = Math.cos(anchor.yaw), s = Math.sin(anchor.yaw);
@@ -238,7 +275,7 @@ const GarageExteriorGeometry = (function () {
     const scenery = yield* clipSteps(TrackModels.sealGeometry(dressing.out), anchor, outward, budget, sceneryLights);
     const glass = yield* clipSteps(dressing.glass, anchor, outward, budget);
     const water = yield* clipSteps(dressing.water, anchor, outward, budget);
-    return { supported: true, trackId: def.id, road, props, ground, terrain, scenery, sceneryLights, glass, water, palette: def.palette, surface, anchor,
+    return { supported: true, trackId: def.id, road, props, laneBays, ground, terrain, scenery, sceneryLights, glass, water, palette: def.palette, surface, anchor,
       stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, contextScale: options.contextScale, groundBounds: floorLimits, night: track._night, terrainVertices: terrain.pos.length / 3, sceneryVertices: (scenery.pos.length + sceneryLights.pos.length) / 3, sceneryLightVertices: sceneryLights.pos.length / 3, glassVertices: glass.pos.length / 3, waterVertices: water.pos.length / 3, region: track.sceneryRegion, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
   }
   function* buildSteps(def, options = {}) {

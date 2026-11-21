@@ -178,6 +178,27 @@ function hose(out, pts, rad, col, seg, mid) {
 const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
   ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
 
+// Low-detail neighboring workshop, in the same local frame as the player's bay.
+function buildLaneBay(out, cx, col, left = HALF_W, right = HALF_W) {
+  const front = Z_DOOR, depth = (front - Z_BACK) / 2;
+  const aperture = TrackPit.BAY.doorW / 2, half = (left + right) / 2, mid = cx + (right - left) / 2;
+  const height = CEIL_Y / 2, lintel = (CEIL_Y - TrackPit.BAY.doorH) / 2;
+  // Solid dividers and rear wall present faces to both the lane and the interior.
+  for (const sign of [-1, 1]) {
+    const edge = sign < 0 ? left : right, jamb = (edge - aperture) / 2;
+    block(out, cx + sign * (edge - 0.08), height, -0.09, 0.08, height, depth - 0.09, PANEL, MAT.CONCRETE);
+    block(out, cx + sign * (aperture + jamb), height, front - 0.09, jamb, height, 0.09, STEEL, MAT.METAL);
+  }
+  block(out, mid, height, Z_BACK + 0.10, half - 0.16, height, 0.10, PANEL, MAT.CONCRETE);
+  block(out, cx, CEIL_Y - lintel, front - 0.09, aperture, lintel, 0.09, col, MAT.METAL);
+  block(out, mid, CEIL_Y + 0.06, 0, half, 0.06, depth, STEEL, MAT.METAL);
+  block(out, mid, -0.06, 0, half, 0.06, depth, DARK, MAT.FLAT);
+  // Workbench, team-colored cabinet fronts and a task light give the doorway depth.
+  block(out, cx, 0.54, Z_BACK + 0.80, 2.85, 0.54, 0.55, col, MAT.METAL);
+  block(out, cx, 1.14, Z_BACK + 0.80, 2.95, 0.06, 0.62, STEEL, MAT.METAL);
+  block(out, cx, 2.65, Z_BACK + 0.25, 2.65, 0.045, 0.05, [1.55, 1.62, 1.70], MAT.FLAT);
+}
+
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
 const rgb = (c, dflt) => (c && c.length === 3 ? c : dflt);
@@ -338,7 +359,7 @@ const look = () => LOOKS[_look] || null;
 const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
   // BOX_F / WALL_KEYED / sideOnly / mix stay module-local: only block/cyl/tube + LOOKS use them.
-  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
+  return { buildLaneBay, tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
     LOOKS, LOOK_IDS, setLook, lookId, look, lookCol, ex, hi: (h) => (H = h),
     // EXTREME seams GarageHiPrims replaces when it lands: the room's geometry key (the look + "+hi")
     // and run(kind, build, undo), a room / crew build in its dense scope (it also sets crewHi, a key bit).

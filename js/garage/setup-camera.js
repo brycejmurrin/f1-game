@@ -1113,6 +1113,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt, arrivalHeld());
   if (handoff && !driveOut && !preview && !home.active && !(arriving && arriving.active)) fireHandoff();   // the show ended or was skipped
   const context = garageCtx(), sceneTime = context.sceneNow;
+  context.showLaneBays = !!(arriving && arriving.active);
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
     GarageExterior.fitPose(arriving, exteriorAnchor, !!driveOut && driveOut.cfg.angle === "cut");
@@ -1295,7 +1296,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return false;
-  if (context.realExterior) exteriorDrawn = exterior.draw();
+  if (context.realExterior) exteriorDrawn = exterior.draw(context.showLaneBays);
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Paint stays the race dry-day material. The old matte override (clearcoat 0.1,
