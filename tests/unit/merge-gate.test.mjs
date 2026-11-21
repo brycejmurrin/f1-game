@@ -508,8 +508,6 @@ function fakes() {
   const compare = { status: "diverged", error: null }, compared = [];
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
-    // #6055: evaluate lists open PRs to see if this head is boarded on a train; fixtures have none.
-    if (p.startsWith("pulls?state=open")) return { json: [] };
     if (p.startsWith("actions/workflows/pages.yml/runs?branch=deploy-x&status=completed")) return { json: { workflow_runs: pages.runs } };
     if (p.startsWith(`actions/runs/${pages.runs[0]?.id}/jobs?filter=latest`)) return { json: { jobs: pages.jobs } };
     if (p === `compare/${pages.runs[0]?.head_sha}...${HEAD}` || p === `compare/${TIP}...${HEAD}`) { compared.push(p); return compare.error ? { error: compare.error } : { json: { status: compare.status } }; }
@@ -1092,7 +1090,7 @@ function runStep(script, env, files = {}) {
     `        [ -z "\${GH_MERGE_STDERR2:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR2" >&2; return "\${GH_MERGE_RC2:-0}";`,
     `      fi;`,
     `      [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
-    `    *" pr list "*) case " \${args[*]} " in *" --label train "*) data=\${FAKE_TRAINS:-[]} ;; *) data=\${FAKE_LANDS:-[]} ;; esac ;;`,
+    `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
         `    *"/statuses"*) src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
         `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
@@ -1683,16 +1681,19 @@ test("#6055: land.yml tip-moved resolve prefers an open train over its older car
   };
   const prs = Object.fromEntries([...cars, trainPr].map((p) => [p.number, p]));
   const lands = [...cars, trainPr].map((p) => ({ number: p.number }));
-  const fakeTrains = [{ number: 99, body: manifest, headRefName: "train/20261120T1200-1-2-3-4-5" }];
   const r = runStep(RESOLVE_RUN, {
     EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null",
     PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "",
-    FAKE_LANDS: JSON.stringify(lands), FAKE_PRS: JSON.stringify(prs), FAKE_TRAINS: JSON.stringify(fakeTrains), FAKE_STATUSES: "{}",
+    // train_cars come from the same FAKE_PRS resolve already fetches (pass 1); no second listing.
+    FAKE_LANDS: JSON.stringify(lands), FAKE_PRS: JSON.stringify(prs), FAKE_STATUSES: "{}",
   });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.deepEqual(JSON.parse(r.out.prs), [{ number: 99, head: trainHead }], "train is the only landable PR; its cars are notasked");
   const notasked = JSON.parse(r.out.notasked);
   assert.deepEqual(notasked.map((row) => row.why), Array(5).fill("car of an open train"));
+  assert.equal(r.calls.filter((c) => /\bpr list\b/.test(c) && /--label train\b/.test(c)).length, 0,
+    "resolve must not list --label train; train_cars come from the land pulls already fetched");
+  assert.equal(r.calls.filter((c) => /pulls\?state=open/.test(c)).length, 0, "resolve must not paginate pulls?state=open");
 });
 
 // ---- 2026-10-30 landing gaps: edited body, draft + land, the stale-gate sweep, ship-pr --------------------------

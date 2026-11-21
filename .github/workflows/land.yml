@@ -307,22 +307,37 @@ jobs:
           rows='[]'
           notasked='[]'
           disarm='[]'
-          # #6055: cars boarded on an open train must not take a resolve slot or arm alone. Source of truth for the
-          # pick is tools/ci/merge-train.mjs `resolveLandable` / `openTrainCarIds` (unit-tested); resolve has no
-          # checkout, so the same rule is applied here with gh+jq. Sweep job untouched.
-          train_cars=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label train --limit 20 --json number,body,headRefName \
-            --jq '[.[] | select((.headRefName // "") | startswith("train/")) | .body // "" | capture("<!-- merge-train (?<j>\\{[^\\n]*\\}) -->")? | .j // empty | fromjson? | .cars[]?.pr // empty] | map(select(type == "number")) | unique' 2>/dev/null) || train_cars='[]'
-          [ -n "$train_cars" ] || train_cars='[]'
+          # #6055: reuse the pulls resolve already fetches (no extra `gh pr list --label train`). Pass 1 stores each
+          # open land PR; train_cars come from those with `train` + `train/` ref. Pass 2 classifies (resolveLandable).
+          # Sweep job untouched. Quota follow-ups own other land.yml surfaces.
+          fetched='[]'
           for n in "${numbers[@]}"; do
             [ -n "$n" ] || continue
             pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
-            state=$(jq -r .state <<<"$pr"); draft=$(jq -r .draft <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
+            state=$(jq -r .state <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
+            head=$(jq -r .head.sha <<<"$pr")
+            labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
+            echo "PR #$n: state=$state draft=$(jq -r .draft <<<"$pr") base=$base head=${head:0:12} armed=$(jq -r '.auto_merge != null' <<<"$pr") labels=[$labels]"
+            if [ "$state" != open ] || [ "$base" != "$DEPLOY_BRANCH" ]; then continue; fi
+            fetched=$(jq -c --argjson p "$pr" '. + [$p]' <<<"$fetched")
+          done
+          train_cars=$(jq -c '
+            [.[]
+              | select(((.labels // []) | map(.name) | index("train")) != null)
+              | select((.head.ref // "") | startswith("train/"))
+              | .body // ""
+              | capture("<!-- merge-train (?<j>\\{[^\\n]*\\}) -->")? | .j // empty
+              | fromjson? | .cars[]?.pr // empty]
+            | map(select(type == "number")) | unique' <<<"$fetched") || train_cars='[]'
+          [ -n "$train_cars" ] || train_cars='[]'
+          while IFS= read -r pr; do
+            [ -n "$pr" ] || continue
+            n=$(jq -r .number <<<"$pr")
+            draft=$(jq -r .draft <<<"$pr")
             head=$(jq -r .head.sha <<<"$pr"); armed=$(jq -r '.auto_merge != null' <<<"$pr")
             created=$(jq -r .created_at <<<"$pr")
             labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
             has() { [[ " $labels " == *" $1 "* ]]; }
-            echo "PR #$n: state=$state draft=$draft base=$base head=${head:0:12} armed=$armed labels=[$labels]"
-            if [ "$state" != open ] || [ "$base" != "$DEPLOY_BRANCH" ]; then continue; fi
             why=""
             if has hold; then why="the \`hold\` label is set"
             elif [ "$draft" = true ]; then why="the PR is a draft"
@@ -351,7 +366,7 @@ jobs:
               notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" --argjson d "$dl" '. + [{number: $n, head: $h, why: $w, draft: $d}]' <<<"$notasked")
               if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
             fi
-          done
+          done < <(jq -c '.[]' <<<"$fetched")
           # Open train first, then `priority`, then oldest; at most 4 gates per run (tools/ci/merge-train.mjs resolveLandable).
           prs=$(jq -c 'sort_by(.prio, .created, .number) | .[:4] | map({number, head})' <<<"$rows")
           landable=false; [ "$prs" != '[]' ] && landable=true

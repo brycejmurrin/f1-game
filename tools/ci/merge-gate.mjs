@@ -1076,15 +1076,11 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   rows.open = openVerdict(pull);
   const want = String(sha || "").toLowerCase();
   if (rows.open.ok && want && !(head.startsWith(want) || want.startsWith(head))) rows.open = row(false, `PR head is ${head.slice(0, 8)}, not the --sha ${want.slice(0, 8)} this run gated: a newer push gets its own run`);
-  // #6055: a car boarded on an open train must not pass (or arm) alone. Nested trainGate car rows set forTrainCar.
-  if (rows.open.ok && !forTrainCar && !String(pull.head?.ref || "").startsWith(TRAIN_PREFIX)) {
-    let pulls = openPulls;
-    if (pulls === undefined) {
-      const listed = listAll(`pulls?state=open&base=${encodeURIComponent(base)}`, request);
-      if (listed.error) return { error: `open PRs for train boarding: ${listed.error}` };
-      pulls = listed.rows;
-    }
-    const train = boardedTrainOf(pr, pulls);
+  // #6055: a car boarded on an open train must not pass (or arm) alone. Nested trainGate rows set forTrainCar.
+  // No new open-PR listing here (quota): only when the caller injects `openPulls` (tests). land.yml resolve already
+  // drops boarded cars from its landable list using the pulls it fetched for this run.
+  if (rows.open.ok && !forTrainCar && !String(pull.head?.ref || "").startsWith(TRAIN_PREFIX) && openPulls !== undefined) {
+    const train = boardedTrainOf(pr, openPulls);
     if (train != null) rows.open = row(false, `car of open train #${train}: lands with the train, not alone`);
   }
   // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).
