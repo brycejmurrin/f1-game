@@ -284,6 +284,7 @@ jobs:
           }
           paused=$(merge_paused)
           numbers=()
+          discovered=''
           queue_pulls='[]'
           train=false   # a validated deploy tip advances one eligible entry
           attempt=0
@@ -307,17 +308,19 @@ jobs:
                 --jq '[.[] | {number, state:(.state|ascii_downcase), draft:.isDraft, base:{ref:.baseRefName},
                   head:{sha:.headRefOid,ref:.headRefName}, mergeable:(.mergeable != "CONFLICTING"),
                   auto_merge:.autoMergeRequest, labels, created_at:.createdAt, body}]')
-              mapfile -t numbers < <(jq -r '.[].number' <<<"$queue_pulls")
+              discovered=$(jq -r '.[].number' <<<"$queue_pulls")
             else
               echo "::notice::deploy-branch $EVENT concluded '$RUN_CONCLUSION' — nothing to re-gate"
             fi
           else
             # A PR's CI finished, green or red: re-gate it so a `gate` posted while CI ran is settled either way.
-            mapfile -t numbers < <(jq -r --arg base "$DEPLOY_BRANCH" '(. // [])[] | select(.base.ref == $base) | .number' <<<"$CANDIDATES")
-            if [ "${#numbers[@]}" -eq 0 ] && [ -n "$RUN_SHA" ]; then
-              mapfile -t numbers < <(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/pulls" --jq ".[] | select(.base.ref == \"$DEPLOY_BRANCH\") | .number")
+            discovered=$(jq -r --arg base "$DEPLOY_BRANCH" '(. // [])[] | select(.base.ref == $base) | .number' <<<"$CANDIDATES")
+            if [ -z "$discovered" ] && [ -n "$RUN_SHA" ]; then
+              discovered=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/pulls" --jq ".[] | select(.base.ref == \"$DEPLOY_BRANCH\") | .number")
             fi
           fi
+          # Keep producer errors visible under errexit; mapfile alone cannot report a process substitution's exit.
+          if [ -n "$discovered" ]; then mapfile -t numbers <<<"$discovered"; fi
           rows='[]'
           notasked='[]'
           disarm='[]'

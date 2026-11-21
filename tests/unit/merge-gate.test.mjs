@@ -1099,9 +1099,10 @@ function runStep(script, env, files = {}) {
     `        [ -z "\${GH_MERGE_STDERR2:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR2" >&2; return "\${GH_MERGE_RC2:-0}";`,
     `      fi;`,
     `      [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
-    `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
+    `    *" pr list "*) if [ "\${GH_DISCOVERY_FAIL:-}" = land ]; then echo 'HTTP 403' >&2; return 42; fi; data=\${FAKE_LANDS:-[]} ;;`,
         `    *"/statuses"*) src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
         `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
+    `    *"/commits/"*"/pulls "*) if [ "\${GH_DISCOVERY_FAIL:-}" = pulls ]; then echo 'HTTP 403' >&2; return 42; fi; data=\${FAKE_COMMIT_PULLS:-[]} ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
     `    *"/actions/runs/"*) data=\${FAKE_RUN:-'{}'}`,
@@ -1704,6 +1705,34 @@ function tipListing(pulls) {
     autoMergeRequest: p.auto_merge, labels: p.labels, createdAt: p.created_at, body: p.body,
   })));
 }
+
+test("#6110: resolve propagates discovery errors and distinguishes an empty queue from a candidate", () => {
+  const run = LAND.jobs.resolve.steps.find(s => s.id === "pick").run;
+  const pull = JSON.parse(pr7());
+  const summary = { number: pull.number, base: pull.base };
+  const env = { EVENT: "workflow_run", RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: HEAD7,
+    CANDIDATES: "[]", FAKE_PR: pr7() };
+  for (const [kind, event, empty, one] of [
+    ["land", { RUN_BRANCH: DEPLOY_BRANCH, RUN_NAME: "Deploy to GitHub Pages" },
+      { FAKE_LANDS: "[]" }, { FAKE_LANDS: tipListing([pull]) }],
+    ["pulls", { RUN_BRANCH: "cursor/test", RUN_NAME: "CI" },
+      { FAKE_COMMIT_PULLS: "[]" }, { FAKE_COMMIT_PULLS: JSON.stringify([summary]) }],
+  ]) {
+    const probe = extra => runStep(run, { ...env, ...event, ...extra });
+    const failed = probe({ GH_DISCOVERY_FAIL: kind });
+    assert.equal(failed.status, 42, kind + " preserves the candidate read failure");
+    assert.deepEqual(failed.out, {}, "no normal queue outcome is published after an error");
+    for (const [fixture, expected] of [[empty, []], [one, [{ number: 7, head: HEAD7 }]]]) {
+      const resolved = probe(fixture);
+      assert.equal(resolved.status, 0, resolved.stderr);
+      assert.deepEqual(JSON.parse(resolved.out.prs), expected);
+      assert.equal(resolved.out.landable, String(expected.length > 0));
+    }
+  }
+  const malformed = runStep(run, { ...env, RUN_BRANCH: "cursor/test", RUN_NAME: "CI", CANDIDATES: "invalid JSON" });
+  assert.notEqual(malformed.status, 0, "an invalid event payload is a parse error");
+  assert.ok(!malformed.calls.some(c => c.includes("/commits/")), "invalid payload does not trigger fallback");
+});
 
 // ---- AUTO-SYNC retired 2026-11-03 with merge-gate's distance row (plan §6): land.yml never update-branches ----------
 
