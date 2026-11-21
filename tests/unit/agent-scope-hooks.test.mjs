@@ -203,13 +203,44 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     const older = pf({ agent_id: "a1" });
     assert.equal(older.status, 2, `an older tree still protects version.json\n${older.stderr}`);
     assert.equal(older.stderr.startsWith("BLOCKED: version.json is GENERATED — "), true, older.stderr);
-    // Present but unresolvable fails closed, like the other two lists.
+    // Present but unresolvable fails closed and names the element (#5799), not the bare "not found".
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, "export const ON_DEMAND_PATHS = Object.freeze([someVar]);"));
-    assert.equal(pf({ agent_id: "a1" }).stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
+    assert.equal(pf({ agent_id: "a1" }).stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: ON_DEMAND_PATHS: cannot parse element 'someVar' (string literal or const name only; // and /* */ comments inside the array are not supported)), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });
     assert.equal(broken.status, 2);
     assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// #5799 row 1: a // comment inside GENERATORS used to collapse to the bare "GENERATORS not found".
+test("protect-files.py: an unparsable GENERATORS element is named in the refusal (#5799)", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "pf-gens-"));
+  try {
+    spawnSync("git", ["init", "-q", dir]);
+    for (const rel of ["tools/lib/generated-paths.mjs", "tools/gen/targets.mjs", "tools/gen/gen-shell.mjs", "tools/gen/gen-cursor-rules.mjs"]) {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
+    }
+    const gens = fs.readFileSync(path.join(ROOT, "tools/gen/targets.mjs"), "utf8").match(/GENERATORS = \[([\s\S]*?)\]/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1));
+    for (const g of gens) {
+      const rel = path.join("tools/gen", g);
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
+    }
+    const targets = fs.readFileSync(path.join(dir, "tools/gen/targets.mjs"), "utf8");
+    fs.writeFileSync(path.join(dir, "tools/gen/targets.mjs"), targets.replace(
+      'export const GENERATORS = [\n  "./gen-tools-readme.mjs",',
+      'export const GENERATORS = [\n  "./gen-tools-readme.mjs",\n  // comment that breaks js_strings,',
+    ));
+    fs.writeFileSync(path.join(dir, "version.json"), "{}\n");
+    const r = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], {
+      input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: path.join(dir, "version.json"), old_string: "{}", new_string: "[]" } }),
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /tools\/gen\/targets\.mjs: GENERATORS: cannot parse element '\/\/ comment that breaks js_strings'/, r.stderr);
+    assert.doesNotMatch(r.stderr, /GENERATORS not found/, "must name the element, not the bare not-found");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
