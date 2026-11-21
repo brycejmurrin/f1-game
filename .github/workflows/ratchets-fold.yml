@@ -29,7 +29,7 @@ name: Ratchets fold
 # the per-run fold branch instead (`actions: write`; .github/actions/open-bot-pr).
 # Schedules fire late (the measured lag is 6.6-9.9 h, median 8.5 h, 2026-11-20; "The schedule event can be
 # delayed during periods of high loads", https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
-# so the minute is off the hour and nothing depends on the exact time. 17:17 UTC
+# so the minute is off the hour and nothing depends on the exact time. 17:13 UTC
 # (was 06:17, which started at 13-16 UTC, the busy hours) lands the start at
 # 00-03 UTC, the queue's quiet window (docs/notes/CI-CRON-DELAY-2026-11-20.md).
 #
@@ -38,7 +38,7 @@ name: Ratchets fold
 
 on:
   schedule:
-    - cron: "17 17 * * *"   # daily 17:17 UTC
+    - cron: "13 17 * * *"   # daily 17:13 UTC
   workflow_dispatch:
     inputs:
       min_fragments:
