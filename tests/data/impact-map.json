@@ -8155,6 +8155,7 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -8299,7 +8300,6 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
-        "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
@@ -19960,7 +19960,8 @@
     "js/ui/layout-presets.js": {
       "apply": [
         "tests/unit/appearance-shapes.test.mjs",
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "current": [
         "tests/unit/layout-presets.test.mjs"
@@ -20260,7 +20261,8 @@
       "apply": [
         "tests/specs/wake-lock.spec.js",
         "tests/unit/layout-presets.test.mjs",
-        "tests/unit/pause-opts.test.mjs"
+        "tests/unit/pause-opts.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "initUI": [
         "tests/unit/pause-opts.test.mjs"
@@ -20567,7 +20569,8 @@
         "tests/unit/scale-defaults.test.mjs"
       ],
       "sizeRow": [
-        "tests/unit/hud-feel.test.mjs"
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "*": [
         "tests/specs/phone-shipped-defaults.spec.js",
@@ -20578,7 +20581,6 @@
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/phone-tools.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/test-groups.test.mjs"
@@ -20587,6 +20589,7 @@
     "js/ui/screen-looks.js": {
       "apply": [
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "build": [
@@ -20753,6 +20756,7 @@
       "fill": [
         "tests/specs/photo-studio.spec.js",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -21164,7 +21168,8 @@
     },
     "js/ui/title-layout.js": {
       "apply": [
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "build": [
         "tests/unit/appearance-opts.test.mjs",
