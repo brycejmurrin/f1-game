@@ -804,11 +804,15 @@ before:
 | variable | job | events that read it |
 |---|---|---|
 | `APEX_BROWSER_RUNNER` | `browser-group.yml` `group` (every shard) | `workflow_dispatch` (its only trigger) |
-| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request`, the pages.yml train, schedule, dispatch |
+| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request` and ci.yml's own dispatch only; the pages.yml train (any event) and the nightly stay on `ubuntu-latest` so a managed-runner outage never blocks a deploy |
 
 The value is ONE `runs-on` label string. Nothing else reads a variable for its runner. Land, the gate, Pages, the
 deploy, the structural guards and the fast tier stay literal `ubuntu-latest`, and so does `renderer-macos`
 (`tests/unit/ci-runner-variable.test.mjs` pins the list).
+
+**Train stays hosted (2026-11-20).** Pages run 44835564654 redded in mesa-xvfb setup on a Ubicloud leg (no apt mirror
+answered), so the train and the nightly no longer read the variable. Bryce deleted `APEX_CI_BROWSER_RUNNER` as a
+stopgap the same day; with this rule merged it is safe to re-add.
 
 **Fork code never runs there.** The repo is public and takes fork PRs. In `ci.yml`, a `pull_request` whose head
 repository is not this one, and any `pull_request_target`, falls back to `ubuntu-latest` whatever the variable says.
@@ -844,7 +848,7 @@ A leg on the variable runner takes no slot of that pool, so two more repository 
 
 | variable | read by | used only when | unset or invalid |
 |---|---|---|---|
-| `APEX_CI_LANES` | ci.yml's select step → select-specs `ciLanes` | the run's `selected` legs resolve to `APEX_CI_BROWSER_RUNNER` (same condition as their `runs-on`: not `pull_request_target`, not a fork PR, the runner variable set) | 28 |
+| `APEX_CI_LANES` | ci.yml's select step → select-specs `ciLanes` | the run's `selected` legs resolve to `APEX_CI_BROWSER_RUNNER` (same condition as their `runs-on`: own `pull_request` or ci.yml dispatch, never the train or nightly, the runner variable set) | 28 |
 | `APEX_GROUP_LANES` | remote-group.mjs `groupLanes` (env, or `--group-lanes <n>`) | the dispatcher sets it only when the target branch's browser-group.yml reads `APEX_BROWSER_RUNNER` (synced past 0575bc45) and that variable is set | 8 |
 
 Each value is an integer in [1, 128]; anything else falls back to the default. A fork or unset case can never get more
