@@ -22,7 +22,7 @@ I.e setup our roles as skills like worker doc should be a skill."
 - The dispatcher procedure was split between WORKERS.md §The dispatcher (rules, guards) and the header of
   `tools/ci/dispatch.mjs` (the scheduled task's prompt, the cycle). No skill, so a fresh dispatcher session had to find both.
 - Efficiency rules for the dispatcher (300k hand-off, ask once, pause an idle trigger, Sonnet reviewers, a denial is
-  final) lived in `docs/notes/EFFICIENCY-REVIEW-2026-10-30.md` and one line each in `handoff`/WORKERS.md.
+  final) lived in `docs/archive/notes/EFFICIENCY-REVIEW-2026-10-30.md` and one line each in `handoff`/WORKERS.md.
 
 ## Duplication and gaps found
 

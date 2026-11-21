@@ -515,7 +515,7 @@ function deployTaper(c) {
 // braking or coasting in the pit box cannot refill the battery (it took ~10 s).
 function regenSpeedK(c) { return clamp(vStd(c.speed) / REGEN_FULL_V, 0, 1); }   // reversing (the brake-held crawl) recovers nothing either
 
-let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
+let /** @type {ReturnType<typeof AeroZones.create> | null} */ aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
 // The zone GEOMETRY lives in js/physics/aero-zones.js (AeroZones.create(G), wired
 // after the G façade as `aeroZ`). It is pure circuit geometry — curvature in,
@@ -702,11 +702,11 @@ let launchT0 = 0;
 // DebrisWorld.hazards() and drives the HUD flag, and NEVER writes speed, px,
 // pz, head or (s, x). The five below are thin passes through to it, kept as
 // hoisted function declarations so the G façade below can name them directly.
-let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
-let wxArc = null;     // WeatherArc.create(G, deps), same deferral — live weather
+let /** @type {ReturnType<typeof RaceControl.create> | null} */ raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
+let /** @type {ReturnType<typeof WeatherArc.create> | null} */ wxArc = null;     // WeatherArc.create(G, deps), same deferral — live weather
                       // and the dynamic arc (js/race/weather-arc.js)
-let tyres = null;     // TyreModel.create(G), same deferral
-let pits = null;      // PitLane.create(G), same deferral
+let /** @type {ReturnType<typeof TyreModel.create> | null} */ tyres = null;     // TyreModel.create(G), same deferral
+let /** @type {ReturnType<typeof PitLane.create> | null} */ pits = null;      // PitLane.create(G), same deferral
 let _pitCrewDrawn = () => 0;   // filled after CarDraw.create — __apex.pit() drains it
 // NO PASSING UNDER THE SC / VSC, for the player (the AI holds station by
 // construction): a place gained must go back inside the window, or it is priced
@@ -745,7 +745,7 @@ function blueFlagCall(ev) {
 // called in and still on your way to the box. Not `out`/`served`/`merge` — by
 // then you are leaving, and not `missed`.
 const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
-let engineer = null;  // RaceEngineer.create(G), same deferral
+let /** @type {ReturnType<typeof RaceEngineer.create> | null} */ engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -885,7 +885,7 @@ if (CHAMP_GRID_RULES.indexOf(champGrid) < 0) champGrid = "champ";
 // driverId -> seconds; quali.simulate() takes the map and stops caring which of
 // them is "the player". Cleared with the classification.
 // Friend-race qualifying sync (peer laps, q-go gate) lives in js/race/quali-net.js.
-let qualiNet = null;
+let /** @type {ReturnType<typeof QualiNet.create> | null} */ qualiNet = null;
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
 let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 const lapRec = LapRecord.create();
@@ -982,7 +982,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
-let lastFrame = 0, raceMessageHistory = null, controllerProfileUi = null, raceMixUi = null, setupTrialSession = null;
+let lastFrame = 0, raceMessageHistory = null, /** @type {ReturnType<typeof ControllerProfileControls.create> | null} */ controllerProfileUi = null, /** @type {ReturnType<typeof RaceMixControls.create> | null} */ raceMixUi = null, /** @type {ReturnType<typeof SetupTrialSession.create> | null} */ setupTrialSession = null;
 const banner = AnnounceBanner.create({
   els: () => els, player: () => player, state: () => state, hudProfile: () => hudProfile,
   camMode: () => camMode, camModes: () => CAM_MODES, radioVoice: () => radioVoice,
@@ -991,7 +991,7 @@ const banner = AnnounceBanner.create({
 let radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
 function announce(msg, dur, kind, still, quiet) { return banner.announce(msg, dur, kind, still, quiet); }
 let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
-let skids = null;   // SkidMarks.create(), assigned once G exists (below)
+let /** @type {ReturnType<typeof SkidMarks.create> | null} */ skids = null;   // SkidMarks.create(), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
 // per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(),
 // wired after the G façade as `skids`. Nothing outside that module reads its
@@ -3012,7 +3012,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
-let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
+let /** @type {ReturnType<typeof LightStore.create> | null} */ ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 
 // ── The shared ctx façade over game.js closure state ─────────────────────────
 // Extracted modules (js/ui/results-sheet.js, hud.js, apex.js, …) can't reach the
@@ -3020,7 +3020,7 @@ let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 // getters/setters + stable helpers. Getters read the current value at call
 // time; setters write back into the closure. Grown as extractions need it —
 // add a getter here rather than passing state ad hoc.
-let raceSettings = null, customTeam = null, titleMenu = null, uiExperience = null, photoStudio = null;
+let /** @type {ReturnType<typeof RaceSettings.create> | null} */ raceSettings = null, /** @type {ReturnType<typeof CustomTeam.create> | null} */ customTeam = null, /** @type {ReturnType<typeof TitleMenu.create> | null} */ titleMenu = null, /** @type {ReturnType<typeof UiExperience.create> | null} */ uiExperience = null, /** @type {ReturnType<typeof PhotoStudio.create> | null} */ photoStudio = null;
 
 const G = {
   $, els,
@@ -4202,6 +4202,7 @@ let netLobby = {
 // C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
+if (typeof VisorOptics !== "undefined") VisorOptics.bind(G); RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen.phase() });   // G is local to this IIFE: a typeof read never sees it (#5964, #5965)
 // MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
@@ -5969,7 +5970,7 @@ function updateCarLateral(c, dt, ranked, S) {
       // Guided: the heading follows the LANE's line, not the racing line's
       // slope (tanT) — which leaned a car in the fast lane on the platform
       // barrier the whole way down the Bahrain lane (traced, aiHead +0.15).
-      if (lx !== desiredX) { desiredX = lx; tanT = 0; }
+      if (lx !== desiredX) { desiredX = lx; tanT = 0; } else if ((desiredX = ContactGeometry.pitWallAim(track, c.s, wrapS(c.s + lead), lx)) !== lx) tanT = 0;   // else clear of the pit walls (#5997)
     }
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
@@ -8904,7 +8905,7 @@ function openSettings() {
   // default focus fixup (survey #3249 — not BACK).
   requestAnimationFrame(() => requestAnimationFrame(() => focusSettingsHub()));
 }
-let keyBinds = null;   // KeyBinds.create(G), below
+let /** @type {ReturnType<typeof KeyBinds.create> | null} */ keyBinds = null;   // KeyBinds.create(G), below
 function closeSettings() { settingsNav.invalidate(); if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };

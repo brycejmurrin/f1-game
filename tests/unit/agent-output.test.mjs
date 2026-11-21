@@ -296,7 +296,7 @@ test('row text is cut on whole lines and keeps its paging footer; mid-size answe
   const rows = Array.from({ length: 300 }, (_, i) => `js/track/file${i}.js:${i + 1}:5 [use] (Mod › fn${i})`);
   const text = `${rows.length} references\n${rows.join('\n')}\n… 41 more (offset:300)`;
   const shown = summarizeOutput({ content: [{ type: 'text', text }] }).content[0].text.split('\n');
-  assert.ok(shown.every(line => line === `${rows.length} references` || rows.includes(line) || /^\[omitted \d+ lines\]$/.test(line) || line === '… 41 more (offset:300)'));
+  assert.ok(shown.every(line => line === `${rows.length} references` || rows.includes(line) || /^\[omitted \d+ lines from this page: output_read on artifact\.path returns them; the paging below is separate\]$/.test(line) || line === '… 41 more (offset:300)'));
   assert.equal(shown.at(-1), '… 41 more (offset:300)');
   // ~6 KB: summarizing would force a follow-up read that costs more than sending it whole.
   const mid = { content: [{ type: 'text', text: rows.slice(0, 120).join('\n') }] };

@@ -58,8 +58,10 @@ test("navigation scopes retain aliases and filter before paging at directory bou
     const file = await query(lsp, "lsp_references", { symbol: "Ops.run", path: "src/ui/panel.js", files: true });
     assert.match(file, /^src\/ui\/panel\.js \d+$/m);
     assert.doesNotMatch(file, /^src\/(?:ui-extra|engine)\//m);
-    const absent = await query(lsp, "lsp_callers", { symbol: "Ops.run", path: "src/not-present" });
-    assert.match(absent, /^0 uses in 0 functions across 0 files/);
+    // A path that names nothing is refused, not answered "0 uses" (read as dead code; B8, 2026-11-20).
+    const absent = await callTool(lsp, "lsp_callers", { symbol: "Ops.run", path: "src/not-present" });
+    assert.equal(absent.isError, true);
+    assert.equal(absent.content[0].text, "path matches nothing: no file or directory src/not-present in the workspace");
     const outside = await query(lsp, "lsp_definition", { symbol: "Ops.run", path: "src/ui", body: true });
     assert.match(outside, /^0 definitions/);
     assert.doesNotMatch(outside, /function run\(v\)/);
@@ -126,7 +128,7 @@ test("cached lexical owners refresh after edits and keep same-named methods dist
 test("invalid scopes are rejected before starting a compiler", async () => {
   const lsp = new Lsp({ idleMs: 0 });
   try {
-    for (const scope of ["../js", "/src/ui", "src/../ui", "src/*", "C:\\temp", ""]) {
+    for (const scope of ["../js", "/src/ui", "src/../ui", "src/*", "C:\\temp", "", "js/phyics"]) {   // the last matches nothing (B8)
       const result = await callTool(lsp, "lsp_references", { symbol: "G.player", path: scope });
       assert.equal(result.isError, true, scope);
       assert.equal(lsp.proc, null);

@@ -13,7 +13,7 @@ const {
   CAREER_SLOT_RE, isCareerKey,
 } = SettingsExport._core;
 
-const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, ghosts, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section (merged on import)";
+const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, the season save, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section, and season setup, circuit mastery, ghosts, onboarding marks and your own circuits in the progress section (both merged on import)";
 
 function same(a, b) {
   if (a === b) return true;
@@ -94,6 +94,8 @@ function collect(mode, G) {
   };
   const ttlb = collectTtlb();
   if (ttlb && Object.keys(ttlb).length) out.ttlb = ttlb;
+  const progress = typeof ProgressBackup !== "undefined" ? ProgressBackup.collect() : null;   // #5992
+  if (progress && Object.keys(progress).length) out.progress = progress;
   return out;
 }
 
@@ -312,7 +314,12 @@ function applySettings(file, G) {
   applied += ttlb.applied;
   skipped += ttlb.skipped;
   failed += ttlb.failed || 0;
-  return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
+  // PROGRESS (#5992, js/ui/progress-backup.js): merged like ttlb; a file without it imports as before.
+  const progress = typeof ProgressBackup !== "undefined" ? ProgressBackup.apply(file.progress) : { applied: 0, skipped: 0, rejected: 0, failed: 0 };
+  applied += progress.applied;
+  skipped += progress.skipped;
+  failed += progress.failed;
+  return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, rejectedProgress: progress.rejected, reason: null };
 }
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
@@ -410,6 +417,9 @@ function poisonedCareerMoney(raw, flavour) {
   return CareerBackup.validate({ format: CareerBackup.FORMAT,
     slots: [{ flavour, i: 0, data: { money: raw.money } }] }).reason === "nan-money";
 }
+// Clean-room fix 70: the season save, licence badges and daily history travel in the career
+// file too, under CareerBackup's envelope names, so a player with no career still backs them up.
+const CAREER_EXTRA_KEYS = Object.freeze({ season: "season", badges: "badges", daily: "daily.v1" });
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -445,8 +455,13 @@ function collectCareer() {
   }
   let build = null;
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
-  return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
-           excluded: CAREER_EXCLUDED, count: n, careers: out };
+  const extras = {};
+  for (const [name, key] of Object.entries(CAREER_EXTRA_KEYS)) {
+    const v = store && store.get ? store.get(key, null) : null;
+    if (isObj(v)) { extras[name] = JSON.parse(JSON.stringify(v)); n++; }
+  }
+  return Object.assign({ format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
+           excluded: CAREER_EXCLUDED, count: n, careers: out }, extras);
 }
 // CareerBackup is lazy (LAZY_CAREER_UI, #4748): the CAREER FILE buttons await
 // it so futureCareerSlot / poisonedCareerMoney never run without their gate.
@@ -489,15 +504,20 @@ async function applyCareer(file, revisions) {
     if (!c) { skipped++; continue; }
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
-  if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
+  const envelope = { format: CareerBackup.FORMAT, slots };
+  for (const name of Object.keys(CAREER_EXTRA_KEYS)) if (file[name] != null) envelope[name] = file[name];
+  const hasExtras = Object.keys(envelope).length > 2;
+  if (!slots.length && liveSlot == null && !hasExtras) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
   // Both file formats share the same live-conflict gate and preflight of ALL
   // destination revisions. No slot is written if any destination changed.
   // applyWithUndo keeps each replaced slot as a restore point first, or refuses.
-  const r = await CareerBackup.applyWithUndo({ format: CareerBackup.FORMAT, slots },
-    Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: false }));
+  // applyWithUndo merges the extras: a newer local season stays, badges combine, daily bests are kept.
+  const r = await CareerBackup.applyWithUndo(envelope,
+    Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: hasExtras }));
   if (!r.ok) return refused(r.reason);
   const failed = r.failed || 0;
-  return { ok: true, applied: r.written.length + (r.selectionWritten ? 1 : 0), skipped, failed, reason: null };
+  const applied = Array.isArray(r.applied) ? r.applied.length : r.written.length + (r.selectionWritten ? 1 : 0);
+  return { ok: true, applied, skipped, failed, reason: null };
 }
 
 async function download(obj, name) {
@@ -666,12 +686,12 @@ function create(G) {
     note.className = "adv-help";
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
     note.id = "pm-settings-file-scope";
-    note.textContent = "SAVE ALL SETTINGS includes preferences, appearance profiles, tuners and control bindings. SAVE CHANGED SETTINGS includes only preference differences from defaults. Both files also include saved time-trial leaderboards when present; loading merges those boards with yours and keeps the best laps. LOAD SETTINGS FILE asks twice, then reloads. Neither file is a complete game backup: garage builds, career and season progress, photos, personal background images, ghosts, replays, daily progress, accounts and network credentials are not included.";
+    note.textContent = "SAVE ALL SETTINGS includes preferences, appearance profiles, tuners and control bindings. SAVE CHANGED SETTINGS includes only preference differences from defaults. Both files also include saved time-trial leaderboards, season setup, circuit mastery, ghosts, onboarding marks and your own circuits when present; loading merges them with yours and keeps the best laps. LOAD SETTINGS FILE asks twice, then reloads. Neither file is a complete game backup: garage builds, career and season saves, photos, personal background images, replays, accounts and network credentials are not included.";
     const otherFiles = document.createElement("p");
     otherFiles.id = "pm-other-save-files";
     otherFiles.className = "adv-help";
     otherFiles.setAttribute("data-help", "keep");
-    otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, ghosts, replays and accounts are not included in these backups. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
+    otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots, the season save, licence badges and daily history. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, replays and accounts are not included in these backups; ghosts travel in the settings file. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
 
     const shareNote = document.createElement("p");
     shareNote.id = "pm-share-code-help";
@@ -766,7 +786,7 @@ function create(G) {
       saveBtn("pm-garage-save", "SAVE GARAGE FILE", "Parts, setups, liveries and your team. Career progress and settings are excluded.",
         collectGarage, () => `apex26-garage-${stamp()}.json`),
       groupHead("CAREER FILE"),
-      saveBtn("pm-career-save", "SAVE CAREER FILE", "All six career slots and the active slot. Settings and garage builds are excluded.",
+      saveBtn("pm-career-save", "SAVE CAREER FILE", "All six career slots, the active slot, the season save, licence badges and daily history. Settings and garage builds are excluded.",
         () => careerReady().then(collectCareer), () => `apex26-career-${stamp()}.json`));
     const restoreHelp = document.createElement("p");
     restoreHelp.className = "adv-help";
@@ -793,7 +813,7 @@ function create(G) {
     const exclusions = document.createElement("p");
     exclusions.className = "adv-help";
     exclusions.setAttribute("data-help", "keep");
-    exclusions.textContent = "Settings, garage and career are separate files. Photos, background images, ghosts, replays and accounts are excluded.";
+    exclusions.textContent = "Settings, garage and career are separate files. Photos, background images, replays and accounts are excluded.";
     selectSection(0);
     host.append(h, nav, ...sections, exclusions, scope);
     if (typeof SaveHealth !== "undefined" && SaveHealth.mount) SaveHealth.mount(host);

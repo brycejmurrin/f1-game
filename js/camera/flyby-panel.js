@@ -346,7 +346,7 @@ let _refresh = null;
 function create(G) {
   Log.info("game", "FlybyPanel.create");
   const { store } = G;
-  let real = null, _apiLoader = null;
+  let /** @type {ReturnType<typeof FlybyEditor.create> | null} */ real = null, _apiLoader = null;
   function loadSaved() {
     let saved = null;
     try { saved = store.get("flybyShots", null); } catch (_) { return null; }

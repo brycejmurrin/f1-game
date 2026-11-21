@@ -1367,7 +1367,10 @@ test("the career file carries the six slots and the live pointer, and nothing el
   assert.equal(f.careers["career.myteam.1"].flavour, "myteam");
   assert.equal(f.careers["career.driver.0"].money, 4200);
   assert.ok(!("career.driver.1" in f.careers), "empty slots are omitted");
-  assert.equal(f.count, 3);
+  // Fix 70: the poison store's daily.v1 object travels as the daily extra (CareerBackup cleans it on
+  // import); its array-shaped season does not.
+  assert.equal(f.count, 4);
+  assert.deepEqual(f.daily, { best: 1 }); assert.equal(f.season, undefined); assert.equal(f.badges, undefined);
   const text = JSON.stringify(f).replace(/"excluded":"[^"]*"/, "");
   assert.ok(!/SECRET|parts\.mercedes|spotify|ghost|ttlb|wss:/.test(text), "career export leaks nothing else");
   // SETTINGS and GARAGE still refuse career keys.
@@ -1671,7 +1674,7 @@ test("Saves and Data explains separate backup scopes and reuses storage health",
   const scope = b.dom.byId("pm-settings-file-scope");
   assert.equal(scope.getAttribute("data-help"), "keep");
   assert.match(scope.textContent, /Both files also include saved time-trial leaderboards/);
-  assert.match(scope.textContent, /loading merges those boards/);
+  assert.match(scope.textContent, /loading merges them with yours/);
   for (const excluded of ["career", "season", "photos", "personal background images", "ghosts", "replays", "accounts", "network credentials"]) assert.ok(scope.textContent.includes(excluded));
   const other = b.dom.byId("pm-other-save-files");
   assert.match(other.textContent, /GARAGE → TEAM → SAVE GARAGE FILE/);
@@ -1954,4 +1957,58 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
     const same = boot({ mobile }).loadSettings(file({ device: { desktop: !mobile } }));
     assert.deepEqual([same.applied, same.skipped], [2, 0], "same kind of device: everything applies");
   }
+});
+
+// Clean-room fix 70: SAVE CAREER FILE carried only career slots, so a player with a standalone season,
+// licence badges or daily history but no career backed up nothing (count 0).
+// CareerBackup writes extras through store.write (the real store's structured set).
+const WRITE = { write(k, v) { this.set(k, v); return { ok: true, durable: true }; } };
+const FIX70 = {
+  season: { round: 3, pts: { "haas:0": 25 }, teamPts: { haas: 25 }, driverCodes: {} },
+  "badges": { v: 1, got: { first_win: 50 } },
+  "daily.v1": { days: { "2026-09-22": { best: 70.5, laps: 2 } } },
+};
+test("fix 70: the career file carries the season save, badges and daily history without any career", async () => {
+  const a = boot({ career: true, store: WRITE, disk: Object.fromEntries(Object.entries(FIX70).map(([k, v]) => ["apex26." + k, JSON.stringify(v)])) });
+  const file = a.career();
+  assert.equal(file.count, 3);
+  assert.deepEqual(file.careers, {});
+  assert.deepEqual(file.season, FIX70.season); assert.deepEqual(file.badges, FIX70.badges); assert.deepEqual(file.daily, FIX70["daily.v1"]);
+  assert.doesNotMatch(file.excluded, /season|daily/, "the exclusion note no longer says season or daily");
+  const b = boot({ career: true, store: WRITE });
+  const r = await b.loadCareer(file);
+  assert.equal(r.ok, true); assert.equal(r.applied, 3);
+  assert.equal(JSON.parse(b.disk.get("apex26.season")).round, 3);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.badges")).got, { first_win: 50 });
+  assert.equal(JSON.parse(b.disk.get("apex26.daily.v1")).days["2026-09-22"].best, 70.5);
+});
+test("fix 70: an old career file without extras still applies nothing and writes nothing", async () => {
+  const b = boot({ career: true, store: WRITE });
+  const r = await b.loadCareer({ format: "apex26-career-v1", careers: {} });
+  assert.equal(r.ok, true); assert.equal(r.applied, 0);
+  assert.equal(b.disk.size, 0);
+});
+test("fix 70: a newer local season survives an older file's season", async () => {
+  const b = boot({ career: true, store: WRITE, disk: { "apex26.season": JSON.stringify({ round: 7, pts: { "haas:0": 90 }, teamPts: {}, driverCodes: {} }) } });
+  const r = await b.loadCareer({ format: "apex26-career-v1", careers: {}, season: FIX70.season });
+  assert.equal(r.ok, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.season")).round, 7, "the local round-7 season is kept");
+});
+
+// #5992: the settings file's `progress` section (js/ui/progress-backup.js rides LAZY_SAVES_DATA before the body).
+test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it", () => {
+  const withProgress = (disk) => {
+    const b = boot({ realStore: true, disk });
+    vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+    return b;
+  };
+  const a = withProgress({ "apex26.circuitMastery": JSON.stringify({ version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] }), "apex26.pitTaught": "1" });
+  const file = a.collect("all");
+  assert.deepEqual(Object.keys(file.progress).sort(), ["circuitMastery", "pitTaught"]);
+  assert.match(file.excluded, /progress section/);
+  const b = withProgress({});
+  const r = b.loadSettings(JSON.parse(JSON.stringify(file)));
+  assert.equal(r.ok, true); assert.equal(r.rejectedProgress, 0);
+  assert.equal(JSON.parse(b.disk.get("apex26.circuitMastery")).entries[0].best, 81);
+  assert.equal(b.disk.get("apex26.pitTaught"), "1");
 });

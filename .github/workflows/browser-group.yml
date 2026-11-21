@@ -112,7 +112,9 @@ jobs:
     # group shards hold runners at once across every dispatch; the rest wait PENDING, holding no runner. Before this,
     # nine group runs could fill the account's 40-slot pool and land.yml's gate jobs queued behind them (measured by
     # tools/ci/pool-share.mjs). remote-group.mjs gives each shard `lane` 1..8 (withLanes, GROUP_LANES); a plan
-    # without one (a hand dispatch) falls back to its shard number. `queue: max` holds up to 100 pending jobs per
+    # without one (a hand dispatch) falls back to its shard number. With the shards on APEX_BROWSER_RUNNER (outside
+    # that pool) the dispatcher may raise the count (APEX_GROUP_LANES / --group-lanes, D-LANES): a lane above 8 is
+    # just another group. `queue: max` holds up to 100 pending jobs per
     # group and cannot be combined with cancel-in-progress in one block; the workflow-level group above still
     # replaces a superseded dispatch, pending shards included.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
