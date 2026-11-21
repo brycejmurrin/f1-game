@@ -416,19 +416,57 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
     : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same ${moved.length ? "hunks" : "blobs, patches"} and modes${also})` };
 }
 
+const RATCHET_TABLE = "tests/data/ratchets.json";
+const RATCHET_DIR = "tests/data/ratchets.d";
+
+/** Full-depth gate checkouts normally already contain both compared commits.
+ * Read only committed regular blobs, without a worktree checkout, attributes or
+ * replacement refs. A fork or historical commit may be absent: use Contents at
+ * that exact ref in that case. Errors reading a resident tree are gate errors. */
+function localRatchetFiles(ref, root) {
+  if (!root || !/^[0-9a-f]{40}$/.test(ref)) return null;
+  const object = args => git(["--no-replace-objects", ...args], root);
+  const type = object(["cat-file", "-t", ref]);
+  if (type.status !== 0) return null;
+  if (type.stdout.trim() !== "commit") return { error: `ratchet ref ${ref} is not a commit` };
+  const listing = object(["ls-tree", "-r", "-t", "-z", ref, "--", RATCHET_TABLE, RATCHET_DIR]);
+  if (listing.status !== 0) return { error: `ratchet tree at ${ref}: ${listing.error || listing.stderr}` };
+  const files = new Map(), fragments = [];
+  for (const entry of listing.stdout.split("\0").filter(Boolean)) {
+    const tab = entry.indexOf("\t"), file = entry.slice(tab + 1);
+    const [mode, kind, oid] = entry.slice(0, tab).split(" ");
+    if (file === RATCHET_DIR && kind !== "tree") return { error: `${file} at ${ref} is not a directory` };
+    const fragment = /^tests\/data\/ratchets\.d\/[^/]+\.json$/s.test(file);
+    if (file !== RATCHET_TABLE && (!fragment || kind === "tree")) continue;
+    if (!/^100(644|755)$/.test(mode) || kind !== "blob" || files.has(file)) return { error: `${file} at ${ref} is not a unique regular blob` };
+    files.set(file, oid);
+    if (fragment) fragments.push(file);
+  }
+  const read = file => {
+    const oid = files.get(file);
+    if (!oid) return { error: `${file} at ${ref} is missing` };
+    const blob = object(["cat-file", "blob", oid]);
+    if (blob.status !== 0) return { error: `${file} at ${ref}: ${blob.error || blob.stderr}` };
+    try { return { json: JSON.parse(blob.stdout) }; } catch (e) { return { error: `${file} at ${ref}: ${e.message}` }; }
+  };
+  return { read, fragments };
+}
+
 /**
  * The effective tree-wide ceilings at `ref`: ratchets.json `tree` plus every ratchets.d delta's `tree` part, with
  * tools/check/ratchets.mjs applyFragments' rule (a delta for a metric the table does not carry moves nothing). Kept
- * here, not imported: the gate must not change when a non-config file does. GitHub reads only.
+ * here, not imported: the gate must not change when a non-config file does.
  * → { tree: { metric: ceiling } } | { error }.
  */
-export function treeCeilingsAt(ref, request) {
-  const read = (file) => {
+export function treeCeilingsAt(ref, request, root) {
+  const local = localRatchetFiles(ref, root);
+  if (local?.error) return local;
+  const read = local?.read || ((file) => {
     const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
     if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return { error: `${file} at ${String(ref).slice(0, 8)}: ${r.error || "unreadable"}` };
     try { return { json: JSON.parse(Buffer.from(r.json.content, "base64").toString("utf8")) }; } catch (e) { return { error: `${file} at ${String(ref).slice(0, 8)}: ${e.message}` }; }
-  };
-  const base = read("tests/data/ratchets.json");
+  });
+  const base = read(RATCHET_TABLE);
   if (base.error) return base;
   const tree = {}, absorb = {};
   for (const [m, v] of Object.entries(base.json?.tree || {})) {
@@ -437,9 +475,12 @@ export function treeCeilingsAt(ref, request) {
     // B+D (2026-11-20): an entry's `absorb` is growth a PR may add with no label (treeRaises below).
     if (v && typeof v === "object" && Number.isFinite(v.absorb) && v.absorb > 0) absorb[m] = v.absorb;
   }
-  const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
-  if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
-  const frags = dir.error ? [] : (Array.isArray(dir.json) ? dir.json : []).filter((e) => e?.type === "file" && /\.json$/.test(e.name || "")).map((e) => e.path);
+  let frags = local?.fragments;
+  if (!frags) {
+    const dir = request(`contents/${RATCHET_DIR}?ref=${encodeURIComponent(ref)}`);
+    if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `${RATCHET_DIR} at ${String(ref).slice(0, 8)}: ${dir.error}` };
+    frags = dir.error ? [] : (Array.isArray(dir.json) ? dir.json : []).filter((e) => e?.type === "file" && /\.json$/.test(e.name || "")).map((e) => e.path);
+  }
   for (const f of frags.sort()) {
     const r = read(f);
     if (r.error) return r;
@@ -495,13 +536,13 @@ export function raiseVerdict(raises, labels, events = null, owner = OWNER, push 
 
 /** The PR's own tree raises at `sha`: its ceilings vs those at its merge base with `base` (so a sync, which moves the
  *  merge base, brings other PRs' fragments into both sides and they cancel). → { raises } | { error }. */
-export function prRaisesAt(sha, base, request) {
+export function prRaisesAt(sha, base, request, root) {
   const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(sha)}`);
   const mb = cmp.json?.merge_base_commit?.sha;
   if (cmp.error || !mb) return { error: `merge base of ${String(sha).slice(0, 8)}: ${cmp.error || "unreadable"}` };
-  const before = treeCeilingsAt(mb, request);
+  const before = treeCeilingsAt(mb, request, root);
   if (before.error) return before;
-  const after = treeCeilingsAt(sha, request);
+  const after = treeCeilingsAt(sha, request, root);
   if (after.error) return after;
   return { raises: treeRaises(before.tree, after.tree, before.absorb, after.absorb) };
 }
@@ -518,16 +559,16 @@ export function raisesCovered(now, then) {
  *  Bound to what Bryce labelled: a push after his click that touches a ratchet file still counts as covered when the
  *  PR's own raise at the head is no wider than its own raise at the head he labelled, so a sync that brings in other
  *  PRs' ratchets.d fragments does not need a fresh click, and any further raise does. */
-export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request, credited = "" }) {
+export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request, credited = "", root }) {
   if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
-  const now = prRaisesAt(head, base, request);
+  const now = prRaisesAt(head, base, request, root);
   if (now.error) return { error: now.error };
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
   let push = raises.length && configLabelKind(last, owner)
     ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file", credited }) : null;
   if (push?.state === "after" && push.from) {
-    const then = prRaisesAt(push.from, base, request);
+    const then = prRaisesAt(push.from, base, request, root);
     if (then.error) return { error: then.error };
     if (raisesCovered(raises, then.raises)) push = { state: "covered", evidence: `the pushes since ${push.from.slice(0, 8)} touch a ratchet file but raise nothing beyond what he labelled there` };
   }
@@ -1145,7 +1186,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   if (!isTrain) {
     rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
     // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
-    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request, credited: credited?.sha || "" });
+    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base: baseTip, root, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request, credited: credited?.sha || "" });
     if (raise.error) return { error: raise.error };
     rows.raise = raise;
   }
