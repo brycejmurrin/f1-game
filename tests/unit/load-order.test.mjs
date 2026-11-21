@@ -169,6 +169,15 @@ const linkHrefs = parseTags(indexHtml, /<link[^>]*\brel="stylesheet"[^>]*\bhref=
 
 const stripV = (u) => u.replace(/\?v=[A-Za-z0-9._-]+$/, "");
 
+test("companion screens load the storage and arrangement owners in dependency order", () => {
+  const owners = ["js/career/save-migrate.js", "js/core/store.js", "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js", "js/ui/screen-arranger.js"];
+  for (const page of ["controller.html", "overlay.html"]) {
+    const tags = parseTags(readFileSync(join(ROOT, page), "utf8"), /<script[^>]*\bsrc="([^"]+)"/g).map(stripV);
+    assert.deepEqual(tags.filter(src => owners.includes(src)), owners, page);
+  }
+});
+
 test("index.html script sequence equals MANIFEST.FULL", () => {
   assert.deepEqual(scriptSrcs.map(stripV), MANIFEST.FULL);
 });

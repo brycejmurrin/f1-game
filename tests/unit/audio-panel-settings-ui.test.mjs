@@ -98,22 +98,25 @@ test("opening a fold inside #audioset-inner scrolls its body into view and refre
   assert.deepEqual(h.scrollFadeCalls, ["refresh"]);
 });
 
-test("every ENGINE TONE slider's grid lands on the shipped TUNE_DEF value and spans its range (H23)", () => {
+test("every ENGINE TONE slider reproduces all named presets and displays the factory trim before boot", () => {
   // tone-model.js promises "the panel's step table still lands on each one". BOOST ships
   // 1.12 and TURBO .62: on the old .25 grid the thumb sat at 1.0/.5 and the first drag
   // wrote a value the shipped voice (and the team profile match) could not return to.
   const html = read("index.html");
   const ctx = vm.createContext({});
   vm.runInContext(read("js/audio/tone-model.js"), ctx, { filename: absSrc("js/audio/tone-model.js") });
-  const { TUNE_DEF, TUNE_RANGE } = vm.runInContext("GameAudioToneModel", ctx);
+  const { TUNE_DEF, TUNE_RANGE, SOUND_PROFILES } = vm.runInContext("GameAudioToneModel", ctx);
   const rows = [...read("js/audio/panel.js").matchAll(/\{ k: "(\w+)",\s*id: "(as-t-[\w-]+)",\s*lo: ([\d.]+),\s*step: ([\d.]+) \}/g)]
     .map((m) => ({ k: m[1], id: m[2], lo: +m[3], step: +m[4] }));
   assert.ok(rows.length >= 20, "found the TONE rows (" + rows.length + ")");
   for (const r of rows) {
-    const idx = (TUNE_DEF[r.k] - r.lo) / r.step;
-    assert.ok(Math.abs(idx - Math.round(idx)) < 1e-6,
-      `${r.id}: shipped ${r.k} ${TUNE_DEF[r.k]} is slider position ${idx} on lo ${r.lo} step ${r.step}`);
-    assert.ok(Math.abs(r.lo + Math.round(idx) * r.step - TUNE_DEF[r.k]) < 1e-9, `${r.id}: round-trip`);
+    for (const [name, profile] of Object.entries(SOUND_PROFILES)) {
+      const trim = profile?.[r.k] ?? TUNE_DEF[r.k];
+      const idx = Math.round((trim - r.lo) / r.step);
+      assert.ok(Math.abs(r.lo + idx * r.step - trim) < 1e-9, `${r.id}: ${name} trim ${trim} must round-trip`);
+      assert.ok(trim >= r.lo && trim <= TUNE_RANGE[r.k][1], `${r.id}: ${name} is within range`);
+    }
+    assert.ok(html.includes(`id="${r.id}-v">${Math.round(TUNE_DEF[r.k] * 100)}</b>`), `${r.id}: factory readout`);
     const tag = html.match(new RegExp('<input id="' + r.id + '"[^>]*>'));
     assert.ok(tag, `${r.id} is in index.html`);
     const max = +tag[0].match(/max="(\d+)"/)[1];

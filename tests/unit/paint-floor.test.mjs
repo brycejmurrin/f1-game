@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { PAINT_KINDS, judgePaint, paintCounts, paintInsets, paintLine, summarisePaint } from "../../tools/lib/paint-floor.mjs";
 import { appliedTag } from "../../tools/ui/ui-scale-axis.mjs";
 import fs from "node:fs";
-import { ACCEPT_ROOTS, ACCEPT_SCREENS, CEILINGS_FILE, ceilingsFrom, cellKey, judgeCells, planRun, readCeilings } from "../../tools/ui/bryce-paint.mjs";
-import { BRYCE_WINDOWS, UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
+import { ACCEPT_ROOTS, PAINT_WINDOWS, ACCEPT_SCREENS, CEILINGS_FILE, ceilingsFrom, cellKey, judgeCells, planRun, readCeilings } from "../../tools/ui/bryce-paint.mjs";
+import { UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
 
 const flags = (o) => ({ flag: (k, d) => (k in o ? o[k] : d), has: (k) => k in o });
 // A 102x48 chip and 14 px type under a 0.51 zoom: what the screen shows is 52x24.5 and 7.14 px.
@@ -81,7 +81,7 @@ test("ceilingsFrom keeps counts only, merges into the previous file and never re
 test(`${CEILINGS_FILE} records every acceptance cell and screen, with whole non-negative counts of the five kinds`, () => {
   const c = readCeilings();
   assert.deepEqual(c.floors, { tap: 44, text: 12 });
-  const want = Object.keys(BRYCE_WINDOWS).flatMap((w) => UI_SIZE_AXIS.map((s) => cellKey(w, s))).sort();
+  const want = PAINT_WINDOWS.flatMap((w) => UI_SIZE_AXIS.map((s) => cellKey(w, s))).sort();
   assert.deepEqual(Object.keys(c.cells), want);
   for (const [cell, screens] of Object.entries(c.cells)) {
     assert.deepEqual(Object.keys(screens), [...ACCEPT_SCREENS], cell);

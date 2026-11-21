@@ -173,6 +173,44 @@ test("set: enums stamp an attribute, ranges a token + presence; back to default 
   assert.equal(html.style.getPropertyValue("--look-career-split"), "");
 });
 
+test("phone panel defaults apply before opening Settings and reset restores them", () => {
+  const win = { innerWidth: 844, innerHeight: 390, matchMedia: (query) => ({ matches: query === "(pointer: coarse)" }) };
+  const { M, html, data } = boot({ settingsOpen: false, win });
+  assert.deepEqual([M.read("pause").btn, M.read("pause").w, M.read("garage").pw], [125, 135, 115]);
+  assert.deepEqual([M.read("datahub").tabs, M.read("datahub").stripes, M.read("career").density], ["underline", "on", "roomy"]);
+  assert.deepEqual(["--look-pause-btn", "--look-pause-w", "--look-garage-pw"].map((k) => html.style.getPropertyValue(k)), ["1.25", "1.35", "1.15"]);
+  assert.deepEqual([html.dataset.lookDatahubTabs, html.dataset.lookDatahubStripes], ["underline", "on"]);
+  const previous = boot({ win, stored: { lookPause: { btn: 115 }, lookDatahub: { tabs: "filled" }, lookGarage: { pw: 100 } } });
+  assert.deepEqual([previous.M.read("pause").btn, previous.M.read("pause").w, previous.M.read("datahub").tabs, previous.M.read("garage").pw], [115, 135, "filled", 100]);
+  M.set("pause", "btn", 100);
+  M.set("datahub", "stripes", "off");
+  M.set("garage", "pw", 100);
+  assert.deepEqual(plain([data.lookPause, data.lookDatahub, data.lookGarage]), [{ btn: 100 }, { stripes: "off" }, { pw: 100 }]);
+  for (const key of ["pause", "datahub", "garage"]) { M.reset(key); assert.equal(M.isShipped(key), true); }
+  assert.deepEqual([html.dataset.lookPauseBtn, html.dataset.lookDatahubStripes, html.dataset.lookGaragePw], ["125", "on", "115"]);
+  assert.deepEqual([data.lookPause, data.lookDatahub, data.lookGarage], [undefined, undefined, undefined]);
+  const desktop = boot().M;
+  assert.deepEqual([desktop.read("pause").btn, desktop.read("pause").w, desktop.read("garage").pw], [100, 100, 100]);
+  assert.deepEqual([desktop.read("datahub").tabs, desktop.read("datahub").stripes], ["filled", "off"]);
+});
+
+test("geometry scale readouts use the factory size while splits show the real column share", () => {
+  const win = { innerWidth: 852, innerHeight: 393, matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) };
+  const { M, dom, html, data } = boot({ win });
+  const width = dom.byId("pm-look-garage-pw");
+  assert.equal(width.getAttribute("aria-valuetext"), "100%");
+  assert.deepEqual([width.min, width.max, width.step, width.value], ["60", "150", "5", "115"]);
+  for (const [raw, shown] of [[60, "52.17%"], [120, "104.35%"], [150, "130.43%"]]) {
+    width.value = String(raw); dom.dispatch(width, { type: "input" });
+    assert.equal(data.lookGarage.pw, raw);
+    assert.equal(html.style.getPropertyValue("--look-garage-pw"), String(raw / 100));
+    assert.equal(width.getAttribute("aria-valuetext"), shown);
+  }
+  M.reset("garage");
+  assert.equal(width.getAttribute("aria-valuetext"), "100%");
+  assert.equal(dom.byId("pm-look-designer-split").getAttribute("aria-valuetext"), "55%");
+});
+
 test("normalize: unknown keys dropped, junk enums read as shipped, ranges clamp and snap", () => {
   const { M, html } = boot({ stored: { lookGarage: { side: "left", pw: 999, glass: "neon", bogus: 1 }, lookPause: { gap: 33 } } });
   const g = M.read("garage");
@@ -600,4 +638,85 @@ test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height
     garage: ["PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "left"],
     rows: ["ROW HEIGHT", "ROW HEIGHT", "STRIP ROWS"],
   });
+});
+
+function bootPlacement(durable = true) {
+  const sheets = new Set();
+  const store = {
+    get: () => store.value,
+    set: (key, value) => { store.value = value; store.notify({ key }); return durable; },
+    subscribe: fn => { store.notify = fn; },
+  };
+  const media = { matches: false, addEventListener: (_, fn) => { media.change = fn; } };
+  const sb = {
+    GameStore: { store }, matchMedia: () => media,
+    ScreenRegions: {
+      garage: { root: "#carsetup", regions: { panel: { selector: ".panel" } } },
+      career: { root: "#career", regions: { calendar: { selector: ".calendar" } } },
+    },
+    document: {
+      head: { appendChild: sheet => sheets.add(sheet) },
+      getElementById: () => null,
+      querySelector: () => ({ currentCSSZoom: 2 }),
+      createElement: () => ({ dataset: {}, remove() { sheets.delete(this); } }),
+    },
+  };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
+  return { model: sb.ScreenPlacement, sheets, media, store };
+}
+
+test("region preview uses viewport coordinates at UI zoom and keeps width independent from scale", () => {
+  const { model, sheets, store } = bootPlacement();
+  model.apply("garage", { panel: { x: -4, y: 2, width: 50, height: 40, scale: 1.25 } });
+  const [sheet] = sheets;
+  // The painted declarations, parsed: the values the region renders with, not the stylesheet's spelling.
+  const decls = Object.fromEntries(sheet.textContent.split(/[;{}]/).map(part => part.trim())
+    .filter(part => part.includes(":") && !part.includes(" {")).map(part => [part.slice(0, part.indexOf(":")).trim(), part.slice(part.indexOf(":") + 1).replace(/\s*!important$/, "").trim()]));
+  assert.deepEqual([decls.translate, decls.width, decls.height, decls.scale], ["-2vw 1vh", "25vw", "20vh", "1.25"]);
+  assert.equal(store.value, undefined);
+  model.restore("garage");
+  assert.equal(sheets.size, 0);
+});
+
+test("region saves validate input, preserve both orientation and screen boundaries, and remove adaptive defaults", () => {
+  const { model, media, store, sheets } = bootPlacement(false);
+  assert.equal(model.save("garage", "landscape", {
+    panel: { x: -120, y: NaN, width: 60, scale: 1 }, gone: { x: 2 },
+  }), false, "save reports session-only storage");
+  assert.deepEqual(plain(model.read("garage", "landscape")), { panel: { x: -50, width: 60 } });
+  model.save("garage", "portrait", { panel: { height: 40 } });
+  model.save("career", "portrait", { calendar: { scale: 1.25 } });
+  media.matches = true;
+  media.change();
+  assert.equal(model.orientation(), "portrait");
+  assert.equal(sheets.size, 2);
+  model.save("garage", "portrait", {});
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+  assert.deepEqual(plain(model.read("career", "portrait")), { calendar: { scale: 1.25 } });
+  assert.equal(model.read("garage", "landscape").panel.width, 60);
+  model.save("career", "portrait", {});
+  model.save("garage", "landscape", {});
+  assert.equal(store.value, undefined);
+  assert.equal(sheets.size, 0);
+  store.value = { v: 999, screens: { garage: { portrait: { panel: { x: 2 } } } } };
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+});
+
+test("a Garage geometry reset previews shipped placement, preserves style and touch settings, and only writes on Apply", () => {
+  const garage = { side: "left", pw: 140, ph: 60, btn: 120, glass: "glass" };
+  const { M, data, html } = boot({ stored: { lookGarage: garage, lookCareer: { side: "swapped" } } });
+  const keys = ["side", "pw", "ph"];
+  M.resetGeometry("garage", keys, "preview");
+  assert.equal(html.dataset.lookGarageSide, undefined);
+  assert.equal(html.dataset.lookGaragePw, undefined);
+  assert.equal(html.dataset.lookGarageGlass, "glass");
+  assert.equal(html.dataset.lookGarageBtn, "120");
+  assert.deepEqual(data.lookGarage, garage);
+  M.resetGeometry("garage", keys, "restore");
+  assert.equal(html.dataset.lookGarageSide, "left");
+  assert.equal(html.dataset.lookGaragePh, "60");
+  M.resetGeometry("garage", keys, "save");
+  assert.deepEqual(plain(data.lookGarage), { btn: 120, glass: "glass" });
+  assert.deepEqual(data.lookCareer, { side: "swapped" });
 });

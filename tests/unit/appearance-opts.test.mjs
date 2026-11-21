@@ -304,6 +304,15 @@ test("setTheme persists and stamps data-ui-theme", () => {
   assert.equal(dataset.uiTheme, "light");
 });
 
+test("Endurance and Drafting write only the theme while retaining cockpit and comfort choices", () => {
+  for (const theme of ["endurance", "drafting"]) {
+    const { M, written, dataset } = load();
+    M.setTheme(theme);
+    assert.equal(dataset.uiTheme, theme);
+    assert.deepEqual(written, { uiTheme: theme });
+  }
+});
+
 test("SYSTEM theme stamps data-ui-theme and re-applies on matchMedia change", () => {
   const { M, dataset, fireMq, written } = load({ preferLight: true });
   M.setTheme("system");
@@ -523,14 +532,14 @@ test("forced-colors opts the appearance chips out with the swatch family", () =>
 
 test("READABILITY: text size, high contrast and speed units persist and apply", () => {
   const { M, dataset, written } = load();
-  assert.equal(M.textSize(), "large");
-  assert.equal(dataset.textSize, "large", "shipped LARGE stamps the ladder");
-  assert.equal(dataset.uiContrast, "high", "shipped HIGH CONTRAST is on");
+  assert.equal(M.textSize(), "normal");
+  assert.equal(dataset.textSize, undefined);
+  assert.equal(dataset.uiContrast, undefined);
   M.setTextSize("larger");
   assert.equal(written.textSize, "larger");
   assert.equal(dataset.textSize, "larger");
   M.setTextSize("huge");
-  assert.equal(M.textSize(), "large", "an unknown size falls back to shipped");
+  assert.equal(M.textSize(), "normal", "an unknown size falls back to shipped");
   M.setContrast("off");
   assert.equal(written.uiContrast, "off");
   assert.equal(dataset.uiContrast, undefined);

@@ -431,7 +431,9 @@
       // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
       fence(0.80, 0.05, -1, 10.3, 4, [0.74, 0.76, 0.80]);
       fence(0.845, 0.965, 1, 10, 4, [0.74, 0.76, 0.80]);
-      fence(0.43, 0.49, -1, 8, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 8: no wall in front on this forest stretch, so a car's side
+      // reached 10.1 m and drove 2.1 m into the fence (#6007).
+      fence(0.43, 0.49, -1, 10.3, 4, [0.74, 0.76, 0.80]);
 
       for (const s of [0.14, 0.22, 0.29, 0.52, 0.68, 0.75]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);

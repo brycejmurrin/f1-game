@@ -8,7 +8,7 @@ const SaveHealth = (function () {
     if (/^apex26\.career/.test(key)) return "Career saves";
     if (/^apex26\.season/.test(key)) return "Season saves";
     if (/^apex26\.(customTeam|customLogo|parts\.|setup\.|setupPresets\.|livery\.)/.test(key)) return "Garage work";
-    if (/^apex26\.(ghost|ttlb\.)/.test(key)) return "Laps and ghosts";
+    if (/^apex26\.(ghost|inputGhost|ttlb\.)/.test(key)) return "Laps and ghosts";
     if (/^apex26\.(customTracks|customTrackDraft(?:Prev)?|trackDesigner|tracks\.)/.test(key)) return "Authored circuits";
     return "Other settings and data";
   }

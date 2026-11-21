@@ -2,7 +2,7 @@
 // @doc Owner-phone acceptance: PAINTED text/tap sizes, safe box, page scroll per window × UI SIZE; measure or check.
 // bryce-paint.mjs — the measuring half of tests/specs/bryce-phone-paint.spec.js (issue #5262).
 //
-//   node tools/ui/bryce-paint.mjs                                  # every cell: 3 windows × UI SIZE 70/109 × 7 screens
+//   node tools/ui/bryce-paint.mjs                                  # every cell: 3 landscape windows × UI SIZE 50/70/109 × 7 screens
 //   node tools/ui/bryce-paint.mjs --window standalone --ui-scale 70 --screens title,settings
 //   node tools/ui/bryce-paint.mjs --check                          # compare with tests/data/bryce-phone-paint.json; exit 1 on a difference
 //   node tools/ui/bryce-paint.mjs --write                          # record the measured counts as the ceilings (only ever lower one by hand or by this)
@@ -24,6 +24,8 @@ import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const CEILINGS_FILE = "tests/data/bryce-phone-paint.json";
+/** Landscape windows with recorded paint ceilings. Portrait remains available for exploratory measurements. */
+export const PAINT_WINDOWS = Object.freeze(["standalone", "safari", "w844"]);
 /** The screens the owner meets every session, menu screens first (the three in-race ones share one race build). */
 export const ACCEPT_SCREENS = Object.freeze(["title", "select", "garage", "settings", "hud", "pause", "results"]);
 const MENU = new Set(["title", "select", "garage", "settings"]);
@@ -35,13 +37,14 @@ export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,
                                      [--profile live|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
   Painted sizes on Bryce's phone (tools/lib/bryce-phone.mjs + tools/lib/paint-floor.mjs): text >= 12 px, taps >= 44 px, nothing outside
   the safe box, no page scroll. --check compares with ${CEILINGS_FILE} (exit 1 on any difference); --write records the counts.
+  Pass --window portrait to measure the portrait viewport separately.
   Starts ONE browser (parent session only).`;
 export const KNOWN = ["--window", "--ui-scale", "--screens", "--profile", "--no-profile", "--check", "--write", "--json", "--verbose"];
 
 /** argv → the run plan. Pure; throws on a bad value. */
 export function planRun(flags) {
   const csv = (name, all) => { const v = flags.flag(name); return v ? String(v).split(",").filter(Boolean) : [...all]; };
-  const windows = csv("--window", Object.keys(BRYCE_WINDOWS));
+  const windows = csv("--window", PAINT_WINDOWS);
   for (const w of windows) if (!BRYCE_WINDOWS[w]) throw new Error(`--window: unknown "${w}" (${Object.keys(BRYCE_WINDOWS).join(" | ")})`);
   const scales = csv("--ui-scale", UI_SIZE_AXIS).map((s) => { const n = Number(s); if (!Number.isFinite(n) || n < 40 || n > 200) throw new Error(`--ui-scale: "${s}" is not a percent in [40, 200]`); return n; });
   const screens = csv("--screens", ACCEPT_SCREENS);

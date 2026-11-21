@@ -243,6 +243,52 @@ test("indianapolis oval retaining wall tightens wallAt (#6004)", () => {
   });
 });
 
+test("circuit catch fences sit behind the run-off edge (#6007)", () => {
+  // Tip 18d8386688: spa / shanghai / hockenheim / nurburgring catch fences at
+  // gap 6–9 m had faces inside Tracks.wallAt + 1.1 m car half-width (worst
+  // past −4.1 / −2.1 / −2.1 / −1.1 m). fence() is geometry-only, so the car
+  // drove through them. Would fail on that tip for the spans below.
+  const CAR_HALF = 1.1;
+  const OFFENDERS = [
+    { id: "spa", maxGap: 7.5 },
+    { id: "shanghai", maxGap: 9.5 },
+    { id: "hockenheim", maxGap: 9.5 },
+    { id: "nurburgring", maxGap: 9.5 },
+  ];
+  const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
+  const env = buildContext(), { Tracks } = env;
+  const bad = [];
+  for (const { id, maxGap } of OFFENDERS) {
+    withTrack(env, Tracks.LIST.find((d) => d.id === id), (track) => {
+      const n = track.n, L = track.total;
+      const spans = (track.props && track.props.spans) || [];
+      const fences = spans.filter((s) => s.kind === "fence" && s.gap <= maxGap);
+      // After the fix every former offender is at 10.3; nothing at gap ≤ maxGap
+      // may still sit inside the car's reach.
+      for (const f of fences) {
+        const k0 = ((Math.round(f.s0 * n) % n) + n) % n;
+        const k1 = ((Math.round(f.s1 * n) % n) + n) % n;
+        const span = ((k1 - k0) + n) % n;
+        let worst = 0, inside = 0;
+        for (let i = 0; i <= span; i++) {
+          const k = (k0 + i) % n;
+          const edge = Tracks.wallAt(track, (k / n) * L, f.side) - track.hw[k];
+          const past = f.gap - (edge + CAR_HALF);
+          if (past < -0.05) {
+            inside++;
+            if (past < worst) worst = past;
+          }
+        }
+        if (inside) bad.push(`${id} fence ${f.s0}-${f.s1} gap ${f.gap}: ${inside} nodes inside (worst ${worst.toFixed(2)} m)`);
+      }
+      // Named residuals must have moved to ≥ 10.3 (not merely gained a wall in front).
+      const moved = spans.filter((s) => s.kind === "fence" && Math.abs(s.gap - 10.3) < 0.05);
+      assert.ok(moved.length >= 1, `${id}: expected a 10.3 m catch fence after #6007`);
+    });
+  }
+  assert.deepEqual(bad, [], bad.join("; "));
+});
+
 test("street barrier: the last panel closes on node 0, not past it (10-F2, odd n)", () => {
   // The panel walk stepped k += 2 and wrapped the last span with `% n`: on an odd node
   // count the final panel ran n-1, 0, 1 (two nodes, ~8 m) on top of the first (0, 1, 2).

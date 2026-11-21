@@ -39,6 +39,7 @@ import { DIAGNOSTICS_TOOL } from "./diagnostics-tools.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
+  HUD_DEVICE_ALIASES,
 } from "../lib/hud-survey-matrix.mjs";
 import { pathToFileURL } from "node:url";
 
@@ -527,7 +528,7 @@ const CATALOG = [
   {
     name: "apex_debug_chrome",
     kind: "tree",
-    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
+    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, standard iPhone 15 landscape by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
     inputSchema: {
       type: "object",
       required: ["action"],
@@ -607,7 +608,7 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot scenery survey sharing one warm browser across circuits. Named locations default to preview JPEG; use comparison for selected final PNGs. Presets: quick, dual_lite, night_pass, lap, dual, inspect, scenery/full. Long or multi-track runs return an async jobId; watch apex_job_status. Resume checks source, settings and custom collection identity. Pass reports[] to combine saved surveys into a portable gallery without Chromium. Skill: survey-track.",
+    description: "Browser (lock first) — pass exactly one of track, tracks[], or reports[]. Multi-shot scenery surveys share one warm browser across circuits. Named locations default to preview JPEG; use comparison for selected final PNGs. Presets: quick, dual_lite, night_pass, lap, dual, inspect, scenery/full. Long or multi-track runs return an async jobId; watch apex_job_status. Resume checks source, settings and custom collection identity. Pass reports[] to combine saved surveys into a portable gallery without Chromium. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -763,7 +764,7 @@ const CATALOG = [
   {
     name: "apex_graph_parity",
     week: 4,
-    description: "Tree — TrackGraph vertex parity vs required git base. Never omit base. id: one circuit, ~2–5 s. all:true outlasts the 180 s tool cap, so it starts apex_job_start graph_parity_all and returns its jobId — watch with apex_job_status. Skill: scenery-dress.",
+    description: "Tree — TrackGraph vertex parity vs required git base. Pass either id or all:true. id: one circuit, ~2–5 s. all:true outlasts the 180 s tool cap, so it starts apex_job_start graph_parity_all and returns its jobId — watch with apex_job_status. Skill: scenery-dress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -829,7 +830,7 @@ const CATALOG = [
         track: { type: "string", description: "Circuit id (default monza)." },
         frac: { type: "number", description: "Lap fraction to park at (default 0.18)." },
         async: { type: "boolean", description: "Default true = background hud_shot job (jobId); false = block on the cell (~2 min; host may time out)." },
-        device: { type: "string", enum: HUD_ENUMS.device },
+        device: { type: "string", enum: HUD_ENUMS.device, description: "Shared menu viewport IDs use the same CSS dimensions for iPhone, iPad and desktop. Only bryce-* IDs load the owner’s settings by default." },
         cam: { type: "string", enum: HUD_ENUMS.cam, description: "CamModes id (default chase)." },
         profile: { type: "string", enum: HUD_ENUMS.profile },
         layout: { type: "string", enum: HUD_ENUMS.layout },
@@ -1053,7 +1054,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "layout-audit screen id (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844). `bryce-standalone` / `bryce-safari` = the owner's iPhone with his live settings (UI SIZE 61 %) and a `paint` block of PAINTED sizes." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844). `bryce-standalone` / `bryce-portrait` / `bryce-safari` = the owner's iPhone 15 with his saved settings and a `paint` block of PAINTED sizes." },
         scale: { type: "number", minimum: 40, maximum: 200, description: "Interface size %, default 100." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1072,7 +1073,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "A screen id from `node tools/ui/layout-audit.mjs --list` (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844; the owner's iPhone with his live settings is bryce-standalone / bryce-safari)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844; the owner's iPhone with his live settings is bryce-standalone / bryce-portrait / bryce-safari)." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1240,11 +1241,8 @@ for (const key of ['tracks', 'visits', 'backend', 'mode', 'cycles', 'settle', 'w
   else if (props[key].enum && spec.enum) props[key].enum = [...new Set([...props[key].enum, ...spec.enum])];
 }
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
-schemaFor("apex_select_specs").anyOf = [{ required: ["since"] }, { required: ["files"] }];
 schemaFor("apex_graph_parity").required = ["base"];
-schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
 schemaFor("apex_frame_report").required = ["track"];
-schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }, { required: ["reports"] }];   // the handler refuses without one; say so in the schema
 bound("apex_graph_parity", "id", { enum: knownCircuits() });
 bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
 bound("apex_select_specs", "budgetMin", { exclusiveMinimum: 0, maximum: 120 });
@@ -1332,21 +1330,6 @@ function nearestKey(key, keys) {
   }
   return bestScore >= 2 ? best : null;
 }
-/** layout-audit viewport ids → HUD survey device ids (apex_hud_shot / survey). */
-const HUD_DEVICE_ALIASES = Object.freeze({
-  "ios-iphone-landscape-844": "phone-landscape-844x390",
-  "ios-iphone-landscape": "phone-landscape-844x390",
-  "ios-iphone-landscape-safari": "phone-short-734x343",
-  "bryce-standalone": "bryce-852x393",
-  "bryce-safari": "bryce-852x368",
-  "ios-iphone-portrait": "phone-portrait-390x844",
-  "desktop-1280x800": "desktop-1280",
-  "desktop-1440x900": "desktop-1280",
-  "desktop-1920x1080": "desktop-1920",
-  "desktop-windowed-1920x937": "desktop-1920",
-  "ios-ipad-landscape": "tablet-1180x820",
-  "ios-ipad-portrait": "tablet-1180x820",
-});
 function aliasHudDevice(args) {
   if (!args || typeof args.device !== "string") return args;
   const mapped = HUD_DEVICE_ALIASES[args.device];
@@ -1427,6 +1410,14 @@ function validateValue(value, schema, label) {
 
 function validateArgs(tool, args) {
   validateValue(args, tool.inputSchema, "arguments");
+  // Keep cross-field checks here: hosted clients project root anyOf branches as
+  // separate argument objects and discard the selectors defined on their parent.
+  if (tool.name === "apex_graph_parity" && Boolean(args.id) === (args.all === true)) {
+    badArgs("apex_graph_parity needs exactly one of id or all:true", 'Pass {"base":"HEAD","id":"monza"} or {"base":"HEAD","all":true}.');
+  }
+  if (tool.name === "apex_shot_survey" && ["track", "tracks", "reports"].filter(key => Object.hasOwn(args, key)).length !== 1) {
+    badArgs("apex_shot_survey needs exactly one of track, tracks or reports", 'Pass {"track":"spa"}, {"tracks":["spa","monza"]} or {"reports":["artifacts/track-survey/spa/findings.json"]}.');
+  }
   // These values reach CLI parsers as positional names or option values.
   // shell:false prevents shell injection; it does not prevent flag injection.
   for (const key of ["since", "base", "track", "id", "command", "detail", "what", "team", "livery"]) {
@@ -1727,7 +1718,7 @@ function buildArgv(name, args) {
       const file = String(args.file || "");
       if (!/^tests\/unit\/[A-Za-z0-9_.-]+\.test\.mjs$/.test(file)) badArgs(`apex_unit_test: file must be tests/unit/<name>.test.mjs (got "${file}")`, "Name one unit file, e.g. tests/unit/hud-layout.test.mjs.");
       if (!fs.existsSync(path.join(ROOT, file))) badArgs(`apex_unit_test: ${file} does not exist`, "ls tests/unit/ for the file's name.");
-      const argv = [process.execPath, "--test"];
+      const argv = [process.execPath, "--test", "--test-reporter=tap"];
       if (args.pattern != null && args.pattern !== "") {
         const pat = String(args.pattern);
         if (pat.length > 200 || /[\u0000-\u001f]/.test(pat)) badArgs("apex_unit_test: pattern must be a short regex", "Keep --test-name-pattern under 200 printable characters.");
@@ -2334,7 +2325,7 @@ export function pinOk(name, argv) {
 }
 
 function dryRunBody(name, argv, env = {}) {
-  return toolResult({
+  const body = {
     ok: true,
     dryRun: true,
     exit: 0,
@@ -2342,11 +2333,15 @@ function dryRunBody(name, argv, env = {}) {
     env: Object.keys(env).length ? env : undefined,
     stdout: "",
     stderr: "",
-    out: name === "apex_verify_change_fast"
-      ? { plan: true, note: "dryRun — no spawn; --fast --json only" }
-      : null,
     durationMs: 0,
-  });
+  };
+  // The HUD mock's optional out is the rendered directory; a plan creates none.
+  if (name !== "apex_hud_mock") {
+    body.out = name === "apex_verify_change_fast"
+      ? { plan: true, note: "dryRun — no spawn; --fast --json only" }
+      : null;
+  }
+  return toolResult(body);
 }
 
 // ── apex_garage: a persistent garage-angles --serve child ─────────────────

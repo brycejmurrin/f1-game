@@ -116,6 +116,11 @@ test("the driving model produces the same numbers it did before", async ({ page,
   // tests/data/physics-baseline.json, which is the factory car (same pin as
   // tools/lib/game-vm.cjs). Must land before loadTrack's goto.
   await pinFactorySeat(page);
+  // The committed traces were measured at these settings.
+  await page.addInitScript(() => {
+    localStorage.setItem("apex26.pace", "11");
+    localStorage.setItem("apex26.adaptiveButtons", "5");
+  });
   // A3: explicit dry pin — loadTrack defaults wx="dry", but grip-sensitive
   // baselines must not inherit a leftover wet enum / arc from a prior test.
   await loadTrack("monza", "day", "dry");

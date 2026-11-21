@@ -25,8 +25,8 @@ paired stays here. Escape/focus paths → **ui-menu-a11y**.
 
 ## Workflow
 
-1. Reproduce at Bryce's profile first: iPhone, 844×390 landscape, touch — before any desk device. Parent session
-   only (skill **mcp-probe**, or Playwright MCP `browser_*` with touch at 844×390); a subagent cannot run a
+1. Reproduce at Bryce's profile first: standard iPhone 15, 852×393 CSS px landscape, touch at DPR 3 — before any desk device. Parent session
+   only (skill **mcp-probe**, or Playwright MCP `browser_*` with touch at 852×393 CSS px); a subagent cannot run a
    browser (AGENTS.md rule 10).
 2. Read `__apex.inputState()`: `steerMode` first (`buttons` / `touch` = drag / `tilt`), then `btn.*` (buttons),
    `touchSteer` / `touchActive` (drag), `pad.*` (gamepad) or `gate` (menu leak).

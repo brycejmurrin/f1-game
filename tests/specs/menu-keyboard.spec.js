@@ -640,7 +640,8 @@ test.describe("Escape is BACK", () => {
       const out = [];
       for (const id of window.UiLayers.LAYER_IDS) {
         const el = document.getElementById(id);
-        if (!el) { out.push({ id, why: "no such element" }); continue; }
+        // A transient layer (an on-demand editor) exists only once opened; its door is checked live there.
+        if (!el) { if (!window.UiLayers.TRANSIENT_IDS.includes(id)) out.push({ id, why: "no such element" }); continue; }
         const via = el.getAttribute("data-esc-close");
         if (!via) continue;                       // opting out is allowed
         const btn = document.getElementById(via);

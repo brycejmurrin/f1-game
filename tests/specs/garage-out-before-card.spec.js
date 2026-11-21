@@ -418,6 +418,11 @@ test.describe("direct start during the picker's build", () => {
       // eslint-disable-next-line no-undef
       const T = Tracks, real = T.buildPaced, seen = [];
       T.buildPaced = function (def, ...rest) { seen.push(def && def.id); return real.call(this, def, ...rest); };
+      // The picker previews the solo GP draft's world, and the direct start has its own conditions: the
+      // shipped storm/dusk draft (RaceSettings.DEFAULT_DRAFT, #5977) built Monaco at night, then the race
+      // built the day world, which is a different world to join. The draft here is the direct start's own.
+      const KEY = "apex26.raceDraft", had = localStorage.getItem(KEY);
+      GameStore.store.set("raceDraft", { weather: "dry", tod: "default", mixed: false, laps: "3" });
       try {
         document.getElementById("mb-race").click();
         // The title already pre-built the saved pick: tap another circuit so the picker starts a fresh build.
@@ -431,7 +436,10 @@ test.describe("direct start during the picker's build", () => {
         window.__apex.race(seen[0]);   // the Daily / Data Hub door: startRace with no RACE! intro
         for (let i = 0; i < 3600 && !/^(count|race)$/.test(window.__apex.info().state); i++) await sleep(50);
         return { seen, startedMs, state: window.__apex.info().state };
-      } finally { T.buildPaced = real; }
+      } finally {
+        T.buildPaced = real;
+        if (had === null) { localStorage.removeItem(KEY); GameStore.store.onForeignWrite({ key: KEY }); } else GameStore.store.set("raceDraft", JSON.parse(had));
+      }
     });
     expect(r.seen.length, "the picker started a build of its circuit: " + JSON.stringify(r)).toBeGreaterThan(0);
     expect(r.state, "the race reached the lights, not the title").toMatch(/^(count|race)$/);

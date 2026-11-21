@@ -79,6 +79,20 @@ test("the hand-over counts down on the plate, then GO gives the wheel back and r
   assert.equal(r.plate[r.plate.length - 1], null, "the GO plate clears");
 });
 
+// Mutation hunt 2026-11-20: GO_HOLD_S 0.8→0.05 survived the 1 s clear check.
+test("GO plate holds for 0.8 s after hand-over", () => {
+  const r = rig();
+  r.G.state = "count"; r.fs.update(1 / 60);
+  for (let i = 0; i < 60 * HANDOVER_S + 2; i++) r.fs.update(1 / 60);
+  assert.equal(r.plate[r.plate.length - 1], "GO");
+  // 0.4 s later the plate must still say GO (a 0.05 s hold would already have cleared).
+  for (let i = 0; i < Math.round(0.4 * 60); i++) r.fs.update(1 / 60);
+  assert.equal(r.plate[r.plate.length - 1], "GO", "GO holds through 0.4 s");
+  // Past 0.8 s the plate clears.
+  for (let i = 0; i < Math.round(0.5 * 60); i++) r.fs.update(1 / 60);
+  assert.equal(r.plate[r.plate.length - 1], null, "GO clears once the 0.8 s hold elapses");
+});
+
 test("time trial gets the same flying start; a race, practice and a Data Hub real race do not", () => {
   const tt = rig({ session: "tt", timeTrial: true, practice: true });   // game.js isPractice(): a time trial is always practice
   tt.G.state = "count"; tt.fs.update(1 / 60);

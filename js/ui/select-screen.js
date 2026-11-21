@@ -12,13 +12,13 @@
 const Menus = (function () {
   "use strict";
 
-function create(G) {
+function create(G, preparePickerTrack = () => G.scheduleFlybyTrack(true)) {
 Log.info("ui", "Menus.create");
 if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) GfxEscalation.noteCleanMenuBoot();
 // Stable helpers from the game.js closure.
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
-const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
+const { $, els, store, cssCol, fmtTime, ttBoard } = G;
 // The best-time star counts only laps of the circuit's CURRENT layout: a lap
 // saved before a layout revision (Kyalami's direction flip, revision 2) stays
 // stored but is a lap of a different circuit, so it is not shown as the record.
@@ -1020,7 +1020,7 @@ function buildSelect(opts) {
         // The still IS the preview — nothing is shown behind the sheet. But once
         // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
-        scheduleFlybyTrack(true);
+        preparePickerTrack();
       };
       els.selTracks.appendChild(row);
       return row;
@@ -1036,7 +1036,7 @@ function buildSelect(opts) {
     updateTrackPreview();
   }
   // Prepare the initial/current tile too, even when no tile is clicked.
-  if (!seasonComplete && !inPlace) scheduleFlybyTrack(true);
+  if (!seasonComplete && !inPlace) preparePickerTrack();
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the
@@ -1277,32 +1277,28 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
 /** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
-    button's content box (padded to the free band by fitPreviewMapBand, #5656). */
+    free band between the caption and stats (#5656). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
-  const btn = map && map.parentElement;
-  if (btn && btn.clientHeight > 0) {
-    fitPreviewMapBand(btn);
-    const bs = getComputedStyle(btn);
-    const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
-    if (room > 0) slotH = Math.min(slotH, room);
-  }
+  if (map && hero.clientHeight > 0) slotH = Math.min(slotH, fitPreviewMapBand(map, hero));
   return { slotW: hero.clientWidth * 0.62, slotH };
 }
-/** Pad the map button to the free band, centred; k = UI SIZE zoom. */
-function fitPreviewMapBand(btn) {
-  const br = btn.getBoundingClientRect();
-  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
-  const k = br.height / btn.offsetHeight;
+/** Position only the outline in the free band; the entire still remains tappable. */
+function fitPreviewMapBand(map, hero) {
+  const rect = hero.getBoundingClientRect();
+  if (!(rect.height > 0) || !(hero.offsetHeight > 0)) return 0;
+  const k = rect.height / hero.offsetHeight;
+  const top = rect.top + hero.clientTop * k;
+  const box = { top, bottom: top + hero.clientHeight * k, left: rect.left, right: rect.right };
   const over = [];
   for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
     if (e) over.push(e.getBoundingClientRect());
   }
-  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
-  btn.style.alignItems = "center";
-  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
-  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
+  const band = previewMapBand(box, over, Math.round(hero.clientHeight * k * 0.025));
+  map.style.setProperty("--map-band-top", band.top / k + "px");
+  map.style.setProperty("--map-band-bottom", band.bottom / k + "px");
+  return Math.max(0, hero.clientHeight - (band.top + band.bottom) / k);
 }
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
@@ -1718,7 +1714,9 @@ function previewMapBand(box, over, margin) {
     else bot = Math.min(bot, r.top);
   }
   const m = Math.max(0, +margin || 0);
-  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+  const height = box.bottom - box.top;
+  const insetTop = Math.min(height, top - box.top + m);
+  return { top: insetTop, bottom: Math.min(height - insetTop, box.bottom - bot + m) };
 }
 /** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {
