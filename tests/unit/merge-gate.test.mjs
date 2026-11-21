@@ -1553,6 +1553,36 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
 });
 
+test("land.yml sweep (finding 2): a push to the deploy branch sweeps at once; a green, unarmed gate older than the tip is re-gated", () => {
+  // pages.yml ignores docs-only pushes, so no Pages workflow_run re-gates the land PRs after a docs merge.
+  const job = LAND.jobs.sweep;
+  assert.deepEqual(LAND.on.push, { branches: [DEPLOY_BRANCH] });
+  const push = (ref = `refs/heads/${DEPLOY_BRANCH}`) => ({ event_name: "push", ref, run_id: 5, event: {} });
+  assert.equal(ghExpr(job.if, push()), true, "a deploy-branch push runs the sweep");
+  assert.equal(ghExpr(job.if, push("refs/heads/cursor/x")), false);
+  assert.equal(ghExpr(LAND.jobs.resolve.if, push()), false, "a push is not a PR re-gate: resolve and everything after it skip");
+  assert.equal(ghExpr(LAND.jobs["train-screen"].if, push()), false);
+  assert.equal(ghExpr(LAND.concurrency.group, push()), "land-stale-sweep", "pushes share the sweep's group, never a per-sha group");
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], push()), false);
+  const [rate, sweep] = job.steps;
+  assert.equal(ghExpr(rate.if, push()), false, "a push sweep is never rate-limited away");
+  const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
+  const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
+  const pr = (o = {}) => JSON.stringify([{ number: 7, headRefOid: "1".repeat(40), isDraft: false, labels: [{ name: "land" }], autoMergeRequest: null, ...o }]);
+  const ci = JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: T(0), updated_at: T(30) }] });
+  const st = (...a) => JSON.stringify(a.map(([state, m]) => ({ context: "gate", state, created_at: T(m) })));
+  const go = (env) => runStep(sweep.run, { FAKE_LANDS: pr(), FAKE_RUNS: ci, FAKE_STATUSES: st(["success", 35]), STALE_MAX: "4", NOW_TIP: T(38), ...env });
+  const dispatched = (r) => r.calls.filter((c) => c.includes("--method POST") && c.includes("land.yml/dispatches"));
+  const r = go({});
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(dispatched(r).length, 1, `a success gate written before the tip moved, not armed: re-gated\n${r.summary}`);
+  assert.match(r.summary, /older than the deploy tip/);
+  assert.equal(dispatched(go({ FAKE_LANDS: pr({ autoMergeRequest: { enabledAt: T(36) } }) })).length, 0, "armed: GitHub merges it, nothing to re-gate");
+  assert.equal(dispatched(go({ NOW_TIP: T(34) })).length, 0, "the tip is older than the gate: current");
+  assert.equal(dispatched(go({ NOW_TIP: "" })).length, 0, "an unreadable tip date sweeps nothing new");
+  assert.equal(dispatched(go({ FAKE_STATUSES: st(["failure", 35]) })).length, 0, "a refusal is a verdict: a push or label re-gates it");
+});
+
 test("land.yml sweep also rides a green CI or Deploy finish, at most once per SWEEP_GAP_MIN, with no PR code", () => {
   const job = LAND.jobs.sweep;
   const wr = (conclusion) => ({ event_name: "workflow_run", event: { workflow_run: { conclusion } } });

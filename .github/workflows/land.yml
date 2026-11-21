@@ -117,7 +117,9 @@ name: Land
 # RETRY_MAX times per head since its CI finished. Removing and re-adding `land` does the same by hand, and so does a
 # dispatch on the deploy branch with `stale=true` (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f stale=true`).
 # GitHub delays scheduled runs under load (this repo's other cron workflows fire hours apart), so the dispatch is also
-# how the sweep is proven live.
+# how the sweep is proven live. A push to the deploy branch sweeps too, and the sweep also re-gates a green, unarmed PR
+# whose `gate` predates the tip commit: pages.yml's paths-ignore starts no Pages train on a docs-only merge, so that
+# train re-gate never comes (audit 2026-11-21, finding 2).
 #
 # DRAFT + `land`. A draft that carries `land` gets `gate` failure "draft: flip ready first …" and, once per head, a
 # comment with the route (ready-gate, `update_pull_request` draft:false, `land`); `ready_for_review` re-gates it.
@@ -140,6 +142,10 @@ on:
     types: [labeled, unlabeled, ready_for_review, converted_to_draft, synchronize, reopened, edited]
     branches: [claude/f1-game-project-26h3ng]
   # The stale-gate sweep (`sweep` job, STALE GATE in the header): reads `gate` and CI, dispatches re-gates, runs no PR code.
+  # A push to the deploy branch sweeps too: pages.yml ignores docs-only pushes (paths-ignore), so after a docs merge no
+  # Pages workflow_run re-gates the land PRs a moved tip just made stale (audit 2026-11-21, finding 2).
+  push:
+    branches: [claude/f1-game-project-26h3ng]
   schedule:
     - cron: "17,47 * * * *"
   workflow_run:   # zizmor: ignore[dangerous-triggers] same as pull_request_target above
@@ -196,7 +202,7 @@ concurrency:
         && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise') && contains(github.event.pull_request.labels.*.name, 'land')))
     || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
-    || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
+    || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event_name == 'push' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 permissions: {}
@@ -818,6 +824,7 @@ jobs:
     name: sweep
     if: >-
       github.event_name == 'schedule'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
       || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
@@ -866,14 +873,18 @@ jobs:
             --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || paused=unreadable
           if [ "$paused" != false ]; then say "stale-gate sweep skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
           now=$(date -u +%s)
-          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,isDraft,labels \
-            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid} | @json') \
+          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,isDraft,labels,autoMergeRequest \
+            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null)} | @json') \
             || { say "stale-gate sweep skipped: could not list the land PRs"; exit 0; }
+          # The deploy tip's commit time: a success `gate` posted before it measured an older tip (finding 2). Unreadable = 0
+          # (that case is then never swept; the others still are).
+          tip_t=$(gh api "repos/$R/branches/$DEPLOY_BRANCH" --jq '.commit.commit.committer.date' 2>/dev/null | xargs -r -I{} date -u -d {} +%s 2>/dev/null) || tip_t=0
+          [[ "${tip_t:-}" =~ ^[0-9]+$ ]] || tip_t=0
           sent=0
           while IFS= read -r c <&3; do
             [ -n "$c" ] || continue
             if [ "$sent" -ge "$STALE_MAX" ]; then say "stale-gate sweep: cap of $STALE_MAX re-gates reached; the rest wait for the next sweep"; break; fi
-            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c")
+            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c"); armed=$(jq -r '.armed // false' <<<"$c")
             runs=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" --jq '.workflow_runs') || { say "#$n: could not read the CI runs"; continue; }
             if jq -e 'any(.[]; .status != "completed")' <<<"$runs" >/dev/null; then echo "#$n: CI still running"; continue; fi
             ci_done=$(jq -r 'sort_by(.created_at) | last // {} | if .conclusion == "success" then (.updated_at | fromdateiso8601) else 0 end' <<<"$runs")
@@ -884,6 +895,10 @@ jobs:
             spent=$(jq -r --argjson c "$ci_done" '[.[] | select(.t > $c)] | length' <<<"$g")
             if [ "$newest_t" -lt "$ci_done" ]; then why="gate (${newest_s:-none}) is older than the last green CI"
             elif [ "$newest_s" = pending ] && [ $((now - newest_t)) -gt 900 ]; then why="gate has been pending for $(((now - newest_t) / 60)) min with CI finished"
+            elif [ "$newest_s" = success ] && [ "$armed" != true ] && [ "$tip_t" -gt "$newest_t" ]; then
+              # Green but never armed, and the tip moved since: the pass measured an older tip, and no Pages run (a
+              # docs-only merge) re-gates it. Re-gating writes a gate newer than the tip, so this fires once per tip.
+              why="gate success is older than the deploy tip and the PR is not armed"
             else echo "#$n: gate is current"; continue
             fi
             if [ "$spent" -ge "$RETRY_MAX" ]; then say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a push, a label flip or the next train re-gates"; continue; fi
