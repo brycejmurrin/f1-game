@@ -245,6 +245,15 @@ function applySettings(file, G) {
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
     groups.a11y = Object.assign({}, groups.a11y, { motion: groups.appearance.motion });
   }
+  // Old changes-only files can carry the line-speed flag in the predictive slider row.
+  const oldCue = groups.steering?.brakeCue;
+  if (oldCue === "on" || oldCue === "off") {
+    if ((groups.driving == null || isPlain(groups.driving)) && !Object.hasOwn(groups.driving || {}, "lineBrakeCue")) {
+      groups.driving = { ...groups.driving, lineBrakeCue: oldCue };
+    }
+    groups.steering = { ...groups.steering };
+    delete groups.steering.brakeCue;
+  }
   // A STEERING SHEET FROM AN OLDER SCHEMA (#5004): the boot migration never runs over imported values (this
   // device is already at STEER_SCHEMA), so the file's own version runs the same ladder here first: a v2 PACE 3
   // is 0.750 of ground speed there and would read as 0.527 on today's grid.

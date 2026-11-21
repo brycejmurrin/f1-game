@@ -57,7 +57,7 @@ const HALO_VALUES = ["0", "slim", "1", "thick", "fairing"];
 const HALO_LABELS = { "0": "OFF", slim: "SLIM", "1": "STANDARD", thick: "THICK", fairing: "FAIRED" };
 
 let haloVal = null;
-let lead = null;
+let lead = readLead();
 const picked = {};
 const listeners = [];
 
@@ -143,14 +143,17 @@ function urlTurnChase() {
 }
 
 function readLead() {
-  const fromUrl = parseLead(null, urlTurnChase());
-  if (fromUrl != null) return fromUrl;
-  const stored = parseLead(GameStore.store.raw(KEY_LEAD), null);
-  if (stored != null) return stored;
-  const legacy = GameStore.store.raw(KEY_TC);
-  if (legacy === "0") return 0;
-  if (legacy === "1") return LEGACY_ON_LEAD;
-  return LEAD_DEFAULT;
+  const store = GameStore.store;
+  let stored = parseLead(store.raw(KEY_LEAD), null);
+  if (stored === null) {
+    const legacy = store.raw(KEY_TC);
+    if (legacy === "0" || legacy === "1") {
+      stored = legacy === "1" ? LEGACY_ON_LEAD : 0;
+      store.rawSet(KEY_LEAD, String(stored));
+    }
+  }
+  // The shot's URL overrides the view, never the preference a backup records.
+  return parseLead(null, urlTurnChase()) ?? stored ?? LEAD_DEFAULT;
 }
 
 function haloSetting() {
@@ -254,7 +257,6 @@ function layout(w, s) {
 function onWheel(fn) { listeners.push(fn); }
 
 function turnChaseLead() {
-  if (lead === null) lead = readLead();
   return lead;
 }
 
