@@ -289,17 +289,20 @@
       }
 
       const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
-      // Main-straight grandstands ~s 0.00–0.02, facing the pits across the road
-      grandstandEx(0.00, STAND, 8, 52, null, null,
+      // Main-straight grandstands ~s 0.00–0.02, facing the pits across the road.
+      // Gap 11.5 (was 8): catch fence moves to 10.3 behind the 9 m run-off
+      // (#6007); stands stay just behind that fence.
+      grandstandEx(0.00, STAND, 11.5, 52, null, null,
         { livery: "darkSteel", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.018, STAND, 8, 30, null, null,
+      grandstandEx(0.018, STAND, 11.5, 30, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, tiers: 2, h: 10 });
       // Gold 3 Raidillon amphitheatre: dual-bay stand row + jumbotron on the
       // OUTSIDE of the descent into the Eau Rouge compression (authored
       // 0.142-0.17 = racing 0.10-0.13), facing the valley floor (racing ≈0.14)
       // and the Raidillon climb. Was authored 0.068-0.092 = racing 0.026-0.05,
       // the La Source exit, before the elevation fix put the valley where it is.
-      for (const [s, gp, len] of [[0.142, 8, 30], [0.154, 9, 32], [0.166, 9, 28]]) {
+      // Gaps 11.5 (were 8/9): same #6007 fence/stand stack as the main straight.
+      for (const [s, gp, len] of [[0.142, 11.5, 30], [0.154, 11.5, 32], [0.166, 11.5, 28]]) {
         grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
@@ -360,14 +363,17 @@
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
       // La Source exit stand (authored 0.068 = racing 0.026); was 0.16, where
       // the Gold-3 row now overlooks the Eau Rouge compression.
-      grandstandEx(0.068, 1, 8, 30, null, null,
+      // Gap 11.5 (was 8): behind the 10.3 m catch fence (#6007).
+      grandstandEx(0.068, 1, 11.5, 30, null, null,
         { livery: "orange", roof: "flat", endWalls: true });
       ardennesTerrace("spa-terrace-fagnes", K(0.60), -1, 16, 6, { rows: 6 });
       // Blanchimont (racing 0.862) outside terrace: open (no slat roof hiding
       // the crowd from the chase camera), longer, and a fuller crowd.
       ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 7, { rows: 6, roof: false, skip: 0.12 });
       // Bus Stop chicane: braking-zone stand facing the final complex.
-      grandstandEx(0.92, 1, 8, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
+      // Gap 11.5 (was 8): behind the 10.3 m catch fence (#6007). The longer
+      // concrete bay at 0.848 stays at 12 (already clear of the fence).
+      grandstandEx(0.92, 1, 11.5, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
       grandstandEx(0.848, 1, 12, 36, null, null,
         { livery: "concrete", tiers: 2, roof: "truss" });
 
@@ -676,12 +682,15 @@
       chalet(K(0.706), -1, 62, 7, 4.7, 11, [0.75, 0.72, 0.65], [0.29, 0.19, 0.15]);
 
       if (circuitKit) {
+        // Gaps 10.5 (were 7 / 8): inner face behind the 9 m run-off + car
+        // half-width (#6007). Blanchimont already had a tighter wall in front;
+        // keep both shelters on the same side of the run-off edge.
         circuitKit.marshalShelter({ id: "kit:spa:les-combes-shelter", frac: 0.168,
-          side: -1, gap: 7, size: [5, 3.2, 5] });
+          side: -1, gap: 10.5, size: [5, 3.2, 5] });
         circuitKit.recoveryBay({ id: "kit:spa:pouhon-recovery", frac: 0.565,
           side: -1, gap: 18, size: [12, 4.5, 18] });
         circuitKit.marshalShelter({ id: "kit:spa:blanchimont-shelter", frac: 0.858,
-          side: 1, gap: 8, size: [5, 3.2, 5], detail: "structure" });
+          side: 1, gap: 10.5, size: [5, 3.2, 5], detail: "structure" });
       }
 
       for (const [s, side, seed] of [[0.50, -1, 811], [0.57, -1, 827],
@@ -787,10 +796,13 @@
         }
       }
 
-      fence(0.0, 0.03, STAND, 6, 4.2, [0.74, 0.76, 0.80]);    // main straight stand
-      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // La Source exit stand
-      fence(0.14, 0.18, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Gold-3 amphitheatre (Eau Rouge)
-      fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
+      // 10.3, not 6/7: no wall in front, so a car's side reached 10.1 m (the
+      // 9 m run-off + its half-width) and drove into these stand catch fences.
+      // Stands above moved to 11.5 so the fence does not run through them (#6007).
+      fence(0.0, 0.03, STAND, 10.3, 4.2, [0.74, 0.76, 0.80]);  // main straight stand
+      fence(0.06, 0.11, 1, 10.3, 4.6, [0.74, 0.76, 0.80]);     // La Source exit stand
+      fence(0.14, 0.18, 1, 10.3, 4.6, [0.74, 0.76, 0.80]);     // Gold-3 amphitheatre (Eau Rouge)
+      fence(0.90, 0.94, 1, 10.3, 4.2, [0.74, 0.76, 0.80]);     // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep
       guardrail(0.80, 0.90,  1, 3.4, [0.84, 0.85, 0.88]);     // Blanchimont
       tyreWall(0.015, 0.03, STAND, 4.4, [0.78, 0.12, 0.12]);  // straight, stand side

@@ -847,7 +847,9 @@
       sponsorHoarding(0.58, 0.72, 1, 9, {
         step: 14, palette: [RED, WHITE, YELLOW, STEEL], postCol: DARK,
       });
-      fence(0.58, 0.72, 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      // 10.3, not 8: no wall in front, so a car's side reached 10.1 m and drove
+      // 2.1 m into this catch fence. Stands behind sit at gap ≥ 29 m (#6007).
+      fence(0.58, 0.72, 1, 10.3, 3.0, [0.70, 0.72, 0.76]);
       cameraTower(K(0.615), 1, 22, { h: 16, col: STEEL });
       cameraTower(K(0.695), -1, 30, { h: 14, col: SEAT });
       marshalPost(K(0.605), -1, 22);
@@ -866,7 +868,8 @@
       // the old layout's spacing (r = the old raw frac) and seats it ~0.10 lap
       // earlier, on the straight itself; the first fence run covers the rest.
       const BS = (r) => sl(r - 0.10);
-      fence(sl(0.606), sl(0.67), 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      // 10.3, not 8: same run-off clearance as the 0.58–0.72 fence (#6007).
+      fence(sl(0.606), sl(0.67), 1, 10.3, 3.0, [0.70, 0.72, 0.76]);
       billboard(K(BS(0.76)), 1, 10, 18, 5, RED);
       billboard(K(BS(0.82)), 1, 10, 18, 5, YELLOW);
       billboard(K(BS(0.79)), 1, 10, 18, 5, RED);
