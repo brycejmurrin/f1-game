@@ -14,12 +14,7 @@ Hard dry sun, bleached everything. Catalunya has no grey steel and no dark timbe
 - Gravel `[0.70, 0.62, 0.46]`; kerbs red `[0.80, 0.14, 0.14]` / white `[0.92, 0.92, 0.90]`
 
 ## 3. Elevation
-A hillside lap: it climbs from Turn 1 to the high ground at Campsa, then falls all the way back.
-- s≈0.00–0.06: flat main straight into **Elf** (T1).
-- s≈0.18: climb through Renault and Repsol.
-- s≈0.44: high ground before **Campsa** — the crest the car goes light over.
-- s≈0.62: drop off Campsa toward La Caixa.
-- s≈0.86: continued descent to the final complex and the line.
+The main straight descends into the low point around T1. The road climbs through Renault and Repsol, dips approaching T7, then rises again to Campsa. After La Caixa it climbs to the lap’s high point on the exit of T12 and descends through the final two corners. Formula 1 reports 29.6 m of relief. Norris’s 2024 pole-lap position samples span 30.0 m and provide the shape of the in-game profile. [Formula 1 elevation guide](https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc) · [OpenF1 lap 11, Spanish GP qualifying](https://api.openf1.org/v1/laps?session_key=9535&driver_number=4&lap_number=11)
 
 ## 4. Landmarks & surroundings by lap position
 

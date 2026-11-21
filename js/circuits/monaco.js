@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "monaco",
+    revision: 2,
     name: "MONACO",
     gp: "Monaco GP",
     country: "Monaco",

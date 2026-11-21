@@ -1,1 +1,1 @@
-Fixed: track elevation and banking across the driving, camera and rendering systems. Spa carries measured camber through Bruxelles and Pouhon, Monaco follows the qualifying elevation profile through Casino and the tunnel, and Zandvoort's Hugenholtz banking increases toward the outside lane.
+Fixed: Road height, banking, vehicle roll and driving cameras now follow the same surface. Corrected the timing of Spa’s Eau Rouge climb, Monaco’s climb and tunnel, Zandvoort’s dune crests and progressive banking, and surveyed profiles and corner camber across the roster.

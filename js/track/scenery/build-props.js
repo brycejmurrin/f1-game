@@ -1256,7 +1256,7 @@ const TrackBuildProps = (function () {
     // Box is track-aligned ([t,u,r] basis) so its large face always runs parallel
     // to the road — a forward camera only ever sees the thin sz[2] edge, never
     // the full sz[0]×sz[1] face regardless of the track's world-space heading.
-    const backdrop = (k, side, dist, sz, col) => {
+    const backdrop = (k, side, dist, sz, col, opts) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1318,15 +1318,19 @@ const TrackBuildProps = (function () {
         const floors = Math.max(2, Math.min(4, Math.round(sz[1] / 18)));
         const fh = sz[1] / floors;
         const base = cy0 - sz[1] / 2;
+        // On a grade, place the facade along the wall’s local up axis.
+        const facadeCenter = y => opts?.followGrade
+          ? vadd([cx, cy0, cz], u, y - sz[1] / 2)
+          : [cx, base + y, cz];
         out._mat = MAT.GLASS;
         for (let i = 1; i < floors; i++) {
           const wc = (lit && hash(k * 7.7 + i * 3.3 + dist * 0.1) < 0.34) ? darkWin : win;
           // band on the camera-facing (u × sz2) face; thin in up, proud in sz2
-          addBox(out, [cx, base + (i + 0.5) * fh, cz], [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
+          addBox(out, facadeCenter((i + 0.5) * fh), [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
         }
         // parapet cap so the roofline isn't a bare slab edge
         out._mat = MAT.METAL;
-        addBox(out, [cx, base + sz[1] + 0.6, cz], [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
+        addBox(out, facadeCenter(sz[1] + 0.6), [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
         out._mat = 0;
       }
     };

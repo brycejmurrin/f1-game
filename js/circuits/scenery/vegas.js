@@ -209,7 +209,7 @@
       // fraction r onto the authored frame. Measured 2026-10-05 (apex-eval
       // overhead frac + orbit shots): strip-gateway authored 0.66 → racing
       // 0.503; Sphere at authored 0.30 visible from racing 0.143, not 0.30.
-      gantry(sl(0.005), 9.5, [0.12, 0.12, 0.16]);
+      gantry(sl(0.005), 9.5, [0.12, 0.12, 0.16], { spanSupports: false }); // portal supplies both masts
       gantry(sl(0.50), 8.5, [0.12, 0.12, 0.16]);                      // DRS detection on Strip
       gantry(sl(0.80), 8.5, [0.12, 0.12, 0.16]);
 
@@ -387,9 +387,10 @@
         // 2026-10-15). gap 30 clips a back-row neonTower; 44+ is "footprint
         // rejected"; 42 culls the canopy (invalid emission); 34-41 and fracs
         // 0.035-0.050 emit but clip paddock boxes (1-2 severe spots).
+        // The full service row sits beyond the terrain shelf at the paddock edge.
         circuitKit.serviceCompound({
           id: "kit:vegas:paddock-service", frac: sl(0.022),
-          side: -1, gap: 15, size: [22, 5, 34], vehicles: 8,
+          side: -1, gap: 25, size: [22, 5, 34], vehicles: 8,
         });
       }
       broadcastCompound(K(sl(0.09)), 1, 44, { vans: 4, dishes: 3, mastH: 11 });
@@ -686,7 +687,8 @@
         // Lit tip seated on the tower mast height (connected, not a free float).
         addBox(out, vadd(tw.c, tw.u, 132), [2.4, 4, 2.4], [1.0, 0.85, 0.35], tb);
       }
-      building(K(sl(0.73)), -1, 24, 36, 55, 34, { wall: [0.72, 0.66, 0.54], window: [1.0, 0.82, 0.30], floor: 7 });
+      // Keep the whole hotel plinth beyond the sloping edge of the Strip verge.
+      building(K(sl(0.73)), -1, 32, 36, 55, 34, { wall: [0.72, 0.66, 0.54], window: [1.0, 0.82, 0.30], floor: 7 });
       {
         // Paris Montgolfier as a PLAZA SIGN beside the hotel — not a sky-dominating
         // hot-air balloon in the day orbit panel (#3363). Landmark id kept.
@@ -766,7 +768,7 @@
             const h1 = hash(idx * 5 + (side > 0 ? 13 : 71));
             const neon = NEON[(idx + (side > 0 ? 4 : 1)) % NEON.length];
             const fh = 80 + h1 * 100;
-            backdrop(k, side, 185, [50, fh, 30], backdropCols[idx % 3]);
+            backdrop(k, side, 185, [50, fh, 30], backdropCols[idx % 3], { followGrade: true });
             // Bright neon band at street level — backdrop() always stands on
             // the ground, so the "crown" never reached the top. Now a 3 m
             // strip against the tower's front face (170 m) instead of a slab
@@ -829,7 +831,8 @@
         for (let j = 0; j < 8; j++) {
           const s = 0.485 + (j + 0.5) / 8 * 0.33, side = (j % 2) ? -1 : 1;
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
-          building(K(sl(s)), side, 68, 28, 120 + hash(j * 17) * 65, 36,
+          // A 30 m body keeps the wrapping crown proud of its facade rails.
+          building(K(sl(s)), side, 68, 30, 120 + hash(j * 17) * 65, 36,
             { wall: casinoDayWall[j], window: windowCol, floor: 16, lit: true });
         }
 

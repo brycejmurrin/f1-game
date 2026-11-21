@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "jeddah",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish on the pit straight AFTER the T27 hairpin, ~250 m before the
     // T1 apex (#5507; evidence docs/tracks/START-LINES.md §jeddah). The line needs

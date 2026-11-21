@@ -109,6 +109,7 @@ export default function register() {
     expect(result.definition.dressingExclusions).toEqual([
       { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
       { kind: "city", s0: 0.0116, s1: 0.0816 },
+      { kind: "foliage", s0: 0.036, s1: 0.044, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.9046, s1: 0.9846 },
       { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },

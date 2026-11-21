@@ -58,6 +58,9 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
     [
       // Curated zones only (eb0b6b3 narrowed the old full-lap city exclusion):
       // Old City / castle section, then the open Caspian side of Neftchilar Ave.
+      // A back-row tower at the T6 exit otherwise occupies a Neftchilar façade
+      // on the nearby return leg. The authored street frontage fills this block.
+      { kinds: ["city"], s0: 0.354, s1: 0.36, side: -1 },
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56, side: undefined },
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
       // #3340: Neftchilar +1 — theme-dress neonTowers buried night_pass orbit;
@@ -70,7 +73,7 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
       { kinds: ["city"], s0: 0, s1: 0.07, side: undefined },
     ],
   );
-  // The 14 m castle rise is asserted by what it BUILDS (crest height and
+  // The old-town rise is asserted by what it BUILDS (crest height and
   // fraction in the build test below), not by echoing def.elevations back.
 });
 
@@ -117,12 +120,12 @@ test("Baku builds finite grounded landmarks, water, and full street boundaries",
         crestFrac = i / track.n;
       }
     }
-    assert.ok(crest >= 13.5);
-    assert.ok(crestFrac >= 0.44 && crestFrac <= 0.48);
+    assert.ok(Math.abs(crest - Math.min(...track.py) - 26.8) < 0.05);
+    assert.ok(Math.abs(crestFrac - def.turns[12]) < 0.002);
 
     // The authored castle climb ends before the harbour straight.
     const seafront = [];
-    for (let i = Math.ceil(track.n * 0.58); i < Math.floor(track.n * 0.99); i++)
+    for (let i = Math.ceil(track.n * def.turns[15]); i < Math.floor(track.n * 0.99); i++)
       seafront.push(track.py[i]);
     const range = Math.max(...seafront) - Math.min(...seafront);
     assert.ok(range < 0.05, `Baku seafront elevation varies by ${range.toFixed(3)} m`);

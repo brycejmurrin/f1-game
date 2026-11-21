@@ -371,6 +371,19 @@ const SceneryStructures = (function () {
       const slab = st === "tecpro" || st === "airfence";
       const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "") + (HI ? "|hi" : "");
       const capKey = `tyre-cap|${st}|${(slab ? tyre : cap).join(",")}`;
+      const capHeight = st === "tecpro" ? 0.98 : st === "airfence" ? 1.14 : 0.95;
+      // A belt runs along the offset row of stacks. On an inside bend those
+      // centres can be metres closer together than the centreline stations.
+      // Put each end at the shared midpoint between neighbouring stack tops.
+      const tops = new Map();
+      const stackTop = (k) => {
+        k = (k + n) % n;
+        if (!tops.has(k)) {
+          const a = anchor(k, side, gap);
+          tops.set(k, vadd(a.c, a.u, capHeight));
+        }
+        return tops.get(k);
+      };
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
@@ -414,12 +427,19 @@ const SceneryStructures = (function () {
             }
           },
           { kind: "tyreWall", k, side });
-        ctx.instance(capKey,
-          Object.assign({ s: [1, 1, spacing] }, place),
+        const step = Math.round(spacing / ds);
+        const prev = stackTop(k - step), next = stackTop(k + step);
+        const top = stackTop(k);
+        const chord = next.map((v, i) => (v - prev[i]) / 2);
+        const length = Math.hypot(...chord);
+        if (length < 1e-6) return;
+        const t = norm(chord), r = norm(cross(t, p.u)), u = norm(cross(r, t));
+        const o = top.map((v, i) => v / 2 + (prev[i] + next[i]) / 4);
+        ctx.instance(capKey, { o, r, u, t, s: [1, 1, length] },
           (rec) => {
-            if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], tyre);
-            else if (st === "airfence") rec.box([0, 1.14, 0], [1.5, 0.14, 1], tyre);
-            else rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap);                     // stack (default)
+            if (st === "tecpro") rec.box([0, 0, 0], [1.7, 0.16, 1], tyre);
+            else if (st === "airfence") rec.box([0, 0, 0], [1.5, 0.14, 1], tyre);
+            else rec.box([0, 0, 0], [2.0, 0.3, 1], cap);
           },
           { kind: "tyreWall", k, side });
       }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}`);

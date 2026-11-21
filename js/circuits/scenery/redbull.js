@@ -396,7 +396,10 @@
           const d = 28 + hash(k * 127 + side) * 14;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 10)) continue;   // per-side reject, not per-node (see above)
-          hedge(k / n, k / n + 0.0025, side, d, 0.85 + hash(k * 131 + side) * 0.25, [0.20, 0.44, 0.18]);
+          // Inside the T6 exit the offset line compresses four metres of road
+          // into 2.4 m of hedge. A single shrub fits the tightest part.
+          const end = side < 0 && frac > 0.685 && frac < 0.696 ? frac : frac + 0.0025;
+          hedge(frac, end, side, d, 0.85 + hash(k * 131 + side) * 0.25, [0.20, 0.44, 0.18]);
         }
       });
 
@@ -438,8 +441,11 @@
         spectatorHill(0.495, 0.545, 1, 24, { rows: 3, rise: 1.1, depth: 1.9, step: 8,
           density: 0.34, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
         // Sparse pines crowning the hilltop behind the bank.
-        forestEdge(0.49, 0.56, 1, 78, { density: 0.35, hMin: 10, hMax: 16,
-          col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 });
+        const hillPines = { density: 0.35, hMin: 10, hMax: 16,
+          col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 };
+        // Follow the shoulder through the hairpin before the hillside widens.
+        forestEdge(0.49, 0.497, 1, 38, hillPines);
+        forestEdge(0.498, 0.56, 1, 78, hillPines);
       }
 
       billboard(Math.round(n * 0.87) % n, -1, 12, 8, 4, [1.0, 0.65, 0.0]);

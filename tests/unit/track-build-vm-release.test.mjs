@@ -292,8 +292,8 @@ const STRIP = {
   //   tiers meet on the outside of the Curva Grande / Parabolica bends, fascia
   //   lip at seg. Emission 313768 → 313948, strip-after 284782 → 284931.
   // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+180 emitted) → 314096 / 285079.
-  // Bank-aware road edges and ground anchors.
-  monza: { before: 314048, after: 284979 },
+  // Surveyed Lesmo–Ascari descent and re-seated paddock and verge scenery.
+  monza: { before: 313340, after: 284611 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

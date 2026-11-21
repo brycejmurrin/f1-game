@@ -264,3 +264,23 @@ test("Spa crossfall follows the measured Bruxelles hairpin and both Pouhon apexe
     assert.ok(Math.abs(actual - measured) < 1.2, `at (${x}, ${z}): ${actual}° vs ${measured}°`);
   }
 });
+
+test("Bahrain and Spielberg turn 10 both fall away from the apex", () => {
+  // They turn in opposite directions. The lateral slope must oppose the
+  // corner's curvature for both to be off-camber.
+  for (const id of ["bahrain", "redbull"]) {
+    const { track, corner } = circuit(id);
+    const apex = corner(10);
+    const roll = Tracks.bankAngle(track, apex.fraction * track.total);
+    assert.ok(roll * apex.curvature < 0, id);
+  }
+});
+
+test("Mercedes-Arena crossfall and Suzuka's near-level Gyaku Bank survive the road build", () => {
+  const arena = circuit("nurburgring");
+  const roll = Tracks.bankAngle(arena.track, arena.corner(2).fraction * arena.track.total);
+  assert.ok(Math.abs(Math.abs(Math.tan(roll)) - 0.025) < 0.001);
+  const suzuka = circuit("suzuka");
+  const gyaku = Tracks.bankAngle(suzuka.track, suzuka.corner(6).fraction * suzuka.track.total);
+  assert.ok(Math.abs(gyaku) < Math.PI / 180);
+});

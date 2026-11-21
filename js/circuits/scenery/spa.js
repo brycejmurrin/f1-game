@@ -418,14 +418,16 @@
       wall(0.172, 0.192, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
       {
         const BROOK = [0.18, 0.28, 0.22];
-        waterSurface(K(0.176), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
-        waterSurface(K(0.184), -1, 8, [2.3, 0.14, 20], BROOK, { id: "spa-eau-rouge-brook-b" });
-        waterSurface(K(0.191), -1, 8, [2.0, 0.14, 18], BROOK, { id: "spa-eau-rouge-brook-c" });
+        // OSM ways 77352254/77352255 locate the culvert at racing fraction
+        // 0.132. The open channel exits to the right, across the valley floor.
+        waterSurface(K(sl(0.1324)), 1, 13, [2.6, 0.14, 9], BROOK, { id: "spa-eau-rouge-brook-a" });
+        waterSurface(K(sl(0.1336)), 1, 22, [2.3, 0.14, 9], BROOK, { id: "spa-eau-rouge-brook-b" });
+        waterSurface(K(sl(0.1341)), 1, 32, [2.0, 0.14, 11], BROOK, { id: "spa-eau-rouge-brook-c" });
 
         // A short concrete service bridge crosses the middle brook strip.
         // The raised deck, paired abutments and rails make the Eau Rouge
         // crossing explicit without inventing an overhead track span.
-        const a = anchor(K(0.184), -1, 8), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.1336)), 1, 23), b = [a.r, a.u, a.t];
         modelGroup("spa-eau-rouge-brook-crossing", {
           center: vadd(a.c, a.u, 0.9), size: [7.6, 2.2, 4.8], basis: b,
         }, (stage) => {

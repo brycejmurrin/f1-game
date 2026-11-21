@@ -7,6 +7,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
+    revision: 2,
     // PIT SIDE IS WRONG HERE AND KNOWN (W12, 2026-11-10): the FIA 2026 Dutch
     // GP "Circuit Map, Pit Lane Drawing and Emergency Exits Map" puts the
     // garages on the driver's RIGHT (pit-lane drawing p.3: entry off T14, exit

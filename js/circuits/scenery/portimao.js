@@ -132,7 +132,8 @@
       const CUTS = [
         ["portimao-cut-t1-exit", 0.100, 0.135, -1],
         ["portimao-cut-t3", 0.150, 0.235, 1],
-        ["portimao-cut-mid", 0.400, 0.435, 1],
+        // Start beyond the bend: adjacent 9 m cut-bank tops overlap on its inside.
+        ["portimao-cut-mid", 0.412, 0.435, 1],
         // Ends at 0.612: past it the bank ran into the 0.620 left terrace.
         ["portimao-cut-t11", 0.560, 0.612, -1],
         ["portimao-cut-final", 0.745, 0.785, 1],

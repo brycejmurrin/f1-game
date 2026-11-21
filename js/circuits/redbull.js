@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "redbull",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 2.3 m off centreline; = trace vertex 0 (timing line).
     // A start line is always on a straight: docs/tracks/START-LINES.md.

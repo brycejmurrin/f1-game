@@ -213,8 +213,10 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // backdrop whose spot lies on another leg's hillside above its top (it
   // would be wholly buried; ground-audit buried 30 → 12), and 23 of those
   // calls were ones the guard dropped anyway. Guard margin unchanged.
-  assert.equal(c.backdrop, 24,
-    `spa backdrop drops = ${c.backdrop}, expected 24 — if you changed the ` +
+  // The corrected Eau Rouge profile and mound footprint check skip nine more
+  // buried placements before they reach the guard.
+  assert.equal(c.backdrop, 15,
+    `spa backdrop drops = ${c.backdrop}, expected 15 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
   // And the pre-check must not have changed what redbull SHIPS: it skips the
   // 295 calls the engine refused, and only those (graph-parity proved it).

@@ -3,7 +3,7 @@
 **Setting:** DAY, green theme (flat city parkland, Buenos Aires). ~4.26 km, classic No.6 layout (`classic: true`), clockwise. Do **not** model the 2027 Tilke hairpin / new F1 config.
 
 ## 1. Setting
-A municipal autodrome inside the city, on the pampa flat at the southern edge of Buenos Aires (Villa Riachuelo). Opened **9 Mar 1952** under Perón (capacity ~45,000): **mass-concrete stepped terraces** with open fronts and no roofs, a low flat-roofed pit block under a simple awning on square columns, and a plain concrete control tower on legs. The site is a public park, so its planting is ORDERED — evenly spaced avenues of **plátano** (London plane), not scattered woodland. Character corners / sections (classic): **Curvón Salotto**, **Recta del Lago**, Ascari chicane, Horquilla Parga, Senna S, **Confitería**.
+A municipal autodrome inside the city, on the pampa flat at the southern edge of Buenos Aires (Villa Riachuelo). Opened **9 Mar 1952** under Perón (capacity ~45,000): **mass-concrete stepped terraces** with open fronts and no roofs, a low flat-roofed pit block under a simple awning on square columns, and a plain concrete control tower on legs. The site is a public park, so its planting is ORDERED — evenly spaced avenues of **plátano** (London plane), not scattered woodland. The modeled 1995–98 No. 6-S includes the Senna S and Horquilla Parga. Curvón Salotto and Recta del Lago belong to the longer lake circuit. [Historic layout maps](https://www.racingcircuits.info/south-america/argentina/buenos-aires.html)
 
 ## 2. Atmosphere & palette
 Warm, slightly hazy River Plate light over flat green parkland. Argentine light blue and white on everything the circuit owns.
@@ -30,11 +30,11 @@ The pampa. Genuinely, honestly flat.
 | 0.075 | L | near | Turn 1 gravel apron + red tyre wall |
 | 0.10–0.25 | both | near | **Plane-tree avenue**: evenly spaced ranks + deeper eucalyptus rank |
 | 0.20–0.30 | L | mid | Grass crowd bank |
-| 0.35–0.42 | — | — | **Curvón Salotto**: long constant-radius sweep |
+| 0.35–0.42 | — | — | Long constant-radius sweep on the short course |
 | 0.365–0.38 | R | mid | Covered `grandstandEx` + **`baires-terrace-curvon`** (required) mass-concrete terrace outside the sweep |
 | 0.380 | L | near | Curvón gravel apron (40×90) + blue tyre wall |
 | 0.38–0.48 | both | far | Open parkland inside the sweep — kept clear |
-| 0.640 | L | mid | **Recta del Lago** covered `grandstandEx` (pastel) overlooking the park lake |
+| 0.640 | L | mid | Park-side covered `grandstandEx` (pastel) overlooking the park lake |
 | 0.64–0.72 | R | mid | Grass crowd bank |
 | 0.655 | R | far | Park lake (`baires-park-lake`) |
 | 0.745 | R | mid | **Confitería** (`baires-confiteria`, required): trackside café-restaurant. Exact frac vs OSM is approximate (**UNCERTAIN** placement); the building is a named classic landmark. 2027 works remove Curva de la Confitería from the *new* layout — we still dress it on classic |

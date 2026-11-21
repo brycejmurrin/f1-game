@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "bahrain",
+    revision: 2,
     // The pit complex (TrackPit) sits on the start straight, on its RIGHT (east):
     // OSM pit-lane way 187123422 measures 9.5-11.8 m right of the built
     // centreline, the main grandstand (way 187123419) 39 m left.

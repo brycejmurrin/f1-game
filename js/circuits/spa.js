@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "spa",
+    revision: 2,
     // The pit complex (TrackPit) is on the driver's RIGHT of the main straight:
     // FIA "2026 Belgian Grand Prix - Competition Notes - Circuit Map, Pit Lane
     // Drawing, Emergency Exits Map and Red Zone" (v4, 16.07.26) — the pit lane

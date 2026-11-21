@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "indianapolis",
+    revision: 2,
     // The pit complex (TrackPit) stands on the INFIELD side of the front
     // stretch, as at the real IMS (pit road, Pagoda and Gasoline Alley are all
     // inside the oval; F1 2000-07 ran the lap clockwise, so the infield is on
@@ -63,15 +64,12 @@
       { s0: 0.240, s1: 0.745, hw: 6.4, ease: 0.020 },
       { s0: 0.760, s1: 0.820, hw: 6.6, ease: 0.012 },
     ],
-    // ONE banked corner: oval Turn 1 (9 deg 12 min, IMS), which the F1 road
-    // course runs backwards as its final corner — the only sustained curve at
-    // 0.85-0.91 (curvature -3.0..-5.0e-3/m, measured on this centreline). It
-    // is not a def.turns peak (radius ~220 m), so it stays a frac zone (no
-    // sceneryStartFrac, startFrac 0: authoring = racing frame). The former
-    // 9 deg zone at 0.115 sat on the front straight (|k| < 0.5e-3/m from
-    // 0.085 to 0.135, T1 at 0.1449) and banked a straight, so it is gone.
+    // F1 Turn 13 uses oval Turn 1 in reverse. The 2007 IMS media guide lists
+    // 9 degrees 12 minutes in the turn. The traced quarter-turn runs from
+    // ~0.81 to ~0.91; its midpoint is not among the curvature-picked turns.
+    // The cosine shoulders approximate the transitions to both level straights.
     bankZones: [
-      { frac: 0.880, angleDeg: 9.0, widthM: 260 },  // the banked oval bend (right, 0.81-0.91, k -3.5..-4.7e-3/m smoothed 20 m), no def.turns apex: a deliberate frac zone
+      { frac: 0.8644, angleDeg: 9.2, widthM: 740 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

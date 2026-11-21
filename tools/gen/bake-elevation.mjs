@@ -52,6 +52,8 @@ const SAMPLES = 64; // profile resolution around the lap
 
 // Apex 26 circuit id -> bacinger/f1-circuits geojson id (from f1-locations.json).
 const MAP = {
+  magny_cours: "fr-1960",  // Estoril dip, Adelaide climb and Château d’Eau crest.
+  watkins_glen: "us-1956",
   bahrain: "bh-2002", monaco: "mc-1929", silverstone: "gb-1948", spa: "be-1925",
   monza: "it-1922", suzuka: "jp-1962", singapore: "sg-2008", cota: "us-2012",
   interlagos: "br-1940", vegas: "us-2023", madrid: "es-2026", zandvoort: "nl-1948",
@@ -289,9 +291,52 @@ function osmCoords(id) {
   return ring;
 }
 
+// The SRTM flight predates Buddh's earthworks. Williams measured a 14 m rise
+// from T1 to T3, and Renault describes the following descent to mid-straight
+// and climb to T4. These arc stations use the stitched ring's origin.
+// https://www.motorsport.com/f1/news/f1-williams-can-t-wait-to-see-tilke-designed-indian-gp-track/413764/
+// https://media.alpinecars.com/renault-sport-f1-preview-to-the-indian-gp/?lang=eng
+function buddhEarthworks(profile) {
+  const turn1 = 0.7765, turn3 = 0.8509, midStraight = 0.9769, turn4 = 1.1025;
+  const ease = (t) => t * t * (3 - 2 * t);
+  // Relative to the old terrain, lower the first braking zone and the hollow
+  // in the straight. A 17.4 m differential corrects the old descent and gives
+  // 14.0 m between the built apexes after the 64-post spline interpolation.
+  const corrected = profile.map((y, i) => {
+    let f = i / profile.length;
+    if (f < turn4 - 1) f += 1;
+    if (f < turn1 - 0.07 || f >= turn4) return y;
+    if (f <= turn1) return y - 4 * ease((f - turn1 + 0.07) / 0.07);
+    if (f <= turn3) return y - 4 + 17.4 * (f - turn1) / (turn3 - turn1);
+    if (f <= midStraight) return y + 13.4 - 18.4 * ease((f - turn3) / (midStraight - turn3));
+    return y - 5 * (1 - ease((f - midStraight) / (turn4 - midStraight)));
+  });
+  return corrected.map((y) => +(y - corrected[0]).toFixed(2));
+}
+
 async function bake(ids) {
   const result = {};
   for (const id of ids) {
+    if (id === "okayama") {
+      // GSI Japan 1 m laser DEM, sampled at i/64 of the stitched OSM ring
+      // from 134.2234962 E, 34.9173276 N. The operator publishes 29 m relief.
+      // https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php
+      const heights = [
+        262.8, 263.4, 263.9, 264.4, 265, 265.6, 266.1, 266.7,
+        266.8, 266.5, 263.5, 259.7, 256.9, 257.2, 258.9, 260.6,
+        262.2, 263.9, 265.5, 267.4, 269.3, 271, 272.9, 274.6,
+        274.7, 274.5, 273, 271.4, 269.7, 267.9, 266.2, 265.3,
+        264.8, 264.4, 263.9, 263.5, 263.1, 262.6, 262.2, 261.7,
+        261, 260.6, 259.5, 258, 256.9, 256.5, 255.3, 253.4,
+        252.7, 252.7, 252.7, 251.9, 250.3, 248.6, 247.2, 245.8,
+        245.4, 248.2, 252.7, 256.6, 259.4, 261, 261.6, 262.2,
+      ];
+      const spacing = 3699.6 / SAMPLES; // metres along the sampled OSM ring
+      const eased = clampKink(heights, spacing, MAX_KINK);
+      const { prof } = clampGrade(eased, spacing, MAX_GRADE);
+      result[id] = prof.map((height) => +(height - prof[0]).toFixed(2));
+      continue;
+    }
     const gid = MAP[id];
     const osm = !gid && osmTable[id];
     if (!gid && !osm) { console.warn(`! no mapping for ${id}, skipping`); continue; }
@@ -306,7 +351,19 @@ async function bake(ids) {
         coords = line.geometry.coordinates.map((c) => [c[0], c[1]]);
       }
       const ele = await elevations(coords);
-      const { prof, spacing, worstRaw } = toProfile(coords, ele, SMOOTH_OVERRIDE[id] ?? SMOOTH_PASSES, KINK_OVERRIDE[id] ?? MAX_KINK, GRADE_OVERRIDE[id] ?? MAX_GRADE);
+      const { prof: terrain, spacing, worstRaw } = toProfile(coords, ele, SMOOTH_OVERRIDE[id] ?? SMOOTH_PASSES, KINK_OVERRIDE[id] ?? MAX_KINK, GRADE_OVERRIDE[id] ?? MAX_GRADE);
+      const prof = id === "buddh" ? buddhEarthworks(terrain) : terrain;
+      if (id === "brands_hatch") {
+        // Environment Agency 1 m DTM (2022, OGL), sampled on the OSM ring.
+        // https://environment.data.gov.uk/dataset/13787b9a-26a4-4775-8523-806d13af58fc
+        // Paddock Hill's approach, trough and Druids are at 138/365/598 m
+        // from the timing line, with elevations of 131.65/114.14/134.71 m.
+        // Fit only posts 21–32 to the measured section relative to post 20.
+        // The cubic grade was constrained to 5.3% to preserve the existing
+        // bake envelope. The adjoining SRTM posts retain their original heights.
+        const localHeights = [2.22, 2.71, 0.03, -3.11, -6.21, -8.61, -6.21, -3.11, 0, 2.45, 0.41, -2.63];
+        prof.splice(21, localHeights.length, ...localHeights.map(h => +(prof[20] + h).toFixed(2)));
+      }
       const lo = Math.min(...prof), hi = Math.max(...prof);
       let grade = 0;
       for (let i = 0; i < prof.length; i++) {
@@ -338,35 +395,26 @@ async function bake(ids) {
   return result;
 }
 
-const requested = process.argv.slice(2);
-const ids = requested.length ? requested : Object.keys(MAP);
-const baked = await bake(ids);
-
-// js/track/, not js/ — this was missed in the js/ -> js/track/ reorganisation,
-// so the tool wrote to a path that its own next line then told you to script-tag
-// from js/track/, and following its instructions produced a 404. Everything else
-// (tools/manifest.cjs, js/track/tracks.js, this file's own header) already
-// agreed on js/track/.
+// Preserve previously surveyed profiles when a terrain service skips a circuit.
 const outPath = join(ROOT, "js", "track", "circuit-elevations.js");
-// A PARTIAL bake merges into the shipped file. `bake-elevation.mjs korea` used
-// to rewrite the file with only what this run produced — and when SRTM had
-// nothing for that one id (reclaimed land), with NOTHING: eleven surveyed
-// profiles gone in one command. Only a full roster bake replaces the table.
-function readExisting() {
-  if (!existsSync(outPath)) return {};
-  try { return vm.runInNewContext(readFileSync(outPath, "utf8") + ";CircuitElevations", {}) || {}; }
-  catch (e) { console.log(`(existing ${outPath} unreadable: ${e.message}; starting empty)`); return {}; }
-}
-const data = requested.length ? { ...readExisting(), ...baked } : baked;
+const existing = existsSync(outPath)
+  ? vm.runInNewContext(readFileSync(outPath, "utf8") + ";CircuitElevations", {})
+  : {};
+const requested = process.argv.slice(2);
+const ids = requested.length ? requested : [...new Set([...Object.keys(MAP), ...Object.keys(existing), "okayama"])];
+const baked = await bake(ids);
+const data = { ...existing, ...baked };
 
 const body = Object.entries(data)
   .map(([id, prof]) => `    ${id}: [${prof.join(", ")}],`)
   .join("\n");
 const file = `/* Apex 26 — surveyed circuit elevation profiles (metres relative to the
    start/finish line, ${SAMPLES} samples by arc-fraction around the lap).
-   Generated by tools/gen/bake-elevation.mjs from SRTM 30 m (Open Topo Data) over
-   bacinger/f1-circuits traces. Load before js/track/tracks.js to override the
-   authored elevation bumps with real data. */
+   Generated by tools/gen/bake-elevation.mjs from Open Topo Data SRTM 30 m
+   and local 1 m lidar from GSI Japan (Okayama) and the Environment Agency
+   (Brands Hatch), sampled on bacinger and OpenStreetMap traces.
+   Consumed by TrackDef (js/track/core/def.js) at fromRaw/hydrate.
+   Keep ahead of tracks.js in the manifest. */
 const CircuitElevations = {
 ${body}
 };

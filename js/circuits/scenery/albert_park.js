@@ -589,7 +589,10 @@
 
       tyreWall(0.04, 0.07,  1, 3.2, RED);
       tyreWall(0.05, 0.08, -1, 3.2, WHITE);
-      tyreWall(0.77, 0.81,  1, 3.5, RED);
+      // At the T11 inside apex the 10.5 m offset row folds back on itself.
+      // Its approach and exit stacks are already 3.2 m apart across the bend.
+      tyreWall(0.77, 0.7871,  1, 3.5, RED);
+      tyreWall(0.7901, 0.81,  1, 3.5, RED);
       tyreWall(0.78, 0.82, -1, 3.5, WHITE);
 
       fence(0.14, 0.42,  1,  9, 3.6, FENCE_COL);

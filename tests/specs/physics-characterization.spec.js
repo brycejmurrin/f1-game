@@ -102,7 +102,8 @@ const SCENARIOS = [
 // The fields that define "the car moved the same way". Rounded to 1e-4 so the
 // comparison survives JSON round-tripping, and no tighter — a tolerance loose
 // enough to hide a real change would defeat the point.
-const R = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
+// JSON stores a rounded -0 as 0. Compare the same representation on replay.
+const R = (v) => (typeof v === "number" && isFinite(v) ? (Math.round(v * 1e4) / 1e4 || 0) : v);
 
 test("the driving model produces the same numbers it did before", async ({ page, loadTrack }) => {
   // ONE track build for the whole suite. Every scenario runs on monza and
@@ -118,7 +119,9 @@ test("the driving model produces the same numbers it did before", async ({ page,
   await pinFactorySeat(page);
   // A3: explicit dry pin — loadTrack defaults wx="dry", but grip-sensitive
   // baselines must not inherit a leftover wet enum / arc from a prior test.
-  await loadTrack("monza", "day", "dry");
+  // This records simulation steps. Rendering between setup calls can advance
+  // presentation-dependent state before the deterministic trace begins.
+  await loadTrack("monza", "day", "dry", { headless: true });
 
   const pin = await page.evaluate(() => {
     const a = window.__apex;

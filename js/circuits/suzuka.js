@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "suzuka",
+    revision: 2,
     pit: { side: 1 },   // the pit complex (TrackPit): driver's RIGHT on the main straight, on the Esses
     // side — FIA 2026 Japanese GP Circuit Map (pit lane drawn west of the S/F straight) and Pit
     // Lane drawing (garages beyond the working lane). Was -1 (grandstand-guide reading).

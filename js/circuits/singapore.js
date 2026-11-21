@@ -68,6 +68,8 @@
       { kinds: ["city", "foliage"], s0: 0.00, s1: 0.20, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.48, s1: 0.88, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
+      // The 44 m scaffold stand occupies this stretch of street frontage.
+      { kind: "city", s0: 0.323, s1: 0.337, side: -1 },
       { kind: "lamps", s0: 0, s1: 1 },
     ],
     // The redundant-layer cut above still left night at 1,006,947 — over even

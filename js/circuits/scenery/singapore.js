@@ -77,14 +77,20 @@
       makePortal("sheares", 0.085, 0.115, { h: 7.4, gap: 2.2 });
       makePortal("finish-underpass", 0.925, 0.985, { h: 6.8, gap: 2.4 });
 
-      // FAR SILHOUETTE BAND — fills sky behind near facades; anchored far
-      // enough (340+ m) that it never clips near geometry.
-      // Use place() not backdrop(): backdrop() auto-adds night window bands that
-      // sit 3–16 mm off the slab face and coplanar-audit fights them from
-      // 131–243 m (591 m² worst). place() seats on terrain with SEP_SLOTS depth
-      // jitter so same-facing slabs do not share a plane. Extra dist stagger
-      // (per-i metres) keeps mid/far bands off one another.
+      // Reserve each skyline building's footprint. Normals from different
+      // sections of the street converge on the same lots across the bay.
       {
+        const lots = [];
+        const placeTower = (k, side, gap, size, colour) => {
+          const radius = Math.hypot(size[0], size[2]) / 2;
+          for (const setback of [0, 40, 80]) {
+            const distance = gap + setback;
+            const { c } = anchor(k, side, distance);
+            if (lots.some(lot => Math.hypot(c[0] - lot.x, c[2] - lot.z) < radius + lot.radius + 1)) continue;
+            if (place(k, side, distance, size, colour)) lots.push({ x: c[0], z: c[2], radius });
+            return;
+          }
+        };
         const N = 48;
         const farCol = [0.08, 0.09, 0.18];
         const midCol = [0.07, 0.08, 0.17];
@@ -94,19 +100,22 @@
           const w  = 34 + hash(i * 5) * 40;
           const h  = 70 + hash(i * 9) * 130;
           const dFar = 340 + hash(i * 13) * 200 + (i % 5) * 9;
-          place(k, sd, dFar, [w, h, 28 + (i % 3) * 5], farCol);
+          placeTower(k, sd, dFar, [w, h, 28 + (i % 3) * 5], farCol);
           if (i % 4 === 0) {
             const dMid = 260 + hash(i * 17) * 100 + (i % 7) * 7;
-            place(k, -sd, dMid, [w * 0.65, h * 1.15, 24 + (i % 2) * 4], midCol);
+            placeTower(k, -sd, dMid, [w * 0.65, h * 1.15, 24 + (i % 2) * 4], midCol);
           }
         }
       }
 
-      cityFront(0.90, 0.16, 1, 20, {
+      const bayFront = {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
         windowCol: WIN_CYAN, floor: 18, step: 70,
-      });
+      };
+      // Leave the inside of the bend free where the two street frontages converge.
+      cityFront(0.982, 0.16, 1, 20, bayFront);
+      cityFront(0.90, 0.9545, 1, 20, bayFront);
       // Skip the Sands/Supertrees window (0.17–0.29 R) so hero silhouettes
       // read against bay/backdrop rather than a competing city wall.
       cityFront(0.29, 0.35, 1, 104, {
@@ -787,7 +796,7 @@
         { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
       grandstandEx(0.05,  1, 12, 50, null, null,
         { livery: "darkSteel", tiers: 1, roof: "flat" });
-      grandstandEx(0.70, -1, 30, 48, null, null,
+      grandstandEx(0.70, -1, 8, 48, null, null,
         { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true });
 
       // Start/finish gantry + halfway scoring gantry. The start gantry and its
@@ -1056,7 +1065,7 @@
         }
       }
 
-      grandstandEx(0.735, -1, 22, 54, null, null,
+      grandstandEx(0.735, -1, 8, 54, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.765,  1, 26, 48, null, null,
         { livery: "scaffold", tiers: 1, roof: "truss" });

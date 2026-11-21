@@ -6,6 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "sochi",
+    revision: 2,
     classic: true,
     // Upstream ru-2014 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -44,9 +45,11 @@
       grass:         [0.22, 0.42, 0.20],
       sunDir:        [0.44, 0.66, 0.32],
     },
+    // 2019 Russian GP media kit: altitude 21.4–23.3 m. Preserve the authored
+    // crest and trough positions while matching the published 1.9 m range.
     elevations: [
-      { s: 0.34, halfM: 420, rise: 3.5 },
-      { s: 0.68, halfM: 400, rise: -3.0 },
+      { s: 0.34, halfM: 420, rise: 1.02 },
+      { s: 0.68, halfM: 400, rise: -0.88 },
     ],
     hwZones: [
       { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },  // Turn 5-6

@@ -613,7 +613,8 @@
         modelGroup("miami-marina-hospitality-deck", {
           center: vadd(a.c, a.u, 7.5), size: [28, 16, 64], basis: bv,
         }, (deck) => {
-          addBox(deck, vadd(a.c, a.u, 1.0), [28, 2.0, 64], GREYWHITE, bv);
+          // Embed the foundation below the marina sheet; keep the deck top at +2 m.
+          addBox(deck, vadd(a.c, a.u, 0.75), [28, 2.5, 64], GREYWHITE, bv);
           addBox(deck, vadd(a.c, a.u, 4.2), [25, 4.8, 59], WHITE, bv);
           addBox(deck, vadd(vadd(a.c, a.r, -12.7), a.u, 4.4), [0.8, 3.0, 57], GLASS, bv);
           addBox(deck, vadd(a.c, a.u, 8.0), [22, 2.8, 52], GREYWHITE, bv);

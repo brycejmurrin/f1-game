@@ -12,7 +12,7 @@ Cool, high-altitude light. Cedar foliage is dark and blue-shifted, not the warm 
 
 ## 3. Elevation
 
-Rises through the esses on the back half and falls all the way down the pit straight — roughly 40 m of total change, most of it gradual.
+The racing surface spans 545–585 m above sea level. The steepest descent comes just after braking for TGR (Turn 1). The course rises slightly after ADVAN, descends to its low point at Dunlop, then climbs through the technical final sector. Fuji Speedway gives maximum gradients of 10.05% downhill and 8.88% uphill. [Circuit guide](https://www.fsw.tv/guide/facility/racing.html) · [Operator’s course introduction](https://www.youtube.com/watch?v=cJsmZZnSnWk)
 
 ## 4. Landmarks & surroundings by lap position
 
