@@ -865,12 +865,6 @@ function isCarriedRuntime(url) {
 }
 async function carryEntry(cache, req, old) {
   const url = new URL(req.url);
-  // A previous worker may have stored a newer response under an older hash.
-  // Even a matching HTTP validator would only authenticate those wrong bytes.
-  if (isHashedPackRequest(url)) {
-    old = await verifiedPackCopy(old, url.search.slice(3));
-    if (!old) return;
-  }
   const etag = old.headers.get("ETag"), modified = old.headers.get("Last-Modified");
   if (!etag && !modified) {
     // Nothing to ask with: only an address that names its content is safe to keep.
@@ -905,25 +899,45 @@ async function carryRuntime(cache, name) {
   const sources = (await caches.keys())
     .filter((k) => cacheBuild(k) > 0 && cacheBuild(k) < build)
     .sort((a, b) => cacheBuild(b) - cacheBuild(a));
-  const seen = new Set();
-  const jobs = [];
+  // Keep one job per URL. For a hashed key, keep older candidates in order:
+  // a legacy worker could have cached a rebaked file under the original hash.
+  const jobs = new Map();
   for (const k of sources) {
     const src = await caches.open(k);
     for (const req of await src.keys()) {
-      if (seen.has(req.url) || !isCarriedRuntime(new URL(req.url))) continue;
-      seen.add(req.url);
-      jobs.push({ src, req });
+      const url = new URL(req.url);
+      if (!isCarriedRuntime(url)) continue;
+      const job = jobs.get(req.url);
+      if (!job) jobs.set(req.url, { req, hash: isHashedPackRequest(url) ? url.search.slice(3) : null, older: [src] });
+      else if (job.hash) job.older.push(src);
     }
   }
-  let carried = 0;
-  await pooled(jobs, CARRY_POOL, async ({ src, req }) => {
+  await pooled([...jobs.values()], CARRY_POOL, async ({ req, hash, older }) => {
     try {
-      if (await cache.match(req)) return;   // install already holds it
-      const old = await src.match(req);
-      if (old && old.ok) { await carryEntry(cache, req, old); carried++; }
+      let current;
+      try { current = await cache.match(req); } catch (_) { if (!hash) return; }
+      if (current) {
+        if (!hash) return;
+        // An older active worker can also pre-fill the incoming generation.
+        const checked = await checkedCachedPack(current, hash);
+        if (checked) {
+          if (checked !== current) await cache.put(req, checked);
+          return;
+        }
+      }
+      for (const src of older) {
+        let old = await src.match(req).catch(() => undefined);
+        if (!old || !old.ok) continue;
+        if (hash) {
+          old = await checkedCachedPack(old, hash);
+          if (!old) continue;
+        }
+        // The newest valid candidate owns the HTTP validator decision, even a deletion.
+        await carryEntry(cache, req, old);
+        return;
+      }
     } catch (_) { /* one entry never fails the install */ }
   });
-  return carried;
 }
 
 async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
@@ -1282,6 +1296,10 @@ async function verifiedPackCopy(response, hash) {
   copy.headers.set(VERIFIED_PACK_HEADER, hash);
   return copy;
 }
+async function checkedCachedPack(response, hash) {
+  if (response.headers.get(VERIFIED_PACK_HEADER) === hash) return response;
+  try { return await verifiedPackCopy(response, hash); } catch (_) { return null; }
+}
 // THE PACK MANIFEST UNDER THE PAGE'S BUILD (#5629): assets.js asks for
 // `assets/pack/manifest.json?b=<shell build>`. One deploy ships one manifest, so
 // a copy cached under that key was this build's (or, when the fetch crossed a
@@ -1305,11 +1323,9 @@ function packCacheFirst(event, req, hash) {
   }
   const response = (async () => {
     const hit = await matchPreferCurrent(req, async (candidate) => {
-      if (candidate.headers.get(VERIFIED_PACK_HEADER) === hash) return true;
-      let checked;
-      try { checked = await verifiedPackCopy(candidate, hash); } catch (_) { return false; }
+      const checked = await checkedCachedPack(candidate, hash);
       if (!checked) return false;
-      store(checked);   // future warm hits need neither a body read nor a digest
+      if (checked !== candidate) store(checked);   // warm hits need neither a body read nor a digest
       return true;
     }).catch(() => undefined);
     if (hit) return hit;

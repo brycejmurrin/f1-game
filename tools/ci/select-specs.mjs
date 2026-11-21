@@ -634,7 +634,7 @@ export function measuredCheap(file, db = timings()) {
  *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
   overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false,
-  includeTwinned = false, scope = null } = {}) {
+  includeTwinned = false, scope = null, noDrop = false } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -866,6 +866,23 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     }
     skipped.length = 0;
     skipped.push(...keep);
+  }
+  // THE NO-DROP TAIL (2026-11-21, Bryce: "Fix the issues now"). The caps above size the pools; they no
+  // longer decide what runs. In 48 h the orchestrator hand-dispatched 85 browser-group runs plus a draft->ready
+  // flip each, because a wide PR's ready plan DROPPED routed specs with overflow and spill full (#5978: gamepad,
+  // menu-keyboard, time-trial, props-over-road, ui-button-touch). Measured on tip d1f9eafc with the
+  // bot/spec-timings overlay, `--files tests/helpers/fixtures.js`: 6 skipped + new-hooks over the pool. The
+  // lanes (LANES / APEX_CI_LANES, ciLanes) already bound how many legs run at once, so an extra leg queues;
+  // it cannot flood the runner pool. With `noDrop` every leftover rides on: an ordinary spec in its own
+  // spill job(s), a declared-slow spec in its own over-budget job(s), each marked `tail`. select() turns it on
+  // for every plan but the draft's (`--overflow-shards 0`: the 5-min draft plan warns on a drop by design).
+  // `unreachable` (the fan-out guard against a mis-billed spec) and `unreadable` are untouched.
+  if (noDrop) {
+    for (const r of skipped) spill.push({ ...r, tail: true });
+    skipped.length = 0;
+    const poolByFile = new Map(overBudgetPool.map((r) => [r.file, r]));
+    for (const s of overBudgetSpecs) overBudgetRun.push({ ...(poolByFile.get(s.file) || s), tail: true });
+    overBudgetSpecs.length = 0;
   }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable, outOfScope,
@@ -1726,7 +1743,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // The plan's APEX_CIRCUITS (circuits, below): a registry spec is billed for the cases it will register.
   const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS,
     overBudgetShards: opts.overBudgetShards ?? MAX_OVER_BUDGET_SHARDS, staleFirst: !!opts.staleFirst,
-    scope: circ.scoped ? circ.ids : null };
+    scope: circ.scoped ? circ.ids : null,
+    // No routed spec is dropped (fit()'s NO-DROP TAIL) unless the caller asked for no overflow at all: the
+    // draft plan (`--overflow-shards 0`) keeps the bounded cut and its drop warns. opts.noDrop overrides.
+    noDrop: opts.noDrop ?? (opts.overflowShards ?? MAX_OVERFLOW_SHARDS) > 0 };
   let cut = fit(candidates, budgetMin, fitOpts);
   // THE FLOOR: infra and partial diffs always carry it; any other non-docs diff
   // whose plan came out with nothing to run gets it too. Never an empty plan
@@ -1822,7 +1842,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `UNREACHABLE (declares ${s.tests} tests, over the whole ${r.secFit} s budget — this gate can ` +
     `NEVER run it): ${s.file}`);
   for (const s of r.spill || []) console.error(
-    `SPILL (overflow full; runs in a spill job, ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s max): ${s.file} (${s.tests} tests)`);
+    s.tail ? `SPILL TAIL (overflow and spill full; runs in its own spill job past the ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s pool, never dropped): ${s.file} (${s.tests} tests)`
+      : `SPILL (overflow full; runs in a spill job, ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s pool): ${s.file} (${s.tests} tests)`);
   for (const s of r.skipped) console.error(
     `ERROR: NOT RUN ANYWHERE (overflow and spill are both full — the verdict reds on this): ${s.file} (${s.tests} tests)`);
   for (const s of r.overBudgetRun || []) console.error(

@@ -730,7 +730,7 @@ function create(G, deps) {
         session.splice(LIMIT);
         if (gen === st.generation) say("Device storage is unavailable. Saved for this visit; download to keep it.");
       }
-      if (gen === st.generation) await paintLibrary();
+      if (st.open) await paintLibrary();   // the album is shared across Studio visits
     } catch (e) { if (gen === st.generation) say("Save failed: " + text(e.message)); }
     finally { if (gen === st.generation) busy(false); }
   }
@@ -785,6 +785,8 @@ function create(G, deps) {
           if (st.open) paintLibrary();
         }),
       ]);
+      // A newly saved photo shifts the rows. Keep focus on the same photo and action.
+      row.querySelectorAll("button").forEach((el, i) => { el.id = "ps-action-" + p.id + "-" + i; });
       box.appendChild(row);
     }
   }

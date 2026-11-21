@@ -77,6 +77,11 @@ function boot(options = {}) {
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
+  if (options.withModalFocus) {
+    dom.document.readyState = "loading";
+    vm.runInContext(fs.readFileSync(new URL("../../js/ui/modal.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/modal.js") });
+    ctx.TopModal = ctx.window.TopModal;
+  }
   vm.runInContext(source, ctx);
   // LightStore.set's shape: the live LT plus whatever profiles object G._ltStore holds right now.
   const ltStore = { set: (id, v) => {
@@ -356,13 +361,12 @@ test("a delayed save retains its original photo and cannot clear a reopened capt
   b.api.open({ metadata: { title: "Old Monza photo" } }); await b.api.capture();
   const saved = b.api.savePhoto();
   b.api.close(false); b.api.open({ source: "garage", metadata: { title: "New garage" } }); await turn();
-  const libraryBefore = b.dom.byId("ps-library").children[0];
   b.G.gfx.capturePixels = () => new Promise((r) => { read = r; });
   const captured = b.api.capture();
   encode(new Blob(["old photo"], { type: "image/jpeg" })); await saved;
   assert.equal(b.api.state().busy, true, "old finally cannot enable a new operation's buttons");
   assert.match(b.dom.byId("ps-message").textContent, /Capturing/);
-  assert.equal(b.dom.byId("ps-library").children[0], libraryBefore, "old save cannot repaint the current library");
+  assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "current visit displays the completed save");
   read({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await captured;
   b.api.close(false); b.api.open({ source: "garage" }); await turn();
   assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "persisted entry retains its initiating context");
@@ -603,6 +607,32 @@ test("saving to a full album evicts the last displayed photo when legacy timesta
   const expected = ["New capture", ...before.slice(0, 5)];
   assert.deepEqual(titles(), expected);
   assert.deepEqual(Array.from(await b.api.album(), (photo) => photo.title), expected);
+});
+for (const fallback of [false, true]) test(`a late ${fallback ? "visit-only" : "durable"} save appears in the reopened album with its original bytes`, async () => {
+  const db = photoDb(seededPhotos(1));
+  let finishEncode, downloaded;
+  const b = boot({ indexedDB: db, withModalFocus: true, encode: cb => { finishEncode = cb; },
+    nativeDownload: { viable: () => true, saveBlob: blob => { downloaded = blob; return Promise.resolve(); } } });
+  b.api.open({ metadata: { title: "Earlier shot" } }); await b.api.capture();
+  const saving = b.api.savePhoto();
+  b.api.close(false); b.api.open({ source: "garage", metadata: { title: "Current shot" } });
+  await b.api.album();   // the new visit's initial gallery read finishes before the JPEG is ready
+  let finishCapture;
+  b.G.gfx.capturePixels = () => new Promise(resolve => { finishCapture = resolve; });
+  const capturing = b.api.capture(), notice = b.dom.byId("ps-message").textContent;
+  b.dom.byId("ps-library").children[0].children[4].focus();
+  if (fallback) db.failNext("put");
+  finishEncode(new Blob(["original capture bytes"], { type: "image/jpeg" })); await saving;
+  assert.equal(b.api.state().busy, true);
+  assert.equal(b.dom.byId("ps-message").textContent, notice);
+  const row = b.dom.byId("ps-library").children[0];
+  assert.equal(row.children[1].textContent, "Earlier shot");
+  assert.equal(db.rows.size, fallback ? 1 : 2);
+  assert.equal(b.dom.document.activeElement.parentElement.children[1].textContent, "Old 0", "DELETE still targets the previously focused photo");
+  assert.equal(b.dom.document.activeElement.textContent, "DELETE");
+  row.children.find(el => el.textContent === "DOWNLOAD").click(); await turn();
+  assert.equal(await downloaded.text(), "original capture bytes");
+  finishCapture({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await capturing;
 });
 test("a committed save from a closed Studio retains its original metadata without touching a reopened session", async () => {
   const idb = photoDb(), b = boot({ indexedDB: idb });

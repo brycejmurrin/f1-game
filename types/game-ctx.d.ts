@@ -429,7 +429,7 @@ interface GameCtx {
   readonly setupTrialRestart: (options: { teamId: string; tune: Record<string, number>; mode: "launch"; isCurrent: () => boolean }) => Promise<{ ok: boolean; context?: Record<string, unknown>; reason?: string }>;
   readonly setupTrialContext: () => Record<string, unknown> | null;
   readonly setupTrialCancel: () => void;
-  readonly realRace: { status(): { active: boolean } };
+  readonly realRace: { status(): { active: boolean; watch?: boolean }; isWatch(): boolean; isActive(): boolean; owns(car: CarState): boolean };
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;

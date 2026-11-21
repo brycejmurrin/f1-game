@@ -36,14 +36,15 @@ function ghostOk(g) {
 }
 function masteryOk(e) {
   // RaceInsights negates places gained, metres closed and seconds defended so lower is better.
-  return isObj(e) && typeof e.key === "string" && e.key.length <= 512 && Number.isFinite(e.best)
+  // Historical keys include the serialized TT class. Bound that input before parsing it.
+  return isObj(e) && typeof e.key === "string" && e.key.length <= 4096 && Number.isFinite(e.best)
     && (e.best >= 0 || /:(?:start|slipstream|defend):all$/.test(e.key));
 }
 function masteryEntries(raw) {
   if (!isObj(raw) || raw.version !== 1 || !Array.isArray(raw.entries)) return [];
   // Fold a single device's old tune classes before comparing devices by max completed.
   return RaceInsights.normalizeMasteryEntries(raw.entries.filter(masteryOk).map(e =>
-    nonNegInt(e.completed) ? e : { ...e, completed: 0 }));
+    nonNegInt(e.completed) ? e : { ...e, completed: 0 })).filter(e => e.key.length <= 512);
 }
 
 function collect() {

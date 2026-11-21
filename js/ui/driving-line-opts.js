@@ -29,7 +29,11 @@ const DrivingLineOpts = (function () {
   let cueOn = (() => {
     const v = store.get(K_CUE, null);
     if (v !== null) return v === "on";
-    return store.get(K_CUE_LEGACY, null) === "on";
+    const legacy = store.get(K_CUE_LEGACY, null);
+    if (legacy !== "on" && legacy !== "off") return false;
+    // Leave the shared key to its numeric owner, including concurrent slider updates.
+    store.set(K_CUE, legacy, { migration: true });
+    return legacy === "on";
   })();
 
   DrivingLine.setPalette(store.get(K_PALETTE, "f1"));

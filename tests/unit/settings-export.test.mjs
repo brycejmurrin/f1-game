@@ -146,6 +146,70 @@ function bootImportUI(opts = {}) {
   };
 }
 
+// Restore into an empty profile and reload the actual option owner, including its
+// first-read cache. The source can have a URL override that the backup must ignore.
+function bootPreference(disk, owner, search = "") {
+  const b = boot({ realStore: true, disk, globals: {
+    location: { search }, DrivingLine: { setPalette() {}, setOpacity() {} },
+  } });
+  const cockpit = owner === "cockpit";
+  const src = cockpit ? "js/camera/cockpit-opts.js" : "js/ui/driving-line-opts.js";
+  const binding = cockpit ? "CockpitOpts" : "DrivingLineOpts";
+  const opts = vm.runInContext(read(src) + "\n" + binding, b.sb, { filename: absSrc(src) });
+  return { ...b, preference: cockpit ? opts.turnChaseLead : opts.brakeCue };
+}
+
+for (const mode of ["all", "changes"]) {
+  for (const [name, disk, expected] of [
+    ["legacy OFF", { "apex26.cockpitTurnChase": "0" }, 0],
+    ["legacy ON", { "apex26.cockpitTurnChase": "1" }, 0.35],
+    ["explicit modern", { "apex26.cockpitTurnChase": "0", "apex26.cockpitTurnChaseLead": "0.65" }, 0.65],
+    ["untouched", {}, 0.4],
+  ]) test(`#6064 ${mode} backs up ${name} Turn Chasing independently of a URL override`, () => {
+    const source = bootPreference(disk, "cockpit", "?turnchase=0.85");
+    assert.equal(source.preference(), 0.85);
+    const file = source.collect(mode);
+    assert.equal(file.settings.camera?.cockpitTurnChaseLead,
+      mode === "changes" && expected === 0.4 ? undefined : String(expected));
+    const target = boot({ realStore: true });
+    assert.equal(target.loadSettings(file).ok, true);
+    assert.equal(bootPreference(Object.fromEntries(target.disk), "cockpit").preference(), expected);
+  });
+
+  for (const [name, disk, line, notch] of [
+    ["legacy ON", { "apex26.brakeCue": '"on"' }, "on", 1],
+    ["legacy OFF", { "apex26.brakeCue": '"off"' }, "off", 1],
+    ["modern flag overrides legacy", { "apex26.lineBrakeCue": '"off"', "apex26.brakeCue": '"on"' }, "off", 1],
+    ["numeric slider alone", { "apex26.brakeCue": "7" }, "off", 7],
+    ["both modern choices", { "apex26.brakeCue": "6", "apex26.lineBrakeCue": '"on"' }, "on", 6],
+  ]) test(`#6066 ${mode} round-trips ${name} as independent line and slider preferences`, () => {
+    const source = bootPreference(disk, "line");
+    assert.equal(source.preference(), line === "on");
+    const file = source.collect(mode);
+    assert.equal(file.settings.driving?.lineBrakeCue, mode === "changes" && line === "off" ? undefined : line);
+    assert.equal(file.settings.steering?.brakeCue, mode === "changes" && notch === 1 ? undefined : notch);
+    const target = boot({ realStore: true });
+    assert.equal(target.loadSettings(file).ok, true);
+    const restarted = bootPreference(Object.fromEntries(target.disk), "line");
+    assert.equal(restarted.preference(), line === "on");
+    assert.equal(restarted.GameStore.store.get("brakeCue", 1), notch);
+  });
+}
+
+for (const [name, steering, driving, expected] of [
+  ["legacy-only file", "on", {}, true],
+  ["explicit modern OFF", "on", { lineBrakeCue: "off" }, false],
+  ["explicit modern ON", "off", { lineBrakeCue: "on" }, true],
+  ["invalid legacy string", "yes", {}, false],
+]) test(`#6066 loading a ${name} keeps the existing numeric Predictive Cue notch`, () => {
+  const target = boot({ realStore: true, disk: { "apex26.brakeCue": "7" } });
+  const file = { format: "apex26-settings-v1", settings: { steering: { brakeCue: steering }, driving } };
+  target.loadSettings(file);
+  const restarted = bootPreference(Object.fromEntries(target.disk), "line");
+  assert.equal(restarted.preference(), expected);
+  assert.equal(restarted.GameStore.store.get("brakeCue", 1), 7);
+});
+
 test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
   const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
   const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
@@ -2121,6 +2185,38 @@ test("historical mastery classes add on one device and take the larger count acr
   assert.deepEqual(saved(), [entry(current, 86, 5)]);
   assert.equal(dst.loadSettings(file).skipped, 1);
   assert.deepEqual(saved(), [entry(current, 86, 5)]);
+});
+
+test("a full legacy TT mastery key survives backup and repeated import, with bounded stored keys", () => {
+  // SessionRecords.config() from a fitted Monza/McLaren time trial, before #5888 shortened mastery keys.
+  const ttClass = {
+    car: ["mclaren", 0.9674, { accel: 0.991, braking: 0.9864999999999999, cornering: 0.994, speed: 0.9895 },
+      0.40740740740740733, 0.2173913043478263, 0.2857142857142857, 0, 0.56, 0],
+    circuit: "monza", controls: { aero: "manual", autoThrottle: false, gearsManual: false, steerMode: "buttons" },
+    difficulty: "hard", layout: [1, 1444, 5777.579011126656], physics: "2026-09-ai-mistakes-1", tod: "day",
+    tune: [0.8396192830323017, 0, 0.94, 1.15, 0, 2.111111111111111, 0.35, 55, 4.2, 1, 0.58, 0],
+    tyreWear: "off", weather: "dry", weatherPlan: null,
+  };
+  const key = JSON.stringify(ttClass) + ":lap:all";
+  assert.ok(key.length > 512);
+  const entry = (key, completed) => ({ key, best: 81, completed });
+  const old = { version: 1, entries: [entry(key, 6)] };
+  const expected = { version: 1, entries: [entry("c2|monza|mclaren:lap:all", 6)] };
+  const source = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify(old) } });
+  loadProgressBackup(source.sb);
+  const file = JSON.parse(JSON.stringify(source.collect("all")));
+  assert.deepEqual(file.progress?.circuitMastery, expected);
+
+  const target = boot({ realStore: true });
+  loadProgressBackup(target.sb);
+  file.progress.circuitMastery = { version: 1, entries: [
+    ...old.entries, entry("x".repeat(513), 12),
+    entry(JSON.stringify({ ...ttClass, circuit: "x".repeat(512) }) + ":lap:all", 12),
+    entry(JSON.stringify({ ...ttClass, tune: ["x".repeat(4096)] }) + ":lap:all", 12),
+  ] };
+  assert.equal(target.loadSettings(file).failed, 0);
+  assert.equal(target.loadSettings(file).failed, 0);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.circuitMastery")), expected);
 });
 
 test("retrying a mixed settings and progress backup saves cache-only merges before reload", async () => {

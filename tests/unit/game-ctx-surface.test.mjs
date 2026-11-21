@@ -16,7 +16,7 @@
  * TWO LEGS, DELIBERATELY UNEQUAL. Parity — the .d.ts member set against the real
  * `const G = {…}` — needs nothing but espree, which is already a devDependency,
  * so it is unconditional and is what actually holds the line. The tsc leg checks
- * all ~1900 G reference sites in js/game|net against the interface and is SKIPPED
+ * all ~5900 G reference sites (create params, helpers, cross-file entries) against the interface and is SKIPPED
  * when no TypeScript is resolvable, because a guard that fails on a machine
  * without an optional toolchain teaches people to ignore it. Skipped is reported,
  * never silent.
@@ -33,6 +33,7 @@ import assert from "node:assert/strict";
 import {
   checkParity, checkElsParity, scanGameCtx, scanDts, scanGameEls, scanDtsEls,
   collectUsage, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc, factoryCoverage,
+  scanCtxEntries, usageFiles, entryCoverage, UNCOVERED_ENTRIES, lazyBodyEntry,
 } from "../../tools/check/check-gctx.mjs";
 
 /* Members game.js publishes that NOTHING reads — the other direction of drift, and
@@ -109,11 +110,12 @@ test("module reads through direct, destructured and aliased G.els are emitted ag
 
 test("the usage extractor finds the G reference sites it is supposed to check", () => {
   const shadow = emitShadow();
-  assert.ok(shadow.sites > 1700, `only ${shadow.sites} G reference sites extracted — the scope walk broke`);   // actual 1914 (2026-08-27)
+  assert.ok(shadow.sites >= 5930, `only ${shadow.sites} G reference sites extracted — the scope walk broke`);   // measured 5930 on the #6044 deployment base
+  assert.ok(shadow.files > 115, `only ${shadow.files} files in the shadow — the entry scan broke`);   // actual 121 (98 factories + 23 entry-only)
   const writes = (shadow.text.match(/= __never;/g) || []).length;
   const destructures = (shadow.text.match(/^ {2}\{ const \{/gm) || []).length;
-  assert.ok(writes > 100, `only ${writes} write sites extracted`);
-  assert.ok(destructures > 8, `only ${destructures} \`const {…} = ctx\` destructures extracted`);
+  assert.ok(writes > 300, `only ${writes} write sites extracted`);   // actual 338 (2026-11-20)
+  assert.ok(destructures > 25, `only ${destructures} \`const {…} = ctx\` destructures extracted`);   // actual 33 (2026-11-20)
 });
 
 /** Split the dead-member rows ("name (js/game.js:N)") against the baseline set. */
@@ -174,4 +176,92 @@ test("a method-shorthand create(G) factory is scanned like `function create(G)`"
 test("every global handed the ctx is covered by the usage leg", () => {
   assert.deepEqual(factoryCoverage(), [],
     "a module receives G but its create() is not scanned — teach isCreateFn() the new shape");
+});
+
+// ── #5980: the checker sees every use, not only create(ctx) parameters ───────
+
+test("a same-file helper handed the ctx is scanned like create()'s own parameter", () => {
+  // js/race/cooldown-lap.js: create(G) → sessionEligible(G) read G.watchMode, a
+  // member that does not exist, and no row was ever emitted for it.
+  const src = `const Fixture = (function () {
+    function eligible(ctx, n) { return ctx.zzHelperRead && n; }
+    const arrow = (x, ctx) => { ctx.zzArrowWrite = 1; };
+    function create(G) { eligible(G, 1); arrow(0, G); return {}; }
+    return { create };
+  })();`;
+  const hits = collectUsage("fixture/helper.js", src).map((h) => [h.kind, h.names[0]]);
+  assert.deepEqual(hits, [["read", "zzHelperRead"], ["write", "zzArrowWrite"]]);
+});
+
+test("cross-file entries: X.fn(ctx) hand-offs are followed without widening the factory roster", () => {
+  const { rows: entries, byFile } = scanCtxEntries();
+  const rows = entries.map((r) => `${r.global}.${r.fn}#${r.argIndex}`);
+  for (const [rel, ownsCollect] of [["js/ui/settings-export.js", false], ["js/ui/settings-export-body.js", true]]) {
+    assert.equal(!!byFile.get(rel)?.some(e => e.fn === "collect" && e.argIndex === 1), ownsCollect, rel);
+  }
+  const want = ["ApexCam.hooks#0", "ApexTrack.hooks#0", "ApexLobby.hooks#0", "ApexNet.hooks#0",
+    "TvGraphics.create#0", "QualiWire.bindQuali#2", "SettingsExportBody.collect#1"];
+  assert.deepEqual(want.filter((w) => rows.indexOf(w) < 0), [], "not a scanned ctx entry — its G use is unchecked");
+  assert.ok(rows.length > 30, `only ${rows.length} cross-file entries found`);   // actual 34 (2026-11-20)
+  const files = usageFiles();
+  assert.deepEqual(["js/race/tv-graphics.js", "js/race/cooldown-lap.js", "js/net/quali-wire.js"]
+    .filter((rel) => files.indexOf(rel) < 0), [], "these receive G and must be under the usage check");
+  // The GameModuleFactory roster stays create-only: TvGraphics is reached through
+  // Reflect.apply and is an entry, not a declared factory.
+  assert.deepEqual(ctxModuleFiles().filter((rel) => rel === "js/race/tv-graphics.js"), []);
+  assert.deepEqual(entryCoverage(), [], "an entry names a function the usage leg could not bind");
+});
+
+test("a skipped entry is named in UNCOVERED_ENTRIES, and every named entry still exists (no stale exception)", () => {
+  const rows = scanCtxEntries().rows;
+  // A row of the skipped-entry kind names its call site: `<file>: <Global>.<fn>(<args>) (<caller>:<line>) — why`.
+  // (CrowdAudio.bind is the other kind: a call site whose ctx is a call result, never a scanned entry.)
+  const named = UNCOVERED_ENTRIES.map((u) => /^([^:]+): ([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\([^)]*\) \(js\//.exec(u)).filter(Boolean);
+  const stale = named.filter(([, rel, g, fn]) => !rows.some((r) => r.rel === rel && r.global === g && r.fn === fn)).map(([u]) => u);
+  assert.deepEqual(stale, [], "an UNCOVERED_ENTRIES row names an entry that no longer exists: delete the row");
+});
+
+test("positive control: a bad read behind Mod.hooks(G) is a tsc error row at the real file:line", (t) => {
+  if (!findTsc()) { t.skip("no TypeScript resolvable"); return; }
+  const src = "const Mod = (function () {\n  function hooks(G) {\n    return G.notAMember;\n  }\n  return { hooks };\n})();\n";
+  const hits = collectUsage("fixture/mod.js", src, { create: false, entries: [{ fn: "hooks", argIndex: 0 }] });
+  assert.deepEqual(hits.map((h) => [h.kind, h.names[0], h.line]), [["read", "notAMember", 3]]);
+  const r = runTsc(emitShadow([{ rel: "fixture/mod.js", hits }]), "artifacts/gctx-fixture");
+  assert.equal(r.skipped, false, r.reason);
+  assert.equal(r.ok, false, "tsc accepted a read of a member GameCtx does not declare");
+  assert.ok(r.errors.some((e) => e.startsWith("fixture/mod.js:3: ") && /notAMember/.test(e)), r.errors.join("\n"));
+});
+
+test("a lazy forwarder's ctx parameter reaches the body's tsc error at its real line", t => {
+  const body = "const ModBody = { collect(mode, ctx) {\n  return ctx.notAMember;\n} }; Mod._bind(ModBody);";
+  const direct = "const Mod = { collect: (...args) => ModBody.collect(...args) };";
+  const factory = `const Mod = (() => {
+    let slot;
+    function _bind(body) { slot = body; }
+    const bodyApi = () => slot;
+    const fwd = name => (...args) => bodyApi()[name](...args);
+    const api = {};
+    for (const key of ["collect", "save"]) api[key] = fwd(key);
+    return { ...api, _bind };
+  })();`;
+  for (const shell of [direct, factory]) assert.equal(lazyBodyEntry(shell, body, "Mod", "collect"), true);
+  assert.equal(lazyBodyEntry(factory, body, "Mod", "unlisted"), false);
+  const overridden = factory.replace("...api, _bind", "...api, _bind, collect(mode, ctx) { return ctx.bad; }");
+  assert.equal(lazyBodyEntry(overridden, body, "Mod", "collect"), false);
+  const unused = direct.replace("=> ModBody.collect(...args)", "=> { const unused = () => ModBody.collect(...args); }");
+  assert.equal(lazyBodyEntry(unused, body, "Mod", "collect"), false);
+  const delayed = factory.replace("=> bodyApi()[name](...args)", "=> ready().then(() => bodyApi()[name](...args))");
+  assert.equal(lazyBodyEntry(delayed, body, "Mod", "collect"), true);
+  assert.equal(lazyBodyEntry(factory.replace("fwd(key)", 'fwd("save")'), body, "Mod", "collect"), false);
+  assert.equal(lazyBodyEntry(direct.replace("ModBody.collect(...args)", "ModBody.collect(null, ...args)"), body, "Mod", "collect"), false);
+  assert.equal(lazyBodyEntry(factory.replace("() => slot", "() => unrelated"), body, "Mod", "collect"), false);
+  assert.equal(lazyBodyEntry(factory, body.replace("Mod._bind(ModBody)", "Other._bind(ModBody)"), "Mod", "collect"), false);
+  const entry = { fn:"collect", argIndex:1 };
+  const file = { rel:"fixture/lazy-body.js", hits:collectUsage("fixture/lazy-body.js", body,
+    { create:false, entries:lazyBodyEntry(factory, body, "Mod", entry.fn) ? [entry] : [] }) };
+  assert.deepEqual(file.hits.map(h => [h.names, h.line]), [[["notAMember"], 2]]);
+  if (!findTsc()) { t.skip("no TypeScript resolvable"); return; }
+  const result = runTsc(emitShadow([file]), "artifacts/gctx-forwarder-fixture");
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some(error => error.startsWith("fixture/lazy-body.js:2: ") && error.includes("notAMember")), result.errors.join("\n"));
 });
