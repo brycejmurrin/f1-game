@@ -168,7 +168,7 @@ const PhonePadPage = (function () {
       const levels = new Map();    // each contact keeps its own pedal travel
       if (travel) PedalTravel.watchButtonProfile(travel, profile => {
         el.classList.toggle("feedback-off", !profile.feedback);
-        if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
+        if (travel !== "gas" && profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
         else el.removeAttribute?.("data-touch-response");
       });
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.

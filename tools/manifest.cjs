@@ -1361,6 +1361,7 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 // them without waiting on the studio painters.
 const LAZY_UI_PRESETS = [
   "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+  "js/ui/dock-toolbar.js",         // Reposition Touch Controls loads its toolbar on first use.
   "js/ui/hud-arrange.js",          // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it alone on the first pause-card tap
   "js/ui/look-avail.js",           // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js",       // LayoutPresets

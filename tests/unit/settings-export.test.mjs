@@ -94,6 +94,7 @@ function boot(opts = {}) {
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio-ui", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
+  vm.runInContext(read("js/ui/dock-layout.js"), ctx, { filename: absSrc("js/ui/dock-layout.js") });
   const pedals = opts.touch && vm.runInContext(read("js/input/pedal-travel.js") + "\nPedalTravel", ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });
   vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
@@ -1427,25 +1428,33 @@ test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
 // flyby shots / loading card) because nobody added their SPEC rows. Every
 // store key APPEARANCE owns must be allowlisted, and a changed one must
 // survive the round trip.
-test("dockLayout is in SPEC and round-trips a per-scheme bag", () => {
+test("touch layouts round-trip complete signed placement and independent control styling in both backup modes", () => {
   const bag = {
     tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
-    buttons: { L: { x: 0.2, y: 0.1 }, R: { x: -0.1, y: 0 } },
+    buttons: { L: { x: -0.02, y: 0.1 }, R: { x: 0.4, y: -0.01 }, gap: 18, layout: "pedal-row",
+      controls: { "btn-throttle": { size: 130, shape: "round" }, "btn-brake": { shape: "square" } } },
     touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
   };
-  const { SettingsExport, collect } = boot({ disk: {
-    "apex26.dockLayout": JSON.stringify(bag),
-  } });
-  const row = SettingsExport.SPEC.find((r) => r.k === "dockLayout");
-  assert.ok(row, "dockLayout needs a SPEC row");
-  assert.equal(row.group, "driving");
-  const f = collect("changes");
-  assert.deepEqual(f.settings.driving.dockLayout.buttons.L, bag.buttons.L);
-  const b = boot();
-  const res = b.loadSettings(f);
-  assert.equal(res.ok, true);
-  assert.equal(res.skipped, 0);
-  assert.deepEqual(JSON.parse(b.disk.get("apex26.dockLayout")).buttons.L, bag.buttons.L);
+  const a = boot({ mobile: true, disk: { "apex26.dockLayout": JSON.stringify(bag) } });
+  for (const mode of ["all", "changes"]) {
+    const f = a.collect(mode), b = boot({ mobile: true });
+    assert.deepEqual(f.settings.driving.dockLayout, bag);
+    assert.equal(b.loadSettings(f).ok, true);
+    assert.deepEqual(b.collect(mode).settings.driving.dockLayout, bag);
+  }
+
+  const defaults = boot({ mobile: true });
+  assert.equal(defaults.collect("all").settings.driving.dockLayout, null);
+  assert.equal(defaults.collect("changes").settings.driving?.dockLayout, undefined);
+  const legacy = { buttons: { L: { x: 0.12, y: 0.15 } } };
+  const loadDock = raw => a.loadSettings({ ...defaults.collect("changes"), settings: { driving: { dockLayout: raw } } });
+  assert.equal(loadDock(legacy).applied, 1);
+  const imported = a.collect("all").settings.driving.dockLayout.buttons;
+  assert.deepEqual(imported, { L: legacy.buttons.L, R: { x: 0, y: 0 } });
+  for (const bad of [[], "broken", { retired: {} }, { v: 500, buttons: {} }]) assert.equal(loadDock(bad).skipped, 1);
+  assert.deepEqual(a.collect("all").settings.driving.dockLayout.buttons, imported);
+  assert.equal(loadDock(null).applied, 1);
+  assert.equal(a.collect("changes").settings.driving?.dockLayout, undefined);
 });
 
 test("every APPEARANCE store key is in SPEC and round-trips", () => {
@@ -2178,18 +2187,28 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
 test("relative placements and named profiles round-trip across devices without saving automatic dimensions", () => {
   const regions = { carsetup: { regions: { panel: {} } } };
   const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28 } } } } };
-  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement } }];
+  const controls = { "btn-throttle": { size: 125, shape: "round", x: -0.02 } };
+  const dock = { buttons: { gap: 20, layout: "pedal-row", controls } };
+  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement, dockLayout: dock, hudBtnShape: "square" } }];
   const source = boot({ mobile: true, appearance: true, realStore: true, denyWrites: true });
   assert.equal(source.collect("all").settings.appearance.screenPlacement, null);
   assert.equal(source.collect("changes").settings.appearance?.screenPlacement, undefined);
   source.GameStore.store.set("screenPlacement", placement);
+  source.GameStore.store.set("dockLayout", dock);
   source.GameStore.store.set("appearanceProfiles", profile);
   for (const mode of ["all", "changes"]) for (const mobile of [true, false]) {
     const backup = source.collect(mode), target = boot({ mobile, regions, appearance: true });
     assert.deepEqual(backup.settings.appearance.screenPlacement, placement);
     assert.equal(target.loadSettings(backup).failed, 0);
     assert.deepEqual(target.GameStore.store.get("screenPlacement"), placement);
-    assert.deepEqual(target.GameStore.store.get("appearanceProfiles")[0].values.screenPlacement, placement);
+    const restored = target.GameStore.store.get("appearanceProfiles")[0].values;
+    assert.deepEqual(restored.screenPlacement, placement);
+    assert.equal(restored.hudBtnShape, "square");
+    const restoredDock = target.GameStore.store.get("dockLayout");
+    assert.deepEqual(restoredDock.buttons.controls, controls);
+    assert.equal(restoredDock.buttons.gap, 20);
+    assert.equal(restoredDock.buttons.layout, "pedal-row");
+    assert.deepEqual(restored.dockLayout, restoredDock);
   }
 });
 

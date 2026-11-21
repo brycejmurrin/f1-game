@@ -128,7 +128,7 @@ const InputHoldButtons = (function () {
       // the same aggregation, including window capture before the local event.
       // The last travel reported: a thumb resting in the dead band sends pointermove at the
       // digitizer rate with an unchanged level, so only a CHANGE reaches the callback.
-      if (level) PedalTravel.watchButtonProfile(opts?.button || id, profile => {
+      if (level && opts?.button !== "gas") PedalTravel.watchButtonProfile(opts?.button || id, profile => {
         if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
         else el.removeAttribute?.("data-touch-response");
       });

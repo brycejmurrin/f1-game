@@ -701,7 +701,7 @@ test("phone pedals use the selected response independently, and carry it across 
     assert.equal(ctl.state().thr, 1);
     gas("pointerup", 60, 100);
     PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
-    assert.equal(dom.gas.attrs["data-touch-response"], "progressive", "the wheel shows the mark before the first progressive press");
+    assert.equal(dom.gas.attrs["data-touch-response"], undefined, "progressive Gas leaves the idle face clear");
     assert.equal(dom.brake.attrs["data-touch-response"], undefined);
     PedalTravel.setButtonProfile("gas", { feedback: false });
     assert.equal(dom.gas.attrs["data-touch-response"], undefined);
