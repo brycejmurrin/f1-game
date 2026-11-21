@@ -11009,6 +11009,7 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "create": [
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -13411,7 +13412,8 @@
         "tests/unit/cooldown-lap.test.mjs"
       ],
       "create": [
-        "tests/unit/cooldown-lap.test.mjs"
+        "tests/unit/cooldown-lap.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs"
       ],
       "exitReason": [
         "tests/unit/cooldown-lap.test.mjs"
@@ -13426,10 +13428,12 @@
         "tests/unit/cooldown-lap.test.mjs"
       ],
       "sessionEligible": [
-        "tests/unit/cooldown-lap.test.mjs"
+        "tests/unit/cooldown-lap.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs"
       ],
       "skip": [
-        "tests/unit/cooldown-lap.test.mjs"
+        "tests/unit/cooldown-lap.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs"
       ],
       "skipTargetOk": [
         "tests/unit/cooldown-lap.test.mjs"
@@ -15135,6 +15139,7 @@
     },
     "js/race/tv-graphics.js": {
       "create": [
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/overlay-feed.test.mjs"
       ],
       "diff": [
@@ -20305,6 +20310,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/scale-defaults.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",

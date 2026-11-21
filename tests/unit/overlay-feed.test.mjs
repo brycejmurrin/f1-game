@@ -306,11 +306,32 @@ test("TV graphics diffs ranked order into a pass lower-third and fastest-lap ban
   assert.deepEqual(JSON.parse(JSON.stringify(changed.fastest)), { code: "NOR" });
 });
 
+// #5981: the frame read G.flag, G.lap and G.laps, none of which is a G member, so
+// every overlay frame carried flag "" and the stream overlay never showed a caution.
+// The flag now comes from G.cautionLevel(); the fake holds only GameCtx members.
+test("TV graphics frame carries the race-control flag and the player's lap", () => {
+  const dom = makeDom();
+  const Tv = loadTv(dom.document);
+  let level = 1;
+  const G = { hudProfile: "broadcast", ranked: cars(.4), state: "race", raceT: 4,
+    player: { lap: 3 }, lapsTarget: 12, cautionLevel: () => level };
+  const graphics = Tv.create(G, dom.document.body);
+  const yellow = graphics.tick(.25, true).frame;
+  assert.equal(yellow.flag, "yellow", "a yellow under race control reaches the overlay frame");
+  assert.equal(yellow.lap, 3);
+  assert.equal(yellow.laps, 12);
+  level = 3;
+  assert.equal(graphics.tick(.25, true).frame.flag, "sc");
+  level = 0;
+  assert.equal(graphics.tick(.25, true).frame.flag, "green");
+  assert.deepEqual([0, 1, 2, 3, 4].map((l) => Tv.flagOf({ cautionLevel: () => l })), ["green", "yellow", "vsc", "sc", "red"]);
+});
+
 test("TV graphics paint only in the broadcast HUD profile", () => {
   const dom = makeDom();
   const Tv = loadTv(dom.document);
   const ranked = cars(.4);
-  const G = { hudProfile: "standard", ranked, state: "race", raceT: 4, lap: 2, laps: 10 };
+  const G = { hudProfile: "standard", ranked, state: "race", raceT: 4, player: { lap: 2 }, lapsTarget: 10 };
   const graphics = Tv.create(G, dom.document.body);
   graphics.tick(.25, true);
   assert.equal(graphics.element().hidden, true);

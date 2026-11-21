@@ -27,6 +27,8 @@ const TvGraphics = (function () {
     return { snapshot: next, lower, fastest };
   }
 
+  const FLAGS = ["green", "yellow", "vsc", "sc", "red"];   // G.cautionLevel() 0..4
+  const flagOf = (G) => FLAGS[G.cautionLevel ? G.cautionLevel() : 0] || "green";
   function addStyle(doc) {
     if (doc.querySelector && doc.querySelector("#tvg-style")) return;
     const style = doc.createElement("style");
@@ -72,8 +74,8 @@ const TvGraphics = (function () {
       const ranked = Array.isArray(G.ranked) ? G.ranked : [];
       const frame = OverlayFeed.frame({
         seq: ++seq, t: Number(G.raceT) || 0, state: G.state, track: G.track && G.track.id,
-        lap: G.lap || G.player && G.player.lap, laps: G.laps || G.lapsTarget,
-        flag: G.flag, ranked, sectorLast: G.sectorLast, sectorBests: G.sectorBests,
+        lap: G.player && G.player.lap, laps: G.lapsTarget,
+        flag: flagOf(G), ranked, sectorLast: G.sectorLast, sectorBests: G.sectorBests,
         fieldSectorBests: G.fieldSectorBests,
         vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,
       });
@@ -98,6 +100,6 @@ const TvGraphics = (function () {
     return { tick, stop, reset, status, element: () => host };
   }
 
-  return { TICK_S, LOWER_S, snapshot, diff, create };
+  return { TICK_S, LOWER_S, snapshot, diff, flagOf, create };
 })();
 Object.freeze(TvGraphics);
