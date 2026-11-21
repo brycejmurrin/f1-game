@@ -157,18 +157,20 @@ test("the record and the batch order are deterministic; the pack's arrays are un
 // TrackDef.scenerySource is the one place the page and the build worker get that text, engine-implied ids included.
 // The guard is behavioural: every id a build actually asks Assets for must be quoted in that circuit's text.
 const quotedIn = (src, id) => src.includes('"' + id + '"') || src.includes("'" + id + "'") || src.includes("`" + id + "`");
-function buildRecording(id) {
+function buildRecording(id, furniture) {
   const env = buildContext(), vm = require("node:vm");
   const TrackDef = vm.runInContext("TrackDef", env.sandbox);
   const registry = vm.runInContext("typeof TrackScenery !== 'undefined' ? TrackScenery : {}", env.sandbox);
-  const def = env.Tracks.LIST.find((d) => d.id === id), asked = new Set(), real = env.sandbox.Assets.modelSync;
+  const base = env.Tracks.LIST.find((d) => d.id === id), asked = new Set(), real = env.sandbox.Assets.modelSync;
+  // furniture: a flag turned on for this build only (Spa's bakedPines is off until pine_lod0 has a crown, #6035).
+  const def = furniture ? { ...base, furniture: { ...base.furniture, ...furniture } } : base;
   env.sandbox.Assets.modelSync = (m) => { const got = real(m); if (got) asked.add(m); return got; };
   const track = env.Tracks.build(def);
   return { def, track, asked: [...asked], src: TrackDef.scenerySource(def, registry), closure: String(def.scenery || registry[id]), TrackDef };
 }
 test("Spa's model text names the baked pine its def asks for, and the build stamps it", () => {
-  const spa = buildRecording("spa");
-  assert.equal(!!(spa.def.furniture && spa.def.furniture.bakedPines), true, "Spa is the bakedPines circuit this test stands on");
+  const spa = buildRecording("spa", { bakedPines: true });
+  assert.equal(!!(spa.def.furniture && spa.def.furniture.bakedPines), true, "Spa with bakedPines is the build this test stands on");
   assert.equal(quotedIn(spa.closure, "pine_lod0"), false, "the closure itself still names no pine: the engine helper does");
   assert.equal(quotedIn(spa.src, "pine_lod0"), true, "the text the loader scans quotes the pine");
   assert.equal(spa.src.startsWith(spa.closure), true, "and still carries the whole closure, so every id it names");
@@ -176,9 +178,48 @@ test("Spa's model text names the baked pine its def asks for, and the build stam
   assert.equal(Object.values(spa.TrackDef.ENGINE_MODELS).includes("pine_lod0"), true);
 });
 for (const id of ["spa", ID]) test(`every pack model the ${id} build asks for is quoted in the text its loader scans`, () => {
-  const r = buildRecording(id);
+  const r = buildRecording(id, id === "spa" ? { bakedPines: true } : null);
   assert.ok(r.asked.length > 0, "the build placed pack models");
   assert.deepEqual(r.asked.filter((m) => !quotedIn(r.src, m)), [],
     "a model id spelled only in an engine helper is never fetched on a player's page: add its def flag to TrackDef.ENGINE_MODELS");
   if (id === ID) assert.equal(quotedIn(r.src, "pine_lod0"), false, "a circuit without the flag does not fetch the pine");
+});
+
+// A BAKED TREE MUST HAVE A CROWN (#6035). #5782 made the page fetch pine_lod0 at Spa, and the pack's pine turned out to
+// be a 0.64 m square trunk (8.2 m^2 of WOOD) with six leaf slivers (1.8 m^2 of FOLIAGE): every Spa pine became a
+// brown post. Any tree model an ENGINE_MODELS flag stamps must carry at least as much foliage surface as bark before
+// a shipped circuit may set that flag; geometry, not pixels, so it holds on every backend.
+const { parseModel } = require(path.join(ROOT, "tools", "lib", "pack-assets.cjs"));
+function surfaceByMat(id) {
+  const b = fs.readFileSync(path.join(ROOT, "assets", "pack", "models", id + ".bin"));
+  const { pos: P, mat: M, idx: I } = parseModel(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
+  const area = { wood: 0, foliage: 0 };
+  for (let t = 0; t < I.length; t += 3) {
+    const a = I[t] * 3, b1 = I[t + 1] * 3, c = I[t + 2] * 3;
+    const u = [P[b1] - P[a], P[b1 + 1] - P[a + 1], P[b1 + 2] - P[a + 2]];
+    const v = [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]];
+    const A = Math.hypot(u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]) / 2;
+    const m = Math.floor(M[I[t]]);   // AX26 v3 packs sway into the fraction; the base id is WOOD 5 / FOLIAGE 6
+    if (m === 5) area.wood += A; else if (m === 6) area.foliage += A;
+  }
+  return area;
+}
+const hasCrown = (id) => { const a = surfaceByMat(id); return a.foliage >= a.wood; };
+test("pine_lod0 has no crown (#6035): the reading this gate stands on", () => {
+  const a = surfaceByMat("pine_lod0");
+  assert.ok(a.wood > 4 * a.foliage, `pine_lod0 is mostly trunk: ${JSON.stringify(a)}`);
+  assert.equal(hasCrown("pine_lod0"), false);
+});
+test("no circuit sets an ENGINE_MODELS flag whose baked tree has no crown", () => {
+  const env = buildContext(), vm = require("node:vm");
+  const TrackDef = vm.runInContext("TrackDef", env.sandbox);
+  const bad = [];
+  for (const def of env.Tracks.LIST) {
+    const f = def.furniture || {};
+    for (const flag in TrackDef.ENGINE_MODELS) {
+      const id = TrackDef.ENGINE_MODELS[flag];
+      if (f[flag] && !hasCrown(id)) bad.push(`${def.id}: furniture.${flag} stamps ${id} (${JSON.stringify(surfaceByMat(id))})`);
+    }
+  }
+  assert.deepEqual(bad, [], "a baked tree with more bark than foliage renders as a post: rebake it with a crown first");
 });

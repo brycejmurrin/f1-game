@@ -5093,6 +5093,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/bahrain.js": {
+      "*": [
+        "tests/unit/select-specs.test.mjs"
+      ]
+    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -5377,6 +5382,7 @@
     "js/circuits/spa.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -12769,11 +12775,18 @@
       "overlap": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "pitWallAim": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
+      "pitWallX": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
       "sweep": [
         "tests/unit/contact-geometry.test.mjs"
       ],
       "wallLimits": [
-        "tests/unit/collision-contact-vm.test.mjs"
+        "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/contact-geometry.test.mjs"
       ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
@@ -16827,7 +16840,8 @@
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "half": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
@@ -17828,6 +17842,9 @@
     "js/track/core/def.js": {
       "fromRaw": [
         "tests/unit/track-def-factory.test.mjs"
+      ],
+      "realPoints": [
+        "tests/unit/circuit-def-fields.test.mjs"
       ],
       "*": [
         "tests/unit/global-registry.test.mjs",

@@ -1,14 +1,14 @@
 /*
- * Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps,
+ * Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 48 spot lamps,
  * shadow maps, procedural materials, wet road, fog), the procedural sky and
- * the FX passes — ~13 programs. GLSL sources live in js/render/shaders/
+ * the FX passes — ~13 programs. GLSL sources live in js/render/glx/shaders/
  * (chunks/lit/sky/fx/post); the post, shadow and chunked-scenery subsystems
  * are split into js/render/glx/.
  */
 "use strict";
 
 const GLXBackend = (function () {
-  // GLSL sources live in js/render/shaders/{lit,sky,fx,post}.js (loaded before this
+  // GLSL sources live in js/render/glx/shaders/{lit,sky,fx,post}.js (loaded before this
   // file). The post/shadow sources are destructured by the split subsystem modules
   // (js/render/glx/post.js, js/render/glx/shadow.js) instead of here.
   const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS } = GLXShaders;

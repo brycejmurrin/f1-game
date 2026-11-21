@@ -21,8 +21,8 @@ const CACHE_PREFIX = "apex26-";
 // RECORDED VOICES LIVE OUTSIDE THE GENERATIONS (audit4 B8). A voice pack is 2-7 MB
 // and unversioned; filed into apex26-<build> it was re-written into every new
 // generation and doubled while a prior settled one was retained. cacheBuild()
-// reads this name as NaN, so the stale sweep never deletes it; the shell's own
-// recovery reset (index.html) deletes apex26-<n> only and leaves it (#4479).
+// reads this name as NaN, so the stale sweep never deletes it; index.html's own
+// recovery reset deletes one failed asset per apex26-<n> and leaves apex26-voice (#4479).
 const VOICE_CACHE = CACHE_PREFIX + "voice";
 // VOICE_CACHE IS A BOUNDED LRU of voice ids (#4219 B): a persona is ~14-18 MB and
 // assets/voice ~111 MB, so every pack ever ensured must not stay forever. Keep

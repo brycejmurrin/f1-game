@@ -640,6 +640,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
   const costOf = (r) => r.tests * specSecPerTest(r.file, db).sec;
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
+  const outOfScope = [];
   const unreadable = [];
   for (const file of specs) {
     const tests = scope ? declaredTestsIn(file, scope) : declaredTests(file);
@@ -649,6 +650,9 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     // in a file whose whole contract is that nothing is dropped silently.
     // Reachable today: hand fit() a path that does not exist and it disappears.
     if (tests == null) { unreadable.push({ file, tests: null }); continue; }
+    // A roster spec whose own APEX_CIRCUITS loop holds none of the scoped circuits (tracks-walls-a when the circuit
+    // is in b's half) would run ZERO tests: a leg of its own fails the verdict, so it runs nowhere, by name (#6036).
+    if (scope && tests === 0 && declaredTests(file) > 0) { outOfScope.push({ file, tests: 0, circuits: scope.join(",") }); continue; }
     if (FIXED_GATE_SPECS.has(file)) {
       coveredByFixedGates.push({ file, tests });
       continue;
@@ -864,7 +868,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     skipped.push(...keep);
   }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
-    unreadable,
+    unreadable, outOfScope,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
 

@@ -5,11 +5,10 @@ Owners in `js/camera/` (locate symbols with apex-lsp, skill code-nav; when `ls j
 - `vantage.js` (`GameCams`) — per-mode framing/placement, incl. heli, side, cinematic, low and the ExtraRigs modes.
 - `extra-rigs.js` — rival / pitwall / drone rigs.
 - `director.js` — the live TV auto-cut (`tv` mode); `Director.live().status()` reports its state.
-- `feel.js` (`CamFeel.lens`, the former `drive-lens.js`) — lens/FOV delta for chase, broadcast and onboard; it does not move the rig.
 - `cam-avoid.js` — wall/building avoidance for broadcast eyes; `cam-comfort.js` — touch comfort preset.
 - Camera tuner: `offsets.js` (`CamTune` knob registry + `apex26.camTune` store), `tuner-panel.js` (`CamTunerEditor` sliders),
   `cam-tuner-boot.js` (`CamTunerPanel` stub); tests `camera-tuner-a11y.test.mjs`, `camera-defaults.test.mjs`.
-- `feel.js` (`CamFeel`) — free-look, look-back, shake; speed FOV forwards to `fov-mode.js` (`CamFov`); test `camera-feel.test.mjs`.
+- `feel.js` (`CamFeel`) — free-look, look-back, shake, and the lens-only FOV delta (`CamFeel.lens`, was `drive-lens.js`); speed FOV forwards to `fov-mode.js` (`CamFov`); test `camera-feel.test.mjs`.
 - Flyby: `flyby-seq.js` (`FlybySeq` shot sequencer), `flyby-panel.js` (shot algebra), `flyby-editor.js` (DOM panel);
   tests `flyby-shots.test.mjs`, `flyby-panel.test.mjs`.
 - `trackside.js` (`TracksideCams`) — roadside fixed eyes per corner; test `trackside.test.mjs`.

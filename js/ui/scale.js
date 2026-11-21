@@ -399,7 +399,7 @@ const UiScale = (() => {
   // Keep the range on the storage grid so keyboard steps and legacy endpoints stay exact.
   const relativePercent = (physical, base) => Math.round(physical * 10000 / base) / 100 + "%";
   /** One size slider's row on THIS window: { min, max, value, label }; the range and value are what paints.
-   *  `caps` = parseCaps() in a race, `sheetCap` = the settings sheet's zoom (0 = hidden), `phone` = UI SIZE min 70. */
+   *  `caps` = parseCaps() in a race, `sheetCap` = the settings sheet's zoom (0 = hidden), `phone` = UI SIZE min 50 (`UI_PHONE_MIN`). */
   function sizeRow(key, wish, lim, caps, sheetCap, phone, base = 100) {
     const st = lim.step || 0.25, down = (p) => Math.floor(p / st + 1e-6) * st, up = (p) => Math.ceil(p / st - 1e-6) * st;
     let min = lim.min, max = lim.max, part = "";

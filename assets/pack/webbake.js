@@ -2,7 +2,7 @@
  * Apex 26 — IN-BROWSER material baker (dev tool, loaded on demand).
  *
  * Pulls real CC0 PBR scans from Poly Haven, composites them into the 17-layer
- * filmstrips js/render/assets.js expects, uploads them live so you can see the
+ * filmstrips js/render/shared/assets.js expects, uploads them live so you can see the
  * result immediately, and downloads the finished PNGs so they can be committed.
  *
  * WHY THIS EXISTS. The offline baker (tools/gen/assets.mjs) needs a shell and

@@ -45,7 +45,7 @@ Do **not** use this for:
 
 **What `hazards()` counts** (`DebrisWorld.hazards`, read its body): only SLEEPING debris shards, disturbed
 cones and broken panels on the road (within the half-width and `HAZARD_Y_TOL` of road height). Stopped,
-retired or pile-up CARS never count. A shard returns to the pool `REST_DESPAWN_S` after it sleeps (or past
+retired or pile-up CARS never count. A car stopped on the road is separate: `StoppedCars` (`js/race/stopped-cars.js`) raises local YELLOW after 3 s and VSC after 15 s (ignored after 60 s); RaceControl takes the higher level. A shard returns to the pool `REST_DESPAWN_S` after it sleeps (or past
 `FAR_DESPAWN_M` from the player), and the pool is `CAP_DESKTOP` / `CAP_MOBILE` (the phone tier) with
 oldest-recycle — so the count is a short peak. "SC never deploys after a pile-up" is often this, not a
 threshold: sample `caution({hazards:true})` every 0.25 s through the settle window, never once afterwards
