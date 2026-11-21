@@ -45,8 +45,9 @@ function requestOnce(pathQs, { run = spawnSync, env = process.env, gh, token, an
   const conditional = method === "GET" && etags;
   const prior = conditional ? etags.get(url) : undefined;
   // -w: the status code, the response ETag and Retry-After on the last line (`%header{}`, curl >= 7.84).
+  const report = "\n%{http_code} %header{etag} %header{retry-after}" + (deferRateLimit ? " %header{x-ratelimit-remaining}" : "");
   const args = ["-sS", ...(follow ? ["-L"] : []), "--max-time", String(timeoutS), ...(token ? ["-K", "-"] : []),
-    ...(method !== "GET" ? ["-X", method] : []), "-w", "\n%{http_code} %header{etag} %header{retry-after} %header{x-ratelimit-remaining}",
+    ...(method !== "GET" ? ["-X", method] : []), "-w", report,
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
     // Revalidate stored HTTP responses when polling mutable CI/PR state (RFC 9111 §5.2.1.4).
     "-H", "Cache-Control: no-cache",
