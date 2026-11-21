@@ -214,3 +214,88 @@ test("a remote STEER outside -1..1 is clamped where Input reads it (W26 row 8)",
     assert.ok(Math.abs(s) <= 1 && Math.sign(s) === sign, `steer(${raw}) stays inside full lock: ${s}`);
   }
 });
+
+// Hold-button teardown pins (M10 / M20 / M19): lostpointercapture release, visibility:hidden
+// as gone, and the secondaryTap native-click dedupe window — via the create()/secondaryTap API.
+function holdTeardownRig() {
+  const { sb } = boot();
+  const listeners = {};
+  const button = {
+    id: "gas", hidden: false, disabled: false, isConnected: true,
+    visibility: "visible", display: "block", parentElement: null,
+    addEventListener(t, fn) { listeners[t] = fn; },
+    setPointerCapture() {}, setAttribute() {}, removeAttribute() {}, getAttribute: () => null,
+  };
+  sb.document.getElementById = (id) => (id === "gas" ? button : null);
+  sb.getComputedStyle = (el) => ({
+    display: (el && el.display) || "block",
+    visibility: (el && el.visibility) || "visible",
+  });
+  const helper = vm.runInContext("InputHoldButtons", sb);
+  const holds = helper.create({
+    clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
+    beforeReleaseAll() {},
+  });
+  let held = false;
+  holds.wireHold("gas", (v) => { held = v; });
+  const emit = (type, extra = {}) => {
+    const e = { pointerId: 7, pointerType: "touch", preventDefault() {}, ...extra };
+    listeners[type](e);
+    return e;
+  };
+  return { holds, button, emit, held: () => held };
+}
+
+test("lostpointercapture releases a held button that became hidden mid-hold (M10)", () => {
+  const h = holdTeardownRig();
+  h.emit("pointerdown");
+  assert.equal(h.held(), true, "press holds");
+  assert.equal(h.holds.lostCaptureShouldRelease(h.button, 7), false,
+    "still visible: a capture steal must not drop the hold");
+  h.button.hidden = true;
+  assert.equal(h.holds.lostCaptureShouldRelease(h.button, 7), true,
+    "was visible at press, now gone → teardown");
+  h.emit("lostpointercapture");
+  assert.equal(h.held(), false, "lost capture after hide releases the held button");
+  assert.deepEqual(Array.from(h.holds.pointerCounts()), [0]);
+});
+
+test("holdTargetGone treats visibility:hidden as gone with no pin (M20)", () => {
+  const h = holdTeardownRig();
+  assert.equal(h.holds.holdTargetGone(h.button), false, "a visible connected button is present");
+  h.button.visibility = "hidden";
+  assert.equal(h.holds.holdTargetGone(h.button), true,
+    "visibility:hidden alone counts as gone (no hidden/display pin needed)");
+  h.emit("pointerdown", { isTrusted: false });
+  assert.equal(h.held(), true, "a synthetic press on a hidden control still registers");
+  // Mid-hold hide of a trusted press: visibility:hidden must release via lost capture.
+  const h2 = holdTeardownRig();
+  h2.emit("pointerdown");
+  h2.button.visibility = "hidden";
+  h2.emit("lostpointercapture");
+  assert.equal(h2.held(), false, "visibility:hidden mid-hold is a lost-capture teardown");
+});
+
+test("secondaryTap dedupes a native click at ~500 ms and lets one after the window through (M19)", () => {
+  const within = secondaryRig();
+  within.emit("pointerdown");
+  within.emit("pointerup", { timeStamp: 1000 });
+  assert.equal(within.actions(), 1);
+  let stopped = 0;
+  within.fire("click", within.event({
+    timeStamp: 1500, detail: 1,
+    preventDefault() { stopped++; }, stopImmediatePropagation() {},
+  }));
+  assert.equal(stopped, 1, "a native click ~500 ms after secondaryTap is still deduped");
+
+  const after = secondaryRig();
+  after.emit("pointerdown");
+  after.emit("pointerup", { timeStamp: 1000 });
+  assert.equal(after.actions(), 1);
+  let passed = 0;
+  after.fire("click", after.event({
+    timeStamp: 1751, detail: 1,
+    preventDefault() { passed++; }, stopImmediatePropagation() {},
+  }));
+  assert.equal(passed, 0, "a native click after the 750 ms window is not deduped");
+});
