@@ -1868,6 +1868,9 @@ test.describe("unrestricted manual widgets", () => {
     await page.locator("#pausebtn").click(); await page.locator("#pm-settings").click();
     await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
+    // ARRANGE HUD is lazy (#5976): its first tap loads js/ui/hud-arrange.js, then builds the picker.
+    await page.waitForFunction(() => typeof HudArrange !== "undefined" && document.querySelector("#hud-arrange-element option"),
+      null, { polling: 100, timeout: BOOT_MS });
     const ids = await page.locator("#hud-arrange-element option").evaluateAll(es => es.map(e => e.value));
     // 19 widgets; on touch the three the buttons carry (OVERTAKE / AERO / BRAKE BIAS) have no box and are not offered (#5256).
     const offered = await page.evaluate(() => ({ all: HudLayout.ELEMENTS.length,

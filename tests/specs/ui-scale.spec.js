@@ -466,7 +466,7 @@ test.describe("UI scale", () => {
     // title-layout.js fit() runs on wide shapes only, and the portrait band in
     // css/menu-destinations.css keeps its scroll fallback on purpose (the
     // portrait column is one door per row and scrolls to SETTINGS). So the
-    // portrait cell keeps the ORIGINAL reachability contract (the 1.25 cap, text
+    // portrait cell keeps the ORIGINAL reachability contract (the 1.25 cap times BUTTONS SIZE, text
     // at the requested 200%, the column scrolls RACE into view) and the two
     // landscape cells carry the fit contract (no scroller, every door on screen).
     const shapes = [
@@ -656,8 +656,10 @@ test.describe("UI scale", () => {
           raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
           scrollY: menu.scrollHeight - menu.clientHeight, scrollX: menu.scrollWidth - menu.clientWidth,
           doors: doors.length, off,
-          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`).
-          doorSize: document.body.dataset.shape === "wide" ? Math.max(1, TitleLayout.current("wide").btns.size / 100) : 1,
+          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`); off the wide
+          // shape a title layout's compact rule multiplies it raw (css/responsive.css, #5976 188f049e).
+          doorSize: document.body.dataset.shape === "wide" ? Math.max(1, TitleLayout.current("wide").btns.size / 100)
+            : document.documentElement.hasAttribute("data-title-layout") ? parseFloat(getComputedStyle(menu).getPropertyValue("--tl-btns-size")) || 1 : 1,
         };
       });
       scale.racePainted = scale.raceFont * +scale.geometry;
@@ -693,7 +695,7 @@ test.describe("UI scale", () => {
         // text paints at the requested 200%, and the column scrolls (the click
         // below proves RACE reachable).
         expect(scale.fit, `${name}: portrait is not fitted ${scaleDump}`).toBe(1);
-        expect(+scale.geometry, `${name}: compact geometry is capped ${scaleDump}`).toBeCloseTo(1.25, 2);
+        expect(+scale.geometry, `${name}: compact geometry is the cap times BUTTONS SIZE ${scaleDump}`).toBeCloseTo(1.25 * scale.doorSize, 2);
         expect(scale.raceFont * +scale.geometry,
           `${name}: control text still paints at the requested 200% ${scaleDump}`).toBeGreaterThanOrEqual(33);
         expect(scale.scrollX, `${name}: the column never scrolls sideways ${scaleDump}`).toBeLessThanOrEqual(1);

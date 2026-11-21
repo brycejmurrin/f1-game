@@ -18829,6 +18829,7 @@
         "tests/unit/hud-arrange.test.mjs"
       ],
       "*": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/menu-a11y-audit.test.mjs"
       ]
     },

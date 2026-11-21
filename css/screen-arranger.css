@@ -229,12 +229,13 @@ body:has(> main#overlay) {
 #trackdesigner > .screen-arrange-entry { position: static; grid-row: 4; justify-self: end; }
 /* Short landscape phone, foot tucked under the rail (js/editor/designer.js
    seatFoot): a fourth 44 px row made the dialog scroll 16 px at 734x343 and
-   852x344. The entry floats at the foot's end instead, at a fixed width the
-   foot's status line keeps clear (css/editor.css; both inside the dialog's zoom). */
+   852x344. The entry shares the body's cell, at its end, a fixed width the
+   foot's status line keeps clear (css/editor.css). The cell ends where the
+   content does, so a dialog that scrolls (UI SIZE 150 %) keeps it off the foot's
+   buttons; an absolute bottom anchored it to the visible box, over SHARE & FILES. */
 #trackdesigner[data-foot="in"] > .screen-arrange-entry {
-  position: absolute; top: auto; width: 9rem;
-  bottom: calc(var(--safe-b) / var(--td-zoom, 1));
-  inset-inline-end: calc(var(--safe-r) / var(--td-zoom, 1));
+  position: relative; inset: auto; z-index: 2; width: 9rem;
+  grid-row: 2; grid-column: 1; align-self: end; justify-self: end;
 }
 /* These owners position their panel on the right. Some have zero-width
    wrappers so a button sized against the wrapper would be unclickable. */
