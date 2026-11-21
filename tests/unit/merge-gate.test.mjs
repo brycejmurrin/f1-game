@@ -875,7 +875,7 @@ test("land.yml: no job holding a write permission or a secret checks out or runs
 
 test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates never join the train's group, PR events cancel", () => {
   const group = (github) => ghExpr(LAND.concurrency.group, github);
-  const prt = (action, label) => ({ event_name: "pull_request_target", run_id: 99, event: { action, label: label && { name: label }, pull_request: { number: 7 } } });
+  const prt = (action, label) => ({ event_name: "pull_request_target", run_id: 99, event: { action, label: label && { name: label }, pull_request: { number: 7, labels: [] } } });
   assert.equal(group(prt("labeled", "needs-owner")), "land-noise-99", "a label other than land/hold cannot cancel or replace the PR's re-gate");
   assert.equal(group(prt("unlabeled", "priority")), "land-noise-99");
   assert.equal(group(prt("labeled", "land")), "land-7");
@@ -892,6 +892,14 @@ test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates neve
   const rr = (action, labels) => ({ ...cfg(action, labels), event: { ...cfg(action, labels).event, label: { name: "ratchet-raise" } } });
   assert.equal(group(rr("labeled", ["land", "ratchet-raise"])), "land-7", "ratchet-raise (#5405) re-gates like config-ok");
   assert.equal(group(rr("labeled", ["ratchet-raise"])), "land-noise-99");
+  // Finding 6 (2026-11-21): Bryce's `deploy:red` (the base row reads it) and `priority` (resolve's order) clicks on a
+  // `land` PR change its gate or its place, so they re-gate in the PR's own group like config-ok.
+  for (const name of ["deploy:red", "priority"]) {
+    const ev = (action, labels) => ({ ...cfg(action, labels), event: { ...cfg(action, labels).event, label: { name } } });
+    assert.equal(group(ev("labeled", ["land", name])), "land-7", `${name} on a land PR re-gates`);
+    assert.equal(group(ev("unlabeled", ["land"])), "land-7", `${name} removed from a land PR re-gates`);
+    assert.equal(group(ev("labeled", [name])), "land-noise-99", `${name} without land is noise`);
+  }
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], prt("labeled", "land")), true);
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a CI or train re-gate never cancels");
 });
@@ -906,6 +914,11 @@ test("land.yml resolve (#5432): a config-ok click on a `land` PR reaches resolve
   assert.equal(ifs("labeled", "ratchet-raise", ["land", "ratchet-raise"]), true, "ratchet-raise on a land PR re-gates (#5405)");
   assert.equal(ifs("unlabeled", "ratchet-raise", ["land"]), true);
   assert.equal(ifs("labeled", "ratchet-raise", ["ratchet-raise"]), false);
+  for (const name of ["deploy:red", "priority"]) {
+    assert.equal(ifs("labeled", name, ["land", name]), true, `${name} added on a land PR reaches resolve (finding 6)`);
+    assert.equal(ifs("unlabeled", name, ["land"]), true);
+    assert.equal(ifs("labeled", name, [name]), false);
+  }
   assert.equal(ifs("labeled", "land", ["land"]), true);
   assert.equal(ifs("unlabeled", "hold", []), true);
   // resolve then picks exactly this PR: a pull_request_target event resolves `numbers=("$PR_NUMBER")`, one gate.

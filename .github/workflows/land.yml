@@ -187,8 +187,8 @@ env:
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
 # group, so a shared group drops one PR's re-gate for another's). A relevant PR event (land/hold label, draft flip,
 # push) cancels the PR's in-flight evaluation, so a `hold` stops a gate already running, and re-evaluates everything
-# itself; a CI or train re-gate never cancels, it queues. A label that is not land/hold (nor config-ok / ratchet-raise
-# on a `land` PR) is noise and runs alone in `land-noise-<run id>` (its resolve is skipped): before, it cancelled an
+# itself; a CI or train re-gate never cancels, it queues. A label that is not land/hold (nor config-ok / ratchet-raise /
+# deploy:red / priority on a `land` PR: the gate's rows or resolve's order read them) is noise and runs alone in `land-noise-<run id>` (its resolve is skipped): before, it cancelled an
 # in-flight CI re-gate and left `gate` pending
 # on a green PR (WP-L3a). The train run and a PR run can still overlap: AT and arm's re-read of every veto cover that.
 # A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
@@ -199,7 +199,7 @@ env:
 concurrency:
   group: >-
     ${{ (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold'
-        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise') && contains(github.event.pull_request.labels.*.name, 'land')))
+        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land')))
     || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
     || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event_name == 'push' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
@@ -214,7 +214,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request_target' && (
         ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'land' || github.event.label.name == 'hold'))
-        || ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise') && contains(github.event.pull_request.labels.*.name, 'land'))
+        || ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land'))
         || github.event.action == 'converted_to_draft'
         || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land')
             && (github.event.action != 'edited' || github.event.changes.body))))
