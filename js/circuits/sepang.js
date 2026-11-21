@@ -70,7 +70,7 @@
     ],
     bankZones: [
       { turn: 1, angleDeg: 3.5, widthM: 140 },   // T1-T2 loop; re-seated frac 0.045 (was 144 m off any apex)
-      { frac: 0.330, angleDeg: 4.0, widthM: 150 },   // T5-T6 sweep
+      { turn: 5, angleDeg: 4.0, widthM: 150 },   // T5-T6 sweep (was frac 0.330, 183 m before T5)
       { frac: 0.660, angleDeg: 3.0, widthM: 130 },   // T12-T13
     ],
 

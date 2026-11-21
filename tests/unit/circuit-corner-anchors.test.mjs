@@ -179,6 +179,18 @@ test("Kyalami runs anticlockwise with the SRO turns, line and infield pits", () 
   assert.ok(inside, "a point 100 m to the driver's left of the line is on the infield");
 });
 
+test("Sepang T5-T6 bank is turn-anchored and the K1 stand sits on T1", () => {
+  // #5652: bankZones frac 0.330 sat 183 m before T5 with no turn claim; the K1
+  // grandstand comment names Turn 1 & 2 but its anchor was at racing 0.058
+  // (72 m before T1). Prove both rows leave the corner-frames BAD set.
+  const CF = require("../../tools/track/corner-frames.cjs");
+  const { def } = circuit("sepang");
+  assert.ok(def.bankZones.some((b) => b.turn === 5),
+    "T5-T6 sweep bank must use { turn: 5 }, not a bare frac");
+  const bad = CF.audit(["sepang"]).filter((r) => r.bad).map((r) => `${r.key} ${r.offsetM}m`);
+  assert.deepEqual(bad, [], "sepang must have no corner-frame offenders");
+});
+
 test("Bahrain scenery landmarks track the current arc-length origin", () => {
   const { def, track } = circuit("bahrain");
   const source = readFileSync(new URL("../../js/circuits/scenery/bahrain.js", import.meta.url), "utf8");
