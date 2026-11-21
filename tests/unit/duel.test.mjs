@@ -59,6 +59,15 @@ test("the bump lifts racecraft harder than pace, and leaves awareness alone", ()
   assert.equal(c.code, "XXX", "an ordinary duel keeps the rival's identity");
 });
 
+// Mutation hunt 2026-11-20: craft 10→5 survived the relative craft>pace pin.
+test("ON duel craft bump is +10 points", () => {
+  assert.equal(Duel.BUMP.craft, 10);
+  const base = DR.get("XXX", 2, null);
+  const c = Duel.bump(car(), DR);
+  assert.equal(c.craft, Math.min(100, base.craft + 10) / 100,
+    "bump() lifts craft by the exported +10, not a quieter half-step");
+});
+
 test("asLegend takes the legend's own ratings and lifts them with LEGEND_BUMP", () => {
   const r = Legends.ratings("fangio");
   // Compare against a SNAPSHOT, not against the object asLegend was handed: an

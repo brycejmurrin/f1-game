@@ -25,7 +25,16 @@ import { screenshotCard, renderGallery } from "./screenshot-gallery.cjs";
 // JS that defines it, so a rule that goes stale points at its source.
 import { analyzeOverlap } from "./hud-geometry.mjs";
 
-export const DEVICES = Object.freeze({
+import phoneWindows from "../../tests/data/phone-windows.json" with { type: "json" };
+
+function phoneWindow({ width, height, insets }) {
+  return { w: width, h: height, touch: true, ins: { sal: insets.left, sar: insets.right, sat: insets.top, sab: insets.bottom } };
+}
+const standalone = phoneWindow(phoneWindows.windows.standalone);
+const safari = phoneWindow(phoneWindows.windows.safari);
+const noInsets = Object.freeze({ sal: 0, sar: 0, sat: 0, sab: 0 });
+
+const devices = {
   "desktop-1280": { w: 1280, h: 720, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   "desktop-1920": { w: 1920, h: 1080, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   // A 16:10 laptop (MacBook Air class): named cells and --device only, not a matrix axis.
@@ -33,11 +42,11 @@ export const DEVICES = Object.freeze({
   // iPhone 12-14 landscape: 47px of notch each side, 21px home indicator.
   // Injected as --sal/--sar/--sat/--sab like hud-layout.spec.js: headless
   // Chromium reports env(safe-area-inset-*) as 0.
-  "phone-landscape-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 47, sat: 0, sab: 21 } },
+  "phone-landscape-844x390": phoneWindow(phoneWindows.windows.w844),
   // The owner's iPhone (tools/lib/bryce-phone.mjs BRYCE_WINDOWS; issue #5262): Home Screen app and Safari tab. Named
   // cells, not a matrix axis. `owner`: hud-survey seeds his live settings export unless --settings names another file.
-  "bryce-852x393": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "standalone" },
-  "bryce-852x368": { w: 852, h: 368, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "safari" },
+  "bryce-852x393": { ...standalone, owner: "standalone" },
+  "bryce-852x368": { ...safari, owner: "safari" },
   "phone-portrait-390x844": { w: 390, h: 844, touch: true, ins: { sal: 0, sar: 0, sat: 47, sab: 34 } },
   // iPhone 15/16 Pro Max portrait (lead-only; HUD Desk readable-floor shots).
   "phone-portrait-430x932": { w: 430, h: 932, touch: true, ins: { sal: 0, sar: 0, sat: 59, sab: 34 } },
@@ -57,6 +66,25 @@ export const DEVICES = Object.freeze({
   "tablet-portrait-820x1180": { w: 820, h: 1180, touch: true, ins: { sal: 0, sar: 0, sat: 24, sab: 20 } },
   "laptop-1366": { w: 1366, h: 768, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   "ultrawide-2560": { w: 2560, h: 1080, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  // Menu viewport IDs are also valid HUD capture IDs. Only bryce-* devices seed the owner's settings.
+  "ios-iphone-landscape": standalone,
+  "ios-iphone-landscape-safari": safari,
+  "ios-iphone-portrait": { w: 393, h: 852, touch: true, ins: { sal: 0, sar: 0, sat: 59, sab: 34 } },
+  "ios-ipad-landscape": { w: 1194, h: 834, touch: true, ins: noInsets },
+  "ios-ipad-portrait": { w: 834, h: 1194, touch: true, ins: noInsets },
+  "desktop-1280x800": { w: 1280, h: 800, touch: false, ins: noInsets },
+  "desktop-windowed-1920x937": { w: 1920, h: 937, touch: false, ins: noInsets },
+};
+// Equivalent IDs retain their original CLI cell names and artifact paths.
+export const HUD_DEVICE_ALIASES = Object.freeze({
+  "ios-iphone-landscape-844": "phone-landscape-844x390",
+  "bryce-standalone": "bryce-852x393",
+  "bryce-safari": "bryce-852x368",
+  "desktop-1920x1080": "desktop-1920",
+});
+export const DEVICES = Object.freeze({
+  ...devices,
+  ...Object.fromEntries(Object.entries(HUD_DEVICE_ALIASES).map(([alias, id]) => [alias, devices[id]])),
 });
 // The device AXIS of every generated matrix; the lead shapes are named cells.
 export const MATRIX_DEVICES = Object.freeze(["desktop-1280", "desktop-1920", "phone-landscape-844x390",

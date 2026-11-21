@@ -207,6 +207,17 @@ test("storage health reports measured categories; cleanup preserves every author
   for (const k of ["setup.ferrari", "career.driver.0", "ghost.monza", "customTracks", "customTeam"]) assert.equal(h.disk.get("apex26." + k), "xx");
   assert.equal(h.store.writeFailed(), "QuotaExceededError");
 });
+test("storage health groups inputGhost with Laps and ghosts", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
+  for (const k of ["ghost.monza", "inputGhost.v1", "ttlb.monza"]) h.disk.set("apex26." + k, "xx");
+  const r = await h.c.Health.inspect({ store: h.store, localStorage: h.storage });
+  const laps = r.categories.find((x) => x.name === "Laps and ghosts");
+  assert.ok(laps, "Laps and ghosts category present");
+  assert.equal(laps.keys, 3, "ghost + inputGhost + ttlb");
+  const other = r.categories.find((x) => x.name === "Other settings and data");
+  assert.equal(other ? other.keys : 0, 0, "inputGhost must not ghost under Other");
+});
 test("storage-health UI does no measurements or prompts until opened, and remains operable", async () => {
   const dom = makeDom(); let estimates = 0, prompts = 0;
   const h = boot(); await h.store.mirror.ready;

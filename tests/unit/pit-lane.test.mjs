@@ -1408,6 +1408,40 @@ test("a caution pull counts the lap the car is on before calling the next set lo
     "a set that covers the lap the car is on still takes the safety-car stop");
 });
 
+// #5775 R1: worthStopping never read compoundDue, so a player who still owes
+// the second dry compound (wear under CUE_WEAR) got no PIT cue / minimap "P"
+// and then a one-compound DSQ. Lights only in the last COMPOUND_WARN_LAPS.
+test("R1 (#5775): a one-compound set owed in the last 5 laps is worthStopping and cues even when fresh", () => {
+  const { pits, car, zone } = strategySession(8);
+  const c = car(0);
+  c.tyreWear = 0; c.tyre = { code: "M", tread: 0 };
+  c.tyreLog = [{ code: "M", lap0: 0, lap1: null }];
+  c.pitState = "none"; c.s = zone.sIn - 200;
+  c.lap = 4;                                          // lapsToFlag = 8 - 4 + 1 = 5 → due
+  assert.equal(pits.compoundDue(c), true, "anti-vacuity: compound is due");
+  assert.equal(pits.worthStopping(c), true, "owed compound must open the cue gate");
+  assert.ok(pits.cue(c) != null, "the HUD cue must speak when the compound is owed");
+  c.lap = 2;                                          // lapsToFlag = 7 → not yet
+  assert.equal(pits.compoundDue(c), false);
+  assert.equal(pits.worthStopping(c), false, "six or more laps to go: no PIT cue yet");
+  assert.equal(pits.cue(c), null);
+});
+
+// #5775 R2: endRace exempts DUEL and armed practice from the two-compound DSQ
+// (game.js cmpOn), but twoCompoundRule still drove the AI planner, the arm hold
+// and compoundDue — rival stops the player does not need, and a false warning.
+test("R2 (#5775): duel and armed practice do not apply the two-compound rule", () => {
+  const { pits, G } = strategySession(10);
+  G.session = "race"; G.seasonMode = false; G.duel = false; G.practice = false;
+  assert.equal(pits.twoCompoundApplies(), true, "a 10-lap dry Race still binds");
+  G.duel = true;
+  assert.equal(pits.twoCompoundApplies(), false, "duel: same exemption endRace uses");
+  G.duel = false; G.practice = true;
+  assert.equal(pits.twoCompoundApplies(), false, "armed practice: same exemption");
+  G.practice = false; G.duel = true; G.seasonMode = true;   // championship sticky duel setting
+  assert.equal(pits.twoCompoundApplies(), true, "a championship race keeps the rule even if duel is sticky");
+});
+
 test("AUTO fits the plan's letter, and the HUD names the set the crew will fit", () => {
   const { pits, car } = strategySession(5);                // under the rule's minimum: no rule
   const c = car(0);

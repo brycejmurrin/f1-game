@@ -353,8 +353,11 @@
       // 10.3, not 9: no wall in front, so a car's side reached 10.1 m (the 9 m run-off + its
       // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
       fence(0.96, 0.04, -1, 10.3, 4, [0.74, 0.76, 0.80]);
-      fence(0.10, 0.19, 1, 9, 4, [0.74, 0.76, 0.80]);
-      fence(0.585, 0.635, 1, 9, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 9: no wall in front, so a car's side reached 10.1 m and drove
+      // 1.1 m into these catch fences. Stand behind 0.10–0.19 sits at face ~15 m
+      // (#6007).
+      fence(0.10, 0.19, 1, 10.3, 4, [0.74, 0.76, 0.80]);
+      fence(0.585, 0.635, 1, 10.3, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.25, 0.37, 0.46, 0.57, 0.72, 0.82]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }

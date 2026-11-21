@@ -62,7 +62,10 @@ const DesignerCanvas = (function () {
     let sel = -1, span = -1, hover = -1, tool = "select";
     // viewMoved: the player panned, zoomed or focused since the last fit — a
     // resize then keeps their view; otherwise it re-fits the loop to the new box.
-    let scale = 0.1, cx = 0, cz = 0, fitted = false, viewMoved = false;
+    // fitHeld: START FROM hydration (and similar) pins the view so a Loading /
+    // SW reflow cannot re-fit under a drag the caller already aimed (#6031).
+    let scale = 0.1, cx = 0, cz = 0, fitted = false, viewMoved = false, fitHeld = 0;
+    let idleWaiters = [];
     let preIns = null;               // sel/span before an insert-drag, for a pinch that abandons it (#5743 D4)
     let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null, rangeAnchor = -1;
     // Group drag: when a SPAN is selected, moving any member translates the whole
@@ -139,9 +142,17 @@ const DesignerCanvas = (function () {
       resizeRetry = 0;
       dpr = Math.min(3, window.devicePixelRatio || 1);
       if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
+      const prevW = W, prevH = H;
       W = w; H = h;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      if (!fitted || !viewMoved) fit();
+      // Keep the same world point under each screen pixel when we do not re-fit:
+      // toSX = (x - cx) * scale + W/2, so ΔW shifts handles by ΔW/2 unless cx follows.
+      const keep = viewMoved || fitHeld > 0 || pointers.size > 0;
+      if (!fitted || !keep) fit();
+      else if (scale) {
+        cx += (W - prevW) / (2 * scale);
+        cz += (H - prevH) / (2 * scale);
+      }
       render();
     }
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
@@ -368,39 +379,43 @@ const DesignerCanvas = (function () {
     }
     function onUp(ev) {
       if (!pointers.has(ev.pointerId)) return;
-      cancelHold();
-      pointers.delete(ev.pointerId);
-      try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
-      if (mode === "held") { mode = "none"; press = null; render(); return; }
-      if (mode === "pinch") { if (pointers.size < 2) { mode = pointers.size === 1 ? "pan" : "none"; pinch0 = null; if (hooks.onView) hooks.onView(view()); } return; }
-      if (mode === "press") {
-        // Tap / click / below-threshold jitter: select only — coordinates unchanged.
-        const i = press ? press.i : -1;
-        const shift = !!(ev.shiftKey || (press && press.shift));
-        press = null; mode = "none";
-        if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: shift, altKey: !!ev.altKey });
-        render();
-        return;
+      try {
+        cancelHold();
+        pointers.delete(ev.pointerId);
+        try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
+        if (mode === "held") { mode = "none"; press = null; render(); return; }
+        if (mode === "pinch") { if (pointers.size < 2) { mode = pointers.size === 1 ? "pan" : "none"; pinch0 = null; if (hooks.onView) hooks.onView(view()); } return; }
+        if (mode === "press") {
+          // Tap / click / below-threshold jitter: select only — coordinates unchanged.
+          const i = press ? press.i : -1;
+          const shift = !!(ev.shiftKey || (press && press.shift));
+          press = null; mode = "none";
+          if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: shift, altKey: !!ev.altKey });
+          render();
+          return;
+        }
+        if (mode === "drag") {
+          if (moved && taps.length) taps[taps.length - 1] = { kind: "move", i: dragI };
+          const out = work; work = null; mode = "none"; stale = false;
+          const kind = inserted ? "insert" : (dragGroup && dragGroup.length > 1 ? "move-span" : "move");
+          const pickShift = !!ev.shiftKey;
+          press = null;
+          if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, kind); }
+          else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: pickShift, altKey: !!ev.altKey });
+          dragI = -1; dragGroup = null; dragOrigins = null; drag0 = null; render();
+          return;
+        }
+        if (mode === "draw") {
+          const out = path; path = null; mode = "none";
+          if (out && out.length >= 3 && hooks.onDraw) hooks.onDraw(out);
+          render();
+          return;
+        }
+        mode = "none"; press = null;
+        if (hooks.onView) hooks.onView(view());
+      } finally {
+        notifyIdle();
       }
-      if (mode === "drag") {
-        if (moved && taps.length) taps[taps.length - 1] = { kind: "move", i: dragI };
-        const out = work; work = null; mode = "none"; stale = false;
-        const kind = inserted ? "insert" : (dragGroup && dragGroup.length > 1 ? "move-span" : "move");
-        const pickShift = !!ev.shiftKey;
-        press = null;
-        if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, kind); }
-        else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: pickShift, altKey: !!ev.altKey });
-        dragI = -1; dragGroup = null; dragOrigins = null; drag0 = null; render();
-        return;
-      }
-      if (mode === "draw") {
-        const out = path; path = null; mode = "none";
-        if (out && out.length >= 3 && hooks.onDraw) hooks.onDraw(out);
-        render();
-        return;
-      }
-      mode = "none"; press = null;
-      if (hooks.onView) hooks.onView(view());
     }
     // pointercancel AND lostpointercapture: a dialog hidden mid-drag takes the
     // capture without a pointerup, which left a stale pointer behind and the
@@ -412,12 +427,29 @@ const DesignerCanvas = (function () {
       if (pointers.size === 0) reset();
       else if (mode === "pinch" && pointers.size < 2) { mode = "pan"; pinch0 = null; }
     }
+    function busy() {
+      return mode === "press" || mode === "drag" || mode === "draw";
+    }
+    function notifyIdle() {
+      if (busy() || !idleWaiters.length) return;
+      const waiters = idleWaiters; idleWaiters = [];
+      for (const resolve of waiters) resolve();
+    }
+    function whenIdle() {
+      if (!busy()) return Promise.resolve();
+      return new Promise((resolve) => { idleWaiters.push(resolve); });
+    }
+    function holdFit(on) {
+      if (on) fitHeld++;
+      else fitHeld = Math.max(0, fitHeld - 1);
+    }
     function reset() {
       cancelHold();
       pointers.clear(); taps = []; last = null; press = null;
       work = null; path = null; pinch0 = null; mode = "none"; dragI = -1; inserted = false; moved = false; stale = false; hover = -1;
       dragGroup = null; dragOrigins = null; drag0 = null;
       render();
+      notifyIdle();
     }
     function onWheel(ev) {
       ev.preventDefault();
@@ -789,6 +821,9 @@ const DesignerCanvas = (function () {
       resize,
       view,
       zoom(f) { zoomAt(f, W / 2, H / 2); render(); },
+      busy,
+      whenIdle,
+      holdFit,
       reset,
       destroy() {
         if (destroyed) return;
