@@ -9840,6 +9840,7 @@
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setAnalogSpeedMix": [
@@ -9855,7 +9856,8 @@
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setKeyRampIn": [
-        "tests/specs/gamepad.spec.js"
+        "tests/specs/gamepad.spec.js",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "setPadAxisMap": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -9883,11 +9885,13 @@
       "setSpeedStd": [
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "setSteerExpo": [
-        "tests/unit/digital-steer.test.mjs"
+        "tests/unit/digital-steer.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "setSteerMode": [
         "tests/specs/gamepad.spec.js",
@@ -9904,6 +9908,7 @@
       ],
       "setSteerSpeedRef": [
         "tests/specs/touch-buttons.spec.js",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setTiltDeadzone": [
@@ -10028,9 +10033,24 @@
       ]
     },
     "js/input/pedal-travel.js": {
+      "buttonOverrides": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "buttonProfile": [
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "ease": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "level": [
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "setButtonProfile": [
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "*": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -10045,7 +10065,6 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
-        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -11075,6 +11094,19 @@
       ],
       "*": [
         "tests/unit/no-bare-console.test.mjs"
+      ]
+    },
+    "js/net/phone-pairing-ui.js": {
+      "cancel": [
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "create": [
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "dash": [
+        "tests/unit/phone-pad.test.mjs"
       ]
     },
     "js/net/qr.js": {
@@ -19722,6 +19754,9 @@
       "paintSectorRow": [
         "tests/unit/hud-readouts.test.mjs"
       ],
+      "pedalGrip": [
+        "tests/unit/hud-readouts.test.mjs"
+      ],
       "push": [
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-race-keep-5678.test.mjs",
@@ -20462,9 +20497,6 @@
       ],
       "onFirstGesture": [
         "tests/unit/audio-recovery.test.mjs"
-      ],
-      "phonePadDash": [
-        "tests/unit/phone-pad.test.mjs"
       ],
       "refresh": [
         "tests/unit/a11y-pwa-pass.test.mjs"
@@ -21420,6 +21452,17 @@
       "*": [
         "tests/specs/boot-guard.spec.js",
         "tests/unit/share-code.test.mjs"
+      ]
+    },
+    "js/ui/touch-button-settings.js": {
+      "change": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/track-maps.js": {

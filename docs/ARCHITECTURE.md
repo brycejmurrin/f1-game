@@ -291,6 +291,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
+| `touch-button-settings.js` | `TouchButtonSettings` | LAZY_NET | Shared response editor for in-game touch buttons and the phone controller. |
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
@@ -767,6 +768,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
+| `phone-pairing-ui.js` | `PhonePairingUI` | LAZY_NET | PhonePairingUI — desktop side of the paired phone wheel. |
 
 **`js/share/`**
 

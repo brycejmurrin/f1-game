@@ -1494,8 +1494,10 @@ const LAZY_NET = [
   // and the phone page evaluate before the session (eval-time destructure).
   // controller.html's CONTROLLER subset below carries the same three.
   "js/input/phone-pad-codec.js",
+  "js/ui/touch-button-settings.js", // Phone wheel editor, also loaded directly by Controls.
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
+  "js/net/phone-pairing-ui.js", // Desktop pairing surface; controller.html only loads the wheel.
 ];
 
 // WORKER SCRIPTS: no <script> tag and never injected into the page — each is
@@ -1539,6 +1541,7 @@ const CONTROLLER = [
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/ui/touch-button-settings.js",
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",

@@ -1988,6 +1988,12 @@ function updateHud(force, dtMs) {
     hHidden(els.workBtn, true);
   }
   // toggle-button states
+  const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
+  if (_ro && (gasFeedback || brakeFeedback)) {
+    const cue = _ro.pedalGrip(player, typeof WheelState !== "undefined" && WheelState.enabled());
+    hData(els.btnThrottle, "gripCue", gasFeedback && (cue === "spin" || cue === "slip") ? cue : null);
+    hData(els.btnBrake, "gripCue", brakeFeedback && cue === "lock" ? cue : null);
+  }
   hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);

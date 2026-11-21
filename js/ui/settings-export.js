@@ -300,6 +300,8 @@ const SPEC = [
   { k: "drivingCoach", lane: "json", group: "driving", def: false, src: "js/race/driving-coach.js" },
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "pedalSlide", lane: "json", group: "driving", def: "instant", oneOf: ["instant", "ease"], src: "js/input/steer-tuning.js PEDAL SLIDE row → Input.setPedalSlide (#5996)" },
+  { k: "touchButtonProfiles", lane: "json", group: "driving", def: null, perDevice: true, whole: true, src: "js/input/pedal-travel.js",
+    normalize: v => v === null ? null : typeof PedalTravel !== "undefined" ? PedalTravel.normalizeProfiles(v) : undefined },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
   { k: "wind", lane: "json", group: "driving", def: "real", oneOf: ["off", "real"], src: "js/race/race-settings.js WIND row → Wind.setLevel" },

@@ -1662,6 +1662,7 @@
         "tests/unit/steer-lock-taper.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/xr-opts.test.mjs",
@@ -3814,6 +3815,11 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/phone-pairing-ui.js",
+      "global": "PhonePairingUI",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/qr.js",
       "global": "NetQr",
       "roster": "LAZY_NET"
@@ -5192,6 +5198,11 @@
       "path": "js/ui/title-menu.js",
       "global": "TitleMenu",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/touch-button-settings.js",
+      "global": "TouchButtonSettings",
+      "roster": "LAZY_NET"
     },
     {
       "path": "js/ui/track-maps.js",

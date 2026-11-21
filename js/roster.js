@@ -576,8 +576,10 @@
     "js/net/netplay.js",
     "js/net/lobby.js",
     "js/input/phone-pad-codec.js",
+    "js/ui/touch-button-settings.js",
     "js/input/phone-pad-page.js",
-    "js/input/phone-pad.js"
+    "js/input/phone-pad.js",
+    "js/net/phone-pairing-ui.js"
   ],
     LAZY_NET_EDGES: [
     [

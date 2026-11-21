@@ -94,6 +94,7 @@ function boot(opts = {}) {
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio-ui", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
+  const pedals = opts.touch && vm.runInContext(read("js/input/pedal-travel.js") + "\nPedalTravel", ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });
   vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
@@ -101,7 +102,7 @@ function boot(opts = {}) {
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb,
+  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb, pedals,
     careerVersion: opts.career || opts.careerLazy ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
@@ -879,6 +880,71 @@ test("an ALL file carries an object key's whole effective value; CHANGES only it
   assert.deepEqual(boot({ disk }).collect("all").settings.a11y.holdMode, { throttle: "toggle", lookBack: "hold" },
     "ALL is every key's effective value: lookBack must not drop out");
   assert.deepEqual(boot({ disk }).collect("changes").settings.a11y.holdMode, { throttle: "toggle" }, "CHANGES keeps the diff");
+});
+
+test("touch response profiles keep each button independent across backups, imports and resets", () => {
+  const phone = () => boot({ touch: true, mobile: true });
+  const a = phone(), b = phone();
+  const unset = a.collect("all");
+  assert.equal(unset.settings.driving.touchButtonProfiles, null);
+  a.pedals.setButtonProfile("gas", { press: "progressive", travel: 160, slide: "ease" });
+  a.pedals.setButtonProfile("brake", { feedback: false });
+  a.pedals.setButtonProfile("left", { travel: 50, adaptive: 15 });
+  for (const mode of ["all", "changes"]) {
+    const saved = a.collect(mode);
+    assert.deepEqual(saved.settings.driving.touchButtonProfiles, {
+      v: 1, buttons: { left: { travel: 50, adaptive: 10 }, gas: { press: "progressive", travel: 160, slide: "ease" }, brake: { feedback: false } },
+    });
+    b.loadSettings(saved);
+    assert.equal(b.pedals.buttonProfile("right").travel, 90);
+    assert.equal(b.pedals.buttonProfile("left").travel, 50);
+    assert.equal(b.pedals.buttonProfile("left").adaptive, 10);
+    b.pedals.setButtonProfile("left", { adaptive: null });
+    assert.equal(b.pedals.buttonProfile("left").adaptive, undefined);
+    assert.equal(b.pedals.buttonProfile("left").travel, 50);
+    assert.equal(b.pedals.buttonProfile("brake").feedback, false);
+    assert.equal(b.pedals.level(b.pedals.buttonProfile("gas"), 80), 0.56);
+    b.pedals.resetButtonProfile("left");
+    assert.equal(b.pedals.buttonProfile("left").travel, 90);
+    assert.equal(b.pedals.buttonProfile("gas").press, "progressive");
+    const desktop = boot({ touch: true });
+    desktop.loadSettings(saved);
+    assert.equal(desktop.pedals.buttonProfile("gas").press, "instant");
+  }
+  b.loadSettings(unset);
+  assert.equal(b.disk.has("apex26.touchButtonProfiles"), false);
+  assert.equal(b.collect("changes").settings.driving?.touchButtonProfiles, undefined);
+});
+
+test("pedal response validation bounds finger travel, rejects unknown versions and inherits global slide", () => {
+  const { pedals, GameStore, loadSettings, collect } = boot({ touch: true, mobile: true });
+  GameStore.store.set("pedalSlide", "ease");
+  assert.equal(pedals.buttonProfile("brake").slide, "ease");
+  pedals.setButtonProfile("brake", { slide: "instant", travel: 250 });
+  assert.equal(pedals.buttonProfile("brake").travel, 160);
+  assert.equal(pedals.buttonProfile("brake").slide, "instant");
+  const bad = collect("changes");
+  bad.settings.driving.touchButtonProfiles = { v: 2, buttons: { gas: { travel: 50 } } };
+  assert.equal(loadSettings(bad).skipped, 1);
+  assert.equal(pedals.buttonProfile("brake").travel, 160);
+  const malformed = collect("all");
+  malformed.settings.driving.touchButtonProfiles = { v: 1, buttons: { gas: { travel: "fast" } } };
+  assert.ok(loadSettings(malformed).skipped >= 1);
+  assert.equal(pedals.buttonProfile("brake").travel, 160);
+  assert.equal(pedals.buttonProfile("left").slide, "instant");
+  pedals.setButtonProfile("brake", { slide: "inherit", travel: -100 });
+  assert.equal(pedals.buttonProfile("brake").slide, "ease");
+  assert.equal(pedals.buttonProfile("brake").travel, 40);
+  assert.equal(pedals.level(pedals.buttonProfile("brake"), 0), 1);
+  assert.equal(pedals.level(pedals.buttonProfile("brake"), 32), 0.5);
+  assert.equal(pedals.level(pedals.buttonProfile("brake"), 100), pedals.MIN);
+  pedals.setButtonProfile("gas", { press: "progressive", travel: 40 });
+  const gas = pedals.buttonProfile("gas");
+  assert.equal(pedals.level(gas, -20), pedals.MIN);
+  assert.equal(pedals.level(gas, 40), 1);
+  pedals.resetButtonProfile("brake");
+  pedals.resetButtonProfile("gas");
+  assert.equal(GameStore.store.get("touchButtonProfiles", null), null);
 });
 
 test("settings backups preserve the announcer switch and radio effects in both modes", () => {

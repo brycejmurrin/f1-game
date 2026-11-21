@@ -2581,6 +2581,7 @@
         "tests/unit/steer-lock-taper.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/xr-opts.test.mjs",

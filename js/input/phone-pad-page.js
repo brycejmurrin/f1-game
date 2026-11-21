@@ -1,6 +1,6 @@
 /* PhonePadPage — the phone wheel. LCD paint and the controller.html page.
    Elements arrive from the shell; this file never looks an id up. The wire
-   format is PhonePadCodec. The desktop session (PhonePad.padSession) stays in
+   format is PhonePadCodec. The transport session (PhonePad.padSession) stays in
    phone-pad.js and is called once that file has evaluated. */
 "use strict";
 
@@ -47,6 +47,8 @@ const PhonePadPage = (function () {
       const n = el.leds.children.length, lit = Math.round(h.rpm * n);
       for (let i = 0; i < n; i++) el.leds.children[i].classList.toggle("on", inRace && i < lit);
     }
+    if (el.gas) el.gas.classList.toggle("grip-cue", inRace && !(h.flags & DASH.paused) && (h.grip === "spin" || h.grip === "slip"));
+    if (el.brake) el.brake.classList.toggle("grip-cue", inRace && !(h.flags & DASH.paused) && h.grip === "lock");
     if (el.screen && el.screen.classList) {
       el.screen.classList.toggle("redline", !!(h.flags & DASH.redline));
       el.screen.classList.toggle("boost", !!(h.flags & DASH.boost));
@@ -158,10 +160,11 @@ const PhonePadPage = (function () {
     // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
     const releases = [], pointerReleases = [];
     const releaseAll = (pointersOnly) => { for (const r of releases) r(pointersOnly === true); };
+    const pedalTargets = new Map(), pedalOwners = new Map();
     function hold(el, on, off, travel) {
       if (!el) return;
       const ids = new Set();
-      const anchors = new Map();   // pointerId -> clientY at touch-down
+      const anchors = new Map();   // Freeze the response and landing point for each contact.
       const levels = new Map();    // each contact keeps its own pedal travel
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
       const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v, edge); };
@@ -171,24 +174,62 @@ const PhonePadPage = (function () {
         // Blur, backgrounding and disconnect still clear every input source.
         if (pointersOnly) { for (const id of Array.from(ids)) if (typeof id !== "string") up({ pointerId: id }); return; }
         if (!ids.size) return;
+        for (const id of anchors.keys()) pedalOwners.delete(id);
         ids.clear(); anchors.clear(); levels.clear(); el.classList.remove("on"); if (travel) paintLevel(); else off();
       });
+      const start = (e, transfer) => {
+        ids.add(e.pointerId);
+        el.classList.add("on");
+        if (!travel) { on(1); return; }
+        const profile = PedalTravel.buttonProfile(travel);
+        const cross = transfer && profile.slide === "ease";
+        const peerId = travel === "gas" ? "brake" : "gas";
+        // Standalone phones historically capture a pedal until lift, including a
+        // slide through the other pedal. Only an explicit destination crossover opts in.
+        const bounds = PedalTravel.buttonOverrides(peerId).slide && dom[peerId]?.getBoundingClientRect?.();
+        const contact = { x: e.clientX, y: e.clientY, profile, cross, transfer, bounds };
+        anchors.set(e.pointerId, contact);
+        pedalOwners.set(e.pointerId, target);
+        levels.set(e.pointerId, cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0));
+        el.classList.toggle("feedback-off", !profile.feedback);
+        paintLevel();
+      };
       const down = (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
-        ids.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
-        el.classList.add("on");
-        if (travel) { anchors.set(e.pointerId, e.clientY); levels.set(e.pointerId, 1); paintLevel(); } else on(1);
-        e.preventDefault();
+        start(e, false); e.preventDefault();
       };
-      const move = (e) => { if (travel && anchors.has(e.pointerId)) { levels.set(e.pointerId, travelOf(anchors.get(e.pointerId), e.clientY)); paintLevel(false); } };
+      function slide(e) {
+        const c = anchors.get(e.pointerId);
+        if (!c) return;
+        const peer = travel === "gas" ? dom.brake : dom.gas;
+        const r = c.bounds;
+        if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom &&
+            typeof document !== "undefined" && document.elementFromPoint) {
+          const hit = document.elementFromPoint(e.clientX, e.clientY);
+          if (peer && (hit === peer || peer.contains?.(hit))) {
+            up(e); pedalTargets.get(peer).start(e, true); return;
+          }
+        }
+        const dy = c.y - e.clientY, dist = Math.hypot(e.clientX - c.x || 0, dy || 0);
+        let value;
+        if (c.cross) {
+          value = Math.max(levels.get(e.pointerId), PedalTravel.arrive(dist));
+          if (value >= 1) { c.cross = false; c.y = e.clientY; }
+        } else if (c.transfer) value = PedalTravel.ease(c.y, e.clientY, c.profile.travel);
+        else value = PedalTravel.level(c.profile, c.profile.press === "progressive" ? dist : dy);
+        levels.set(e.pointerId, value); paintLevel(false);
+      }
+      const move = (e) => { if (travel) pedalOwners.get(e.pointerId)?.slide(e); };
       const up = (e) => {
-        anchors.delete(e.pointerId);
+        if (anchors.delete(e.pointerId)) pedalOwners.delete(e.pointerId);
         levels.delete(e.pointerId);
         if (!ids.delete(e.pointerId)) return;
         if (!ids.size) el.classList.remove("on");
         if (travel) paintLevel(); else if (!ids.size) off();
       };
+      const target = { start, slide };
+      if (travel) pedalTargets.set(el, target);
       // Keyboard holds share the contact set, so releasing a key cannot
       // cancel a thumb that is still down (or vice versa).
       const keyId = (key) => key === " " || key === "Enter" ? "key:" + key : null;
@@ -198,7 +239,7 @@ const PhonePadPage = (function () {
         e.preventDefault();
         if (ids.has(id)) return;
         ids.add(id); el.classList.add("on");
-        if (travel) { levels.set(id, 1); paintLevel(); } else on(1);
+        if (travel) { el.classList.toggle("feedback-off", !PedalTravel.buttonProfile(travel).feedback); levels.set(id, 1); paintLevel(); } else on(1);
       });
       el.addEventListener("keyup", (e) => {
         const id = keyId(e.key);
@@ -234,9 +275,6 @@ const PhonePadPage = (function () {
       document.addEventListener("touchcancel", allUp, { capture: true, passive: true });
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
     }
-    // PedalTravel: 12 px of slop, then 90 px to the 0.12 floor. Moving down
-    // past the landing point stays full.
-    function travelOf(anchorY, y) { return PedalTravel.ease(anchorY, y); }
     // aria-valuenow is an integer percent (controller.html: min -100, max 100), written
     // only when it changes; a drag/slide (edge false) keeps the session's 15 ms cap.
     let steerAria = "0";
@@ -271,8 +309,8 @@ const PhonePadPage = (function () {
       });
       dom.steer.addEventListener("blur", () => release());
     }
-    hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, true);
-    hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, true);
+    hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, "gas");
+    hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, "brake");
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
     // Edges fire on the DOWN, not the click: a paddle on a wheel answers the
     // finger, and a click waits for the release (and can be lost to a drag).
@@ -870,7 +908,13 @@ const PhonePadPage = (function () {
     if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
     if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
     if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
-    const show = (on) => { if (dom.sheet) dom.sheet.hidden = !on; if (on && dom.done && dom.done.focus) dom.done.focus(); else if (!on && dom.open && dom.open.focus) dom.open.focus(); };
+    function show(on) {
+      if (dom.sheet) dom.sheet.hidden = !on;
+      if (on && dom.responses && typeof TouchButtonSettings !== "undefined") {
+        TouchButtonSettings.mount(dom.responses, ["gas", "brake"], { standalone: true });
+      }
+      (on ? dom.done : dom.open)?.focus?.();
+    }
     // ARRANGE: capture-phase pointers on the stage, so a drag on GAS moves GAS and never presses it.
     const A = dom.arrange || {}, idOf = new Map(Object.entries(A).map(([id, el]) => [el, id]));
     let picked = null, drag = null, baseline, opener, frame = 0, coarse = false;

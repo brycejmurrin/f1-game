@@ -139,3 +139,41 @@ test("auto-throttle and the GAS button can never disagree, across mode switches"
   // proved the invariant for a single state and called it a sweep.
   expect(new Set(seen.map((s) => s.mode)).size).toBeGreaterThan(1);
 });
+test("a driver can tune Gas and Left independently, reload, and reset only Gas", async ({ page }) => {
+  const openControls = async () => {
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-controls").tap();
+    await page.locator("#pm-touch-response").tap();
+  };
+  await openControls();
+  const form = page.locator("#pm-touch-response-fields");
+  const button = form.locator('[data-field="button"]');
+  const press = form.locator('[data-field="press"]');
+  const travel = form.locator('[data-field="travel"]');
+  await button.selectOption("gas");
+  await press.selectOption("progressive");
+  await travel.focus();
+  await travel.press("Home");
+  await expect(travel).toHaveValue("40");
+  await button.selectOption("left");
+  await press.selectOption("progressive");
+  const adaptive = form.locator('[data-field="adaptive"]');
+  await adaptive.selectOption("10");
+
+  await page.reload();
+  await openControls();
+  await button.selectOption("gas");
+  await expect(press).toHaveValue("progressive");
+  await expect(travel).toHaveValue("40");
+  await form.locator('[data-field="reset"]').tap();
+  await expect(press).toHaveValue("instant");
+  await expect(travel).toHaveValue("90");
+  await button.selectOption("left");
+  await expect(press).toHaveValue("progressive");
+  await expect(adaptive).toHaveValue("10");
+  for (const id of ["right", "brake"]) {
+    await button.selectOption(id);
+    await expect(press).toHaveValue("instant");
+    await expect(travel).toHaveValue("90");
+  }
+});

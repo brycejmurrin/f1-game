@@ -133,6 +133,29 @@
    (it shares the :active rules); "off" puts the one it left back to idle. */
 #btn-throttle[data-slid="off"]:active, #btn-brake[data-slid="off"]:active { background: var(--idle); opacity: var(--btn-a); box-shadow: none; }
 
+/* The dock uses static positioning; containment anchors the edge indicators to
+   the held button without changing its slot or pointer hit area. */
+.touchbtn[data-touch-feedback="on"] { contain: layout; }
+.touchbtn[data-touch-feedback="on"]::after,
+.touchbtn[data-touch-feedback="on"][data-grip-cue]::before {
+  content: ""; position: absolute; pointer-events: none; inset-inline: 22%;
+  border-radius: var(--r-pill); box-shadow: 0 0 0 1px var(--carbon);
+}
+.touchbtn[data-touch-feedback="on"]::after {
+  bottom: 12%; height: max(6%, 2px);
+  background: linear-gradient(to right, var(--hud-ink-light) calc(var(--touch-level) * 100%), var(--carbon) 0);
+}
+.touchbtn[data-touch-feedback="on"][data-grip-cue]::before {
+  top: 12%; height: max(13%, 4px);
+  background: repeating-linear-gradient(120deg, var(--hud-ink-light) 0 15%, var(--carbon) 15% 30%);
+}
+.touchbtn[data-touch-feedback="on"][data-grip-cue="lock"]::before {
+  background: linear-gradient(to bottom, var(--hud-ink-light) 32%, var(--carbon) 32% 68%, var(--hud-ink-light) 68%);
+}
+
+/* Latch uses the persistent illuminated GAS button for its binary command. */
+#btn-throttle[aria-pressed][data-touch-feedback]::after { display: none; }
+
 /* BOOST IS THE BATTERY, so it is GREEN and its colour IS the charge. `--e` is
    written each frame by hud.js from player.energy (0..1) and mixed between a
    flat grey-green at empty and a vivid green at full, so the button answers

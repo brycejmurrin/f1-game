@@ -439,6 +439,7 @@ const NET_READY = {
   "js/input/phone-pad-codec.js": () => typeof PhonePadCodec !== "undefined",
   "js/input/phone-pad-page.js": () => typeof PhonePadPage !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
+  "js/net/phone-pairing-ui.js": () => typeof PhonePairingUI !== "undefined",
 };
 function ensureNet() {
   if (netLoad) return netLoad;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-pSvJe1DWpQ9PAgWKjVodFDbn/z0zypRIcHAoGhK78pA=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-NsPmuNpdF4Lo0c45H4G3sVhlm0pYF7/xgx1tQLyfb/k=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -286,8 +286,21 @@
   .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
   .pedal.on { color: var(--text); }
   /* --travel: the pedal's live level (phone-pad.js hold): full on the touch, easing as the thumb slides up. */
-  #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(94,240,138,.16); }
-  #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(255,77,77,.16); }
+  #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: var(--ok); }
+  #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: var(--bad); }
+  .pedal.on:not(.feedback-off)::after { inset-inline: auto 0; width: .45rem; }
+  .pedal.feedback-off.on::after { display: none; }
+  .pedal.grip-cue.on:not(.feedback-off)::before { inset: .4rem 12% auto; height: .4rem; border: 0; }
+  #gas.grip-cue.on:not(.feedback-off)::before { background: repeating-linear-gradient(125deg, currentColor 0 .2rem, transparent .2rem .4rem); }
+  #brake.grip-cue.on:not(.feedback-off)::before { border-block: .15rem solid currentColor; border-radius: 0; }
+  #pedal-responses summary { min-height: 44px; cursor: pointer; font-weight: bold; }
+  #pedal-response-fields :is(.set-row, .tune-row) { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  #pedal-response-fields :is(select,input,button) { min-height: 44px; max-width: 100%; }
+  #pedal-response-fields .set-row { flex-wrap: wrap; }
+  #pedal-response-fields [hidden] { display: none; }
+  #pedal-response-fields .tune-label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  #pedal-response-fields .set-row > div { max-width: 100%; margin-inline-start: auto; }
+  #pedal-response-fields select { appearance: auto; width: max-content; }
   /* CONTROL MODES from the dash (PhonePad.paintHud → body classes): what the
      game drives itself the wheel does not offer. Gears AUTO: no paddles, the
      pedal takes the whole grip. Throttle AUTO: the GAS zone is an inert plate
@@ -558,6 +571,7 @@
 </section>
 <div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
   <div id="lay-head"><h2 id="lay-title">WHEEL LAYOUT</h2><button id="lay-done" class="bigbtn" type="button">DONE</button></div>
+  <details id="pedal-responses"><summary>Pedal response</summary><div id="pedal-response-fields"></div></details>
   <div id="lay-presets" role="group" aria-label="Layout presets">
     <button type="button" data-preset="classic">CLASSIC</button>
     <button type="button" data-preset="right">RIGHT THUMB<small>OT · BOOST · AERO by the pedals</small></button>
@@ -603,6 +617,7 @@
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/touch-button-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-codec.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-page.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad.js?v=dev"></script>
@@ -635,7 +650,7 @@ window.addEventListener("DOMContentLoaded", function () {
     scan: $("scan"), scanBox: $("scan-box"), video: $("scan-video"),
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
            ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
-           mtitle: $("mp-title"),
+           mtitle: $("mp-title"), gas: $("gas"), brake: $("brake"),
            body: document.body },
   }, {
     onOpen: function () {
@@ -653,7 +668,7 @@ window.addEventListener("DOMContentLoaded", function () {
       body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
       keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
               look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
-      sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
+      sheet: $("layout-sheet"), responses: $("pedal-response-fields"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
       stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
       picker: $("arr-select"), adjust: $("arr-adjust"), tools: $("arr-tools"), edge: $("arr-edge"), step: $("arr-step"),
