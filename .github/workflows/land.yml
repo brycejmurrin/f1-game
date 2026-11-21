@@ -815,7 +815,7 @@ jobs:
   # `land` PR whose newest `gate` status is older than its newest successful ci.yml run, or has sat `pending` for over
   # 15 min with CI finished. No checkout, no repo code, no secret: gh and jq with a token that may only dispatch.
   # Bounded: STALE_MAX dispatches per run, and per head at most RETRY_MAX re-gates since CI finished (counted as the
-  # `gate` statuses written after that CI run, since every re-gate writes one; nothing is counted in repo files).
+  # workflow_dispatch land.yml runs that wrote a `gate` status after that CI run; nothing is counted in repo files).
   # ALSO ON A GREEN CI OR DEPLOY FINISH (2026-11-20): the `17,47` cron fired 54 times in 672 slots over 14 days
   # (gaps of 3.3-10.4 h, docs/notes/CI-CRON-DELAY-2026-11-20.md), so a green PR with a stale gate sat for hours.
   # A finished CI run is exactly when a gate goes stale, so the sweep rides `workflow_run` too, at most once per
@@ -890,9 +890,16 @@ jobs:
             ci_done=$(jq -r 'sort_by(.created_at) | last // {} | if .conclusion == "success" then (.updated_at | fromdateiso8601) else 0 end' <<<"$runs")
             [ "${ci_done:-0}" -gt 0 ] || { echo "#$n: no successful CI on ${head:0:12}"; continue; }
             g=$(gh api "repos/$R/commits/$head/statuses?per_page=100" \
-              --jq '[.[] | select(.context == "gate") | {s: .state, t: (.created_at | fromdateiso8601)}]') || { say "#$n: could not read the gate status"; continue; }
+              --jq '[.[] | select(.context == "gate") | {s: .state, t: (.created_at | fromdateiso8601), u: (.target_url // "")}]') || { say "#$n: could not read the gate status"; continue; }
             newest_t=$(jq -r '.[0].t // 0' <<<"$g"); newest_s=$(jq -r '.[0].s // ""' <<<"$g")
-            spent=$(jq -r --argjson c "$ci_done" '[.[] | select(.t > $c)] | length' <<<"$g")
+            # The budget counts re-gate DISPATCHES (this sweep's and `retry`'s) since CI finished, one per land.yml run:
+            # a CI re-gate, a label event or a run's pending-then-verdict pair is no retry (finding 5). A run that
+            # cannot be read counts (fail closed: the budget only ever runs out sooner).
+            spent=0
+            for id in $(jq -r --argjson c "$ci_done" '[.[] | select(.t > $c) | .u | capture("/actions/runs/(?<id>[0-9]+)$").id] | unique | .[]' <<<"$g"); do
+              ev=$(gh api "repos/$R/actions/runs/$id" --jq '.event // ""') || ev=unreadable
+              case "$ev" in workflow_dispatch|unreadable|"") spent=$((spent + 1)) ;; esac
+            done
             if [ "$newest_t" -lt "$ci_done" ]; then why="gate (${newest_s:-none}) is older than the last green CI"
             elif [ "$newest_s" = pending ] && [ $((now - newest_t)) -gt 900 ]; then why="gate has been pending for $(((now - newest_t) / 60)) min with CI finished"
             elif [ "$newest_s" = success ] && [ "$armed" != true ] && [ "$tip_t" -gt "$newest_t" ]; then

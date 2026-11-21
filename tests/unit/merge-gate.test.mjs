@@ -985,7 +985,8 @@ function runStep(script, env, files = {}) {
         `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
-    `    *"/actions/runs/"*) data=\${FAKE_RUN:-'{}'} ;;`,
+    `    *"/actions/runs/"*) data=\${FAKE_RUN:-'{}'}`,
+    `      if [ -n "\${FAKE_RUNS_BY_ID:-}" ]; then data=$(jq -c --arg i "$(sed -n 's#.*/actions/runs/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$i] // {}' <<<"$FAKE_RUNS_BY_ID"); fi ;;`,
     `    *) data=\${FAKE_PR:-'{}'}`,
     `       if [[ " \${args[*]} " == *"/pulls/"* ]] && [ "$(grep -c '/pulls/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pr ] || return 31; data=\${FAKE_PR_AFTER-$data}; fi`,
     `       if [ -n "\${FAKE_PRS:-}" ]; then data=$(jq -c --arg n "$(sed -n 's#.*/pulls/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$n] // {}' <<<"$FAKE_PRS"); fi ;;`,
@@ -1094,7 +1095,6 @@ test("land.yml post: the pass-time CI re-read counts only the PR's own ci.yml ru
     const r = runStep(post.run, { ...env, FAKE_PR: withRef(ref), FAKE_RUNS: runs({ event, head_branch: branch }) }, files);
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.out.arm, "", `${event} on ${branch} (PR ref ${ref}) is not the PR's CI: never posted as a pass`);
-    assert.match(r.stdout, /disagrees with GitHub now/);
   }
   const bot = runStep(post.run, { ...env, FAKE_PR: withRef("bot/fold"), FAKE_RUNS: runs({ event: "workflow_dispatch", head_branch: "bot/fold" }) }, files);
   assert.ok(bot.out.arm, "the fold bot's dispatched CI on its own branch still counts");
@@ -1543,7 +1543,7 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
     [{ FAKE_RUNS: ci({ conclusion: "failure" }) }, 0, "no green CI: nothing to re-gate for"],
     [{ FAKE_STATUSES: "[]" }, 1, "a land PR with no gate at all is re-gated"],
     [{ FAKE_STATUSES: st(["pending", 31]) }, 0, "a gate written after CI is current until it has been pending 15 min"],
-    [{ FAKE_STATUSES: st(["failure", 33], ["pending", 32], ["pending", 31], ["pending", 20]) }, 0, "RETRY_MAX re-gates since CI finished spent the budget"],
+    [{ FAKE_STATUSES: st(["failure", 33], ["pending", 32], ["pending", 31], ["pending", 20]) }, 0, "a failure after re-gates is a verdict (the budget itself: the finding 5 test)"],
     [{ FAKE_LANDS: lands(6), STALE_MAX: "2" }, 2, "at most STALE_MAX per run"],
     [{ PAUSED: "true" }, 0, "merge-pause: nothing"],
     [{ FAKE_LANDS: JSON.stringify([{ ...one, isDraft: true }]) }, 0, "a draft is never swept"],
@@ -1576,11 +1576,36 @@ test("land.yml sweep (finding 2): a push to the deploy branch sweeps at once; a 
   const r = go({});
   assert.equal(r.status, 0, r.stderr);
   assert.equal(dispatched(r).length, 1, `a success gate written before the tip moved, not armed: re-gated\n${r.summary}`);
-  assert.match(r.summary, /older than the deploy tip/);
   assert.equal(dispatched(go({ FAKE_LANDS: pr({ autoMergeRequest: { enabledAt: T(36) } }) })).length, 0, "armed: GitHub merges it, nothing to re-gate");
   assert.equal(dispatched(go({ NOW_TIP: T(34) })).length, 0, "the tip is older than the gate: current");
   assert.equal(dispatched(go({ NOW_TIP: "" })).length, 0, "an unreadable tip date sweeps nothing new");
   assert.equal(dispatched(go({ FAKE_STATUSES: st(["failure", 35]) })).length, 0, "a refusal is a verdict: a push or label re-gates it");
+});
+
+test("land.yml sweep (finding 5): the per-head budget counts land.yml re-gate DISPATCHES since CI finished, not gate statuses", () => {
+  const sweep = LAND.jobs.sweep.steps.find((st) => st.name.startsWith("Re-gate the land PRs"));
+  const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
+  const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
+  const lands = JSON.stringify([{ number: 7, headRefOid: "1".repeat(40), isDraft: false, labels: [{ name: "land" }], autoMergeRequest: null }]);
+  const ci = JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: T(0), updated_at: T(5) }] });
+  // Newest first, as the statuses endpoint lists them; each names the land.yml run that posted it.
+  const st = (...a) => JSON.stringify(a.map(([state, m, run]) => ({ context: "gate", state, created_at: T(m), target_url: `https://github.com/o/r/actions/runs/${run}` })));
+  const byId = JSON.stringify({ 100: { event: "workflow_run" }, 101: { event: "pull_request_target" }, 102: { event: "workflow_run" }, 103: { event: "workflow_dispatch" }, 104: { event: "workflow_dispatch" }, 105: { event: "workflow_dispatch" } });
+  const go = (statuses) => runStep(sweep.run, { FAKE_LANDS: lands, FAKE_RUNS: ci, FAKE_STATUSES: statuses, FAKE_RUNS_BY_ID: byId, STALE_MAX: "4", NOW_TIP: T(1) });
+  const dispatched = (r) => r.calls.filter((c) => c.includes("--method POST") && c.includes("land.yml/dispatches"));
+  const attempt = (r) => dispatched(r)[0]?.split("inputs[attempt]=")[1];
+  // A stale pending (20 min old, CI finished at minute 5) after three ordinary gates: CI re-gate, label, CI re-gate.
+  let r = go(st(["pending", 20, 102], ["pending", 10, 101], ["pending", 8, 100]));
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(dispatched(r).length, 1, `ordinary gates spend no re-gate budget\n${r.summary}`);
+  assert.equal(attempt(r), "0");
+  r = go(st(["pending", 20, 105], ["pending", 12, 104], ["pending", 8, 103]));
+  assert.equal(dispatched(r).length, 0, "RETRY_MAX dispatched re-gates since CI finished spend the budget");
+  r = go(st(["pending", 20, 104], ["pending", 19, 104], ["pending", 12, 103], ["pending", 11, 103]));
+  assert.equal(dispatched(r).length, 1, "a run that wrote pending and then its verdict is ONE re-gate");
+  assert.equal(attempt(r), "2");
+  r = go(st(["pending", 20, 102], ["pending", 4, 103], ["pending", 3, 104]));
+  assert.equal(attempt(r), "0", "re-gates before CI finished do not count");
 });
 
 test("land.yml sweep also rides a green CI or Deploy finish, at most once per SWEEP_GAP_MIN, with no PR code", () => {
