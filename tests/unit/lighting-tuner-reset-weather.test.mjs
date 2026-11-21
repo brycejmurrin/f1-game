@@ -98,6 +98,7 @@ function bootTuner(weather = "wet", saved = null) {
   vm.runInContext(symbolSource("function setLightTune(id, v)"), h.ctx);
   Object.assign(h.G, { $, els: {}, ltKey: h.store.key, setLightTune: h.ctx.setLightTune,
     persistLightTune: h.store.persist, applyLightTune: h.store.apply,
+    copyLightTune: h.store.copyToTracks, restoreLightTune: h.store.restore,
     setTimeOfDay: () => "dusk", weather: () => h.st.weather, gfx: h.ctx.gfx });
   h.G._ltStore = h.store.profiles;
   vm.runInContext(read("js/lighting/tuner-panel.js"), h.ctx, { filename: absSrc("js/lighting/tuner-panel.js") });
@@ -118,6 +119,48 @@ test("lighting-1: drag updates profile count and returning to baseline restores 
   assert.deepEqual(h.writes, [], "input ticks do not persist");
   h.$("lt-in-lampLevel").onchange();
   assert.equal(h.writes.length, 1, "release persists once");
+});
+
+test("My Edits skips local reset values after reload, while Full Look copies them and Undo restores the target", () => {
+  const presets = {
+    "monaco|dusk|dry": { sunElev: 35 }, "spa|dusk|dry": { sunElev: 12 },
+    "monaco|dusk|wet": { lampLevel: 0.6 }, "spa|dusk|wet": { lampLevel: 0.3 },
+  };
+  const setup = (saved) => {
+    const h = bootTuner("wet", saved);
+    h.ctx.Tracks.LIST.push({ id: "spa" });
+    h.ctx.window.LightPresets = presets;
+    h.store.apply();
+    h.panel.refreshLightTunePanel();
+    return h;
+  };
+  const first = setup({ sunElev: 9, lampLevel: 0.8 });
+  first.$("lt-reset").onclick();
+  const h = setup(first.stored.lightTune);
+  const confirmCopy = (mode) => {
+    const button = h.$("lt-spread-" + mode);
+    button.onclick();
+    button.onclick();
+    return button.textContent;
+  };
+  assert.equal(h.$("lt-profile").textContent, "MONACO · DUSK · WET  (defaults)");
+  assert.equal(confirmCopy("edits"), "NOTHING TUNED");
+  assert.equal(h.writes.length, 0);
+
+  h.input("sunAzim", 42);
+  assert.equal(h.$("lt-profile").textContent, "MONACO · DUSK · WET  (1 tuned)");
+  assert.equal(confirmCopy("edits"), "COPIED 1 ✓");
+  assert.deepEqual(h.stored.lightTune["spa|dusk|dry"], { sunAzim: 42 });
+  assert.equal(h.stored.lightTune["spa|dusk|wet"], undefined);
+  h.$("lt-spread-undo").onclick();
+  const beforeLook = host(h.stored.lightTune);
+  assert.equal(beforeLook["spa|dusk|dry"], undefined);
+
+  assert.equal(confirmCopy("look"), "COPIED 1 ✓");
+  assert.equal(h.stored.lightTune["spa|dusk|dry"].sunElev, 35);
+  assert.equal(h.stored.lightTune["spa|dusk|wet"].lampLevel, 0.6);
+  h.$("lt-spread-undo").onclick();
+  assert.deepEqual(h.stored.lightTune, beforeLook);
 });
 
 test("lighting-2: shared sun slot exports next to wet edits, distinguishes dry knobs, and loads once per key", () => {
