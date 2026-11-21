@@ -630,7 +630,10 @@ jobs:
             if [ "$code" = 0 ]; then
               # The verdict came from a job that ran PR code: re-read what GitHub itself can say before posting a pass.
               pr=$(gh api "repos/$R/pulls/$n") || pr='{}'
-              ci=$(ci_now "$head") || ci=""
+              # D-045: a ci row the trusted rows CREDITED across a clean tip-sync names the prior head (`credited=<sha>`);
+              # its CI is the one re-read. The trusted rows ran the deploy branch's own code, so the sha is believed.
+              cisha=$(sed -n 's/.* credited=\([0-9a-f]\{40\}\) .*/\1/p' <<<"$tline"); cisha=${cisha:-$head}
+              ci=$(ci_now "$cisha") || ci=""
               if [ "$(jq -r .head.sha <<<"$pr")" != "$head" ] || [ "$(jq -r .draft <<<"$pr")" != false ] || [ "$ci" != success ] \
                  || ! jq -e '[.labels[].name] | index("land") and (index("hold") | not)' <<<"$pr" >/dev/null; then
                 echo "::warning::PR #$n: the land-gate verdict disagrees with GitHub now (head, draft, labels or CI=$ci); not posted, the next event re-gates"

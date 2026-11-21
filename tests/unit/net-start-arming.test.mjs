@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { netStubG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -37,16 +38,10 @@ globalThis.Tracks = { sample: (t, s, o) => { o.t = [0, 0, 1]; return o; } };
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 
 function stubG(n) {
-  const car = (i, local) => ({ idx: i, local, human: local, isPlayer: local, s: i * 10, x: 0, px: 0, pz: 0,
-    speed: 0, head: 0, lap: 0, mods: null, name: "D" + i, code: "D" + i, driverId: "drv" + i });
-  const cars = [];
-  for (let i = 0; i < n; i++) cars.push(car(i, i === 0));
-  return {
-    cars, player: cars[0], track: { total: 5000, n: 500 }, netStart: null, netNow: null,
-    wireId: (c) => c.idx, setCarRole: (c, h, l) => { c.human = h; c.local = l; },
-    announce() {}, applyCaution() {}, COUNTDOWN_S: 3,
-    worldFromTrack: (s, x) => ({ x: s, y: 0, z: x, px: s, pz: x, head: 0 }), groundY: () => 0, trackAt: () => ({}),
-  };
+  return netStubG(n, 0, {
+    lapsTarget: undefined, raceT: undefined, applyCaution() {},
+    worldFromTrack: (s, x) => ({ x: s, y: 0, z: x, px: s, pz: x, head: 0 }),
+  });
 }
 
 test("a guest whose circuit built first still gets the start named promptly", () => {

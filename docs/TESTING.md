@@ -97,7 +97,10 @@ over the gate's `SELECTED_GATE.perTestTimeoutSec` runs in the **over-budget pool
 up to `MAX_OVER_BUDGET_SHARDS` jobs' worth, each capped from its own declaration). When the
 overflow is full, leftovers ride a bounded **spill** leg (`spill-<k>` jobs,
 up to `MAX_SPILL_SHARDS` jobs' worth, logged as `SPILL`). What is still
-left is dropped by name as an error, and a dropped spec turns `Selected specs (verdict)`
+left rides the **no-drop tail** (2026-11-21): its own spill or over-budget jobs past those caps, logged as
+`SPILL TAIL`. The lanes (`LANES` / `APEX_CI_LANES`) bound how many legs run at once, so a wide PR's extra legs
+queue rather than flood the pool. Only the draft plan (`OVERFLOW_SHARDS` 0) keeps the bounded cut, and there a
+dropped spec warns. Anywhere else a spec dropped by name (unreachable, unreadable) turns `Selected specs (verdict)`
 red on a pull request (2026-10-04). The
 **nightly** runs the same selector over the last day of deploy-branch merges
 (`ci-resolve-before.sh`'s `schedule` base) with its own `BUDGET_MIN` and
