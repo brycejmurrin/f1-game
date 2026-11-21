@@ -658,9 +658,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "92098d806ab8454e204dabe3df7d65ab2b007215",
+    "sha": "f78d2b228f64d2219e07478aef3b82f4e014a557",
     "reason": "Monza's independently measured longitudinal grade corrects the descent between the Lesmos and Ascari, changing gravity along the driving line.",
-    "at": "2026-11-21T22:57:48.943Z",
+    "at": "2026-11-21T23:41:00.344Z",
     "hash": "77de885379adfadd7f30646a5197509f03e2e64919fe5b1cdbaba87bd8656748"
   }
 }
