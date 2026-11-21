@@ -160,11 +160,13 @@ test("apply checks each audited tip and accepts merge evidence only for the requ
   git("commit", "-m", "feature");
   const feature = git("rev-parse", "HEAD");
   git("push", "origin", ...["integration-pr", "deploy-pr", "unknown-base", "open-pr"].map((b) => "HEAD:refs/heads/" + b));
-  // Another writer updates the server without refreshing the auditor's origin/advanced.
-  git("push", remote, "HEAD:refs/heads/advanced");
   git("reset", "--soft", "HEAD~");
   git("commit", "-m", "squashed feature");
   git("push", "origin", "HEAD:refs/heads/deploy");
+  // Another writer updates the server without refreshing the auditor's origin/advanced.
+  const auditedTip = git("rev-parse", "refs/remotes/origin/advanced");
+  git("--git-dir", remote, "update-ref", "refs/heads/advanced", feature, auditedTip);
+  assert.equal(git("rev-parse", "refs/remotes/origin/advanced"), auditedTip);
   const merged = { state: "MERGED", mergedAt: "2026-01-01T00:00:00Z", headRefOid: feature };
   const prs = [
     { ...merged, number: 1, headRefName: "integration-pr", baseRefName: "integration" },
