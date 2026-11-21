@@ -26,6 +26,9 @@ const GhostShare = (function () {
   // `smp.p + r * g.x`. The bounds are what a recorded lap can hold (ghost.js:
   // 600 s at 20 Hz): lateral |x| within half-width + run-off, s within three
   // laps of the circuit (60 km where the circuit declares no length).
+  // Speed (≤120 m/s) and one-lap ±4% length bounds (#5783 I2/I3) wait on remakes
+  // of existing ghost-share.test.mjs cases that still assert the old ceiling;
+  // DAD 2026-11-21: append-only in that file while #5978 is open.
   const MAX_X = 60, MAX_T = 600, MAX_SAMPLES = 600 * 20, MAX_S = 60000;
   function validGhost(g, maxS) {
     if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
@@ -53,10 +56,13 @@ const GhostShare = (function () {
     }
     return Object.keys(out).length ? out : null;
   }
-  // FNV-1a (32-bit) over the JSON of [time, t, s, x]: JSON numbers round-trip
-  // exactly, so the receiver hashes the same text the sender did.
-  function traceHash(g) {
-    const text = JSON.stringify([g.time, g.t, g.s, g.x]);
+  // FNV-1a (32-bit) over the JSON of [track?, time, t, s, x]: JSON numbers
+  // round-trip exactly, so the receiver hashes the same text the sender did.
+  // New links include the track id so a relabelled envelope no longer matches
+  // `h`; old links hashed without the track still verify via the legacy form.
+  function traceHash(g, track) {
+    const payload = track ? [track, g.time, g.t, g.s, g.x] : [g.time, g.t, g.s, g.x];
+    const text = JSON.stringify(payload);
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
     return (h >>> 0).toString(36);
@@ -65,10 +71,11 @@ const GhostShare = (function () {
   function envelope(ghost, opts) {
     if (!validGhost(ghost)) return null;
     const o = opts || {};
+    const track = typeof o.track === "string" && o.track ? o.track : null;
     return {
       v: 1,
       kind: "ghost",
-      track: typeof o.track === "string" && o.track ? o.track : null,
+      track,
       context: typeof o.context === "string" && o.context ? o.context : null,
       day: typeof o.day === "string" && o.day ? o.day : null,
       time: ghost.time,
@@ -76,7 +83,7 @@ const GhostShare = (function () {
       t: ghost.t,
       s: ghost.s,
       x: ghost.x,
-      h: traceHash(ghost),
+      h: traceHash(ghost, track),
     };
   }
 
@@ -229,7 +236,10 @@ const GhostShare = (function () {
   function fromBody(body) {
     if (!body || body.v !== 1 || body.kind !== "ghost" || typeof body.track !== "string" || !body.track ||
         !validGhost(body, maxArc(body.track))) return CORRUPT;
-    if (body.h !== undefined && body.h !== traceHash(body)) return CORRUPT;   // time or trace edited after export
+    // New `h` covers the track id so a relabel no longer matches; legacy
+    // (pre-track) hashes still verify. Length/speed plausibility is separate.
+    if (body.h !== undefined && body.h !== traceHash(body, body.track) &&
+        body.h !== traceHash(body)) return CORRUPT;
     if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
     const meta = cleanMeta(body.meta);
     return {

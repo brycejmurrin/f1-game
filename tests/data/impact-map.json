@@ -3507,6 +3507,7 @@
         "tests/unit/ghost-share.test.mjs"
       ],
       "fileExport": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/ghost-share.test.mjs"
       ],
       "guest": [
