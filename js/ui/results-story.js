@@ -30,9 +30,9 @@ const ResultsStory = (function () {
       const p = data.player;
       head.appendChild(el("span", "", "Unscored session" + (p ? " · " + (p.out || "P" + p.pos) : "")));
     } else if (data.player && !o.watched) {
-      const p = data.player;
+      const p = data.player, pt = " · " + p.points + " point" + (p.points === 1 ? "" : "s");
       head.append(el("strong", "", p.out ? "A tough finish" : p.pos === 1 ? "Race winner" : p.pos <= 3 ? "On the podium" : "Across the line"),
-        el("span", "", p.out === "NC" ? "NC · 0 points" : p.out ? p.out + (p.points ? " · " + p.points + " points" : "") : "P" + p.pos + " · " + p.points + " points"));
+        el("span", "", p.out === "NC" ? "NC · 0 points" : p.out ? p.out + (p.points ? pt : "") : "P" + p.pos + pt));
       if (G.careerSettlement && G.careerSettlement.obj) head.appendChild(el("span", "", G.careerSettlement.obj.done
         ? "Round objective achieved" : "Round objective missed"));
     } else head.appendChild(el("strong", "", "At the chequered flag"));

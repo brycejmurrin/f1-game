@@ -1,5 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-20 — PR #6017 (claude/port-cleanroom-46-53-5973): clean-room fix 45, the two-dry-compound rule in HOW TO PLAY
+
+`(tree) shellNodes` 2321 → **2323** (+2). Deliberate raise past the absorb, on Bryce's `ratchet-raise` (decision issue
+#6016). The game disqualifies a driver who finishes a dry race of eight laps or more on one compound
+(`SportingRegs.applyCompoundRule`), but HOW TO PLAY never said so. One `dt`/`dd` pair under PIT STOPS is the
+two nodes; `tests/unit/help-rules-facts.test.mjs` reads the figures in it from the code that enforces them.
+Fragment: `tests/data/ratchets.d/claude--port-cleanroom-46-53-5973.json`.
 ## 2026-11-20 — PR #6024 (claude/ratchet-pin-absorb): pin counts get a 5-pin absorb (Bryce's "Pin slack", D-037)
 
 `(tree) assertPins` ceiling **8140** and `(tree) assertPinsAll` ceiling **10366** are unchanged; each entry gains

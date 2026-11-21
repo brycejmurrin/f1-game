@@ -820,7 +820,7 @@
   "results.finalChampionship": "FINAL CHAMPIONSHIP",
   "results.finalDriverStandings": "Final driver standings",
   "results.finalStandings": "FINAL STANDINGS",
-  "results.friendRoomClosed": "The friend room closes when you leave. NEW FRIEND ROOM, or VS FRIEND on the title screen, starts another.",
+  "results.friendRoomClosed": "The friend room closes when you leave. NEW FRIEND ROOM, or RACE A FRIEND on the title screen, starts another.",
   "results.fromGrid": "FROM P{pos}",
   "results.gapBehind": "{gap} behind winner",
   "results.ghostCode": "Ghost code",

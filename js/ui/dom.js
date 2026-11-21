@@ -17,13 +17,13 @@ const Dom = (function () {
 
   // A closed fold's summary line: `bits` is [[key, label], …]; each pair becomes
   // <span data-fold="key">label</span>, separated by " · ". The labels are the
-  // callers' own constants (never user text), which is why innerHTML is
-  // acceptable here.
+  // callers' constants; < > " escaped too: TILT carries a stored value (#5900).
   const foldHtml = new WeakMap();
+  const esc = (v) => String(v).replace(/[<>"]/g, (c) => "&#" + c.charCodeAt(0) + ";");
   function paintFold(target, bits) {
     if (!target) return;
     const html = bits.map((p, i) =>
-      `${i ? '<span data-fold="sep"> · </span>' : ""}<span data-fold="${p[0]}">${p[1]}</span>`).join("");
+      `${i ? '<span data-fold="sep"> · </span>' : ""}<span data-fold="${esc(p[0])}">${esc(p[1])}</span>`).join("");
     const last = foldHtml.get(target);
     // innerHTML serializes entities, so remember the rendered spelling too.
     // Read it back before skipping: another owner may have changed the fold.
