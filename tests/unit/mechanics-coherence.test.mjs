@@ -49,6 +49,16 @@ test("roll stiffness shifts grip between axles while works settings stay identic
   for (const x of [front,rear]) assert.ok(x.f>.8 && x.r>.8 && x.f<1.2 && x.r<1.2);
 });
 
+test("axleGrip transfer magnitude at LAT_MAX", () => {
+  const { get } = load(["js/physics/consts.js", "js/garage/setup-tune.js"]);
+  const S = get("SetupTune"), lat = get("PhysicsConsts").LAT_MAX;
+  const g = { ...S.axleGrip(0.3, lat) };
+  // Full lateral demand must move axle capacity by a material amount — a token
+  // transfer (≈0.01) leaves both axles within a few parts per ten-thousand of 1.
+  assert.ok(Math.abs(g.f - 1) > 0.02, `front axle shift at LAT_MAX must be >2%, got ${g.f}`);
+  assert.ok(Math.abs(g.r - 1) > 0.01, `rear axle shift at LAT_MAX must be >1%, got ${g.r}`);
+});
+
 test("ghost classes isolate records, retain legacy laps and survive immediate switching", () => {
   const { get, ctx }=load(["js/car/ghost.js"],{requestIdleCallback() {}}), G=get("Ghost");
   const lap=t=>{G.startLap();for(let i=0;i<12;i++)G.record(i*t/12,i*10,0);G.finishLap(t);};
