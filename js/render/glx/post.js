@@ -209,7 +209,7 @@ const GLXPost = (function () {
           try {
             let _p = localStorage.getItem("apex26.gfxPreset");
             try { _p = JSON.parse(_p); } catch (_) { /* not JSON: compare the raw string */ }
-            _ultra = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+            _ultra = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
           } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
           if (!_ultra && msaaSamples > 2) msaaSamples = 2;
         }

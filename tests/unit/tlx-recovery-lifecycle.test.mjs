@@ -109,12 +109,12 @@ for (const initialFailure of [true, false]) {
     const target = () => ({ tagOn: () => true, resize() {}, hdrOk: () => true });
     const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} }, THREE, TSL,
       post: initialFailure ? null : target(), fx: {}, lit: null, renderer: { setMRT() {} },
-      shadowSys: null, envRT: null, matMaps: null, lampGrid: null, _sharedUniforms: true, _liteGpu: true,
+      shadowSys: null, envRT: null, matMaps: null, lampGrid: null, _sharedUniforms: true, _liteGpu: true, isMobile: false, isWebGPU: () => false, ENV_SIZE: 64,
       _warmPending: null, W: 640, H: 360, presentW: 640, presentH: 360, performance: { now: () => 100 },
       buildPost() { builds++; return target(); } });
     load(ctx, ["js/render/shared/light-budget.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"]);
     vm.runInContext("globalThis.TLXShaders = window.TLXShaders; globalThis.chunks = TLXShaders.chunks(THREE, TSL);", ctx);
-    vm.runInContext(slice(tlx, "          lit = TLXShaders.lit(THREE, TSL, {", "\n        }"), ctx, { filename: "vm-snippet:tlx-lit-recovery" });
+    vm.runInContext(slice(tlx, "          const litCtx = {", "\n        }"), ctx, { filename: "vm-snippet:tlx-lit-recovery" });
     const existing = ctx.lit.makeMaterial({ carPaint: 1 });
     assert.equal(existing.mrtNode, null, "canvas starts without MRT");
     const key = existing.customProgramCacheKey(), output = existing.outputNode, opacity = existing.opacityNode;

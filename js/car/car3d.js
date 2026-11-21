@@ -192,7 +192,9 @@ const Car3D = (function () {
   // busy lids) matter only large on screen: field AI bodies (tens of px) and depth silhouettes drop them to 0.
   function emitHelmet(out, opts, c1, liv, sil) {
     const des = Helmets.styled(Helmets.designFor(opts && opts.num, c1, helmetKey(opts)), liv.helmetStyle, liv.helmetBase, liv.helmetAccent), flat = sil || !!(opts && opts.field);
-    Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.visor, maxSplit: flat ? 0 : undefined, simplePaint: flat });
+    const S = { paint: SURFACES.paint, glass: SURFACES.visor, maxSplit: flat ? 0 : undefined, simplePaint: flat };
+    if (!flat && CarGeometry.level() >= 1) S.hi = true;   // meshHi lid (absent at detail 0: the memo key is unchanged)
+    Helmets.build(out, 0, 0.715, -0.075, des, S);
   }
 
   const { addWheel, buildWheel, buildWheelLayers } = CarWheels.create({
@@ -1172,6 +1174,7 @@ const Car3D = (function () {
       }
     };
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(styledTipZ - 0.04);
+    if (CarGeometry.hero() && !ckpt) CarHero.nose(HK, out, anchors, styledTipZ);   // heroCar pitot + antenna
     // fitSeat: a concept cone bulges 27-98 mm over the straight 1.60-to-tip chord, which
     // buried the accent and z-fought where it crossed the skin (sharkfin 215 cm2). Follow
     // the skin in ~12 cm steps from the cockpit deck's front (2.15), which covers it behind.
@@ -2604,6 +2607,7 @@ const Car3D = (function () {
         addBox(out, s*0.595, 0.32, AXLES.frontZ + 0.14, 0.014, 0.10, 0.16, CARBON);
       }
       if (!ckpt) (shadeFlags.round ? CarShade.boxFn(addTri, { r: 0.028 }) : addBox)(out, s*0.58, 0.30, AXLES.rearZ - 0.20, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
+      if (CarGeometry.hero() && !ckpt) CarHero.duct(HK, out, s, ductMul);   // heroCar: the rear duct's throat
       if (brakeScoop >= 1 && !ckpt) {
         addBox(out, s*0.58, 0.355, AXLES.rearZ - 0.275, 0.07, 0.040, 0.045, INTAKE);
         addBox(out, s*0.58, 0.385, AXLES.rearZ - 0.295, 0.08, 0.010, 0.028, CARBON);
@@ -2863,8 +2867,28 @@ const Car3D = (function () {
     return out;
   }
 
-  // opts.seats (#4219): teammates' bodies from this one build (CarMaterials.reseat; `lid` emits a seat's lid alone).
+  // opts.detail (0 / 1 / 2, CarGeometry.detailFor): the tessellation level of this build, 0 = today's mesh.
+  // opts.hero (EXTREME player car, CarGeometry.heroOn): the lazy CarHero's pass (js/car/car-hero.js; absent, the
+  // build is ULTRA's). Any throw in the detailed build falls back to today's detail-0 mesh.
   function build(color, color2, opts) {
+    if (opts && opts.hero && typeof CarHero !== "undefined") return CarHero.build(build0, color, color2, opts);
+    const d = CarGeometry.clampDetail(opts && opts.detail);
+    if (!d) return build0(color, color2, opts);
+    try {
+      return CarGeometry.withDetail(d, () => build0(color, color2, opts));
+    } catch (e) {
+      Log.warn("car", "detail " + d + " build failed, detail 0: " + (e && e.message));
+      return build0(color, color2, Object.assign({}, opts, { detail: 0, hero: false }));
+    }
+  }
+  // The garage / CAR STUDIO opts (js/garage/setup-camera.js): {} below ULTRA, every phone, node.
+  function garageDetail() {
+    const d = CarGeometry.detailFor(true), h = CarGeometry.heroOn() && d > 1;
+    return d || h ? { detail: d, hero: h } : {};
+  }
+  const HK = { G: geometry, CARBON, DARK, mouth: addInletMouth };   // CarHero's kit (it reads Car3D.SURFACES / AXLES)
+  // opts.seats (#4219): teammates' bodies from this one build (CarMaterials.reseat; `lid` emits a seat's lid alone).
+  function build0(color, color2, opts) {
     if (!(opts && opts.seats && opts.seats.size && CarMaterials.seatable(opts))) return buildOne(color, color2, opts);
     const lid = (num) => { const h = { pos: [], nrm: [], col: [], mat: [], idx: [] }; emitHelmet(h, Object.assign({}, opts, { num }), color || [0.8, 0.05, 0.05], opts.livery || {}, false); return h; };
     return CarMaterials.reseat(buildOne(color, color2, Object.assign({}, opts, { refinish: true })), opts, lid);
@@ -2876,7 +2900,7 @@ const Car3D = (function () {
     for (const el of aeroFlapsGeom(info.aLvl, info.style)) {
       // flapInfo carries finish: build()'s paint→finish remap runs before append;
       // without it satin/chrome cars got gloss top flaps here.
-      const g = buildFlapGeom(el, info.col, info.finish, info.surface);
+      const g = CarGeometry.withDetail(opts && opts.detail, () => buildFlapGeom(el, info.col, info.finish, info.surface));
       const base = out.pos.length / 3;
       for (let i = 0; i < g.pos.length; i += 3) {
         // delta 0: undo only the hinge translation buildFlapGeom applied.
@@ -2890,7 +2914,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, garageDetail, heroCopy: (d) => d && d._hero ? CarHero.copy(d) : d, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

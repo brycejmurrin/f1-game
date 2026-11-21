@@ -229,6 +229,13 @@ test("the phone mirror ranks the unculled lamp list and preserves all tail-light
   assert.equal(h.frame.tailCount, tails.length);
 });
 
+test("mirrorHi (ULTRA+): a backend's mirrorMax lifts the cap (TLX 2048x1024); without one (GLX/WGX) it stays 1024x512", () => {
+  const size = (o) => { const h = boot(Object.assign({ mode: "on", tier: 0, dpr: 3 }, o)); h.render(); const b = h.calls.find((c) => c[0] === "begin"); return [b[1], b[2]]; };
+  assert.deepEqual(size({ mirrorMax: [2048, 1024] }), [1600, 456], "TLX + mirrorHi: the uncapped 2x-SS target");
+  assert.deepEqual(size({ mirrorMax: [1600, 400] }), [1404, 400], "the backend's cap, aspect kept");
+  assert.deepEqual(size({}), [1024, 292], "no mirrorMax: today's cap");
+});
+
 test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a third)", () => {
   const cases = [[{ tier: 0 }, "full", 800, 228], [{ mobile: true }, "lite", 480, 137],
     [{ tier: 3 }, "low", 200, 57], [{ tier: 4 }, "min", 160, 46]];

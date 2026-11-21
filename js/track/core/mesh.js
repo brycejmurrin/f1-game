@@ -343,6 +343,8 @@ const TrackMesh = (function () {
   }
 
   function buildKerbs(track, out) {
+    // EXTREME kerbProfile's strip hook (js/track/scenery/detail.js attach; it mirrors KW / KH0 / STRIPE_M below).
+    const kp = track._kerb && track._kerb(out);
     const { n, px, py, pz, hw } = track;
     const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
     const ds = track.total / n;
@@ -504,6 +506,7 @@ const TrackMesh = (function () {
         let len = 1;
         while (len < n - m && joins((i + len) % n)) len++;
         ribbon(U(i), U(i) + len, side);
+        kp && kp(U(i), U(i) + len, side);   // kerbProfile: the same strip, profiled, into a drawn-only buffer
         m += len;
       }
     }

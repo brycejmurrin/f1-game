@@ -914,7 +914,7 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
 test("TLX composite skips ACES and HDR grade on an 8-bit scene target", () => {
   const tsl = read("js/render/three/tsl-post.js");
   assert.match(tsl, /sceneHdr: uniform\(1\)/);
-  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?acesTonemap/);
+  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?toneMap\(/);
   assert.match(tsl, /C\.hdrGradeOn\.greaterThan\(0\.5\)\.and\(C\.sceneHdr\.greaterThan\(0\.5\)\)/);
   const post = read("js/render/three/tlx-post.js");
   assert.match(post, /P\.composite\.U\.sceneHdr\.value = _sceneHdr/);
@@ -1038,6 +1038,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
+    "apex26.tlxAgx",   // the EXTREME AgX tone-map opt-in: a RESET returns the picture to ACES (#6003)
+    "apex26.tlxCsmCars", "apex26.tlxCsmDither",   // the EXTREME cascade A/B switches (#6003)
     // The boot canary's latch. gfxProbeStrikes counts loads that died before
     // presenting a frame — one is a memory kill, two retires the pick. A RESET
     // that left a strike behind would hand the next boot a strike it did not
@@ -2793,7 +2795,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /queue\.writeBuffer\(\s*buf\s*,\s*0\s*,\s*staging\s*\)/);
   assert.match(tlx, /function\s+_instColorAttr\b/);
   assert.match(tlx, /\bisInstancedBufferAttribute\b/);
-  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
+  // hdrOut: a half-float LDR is copied to RGBA8 first (cap8 is the identity on an 8-bit target).
+  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*cap8\(ldrRT\)/);
 });
 
 test("TLX coalesces window resize to one target realloc per frame", () => {
@@ -4686,6 +4689,8 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
     "a raw (unencoded) 'ultra' — a probe's --ls or an older writer — still reads as ULTRA");
   assert.equal(msaaFor({}), 2,
     "unset = the desktop default HIGH = capped");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("extreme") }), 4,
+    "EXTREME is capped at ULTRA on GLX, never below it");
   assert.equal(msaaFor({ "apex26.gfxHigh": "1" }), 4,
     "the legacy phone key is honoured only when the preset was never stored");
   assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
@@ -4693,7 +4698,7 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
   // WGX makes the same decision at module scope; pin that it decodes too.
   const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
-  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
+  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| _p === "extreme" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
     "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
 });
 
@@ -5570,7 +5575,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
   // can read it (eligible phone LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
-  assert.match(post, /count:\s*tagOn \? 2 : 1/,
+  assert.match(post, /count:\s*tagOn \? \(velOn \? 3 : 2\) : 1/,   // +velocity (EXTREME motion vectors, #6003): a third attachment only with the tag
     "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
     "MRTNode.setup matches attachments by texture.name");
@@ -6545,6 +6550,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
+  const carDetail = () => ({ player: 0, rival: 0, hero: false, key: "" });   // desktop detail: HIGH (CarGeometry.detailFor 0)
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
   let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;

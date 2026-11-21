@@ -3538,7 +3538,7 @@ const titleWarm = TitleWarm.create(G, { $, ui: () => uiExperience, schedule: () 
 titleWarm.start();
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
-const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });
+const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster, sharedRivalBody: carDraw.sharedRivalBodyMesh });
 // The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
 const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, drawCar: carDraw.drawMirrorCar, renderPosOf, playerAnchor, yawVisInterp, basisMat,
   carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
@@ -6880,7 +6880,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
         track.meshes.roadChunked = null;
         if (track.roadGeo && gfx.createChunkedMesh) {
           track.roadGeo._keepPositions = true;
-          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadDrawGeo || track.roadGeo, 72);   // roadDrawGeo: kerbProfile
           if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(track);
         }
       }
@@ -8515,6 +8515,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
   if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
+  if (typeof GfxQuality !== "undefined") GfxQuality.setCinema(setupPreviewOn || photoMode || replayBuf.isScrubbing());   // CINEMA: garage / photo / replay (EXTREME only)
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,

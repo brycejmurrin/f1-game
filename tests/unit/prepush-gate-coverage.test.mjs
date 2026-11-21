@@ -55,6 +55,8 @@ const UNIT = path.join(ROOT, "tests/unit");
    is exactly the condition under which a prop can move. Conditional on the
    diffs that can cause the defect beats unconditional on none of them. */
 const SWEEPS_ONLY = new Map([
+  ["props-hi-detail.test.mjs", "test:sweeps — per-circuit geometry (EXTREME propsHi: detail-0 hashes and detail-2 builds, #5951)"],
+  ["track-detail.test.mjs", "test:sweeps — per-circuit geometry (detail tiers: builds monza, monaco, spa three times each, #5951)"],
   ["coplanar-faces.test.mjs", "test:sweeps — per-circuit geometry"],
   ["kerb-berm-surface.test.mjs", "test:sweeps — per-circuit geometry (designer kerb styles + berms on banked corners)"],
   ["kerb-stripes.test.mjs", "test:sweeps — per-circuit geometry (kerb stripe edges, the line-following rubber band)"],
