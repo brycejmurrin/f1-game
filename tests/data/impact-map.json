@@ -19015,9 +19015,8 @@
         "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
-    "js/ui/appearance-studio.js": {
+    "js/ui/appearance-studio-ui.js": {
       "applyPreset": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "applySnapshot": [
@@ -19054,7 +19053,6 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "reset": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "saveProfile": [
@@ -19073,11 +19071,53 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "undo": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
+      ]
+    },
+    "js/ui/appearance-studio.js": {
+      "applySnapshot": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "attach": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "effectiveSceneMotion": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "homeCamera": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "initUI": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "normalizeSnapshot": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "onSceneChange": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "profiles": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "scene": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "setHomeCamera": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "setScene": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "snapshot": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/settings-lazy-gate.test.mjs",
@@ -20283,7 +20323,7 @@
         "tests/unit/wake-lock-vm.test.mjs"
       ]
     },
-    "js/ui/photo-studio.js": {
+    "js/ui/photo-studio-ui.js": {
       "album": [
         "tests/unit/photo-studio.test.mjs"
       ],
@@ -20329,11 +20369,29 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "state": [
-        "tests/specs/photo-studio-conditions.spec.js",
+        "tests/specs/photo-studio.spec.js",
+        "tests/unit/photo-studio.test.mjs"
+      ]
+    },
+    "js/ui/photo-studio.js": {
+      "background": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "create": [
         "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
       ],
+      "crop": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "filename": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "setBackground": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
       "*": [
+        "tests/specs/photo-studio-conditions.spec.js",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]

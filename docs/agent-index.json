@@ -4828,6 +4828,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/appearance-studio-ui.js",
+      "global": "AppearanceStudioBody",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/appearance-studio.js",
       "global": "AppearanceStudio",
       "roster": "tag"
@@ -5021,6 +5026,11 @@
       "path": "js/ui/pause-opts.js",
       "global": "PauseOpts",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/photo-studio-ui.js",
+      "global": "PhotoStudioBody",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/photo-studio.js",
