@@ -176,6 +176,15 @@ test('coach applies a bounded atomic pair, undoes exact snapshot, and invalidate
   assert.equal(S.experiment('wide', { ...before, arbF: 1 }), null);
   const front = S.experiment('wide', before); S.set(team.id, front); assert.ok(S.balance(team.id) < 0);
 });
+
+test('ARB split balance scales ~0.025 per click', () => {
+  const f = tuneFixture(), { S, team } = f;
+  const d = S.defaults(team.id);
+  S.set(team.id, { arbF: d.arbF + 1, arbR: d.arbR });
+  assert.equal(+S.balance(team.id).toFixed(3), 0.025, 'one front ARB click is +0.025 balance');
+  S.set(team.id, { arbF: d.arbF + 2, arbR: d.arbR - 1 });
+  assert.equal(+S.balance(team.id).toFixed(3), 0.075, 'three clicks of split land at 0.075');
+});
 test('aero bench reports saturation and no Corner Mode standing gain', () => {
   const f = tuneFixture(); f.S.set(f.team.id, { rideR: 80 }); f.build();
   const text = () => f.container.querySelectorAll('p').map(n => n.textContent).join(' ');

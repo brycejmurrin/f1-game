@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB, guardsVerdict, newestByName, localVerdict, evaluate, shaPrefixMatch,
-  stampReadySha, planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, mergeableProblem, draftProblem, main,
+  stampReadySha, planHash, planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, mergeableProblem, draftProblem, main,
 } from "../../tools/ci/ready-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -243,6 +243,35 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
     assert.equal(main(["--sha", SHA, "--local"], deps(() => { throw new Error("no API"); })), 0, "--local never calls GitHub");
     assert.equal(receipts.length, n, "no receipt without --pr");
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test("--wait judges the latest PR snapshot and keeps its original head pin", () => {
+  const openPlan = body("- [ ] Verify");
+  const donePlan = body("- [x] Verify");
+  const initial = { sha: SHA, pr: 7, state: "open", draft: true, mergeableState: "clean", files: [], labels: [] };
+  for (const [before, after, expected, state] of [
+    [{ body: openPlan }, { body: donePlan }, 0, "passed"],
+    [{ body: donePlan }, { body: openPlan }, 1, "plan-open"],
+    [{ body: donePlan }, { draft: false }, 1, "not-draft"],
+    [{ body: donePlan }, { mergeableState: "dirty" }, 1, "conflicting"],
+    [{ body: donePlan }, { sha: "b".repeat(40) }, 1, "moved"],
+    [{ body: donePlan }, { error: "offline" }, 3, "unknown"],
+  ]) {
+    const snapshots = [{ ...initial, ...before }, { ...initial, ...before, ...after }];
+    const checks = [{ ...GREEN, state: "pending", code: 1 }, GREEN];
+    const receipts = [], lines = [];
+    const rc = main(["--pr", "7", "--wait"], {
+      resolve: () => snapshots.shift(), judge: () => checks.shift(), sleep: () => {}, now: () => 1,
+      receipt: r => receipts.push(r), log: (...args) => lines.push(args.join(" ")),
+    });
+    assert.equal(rc, expected, state);
+    assert.ok(lines.some(line => line.includes(`= ready-gate ${state}`)), lines.join("\n"));
+    if (["moved", "unknown"].includes(state)) assert.equal(receipts.length, 0);
+    else {
+      assert.equal(receipts[0].ok, expected === 0);
+      assert.equal(receipts[0].planHash, planHash(after.body ?? before.body));
+    }
+  }
 });
 
 test("nextAction: the land step is the MCP issue_write recipe, never a gh label write (PR #5809)", async () => {

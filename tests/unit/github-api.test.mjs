@@ -88,6 +88,18 @@ test("request(): a 429 is retried like a 5xx", () => {
   assert.equal(slept.length, 1);
 });
 
+test("trusted gate requests defer only verified HTTP quota without transport retries", () => {
+  const call = (stdout, deferRateLimit = true) => api("pulls/7", {
+    token: "t", deferRateLimit, run: () => ({ status: 0, stdout }),
+    sleepSync: () => { throw new Error("an exhausted trusted read must return to the scheduler"); },
+  });
+  for (const response of ['{"message":"API rate limit exceeded for installation"}\n403', '{}\n403   0', '{}\n403  30', '{}\n429']) {
+    assert.equal(call(response).rateLimited, true);
+  }
+  assert.deepEqual(call('{"message":"Resource not accessible by integration"}\n403'), { error: "HTTP 403" });
+  assert.deepEqual(call('{"message":"secondary rate limit"}\n403', false), { error: "HTTP 403" });
+});
+
 test("request(): a 429's Retry-After is honoured up to MAX_RETRY_AFTER_S, and a longer one is returned at once", async () => {
   const { MAX_RETRY_AFTER_S } = await import("../../tools/ci/github-api.mjs");
   const slept = [];

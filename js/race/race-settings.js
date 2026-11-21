@@ -182,10 +182,10 @@ const RaceSettings = (function () {
 
   /* REMEMBER LAST RACE SETUP (apex26.raceDraft). A solo one-off Grand Prix
    * remembers what it last STARTED with — laps as a ladder rung or "FULL",
-   * weather, time of day, MIXED — so the next circuit opens on the same race
-   * instead of 3 laps / dry / default. Pure halves, exported for the tests. The
+   * weather, time of day and MIXED — across circuits. The
    * laps are stored as a rung, not a number: FULL is 44 at Spa and 79 at Monaco,
    * so "the full race" is what carries between circuits, not its count. */
+  const DEFAULT_DRAFT = Object.freeze({ weather: "storm", tod: "dusk", mixed: true, laps: "3" });
   const DRAFT_LAPS = ["3", "5", "10", "25"];
   function draftOf(laps, full, weather, tod, mixed) {
     const n = +laps;
@@ -694,9 +694,7 @@ const RaceSettings = (function () {
       if (G.soundOn) GameAudio.uiSelect();
     }
 
-    function openRaceSettings(from) {
-      searchReturn = null;
-      rsReturn = from || "select";
+    function stageDraft() {
       if (!netRoom) {
         const daily = isTimeTrial() && G.daily ? G.daily.current() : null;
         const key = [G.flow, G.session, G.trackIdx, daily && daily.day,
@@ -706,7 +704,7 @@ const RaceSettings = (function () {
           G.raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
           G.raceWeather = daily ? daily.weather : "dry";
           G.raceTimeOfDay = daily ? daily.tod : "default";
-          const d = soloGp() ? draftFor(store.get("raceDraft", null), fullLaps()) : null;
+          const d = soloGp() ? draftFor(store.get("raceDraft", DEFAULT_DRAFT), fullLaps()) : null;
           if (d) {
             if (d.laps != null) G.raceLaps = d.laps;
             if (d.weather) G.raceWeather = d.weather;
@@ -715,6 +713,17 @@ const RaceSettings = (function () {
           }
         }
       }
+    }
+
+    function preparePickerTrack() {
+      if (soloGp()) stageDraft();
+      flybyTrack(true);
+    }
+
+    function openRaceSettings(from) {
+      searchReturn = null;
+      rsReturn = from || "select";
+      stageDraft();
       buildRaceSettings();
       $(rsReturn).hidden = true;
       $("race-settings").hidden = false;
@@ -796,6 +805,7 @@ const RaceSettings = (function () {
     return {
       buildRaceSettings,
       wireRaceSettings,
+      preparePickerTrack,
       openRaceSettings,
       openSettingSearch,
       openRaceSetup,
@@ -812,6 +822,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts };
+  return { create, DEFAULT_DRAFT, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts };
 })();
 Object.freeze(RaceSettings);

@@ -1198,6 +1198,10 @@ const NetPlay = (function () {
         const quiet = now - r.heardAt > (r.hostAi || r.everHeard ? STALE_MS : HOLD_MAX_MS);
         if (quiet !== r.stale) { if (quiet) goLocal(r); else goWire(r); }
         if (r.stale) continue;
+        // A retired car stays where retireCar / the LAP event parked it. Posing
+        // from a leftover aged packet (or a host that still relays — #4270) would
+        // only move a DNF the game already excludes from ranked/contact.
+        if (r.car.retired) continue;
         // Per-remote scratch (the ._smp precedent): poseRemote copies fields
         // out and pred is consumed below, so neither object escapes the tick.
         const st = r.interp.sample(now, r._smpSt || (r._smpSt = {}));
@@ -1250,7 +1254,9 @@ const NetPlay = (function () {
       // immediately on a pit/tyre phase change, and for each arriving epoch.
       if (role === "host" && G.track && G.track.def) for (const c of G.cars || []) {
         const wire = G.wireId(c);
-        if (c === localCar || wire < 0 || remotes.has(wire)) continue;
+        // Retired AI: the LAP retirement event is the last word (and peerArrived
+        // re-sends it above). A 1 Hz strategy refresh of a parked car is noise.
+        if (c === localCar || c.retired || wire < 0 || remotes.has(wire)) continue;
         let last = aiStrategyPhases.get(wire);
         const phase = !last || peerArrived || c.tyreStints !== last.stints
             || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
@@ -1301,6 +1307,11 @@ const NetPlay = (function () {
           }
           if (withAi) for (const c of G.cars || []) {
             if (c === localCar) continue;
+            // A retired/DNF AI is already parked on every peer via the LAP event
+            // (retireCar → reportLap). Relaying its frozen pose at 10 Hz wastes
+            // the aged datagram and kept posing a car updateCar will never drive
+            // again (#4270). Live AI and human remotes are unchanged.
+            if (c.retired) continue;
             const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
             if (id < 0 || r) continue;   // human owner poses are relayed above; never fallback motion
             relayPush(id, c, at);

@@ -55,7 +55,10 @@ function silentWav(seconds = 5, sampleRate = 8000) {
 
 async function boot(page) {
   await page.addInitScript(() => {
-    try { localStorage.setItem("apex26.music", "true"); } catch (_) {}
+    try {
+      localStorage.setItem("apex26.sound", "true");
+      localStorage.setItem("apex26.music", "true");
+    } catch (_) {}
   });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).

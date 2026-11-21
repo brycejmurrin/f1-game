@@ -65,7 +65,8 @@ function runWithFakeGh(script, { refusePr, env = {} }) {
     fs.writeFileSync(path.join(dir, "gh"), `#!/usr/bin/env bash
 line="GH_TOKEN=$GH_TOKEN $*"; printf '%s\\n' "\${line//$'\\n'/\\\\n}" >> "${log}"
 case "$1 $2" in
-  "pr create") ${refusePr ? 'echo "pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)" >&2; exit 1' : "exit 0"} ;;
+  "pr create") ${refusePr ? 'echo "pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)" >&2; exit 1' : 'echo "https://x/o/r/pull/7"'} ;;
+  "workflow run") exit "\${DISPATCH_STATUS:-0}" ;;
   "issue list") printf '%s' "$ISSUE_ROW"; exit 0 ;;
 esac
 exit 0
@@ -122,6 +123,13 @@ test("open-bot-pr: a refusal fails, dispatches CI and opens ONE issue; it re-pin
   const ok = runWithFakeGh(run, { refusePr: false, env: base });
   assert.equal(ok.code, 0, ok.out);
   assert.deepEqual(verbsOf(ok.calls), ["pr create", "workflow run"], "a default-token PR starts no CI, so CI is dispatched");
+  const dispatchFailure = runWithFakeGh(run, { refusePr: false, env: { ...base, DISPATCH_STATUS: "1" } });
+  assert.equal(dispatchFailure.code, 1);
+  assert.deepEqual(verbsOf(dispatchFailure.calls), ["pr create", "workflow run"]);
+  assert.match(dispatchFailure.out, /https:\/\/x\/o\/r\/pull\/7.*Retry with: gh workflow run ci.yml --repo o\/r --ref bot\/x/);
+  const bothFailed = runWithFakeGh(run, { refusePr: true, env: { ...base, DISPATCH_STATUS: "1" } });
+  assert.equal(bothFailed.code, 1);
+  assert.match(bothFailed.calls.at(-1), /issue create .*CI dispatch failed/);
   const land = runWithFakeGh(run, { refusePr: false, env: { ...base, PR_TOKEN: "pat" } });
   assert.equal(land.code, 0, land.out);
   assert.equal(land.calls.length, 1, "a LAND_TOKEN PR starts its own CI: no dispatch");

@@ -626,6 +626,8 @@ function mirrorClear(root) {
 }
 /** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
 const manualHud = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+// The cap passes measure the factory phone seed (data-hl-seed, js/ui/hud-layout.js) like an automatic piece.
+const capManual = (el) => manualHud(el) && !el.hasAttribute("data-hl-seed");
 function _hudRectsHit(a, b) {
   return !!(a && b && a.width > 0 && b.width > 0
     && a.left < b.right - 0.5 && b.left < a.right - 0.5
@@ -940,7 +942,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   let zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));   // #dock-left (steer) paints at its own cap
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
-    if (!el || manualHud(el)) return 0;
+    if (!el || capManual(el)) return 0;
     const r = layoutRect(el);
     if (!r.width) return 0;
     return r.width / zoomDiv(el, pub);
@@ -955,8 +957,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const span = (el, pub) => {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
-    for (const c of el.children) {
-      if (manualHud(c) || (c.id === "hud-tyre" && outOfFlow(c))) continue;
+    // A seed piece HudLayout lifted out of the bottom cluster still counts toward its width.
+    const kids = el === _hudBottom && document.querySelectorAll ? [...el.children, ...document.querySelectorAll("[data-hl-bottom][data-hl-seed]")] : el.children;
+    for (const c of kids) {
+      if (capManual(c) || (c.id === "hud-tyre" && outOfFlow(c))) continue;
       const r = layoutRect(c);
       if (!r.width) continue;
       if (r.left < lo) lo = r.left;
@@ -1013,8 +1017,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // rather than on the class, so any future hide rule is covered too; the
   // fallback is the other side's measurement, which is right on every phone
   // whose notch is symmetric in landscape and never worse than 0.
-  const mmR = els.minimap && !manualHud(els.minimap) ? layoutRect(els.minimap) : null;
-  const scR = els.hudSectors && !manualHud(els.hudSectors) ? layoutRect(els.hudSectors) : null;
+  const mmR = els.minimap && !capManual(els.minimap) ? layoutRect(els.minimap) : null;
+  const scR = els.hudSectors && !capManual(els.hudSectors) ? layoutRect(els.hudSectors) : null;
   const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
   // THE RIGHT INSET IS THE TOKEN WHEN IT IS READABLE. On touch #hud-sectors is pushed inboard by
@@ -1331,14 +1335,14 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const kids = _hudBottom.children;
       for (let i = 0; i < kids.length; i++) {
         const c = kids[i];
-        if (!c || manualHud(c) || c.id === "hud-tyre") continue;
+        if (!c || capManual(c) || c.id === "hud-tyre") continue;
         const r = layoutRect(c);
         if (!r.width) continue;
         if (r.left < lo) lo = r.left;
         if (r.right > hi) hi = r.right;
       }
       const tyreEl = document.getElementById("hud-tyre");
-      const tyreR = tyreEl && !manualHud(tyreEl) && !tyreEl.hidden ? layoutRect(tyreEl) : null;
+      const tyreR = tyreEl && !capManual(tyreEl) && !tyreEl.hidden ? layoutRect(tyreEl) : null;
       if (hi > lo && tyreR && tyreR.width && zNow) {
         const cW = (hi - lo) / zNow, tW = tyreR.width / zNow, cMid = (lo + hi) / 2;
         const denom = cW / 2 + tW;
@@ -1378,7 +1382,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (bcast && phone && vpW() > vpH()) {
       const stack = [_hudTop, els.minimap, gapsEl, els.flag, els.announce, els.tyre];
       const height = stack.reduce((sum, el) => {
-        if (!el || manualHud(el) || el.hidden) return sum;
+        if (!el || capManual(el) || el.hidden) return sum;
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
@@ -1421,7 +1425,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const mid = vpW() / 2, phoneBtns = document.body.classList.contains("steer-buttons") && vpW() < 744;
       let lo = mid, hi = mid, row = 0, capSide = Infinity;
       for (const c of _hudBottom.children) {
-        const r = c && !c.hidden && !manualHud(c) ? layoutRect(c) : null;
+        const r = c && !c.hidden && !capManual(c) ? layoutRect(c) : null;
         if (r && r.width) { lo = Math.min(lo, r.left); hi = Math.max(hi, r.right); }
       }
       for (const el of dockButtons()) {
@@ -1959,6 +1963,12 @@ function updateHud(force, dtMs) {
     hHidden(els.workBtn, true);
   }
   // toggle-button states
+  const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
+  if (_ro && (gasFeedback || brakeFeedback)) {
+    const cue = _ro.pedalGrip(player, typeof WheelState !== "undefined" && WheelState.enabled());
+    hData(els.btnThrottle, "gripCue", gasFeedback && (cue === "spin" || cue === "slip") ? cue : null);
+    hData(els.btnBrake, "gripCue", brakeFeedback && cue === "lock" ? cue : null);
+  }
   hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);

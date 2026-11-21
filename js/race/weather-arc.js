@@ -347,7 +347,9 @@ const WeatherArc = (function () {
         tauW: TAU_WET, tauD: TAU_DRY,
       }, RainCells.segFrac(i, n), t);
     }
-    /** The segment grid at the arc's own clock, cached per arc.t. */
+    /** The segment grid at the arc's own clock, cached per arc.t.
+     *  Without the memo, wetnessAt rebuilt SEGS per car; netplay shares raceT +
+     *  plan only, never `_sg` (#4270). */
     function segs(a) {
       if (a._st !== a.t || !a._sg) {
         const n = a.w0s ? a.w0s.length : RainCells.SEGS;

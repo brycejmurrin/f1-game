@@ -1657,6 +1657,7 @@
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/input-clock-rotate.test.mjs",
@@ -1687,6 +1688,7 @@
         "tests/unit/steer-lock-taper.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/xr-opts.test.mjs",
@@ -3839,6 +3841,11 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/phone-pairing-ui.js",
+      "global": "PhonePairingUI",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/qr.js",
       "global": "NetQr",
       "roster": "LAZY_NET"
@@ -4854,6 +4861,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/appearance-studio-ui.js",
+      "global": "AppearanceStudioBody",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/appearance-studio.js",
       "global": "AppearanceStudio",
       "roster": "tag"
@@ -4931,7 +4943,7 @@
     {
       "path": "js/ui/hud-arrange.js",
       "global": "HudArrange",
-      "roster": "tag"
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/hud-damage.js",
@@ -5049,6 +5061,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/photo-studio-ui.js",
+      "global": "PhotoStudioBody",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/photo-studio.js",
       "global": "PhotoStudio",
       "roster": "tag"
@@ -5114,9 +5131,24 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/screen-arranger.js",
+      "global": "ScreenArranger",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/screen-looks.js",
       "global": "ScreenLooks",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/screen-placement.js",
+      "global": "ScreenPlacement",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
+      "path": "js/ui/screen-regions.js",
+      "global": "ScreenRegions",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/scroll-fade.js",
@@ -5192,6 +5224,11 @@
       "path": "js/ui/title-menu.js",
       "global": "TitleMenu",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/touch-button-settings.js",
+      "global": "TouchButtonSettings",
+      "roster": "LAZY_NET"
     },
     {
       "path": "js/ui/track-maps.js",

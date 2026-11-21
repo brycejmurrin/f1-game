@@ -211,6 +211,12 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
+The reference phone is the standard **iPhone 15**. For full-screen captures, use 393 × 852 CSS pixels
+in portrait or 852 × 393 in landscape. At the native 3× scale the PNGs are 1179 × 2556 and 2556 × 1179
+pixels respectively. Safari’s visible game area varies with browser controls. The measured landscape tab
+is 852 × 368 CSS pixels. Use the [device fixture](tests/data/phone-windows.json) for the corresponding
+viewport and safe-area assumptions. [Apple display specifications](https://support.apple.com/en-us/111831)
+
 The project ships a **Playwright test suite** — 130+ Playwright specs — plus
 1000+ `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40

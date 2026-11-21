@@ -43,6 +43,8 @@ CI gate. A single spec (`npm test -- tests/specs/<file>.spec.js`) is always
 preferable to its whole group when the change touches that spec's subject and
 nothing else. `tests/unit/test-groups.test.mjs` asserts every group they name exists.
 
+For owner-facing phone screenshots, use the standard iPhone 15 capture preset at DPR 3. Verify both the logical viewport and the output PNG dimensions when comparing orientations. Record whether the capture came from emulation or a physical device, and whether it used the full display or the Safari tab viewport. [iPhone 15 dimensions](COMPONENTS.md#the-viewports-and-what-each-one-is-for) · [Capture commands](AGENT-SURFACE.md#the-owners-phone-one-preset-2026-11-10)
+
 ## 2. The local edit loop
 
 ```sh

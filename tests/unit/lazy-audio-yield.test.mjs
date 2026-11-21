@@ -265,8 +265,8 @@ function bootEnsureWithRadio(opts) {
 test("restoreOnEngine source restores volRadio alongside volMusic and volSfx", () => {
   const bundles = src("js/core/lazy-bundles.js");
   const block = bundles.slice(bundles.indexOf("function restoreOnEngine"), bundles.indexOf("function ensureAudio"));
-  assert.match(block, /setMusicVolume\(store\.get\("volMusic"\)\)/);
-  assert.match(block, /setSfxVolume\(store\.get\("volSfx"\)\)/);
+  assert.match(block, /setMusicVolume\(store\.get\("volMusic", 0\.7\)\)/);
+  assert.match(block, /setSfxVolume\(store\.get\("volSfx", 0\.4\)\)/);
   assert.match(block, /setVolume\(store\.get\("volRadio"/);
 });
 

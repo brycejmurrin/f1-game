@@ -74,6 +74,9 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     const packageBin = path.join(dir, "cached/build/src/bin/chrome-devtools-mcp.js");
     fs.mkdirSync(mcp, { recursive: true });
     fs.mkdirSync(bin);
+    const record = "tests/data/phone-windows.json";
+    fs.mkdirSync(path.join(dir, "tests/data"), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, record), path.join(dir, record));
     fs.mkdirSync(path.dirname(packageBin), { recursive: true });
     for (const name of ["playwright-mcp.sh", "chrome-devtools-mcp.sh"]) fs.copyFileSync(path.join(ROOT, "tools/mcp", name), path.join(mcp, name));
     fs.writeFileSync(path.join(mcp, "mcp-preflight.sh"), "mcp_preflight() { :; }\n");
@@ -81,6 +84,7 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     stub("npx", 'printf "%s\\n" "$@" > "$LAUNCH_LOG"\n');
     stub("npm", 'printf "%s\\n" "$@" > "$LAUNCH_LOG"\nprintf "%s\\n" "$PACKAGE_BIN"\n');
     stub("node", `case "$1" in
+      -p) exec "$REAL_NODE" "$@";;
       */chromium-path.mjs) printf '/bin/true\\n';;
       -e) printf '%s\\n' "$3";;
       */webgpu-chrome-args.cjs) :;;
@@ -89,7 +93,7 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     esac\n`);
     const log = path.join(dir, "launch"), gate = path.join(dir, "gate"), runtime = path.join(dir, "runtime");
     const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH, LAUNCH_LOG: log,
-      GATE_LOG: gate, RUNTIME_LOG: runtime, PACKAGE_BIN: packageBin, APEX_PW_DEVICE: "iPhone 15", APEX_PW_CDP: "", APEX_CDT_BROWSER_URL: "" };
+      GATE_LOG: gate, RUNTIME_LOG: runtime, PACKAGE_BIN: packageBin, REAL_NODE: process.execPath, APEX_PW_DEVICE: "iPhone 15", APEX_PW_CDP: "", APEX_CDT_BROWSER_URL: "" };
     for (const cdp of ["", "http://127.0.0.1:9222"]) {
       const r = spawnSync("bash", [path.join(mcp, "playwright-mcp.sh"), "run"], { env: { ...env, APEX_PW_CDP: cdp }, encoding: "utf8", timeout: 5000 });
       assert.equal(r.status, 0, r.stderr);
@@ -105,7 +109,9 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     assert.deepEqual(args.slice(0, 4), ["exec", "--yes", "--prefer-offline", "--package=chrome-devtools-mcp@1.11.0"]);
     assert.equal(args.includes("--offline"), false);
     assert.ok(fs.readFileSync(gate, "utf8").includes(path.join(dir, "cached")), "resolved package still passes through version gate");
-    assert.equal(fs.readFileSync(runtime, "utf8").split("\n")[0], "/fixture/gated-runtime.js");
+    const runtimeArgs = fs.readFileSync(runtime, "utf8").split("\n");
+    assert.equal(runtimeArgs[0], "/fixture/gated-runtime.js");
+    assert.equal(runtimeArgs[runtimeArgs.indexOf("--viewport") + 1], "852x393");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

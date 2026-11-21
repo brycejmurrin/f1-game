@@ -1,16 +1,20 @@
 // @doc UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the
 // contract windows A/C/D seeded from the owner export, x textSize x uiScale. Parent only (one browser); needs `node tools/serve.mjs`.
 // Usage: node tools/ui/probe-sheets-contract.mjs [A,C,D] [owner|full] [out.json]. Cells per the UI contract note (PR #5154) §2.
-import { chromium, devices } from "playwright";
+import { chromium } from "playwright";
 import fs from "node:fs";
+import path from "node:path";
+import { brycePhone, readProfile } from "../lib/bryce-phone.mjs";
 
-const ROOT = "/home/user/f1-game";
-const EXPORT = JSON.parse(fs.readFileSync(ROOT + "/tests/data/settings-defaults-export.json", "utf8"));
+const EXPORT = readProfile("legacy");
 const EXPORT_UI = EXPORT.uiScale == null ? null : Math.round(100 * EXPORT.uiScale);   // percent for __apex.uiScale; null = the export's default
+// Probe layout at 1×; window C is the historical short-toolbar stress case.
+const landscape = brycePhone({ window: "standalone", profile: false, dpr: 1 });
+const olderPhone = brycePhone({ window: "w844", profile: false, dpr: 1 });
 const WINDOWS = [
-  { name: "A", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
-  { name: "C", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
-  { name: "D", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
+  { ...landscape, name: "A" },
+  { ...landscape, name: "C", viewport: { ...landscape.viewport, height: 283 }, insets: { ...landscape.insets, bottom: 0 } },
+  { ...olderPhone, name: "D", insets: { top: 0, right: 0, bottom: 0, left: 0 } },
 ];
 const only = process.argv[2] ? process.argv[2].split(",") : null;
 const KNOBS = process.argv[3] === "owner" ? [["large", null]] : [["large", null], ["normal", 100], ["large", 100], ["normal", 130], ["large", 130]];
@@ -129,8 +133,7 @@ async function main() {
   const out = {};
   for (const v of WINDOWS) {
     if (only && !only.includes(v.name)) continue;
-    const desc = devices["iPhone 15 Pro landscape"];
-    const ctx = await browser.newContext({ ...desc, viewport: { width: v.w, height: v.h }, screen: { width: v.w, height: v.h }, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext({ ...v.contextOptions, viewport: v.viewport });
     const page = await ctx.newPage();
     page.on("pageerror", (e) => console.error("[pageerror]", v.name, e.message.slice(0, 200)));
     await page.addInitScript(() => { try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.setItem("apex26.tyreWear", JSON.stringify("off")); } catch (_) {} });
@@ -140,7 +143,7 @@ async function main() {
     if (!imp.ok || imp.failed) throw new Error("import " + JSON.stringify(imp));
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 90000 });
-    await page.addStyleTag({ content: `:root{--sal:${v.sal}px;--sar:${v.sar}px;--sat:${v.sat}px;--sab:${v.sab}px;}` });
+    await page.addStyleTag({ content: `:root{--sal:${v.insets.left}px;--sar:${v.insets.right}px;--sat:${v.insets.top}px;--sab:${v.insets.bottom}px;}` });
     await page.evaluate(() => window.__apex.headless(true));
     const W = (out[v.name] = { boot: await page.evaluate(() => ({ ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize, contrast: document.documentElement.dataset.uiContrast, body: { ...document.body.dataset }, inner: [innerWidth, innerHeight], client: [document.documentElement.clientWidth, document.documentElement.clientHeight] })) });
     console.log(v.name, JSON.stringify(W.boot));
@@ -226,7 +229,8 @@ async function main() {
     await ctx.close();
   }
   await browser.close();
-  const outPath = process.argv[4] || "/home/user/f1-game/artifacts/pr-d-probe.json";
+  const outPath = process.argv[4] || path.resolve(import.meta.dirname, "../../artifacts/pr-d-probe.json");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
   console.log("wrote", outPath);
 }

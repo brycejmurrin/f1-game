@@ -44,6 +44,7 @@ test("the four doors map to title buttons; unknown, inherited and empty values p
   for (const bad of ["", "?go=", "?go=constructor", "?go=__proto__", "?go=javascript:1", "?go=RACE", "?x=race"]) {
     assert.equal(DeepLink.parse(bad), null, bad);
   }
+  assert.equal(Object.prototype.hasOwnProperty.call(DeepLink, "onBack"), false, "onBack stays internal");
 });
 
 test("on a live title the door button is clicked once and the param is stripped (other params and the hash survive)", () => {

@@ -326,6 +326,7 @@ export const RULES = [
   [/^css\/career\.css$/, ["modes", "ui"], "career sheet: #cr-left phone overflow + hub still fit"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
+  [/^js\/ui\/touch-button-settings\.js$/, ["input", "steering-unit"], "per-button profiles in Controls and on the standalone wheel"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
   [/^js\/ui\/setting-deps\.js$/, ["steering-unit"], "settings grey-out dependency map: every rule greys with a reason"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of

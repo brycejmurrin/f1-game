@@ -778,19 +778,22 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
           const zoom=sheet.currentCSSZoom || 1;
           const focusables=[...e.querySelectorAll('select,button,summary,a[href]')].filter(n => n.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
           const overflow=focusables.filter(n => { const b=n.getBoundingClientRect(); return b.left < pr.left-1 || b.right > pr.right+1; })
-            .filter(n=>!n.closest('.sheet-foot')).map(n=>n.id || n.tagName);
+            // The arranger's door sits after the sheet, not in its pane (css/screen-arranger.css): held to the viewport below.
+            .filter(n=>!n.closest('.sheet-foot') && !n.classList.contains('screen-arrange-entry')).map(n=>n.id || n.tagName);
+          const offscreen=focusables.filter(n=>n.classList.contains('screen-arrange-entry')).filter(n => { const b=n.getBoundingClientRect(); return b.left < -1 || b.right > innerWidth+1 || b.top < -1 || b.bottom > innerHeight+1; }).map(n=>n.id);
           return { root:selector,zoom,shape:sheet.dataset.shape,density:sheet.dataset.density,
             sheet:{x:r.x,y:r.y,w:r.width,h:r.height},paneHeight:pr.height,
             shortHelpChips:selector === '#howtoplay' && sheet.dataset.density === 'compact'
               ? [...e.querySelectorAll('#htp-contents a')].filter(n=>n.getBoundingClientRect().height<43.5).map(n=>n.textContent) : [],
             smallTargets:focusables.filter(n=>{const b=n.getBoundingClientRect();return b.width<23.5||b.height<23.5;}).map(n=>n.id||n.tagName),
-            overflow,docOverflow:document.documentElement.scrollWidth-innerWidth,
+            overflow,offscreen,docOverflow:document.documentElement.scrollWidth-innerWidth,
             paneOverflow:pane.scrollWidth-pane.clientWidth };
         },root);
         rows.push({pct,...await measure('#pmsettings')});
         const m=rows[rows.length-1];
         expect(m.smallTargets).toEqual([]);
         expect(m.overflow,`${device.name} at ${pct}%`).toEqual([]);
+        expect(m.offscreen,`${device.name} at ${pct}%: the arrange door on screen`).toEqual([]);
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});

@@ -116,3 +116,20 @@ test("the media-query path is idempotent beside the window path", () => {
   fireMql(); fireWin("resize");
   assert.equal(shape(dom), "tall", "four deliveries of one rotation land on one answer each way");
 });
+
+test("without --tall-at, body shape uses the 1.05 tall fallback", () => {
+  // bootSheetShape's getComputedStyle returns "" for --tall-at, so classifyBody
+  // falls through to TALL_FALLBACK. A ratio just above 1.05 must latch tall; one
+  // just under must stay wide. Mutating the fallback to 1.50 left this suite green.
+  const { dom, sb, fireWin, runTimers } = boot();
+  runTimers();
+  sb.innerWidth = 1000; sb.innerHeight = 400;   // ratio 0.40
+  fireWin("resize");
+  assert.equal(shape(dom), "wide", "precondition: clearly wide");
+  sb.innerWidth = 1000; sb.innerHeight = 1040;  // ratio 1.04 < 1.05
+  fireWin("resize");
+  assert.equal(shape(dom), "wide", "1.04 stays wide under the 1.05 fallback");
+  sb.innerWidth = 1000; sb.innerHeight = 1060;  // ratio 1.06 >= 1.05
+  fireWin("resize");
+  assert.equal(shape(dom), "tall", "1.06 latches tall at TALL_FALLBACK 1.05");
+});

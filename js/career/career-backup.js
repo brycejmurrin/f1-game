@@ -457,6 +457,11 @@ const CareerBackup = (function () {
   }
   function cleanSeason(raw) {
     const r = plain(raw);
+    // Match recovery: a present round that is non-integer or outside 0..200 is
+    // season-invalid. Never coerce >200 to 0 while keeping pts/teamPts.
+    if (r.round != null && (!Number.isInteger(r.round) || r.round < 0 || r.round > 200)) {
+      throw new Error("season-invalid");
+    }
     const out = {
       round: Number.isInteger(r.round) && r.round >= 0 && r.round <= 200 ? r.round : 0,
       pts: idMap(r.pts, 120, (v) => { const n = num(v, 0, 1e6); return n == null ? undefined : n; }),
@@ -686,7 +691,8 @@ const CareerBackup = (function () {
   }
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
-    // apply() writes the CLEANED season (round > 200 -> 0); compare that, not the raw file.
+    // apply() writes the CLEANED season; compare that round, not a raw outlier.
+    // (round > 200 / non-integer is refused by cleanExtra as season-invalid.)
     if (isObj(incoming)) { const c = cleanExtra("season", incoming); if (c && c.value) incoming = Object.assign({}, incoming, { round: c.value.round }); }
     const a = local.round | 0, b = incoming.round | 0;
     return a !== b ? a > b : seasonPts(local) > seasonPts(incoming)

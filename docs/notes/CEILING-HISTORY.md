@@ -3985,6 +3985,16 @@ const MAX_EAGER_SCRIPTS = 313;
 const MAX_EAGER_BYTES = 8_017_936;
 ```
 
+## 2026-11-20 — contextual screen arrangement (cursor/screen-arrangement-f8970a)
+
+PR #5976 (with #5977 folded in). The in-context region editor raises five tree ceilings past the absorb. Everything else was lowered back to the tip in the fold. The 9 assertion pins became a parsed-declaration check and live dialog checks in `appearance-orientation.spec.js`. The extra VM load is gone. The 13 theme colors are now `--endurance-*` / `--drafting-*` tokens in `css/tokens.css`. One dynamic id read is now literal `$()` calls. eagerCodeBytes is 2,475 B under the tip, because ARRANGE HUD now loads lazily.
+
+`(tree) cssClasses` 665 → **670** (+5). Deliberate raise past the absorb: the region editor's own classes `.screen-arranger`, `.arrange-selection`, `.arrange-tools`, `.arrange-row` and `.screen-arrange-entry` (the per-screen "Arrange this screen" door).
+`(tree) dynamicIdReads` 73 → **75** (+2). Deliberate raise past the absorb: `js/ui/screen-regions.js` opens each screen's editor through its registry row (`door`, `routes[key][1]`). The ids are data in `ScreenRegions`, one per registered screen, so a literal lookup would mean one branch per screen.
+`(tree) rawColor` 323 → **326** (+3). Deliberate raise past the absorb: `css/screen-arranger.css` maps the standalone OBS overlay's palette (`--bg`, `--surf-1`, `--surf-3`). `overlay.html` loads no `tokens.css`, so these three cannot be tokens.
+`(tree) rawColorDistinct` 179 → **182** (+3). Deliberate raise past the absorb: the same three overlay colors.
+`(tree) shellNodes` 2321 → **2322** (+1). Deliberate raise past the absorb: `#title-arrange-entry`, the title screen's "Arrange this screen" button, which the shell owns so it is there before first paint.
+Fragment: `ratchets.d/cursor--screen-arrangement-f8970a.json`.
 **Raise, 2026-11-19 — `eagerBytes` +3,894, re-snapped to +3,166 on 2026-11-20, then +2,980 when #5948 and #6009 were combined in (fragment `claude--ai-pace-calibration-5330.json`).**
 Retired with `eagerBytes` (#5975): on the sync onto 322c63a3 the branch's `eagerCodeBytes` growth is +3,448, inside its 5,000 B absorb (the commit hook's fragment).
 Cause: #5686 (#5330), so AI solo pace follows team tier and then driver skill. It adds `aiErs`,

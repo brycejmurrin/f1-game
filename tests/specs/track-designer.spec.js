@@ -329,8 +329,8 @@ test.describe("Track designer", () => {
     });
     await request;
     // Aim with the map canvas's OWN view, once its size has settled: "Loading…" shows in .td-msg
-    // (`:empty` hides it), the foot reflows and the canvas resizes without re-fitting, so a scale
-    // re-derived from the new rect could miss the grip and turn the press into a pan (#5937).
+    // (`:empty` hides it) and the foot reflows. holdFit (#6031) keeps that view through a later
+    // resize so a stale aim cannot miss into a pan (no onBegin → pending resolved true; #5937).
     await expect.poll(() => page.evaluate(() => {
       const v = TrackDesigner.state().view, r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
       return !!v && v.w === Math.max(1, Math.round(r.width)) && v.h === Math.max(1, Math.round(r.height));
