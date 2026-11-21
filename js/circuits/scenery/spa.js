@@ -304,7 +304,11 @@
       // Gaps 14/15 (were 8/9): shell reaches gap+12.5, so 11.5 put the back
       // face into the spectatorHill at 24 (clip-audit SEVERE 1.58 m). Pull the
       // row clear of the 10.3 m fence and keep the hill/jumbotron offset.
-      for (const [s, gp, len] of [[0.142, 14, 30], [0.154, 15, 32], [0.166, 15, 28]]) {
+      // Lengths 30/20/12 (were 30/32/28). The two downhill bays ride the Eau
+      // Rouge grade, so a 32 m shell's axis-aligned box is ~23 m tall and covers
+      // the wide2 crest's lap (49% visible, by grandstand). Shorter bays clear
+      // that ray; the gaps stay behind the fence.
+      for (const [s, gp, len] of [[0.142, 14, 30], [0.154, 15, 20], [0.166, 15, 12]]) {
         grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
@@ -375,10 +379,15 @@
       // the crowd from the chase camera), longer, and a fuller crowd.
       ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 7, { rows: 6, roof: false, skip: 0.12 });
       // Bus Stop chicane: braking-zone stand facing the final complex.
-      // Gap 11.5 (was 8): behind the 10.3 m catch fence (#6007). endWalls off:
-      // with them on, the moved bay went coplanar with the 0.848 concrete shell
-      // (coplanar-audit 50 m² same-facing pair). Bay at 0.848 stays at 12.
-      grandstandEx(0.92, 1, 11.5, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: false });
+      // Gap 11.5 (was 8): behind the 10.3 m catch fence (#6007). The cantilever
+      // roof's inner edge is ~gap-1, so 11.5 keeps it off the fence; a closer
+      // gap would put the slab through it. endWalls off: with them on, the
+      // moved bay went coplanar with the 0.848 concrete shell (coplanar-audit
+      // 50 m² same-facing pair). Bay at 0.848 stays at 12.
+      // Authored 0.923 (was 0.92, ~21 m down the straight). At 0.92 the bay's
+      // box sat on the wide crest's ray and the planner left that eye for one
+      // that sees 54% of the lap (under the report's 56% floor).
+      grandstandEx(0.923, 1, 11.5, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: false });
       grandstandEx(0.848, 1, 12, 36, null, null,
         { livery: "concrete", tiers: 2, roof: "truss" });
 
