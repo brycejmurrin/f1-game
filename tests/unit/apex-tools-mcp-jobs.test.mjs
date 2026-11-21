@@ -1,5 +1,5 @@
 // apex-tools-mcp-jobs.test.mjs — apex-tools MCP (local CLI wrap): track sessions, resources, jobs and their logs.
-// APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network. One of eight files split from the
+// No Chromium or network. The unit-test reporter fixture runs the real Node test runner. One of eight files split from the
 // original apex-tools-mcp.test.mjs (T1-16, #3043); shared fixtures: tests/helpers/apex-tools-mcp.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -45,9 +45,9 @@ test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
   // apex_unit_test: one file under tests/unit/, optional --test-name-pattern.
   const unit = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" });
-  assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  assert.deepEqual(unit.argv.slice(1), ["--test", "--test-reporter=tap", "tests/unit/hud-layout.test.mjs"]);
   const pat = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs", pattern: "HELMET" });
-  assert.match(JSON.stringify(pat.argv), /"--test","--test-name-pattern","HELMET","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  assert.deepEqual(pat.argv.slice(1), ["--test", "--test-reporter=tap", "--test-name-pattern", "HELMET", "tests/unit/hud-layout.test.mjs"]);
   bad("apex_unit_test", { file: "tests/specs/camera.spec.js" });
   bad("apex_unit_test", { file: "tests/unit/" + "no-such-file.test.mjs" });   // a missing file is refused (docs-integrity: not a path literal)
   bad("apex_unit_test", { file: "../etc/passwd" });
@@ -55,6 +55,41 @@ test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad
   const src = fs.readFileSync(MCP, "utf8");
   for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
   for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);
+});
+
+test("apex_unit_test reports real pass/fail counts and preserves full TAP output", (t) => {
+  const file = "tests/unit/visual-oracle.test.mjs";
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "unit-reporter-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const preload = path.join(dir, "failure.cjs");
+  // Register the intentional failure only in the selected test worker.
+  fs.writeFileSync(preload, [
+    'if (process.env.NODE_TEST_CONTEXT && process.argv[1] === process.env.APEX_REPORTER_TEST_FILE) {',
+    '  require("node:test")("reporter fixture", () => { throw Error("fixture failure"); });',
+    '}',
+  ].join("\n"));
+  const run = (full, fail) => {
+    const env = { APEX_MCP_MOCK: "0", NODE_TEST_CONTEXT: undefined };
+    if (fail) {
+      env.APEX_REPORTER_TEST_FILE = path.join(ROOT, file);
+      env.NODE_OPTIONS = [process.env.NODE_OPTIONS, `--require="${preload}"`].filter(Boolean).join(" ");
+    }
+    const pattern = "^visual content|^reporter fixture$";
+    const result = callCli("apex_unit_test", { file, full, pattern }, env);
+    assert.equal(result.status, fail ? 1 : 0, result.stdout + result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const pass = run(false, false);
+  assert.equal(pass.exit, 0);
+  assert.deepEqual(pass.out, { tests: 1, pass: 1, fail: 0, failing: [] });
+  const failed = run(false, true);
+  assert.equal(failed.exit, 1);
+  assert.deepEqual(failed.out, { tests: 2, pass: 1, fail: 1, failing: ["reporter fixture"] });
+  assert.match(failed.stdout, /fixture failure/);
+  const full = run(true, false);
+  const lines = full.stdout.trimEnd().split("\n");
+  assert.equal(lines[0], "TAP version 13");
+  assert.deepEqual(lines.filter(line => line.startsWith("# pass ")), ["# pass 1"]);
 });
 
 test("resources/list and resources/read serve the agent references", () => {
