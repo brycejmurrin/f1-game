@@ -20,6 +20,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -46,9 +47,11 @@ async function run({ env, palette, tod = "default", night = false }) {
     vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   await vm.runInContext("Assets", sandbox).manifest();
   vm.runInContext("LightTune = { LT: LightKnobs.LT, buildTrackLights: () => [] };", sandbox);
-  const G = {
+  const G = fakeG({
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
-    satAdjust: (c) => c, isRaining: () => false, isWetRoad: () => false, isFloodActiveSession: () => false,
+    // the atmosphere module writes these real G members (js/game.js declares them)
+    _cloudBase: undefined, _ltBase: undefined, _ltFlash: 0, _ltNextT: 0, _lastFloodEmit: undefined,
+    satAdjust: (c) => c, isWetRoad: () => false, isFloodActiveSession: () => false,
     _nightAmbientBand: () => 0, applyLightTune: () => {},
     // loadTrack seeds these once; applyRaceSettings only refines them.
     frame: { ambientSky: [0.3, 0.3, 0.3], ambientGround: [0.1, 0.1, 0.1], sunDir: [0, 1, 0], sunColor: [1, 1, 1], fogColor: [0.5, 0.5, 0.5] },
@@ -56,7 +59,7 @@ async function run({ env, palette, tod = "default", night = false }) {
     gfx: null, state: "menu",
     raceTimeOfDay: tod, raceWeather: "dry",
     track: { def: { id: "testtrack", night, palette } },
-  };
+  });
   const Atmosphere = vm.runInContext("Atmosphere", sandbox);
   Atmosphere.create(G).applyRaceSettings();
   return G;
