@@ -235,6 +235,53 @@ test("DamageHandling factors: front wing → front aero, rear wing → rear aero
   assert.ok(worst.aeroF >= 0 && worst.aeroR >= 0, "out-of-range parts clamp; aero never goes negative");
 });
 
+// Magnitude pins for DamageHandling's aero/grip scales and Damage.KNOCK_SEV (mutation hunt tip 46c86e30c1).
+test("full front-wing loss costs ~60% front aero", () => {
+  const { DamageHandling: H } = loadDH();
+  const f = H.factors({ fwL: 1, fwR: 1, rw: 0, floor: 0, knock: 0 });
+  assert.equal(f.aeroF, 0.4);
+  assert.equal(f.aeroR, 1);
+  assert.equal(f.grip, 1);
+  assert.equal(H.FW_AERO, 0.6);
+});
+
+test("full rear-wing loss costs ~60% rear aero", () => {
+  const { DamageHandling: H } = loadDH();
+  const f = H.factors({ fwL: 0, fwR: 0, rw: 1, floor: 0, knock: 0 });
+  assert.equal(f.aeroR, 0.4);
+  assert.equal(f.aeroF, 1);
+  assert.equal(f.grip, 1);
+  assert.equal(H.RW_AERO, 0.6);
+});
+
+test("full floor damage costs ~30% both axles", () => {
+  const { DamageHandling: H } = loadDH();
+  const f = H.factors({ fwL: 0, fwR: 0, rw: 0, floor: 1, knock: 0 });
+  assert.equal(f.aeroF, 0.7);
+  assert.equal(f.aeroR, 0.7);
+  assert.equal(f.grip, 1);
+  assert.equal(H.FLOOR_AERO, 0.3);
+});
+
+test("suspension knock costs ~5% grip", () => {
+  const { DamageHandling: H } = loadDH();
+  const f = H.factors({ fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 1 });
+  assert.equal(f.grip, 0.95);
+  assert.equal(f.aeroF, 1);
+  assert.equal(f.aeroR, 1);
+  assert.equal(H.KNOCK_GRIP, 0.05);
+});
+
+test("knock threshold is 0.55 (sev 0.55 knocks, 0.54 does not)", () => {
+  const { Damage: D } = load();
+  // Side hit (long/lat → ZONE_SIDE): knock fires when sev >= KNOCK_SEV, rear never knocks.
+  assert.equal(D.apply(D.blank(), 0.5, 2, 0.55).knock, 1);
+  assert.equal(D.apply(D.blank(), 0.5, 2, 0.54).knock, 0);
+  assert.equal(D.apply(D.blank(), 3, -0.5, 0.55).knock, 1, "front at threshold also knocks");
+  assert.equal(D.apply(D.blank(), 3, -0.5, 0.54).knock, 0);
+  assert.equal(D.apply(D.blank(), -3, 0.2, 0.9).knock, 0, "rear never knocks even above threshold");
+});
+
 test("a completed pit stop repairs the handling: the factors return to 1 on the pit-out edge", () => {
   const { Damage: D, DamageHandling: H } = loadDH();
   H.setEnabled(true);
