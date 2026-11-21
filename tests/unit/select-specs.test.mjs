@@ -2361,3 +2361,65 @@ for (const file of ["js/circuits/spa.js", "js/circuits/scenery/spa.js", "js/circ
     }
   });
 }
+
+// THE NO-DROP TAIL (2026-11-21): a wide PR's ready plan dropped routed specs with overflow and spill full
+// (#5978, #5296, #5617), and each drop cost a hand-dispatched browser-group run plus a draft->ready flip.
+test("noDrop: a synthetic wide diff that drops N routed specs under the bounded caps now schedules them all", () => {
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  // Every spec measured at 300 s: far more work than overflow + spill + the over-budget pool can afford.
+  const row = (n) => ({ s: [1, 2, 3].map((i) => [`2026-11-1${i}T00:00:00Z`, "llvmpipe", 300, n]) });
+  const db = { specs: Object.fromEntries(all.map((f) => [f, row(declaredTests(f) || 1)])) };
+  const opts = { db, rank: () => 3 };
+  const bounded = fit(all, DEFAULT_BUDGET_MIN, opts);
+  const dropped = (r) => [...r.skipped, ...r.overBudgetSpecs].map((s) => s.file).sort();
+  const lost = dropped(bounded);
+  assert.ok(lost.length > 5, `fixture: the bounded plan drops several routed specs (${lost.length})`);
+  const tail = fit(all, DEFAULT_BUDGET_MIN, { ...opts, noDrop: true });
+  assert.deepEqual(dropped(tail), [], "nothing routed is dropped");
+  const tailed = [...tail.spill, ...tail.overBudgetRun].filter((s) => s.tail).map((s) => s.file).sort();
+  assert.deepEqual(tailed, lost, "exactly the specs the caps dropped ride the tail");
+  // Everything the bounded plan scheduled is scheduled the same way: the tail only adds.
+  for (const k of ["selected", "overflow", "oversize", "unreachable", "unreadable"])
+    assert.deepEqual(tail[k].map((s) => s.file), bounded[k].map((s) => s.file), `${k} unchanged`);
+  assert.deepEqual(tail.spill.filter((s) => !s.tail).map((s) => s.file), bounded.spill.map((s) => s.file));
+  assert.deepEqual(tail.overBudgetRun.filter((s) => !s.tail).map((s) => s.file), bounded.overBudgetRun.map((s) => s.file));
+  // And shards() gives every tail spec a leg.
+  const planned = new Set(shards(tail, db).flatMap((j) => j.specs.split(" ")));
+  for (const f of lost) assert.ok(planned.has(f), `${f} has a matrix leg`);
+  // A tail over-budget spec keeps its declared per-test figure (its job's kill timer derives from it).
+  for (const s of tail.overBudgetRun.filter((x) => x.tail)) assert.ok(s.ownTimeoutSec > 0, `${s.file} keeps ownTimeoutSec`);
+});
+
+test("noDrop: select() turns it on for every plan but the draft's --overflow-shards 0", () => {
+  const files = ["tests/helpers/fixtures.js"]; // the whole-suite route
+  const dropped = (r) => r.skipped.length + r.overBudgetSpecs.length;
+  // Starve the pools so the bounded cut drops on the committed timings, whatever they say.
+  const tight = { files, overflowShards: 1, overBudgetShards: 0 };
+  const off = select(undefined, DEFAULT_BUDGET_MIN, { ...tight, noDrop: false });
+  assert.ok(dropped(off) > 0, `fixture: the starved bounded plan drops (${dropped(off)})`);
+  const on = select(undefined, DEFAULT_BUDGET_MIN, tight);
+  assert.equal(dropped(on), 0, "the default ready/nightly plan drops nothing");
+  // The draft plan (overflow 0) keeps the bounded cut: its drop only warns, by design.
+  const draft = select(undefined, 5, { files, overflowShards: 0 });
+  const draftBounded = select(undefined, 5, { files, overflowShards: 0, noDrop: false });
+  assert.deepEqual(draft.shards, draftBounded.shards, "the draft plan is unchanged");
+  assert.deepEqual(draft.skipped, draftBounded.skipped);
+  // A small PR's plan has nothing to drain: identical with or without the tail.
+  for (const f of ["js/ui/hud.js", "js/core/log.js"]) {
+    const a = select(undefined, DEFAULT_BUDGET_MIN, { files: [f] });
+    const b = select(undefined, DEFAULT_BUDGET_MIN, { files: [f], noDrop: false });
+    assert.deepEqual(a.shards, b.shards, `${f}: the plan is unchanged`);
+  }
+});
+
+test("noDrop: the plan is deterministic for a given input (same head, base, timings and failed list)", () => {
+  // #5986's second ready run dropped a different set; with no drops the set cannot drift, and for a fixed input the
+  // plan itself must not drift either (what can still differ between runs is the INPUT: the bot/spec-timings
+  // overlay and the .selected-failed.txt cache).
+  const files = ["tests/helpers/fixtures.js"];
+  const a = select(undefined, DEFAULT_BUDGET_MIN, { files });
+  const b = select(undefined, DEFAULT_BUDGET_MIN, { files });
+  assert.deepEqual(a.shards, b.shards, "identical matrix");
+  assert.deepEqual([a.skipped, a.overBudgetSpecs], [[], []], "and a whole-suite route drops nothing");
+});
