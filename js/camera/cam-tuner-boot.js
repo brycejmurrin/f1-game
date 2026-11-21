@@ -3,7 +3,7 @@
 const CamTunerPanel = (function () {
 "use strict";
 
-let _real = null, _refresh = null;
+let /** @type {ReturnType<typeof CamTunerEditor.create> | null} */ _real = null, _refresh = null;
 
 function create(G) {
   Log.info("game", "CamTunerPanel.create");

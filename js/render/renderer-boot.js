@@ -40,10 +40,10 @@ let _backendBound = false;
 // strike rewrite of the pick. Two iOS app kills inside the first race load are
 // enough to retire TLX/WebGPU, and without this the next cold launch showed
 // WEBGL2 as if the player had chosen it. RendererPicker reads it for the
-// SETTINGS notice and its TRY AGAIN button; a hand pick or RESET clears it.
+// SETTINGS notice and its TRY AGAIN button; a hand pick, RESET or a new build (#5942) clears it.
 function retiredWhy(raw) {
   const m = /^(three|webgpu):(\d+)$/.exec(raw || "");
-  return m ? "retired: " + m[1] + " never presented a frame on two starts in a row (build " + m[2] + "); WebGL2 is the pick until a renderer is picked by hand" : "";
+  return m ? "retired: " + m[1] + " never presented a frame on two starts in a row (build " + m[2] + "); WebGL2 is the pick until a hand pick or a new build" : "";
 }
 function strikesFor(raw, backend) {
   if (raw == null) return 0;
@@ -112,27 +112,17 @@ async function gpuAdapterAvailable() {
     return false;
   }
 }
-// Every awaited step of the backend boot runs before any menu handler is wired,
-// and several of them wait on the device or the network with no timer of their
-// own (ApexXR.detect → navigator.xr.isSessionSupported, the backend script fetch,
-// TLX's import("three/webgpu") / requestAdapter / renderer.init → requestDevice).
-// A hung request left a DEAD TITLE until the next reload's canary reverted to
-// GLX. A step that outlives BOOT_STEP_MS resolves to TIMED_OUT and the caller
-// treats the backend as unavailable and falls through to GLX. Logged once, where
-// it fires; a step that settles in time costs one cleared timer.
-// Software-GL CI runners (SwiftShader/llvmpipe on a starved host) can take
-// longer than 8 s to init TLX; Pages 38660546141 saw init finish just after
-// the old 8 s cap on a hot gate. Default 15 s; a spec that MEASURES TLX may
-// RAISE the cap (never lower it) with apex26.gfxBootStepMs, clamped to 60 s.
+// Every awaited boot step runs before any menu handler is wired, and several wait on the device or network with
+// no timer (XR detect, the script fetch, TLX's import / requestAdapter / requestDevice): a hang left a DEAD TITLE.
+// A step past BOOT_STEP_MS resolves TIMED_OUT and GLX takes over, logged once. 15 s, not 8: software-GL TLX init
+// overran 8 s (Pages 38660546141). A spec measuring TLX may RAISE it (apex26.gfxBootStepMs, max 60 s).
 const BOOT_STEP_MS = (() => {
   let ms = 15000;
   try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 60000); } catch (_) { /* blocked storage: default cap */ }
   return ms;
 })();
-// Software-GL boots (SwiftShader / llvmpipe) can spend the whole idle window
-// on one GLX deferred wave while the next file is still in flight — a fixed
-// wall-clock cap on the whole fetch treats that as failure every reload (#3587).
-// Idle: no progress for BOOT_STEP_MS. Max: BOOT_STEP_MAX_MS hard stop.
+// Software-GL boots can spend the idle window on one GLX wave with the next file in flight: a wall cap on the
+// whole fetch failed every reload (#3587). Idle: no progress for BOOT_STEP_MS; BOOT_STEP_MAX_MS hard stop.
 const BOOT_STEP_MAX_MS = (() => {
   let ms = 60000;
   try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 120000); } catch (_) { /* blocked storage */ }
@@ -226,7 +216,7 @@ function reloadOnceIntoGlx(disarm) {
 }
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
-let _initOwner = null;
+let /** @type {ReturnType<typeof Gfx.createInitOwner> | null} */ _initOwner = null;
 let _createHung = false;     // the backend's create() never answered: leave its canary armed
 let pref = "webgl2", pick = "", why = "";   // the resolved pick, the explicit one, and why it did not bind (#2285: never silent)
 try {
@@ -275,10 +265,18 @@ try {
   // A record only speaks for the webgl2 pick it wrote: any other stored pick
   // (a settings import, the agent bridge) makes it stale. While it stands, every
   // boot says why WebGL2 is drawing, not just the boot that retired the pick.
+  // A retirement expires with its build, one strike left (#5942).
   try {
     const retired = localStorage.getItem("apex26.gfxRetired");
+    const rm = /^(three|webgpu):(\d+)$/.exec(retired || "");
+    const build = (typeof window !== "undefined" && window.__APEX_BUILD) || 0;
     if (retired && localStorage.getItem("apex26.gfxBackend") !== "webgl2") localStorage.removeItem("apex26.gfxRetired");
-    else if (retired) why = retiredWhy(retired);
+    else if (rm && build && +rm[2] !== build) {
+      localStorage.removeItem("apex26.gfxRetired");
+      localStorage.setItem("apex26.gfxBackend", rm[1]);
+      localStorage.setItem(STRIKE_KEY, rm[1] + ":1");
+      pref = rm[1]; pick = rm[1];
+    } else if (retired) why = retiredWhy(retired);
   } catch (_) { /* blocked storage: no record to read */ }
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
@@ -350,13 +348,15 @@ try {
     const fetched = await withIdleProgressTimeout(
       (touch) => loadDeferredScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu, touch),
       BOOT_STEP_MS, BOOT_STEP_MAX_MS, "backend script fetch");
-    // A slow fetch is the network's verdict, not the device's: GLX for this boot,
-    // canary state untouched. A hung create() IS the device's (see _createHung).
+    // A slow fetch is the network's verdict: GLX this boot, no strike. A hung create() is the device's.
     if (earlyP) _probeAdapter = await earlyP;
     if (fetched !== TIMED_OUT && Gfx.createInitOwner) _initOwner = Gfx.createInitOwner(canvas);
     const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref, initOwner: _initOwner, adapter: _probeAdapter }), BOOT_STEP_MS, "backend " + pref + " init", () => { if (_initOwner) _initOwner.abort(); });
-    const backend = made === TIMED_OUT ? (_createHung = true, null) : made;
+    // Timed out mid vendor import: the network's, like a slow fetch (#5942).
+    const stalled = made === TIMED_OUT && !!(_initOwner && _initOwner.importing);
+    const backend = made === TIMED_OUT ? (_createHung = !stalled, null) : made;
     if (fetched === TIMED_OUT) why = "backend script fetch gave no answer in " + BOOT_STEP_MS / 1000 + " s";
+    else if (stalled) why = "backend " + pref + " module download gave no answer in " + BOOT_STEP_MS / 1000 + " s";
     else if (made === TIMED_OUT) why = "backend " + pref + " init gave no answer in " + BOOT_STEP_MS / 1000 + " s";
     else if (!backend) {
       let own = null;
@@ -364,13 +364,8 @@ try {
       why = pref + " create() refused" + (own ? ": " + own : " without a reason") + (_adapterSlow ? " (" + _adapterWhy + ")" : "");
     }
     if (backend) {
-      // game.js and tracks.js take the backend by injection (the `gfx` handle
-      // / Tracks.build's opts.gfx) and need no patch. The descriptor-copy
-      // below is only for spec files that monkey-patch GLX.* by object
-      // identity and read the page-scope GLX global directly — identity IS
-      // their compatibility contract. Copy the backend's methods + live
-      // getters (width/height/aspect) onto GLX so `GLX.foo()` delegates.
-      // GLX's own WebGL context is never initialised here.
+      // game.js and tracks.js take the backend by injection. The descriptor copy (methods + live getters) onto GLX
+      // is for specs that patch GLX.* by identity; GLX's own context is never initialised here.
       try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
       // Bound and live. Title has no track yet (deferred flyby), so present()
@@ -442,13 +437,9 @@ if (!gfx) {
     try { sessionStorage.setItem("apex26.gfxFallbackWhy", reason); } catch (_) { /* the warning still says it */ }
   } else try { sessionStorage.removeItem("apex26.gfxFallbackWhy"); } catch (_) { /* blocked storage */ }
   try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
-  // Live tab, create() refused. Keep the pick and disarm the canary so a
-  // refresh retries instead of reverting to WEBGL2. Jetsam during create()
-  // never reaches here — the probe stays armed and the next boot reverts. A
-  // create() that HUNG is the same case as a jetsam kill (it never completed),
-  // so its probe stays armed too: the strike ledger retires a device that hangs
-  // twice instead of costing every boot BOOT_STEP_MS.
-  // A claim-skip boot owes the probe nothing either: a hang's reload (#4577) left it armed on purpose.
+  // Live tab, create() refused: keep the pick, disarm the canary. A jetsam never gets here (the probe stays armed),
+  // nor a HUNG create() (a jetsam's twin: two hangs retire), but one stalled in its vendor download does (#5942).
+  // A claim-skip boot owes nothing: a hang's reload (#4577) left the probe armed on purpose.
   if (!_createHung && !_claimSkipped) try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
 // What this boot BOUND, for the next boot's early preload (guessBackend below).

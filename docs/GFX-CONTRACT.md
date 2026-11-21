@@ -10,39 +10,42 @@ THREE backends stand behind this seam:
                          explicit apex26.gfxBackend="three" pick.
   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu". Ships the
                          GLX draw-API surface (gpuTimer, texture arrays,
-                         lamp shadows, instancing, particles, MSAA 4×).
+                         lamp shadows, instancing, particles, MSAA 4× on
+                         GRAPHICS: ULTRA or legacy apex26.gfxHigh=1 on a
+                         non-lite, non-software adapter — otherwise 1×).
                          pcss() returns true (Poisson-8 + blocker search).
 
 All three implementations are DEFERRED and have NO <script> tags; the
-stable GLX facade is eager for eval-time device-tier consumers. game.js
-injects the TLX or WGX implementation for the resolved pick, then calls
-`Gfx.create()`, which returns a ready
-TLX or WGX backend implementing the interface below — or `null` on absence
-or ANY failure, and THE CALLER falls back to GLX. This module deliberately
-does NOT reference GLX — keeping the fallback decision in game.js avoids
-coupling the backends here.
+stable GLX facade is eager for eval-time device-tier consumers.
+`RendererBoot.start()` (`js/render/renderer-boot.js`, awaited from
+game.js) injects the TLX or WGX implementation for the resolved pick, calls
+`Gfx.create()`, which returns a ready TLX or WGX backend implementing the
+interface below — or `null` on absence or ANY failure, and THE BOOT PATH
+falls back to GLX. This module deliberately does NOT reference GLX — the
+fallback decision lives in renderer-boot.js, not here.
 
 NO build step, no ES modules: "use strict" IIFE assigning one global `Gfx`.
-`Gfx` is inert until game.js calls it; nothing here runs at load time.
+`Gfx` is inert until `RendererBoot.start()` calls it; nothing here runs at
+load time.
 
 ─────────────────────────────────────────────────────────────────────────────
 THE BACKEND INTERFACE CONTRACT (the "seam")
 ─────────────────────────────────────────────────────────────────────────────
-Both the backend object returned by GLX and the backend returned by
-WGX.create() expose the SAME renderer surface. game.js talks to the selected
-renderer through these methods. This is transcribed from the real GLX object.
+GLX, TLX and WGX each expose the SAME renderer surface. The game talks to
+the selected backend through these methods. This is transcribed from the real
+GLX object.
 
 Lifecycle / capability:
-  init(canvas) -> bool       acquire context/programs (GLX: sync). WGX is
-                             already initialised by Gfx.create(); its init() is
-                             a no-op returning true.
+  init(canvas) -> bool       GLX: sync acquire context/programs. TLX and WGX
+                             are already initialised by Gfx.create(); their
+                             init() is a no-op returning true.
   resize()                   re-read canvas size * DPR (capped 1.5 mobile / 2)
                              * renderScale; (re)allocate targets on change.
   setRenderScale(s)->bool    clamp 0.5..1; re-resize; true if it changed.
   getRenderScale()->number
-  setDprBoost(n)/getDprBoost()  TLX only (feature-detect): RESOLUTION MAX asks
+  setDprBoost(n)/getDprBoost()  TLX + GLX (WGX lacks it; feature-detect): RESOLUTION MAX asks
     for DPR n (3) above the tier's cap; 0 drops it (every other RESOLUTION,
-    PerfGov's budget shed). capDpr(n) (crash sentinel) still wins. #5222.
+    PerfGov's budget shed). capDpr(n) (crash sentinel, TLX) still wins. #5222.
   setSpatialUpscale(on)/getSpatialUpscale()  GLX + WGX + TLX SGSR1 spatial
     upscale (opt-in; feature-detect). See docs/research/UPSCALING-2026-09.md.
   width / height / aspect    getters (backing-store pixels).
@@ -182,7 +185,7 @@ Frame protocol (per rendered frame, in this order):
                                  (Frustum.radialCulled, height-aware; null = none)
   noEnv:bool                     disable env-cube sheen (menu preview)
   tune:object                    live LIGHTING TUNER knobs (LT.*); defaults in
-                                 the backend MUST mirror LightTune.TUNE_DEFS
+                                 the backend MUST mirror LightKnobs.TUNE_DEFS
   lights:Float32Array            flat stride-15 point lights, pre-culled <=48:
     [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
   allLights:Float32Array         FULL baked track-lamp set (same stride) for

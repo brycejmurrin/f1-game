@@ -83,6 +83,11 @@ const Captions = (function () {
   function stripVisible() {
     return mode === "on" || mode === "spoken";
   }
+  // SPOKEN ONLY (#5946): only a line the source voiced (`heard`), never with SOUND off or VOICE VOLUME 0.
+  function captioned(heard) {
+    const s = store();
+    return mode === "on" || (mode === "spoken" && heard === true && (!s || (s.get("sound", true) !== false && +s.get("volRadio", 0.8) > 0)));
+  }
 
   function spotterSide(key) {
     if (key === "car left") return "left";
@@ -169,15 +174,15 @@ const Captions = (function () {
     push({ who: meta.who, text: meta.text, kind: meta.kind || "radio" });
   }
 
-  function onSpotter(text, key) {
-    if (mode === "off") return;
+  function onSpotter(text, key, heard) {
+    if (!captioned(heard)) return;
     const who = WHO.spotter;
     push({ who, text, kind: "spotter" });
     paintStrip(who, text, spotterSide(key));
   }
 
-  function onAnnouncerLine(text) {
-    if (mode === "off") return;
+  function onAnnouncerLine(text, heard) {
+    if (!captioned(heard)) return;
     const line = String(text || "").trim();
     if (!line) return;
     push({ who: WHO.announcer, text: line, kind: "announcer" });

@@ -12,7 +12,7 @@
 #         pages.yml / ci.yml; the ORCHESTRATOR (steward §CI; the hook's OWN env; as a child session it also needs APEX_ORCH_ENV=env_…, Bryce-set; never from a settings `env`, #5819) passes cancels, rerun_failed_jobs, ci.yml, deploy-branch pages.yml
 #   ASK   update_pull_request with state "closed"
 #   DENY  issue_write whose `labels` (it REPLACES the list) differs from the live labels by anything but ONE name
-#         (live from `gh api`; unknown → ask), touches `config-ok`, or removes a `hold` Bryce set
+#         (live from `gh api`; unknown → ask), removes `config-ok` or adds it on a PROTECTED path (D-042), or removes a `hold` Bryce set
 #   ALLOW the rest, draft→ready included: the Plan gate and CI check a flip.
 # Output is the documented PreToolUse JSON; an unreadable payload or a guarded call with a non-object input is a
 # deny (fail closed).
@@ -97,8 +97,8 @@ if op == "issue_write":
         sys.exit(0)
     if len(add) + len(gone) != 1:
         emit("deny", "issue_write labels REPLACES the list, so it may differ from the live labels by exactly ONE name. Live: [" + ", ".join(sorted(set(cur))) + "]; this list would add [" + ", ".join(add) + "] and remove [" + ", ".join(gone) + "]. " + how)
-    if add + gone == ["config-ok"]:
-        emit("deny", "`config-ok` is Bryce's own click (merge-gate reads the label event's actor): an agent never adds or removes it. Ask with `needs-decision` and one comment.")
+    if add + gone == ["config-ok"]:    # D-042 (Bryce 2026-11-20 "Routine both"): an agent ADDS it where the PR's files hold no PROTECTED path (D-034); an unreadable list or gate raises (fail closed)
+        prot = [] if gone else [x for x in subprocess.run(["node", "--input-type=module", "-e", "const {isProtectedConfigPath:f}=await import(process.argv[2]);let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(s.split('\\n').filter(x=>x&&f(x)).join('\\n')))", "gate", os.path.join(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd(), "tools/ci/merge-gate.mjs")], input=subprocess.run(["gh", "api", "--paginate", "repos/%s/pulls/%d/files?per_page=100" % (s, int(number)), "--jq", ".[] | .filename, (.previous_filename // empty)"], capture_output=True, text=True, timeout=20, check=True).stdout, capture_output=True, text=True, timeout=20, check=True).stdout.splitlines() if x.strip()]; (gone or prot) and emit("deny", "`config-ok` removal is Bryce's own click: an agent never removes it." if gone else "`config-ok` on a PROTECTED config path is Bryce's own tap (D-034): " + ", ".join(prot[:4]) + ". Ask with `needs-decision` and one comment.")
     if gone == ["hold"]:    # an agent's hold: any removal; Bryce's: his own click. The LAST `labeled hold` event's app marker tells (every page, oldest first).
         by = live("/events?per_page=100", '.[] | select(.event == "labeled" and .label.name == "hold") | (.performed_via_github_app.slug // "owner")')
         if not by or by[-1] == "owner":

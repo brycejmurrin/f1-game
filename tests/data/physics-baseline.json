@@ -519,8 +519,8 @@
       0,
       1,
       5765.22,
-      -1.412,
-      4.93
+      -1.411,
+      4.94
     ],
     [
       311.1952,
@@ -534,8 +534,8 @@
       0,
       1,
       5766.71,
-      -0.908,
-      6.82
+      -0.907,
+      6.83
     ],
     [
       317.2555,
@@ -565,7 +565,7 @@
       1,
       5771.07,
       -0.458,
-      10.49
+      10.5
     ],
     [
       330.0204,
@@ -578,9 +578,9 @@
       5,
       0,
       1,
-      5773.93,
+      5773.94,
       -0.375,
-      12.26
+      12.28
     ]
   ],
   "wet right-hand corner": [
@@ -658,9 +658,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "7fe2fcb05a81511654561214b7d7812b33070fdf",
-    "reason": "#5791 decision B: AI X-mode reads the neutral wing, AI_WING_GRIP 0.055 (AI car only; ai car launch ai.x -2.917 -> -2.919)",
-    "at": "2026-11-19T09:50:13.004Z",
-    "hash": "b7efea43c72fbc90383fc141653abf4281b10b0b910a5e13de7dbde58fdfc5da"
+    "sha": "121fe445565cf7e22014fcd2eb239afd56d348b9",
+    "reason": "#5686 at 121fe445: AI solo-pace recalibration after #5791 (PACE_REF 0.9332, aeroDragMul dropped); ai car launch row moves, AI car only",
+    "at": "2026-11-20T07:09:11.778Z",
+    "hash": "780beba0470d63f67f505a348a4bf51f7b32de313745044cc68623cc096ca82f"
   }
 }

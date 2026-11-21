@@ -60,7 +60,7 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 | Catalog | Ordered category array; budget `Parts.BUDGET` (career: `Career.budget()`) |
 | SIGNATURE | Same cost/stats as `equivalent`; mesh-only |
 | FACTORY_PRESETS | AI build: mesh + aeroLoad/ERS (no stat `mods`) |
-| `_resolve` | Ownership-blind; supplier/team lock plus the career regulation predicate (`_legal`) |
+| `_resolve` | Ownership-blind (no `owned` set); supplier/team lock plus the career regulation via `isOptionAvailable` (the `_legal` predicate `Parts.setLegality` sets) |
 | Owned gate | UI: `G.careerOwned()` → `Parts.isOptionAvailable` |
 | ERS / aero | `ersProfile` / `aeroLoad` → game.js battery / X-mode |
 | Finish | `gloss` default; every other finish is a `FINISH_SURFACE` key in `js/car/car-materials.js` (satin, chrome, matte, carbon, pearl, …) |

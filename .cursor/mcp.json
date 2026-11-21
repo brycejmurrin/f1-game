@@ -64,7 +64,8 @@
         "bash",
         "tools/mcp/lsp-mcp.sh",
         "serve"
-      ]
+      ],
+      "alwaysLoad": true
     },
     "browserstack": {
       "type": "stdio",

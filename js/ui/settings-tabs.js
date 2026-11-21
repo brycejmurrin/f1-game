@@ -118,7 +118,7 @@ const SettingsNav = (function () {
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
-    let current = "home", generation = 0, search = null;
+    let current = "home", generation = 0, /** @type {ReturnType<typeof SettingsSearch.create> | null} */ search = null;
     // The index door that opened a page. A dialog does not know about focus
     // changes inside its own sheet, so keep this explicitly and restore it on
     // the same page-stack BACK path that Escape presses.

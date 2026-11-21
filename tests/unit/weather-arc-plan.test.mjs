@@ -62,6 +62,15 @@ function boot(over = {}) {
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const plan = (b) => plain(b.wa.planFor());
 
+test("a time-of-day change rebuilds the track once even if a preview selects it again", () => {
+  const loads = [], settings = [];
+  const { wa } = boot({ raceTimeOfDay: "day", trackIdx: 7,
+    loadTrack: id => loads.push(id), applyRaceSettings: () => settings.push(wa.setTimeOfDay()) });
+  for (const tod of ["day", "night", "night", "default", "invalid"]) wa.setTimeOfDay(tod);
+  assert.deepEqual(loads, [7, 7]);
+  assert.deepEqual(settings, ["night", "default"]);
+});
+
 test("the plan the lobby ships is the plan the green light uses, whatever lapsTarget was left at", () => {
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
     const { G, wa } = boot({ simSeed: () => seed });

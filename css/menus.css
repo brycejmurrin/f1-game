@@ -120,6 +120,7 @@
    row wrap a door onto its own line instead of clipping its label. */
 #menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
 #menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
+#menu-buttons #menu-secondary.balanced-row > #mb-steerphone { min-width: min-content; }
 /* apex9 ~752–768: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
    onto two lines; long WATCH label wrapped inside its tile. nowrap +
    min-content on every room is mid-wide only — on 1440 it forced

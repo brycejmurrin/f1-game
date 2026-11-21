@@ -139,7 +139,7 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   for (const file of ["js/race/quali-model.js", "js/race/daily-challenge.js", "js/ui/share-code.js"]) {
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   }
-  ctx.G = { ...G, referencePole: () => 82, player: { best: 80 },
+  ctx.G = { ...G, referencePole: (k) => (k === "medal" ? 82 : NaN), player: { best: 80 },
     records: { key: () => context, prepareDaily() {}, restoreDaily() {} } };
   ctx.G.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
   const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
@@ -273,7 +273,9 @@ test("a streak left by a clock set ahead moves again once the clock is back", ()
   now = "2026-11-21T12:00:00";
   d.open("2026-11-21"); d.record(81);
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-11-21" }, "the real day takes the streak back");
-  assert.equal(d.data().days["2027-11-20"], undefined, "the future day is pruned");
+  // #5943: a future-dated day cannot be told from real days after a clock set back, so it stays (one key);
+  // pruning it by the device's "tomorrow" deleted real history.
+  assert.equal(d.data().days["2027-11-20"].best, 80, "the future-dated day is kept, not pruned by the device clock");
   now = "2026-11-22T12:00:00";
   d.open("2026-11-22"); d.record(82);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" }, "and counts on from there");
@@ -282,6 +284,43 @@ test("a streak left by a clock set ahead moves again once the clock is back", ()
   d.open("2026-11-21"); d.record(80);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" });
   assert.equal(d.data().days["2026-11-22"].best, 82);
+  d.stop();
+});
+
+// #5943: the prune trusted the device clock. A clock set back two days deleted every real day after its
+// "tomorrow"; one set more than HISTORY_DAYS ahead deleted the whole real history.
+test("a clock set back two days, then corrected, loses no real day", () => {
+  let now = "2026-11-18T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  for (const day of ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]) {
+    now = day + "T12:00:00"; d.open(day); d.record(80);
+  }
+  now = "2026-11-18T12:00:00";   // a dead battery: the phone wakes two days in the past
+  d.open("2026-11-18"); d.record(79);
+  for (const day of ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"])
+    assert.ok(d.data().days[day], day + " survives a play with the clock set back");
+  now = "2026-11-21T12:00:00";   // corrected
+  d.open("2026-11-21"); d.record(78);
+  assert.deepEqual(Object.keys(d.data().days).sort(), ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21"]);
+  assert.equal(d.data().days["2026-11-18"].best, 79);
+  d.stop();
+});
+
+test("a clock set far ahead keeps the real history, and the window still prunes", () => {
+  let now = "2026-11-20T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  d.open("2026-08-01"); d.record(80);   // older than the window once the 20th is played
+  d.open("2026-11-19"); d.record(80);
+  d.open("2026-11-20"); d.record(80);
+  assert.equal(d.data().days["2026-08-01"], undefined, "a real day out of the window is pruned");
+  now = "2027-03-01T12:00:00";   // 101 days ahead
+  d.open("2027-03-01"); d.record(80);
+  for (const day of ["2026-11-19", "2026-11-20", "2027-03-01"]) assert.ok(d.data().days[day], day + " kept");
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(80);
+  for (const day of ["2026-11-19", "2026-11-20", "2026-11-21"]) assert.ok(d.data().days[day], day + " kept after the clock is back");
   d.stop();
 });
 
@@ -340,11 +379,13 @@ test("record() keeps a 60-day window of history; the streak is untouched", () =>
   d.open("2026-01-01"); d.record(90);
   d.open("2026-03-01"); d.record(90);    // 59 days later: still inside the window
   assert.ok(d.data().days["2026-01-01"], "a day inside the window was dropped");
-  d.open("2026-03-03"); d.record(90);    // 61 days after the first
-  const days = Object.keys(d.data().days).sort();
-  assert.deepEqual(days, ["2026-03-01", "2026-03-03"]);
+  // #5943: the window counts from the EARLIER of the lap's day and the newest stored day, so a lap on the 3rd
+  // (61 days on) still keeps the 1st, which is 59 days before the newest stored day (Mar 1).
+  d.open("2026-03-03"); d.record(90);
+  assert.ok(d.data().days["2026-01-01"], "the window counts from the newest stored day, not the device's");
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-03-03" });
-  d.open("2026-03-04"); d.record(90);
+  d.open("2026-03-04"); d.record(90);    // now counted from Mar 3: Jan 1 is 61 days out
+  assert.deepEqual(Object.keys(d.data().days).sort(), ["2026-03-01", "2026-03-03", "2026-03-04"]);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-03-04" });
 });
 
@@ -397,7 +438,7 @@ test("with no medal passed, the share line carries TODAY's — from today's best
   });
   seedLog(ctx); seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
-  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
+  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: (k) => (k === "medal" ? 82 : NaN) });
   d.open("2026-09-03");
   d.record(84);                                   // within 3 % of pole: silver
   assert.match(d.shareText(), / · SILVER( · |$)/);
@@ -423,4 +464,30 @@ test("stop() resumes the sim stream where the Daily found it (G.simSeed(seed, st
   d.stop();
   assert.equal(seed, 777);
   assert.equal(stream, 123456, "the stream is back where race 1 left it");
+});
+
+// #5821: the share-card stack rides LAZY_RESULTS_SHEET (off the boot wall). Daily shareCard() loads that
+// group through GameResults.ensureLoaded before painting, instead of throwing "unavailable" at the title.
+test("shareCard() loads the lazy share-card group before rendering, and the stack is off the boot wall", async () => {
+  const { d, ctx } = load();
+  const delivered = [];
+  let loads = 0;
+  ctx.GameResults = { ensureLoaded: () => {
+    loads++;
+    ctx.ShareCardData = { fromDaily: () => ({ link: null }) };
+    ctx.ShareCard = { render: () => Promise.resolve({ type: "image/png" }), deliver: (blob, name) => { delivered.push(name); return Promise.resolve("shared"); } };
+    return Promise.resolve(true);
+  } };
+  assert.equal(await d.shareCard("gold"), "shared");
+  assert.equal(loads, 1, "the results-sheet group was loaded once");
+  assert.equal(delivered[0].startsWith("apex26-daily-"), true, delivered[0]);
+  await d.shareCard("gold");
+  assert.equal(loads, 1, "a second share does not reload");
+  const manifest = (await import("../../tools/manifest.cjs")).default;
+  const { eagerScriptsOf } = await import("../../tools/check/boot-wall.mjs");
+  const lazy = new Set(manifest.LAZY_RESULTS_SHEET), wall = new Set(eagerScriptsOf(readFileSync(join(ROOT, "index.html"), "utf8")));
+  for (const f of ["js/share/share-card-data.js", "js/share/share-card-layout.js", "js/share/share-card.js"]) {
+    assert.equal(lazy.has(f), true, f + " rides LAZY_RESULTS_SHEET");
+    assert.equal(wall.has(f), false, f + " has no boot <script> tag");
+  }
 });

@@ -11,6 +11,8 @@
  *
  *  - #4671: a re-open re-attaches the cached circuit tiles (re-land).
  *  - #5889: a search that hides the active circuit selects the first match.
+ *    Only while typing: a rebuild with a query kept (TODAY'S CHALLENGE) must
+ *    not click a match, or the row handler stops the daily it just armed.
  *  - #5062: CIRCUIT DETAIL drew its elevation strip while the modal was hidden
  *    (zero box), multiplying the buffer by dpr on every open; it now waits for
  *    the post-reveal pass.
@@ -193,6 +195,32 @@ test("#5889: a search that hides the active circuit selects the first match", ()
   search.value = "zzz";                            // no match: selection left alone
   search.oninput();
   assert.equal(h.G.trackIdx, 0);
+});
+
+function dailyStub(G) {
+  let cur = null;
+  const plan = { day: "2026-11-20", trackId: "spa", trackName: "Spa", weather: "dry", tod: "day" };
+  return {
+    plan: () => plan, today: () => null, current: () => cur, isActive: () => !!cur,
+    select() { cur = { day: plan.day, class: "standard" }; G.trackIdx = 1; },
+    stop() { cur = null; },
+  };
+}
+
+test("#5889 regression: TODAY'S CHALLENGE with a search typed still arms the daily", () => {
+  const h = boot({}, { trackIdx: 1, timeTrial: true });
+  h.G.daily = dailyStub(h.G);
+  h.menus.buildSelect();
+  const search = () => h.dom.byId("sel-track-search");
+  search().value = "monza";
+  search().oninput();
+  assert.equal(h.G.trackIdx, 0, "typing still selects the first match");
+  h.dom.byId("sel-daily").onclick({ stopPropagation() {} });
+  assert.ok(h.G.daily.isActive(), "the daily stays armed");
+  assert.equal(h.G.trackIdx, 1, "the daily circuit stays selected");
+  const chip = h.dom.byId("sel-daily");
+  assert.equal(chip.getAttribute("aria-pressed"), "true");
+  assert.equal(chip.textContent.split(" · ").slice(0, 2).join(" · "), "DAILY STANDARD · SPA");
 });
 
 test("CLASSICS filter refreshes the hero preview when the active circuit is hidden", () => {

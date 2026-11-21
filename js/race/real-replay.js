@@ -274,7 +274,7 @@ const RealReplay = (function () {
   function create(G) {
     let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey}
     let captionGeneration = 0;
-    let transport = null;
+    let /** @type {ReturnType<typeof WatchTransport.create> | null} */ transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
     // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
@@ -430,18 +430,23 @@ const RealReplay = (function () {
         if (run.onTimeline) run.onTimeline(run.T);
         if (bc) bc.resetTiming();
       }
+      // Keep a live subject, but never replace the viewer's manual, locked or fixed-camera choice.
+      const liveSubject = () => {
+        let next = null;
+        for (const [car, f] of run.cars) if (f.tr && !car.retired && (!next || car.prog > next.prog)) next = car;
+        if (next) setFollow(next, false);
+      };
       if (highlight) {
         const c = carOfNum(highlight.num);
         const picture = bc && bc.status();
         if (c && !c.retired && !(picture && (picture.locked || picture.manual))) setFollow(c, false);
-        else if (bc && bc.autoOn() && (!run.follow || run.follow.retired)) {
-          // A caution/green highlight has no driver. Keep a live subject, but
-          // never replace the viewer's manual, locked or fixed-camera choice.
-          let next = null;
-          for (const [car, f] of run.cars) if (f.tr && !car.retired && (!next || car.prog > next.prog)) next = car;
-          if (next) setFollow(next, false);
-        }
+        else if (bc && bc.autoOn() && (!run.follow || run.follow.retired)) liveSubject();   // a caution/green highlight has no driver
         if (bc) bc.onCut(highlight.kind);
+      } else if (!continuous && bc && bc.autoOn() && run.follow && run.follow.retired) {
+        // A seek past the followed car's DNF: off the parked car now, not at the
+        // next event or SHOT_MAX_S later (hunt #5694 B9).
+        const picture = bc.status();
+        if (!(picture && (picture.locked || picture.manual))) liveSubject();
       }
       if (!continuous && G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
       if (bc) bc.refresh(bcState);

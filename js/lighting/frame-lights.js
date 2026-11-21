@@ -151,7 +151,7 @@ const _lightScaleBuf = [];
 // _allLightsGen is the change signal for consumers that cache by identity
 // (WGX's trackLightSBO upload) — it moves when the VALUES move.
 const _allLightsBuf = [];
-let _allLightsGen = 0;
+let _allLightsGen = 0, _allLightsStaticGen = 0;
 // frame.lampSetGen: moves when the lamp SET or its SCALE moves (a new source
 // array, a length change, a new time-of-day / LAMP LEVEL scale) and never for
 // flicker or warm-up. game.js's env-probe hold latches on it: latched on
@@ -365,6 +365,8 @@ function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
+  if (fresh) _allLightsStaticGen++;
+  frame.allLightsStaticGen = _allLightsStaticGen;
   // DIRTY-ONLY (R2-2, #3104): the steady factor (flicker 0 and warm-up done; 52 preset
   // rows ship lampFlicker 0) is a constant, so the same source and scale
   // mean nothing moved: skip the whole-set re-tint outright, not every 50 ms.
@@ -635,6 +637,9 @@ function release() {
   // release(). Null every pool car and drop the selection list.
   for (let i = 0; i < _tlPool.length; i++) _tlPool[i].c = null;
   _tlSel.length = 0;
+  // Flicker hash table grows with the largest lamp offset this session; drop it
+  // on track switch so a dense night circuit does not keep ~N×4 bytes forever.
+  _hshC = new Float32Array(0);
 }
 /** THE MIRROR'S LAMPS. frame.lights is ranked for the FORWARD camera, and that
  *  ranking pushes lamps behind it down the list (lampBehindBias) — exactly the

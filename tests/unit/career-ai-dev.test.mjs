@@ -227,7 +227,8 @@ function makeCarsBoot() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/physics/consts.js",
-    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js"]) {
+    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js",
+    "js/physics/ai-drive.js"]) {   // makeCars bounds the AI's ERS map through AiDrive.aiErs (#5330)
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   vm.runInContext(`
@@ -241,6 +242,7 @@ function makeCarsBoot() {
     var gridTeams=()=>Teams.LIST, seatsFor=t=>t.custom?[t.drivers[0],t.drivers[0]]:t.drivers;
     var simRnd=()=>{draws++;return .5},clamp=M4.clamp;
     var seasonDriverId=(t,i)=>t+':'+i;
+    var flow='career';   // makeCars' season seat move (#5877) runs in flow 'season' only
     var daily={isActive:()=>false},SetupTune={mods:()=>null,balance:()=>0,aero:()=>undefined};
     var getTeamParts=id=>saved||Parts.getFactorySetup(Teams.LIST.find(t=>t.id===id));
     var modsFor=(t,s)=>Parts.getMods(s,t),tyreBaseModsFor=modsFor;

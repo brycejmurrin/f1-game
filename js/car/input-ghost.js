@@ -8,15 +8,13 @@
 
 const InputGhost = (function () {
   const STORE_KEY = "inputGhost.v1";
+  const DISK_KEY = "apex26." + STORE_KEY;
   const MAX_STORE_BYTES = 256 * 1024;   // half the pose budget — inputs pack denser
   const MIN_STEPS = 30;                 // half a second at 60 Hz
-  // A lap left open (parked, stuck, AFK) grew two arrays per physics step without
-  // bound (~3-4 MB/h), and with no best yet a one-hour lap became the ghost.
-  // Ten minutes is several times the slowest lap of the longest circuit (7 km):
-  // past it the lap is dropped, as an invalid one is.
+  // Bound memory for laps left open while parked.
   const MAX_LAP_S = 600;
   const DEFAULT_DT = 1 / 60;
-  const IDLE_CAP_MS = 5000;             // the PB write waits this long for a long idle slot
+  const IDLE_CAP_MS = 5000;
 
   let trackId = null, context = null, storageId = null;
   let best = null;               // finished envelope for current track/class
@@ -25,8 +23,10 @@ const InputGhost = (function () {
   let lastSave = { durable: false, reason: "no recording" };
 
   let storeCache = null;
+  let diskBaseline;
   let accessClock = Date.now();
   const pending = new Map();
+  const pendingDeletes = new Set();
   let _enc = null;
   const clamp = M4.clamp;
 
@@ -115,17 +115,13 @@ const InputGhost = (function () {
     return st.every((v, i) => Number.isFinite(v) && Number.isInteger(fl[i])
       && v >= -127 && v <= 127 && fl[i] >= 0 && fl[i] <= (g.v === 3 ? 255 : 3));
   }
-  // Snapshots this module committed (a finished lap, a decoded disk entry) are
-  // immutable, so their O(steps) valid() runs once: compatible(best) ran it on
-  // every finishLap (#3109).
+  // Validate immutable snapshots once.
   const _validSnaps = new WeakSet();
   function committed(g) { _validSnaps.add(g); return g; }
   function compatible(g) {
     if (!(g && _validSnaps.has(g)) && !valid(g)) return false;
     if (g.physRev !== currentPhysRev()) return false;
-    // Build 0 means "dev / unknown" on either side — accept so VM harnesses and
-    // unstamped shells still round-trip. A stamped recording refuses a different
-    // stamped build.
+    // Build 0 is unstamped and matches any build.
     const here = currentBuild();
     if (g.build !== 0 && here !== 0 && g.build !== here) return false;
     const dt = currentDt();
@@ -193,9 +189,7 @@ const InputGhost = (function () {
     const bytes = decodeBytes(value, count * (flags ? 1 : 8)), view = new DataView(bytes.buffer);
     return Array.from({ length: count }, (_, i) => flags ? bytes[i] : view.getFloat64(i * 8, true));
   }
-  // A finished ghost's channels never change after finishLap / load (only
-  // `_used` does), so each snapshot packs once: the idle write packed the whole
-  // store twice per save (#3109).
+  // Reuse packed channels when only the access stamp changes.
   const _packed = new WeakMap();
   const DROP_V2 = ["steer", "flags", "throttle", "brake"];
   const DROP_V3 = ["steer", "flags", "throttle", "brake", "rawSteer", "rawThrottle", "rawBrake"];
@@ -249,10 +243,7 @@ const InputGhost = (function () {
       return valid(out) ? committed(out) : null;
     } catch (_) { return null; }
   }
-  // Upper bound on byteLength(JSON.stringify({ [id]: packedGhost(g) })) with no
-  // encode: a packed channel's JSON is at most its dense base64 plus quotes
-  // (packChannel keeps sparse runs only when shorter; a constant is a short
-  // number), and all of it is ASCII. The "" placeholders carry the quotes.
+  // Dense base64 bounds packed channel sizes. The placeholders count the quotes.
   function packedBytesBound(id, g) {
     const n = g.steer.length, v3 = g.v === 3;
     if (!v3 && !(g.v === 2 && g.steer.every(Number.isInteger))) return Infinity;
@@ -269,16 +260,20 @@ const InputGhost = (function () {
     if (storeCache) return storeCache;
     let parsed = null;
     try {
-      if (typeof GameStore !== "undefined" && GameStore && GameStore.store)
-        parsed = GameStore.store.get(STORE_KEY, null);
-    } catch { parsed = null; }
+      const raw = localStorage.getItem(DISK_KEY);
+      parsed = JSON.parse(raw);
+      diskBaseline = raw;
+    } catch {
+      try {
+        if (typeof GameStore !== "undefined" && GameStore && GameStore.store) parsed = GameStore.store.get(STORE_KEY, null);
+      } catch { /* unavailable */ }
+    }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       if (parsed !== null && typeof Log !== "undefined")
         Log.warn("car", "input-ghost store was not an object; starting empty");
       parsed = {};
     }
-    // Keep compact tapes compact: a tiny constant-channel entry may represent
-    // 36,000 steps. Only the selected context (or a pending merge) decodes it.
+    // Decode only the active tape and merge candidates.
     for (const g of Object.values(parsed)) {
       if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
@@ -289,10 +284,7 @@ const InputGhost = (function () {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
   }
-  // UTF-8 bytes of one `"id":packed` member, memoised per snapshot while its
-  // `_used` stamp holds. The store's JSON is "{" + members.join(",") + "}", so
-  // the sum below is byte-for-byte JSON.stringify(packedStore(store)) without
-  // building the whole-store string twice per save (#3109).
+  // Count exact JSON bytes without serializing the whole store twice.
   const _entryBytes = new WeakMap();
   function entryBytes(id, g) {
     const hit = g && typeof g === "object" ? _entryBytes.get(g) : null;
@@ -315,8 +307,7 @@ const InputGhost = (function () {
     let changed = false;
     for (const id of Object.keys(store)) {
       const g = store[id];
-      // Unselected packed entries are opaque until used; valid() accepts the
-      // decoded envelope, so applying it here would discard valid history.
+      // valid() expects a decoded tape.
       if (!(g && (g.packedV2 || g.packedV3 || _validSnaps.has(g))) && !valid(g)) { delete store[id]; changed = true; }
     }
     const oldest = Object.keys(store).sort((a, b) => {
@@ -338,11 +329,13 @@ const InputGhost = (function () {
     trimStore(store);
     if (typeof GameStore === "undefined" || !GameStore || !GameStore.store)
       return { durable: false };
-    return GameStore.store.write(STORE_KEY, packedStore(store));
+    const result = GameStore.store.write(STORE_KEY, packedStore(store));
+    if (result.durable) {
+      diskBaseline = undefined;
+      pendingDeletes.clear();
+    }
+    return result;
   }
-  // Another tab wrote the store (GameStore's `storage` listener): forget the
-  // cached copy, re-read it, and lay this tab's unsaved laps back on top, so the
-  // next save does not write a stale whole-object over the other tab's ghosts.
   function betterGhost(a, b) {
     const ad = materialized(a), bd = materialized(b);
     if (!ad) return bd ? b : null;
@@ -353,21 +346,15 @@ const InputGhost = (function () {
     winner._used = Math.max(Number(a._used) || 0, Number(b._used) || 0);
     return winner;
   }
-  function onStoreChange(change) {
-    if (!change || !change.foreign) return;
-    if (change.clear) {
-      pending.clear();
-      storeCache = null;
-      best = null;
-      return;
-    }
-    if (change.key !== STORE_KEY) return;
-    let fresh = null;
-    try { fresh = GameStore.store.get(STORE_KEY, {}); } catch { fresh = null; }
+  function rebaseStore(fresh) {
     if (!fresh || typeof fresh !== "object" || Array.isArray(fresh)) fresh = {};
-    for (const g of Object.values(fresh)) {
-      if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
+    for (const [id, g] of Object.entries(fresh)) {
+      if (!g || typeof g !== "object") continue;
+      const cached = storeCache && storeCache[id];
+      if (cached && cached.time === g.time && cached._used > (g._used || 0)) g._used = cached._used;
+      if (Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
+    for (const id of pendingDeletes) delete fresh[id];
     for (const [id, snap] of pending) {
       const winner = betterGhost(fresh[id], snap);
       if (winner) fresh[id] = winner;
@@ -375,6 +362,35 @@ const InputGhost = (function () {
     storeCache = fresh;
     const current = storageId == null ? null : fresh[storageId];
     best = materialized(current);
+    return fresh;
+  }
+  function onStoreChange(change) {
+    if (!change || !change.foreign) return;
+    if (change.clear) {
+      pending.clear();
+      pendingDeletes.clear();
+      storeCache = null;
+      diskBaseline = undefined;
+      best = null;
+      return;
+    }
+    if (change.key !== STORE_KEY) return;
+    diskBaseline = undefined;
+    let fresh = null;
+    try { fresh = GameStore.store.get(STORE_KEY, {}); } catch { /* unavailable */ }
+    rebaseStore(fresh);
+  }
+  // A save or clear can run before another tab's queued storage event.
+  // Read the stored baseline at the write boundary; blocked reads keep the session copy.
+  function storeForWrite() {
+    let fresh;
+    try {
+      const raw = localStorage.getItem(DISK_KEY);
+      if (storeCache && raw === diskBaseline) return storeCache;
+      fresh = JSON.parse(raw);
+      diskBaseline = raw;
+    } catch { return loadStore(); }
+    return rebaseStore(fresh);
   }
   if (typeof GameStore !== "undefined" && GameStore && GameStore.store && typeof GameStore.store.subscribe === "function")
     GameStore.store.subscribe(onStoreChange);
@@ -386,7 +402,7 @@ const InputGhost = (function () {
     const write = () => {
       if (pending.get(id) !== snap) return;
       try {
-        const store = loadStore();
+        const store = storeForWrite();
         const result = saveStore(store);
         lastSave = { durable: !!result.durable, reason: result.durable ? "saved" : "quota or storage unavailable" };
         if (result.durable) {
@@ -401,9 +417,7 @@ const InputGhost = (function () {
       }
     };
     if (typeof requestIdleCallback === "function") {
-      // A long idle slot only, as Ghost's save (js/car/ghost.js): the write is a
-      // multi-ms job on a phone and a frame's idle tail is < 16 ms. Capped so a
-      // Time Trial driven lap after lap still writes; flush() covers pause/quit.
+      // Wait for a long idle slot up to the cap. Pause and quit flush sooner.
       const since = Date.now();
       const idle = (dl) => {
         if (pending.get(id) !== snap) return;
@@ -412,7 +426,7 @@ const InputGhost = (function () {
       };
       requestIdleCallback(idle);
     }
-    // No rIC (iOS Safari): as Ghost, 2 s after its write, so a PB lap is two short writes (#5629).
+    // Without idle callbacks, stagger writes by two seconds after pose ghosts.
     else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS + 2000);
     else write();
   }
@@ -468,8 +482,7 @@ const InputGhost = (function () {
     const m = meta;
     rec = null;
     meta = null;
-    // A stored ghost from another physics revision / build is not a record to
-    // beat: it cannot be replayed, and it would otherwise block every later lap.
+    // An incompatible tape cannot block a new recording.
     if (best && compatible(best) && lapTime >= best.time) return false;
     const snap = {
       v: done.native || done.flags.some(f => f > 3) ? 3 : 2,
@@ -489,8 +502,7 @@ const InputGhost = (function () {
     if (extraMeta && typeof extraMeta === "object") snap.meta = Object.assign({}, extraMeta);
     if (!valid(snap)) return false;
     const diskKey = storageId || "recording";
-    // The analytic bound settles the common case without packing on the lap
-    // line; only a lap near the budget pays the exact encode (#3109).
+    // Pack on the lap line only when the bound cannot prove it fits.
     const bound = packedBytesBound(diskKey, snap);
     const diskBytes = bound + 64 <= MAX_STORE_BYTES ? bound + 64
       : byteLength(JSON.stringify({ [diskKey]: packedGhost(snap) })) + 64;
@@ -523,35 +535,28 @@ const InputGhost = (function () {
   function steps() { return best ? best.steer.length : 0; }
 
   function clear(id) {
-    const store = loadStore();
-    if (id == null) {
-      for (const k of Object.keys(store)) delete store[k];
-      pending.clear();
-      best = null;
-    } else {
-      const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
-      const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
-      for (const key of pending.keys()) if (matches(key)) pending.delete(key);
-      for (const key of Object.keys(store)) if (matches(key)) delete store[key];
-      if (storageId != null && matches(storageId)) {
-        best = null;
-      }
+    const store = storeForWrite();
+    const contextPrefix = id != null && !id.startsWith("v2:") ? "v2:" + id + ":" : null;
+    const matches = key => id == null || key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    for (const key of pending.keys()) if (matches(key)) pending.delete(key);
+    for (const key of Object.keys(store)) {
+      if (!matches(key)) continue;
+      pendingDeletes.add(key);
+      delete store[key];
     }
+    if (id == null || (storageId != null && matches(storageId))) best = null;
     saveStore(store);
   }
 
   function flush() {
-    for (const [id, snap] of pending) {
-      try {
-        const store = loadStore();
-        // A storage event may already have merged a faster foreign lap into
-        // the cache while this local snapshot waited for an idle slot.
-        const winner = betterGhost(store[id], snap);
-        if (winner) store[id] = winner;
-        const result = saveStore(store);
-        if (result.durable && pending.get(id) === snap) pending.delete(id);
-      } catch { /* best effort */ }
-    }
+    if (!pending.size && !pendingDeletes.size) return;
+    try {
+      const writes = new Map(pending);
+      const result = saveStore(storeForWrite());
+      if (result.durable) {
+        for (const [id, snap] of writes) if (pending.get(id) === snap) pending.delete(id);
+      }
+    } catch { /* best effort */ }
   }
 
   return {

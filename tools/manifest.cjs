@@ -240,7 +240,6 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
-  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -413,7 +412,6 @@ const FULL = [
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
-  "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
@@ -440,9 +438,7 @@ const FULL = [
   "js/ui/results-story.js",
   "js/ui/results-boot.js", // GameResults stub; sheet body is LAZY_RESULTS_SHEET
   "js/race/quali-model.js",
-  "js/share/share-card-data.js",
-  "js/share/share-card-layout.js",
-  "js/share/share-card.js",
+  // share-card-data / -layout / -card are LAZY_RESULTS_SHEET (#5821 paid for its re-land with them)
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -812,6 +808,7 @@ const HARD_EDGES = [
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as
   // js/game.js destructures the rest of them.
   ["js/physics/consts.js", "js/garage/setup-camera.js"],
+  ["js/physics/consts.js", "js/physics/ai-drive.js"],   // AiDrive reads PhysicsConsts.AI_WING_GRIP at eval
   ["js/track/core/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval
@@ -893,9 +890,6 @@ const HARD_EDGES = [
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
   // start-lights / marshal-panels → LAZY_RACE_SESSION (ensureRaceSession before startRace)
-  ["js/share/share-card-data.js", "js/race/daily-challenge.js"], // Daily shareCard builds the canonical model
-  ["js/share/share-card-layout.js", "js/share/share-card.js"],   // ShareCard.render lays out before painting
-  ["js/share/share-card.js", "js/race/daily-challenge.js"],      // Daily shareCard renders and delivers the PNG
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/ui/title-flow.js", "js/game.js"],          // game.js calls TitleFlow.create(G) at eval time
@@ -1163,6 +1157,7 @@ const LAZY_RACE_SESSION = [
   "js/race/stopped-cars.js", // StoppedCars: cars stopped on the road, RaceControl's second hazard source (W34)
   "js/race/retired-card.js", // RetiredCard: a retired solo player's RETIRED card + SKIP TO RESULTS (W34); RaceControl typeof-guards it
   "js/race/driving-coach.js", // DrivingCoachBody: the coach (#4748); the FULL façade js/race/driving-coach-boot.js creates it once it lands
+  "js/ui/hud-inputs.js",     // HudInputs: opt-in INPUTS trace + pause REVIEW INPUTS (mounts itself); GameHud typeof-guards it (#5682)
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat
@@ -1362,17 +1357,31 @@ const LAZY_UI_PRESETS = [
 ];
 const LAZY_UI_PRESETS_EDGES = [];
 
-// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~62 KB). endRace and the
+// SAVES & DATA body (#4748, ~50 KB): SettingsExportBody — collect / apply for the SETTINGS, GARAGE
+// and CAREER files, ttlb, and the SETTINGS › FILES / GARAGE FILE / CAREER FILE UI. The FULL
+// js/ui/settings-export.js keeps FORMAT, SPEC (SaveSchemaRegistry ingests it at eval) and the
+// garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
+// it at idle, at the garage door, with the agent surface and with the career screen.
+const LAZY_SAVES_DATA = [
+  "js/ui/progress-backup.js",      // ProgressBackup (#5992): the settings file's `progress` section; read at call time
+  "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
+];
+const LAZY_SAVES_DATA_EDGES = [];
+
+// RESULTS / TT / STANDINGS / CHAMPION DOM builders + the share-card stack (~92 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
 // ensureResultsSheet so buildResults stays synchronous at the flag. The SHARE
 // CARD chip (ShareCardChips) rides here: results-sheet and career-ui's THE YEAR
 // card are its only callers, both behind a typeof check (deploy red, boot wall).
 const LAZY_RESULTS_SHEET = [
+  "js/share/share-card-data.js",   // ShareCardData: Daily / results / career-year card models, read at call time
+  "js/share/share-card-layout.js", // ShareCardLayout: ShareCard.render lays out before painting
+  "js/share/share-card.js",        // ShareCard: Daily shareCard() loads this group first
   "js/share/share-card-chips.js",
   "js/ui/results-sheet.js",
   "js/ui/quali-sheet.js", // QualiSheet: paints only after a session ran (C1 #5807 moved it off the boot wall)
 ];
-const LAZY_RESULTS_SHEET_EDGES = [];
+const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/share-card.js"]];
 
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
@@ -1859,7 +1868,7 @@ module.exports = {
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
-  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES,
+  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,

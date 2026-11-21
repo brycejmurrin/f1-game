@@ -236,6 +236,33 @@ test("the finish policy closes completed human races and bounded edge cases", ()
   ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
 });
 
+test("a VS FRIEND race waits POST_FINISH_CAP s after the first human finishes, not 360 s/lap (#5989 A1)", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const post = { solo: false, net: true, since: -1, first: -1 };
+  const cars = [
+    { human: true, finished: false, retired: false },
+    { _nHuman: true, finished: false, retired: false },
+    { human: false, finished: false, retired: false },
+  ];
+  assert.equal(finishDelay(cars, 290, 5, 0, post), 0, "nobody home: racing");
+  assert.equal(post.first, -1);
+  Object.assign(cars[0], { finished: true, finishT: 300 });
+  assert.equal(finishDelay(cars, 300, 5, 0, post), 0, "the first human home starts the wait");
+  assert.equal(post.first, 300);
+  assert.equal(finishDelay(cars, 374, 5, 0, post), 0, "74 s on: the friend still has time");
+  assert.equal(finishDelay(cars, 375, 5, 0, post), 0.1, "75 s on: classify the friend by laps done");
+  // The friend's own screen applies the same bound to the remote finisher.
+  const theirs = { solo: false, net: true, since: -1, first: -1 };
+  const mirror = [{ human: true, finished: false, retired: false }, { _nHuman: true, finished: true, retired: false, finishT: 300 }];
+  assert.equal(finishDelay(mirror, 300, 5, 0, theirs), 0);
+  assert.equal(finishDelay(mirror, 376, 5, 0, theirs), 0.1, "both peers end on the same bound");
+  // Both home is the ordinary 2.2 s countdown, AI still on track or not.
+  Object.assign(cars[1], { finished: true, finishT: 320 });
+  assert.equal(finishDelay(cars, 330, 5, 0, post), 2.2);
+  // Without `post.net` (TT, quali, harnesses) the old 360 s/lap cap stands.
+  assert.equal(finishDelay([{ human: true, finished: true, retired: false, finishT: 300 }, { _nHuman: true, finished: false, retired: false }], 400, 5), 0);
+});
+
 test("a Data Hub JUMP IN counts the hard cap from the clock it was seeded to, not from zero", () => {
   // PR #402 audit: RealRace.place seeds raceT to the real race's time at the
   // lap you join (K0 * t0 — 5 000+ s at lap 40 of Baku). On a 3-lap condensed
@@ -303,16 +330,33 @@ test("a caution RAISES immediately but does not LOWER before the hold", () => {
   let hz = hazards(0, 0);
   const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
 
-  hz = hazards(10, 2);
+  hz = hazards(6, 2);
   run(rc, 0.5);
-  assert.equal(rc.info().level, 3, "raises inside half a second");
+  assert.equal(rc.info().level, 2, "raises inside half a second");
 
   hz = hazards(0, 0);
   run(rc, 3);
-  assert.equal(rc.info().level, 3, "still flying 3 s later — MIN_HOLD is 6 s");
+  assert.equal(rc.info().level, 2, "still flying 3 s later — MIN_HOLD is 6 s");
 
   run(rc, 4);
   assert.equal(rc.info().level, 0, "cleared once the hold expires");
+});
+
+test("#5893: a debris SAFETY CAR outlives its debris — it holds SC_HOLD, not the 6 s MIN_HOLD", () => {
+  // Resting shards despawn after 4 s (DebrisWorld REST_DESPAWN_S), so a pile
+  // that raised an SC was gone ~6 s later and MIN_HOLD withdrew the SC before
+  // the field could bunch behind it. Before the fix: level 0 at t = 8 s.
+  let hz = hazards(10, 2);
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  hz = hazards(0, 0);   // the shards came to rest and despawned
+  run(rc, 7);
+  assert.equal(rc.info().level, 3, "the SC is still out 8 s after it was raised");
+  run(rc, 36);
+  assert.equal(rc.info().level, 3, "and 44 s after");
+  run(rc, 2);
+  assert.equal(rc.info().level, 0, "it comes in once SC_HOLD (45 s) has run");
 });
 
 test("a stuck hazard cannot neutralise the race forever", () => {
@@ -570,7 +614,7 @@ test("OVERTAKE stays off after the Safety Car comes in until the leader next cro
   assert.equal(rc.otEnabled(), false, "disabled under the Safety Car");
 
   hz = hazards(0, 0);
-  run(rc, 7);   // past MIN_HOLD: the Safety Car comes in
+  run(rc, 46);   // past SC_HOLD: the Safety Car comes in
   assert.equal(rc.info().level, 0);
   assert.equal(rc.otEnabled(), false, "green, but the field has not crossed the Line since");
   leader.lap = 6;
@@ -1087,7 +1131,7 @@ const CONTROL_SRC = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
 const MACHINE = fnSource(CONTROL_SRC, "function createControl(port)");
 const MACHINE_GLOBALS = ["Log", "blank", "logFlag", "LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD",
   "RED_STOP", "RED_HOLD", "QUERY_EVERY", "DebrisWorld", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN",
-  "MIN_HOLD", "Storm", "TyreModel", "Number", "Math", "Array",
+  "MIN_HOLD", "SC_HOLD", "Storm", "TyreModel", "Number", "Math", "Array",
   // The stopped-car source (W34) leaves the machine only the empty debris picture.
   "NO_HAZARDS"];
 function freeNames(source) {
@@ -1156,7 +1200,7 @@ test("the actual private machine checks against its port and rejects authority e
   // Check the REAL factory body. Legacy collaborators stay declared separately;
   // noImplicitAny/strictNullChecks remain off for its existing untyped internals.
   const helpers = ["function blank()", "function logFlag(prev, next)"].map((decl) => fnSource(CONTROL_SRC, decl)).join("\n");
-  const constants = ["LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD", "RED_STOP", "RED_HOLD", "QUERY_EVERY", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN", "MIN_HOLD",
+  const constants = ["LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD", "RED_STOP", "RED_HOLD", "QUERY_EVERY", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN", "MIN_HOLD", "SC_HOLD",
     "NO_HAZARDS"];
   const ast = espree.parse(CONTROL_SRC, { ecmaVersion: 2022, range: true });
   const body = ast.body[0].declarations[0].init.callee.body.body;

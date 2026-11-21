@@ -142,7 +142,7 @@ function loadStall(opts = {}) {
     softwareGL = false, swRaceShed = true, handoffCover = false, introBudgetLeft = 0,
     loadingPhase = "", envProbeOff = false, perChunkOff = false,
   } = opts;
-  const clock = { t: 0 }, calls = { tier: [], reload: 0 }, ls = new Map(), ss = new Map();
+  const clock = { t: opts.t0 || 0 }, calls = { tier: [], reload: 0 }, ls = new Map(Object.entries(opts.seed || {})), ss = new Map();
   if (reloadsSpent != null) ss.set("apex26.stallReloads", String(reloadsSpent));
   if (envProbeOff) ls.set("apex26.envProbeOff", "1");
   if (perChunkOff) ls.set("apex26.perChunkOff", "1");
@@ -153,7 +153,12 @@ function loadStall(opts = {}) {
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? carsetup : null),
+    // A real Document method: called unbound (`const g = document.getElementById; g(id)`) it
+    // throws "Illegal invocation", so the stub does too — an arrow let the unbound call pass.
+    getElementById(id) {
+      if (this !== doc) throw new TypeError("Illegal invocation");
+      return id === "loading" ? cover : id === "carsetup" ? carsetup : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
@@ -285,7 +290,10 @@ test("stall: #race-settings (PREPARING…) uses the same relaxed cover as #loadi
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null),
+    getElementById(id) {
+      if (this !== doc) throw new TypeError("Illegal invocation");   // as a browser's Document does
+      return id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
@@ -383,4 +391,48 @@ test("recover(): stays stopped when no frame could be scheduled", () => {
     assert.equal(LoopHealth.recover(), false);
     assert.equal(LoopHealth.state().stopped, true, "a card that says the loop stopped must stay true");
   }
+});
+
+// #5899: THE WATCHDOG'S LATCH LAPSES. One stall on one bad load used to set envProbeOff / perChunkOff for good: only
+// RESET or __apex.envProbe() cleared them. The reload now stamps apex26.stallLatch "<ms>:<strikes>" and the next boot
+// after 3^strikes days clears both keys (a repeat stall re-latches for longer). A context-loss latch has no stamp.
+const DAY = 864e5;
+const glacial = (h) => { h.frames(1, 16); h.frames(10, 2500); };
+test("stall latch: the reload stamps its latch with the time and a first strike", () => {
+  const h = loadStall({ t0: 5 * DAY });
+  glacial(h);
+  assert.equal(h.calls.reload, 1);
+  assert.equal(h.ls.get("apex26.envProbeOff"), "1");
+  const [at, n] = h.ls.get("apex26.stallLatch").split(":").map(Number);
+  assert.ok(at > 5 * DAY && at < 6 * DAY, "stamped with the reload time");
+  assert.equal(n, 1, "first strike");
+});
+test("stall latch: a boot inside 3 days keeps it, a boot after clears both keys", () => {
+  const latched = { "apex26.envProbeOff": "1", "apex26.perChunkOff": "1", "apex26.stallLatch": `${DAY}:1` };
+  const inside = loadStall({ t0: DAY + 3 * DAY - 1, seed: latched });
+  assert.equal(inside.ls.get("apex26.envProbeOff"), "1", "still inside the first strike's window");
+  assert.equal(inside.ls.get("apex26.perChunkOff"), "1");
+  const after = loadStall({ t0: DAY + 3 * DAY + 1, seed: latched });
+  assert.equal(after.ls.has("apex26.envProbeOff"), false, "one bad load is not a downgrade for good");
+  assert.equal(after.ls.has("apex26.perChunkOff"), false);
+  assert.equal(after.ls.get("apex26.stallLatch"), "0:1", "lapsed, the strike count remembered");
+});
+test("stall latch: a repeat stall after a lapse counts a second strike and holds 9 days", () => {
+  const h = loadStall({ t0: 10 * DAY, seed: { "apex26.stallLatch": "0:1" } });
+  glacial(h);
+  assert.equal(h.calls.reload, 1);
+  const stamp = h.ls.get("apex26.stallLatch");
+  assert.equal(stamp.split(":")[1], "2");
+  const at = Number(stamp.split(":")[0]);
+  const seed = { "apex26.envProbeOff": "1", "apex26.perChunkOff": "1", "apex26.stallLatch": stamp };
+  assert.equal(loadStall({ t0: at + 8 * DAY, seed }).ls.get("apex26.envProbeOff"), "1", "a second strike outlasts 3 days");
+  assert.equal(loadStall({ t0: at + 9 * DAY + 1, seed }).ls.has("apex26.envProbeOff"), false, "and lapses after 9");
+});
+test("stall latch: a context-loss latch (no stamp) and a lapsed stamp are never cleared", () => {
+  const loss = { "apex26.envProbeOff": "1", "apex26.perChunkOff": "1" };
+  const h = loadStall({ t0: 400 * DAY, seed: loss });
+  assert.equal(h.ls.get("apex26.envProbeOff"), "1", "a device that lost its context keeps the lighter renderer");
+  assert.equal(h.ls.get("apex26.perChunkOff"), "1");
+  const later = loadStall({ t0: 400 * DAY, seed: { ...loss, "apex26.stallLatch": "0:1" } });
+  assert.equal(later.ls.get("apex26.envProbeOff"), "1", "a loss latch written after a lapse is not the watchdog's to clear");
 });

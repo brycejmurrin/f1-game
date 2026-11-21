@@ -53,15 +53,30 @@ export { TRACK_STALL_MS, awaitTrackBuild };
  * the same onclick handler the game wires up. Use this for any HUD / pause /
  * garage button reached with a race running and no `headless(true)` first;
  * menu clicks on a quiet page keep `locator.click()` and its checks.
+ *
+ * HIT-TEST FIRST (#5242 ask 6). A bare `el.click()` succeeds on a hidden, clipped or covered button, so a spec
+ * could drive a control no thumb can reach and stay green (the #5200 RESUME). Before the click the control is
+ * scrolled into view the way a player would scroll a sheet, must have a painted rect, and must own the point at
+ * its own centre (`elementFromPoint`, which skips `pointer-events: none` layers as a real tap does); otherwise
+ * this throws naming what took the tap. The click itself stays the DOM `.click()` for the reason above.
  */
 export async function clickLive(page, id) {
-  const hit = await page.evaluate((i) => {
+  const r = await page.evaluate((i) => {
     const el = document.getElementById(i);
-    if (!el) return false;
+    if (!el) return { err: "none" };
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const b = el.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) return { err: `has no painted rect (${b.width}x${b.height}: hidden or display:none)` };
+    const t = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!t || (t !== el && !el.contains(t))) {
+      const who = t ? (t.id ? "#" + t.id : t.tagName.toLowerCase() + (typeof t.className === "string" && t.className ? "." + t.className.trim().split(/\s+/).join(".") : "")) : "nothing (centre off-screen)";
+      return { err: `is covered: a tap at its centre lands on ${who}` };
+    }
     el.click();
-    return true;
+    return { err: null };
   }, id);
-  if (!hit) throw new Error(`clickLive: no element with id "${id}"`);
+  if (r.err === "none") throw new Error(`clickLive: no element with id "${id}"`);
+  if (r.err) throw new Error(`clickLive: #${id} ${r.err}`);
 }
 
 /**
@@ -191,15 +206,30 @@ function captureConsole(page) {
 }
 
 const pwTest = base.extend({
-  context: async ({ context }, use, testInfo) => {
-    await installMocks(context, shippedDefaults(testInfo));
-    context.on("page", captureConsole);
-    for (const p of context.pages()) captureConsole(p);
-    if (COVERAGE) {
-      context.on("page", (p) => { startCoverage(p); });
-      for (const p of context.pages()) await startCoverage(p);
+  // OWN BROWSER PER TEST (#5599): `test.use({ ownBrowser: true })` gives each test a Chromium of its own, launched
+  // through the worker's `playwright` (which applies the project's context options to every newContext) with the
+  // project's launchOptions, and closed at teardown. Why: a page closed while its GPU work is still in flight (a TLX
+  // race closed at the results screen) leaves the BROWSER's GPU process busy finishing it, and the next page's first
+  // synchronous GPU call (requestAdapter, getContext) blocks its main thread until it does: measured 18-20 s on one
+  // local core (llvmpipe), ~70 s on CI, where boot() then ran out of BOOT_MS with every timer frozen. Closing the
+  // browser kills that GPU process instead (283 ms close + 52 ms launch, next boot 4.9 s). The shared-browser context
+  // below is still created, idle, as the dependency chain needs it.
+  ownBrowser: [false, { option: true }],
+  context: async ({ context: shared, ownBrowser, playwright, browserName, launchOptions }, use, testInfo) => {
+    const own = ownBrowser ? await playwright[browserName].launch(launchOptions) : null;
+    const context = own ? await own.newContext() : shared;
+    try {
+      await installMocks(context, shippedDefaults(testInfo));
+      context.on("page", captureConsole);
+      for (const p of context.pages()) captureConsole(p);
+      if (COVERAGE) {
+        context.on("page", (p) => { startCoverage(p); });
+        for (const p of context.pages()) await startCoverage(p);
+      }
+      await use(context);
+    } finally {
+      if (own) await own.close().catch(() => {});
     }
-    await use(context);
   },
 
   /**

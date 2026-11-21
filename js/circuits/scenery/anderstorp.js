@@ -122,6 +122,10 @@
         [0.955, 0.982, -1, 20, 38.4],   // block 17 terrace (T8 outside)
         [0.900, 0.925, -1, 26, 36.0],   // block 17 spectatorHill
         [0.172, 0.212,  1, 28, 38.0],   // block 7 spectatorHill (Sodra)
+        // The engine's generic pit-straight bank + shell (build-props.js,
+        // nodes 0-24 on -1): from the run-off edge it stands at 9.73-20.2 m,
+        // where a start-line bush grew through its risers (#5998).
+        [0.000, 0.028, -1, 9.4, 20.2],
       ];
       // Boxes: [s, side, centre gap, across, along] — building() centres at
       // gap + w/2; place() centres at gap.

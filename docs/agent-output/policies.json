@@ -264,7 +264,7 @@
     "tools/check/boot-wall.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes) for the eager* tree ratchets; no CLI output"
+      "preserve": "Library: eagerScriptsOf / wallNow / wallAt boot-wall counts (scripts, raw bytes, stripped code bytes) for the eager* tree ratchets; CLI prints one JSON line, or with --growth [--days=N] the wall's change over N days (the weekly report)"
     },
     "tools/check/brake-cue-calibrate.mjs": {
       "action": "keep-native",
@@ -394,6 +394,11 @@
     "tools/check/player-dyn.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
+    "tools/check/quali-calibrate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
       "preserve": "@c1"
     },
     "tools/check/quick-validate.mjs": {
@@ -1211,6 +1216,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/gen-quali-calib.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/gen/gen-shell.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1606,6 +1616,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/js-strip.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/lint-bins.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1996,6 +2011,11 @@
       "presentation": "native",
       "preserve": "Correctness and timing separate"
     },
+    "tools/mcp/lsp-coverage.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Raw-server vs tool counts and the TypeScript version"
+    },
     "tools/mcp/lsp-mcp.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -2025,6 +2045,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Meaningful nonempty-result check and exit"
+    },
+    "tools/mcp/member-check.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/mcp/output-level-mcp.mjs": {
       "action": "targeted-summary",
@@ -2280,6 +2305,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
+    },
+    "tools/shot/capture-fallbacks.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The one capture-state line beside each image: every active software-renderer fallback, the tlxForceHw set, the extra models and parity true/false; the whole-pack prefetch line."
     },
     "tools/shot/capture-gallery.mjs": {
       "action": "keep-native",

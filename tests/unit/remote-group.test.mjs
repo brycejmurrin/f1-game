@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import YAML from "yaml";
 import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE,
-  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN, GROUP_LANES, withLanes } from "../../tools/ci/remote-group.mjs";
+  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN, GROUP_LANES, withLanes, groupLanes, MAX_GROUP_LANES } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -275,6 +275,21 @@ test("the dispatch is an owner write: it says so and refuses unless the owner's 
     assert.deepEqual([g.ok, g.lines.length, g.lines[0], g.lines[1].slice(0, 8)], [false, 2, what, "refused:"], JSON.stringify(env));
   }
   assert.deepEqual(ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" }), { ok: true, lines: [what] }, "the opt-in still prints what the dispatch is");
+});
+
+test("group lanes (D-LANES): --group-lanes, else APEX_GROUP_LANES, else 8; bounds and fallback", () => {
+  assert.equal(MAX_GROUP_LANES, 128);
+  assert.equal(groupLanes({}, []), GROUP_LANES);
+  assert.equal(groupLanes({ APEX_GROUP_LANES: "24" }, []), 24);
+  assert.equal(groupLanes({ APEX_GROUP_LANES: "24" }, ["ui", "--group-lanes", "12"]), 12, "the flag wins over the env");
+  for (const v of ["", "0", "-1", "2.5", "24x", "129"]) {
+    assert.equal(groupLanes({ APEX_GROUP_LANES: v }, []), GROUP_LANES, `env '${v}' falls back`);
+    assert.equal(groupLanes({}, ["--group-lanes", v]), GROUP_LANES, `flag '${v}' falls back`);
+  }
+  assert.equal(groupLanes({}, ["--group-lanes"]), GROUP_LANES, "a flag with no value falls back");
+  const m = Array.from({ length: 4 }, (_, i) => ({ shard: i + 1, total: 4 }));
+  assert.deepEqual(withLanes(m, 22, 24).map((x) => x.lane), [23, 24, 1, 2], "lanes above 8 are used and wrap at the count");
+  assert.deepEqual(withLanes(m, 6, 0).map((x) => x.lane), withLanes(m, 6).map((x) => x.lane), "a bad count is the default");
 });
 
 test("group lanes (#5848): a dispatch gives every shard a lane 1..GROUP_LANES and the shard job queues on it", () => {

@@ -42,7 +42,7 @@ import { ROOT, isMain, firstDiff } from "./gen-lib.mjs";
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../manifest.cjs");
 
-export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "cockpit-view.html", "controller.html", "sw.js", "js/roster.js"]);
+export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "cockpit-view.html", "controller.html", "overlay.html", "bench.html", "sw.js", "js/roster.js"]);
 /** The `?v=` token written into the repo's shell. Real hashes exist only in
  *  the deploy's staged copy. */
 export const DEV_TOKEN = "dev";
@@ -88,6 +88,11 @@ export function replaceMarked(text, open, close, body) {
 //   connect-src stays https:/wss: wide on purpose: the TURN credential URL
 //     (apex26.turnApi), the room-code Worker (apex26.rendezvous) and the Nostr
 //     relays are player-configurable, so an allow-list would break overrides.
+//   img-src/media-src keep https: for the same reason: the music menu streams
+//     a player-pasted URL (soundtrack.js) and Spotify album art arrives as
+//     whatever CDN URL its API returns (spotify.js) (#5993, kept, not tightened).
+//   ONE policy for every root page (index, controller, overlay, bench and the
+//     generated cockpit-view), each with its own inline-script hashes (#5993).
 //   object-src 'none' and base-uri 'self' close plugin and <base> injection.
 // frame-ancestors / report-to are header-only and cannot be set from a meta.
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
@@ -206,6 +211,7 @@ function cockpitViewPage() {
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Apex 26 — Cockpit Preview</title>
+<meta http-equiv="Content-Security-Policy" content="${cspFor("")}">
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#171b20;color:#eee;font:14px system-ui}#view{width:100%;height:100%;display:block}#err{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:20px}</style>
 </head><body><canvas id="view" aria-label="Stationary cockpit model"></canvas>
 <div id="hud" hidden></div><div id="tip" hidden></div><div id="err" role="status"></div>
@@ -232,7 +238,7 @@ export function swOptionalFiles() {
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
-    ...(MANIFEST.LAZY_UI_PRESETS || []),
+    ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []),
     ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []),
   ];
 }
@@ -264,6 +270,7 @@ function swOptionalBlock() {
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
+    ["LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade", MANIFEST.LAZY_SAVES_DATA || []],
     ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
     ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
     ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
@@ -308,6 +315,7 @@ function rosterSource() {
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
     ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
+    ["LAZY_SAVES_DATA", MANIFEST.LAZY_SAVES_DATA], ["LAZY_SAVES_DATA_EDGES", MANIFEST.LAZY_SAVES_DATA_EDGES],
     ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],
     ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
     ["LAZY_GARAGE_EXTERIOR", MANIFEST.LAZY_GARAGE_EXTERIOR],
@@ -348,11 +356,13 @@ export function generate() {
   let controller = read("controller.html");
   controller = replaceMarked(controller, "<!-- @gen-shell:controller -->", "<!-- /@gen-shell:controller -->", controllerBlock());
   controller = replaceMarked(controller, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(controller));
+  // overlay.html and bench.html are hand-written pages; only their CSP block is generated.
+  const marked = (rel) => replaceMarked(read(rel), "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(read(rel)));
   let sw = read("sw.js");
   sw = replaceMarked(sw, "// @gen-shell:sw-optional", "// /@gen-shell:sw-optional", swOptionalBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-required-lazy", "// /@gen-shell:sw-required-lazy", swRequiredLazyBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-lazy-agent", "// /@gen-shell:sw-lazy-agent", swLazyAgentBlock());
-  return { "index.html": html, "tools/carview.html": carview, "cockpit-view.html": cockpitViewPage(), "controller.html": controller, "sw.js": sw, "js/roster.js": rosterSource() };
+  return { "index.html": html, "tools/carview.html": carview, "cockpit-view.html": cockpitViewPage(), "controller.html": controller, "overlay.html": marked("overlay.html"), "bench.html": marked("bench.html"), "sw.js": sw, "js/roster.js": rosterSource() };
 }
 
 /** Targets whose committed bytes differ from a fresh generation. */

@@ -529,8 +529,20 @@ const AiDrive = (function () {
   const AI_DF = 0.65;   // PhysicsConsts.DOWNFORCE (not bound here: unit VMs load this file alone)
   // `aero` scales the wing term. The YAW budget (yawScale) gets no wings: it is a lane-change smoothness
   // budget, and wings took ai-racecraft-vm's solo lateral jerk from 5.9 to 8.1 m/s² (cap 7.5).
-  const AERO_GRIP_K = 0.055;   // PhysicsConsts.AI_WING_GRIP, unbound as AI_DF
+  const AERO_GRIP_K = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.AI_WING_GRIP) || 0.055;   // the literal: unit VMs (as AI_DF)
   function aeroGrip(load) { return 1 + ((load != null ? load : 0.5) - 0.5) * AERO_GRIP_K; }
+  // AI ERS IS BOUNDED (#5330): deploy/regen cost nothing (PaceMath) and works kits
+  // don't trade them (Aston 0.91/0.79, Haas 0.00/0.43); deploy 0->1 was 1.2-1.9 % of
+  // a solo lap. AI maps pull to AI_ERS_SPAN round 0.5; player + hire keep their build.
+  const AI_ERS_SPAN = 0.3;
+  function aiErs(x) { return 0.5 + (clamp(x != null ? x : 0.5, 0, 1) - 0.5) * AI_ERS_SPAN; }
+  // SCRIPTED PACE TRIM (#5330): tierV x skill reached only top speed, so the ladder
+  // barely showed in corners. paceTrim scales AI vmax AND corner target by PACE_GAIN x
+  // scripted pace vs PACE_REF (re-centred after #5791 so the NORMAL solo median holds,
+  // docs/notes/AI-SOLO-PACE-CALIBRATION-2026-11-18.md). Fed TIER_V[tier] x skill, not tierV:
+  // career development and the legend duel keep their old weight.
+  const PACE_GAIN = 2.5, PACE_REF = 0.9332;
+  function paceTrim(script) { return script > 0 ? 1 + PACE_GAIN * (script / PACE_REF - 1) : 1; }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
     return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
@@ -609,8 +621,8 @@ const AiDrive = (function () {
     let vLim = Math.sqrt(vLimSq);
     if (!Number.isFinite(vLim)) vLim = 1e6;
     const vLimRaw = vLim;
-    const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
-    if (hold) vLim *= 1 - hold * 0.025;
+    // No `hold` vLim term (#5330): it braked Mercedes/McLaren 0.7-0.9 % early, gave
+    // Cadillac +1.25 % (solo order backwards, rho -0.08). Hold still shapes gap/line/defence.
     // Craft late-brake when attacking with room: allow a few % over the limit.
     // The 1 m/s "still closing" band is pace-5 m/s, so it rides vs like V.
     const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1 * vs);
@@ -622,8 +634,9 @@ const AiDrive = (function () {
     // marker. Signed, zero-mean across the grid — not a top-speed product term.
     // Kept small (±1.2 %): a 3 % always-on term moved field median >1 % despite
     // zero-mean (nonlinear with who sits at the median).
+    // ATTACKING ONLY (#5330): solo it re-ordered team-mates on identical cars.
     const opt = clamp(t.optimism != null ? t.optimism : 0, -1, 1);
-    if (opt) vLim *= 1 + opt * 0.012;
+    if (opt && attacking) vLim *= 1 + opt * 0.012;
     if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
     // The BINDING sample, for brakeDecision's feed-forward: its corner speed
     // carries the same style/attack/optimism/error scale as the entry budget.
@@ -688,6 +701,15 @@ const AiDrive = (function () {
     const home = ctx.baseLane != null ? ctx.baseLane : lane;
     const target = clamp(home + sign * step, -0.85, 0.85);
     return damp(lane, target, 0.35, dt);
+  }
+
+  // CLEAR ROAD TAKES THE LINE (#5330): the grid home lane (up to 0.78 half-width) cost
+  // a lone car up to ~2 % (rho 0.79 with lanes, 0.99 without). laneClear damps 0..1
+  // toward 1 when clear, 0 in traffic; game.js lifts the line weight by it.
+  const LANE_CLEAR_IN = 0.5, LANE_CLEAR_OUT = 2.5;   // 1/s: ~2 s to settle on the line, ~0.4 s back to the lane
+  function laneClear(w, clear, dt) {
+    const c = w > 0 ? w : 0;
+    return clear ? damp(c, 1, LANE_CLEAR_IN, dt) : damp(c, 0, LANE_CLEAR_OUT, dt);
   }
 
   function otPull(ctx) {
@@ -976,9 +998,7 @@ const AiDrive = (function () {
     const hi = Math.sqrt(k * Math.max(0, hiLim - x)), lo = -Math.sqrt(k * Math.max(0, loLim + x));
     return want > hi ? hi : want < lo ? lo : want;
   }
-  // A STOPPED CAR IS A HAZARD (W26): not retired/parked (Collide.parkedAhead) but stopped,
-  // e.g. a human parked on the grid, which the queue/pass logic treated as a slow blocker.
-  // Under 6 % of vTop and not in the pits; steer round it from hazardReach metres.
+  // A STOPPED CAR IS A HAZARD (W26), not a slow blocker: under 6 % of vTop, not in the pits.
   const HAZARD_V_FRAC = 0.06;
   function stoppedHazard(o, vTop) {
     if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
@@ -986,20 +1006,31 @@ const AiDrive = (function () {
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
-  // THE GAP ROUND A STATIC BODY (#5539): a street's minLatGap (2.2 m at Monaco) leaves 0.2 m to a
-  // 2.0 m car. Fine beside a moving neighbour, who gives; a parked retirement or a stopped car
-  // does not, and the lane change onto that aim overshoots it (measured 0.35 m at 59 m/s): a
-  // dead stop from full speed and a queue behind. A hazard gets the permanent-circuit lane.
+  // A CRAWLING CAR HOLDS THE CLEAR-ROAD LINE OFF (#5330): the line can run through a car crawling or reversing on
+  // it (5 m/s, over stoppedHazard's floor) that the blocker box sees too late at 42 m/s. Any running car under
+  // SLOW_V_FRAC of top speed (PACE-scaled) within hazardReach keeps the car in its lane.
+  const SLOW_V_FRAC = 0.25;
+  function slowHazard(o, vTop) {
+    if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
+    return Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72) < SLOW_V_FRAC;
+  }
+  // THE GAP ROUND A STATIC BODY (#5539): a street's 2.2 m minLatGap left 0.2 m to a car that does
+  // not give (overshoot 0.35 m at 59 m/s: a dead stop). A hazard gets the permanent-circuit lane.
   const HAZARD_CLEAR_M = 2.8;
   function hazardClear(clear) { return clear > HAZARD_CLEAR_M ? clear : HAZARD_CLEAR_M; }
-  // ...AND THE HEADING STOPS AT THAT GAP, the edgeHead rule with the hazard's clear line as the
-  // edge: the racing line's own slope (tanT) carried a car 0.85 m past a clamped aim. The side
-  // is game.js's (pass on the centre side of the hazard). An aim beyond the line (the pit lane,
-  // a rub yield: something later overrode the clamp) is left alone. Pure, no allocation.
-  function hazardHead(want, x, hz, clear, desiredX, v, yawMax) {
+  // ...AND THE HEADING STOPS AT THAT GAP (the edgeHead rule; tanT carried a car 0.85 m past a
+  // clamped aim) on the committed `side` (hazardSide; absent: the centre side). An aim beyond the
+  // line (pit lane, rub yield) is left alone. hazardSide: once per hazard (clean-room 40), the
+  // car's own side, else the roomier one; -1 = pass on its -x side.
+  const HAZARD_COMMIT_M = 1;
+  function hazardSide(x, hzX) {
+    if (Math.abs(x - hzX) >= HAZARD_COMMIT_M) return x < hzX ? -1 : 1;
+    return hzX > 0 ? -1 : 1;
+  }
+  function hazardHead(want, x, hz, clear, desiredX, v, yawMax, side) {
     if (!hz || !(v > 1) || !(yawMax > 0)) return want;
     const k = 2 * EDGE_YAW_SHARE * yawMax / v;
-    if (hz.x > 0) {
+    if (side ? side < 0 : hz.x > 0) {
       const lim = hz.x - clear;
       if (desiredX > lim + 0.01) return want;
       const hi = Math.sqrt(k * Math.max(0, lim - x));
@@ -1704,7 +1735,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, aeroGrip, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, paceTrim, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,
@@ -1713,7 +1744,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, hazardSide, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

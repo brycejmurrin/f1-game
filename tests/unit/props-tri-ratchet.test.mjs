@@ -85,6 +85,12 @@ const require = createRequire(import.meta.url);
 // cota 303352 -> 301674 and mexico 344035 -> 343891: the W21 ceilings sat above the current
 // build, so they are pinned to the measured post-strip counts. hungaroring stays 215237.
 // Measured, not widened.
+// 2026-11-20 (#5998, PR #6006, Bryce `decision: A` 15:01Z): the pit-straight crowd moves behind
+// the run-off and yields to the circuit's own stand. Lowered to the measured count:
+// brands_hatch 322469, mosport 245130, jacarepagua 177137, magny_cours 237733, indianapolis
+// 267530. buenos_aires 226645 -> 227818 (+0.52 %): pre-strip 239587 on the tip and on this PR
+// (fence or banks put back alike), so nothing is added; the strip removes 475 fewer faces once
+// the crowd emits after def.scenery().
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

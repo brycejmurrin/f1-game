@@ -22,9 +22,12 @@ export async function awaitSoftCapture(page, timeoutMs = 20_000) {
     // the camera settles before every capture. So: a spec that owns the camera
     // gets the blit arming ALONE — dbgCam already overrides eye/target/fov/far
     // every frame, so there is nothing to snap — and everyone else is unchanged.
+    // `{ capture: true }` (Bryce's decision: A2 on #5986): this read is an EXPLICIT capture, so the software-GL UI
+    // readback defer must not answer it with a blank generation (js/render/glx/soft.js softBlit). snapCam() arms
+    // the passive kind; the explicit arm after it upgrades that same capture.
     try {
-      if (window.__apex?.camState?.().debug === true) g.invalidateSoftPresent?.();
-      else window.__apex?.snapCam?.();
+      if (window.__apex?.camState?.().debug !== true) window.__apex?.snapCam?.();
+      g.invalidateSoftPresent?.({ capture: true });
     } catch (_) { /* harness */ }
     return g.softPresentState?.()?.gen ?? 0;
   });

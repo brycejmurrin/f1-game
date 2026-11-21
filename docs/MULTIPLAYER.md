@@ -73,8 +73,9 @@ reads its own message back. The topic (the plaintext NIP-01 `x` tag) is
 `apex26-rendezvous-v<PROTOCOL>/topic|<slot>` — never a bare hash of the code:
 SHA-256 of a ~30-bit code let anyone reading public relay traffic brute-force
 live codes in minutes. The 120 000-round PBKDF2 slows that, but its salt is a
-constant, so the cost is paid ONCE for the whole 31^6 code space (~1e14
-iterations — a GPU-day), not once per room: whoever builds that table can map
+constant, so the cost is paid ONCE for the whole 31^8 code space (~8.5×10^11
+codes; the ~1e14-iteration / GPU-day figures here were for the old six-character
+space and the offline work scales by 31² ≈ 961×), not once per room: whoever builds that table can map
 any live topic to its code, open the offer and post an answer. The room code
 is therefore a rendezvous, not an authentication; the VERIFICATION CODE under
 `rendezvous.js` below is what tells two players they are talking to each other. The full Trystero room join (its own
@@ -91,7 +92,8 @@ refusing relay's WebSocket is still OPEN. Because we own the sockets we read
 the `["OK", id, false, why]` and `["CLOSED", subId, why]` frames first-hand
 and report `all_rejected` (advisory — the room keeps running) once every live
 relay has refused. Measured on hardware when `RELAYS` (nostr.js) held six: all healthy,
-wellorder answering "blocked: spam not permitted", both players on spinners.
+wellorder answering "blocked: spam not permitted", both players on spinners. The list now
+has seven relays (`js/net/nostr.js`) and still includes wellorder.
 Pick relays with tools/net/nostr-probe.mjs — which tests the only criterion
 that decides this, whether a relay accepts an ephemeral event from an UNKNOWN
 pubkey — never by reputation or uptime

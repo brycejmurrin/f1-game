@@ -97,12 +97,15 @@ const MAX_COUNTED = 60;
 /** Pages of 100 runs read per status. */
 const MAX_PAGES = 3;
 /** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181).
- *  2026-10-26 (system audit §7): `pending`, `requested` and `waiting` runs were three
- *  more list calls (up to nine pages) per gauge for runs that hold no runner — a
- *  pending run waits on a workflow concurrency group (the Pages train), a waiting
- *  one on an environment gate, a requested one for seconds — so only queued and
- *  in_progress are listed. Pending JOBS inside live runs are still counted apart. */
-export const RUN_STATUSES = ["queued", "in_progress"];
+ *  2026-10-26 (system audit §7): `requested` and `waiting` runs hold no runner (a waiting
+ *  run waits on an environment gate, a requested one for seconds), so they are not listed.
+ *  `pending` IS listed again, last (2026-11-20): GitHub reports a whole CI run as
+ *  `pending` while ANY of its jobs waits in a job-level `queue: max` group (ci.yml's
+ *  selected lanes), even while other legs of that run are `in_progress` on runners.
+ *  Measured 2026-11-20 14:58Z: run 44744533398 read `pending` with 6 legs in_progress;
+ *  17 pending CI runs held all 24 running lane legs, and the gauge said "9 Linux jobs
+ *  in flight" because it never read them. Pending JOBS are still counted apart. */
+export const RUN_STATUSES = ["queued", "in_progress", "pending"];
 const QUEUED_RUN = new Set(["queued"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 

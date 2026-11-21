@@ -47,6 +47,7 @@ import {
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { loadAllModels } from "./capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -267,10 +268,7 @@ try {
       await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
       // Models resident BEFORE the build, so scenery()'s bakedModel() emits —
       // the pit buildings are exactly the kind of prop that goes missing here.
-      const models = NO_MODELS ? 0 : await page.evaluate(async () => {
-        if (typeof Assets === "undefined" || !Assets.loadModels) return 0;
-        try { return await Assets.loadModels(); } catch (_) { return 0; }
-      });
+      const models = NO_MODELS ? 0 : (await loadAllModels(page)).n;
       await page.evaluate((id) => window.__apex.race(id), trackId);
       await page.waitForFunction(() => window.__apex.info().track != null, null,
         { timeout: WAIT_MS, polling: 100 });

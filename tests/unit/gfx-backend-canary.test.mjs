@@ -1055,7 +1055,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // assets.js remembers the last pack's model file+md5 (a js/render write, so
     // RESET must clear it). The next visit relearns the hint from the manifest.
     "apex26.packIndex",
-    "apex26.envProbeOff", "apex26.perChunkOff",
+    "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
     "apex26.tlxWebKitGL",
@@ -4247,13 +4247,20 @@ test("a retired pick leaves a record every later boot can read, and only while W
   assert.equal(boot.bound, false);
   assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "second strike: the pick is retired");
   assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "the record names the backend and the build that retired it");
-  // A cold launch: new sessionStorage, no probe, a plain webgl2 pick.
+  // A cold launch of the SAME build: new sessionStorage, no probe, a plain webgl2 pick.
   ss = new Map();
-  boot = await rendererBootRun(ls, { ss, build: 4400 }).start();
+  boot = await rendererBootRun(ls, { ss, build: 4321 }).start();
   assert.equal(boot.bound, false);
   assert.match(ss.get("apex26.gfxFallbackWhy") || "", /^retired: three .*build 4321/,
     "diag().env.backendFallback still says why WebGL2 is drawing on the next launch");
   assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "reading the record does not spend it");
+  // #5942: a NEW build expires the record and tries the pick again, one strike already on the ledger.
+  const expiring = new Map(ls);
+  boot = await rendererBootRun(expiring, { ss: new Map(), build: 4400 }).start();
+  assert.equal(boot.bound, true, "a new build tries three again");
+  assert.equal(expiring.get("apex26.gfxBackend"), "three");
+  assert.equal(expiring.has("apex26.gfxRetired"), false);
+  assert.equal(expiring.get("apex26.gfxProbeStrikes"), "three:1");
   // Any other stored pick (a hand pick clears the record itself; an import or the bridge does not) makes it stale.
   ls.set("apex26.gfxBackend", "three");
   ss = new Map();
@@ -6255,6 +6262,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
 });
 
 test("TLX post warm compiles serially and holds each target across awaits", async () => {
+  const disposed = false;
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
@@ -7301,6 +7309,11 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   G.mirrorRect(rect);
   assert.equal(G.drawMirrorGlass(glass, id, null), true);
   assert.equal(G.mirrorState().glass, 2);
+  // opts: the shared (mesh, model, opts) slot TLX and WGX take too; GLX forwards it and draws the same glass.
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, { lod: 2 }), true, "an opts object is accepted, not a refusal");
+  assert.equal(h.count("drawElements"), 1, "one glass draw, as with null opts");
+  assert.equal(G.mirrorState().glass, 3);
 
   // A dead target (an incomplete framebuffer at a new size): refused for good.
   h.answers.checkFramebufferStatus = () => 0;
@@ -7308,7 +7321,7 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   assert.equal(G.mirrorState().dead, true);
   G.begin(h.frame());
   assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
-  assert.equal(G.mirrorState().glass, 2);
+  assert.equal(G.mirrorState().glass, 3);
 });
 
 // The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's
@@ -7320,7 +7333,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   const run = (st) => {
     const recs = [];
     const make = new Function("st", "recs", `
-      let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let { _mirActive, _mirDead, mirRT, _mirReady, _mirFlip, fx } = st, _mirGlass = 0;
       let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
       const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
@@ -7331,13 +7344,13 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     return { ok, recs, glass: t.glass() };
   };
   const tex = { rt: true }, mat = { glassMat: true };
-  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirRenders: 3, _mirFlip: true,
+  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirReady: true, _mirFlip: true,
     fx: { mirrorGlassMaterial: (t) => (t === tex ? mat : null) } };
   const r = run(live);
   assert.equal(r.ok, true);
   assert.equal(r.glass, 1);
   assert.deepEqual(r.recs, [["glassGeo", "model", mat, undefined, undefined, 0, null, null]], "one opaque, un-lit record on mirRT's texture");
-  for (const [why, over] of [["no image yet", { _mirRenders: 0 }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
+  for (const [why, over] of [["no image yet", { _mirReady: false }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
     ["the PiP", { _mirFlip: false }], ["an open mirror pass", { _mirActive: true }], ["no fx", { fx: null }]]) {
     const x = run(Object.assign({}, live, over));
     assert.equal(x.ok, false, why);
@@ -7345,7 +7358,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   }
   const tlx = code("js/render/three/tlx.js");
   assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
-  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
+  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post && post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
   // useTag (perf hunt 3 R3) = usePost on a chain that has the ssrTag attachment.
   const mrt = spanBack(tlx, "renderer.setMRT(useTag ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");

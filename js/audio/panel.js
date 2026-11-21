@@ -46,6 +46,7 @@ var AudioPanel = (() => {
       // iOS/Safari may leave it suspended. Setting the master first also makes
       // createCtx() build the gain graph at the right level immediately.
       if (b && fromGesture) GameAudio.init();
+      if (b && G.radio && G.radio.soundOn) G.radio.soundOn();   // the voice packs a muted race entry did not fetch
       // "♪ ON" read as ambiguous — the state of what? The word makes it a
       // labelled state (this is the MASTER gate: engine and SFX too, so
       // SOUND, not MUSIC). index.html's static markup is the other writer
@@ -113,8 +114,10 @@ var AudioPanel = (() => {
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
     // The language the system voice speaks (RadioVoice.spokenLang); captions follow the UI language, not this.
-    const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"], ["es", "ESPAÑOL"], ["pt", "PORTUGUÊS"], ["it", "ITALIANO"], ["de", "DEUTSCH"], ["fr", "FRANÇAIS"], ["ja", "日本語"], ["nl", "NEDERLANDS"]];
+    // AUTO/ENGLISH only until radio.* lines are translated (#5946, #1607); another stored pick migrates to AUTO.
+    const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"]];
     const slangNow = () => { const v = String(store.get("spokenLang", "auto")); return SLANG_VALUES.some((x) => x[0] === v) ? v : "auto"; };
+    if (store.get("spokenLang", "auto") !== slangNow()) store.set("spokenLang", "auto", { migration: true });
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");

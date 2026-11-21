@@ -1486,7 +1486,7 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.deepEqual([ghExpr(LAND.jobs.resolve.if, disp("true")), ghExpr(LAND.jobs.resolve.if, disp("false"))], [false, true], "a stale dispatch is not a PR re-gate");
   assert.equal(ghExpr(LAND.concurrency.group, { ...disp("true"), run_id: 4 }), "land-stale-sweep");
   assert.ok(LAND.on.schedule[0].cron);
-  const run = job.steps[0].run;
+  const run = job.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
   // The sweep reads the real clock, so the fixture times are relative to it: "now" is minute 40.
   const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
   const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
@@ -1515,6 +1515,47 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   ];
   for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
+});
+
+test("land.yml sweep also rides a green CI or Deploy finish, at most once per SWEEP_GAP_MIN, with no PR code", () => {
+  const job = LAND.jobs.sweep;
+  const wr = (conclusion) => ({ event_name: "workflow_run", event: { workflow_run: { conclusion } } });
+  assert.deepEqual([ghExpr(job.if, wr("success")), ghExpr(job.if, wr("failure")), ghExpr(job.if, wr("cancelled"))], [true, false, false],
+    "a green CI/Deploy finish runs the sweep; a red or cancelled one does not");
+  assert.deepEqual(LAND.on.workflow_run.workflows, ["CI", "Deploy to GitHub Pages"]);
+  assert.ok(LAND.on.schedule[0].cron, "the cron stays as the backstop");
+  assert.ok(!runsRepoCode(job) && !usesSecret(job), "no PR code, no secret");
+  const [rate, sweep] = job.steps;
+  assert.equal(rate.id, "rate");
+  assert.equal(ghExpr(rate.if, wr("success")), true);
+  assert.equal(ghExpr(rate.if, { event_name: "schedule" }), false, "the cron and a stale dispatch are never rate-limited");
+  assert.equal(sweep.if, "steps.rate.outputs.skip != 'true'");
+  assert.equal(rate.env.SWEEP_GAP_MIN, "20");
+  const go = (env) => {
+    const r = runStep(rate.run, { RUN_ID: "9", SWEEP_GAP_MIN: "20", ...env });
+    assert.equal(r.status, 0, r.stderr);
+    return { ...r, skip: r.out.skip };
+  };
+  const runs = (...ids) => JSON.stringify({ workflow_runs: ids.map((id) => ({ id })) });
+  const jobs = (...j) => JSON.stringify({ jobs: j });
+  const step = (status, conclusion) => [{ name: rate.name, status: "completed", conclusion: "success" }, { name: sweep.name, status, conclusion }];
+  const sw = (status, conclusion, steps) => ({ name: "sweep", status, conclusion, steps });
+  const cases = [
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "success", step("completed", "success"))) }, "true", "a sweep re-gated in the window: skip"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "true", "a sweep re-gating now: skip"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "success", step("completed", "skipped"))) }, "false",
+      "a sweep that itself skipped at the rate step also concludes success, and must not count (or every later sweep skips forever)"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("in_progress", null, step("pending", null))) }, "false", "a sweep still at its own rate check is no sweep yet"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs(sw("completed", "skipped", [])) }, "false", "a skipped sweep job is no sweep"],
+    [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "resolve", status: "completed", conclusion: "success", steps: [{ name: sweep.name, status: "completed", conclusion: "success" }] }) }, "false", "another job is no sweep"],
+    [{ FAKE_RUNS: runs(9), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "false", "this run's own sweep does not count"],
+    [{ FAKE_RUNS: runs() }, "false", "no recent run: sweep"],
+    [{ FAKE_RUNS: "not json" }, "false", "unreadable history sweeps anyway"],
+  ];
+  for (const [env, want, why] of cases) assert.equal(go(env).skip, want, why);
+  const listed = go({ FAKE_RUNS: runs() }).calls.find((c) => c.includes("land.yml/runs?"));
+  const since = Date.parse(listed.split("created=>=")[1].split("&")[0]);
+  assert.ok(Math.abs(since - (Date.now() - 20 * 60000)) < 120000, `the window is the last SWEEP_GAP_MIN minutes: ${listed}`);
 });
 
 test("ci retry: a CI that went green only on a re-run after a failed job fails the row; a first-attempt pass or a re-run after a cancel passes", () => {
@@ -1999,7 +2040,7 @@ test("#5407 evaluate: the retest row is local (never --trusted), waits with a pe
 /** A fixture ratchets.d fragment path no tree carries, built so the source-path lint does not read it as a reference. */
 const FRAG = (name) => ["tests", "data", "ratchets.d", `${name}.json`].join("/");
 
-test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bound to the head; lower, unchanged and per-file pass", () => {
+test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet-raise (D-042), bound to the head; lower, unchanged and per-file pass", () => {
   assert.equal(RAISE_LABEL, "ratchet-raise");
   const b64 = (o) => ({ json: { encoding: "base64", content: Buffer.from(JSON.stringify(o)).toString("base64") } });
   const MB = "m".repeat(40);
@@ -2017,10 +2058,21 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
     if (file === "tests/data/ratchets.d") return { json: Object.keys(side.frags).map((f) => ({ type: "file", name: f.split("/").pop(), path: f })) };
     return side.frags[file] ? b64(side.frags[file]) : { error: "HTTP 404" };
   };
-  assert.deepEqual(treeCeilingsAt(MB, ghRequest), { tree: { assertPins: 105, bareCatches: 10 } });
+  assert.deepEqual(treeCeilingsAt(MB, ghRequest), { tree: { assertPins: 105, bareCatches: 10 }, absorb: {} });
   assert.deepEqual(treeRaises({ a: 1, b: 5 }, { a: 2, b: 4, c: 9 }), [{ metric: "a", from: 1, to: 2 }], "lowered and new ceilings are no raise");
   // Deleting a tree metric removes its ceiling (ratchets.mjs measures only what ratchets.json names): a raise.
   assert.deepEqual(treeRaises({ assertPins: 8223, bareCatches: 29 }, { assertPins: 8223 }), [{ metric: "bareCatches", from: 29, to: null }]);
+  // B+D (2026-11-20, docs/notes/RATCHET-REVIEW-2026-11-20.md): growth inside the BASE's absorb needs no label; past it,
+  // or with a wider absorb, it does.
+  const ab = { eagerCodeBytes: 5000 };
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 5100 }, ab, ab), [], "inside the absorb");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 5101 }, ab, ab), [{ metric: "eagerCodeBytes", from: 100, to: 5101 }], "past the absorb");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 200 }, {}, ab),
+    [{ metric: "eagerCodeBytes", from: 100, to: 200 }, { metric: "eagerCodeBytes absorb", from: 0, to: 5000 }],
+    "an absorb the base did not grant covers nothing, and granting one is itself a raise");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, { eagerCodeBytes: 100 }, ab, { eagerCodeBytes: 9000 }), [{ metric: "eagerCodeBytes absorb", from: 5000, to: 9000 }],
+    "widening the absorb is a raise");
+  assert.deepEqual(treeRaises({ eagerCodeBytes: 100 }, {}, ab, {}), [{ metric: "eagerCodeBytes", from: 100, to: null }], "removing it is still a raise");
   assert.equal(raiseVerdict([{ metric: "bareCatches", from: 29, to: null }], [], []).evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (bareCatches 29→removed) — lower the count instead, or ask him");
   const f = fakes();
   f.files.push({ filename: FRAG("cursor--x") });
@@ -2034,11 +2086,19 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   let r = rowOf();
   assert.equal(r.ok, false);
   assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (assertPins 105→108) — lower the count instead, or ask him");
-  // An agent's label (through an app) never counts.
+  // An agent's label (through the Claude app) counts since D-042 (Bryce 2026-11-20 "Routine both"), bound to the head.
   f.pull.labels = [{ name: "ratchet-raise" }]; f.events.push(ev("ratchet-raise", "2026-11-03T10:00:00Z", { app: APP }));
   r = rowOf();
+  assert.equal(r.ok, true, r.evidence);
+  assert.equal(r.evidence, "ratchet-raise added by agent (brycejmurrin via app claude) at 2026-11-03T10:00:00Z covers assertPins 105→108 (labelled after the head aaaaaaaa was pushed)");
+  // Bryce's own removal vetoes the agent's re-add until his own click.
+  f.events.push({ ...ev("ratchet-raise", "2026-11-03T10:10:00Z"), event: "unlabeled" }, ev("ratchet-raise", "2026-11-03T10:20:00Z", { app: APP }));
+  r = rowOf();
   assert.equal(r.ok, false);
-  assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the label was last added by brycejmurrin via app claude — only his own click counts (raises assertPins 105→108)");
+  assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: he removed it himself at 2026-11-03T10:10:00Z, so an agent's re-add does not count until his own (raises assertPins 105→108)");
+  // A label from another login or another app never counts.
+  assert.equal(raiseVerdict([{ metric: "assertPins", from: 105, to: 108 }], ["ratchet-raise"], [{ ...ev("ratchet-raise", "2026-11-03T10:00:00Z"), actor: { login: "someone" } }]).evidence,
+    "needs ratchet-raise from brycejmurrin: the label was last added by someone — only his own click, or an agent's (claude app), counts (raises assertPins 105→108)");
   // Bryce's own click after the head was pushed (its first ci.yml run, 09:00): passes.
   f.events.push(ev("ratchet-raise", "2026-11-03T10:30:00Z"));
   r = rowOf();

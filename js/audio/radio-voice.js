@@ -347,7 +347,7 @@ var RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, flushDecoded: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
+      setPackOn: () => {}, packOn: () => false, prepare: () => {}, soundOn: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
       announcerPackOn: () => false,
@@ -419,6 +419,7 @@ var RadioVoice = (function () {
      * exactly how this defect survived three attempts to fix it from the
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
+    const unrecorded = {};   // #5991: RECORDED misses, "speaker|text" -> times; each logged once
     let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
     let squelchEpoch = 0;   // a mute invalidates even a line still waiting for its speech task
     let noiseBuf = null, poolCtx = null, poolDest = null;
@@ -690,7 +691,9 @@ var RadioVoice = (function () {
       gatePoll = setTimeout(poll, 800);
     }
     function ensureVoices() {
-      if (!pack) return;
+      // G.soundOn is the stored SOUND setting (game.js `sound`), not the AudioContext's unlock state: with it off no
+      // line can play (plan() answers master-off), so the packs (4-9 MB a race) are not fetched until it is back on.
+      if (!pack || !G.soundOn) return;
       const [lap1, rest] = packsInUse();
       if (pack.ensureStaged) pack.ensureStaged([lap1, rest]);
       else for (const id of lap1.concat(rest)) pack.ensure(id);
@@ -757,6 +760,7 @@ var RadioVoice = (function () {
       if (recordedOk() && pack && packOn && PACK_VOICE[p.speaker]) {
         activeKind = "";
         last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
+        if (last.reason === "not-recorded") noteUnrecorded(p.speaker + "|" + p.text);
         return false;
       }
       if (!api) { last.reason = "no-api"; return false; }
@@ -766,6 +770,10 @@ var RadioVoice = (function () {
       // game tick (see synthTask above). The cancel stop() scheduled runs first.
       pending = setTimeout(() => { pending = null; speakPlanned(p); }, Math.max(0, p.leadMs));
       return true;
+    }
+    function noteUnrecorded(key) {
+      if (!unrecorded[key]) Log.info("audio", "RadioVoice: no clip for " + key + " (written only)");
+      unrecorded[key] = (unrecorded[key] || 0) + 1;
     }
     /* THE RECORDED PATH. Same contract as speakPlanned: claims `current`,
      * ducks the music, and the card's deadline is the hard stop. The pack
@@ -1043,6 +1051,8 @@ var RadioVoice = (function () {
       },
       /** Fetch lap-1 recorded voices for race entry; announcer waits until race/count. */
       prepare() { armRaceLoadGate(); ensureVoices(); },
+      /** SOUND came back on (AudioPanel): fetch what a muted race entry skipped. In the menu the next prepare() does it. */
+      soundOn() { const ls = G.loadingScreen; if (G.state === "race" || G.state === "count" || (ls && ls.phase && ls.phase())) ensureVoices(); },
       /** Open the announcer gate early (tests / idle prefetch after lights-out). */
       releaseRaceLoadGate: clearRaceLoadGate,
       packOn: () => !!(pack && packOn),
@@ -1065,6 +1075,7 @@ var RadioVoice = (function () {
       },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
+        unrecorded,
         pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,
         synth: { calls: synthStat.calls, maxMs: +synthStat.maxMs.toFixed(1), slow: synthStat.slow },
         squelch: lastSquelch && { play: lastSquelch.play, reason: lastSquelch.reason, openMs: lastSquelch.openMs,

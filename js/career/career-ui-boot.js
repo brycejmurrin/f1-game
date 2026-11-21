@@ -14,7 +14,9 @@ function ensureScreen() {
     Log.warn("ui", "career UI bundle is not in this build");
     return Promise.resolve(false);
   }
-  _load = ScriptLoader.create().load(files, edges, { strict: true }).then((ok) => {
+  // The CAREER FILE row (SettingsExport.careerRow) is built synchronously by the screen: its body comes too (#4748).
+  const saves = typeof SettingsExport !== "undefined" && SettingsExport.ready ? SettingsExport.ready() : null;
+  _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), saves]).then(([ok]) => {
     if (!ok || typeof CareerScreen === "undefined") {
       _load = null;
       Log.warn("ui", "the career UI bundle did not load");
@@ -32,7 +34,7 @@ function ensureScreen() {
 function create(G) {
   Log.info("ui", "CareerUI.create");
   const { $ } = G;
-  let real = null;
+  let /** @type {ReturnType<typeof CareerScreen.create> | null} */ real = null;
   let entryGeneration = 0;
   let goGeneration = 0;
   let entryFailed = false;

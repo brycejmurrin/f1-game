@@ -256,23 +256,22 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
+  // game.js hands in live getters (bindGame): its G and loadingScreen are function-scoped consts inside its IIFE,
+  // which a `typeof G` / `typeof loadingScreen` read from this script never sees (#5965).
+  let _game = { state: () => null, loadPhase: () => null };
+  function bindGame(hooks) {
+    _game = { state: hooks && hooks.state || (() => null), loadPhase: hooks && hooks.loadPhase || (() => null) };
+  }
+
   /** True while race-entry handoff should use the stall watchdog's relaxed cover (#3510). */
   function stallHandoffCover() {
     if (armed) return true;
-    try {
-      if (typeof G !== "undefined" && G.state === "count") return true;
-    } catch (_) { /* harness */ }
-    try {
-      if (typeof loadingScreen !== "undefined" && loadingScreen.phase) {
-        const ph = loadingScreen.phase();
-        if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
-      }
-    } catch (_) { /* harness */ }
-    if (softwareRaster()) {
-      try {
-        if (typeof G !== "undefined" && G.state === "race" && introBudgetLeft() > 0) return true;
-      } catch (_) { /* harness */ }
-    }
+    let state = null, ph = null;
+    try { state = _game.state(); } catch (_) { /* mid-boot */ }
+    if (state === "count") return true;
+    try { ph = _game.loadPhase(); } catch (_) { /* mid-boot */ }
+    if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
+    if (softwareRaster() && state === "race" && introBudgetLeft() > 0) return true;
     return false;
   }
 
@@ -447,7 +446,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover,
+    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover, bindGame,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,

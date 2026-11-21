@@ -1,6 +1,83 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-20 — PR #6024 (claude/ratchet-pin-absorb): pin counts get a 5-pin absorb (Bryce's "Pin slack", D-037)
 
+`(tree) assertPins` ceiling **8140** and `(tree) assertPinsAll` ceiling **10366** are unchanged; each entry gains
+`absorb: 5`, the mechanism `eagerCodeBytes` already uses. A branch's own growth of up to 5 pin-shaped asserts since its
+merge base is then the commit hook's fragment with no label, and past 5 it still needs Bryce's `ratchet-raise`. Why: with the tip
+exactly at both ceilings, #5959, #5966, #5686 and #6014 each added one pin, passed CI, and were refused by merge-gate's
+ratchets row at land (each a full CI run wasted). `ratchets.mjs --base` reads the widened absorb as a LOOSEN; this
+entry is the recorded reason that lets that one loosen pass (`historyNamesTree`), and the gate's raise row still asks
+for `ratchet-raise` on this PR.
+
+## 2026-11-20 — PR #5788 (claude/render-caster-position-only-1118): car shadow casters position-only
+
+`(tree) eagerCodeBytes` 4018312 → **4018390** (+78, stripped code bytes; inside the 5,000 B absorb).
+Deliberate raise of the exact boot-wall ceiling; it still needs Bryce's `ratchet-raise` label on the PR.
+The growth is this PR's eager `js/car/car-draw.js` and `js/car/car3d.js`. The code is the `_casterOnly`
+flag on the two depth-only builds (the team caster and the first-person caster), which lets TLX allocate
+position + index alone (about 8 to 10 MB of `carSh` geometry saved per race). The earlier `eagerBytes`
++224 raise (2026-11-19) lapsed when the tip moved to `eagerCodeBytes`.
+Fragment: `tests/data/ratchets.d/claude--render-caster-position-only-1118.json`.
+
+## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
+
+## 2026-11-19 — PR #5971 (claude/lsp-tool-fixes-1120): apex-lsp factory typing and the G hand-off (#5964, #5965)
+
+`(tree) eagerBytes` 7972011 → **7974642** (+2631). Deliberate raise past the absorb: 54 comment-only
+`/** @type {ReturnType<typeof M.create> | null} */` annotations on null-initialised factory variables in eager
+files (+2,027; member reads on them resolve 0/626 → 610/626 for apex-lsp, docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md),
+and the one game.js line that hands `G` to `VisorOptics.bind` and getters to `RaceEntryProfile.bindGame` (+604):
+their `typeof G` reads never saw game.js's IIFE-local const. Bryce chose to keep the comments (`decision: A` on #5971,
+2026-11-20 07:58Z) and applied `ratchet-raise`.
+`js/game.js codeLines` 5417 → **5418** (+1). Deliberate raise past the absorb: the bind line above.
+`js/game.js lines` 9594 → **9595** (+1). Deliberate raise past the absorb: the bind line above.
+Fragment: `ratchets.d/claude--lsp-tool-fixes-1120.json`.
+
+## 2026-11-20 — PR #5953 (claude/batch-5896-5878-5877): share-link undo, repair stop, season points; absorbs #5954 records and drills (#5896, #5878, #5877, #5895, #5888)
+
+`(tree) eagerBytes` 7,972,011 → **7,974,059** (+2,048 B), measured exact on the merge with tip
+`fb12c549`. Deliberate raise; Bryce decided the fixes (`decision: A` on #5896, `decision: A` on
+#5878, `decision: B` on #5877, 2026-11-20 ~06:36Z) and the orchestrator chose the raise over pruning
+unrelated comments (06:56Z); the tree-wide ceiling still needs his `ratchet-raise` label on the PR.
+The growth is the fixes' own code in three FULL (eager) files, after trimming their comments:
+`js/ui/share-code.js` +1,145 (`importValues` keeps the player's pre-link values across links),
+`js/career/season-cal.js` +925 (`seatPlayer`, the seat move) and `js/game.js` +124 (its one-line
+call in `makeCars`; also `js/game.js` codeLines/lines +1). The repair-only stop (#5878) is in the
+lazy `js/race/pit-lane.js`. #5954 (WIND OFF record class, per-circuit drill bests), folded in on the
+orchestrator's call (07:30Z), nets −146 in the eager `js/race/race-insights.js` (comments tightened);
+its own fragment is folded into this one. Fragment:
+`tests/data/ratchets.d/claude--batch-5896-5878-5877.json`.
+`(tree) eagerBytes` 8015286 → **8016541** (+1255). Deliberate raise of the exact boot-wall ceiling;
+it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's eager
+`js/track/core/def.js`, `js/ui/platform-session.js`, `js/core/lazy-bundles.js` and `js/track/build-client.js`
+(+1793 after the sync onto dec94440; shorter wording of the PR's own new comments took it to +1255).
+The code is `TrackDef.scenerySource` + `ENGINE_MODELS`, the one text the page and the build worker read a
+circuit's pack-model set from (Spa built procedural pines because `pine_lod0` was spelled only inside an
+engine helper), and the IntersectionObserver gate that stops the offline note costing about 620 worker
+cache lookups on every boot. Fragment: `tests/data/ratchets.d/claude--perf-assets-flow-1118.json`.
+
+## 2026-11-20 — boot wall counts stripped code (Bryce's B+D, D-036)
+
+`(tree) eagerBytes` 7,972,011 (raw source) is **retired** for `(tree) eagerCodeBytes` **4,018,312** (`slack: 0`,
+`absorb: 5000`), first measured on tip `d35f2e29` at 4,035,289, re-seeded at 4,037,486 on the sync with `6555994c`
+(#5786, #5782, #5902 grew eager code) and at 4,018,312 on the sync with `0dc58899` (#5957's lazy moves, #5721): the same 309 eager scripts with comments and spare whitespace stripped by
+`tools/lib/js-strip.mjs` (terser, which Pages ships, reads 3,325,036; the gap is unmangled local names). Comments
+were 2,847,130 B (35.7 %) of the old count. A branch's own growth up to 5000 B is the commit hook's fragment with no
+label; past it, `ratchet-raise` as before. Open fragments' `eagerBytes` deltas are inert from here (applyFragments
+skips a metric ratchets.json no longer names). Evidence: docs/notes/RATCHET-REVIEW-2026-11-20.md.
+
+## 2026-11-19 — PR #5721 (claude/hunt4-fixes-5694): hunt #5694 season and replay fixes
+
+`(tree) eagerBytes` 8,015,286 → **8,017,013** (+1,727 B). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. The growth is the PR's own
+fix code in three FULL (eager) files, measured on the sync merge with tip `dec94440`:
+`js/career/season-ui.js` +1,022 (Season calendar edits, presets and the stale-tab note spoken
+through `LiveRegion`; a removed round drops its sprint mark), `js/career/season-cal.js` +376
+(`normalize` keeps sprintIds a set over the calendar) and `js/camera/replay-buf.js` +329 (a field
+replaced mid-scrub ends the scrub; `at/apply(NaN)` refused). The data-hub and real-race hunks are
+already lazy (LAZY_DATA, LAZY_REAL_RACE) and cost nothing. Fragment:
+`tests/data/ratchets.d/claude--hunt4-fixes-5694.json`.
 ## 2026-11-19 — PR #5778 (claude/gameplay-hunt-1118): gameplay-hunt fixes 1–6
 
 `(tree) eagerBytes` 8015286 → **8017662** (+2376), measured on the merge with tip `9db4870f`.
@@ -13,11 +90,26 @@ merge base: `js/career/save-migrate.js` +874 (import range clamps), `js/physics/
 (fix 6, the stale-text corrections). About +1379 of it is whole-line comments, which carry
 fix 6's corrected facts. Fragment: `ratchets.d/claude--gameplay-hunt-1118.json`.
 
+## 2026-11-19 — PR #5786 (claude/quali-model-refit-1118): qualifying-model refit, option 1
+
+`(tree) eagerBytes` 8015286 → **8019119** (+3833), measured on the merge with tip `9db4870f`.
+A deliberate raise: the ceiling has been exact (slack 0) since #5819, so any eager growth
+needs Bryce's own `ratchet-raise` label on the PR. The growth is option 1 of the qualifying
+refit (Bryce's `decision: 1`, 2026-11-19 07:36:21Z), in two eager files:
+`js/race/quali-model.js` +3469 (the wing term in `carLap`, the human-neutral wing and the
+generated `@gen-quali-calib` per-circuit factor block) and `js/physics/ai-drive.js` +364 (the
+shared `aeroGrip` / `AERO_GRIP_K` helper the model and the AI's lateral and brake reads now
+share). Not taken: a lazy split of the calibration table behind the race-session bundle.
+It is unmeasured. Fragment: `ratchets.d/claude--quali-model-refit-1118.json`.
+2026-11-20, on the merge with tip `3fd508b5` (#5854 merged first and its `ai-drive.js` side won the
+conflict, so the +364 is gone): `eagerBytes` 7968494 → **7971963** (+3469), the `quali-model.js` growth
+alone. The fragment was narrowed from +3833 to +3469; nothing was raised beyond what Bryce labelled.
 ## 2026-11-19 — PR #5747 sync onto 734d0a2d (comments cut so the wall does not rise)
 
 `(tree) eagerBytes` 8,015,949 → **8,015,807** (−142 B). The hunt rows stay; the comments that
 explained them were the bytes over the tip, so they were cut and the fragment records the
 lowering. No tree-wide raise, so no `ratchet-raise`. `js/track/tracks.js` lines 847 → 848 (+1),
+inside the absorb. Fragment: `ratchets.d/cursor--hunt2-rest-5699-c7e1.json (folded)`.
 inside the absorb. Fragment: `tests/data/ratchets.d/cursor--hunt2-rest-5699-c7e1.json`.
 ## 2026-11-19 — PR #5679 (claude/picker-outline-centre-5656): select preview outline centred
 
@@ -40,7 +132,7 @@ run at boot to see a settled rotation; on SHARED, the default, it returns at onc
 +340 (PANEL WIDTH 60–150 and the new PANEL HEIGHT knob) and `js/ui/settings-tabs.js` +279
 (`SettingsNav.presets()`, the lazy loader the swap calls). The swap and the PORTRAIT & LANDSCAPE
 row stay lazy in `js/ui/layout-presets.js`. Fragment:
-`tests/data/ratchets.d/claude--appearance-shapes-4529.json`.
+`ratchets.d/claude--appearance-shapes-4529.json (folded)`.
 ## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
 
 `(tree) eagerBytes` 8,015,949 → **8,017,580** (+1,631 B). Deliberate raise; Bryce chose it with
@@ -50,7 +142,7 @@ measured on the sync merge with tip `734d0a2d` after trimming the PR's own comme
 each: `js/perf/quality-preset.js` +943 (`syncPack` and its pause/race `MutationObserver`, called
 from the eager `GfxQuality.set`) and `js/render/shared/assets.js` +688 (`followQuality` and the
 forced-tier `_pinned` flag). A lazy bundle (option B) was declined: both hook the eager preset
-path. Fragment: `tests/data/ratchets.d/claude--pack-tier-follows-quality-5561.json`.
+path. Fragment: `ratchets.d/claude--pack-tier-follows-quality-5561.json (folded)`.
 
 ## 2026-11-19 — PR #5793 (claude/tt-garage-pit-end): TIME TRIAL pit lane and END TIME TRIAL (#5789)
 
@@ -3807,3 +3899,19 @@ const MAX_EAGER_SCRIPTS = 313;
 // 8,018,484; no room added. Bryce chose cap = measurement (2026-11-19 ~01:15Z, relayed by the orchestrator).
 const MAX_EAGER_BYTES = 8_017_936;
 ```
+
+**Raise, 2026-11-19 — `eagerBytes` +3,894, re-snapped to +3,166 on 2026-11-20, then +2,980 when #5948 and #6009 were combined in (fragment `claude--ai-pace-calibration-5330.json`).**
+Retired with `eagerBytes` (#5975): on the sync onto 322c63a3 the branch's `eagerCodeBytes` growth is +3,448, inside its 5,000 B absorb (the commit hook's fragment).
+Cause: #5686 (#5330), so AI solo pace follows team tier and then driver skill. It adds `aiErs`,
+`paceTrim`, `laneClear` and `slowHazard` to the eager `js/physics/ai-drive.js`, plus their call sites in
+`js/game.js`.
+
+Trim first, then raise:
+- The merge with tip 734d0a2d measured +6,151 B.
+- Condensing the PR's own new comments (facts kept, no code change) freed 2,257 B.
+- Only the remainder, +3,894 B, is raised.
+- The merge with tip 357821a7 (after #5791) dropped `aeroDragMul` and measured 7,971,419 B: the fragment is snapped to
+  that exact value, +3,166 B.
+
+Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed `decision: A` on #5686
+(comment 7013079936, 15:09:10Z). The raise lands under his `ratchet-raise`.

@@ -42,7 +42,8 @@
 //             passes. A package.json diff that is ONLY the generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
 //             deltas, compared head vs merge base; a lowered, unchanged or new ceiling is no raise) needs the
-//             `ratchet-raise` label, last added by Bryce in person and newer than the last push touching a ratchet file.
+//             `ratchet-raise` label, last added by Bryce in person or by an agent through the Claude app (D-042; his
+//             own removal vetoes agent re-adds), and newer than the last push touching a ratchet file.
 //             Per-file ceilings (`files`, the commit hook's --auto-raise) are not this row's. Bryce's pick, 2026-11-11
 //             ~09:10Z: "Build the check (Recommended)" (#5405 option b; .claude/rules/game-code.md).
 //   gen       clean merge onto the current base tip; `gen:check` passes and the scenery catalog builds there
@@ -226,6 +227,18 @@ export function baseVerdict(tip, labels, events = null, owner = OWNER, proof = n
  *  Claude app, byAgent) or null (anything else: another app, another login, no app field). Pure. */
 export const configLabelKind = (e, owner = OWNER) => (e?.event !== "labeled" ? null : byOwner(e, owner) ? "owner" : byAgent(e, owner) ? "agent" : null);
 
+/** The owner's own newest `unlabeled` of `label`, when no own `labeled` came after it (walked oldest first, like
+ *  hold): it vetoes every agent re-add until his own click (#5455). → the event, or null. Pure. */
+export function ownerVeto(events, label, owner = OWNER) {
+  const at = (e) => Date.parse(e?.created_at || "") || 0;
+  let veto = null;
+  for (const e of labelEvents(events, label).map((e, i) => ({ e, i })).sort((x, y) => at(x.e) - at(y.e) || x.i - y.i).map((x) => x.e)) {
+    if (!byOwner(e, owner)) continue;
+    veto = e.event === "unlabeled" ? e : null;
+  }
+  return veto;
+}
+
 /** config: a diff touching a CONFIG_PATH needs `config-ok`, and its newest label event must be a `labeled` one that
  *  counts. The owner's own click covers any diff. An agent's (configLabelKind "agent") covers a diff of ROUTINE config
  *  paths only: one PROTECTED path in the diff needs the owner's click for the whole row; and an owner's own `unlabeled`
@@ -248,13 +261,7 @@ export function configVerdict(files, labels, events = null, owner = OWNER, push 
   }
   if (kind === "agent") {
     if (prot.length) return row(false, `needs ${CONFIG_LABEL} from ${owner} himself: an agent's label (${describeActor(last)}) covers routine config paths only, and the diff edits protected path(s) ${list(prot)}`);
-    // An owner's own removal vetoes agent re-adds until he adds it himself (walked oldest first, like hold).
-    const at = (e) => Date.parse(e?.created_at || "") || 0;
-    let veto = null;
-    for (const e of labelEvents(events, CONFIG_LABEL).map((e, i) => ({ e, i })).sort((x, y) => at(x.e) - at(y.e) || x.i - y.i).map((x) => x.e)) {
-      if (!byOwner(e, owner)) continue;
-      veto = e.event === "unlabeled" ? e : null;
-    }
+    const veto = ownerVeto(events, CONFIG_LABEL, owner);
     if (veto) return row(false, `needs ${CONFIG_LABEL} from ${owner}: he removed it himself at ${veto.created_at || "?"}, so an agent's re-add does not count until his own (the diff edits ${shown})`);
   }
   const by = kind === "owner" ? `${CONFIG_LABEL} by owner (${owner}` : `${CONFIG_LABEL} by agent (${AGENT_APP_SLUG} app), routine paths only (${describeActor(last)}`;
@@ -357,10 +364,12 @@ export function treeCeilingsAt(ref, request) {
   };
   const base = read("tests/data/ratchets.json");
   if (base.error) return base;
-  const tree = {};
+  const tree = {}, absorb = {};
   for (const [m, v] of Object.entries(base.json?.tree || {})) {
     const c = typeof v === "number" ? v : v?.ceiling;
     if (typeof c === "number" && Number.isFinite(c)) tree[m] = c;
+    // B+D (2026-11-20): an entry's `absorb` is growth a PR may add with no label (treeRaises below).
+    if (v && typeof v === "object" && Number.isFinite(v.absorb) && v.absorb > 0) absorb[m] = v.absorb;
   }
   const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
   if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
@@ -374,21 +383,26 @@ export function treeCeilingsAt(ref, request) {
       tree[m] += d;
     }
   }
-  return { tree };
+  return { tree, absorb };
 }
 
 /** The tree metrics whose ceiling is higher at `after` than at `before`, and those `before` carries that `after` does
  *  not: ratchets.mjs measures only the metrics ratchets.json names, so deleting one removes its ceiling, the widest
  *  raise there is (`to: null`, shown as "removed"). A metric only `after` carries is a new ceiling, no raise. Pure. */
-export function treeRaises(before, after) {
-  const b = before || {}, a = after || {};
-  return Object.keys(b).filter((m) => !Object.hasOwn(a, m) || a[m] > b[m]).sort()
+export function treeRaises(before, after, absorbBefore = {}, absorbAfter = {}) {
+  const b = before || {}, a = after || {}, ab = absorbBefore || {}, aa = absorbAfter || {};
+  // B+D (2026-11-20): growth inside the absorb the BASE granted is no raise; a wider absorb is one (`<m> absorb`).
+  const inside = (m) => Object.hasOwn(a, m) && ab[m] > 0 && a[m] - b[m] <= ab[m] && (aa[m] || 0) <= ab[m];
+  const rows = Object.keys(b).filter((m) => (!Object.hasOwn(a, m) || a[m] > b[m]) && !inside(m))
     .map((m) => ({ metric: m, from: b[m], to: Object.hasOwn(a, m) ? a[m] : null }));
+  for (const m of Object.keys(aa)) if (Object.hasOwn(b, m) && aa[m] > (ab[m] || 0)) rows.push({ metric: `${m} absorb`, from: ab[m] || 0, to: aa[m] });
+  return rows.sort((x, y) => (x.metric < y.metric ? -1 : x.metric > y.metric ? 1 : 0));
 }
 
 /**
- * raise: no tree-wide ceiling rises, or Bryce's own newest `ratchet-raise` covers the head (`push` from
- * configPushState over the ratchet files). An agent's label never counts. Pure.
+ * raise: no tree-wide ceiling rises, or the newest `ratchet-raise` covers the head (`push` from configPushState over
+ * the ratchet files). Bryce's own click counts, and so does an agent's (configLabelKind "agent", D-042: Bryce
+ * 2026-11-20 "Routine both"), except that his own `unlabeled` vetoes agent re-adds until his own `labeled`. Pure.
  */
 export function raiseVerdict(raises, labels, events = null, owner = OWNER, push = null) {
   if (!raises?.length) return row(true, "no tree-wide ratchet ceiling rises or is removed in the diff (per-file ceilings are the commit hook's --auto-raise, not this row's)");
@@ -396,8 +410,17 @@ export function raiseVerdict(raises, labels, events = null, owner = OWNER, push 
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
   const last = newestLabelEvent(events, RAISE_LABEL);
   if (!names.includes(RAISE_LABEL)) return row(false, `needs ${RAISE_LABEL} from ${owner}: the diff raises a tree-wide ceiling (${shown}) — lower the count instead, or ask him`);
-  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
-    return row(false, `needs ${RAISE_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (raises ${shown})`);
+  const kind = configLabelKind(last, owner);
+  if (!kind) {
+    return row(false, `needs ${RAISE_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click, or an agent's (${AGENT_APP_SLUG} app), counts (raises ${shown})`);
+  }
+  if (kind === "agent") {
+    const veto = ownerVeto(events, RAISE_LABEL, owner);
+    if (veto) return row(false, `needs ${RAISE_LABEL} from ${owner}: he removed it himself at ${veto.created_at || "?"}, so an agent's re-add does not count until his own (raises ${shown})`);
+    const by = `agent (${describeActor(last)})`;
+    if (push?.state === "after") return row(false, `needs a fresh ${RAISE_LABEL}: ${push.evidence} after the label by ${by} at ${last.created_at || "?"} (remove and re-add it)`);
+    if (push?.state === "unknown") return { ...row(false, `${RAISE_LABEL} by ${by} found, head push not resolved yet: ${push.evidence}`), pending: true };
+    return row(true, `${RAISE_LABEL} added by ${by} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
   }
   if (push?.state === "after") return row(false, `needs a fresh ${RAISE_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
   if (push?.state === "unknown") return { ...row(false, `${RAISE_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
@@ -414,7 +437,7 @@ export function prRaisesAt(sha, base, request) {
   if (before.error) return before;
   const after = treeCeilingsAt(sha, request);
   if (after.error) return after;
-  return { raises: treeRaises(before.tree, after.tree) };
+  return { raises: treeRaises(before.tree, after.tree, before.absorb, after.absorb) };
 }
 
 /** Does `now` raise nothing beyond `then` (the raises Bryce saw when he clicked)? Every metric raised now was raised
@@ -435,7 +458,7 @@ export function raiseRow({ pr, head, headRef, base, changed, labels, events, own
   if (now.error) return { error: now.error };
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
-  let push = raises.length && last?.event === "labeled" && byOwner(last, owner)
+  let push = raises.length && configLabelKind(last, owner)
     ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file" }) : null;
   if (push?.state === "after" && push.from) {
     const then = prRaisesAt(push.from, base, request);

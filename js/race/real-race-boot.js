@@ -45,7 +45,7 @@ const RealRace = (function () {
 
   function create(G) {
     Log.info("game", "RealRace.create (boot stub)");
-    let mine = null;   // this G's body instance, made once the bundle has landed
+    let /** @type {ReturnType<typeof RealRaceBody.create> | null} */ mine = null;   // this G's body instance, made once the bundle has landed
     /** The guarded creation: the body, made ONCE, the first time anything asks after LAZY_REAL_RACE evaluated. */
     const body = () => {
       if (mine || typeof RealRaceBody === "undefined") return mine;

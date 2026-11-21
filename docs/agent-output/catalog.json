@@ -387,8 +387,9 @@
     },
     {
       "path": "tools/check/boot-wall.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/check/brake-cue-calibrate.mjs",
@@ -596,6 +597,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/check/quali-calibrate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/check/quick-validate.mjs",
@@ -1899,6 +1906,16 @@
       ]
     },
     {
+      "path": "tools/gen/gen-quali-calib.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "npmScripts": [
+        "gen",
+        "gen:check"
+      ]
+    },
+    {
       "path": "tools/gen/gen-shell.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2429,6 +2446,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/js-strip.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/lint-bins.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output",
@@ -2883,6 +2905,15 @@
       "outputPolicy": "page-results"
     },
     {
+      "path": "tools/mcp/lsp-coverage.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/mcp/lsp-eval.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2939,6 +2970,11 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/mcp/member-check.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/mcp/output-level-mcp.mjs",
@@ -3299,6 +3335,11 @@
       "path": "tools/shot/capture-diagnostics.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/shot/capture-fallbacks.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/shot/capture-gallery.mjs",
@@ -4247,11 +4288,11 @@
     },
     {
       "name": "gen",
-      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node desktop/scripts/notices.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && npm run gen:docs"
+      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node desktop/scripts/notices.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && node tools/gen/gen-quali-calib.mjs && npm run gen:docs"
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check && node desktop/scripts/notices.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-quali-calib.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check && node desktop/scripts/notices.mjs --check"
     },
     {
       "name": "gen:docs",

@@ -19,6 +19,7 @@
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
 //   node tools/ci/remote-group.mjs ui --force           # dispatch even when this sha already has a live or green run
+//   APEX_GROUP_LANES=24 node tools/ci/remote-group.mjs ui   # more lanes, ONLY when its shards run on APEX_BROWSER_RUNNER (D-LANES)
 //   (an open PR on the branch: the run tests its merge ref and its ready verdict can count a dropped spec, #5480)
 //   GROUP=ui PLAN='{…}' SHARD=1 TOTAL=4 node tools/ci/remote-group.mjs --run-shard   # the workflow's shard step
 //   GROUP=ui PLAN='{…}' SHARD=1 TOTAL=4 node tools/ci/remote-group.mjs --plan-record # its plan record, before any spec runs
@@ -68,15 +69,30 @@ export const SHARD_CHOICES = [1, 2, 4, 6, 8];   // browser-group.yml's `shards` 
  *  groups (`browser-group-lane-<n>`, `queue: max`), so at most GROUP_LANES group shards hold runners at once across
  *  every dispatch, and the rest wait without holding one. Measured by tools/ci/pool-share.mjs: on 11-19 nine group
  *  runs held up to the whole 40-slot pool while land.yml's seconds-long gate jobs queued behind them; ci.yml's
- *  selected legs already have LANES (select-specs.mjs, 24), so 24 + 8 leaves 8 slots that neither can take.
+ *  selected legs already have LANES (select-specs.mjs, 28 since D-038), so 28 + 8 leaves 4 slots that neither can take.
  *  Lanes are 1..GROUP_LANES (a plan without `lane`, e.g. a hand dispatch of the default plan, falls back to its
  *  shard number in the workflow, so 0 is never a lane). */
 export const GROUP_LANES = 8;
-/** The matrix with a lane per shard: consecutive lanes from `base`, so one run's shards never queue behind each
- *  other and runs dispatched at different minutes start on different lanes. Pure. */
-export function withLanes(matrix, base = 0) {
-  const b = ((Math.floor(Number(base)) || 0) % GROUP_LANES + GROUP_LANES) % GROUP_LANES;
-  return (matrix || []).map((m, i) => ({ ...m, lane: ((b + i) % GROUP_LANES) + 1 }));
+/** THE GROUP LANE COUNT FROM THE DISPATCHER (D-LANES, 2026-11-20): `--group-lanes <n>`, else env `APEX_GROUP_LANES`,
+ *  else GROUP_LANES; an integer in [1, MAX_GROUP_LANES], anything else is GROUP_LANES. The dispatcher sets it ONLY when
+ *  the shards will not take GitHub-hosted slots: the target branch's browser-group.yml reads `vars.APEX_BROWSER_RUNNER`
+ *  for its runs-on (branches synced past 0575bc45, #6033) AND that variable is set. Otherwise the default 8 keeps the
+ *  28 + 8 budget above. browser-group.yml's group is `browser-group-lane-<lane>`, so a lane above 8 is simply a new
+ *  group. Bryce's value with Ubicloud: 24 (docs/TESTING.md §CI runners). Pure. */
+export const MAX_GROUP_LANES = 128;
+export function groupLanes(env = process.env, args = []) {
+  const i = args.indexOf("--group-lanes");
+  const s = String(i >= 0 ? args[i + 1] ?? "" : env.APEX_GROUP_LANES ?? "").trim();
+  if (!/^\d+$/.test(s)) return GROUP_LANES;
+  const n = Number(s);
+  return n >= 1 && n <= MAX_GROUP_LANES ? n : GROUP_LANES;
+}
+/** The matrix with a lane per shard: consecutive lanes 1..`lanes` from `base`, so one run's shards never queue behind
+ *  each other and runs dispatched at different minutes start on different lanes. Pure. */
+export function withLanes(matrix, base = 0, lanes = GROUP_LANES) {
+  const L = Number.isInteger(lanes) && lanes >= 1 ? lanes : GROUP_LANES;
+  const b = ((Math.floor(Number(base)) || 0) % L + L) % L;
+  return (matrix || []).map((m, i) => ({ ...m, lane: ((b + i) % L) + 1 }));
 }
 const say = (...a) => console.log("[remote-group]", ...a);
 
@@ -338,11 +354,13 @@ async function watch(runId, { interval, deadline }) {
 }
 
 /** Printed for `--help` / a missing group — never `not a group name: undefined`. */
-export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--force] [--timeout <min>]
+export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--force] [--timeout <min>] [--group-lanes N]
        node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env: print the shard plan JSON (what the dispatch sends)
        node tools/ci/remote-group.mjs --run-shard     # GROUP=/PLAN=/SHARD=/TOTAL=/WORKERS= env (the workflow's shard step)
        node tools/ci/remote-group.mjs --watch <run-id>
        node tools/ci/remote-group.mjs --help
+  --group-lanes <n> lane count for the shards (env APEX_GROUP_LANES; default 8): set only when the branch's browser-group.yml
+                 reads APEX_BROWSER_RUNNER (synced past 0575bc45) and that variable is set (D-LANES).
   --interval <s> poll period (min 10, default 30). An unknown flag prints this usage and exits 2, before any dispatch.`;
 /**
  * The dispatch is a GitHub WRITE made with the gh token, which GitHub records as the repository owner's own act (no
@@ -359,7 +377,7 @@ export function ownerWriteGate(env = process.env) {
   return { ok, lines };
 }
 
-export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--plan-record", "--watch"];
+export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--plan-record", "--watch", "--group-lanes"];
 
 /** The open PR whose head is `branch`, as the dispatch's `pr` input: "" when there is none, the lookup fails, or
  *  the branch's browser-group.yml predates the input (a dispatch with an unknown input is a 422). */
@@ -458,7 +476,7 @@ async function main() {
   const deadline = tmin > 0 ? Date.now() + tmin * 60_000 : Infinity;
   if (argv.includes("--watch")) return watch(opt("--watch"), { interval, deadline });
 
-  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers"].includes(argv[i - 1]));
+  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers", "--group-lanes"].includes(argv[i - 1]));
   // Bare invoke used to fall through to planMatrix(undefined) → "not a group name: undefined".
   if (!group) {
     console.error(USAGE);
@@ -509,7 +527,9 @@ async function main() {
   for (const l of gate.lines) say(l);
   if (!gate.ok) return 3;
   const since = Date.now();
-  const plan = JSON.stringify({ matrix: withLanes(p.matrix, Math.floor(since / 60000)), ...(p.shards ? { shards: p.shards } : {}) });
+  const lanes = groupLanes(process.env, argv);
+  if (lanes !== GROUP_LANES) say(`group lanes: ${lanes} (APEX_GROUP_LANES / --group-lanes; default ${GROUP_LANES})`);
+  const plan = JSON.stringify({ matrix: withLanes(p.matrix, Math.floor(since / 60000), lanes), ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
     // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.

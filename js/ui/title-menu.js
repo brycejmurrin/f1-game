@@ -8,15 +8,15 @@ const TitleMenu = (function () {
     ["menu-garage", "Garage", ["mb-garage"]],
     ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]],
     ["menu-create", "Create", ["mb-photo", "mb-designer"]],
-    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]],
+    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-steerphone", "mb-help"]],
   ];
   const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data"];
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
   // The shell ships the organized end state (index.html, data-destinations):
-  // then this only wires the two settings shortcuts. The build path below stays
-  // for repairDestinations() and for a shell that predates it.
+  // then this only wires the two settings shortcuts. The build path is for
+  // repairDestinations() and an older shell.
   function organize(doc) {
     const menu = doc && doc.getElementById("menu-buttons");
     if (!menu) return;
@@ -163,6 +163,21 @@ const TitleMenu = (function () {
     });
   }
 
+  // BOOT TAP (index.html, #5995): the door tapped before boot is clicked once
+  // game.js has wired it (the rest of this task), if the bare title is still
+  // on top; a consent sheet or first-run layer over it drops the tap.
+  function replayBootTap($, doc) {
+    const btn = doc && doc.querySelector ? doc.querySelector("#menu-buttons [aria-busy]") : null;
+    if (!btn) return;
+    btn.removeAttribute("aria-busy");
+    setTimeout(() => {
+      const overlay = $("overlay"), top = UiLayers.top();
+      const live = overlay && !overlay.hidden && !UiLayers.inRace() && (!top || top.id === "overlay");
+      if (live && !btn.hidden && !btn.disabled) btn.click();
+      else Log.info("game", "boot tap dropped (" + btn.id + ")");
+    }, 0);
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
@@ -171,6 +186,7 @@ const TitleMenu = (function () {
     // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
     // does something; game.js wires the handlers in this same task.
     if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
+    replayBootTap($, typeof document !== "undefined" ? document : null);
 
     const history = $("daily-history"), historyList = $("daily-history-list");
     const doc = typeof document !== "undefined" ? document : null;
@@ -300,6 +316,6 @@ const TitleMenu = (function () {
     return { refresh };
   }
 
-  return { create, organize, repairDestinations, CORE_PLAY_DOORS };
+  return { create, organize, repairDestinations, replayBootTap, CORE_PLAY_DOORS };
 })();
 Object.freeze(TitleMenu);

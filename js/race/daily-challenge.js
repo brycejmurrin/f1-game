@@ -41,6 +41,8 @@ const DailyChallenge = (function () {
   // Apply one valid lap to the supplied save data. Persistence, badges and
   // the active session belong to record(); these rules mutate only d.
   function recordDay(d, day, lapTime, context) {
+    let newest = "";   // newest stored day before this lap (#5943)
+    for (const k of Object.keys(d.days)) if (k !== day && k > newest) newest = k;
     // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
     const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
     const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -60,12 +62,13 @@ const DailyChallenge = (function () {
       d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
       d.streak.last = day;
     }
-    // Write-only history (readers ask for today): a window, not ~680 chars a day for ever.
-    const floor = new Date(day + "T00:00:00Z");
+    // Write-only history: a window, counted from the earlier of day and newest so a clock set back or ahead
+    // deletes no real day (#5943).
+    const floor = new Date((newest && newest < day ? newest : day) + "T00:00:00Z");
     if (Number.isFinite(floor.getTime())) {
       floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
       const cut = floor.toISOString().slice(0, 10);
-      for (const k of Object.keys(d.days)) if (k < cut || k > soon) delete d.days[k];
+      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
     }
     return e;
   }
@@ -137,7 +140,7 @@ const DailyChallenge = (function () {
       const e = context ? day && day.classes && day.classes[context] : day;
       const best = e && e.best != null ? e.best : undefined;
       const medal = best != null && typeof Quali !== "undefined" && G.referencePole
-        ? Quali.medalFor(best, G.referencePole()) : null;
+        ? Quali.medalFor(best, G.referencePole("medal")) : null;
       return { day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
         best, medal, streak: liveStreak(), class: p.class || "standard" };
     }
@@ -176,6 +179,8 @@ const DailyChallenge = (function () {
       return { model: ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link }), name: "daily-" + p.day, text: shareText(medal) };
     }
     async function shareCard(medal) {
+      // ShareCard rides LAZY_RESULTS_SHEET (off the boot wall): load it before the first card.
+      if (typeof ShareCard === "undefined" && typeof GameResults !== "undefined" && GameResults.ensureLoaded) await GameResults.ensureLoaded();
       if (typeof ShareCard === "undefined") throw new Error("Share cards are unavailable");
       const c = card(medal), blob = await ShareCard.render(c.model, "portrait");
       return ShareCard.deliver(blob, "apex26-" + c.name + ".png", { title: "APEX 26 DAILY", text: c.text, url: c.model.link });
