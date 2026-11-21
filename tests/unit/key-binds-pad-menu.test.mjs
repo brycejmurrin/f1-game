@@ -2,7 +2,44 @@
 // Split from key-binds.test.mjs (T3-16); the VM rig is tests/helpers/key-binds-rig.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { read, boot, fakePad, plain, bootUi } from "../helpers/key-binds-rig.mjs";
+import { read, boot, fakePad, plain, bootUi, menuRig, rawPad, setBtn } from "../helpers/key-binds-rig.mjs";
+
+test("reconnecting the same pad requires a release before it can activate a menu again", () => {
+  const h = menuRig(), pad = rawPad();
+  h.sb.navigator.getGamepads = () => pad.connected ? [pad] : [];
+  h.fire("gamepadconnected", { gamepad: pad });
+  setBtn(pad, 0, true);
+  h.tick();
+  assert.equal(h.clicks, 1, "the press that first woke the controller is valid");
+  pad.connected = false;
+  h.fire("gamepaddisconnected", { gamepad: pad });
+  h.tick();
+  pad.connected = true;
+  h.fire("gamepadconnected", { gamepad: pad });
+  h.tick();
+  assert.equal(h.clicks, 1, "reconnecting while held does not click");
+  setBtn(pad, 0, false); h.tick();
+  setBtn(pad, 0, true); h.tick();
+  assert.equal(h.clicks, 2);
+});
+
+test("removing a spare pad preserves the active menu direction's repeat deadline", () => {
+  const h = menuRig(), active = rawPad(), spare = rawPad({ id: "Spare", index: 1 });
+  let now = 0;
+  h.sb.performance.now = () => now;
+  h.sb.navigator.getGamepads = () => [active, spare.connected ? spare : null];
+  h.fire("gamepadconnected", { gamepad: active });
+  setBtn(active, 13, true); h.Input.poll();
+  const keys = () => h.dispatched.map(e => e.key);
+  assert.deepEqual(keys(), ["ArrowDown"]);
+  now = 16;
+  spare.connected = false;
+  h.fire("gamepaddisconnected", { gamepad: spare });
+  h.Input.poll();
+  assert.deepEqual(keys(), ["ArrowDown"], "no early repeat when the spare leaves");
+  now = 450; h.Input.poll();
+  assert.deepEqual(keys(), ["ArrowDown", "ArrowDown"], "the scheduled repeat still fires");
+});
 
 // ---- the pad in a menu: value controls --------------------------------------
 

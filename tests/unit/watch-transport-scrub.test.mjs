@@ -28,6 +28,7 @@ function setup({ raf, events = [], startT }) {
   const W = vm.runInContext("WatchTransport", ctx);
   const seeks = [], actions = [], state = { T: 0, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "GP", startT, drivers: [{ code: "AAA", name: "Alpha" }], events, speeds: [1] }), status: () => state,
+    isPausedAt: (t) => state.paused && state.T === t,
     setPaused() {}, setSpeed() {}, follow() {},
     setLocked(v) { actions.push(["lock", v]); state.broadcast.locked = v; },
     setAuto(v) { actions.push(["auto", v]); state.broadcast.auto = v; if (v) { state.broadcast.locked = false; state.broadcast.manual = false; } },
@@ -116,6 +117,20 @@ test("50 scrub `input` events cost at most one seek (one paint) before the next 
   assert.equal(t.seeks.at(-1), 61, "`change` seeks at once");
   t.flush();
   assert.equal(t.seeks.at(-1), 61, "a stale pending value never overwrites the committed seek");
+  t.ui.stop();
+});
+
+test("releasing a painted scrub avoids a duplicate pose while paused and commits the live clock", () => {
+  const t = setup({ raf: true });
+  const seek = t.find("seek");
+  function drag(v) { seek.value = String(v); seek.dispatch("input"); t.flush(); }
+  drag(50); seek.dispatch("change");
+  assert.deepEqual(t.seeks, [50], "release at the painted time needs no second seek");
+  drag(51); seek.value = "52"; seek.dispatch("change");
+  assert.deepEqual(t.seeks, [50, 51, 52], "release can supply a final value between frames");
+  t.state.paused = false;
+  drag(60); t.state.T += 0.1; seek.dispatch("change");
+  assert.deepEqual(t.seeks.slice(-2), [60, 60], "restore the chosen time if playback advanced");
   t.ui.stop();
 });
 

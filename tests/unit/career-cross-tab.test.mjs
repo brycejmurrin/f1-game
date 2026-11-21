@@ -505,7 +505,7 @@ function fireSeasonRestore(open) {
     store: { subscribe: (fn) => subs.push(fn), raw: () => null },
     daily: { plan: () => ({ trackName: "Monza", weather: "dry" }) },
     refreshCareerButton: () => { refreshed++; },
-    openCareerSlots() {}, openCareer() {}, openDailyPicker() {} };
+    openCareerSlots() {}, openCareer() {}, openTimeTrialPicker() {} };
   vm.runInContext("TitleMenu", ctx).create(G);
   assert.equal(subs.length, 1, "TitleMenu registers one store subscriber");
   subs[0]({ restoredBatch: true, keys: ["season"] });

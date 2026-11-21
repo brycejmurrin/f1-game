@@ -330,6 +330,7 @@ const DATA_READY = {
 const REAL_RACE_FILES = ApexRoster.LAZY_REAL_RACE || [];
 const REAL_RACE_EDGES = ApexRoster.LAZY_REAL_RACE_EDGES || [];
 const REAL_RACE_READY = {
+  "js/race/tv-graphics.js": () => typeof TvGraphics !== "undefined",
   "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined",
   "js/race/real-replay.js": () => typeof RealReplay !== "undefined",
   "js/race/real-race-pace.js": () => typeof RealRacePace !== "undefined",

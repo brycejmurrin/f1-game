@@ -3088,6 +3088,43 @@ test("native CARD share title remains captured when the design changes during PN
 });
 
 
+test("CARD from a closed visit cannot share its PNG or release the reopened visit's pending card", async () => {
+  const b = bootScreen(); openGreen(b); b.ctx.File = File;
+  const create = b.dom.document.createElement, shared = [];
+  let onPng;
+  b.dom.document.createElement = tag => {
+    const el = create(tag);
+    if (tag === "canvas") el.toBlob = done => onPng(() => done(new Blob(["png"], { type: "image/png" })));
+    return el;
+  };
+  b.ctx.navigator = { canShare: () => true, share: async data => { shared.push(data.title); } };
+  const oldPng = new Promise(resolve => { onPng = resolve; });
+  const old = b.D.shareCard(), finishOld = await oldPng;
+  b.D.close(); b.D.open(); b.D.setName("Next visit");
+  const newPng = new Promise(resolve => { onPng = resolve; });
+  const newer = b.D.shareCard(), finishNew = await newPng;
+  finishOld(); assert.equal(await old, false); assert.deepEqual(shared, []);
+  assert.equal(await b.D.shareCard(), false, "older completion keeps the current card busy");
+  finishNew(); assert.equal(await newer, true); assert.deepEqual(shared, [b.D.state().design.name]);
+  b.D.close();
+});
+
+for (const outcome of ["resolve", "reject"]) {
+  test(`CARD native share ${outcome} after close leaves the next visit alone`, async () => {
+    const b = bootScreen(); openGreen(b); recordingCanvas(b, [], []); b.ctx.File = File;
+    let onShare, saves = 0;
+    const entered = new Promise(resolve => { onShare = resolve; });
+    b.ctx.navigator = { canShare: () => true, share: () => new Promise((resolve, reject) => onShare({ resolve, reject })) };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    const old = b.D.shareCard(), finish = await entered;
+    b.D.close(); b.D.open(); const message = msgText(b);
+    finish[outcome](new Error("share unavailable"));
+    assert.equal(await old, false); assert.equal(saves, 0);
+    assert.equal(msgText(b), message);
+    b.D.close();
+  });
+}
+
 test("close cancels pending single-file and decoded imports without blocking a new closed API load", async () => {
   for (const path of ["file","decode"]) {
     const b=bootScreen();b.D.init(b.G,{custom:b.C,root:b.root});b.D.open();b.D.load(design({name:"ORIGINAL"}));
@@ -3172,6 +3209,105 @@ test("authored road bridge adds, refuses overlap/unsafe inputs, edits, undoes an
   assert.equal(b.D.state().design.bridges.length, 1);
   b.D.close(); b.D.open();
   assert.equal(b.D.state().design.bridges.length, 1, "draft reopens with its bridge");
+});
+
+test("SHARE copies the newer circuit when its encode finishes first", async () => {
+  const b = bootScreen(); openGreen(b);
+  const finish = [], written = [];
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => finish.push(resolve)) };
+  b.ctx.ApexClipboard = { write: async url => { written.push(url); return true; } };
+  const old = b.D.share();
+  b.D.setName("New circuit");
+  const latest = b.D.share();
+  finish[1]("new"); const url = await latest;
+  finish[0]("old"); assert.equal(await old, null);
+  assert.deepEqual(written, [b.CD.shareUrl("new")]);
+  assert.equal(url, written[0]);
+  assert.equal(b.root.querySelector('[aria-label="Share code or link"]').value, url);
+  assert.equal(b.D.state().lastCode, "new");
+  b.D.close();
+});
+
+for (const action of ["share", "shareCard"]) {
+  test(`${action} from a replaced circuit leaves the imported design and its controls alone`, async () => {
+    const b = bootScreen(); openGreen(b);
+    const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+    let finish, copies = 0, saves = 0;
+    b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+    b.ctx.ApexClipboard = { write: async () => { copies++; return false; } };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    recordingCanvas(b, [], []);
+    const pending = b.D[action]();
+    assert.equal(await b.D.loadFrom(incoming), true);
+    assert.equal(b.D.state().design.name, "IMPORTED");
+    const field = b.root.querySelector('[aria-label="Share code or link"]'), value = field.value;
+    const focus = b.dom.document.activeElement, status = msgText(b);
+    finish("old-code");
+    assert.equal(await pending, action === "share" ? null : false);
+    assert.equal(copies, 0); assert.equal(saves, 0);
+    assert.equal(field.value, value); assert.equal(msgText(b), status);
+    assert.ok(b.dom.document.activeElement === focus);
+    assert.notEqual(b.D.state().lastCode, "old-code");
+    b.D.close();
+  });
+}
+
+test("undoing a document replacement withdraws the replaced circuit's pending SHARE", async () => {
+  const b = bootScreen(); openGreen(b);
+  const original = b.D.state().design.name;
+  const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+  assert.equal(await b.D.loadFrom(incoming), true);
+  let finish, copied = false;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async () => { copied = true; return true; } };
+  const pending = b.D.share();
+  assert.equal(b.D.undo(), true); assert.equal(b.D.state().design.name, original);
+  finish("imported-code");
+  assert.equal(await pending, null); assert.equal(copied, false);
+  b.D.close();
+});
+
+test("a refused import leaves the pending SHARE on its original circuit", async () => {
+  const b = bootScreen(); openGreen(b);
+  const copied = []; let finish;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async url => { copied.push(url); return true; } };
+  const pending = b.D.share();
+  assert.equal(await b.D.loadFrom("invalid"), false);
+  finish("original");
+  assert.equal(await pending, b.CD.shareUrl("original"));
+  assert.deepEqual(copied, [b.CD.shareUrl("original")]);
+  b.D.close();
+});
+
+test("SHARE waits for an in-flight clipboard write and suppresses its fallback after reopening", async () => {
+  const b = bootScreen(); openGreen(b);
+  vm.runInContext(read("js/core/clipboard.js"), b.ctx, { filename: absSrc("js/core/clipboard.js") });
+  const writes = [], pending = [];
+  let copiedSelection = 0;
+  b.dom.document.execCommand = () => { copiedSelection++; return true; };
+  b.ctx.navigator = { clipboard: { writeText(url) {
+    writes.push(url);
+    return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+  } } };
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: async item => item.name };
+  const old = b.D.share();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  b.D.close(); b.D.open(); b.D.setName("New circuit"); b.D.showPane("library");
+  const latest = b.D.share();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1, "second native write waits for first to settle");
+  pending[0].reject(new Error("permission denied"));
+  assert.equal(await old, null);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 2);
+  assert.equal(copiedSelection, 0, "old clipboard fallback never copies or takes focus");
+  assert.equal(b.root.dataset.pane, "library");
+  pending[1].resolve();
+  assert.equal(await latest, writes[1]);
+  assert.equal(msgText(b), "Share link copied");
+  b.D.close();
 });
 
 test("share clipboard fallback opens the workspace containing its copy field", async () => {

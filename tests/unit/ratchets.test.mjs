@@ -501,6 +501,33 @@ test("#4257: a topic branch lowers a tree ceiling by its OWN reduction (merge-ba
   assert.deepEqual(mergeFragment({}, [{ tree: true, metric: "rawColor", value: 321, ceiling: 334 }]), { tree: {} });
 });
 
+test("#6032: a topic branch lowers its OWN positive tree fragment (down to 0), with no AT_REF form needed", async () => {
+  const { attributeTree } = await import("../../tools/check/ratchets.mjs");
+  // The branch's fragment raised eagerCodeBytes +933; removing a dead line left the row 35 B under its ceiling.
+  const row = { tree: true, metric: "eagerCodeBytes", value: 3994456, ceiling: 3994491, slack: 35, slackMax: 0 };
+  const got = await attributeTree([row], { name: "x.json", base: "BASE", at: {}, own: { eagerCodeBytes: 933 } });
+  assert.equal(got[0].ownFrag, 933);
+  assert.deepEqual(scopeToBranch(got, new Set()).map((r) => r.metric), ["eagerCodeBytes"], "the branch's own raise is its to lower");
+  assert.deepEqual(mergeFragment({ tree: { eagerCodeBytes: 933 } }, scopeToBranch(got, new Set())), { tree: { eagerCodeBytes: 898 } });
+  // A shrink past the branch's own raise stops at 0: the rest is the deploy branch's to lower.
+  const big = { ...got[0], value: 3993000 };
+  assert.deepEqual(mergeFragment({ tree: { eagerCodeBytes: 933 } }, [big]), { tree: {} });
+  // No own raise: the loose row still drops (#3996).
+  const none = await attributeTree([row], { name: "x.json", base: "BASE", at: {}, own: {} });
+  assert.deepEqual(scopeToBranch(none, new Set()), []);
+});
+
+test("#6023: a pin counter lowers by the branch's OWN pin delta (pinDelta), never by the tip's looseness", async () => {
+  const { attributeTree } = await import("../../tools/check/ratchets.mjs");
+  const row = { tree: true, metric: "assertPins", value: 8158, ceiling: 8193, slack: 35, slackMax: 200 };
+  const loose = row;                                          // inside slackMax: a pin row is still measured
+  const got = await attributeTree([loose], { name: "x.json", base: "BASE", at: {}, own: {}, pinGrowth: async () => -32 });
+  assert.equal(got[0].ownMin, -32);
+  assert.deepEqual(mergeFragment({}, scopeToBranch(got, new Set())), { tree: { assertPins: -32 } }, "−32, not −35");
+  const grew = await attributeTree([loose], { name: "x.json", base: "BASE", at: {}, own: {}, pinGrowth: async () => 3 });
+  assert.deepEqual(scopeToBranch(grew, new Set()), [], "a branch that added pins lowers nothing");
+});
+
 test("#4257: own tree lowerings add under a merge, so siblings stay at ceiling == value (no #3996 sibling-OVER)", () => {
   const base = { files: {}, tree: { rawColor: { ceiling: 334, slack: 0 } } };
   const lowering = (value, ownMin) => mergeFragment({}, [{ tree: true, metric: "rawColor", value, ceiling: 334, ownMin }]);

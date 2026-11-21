@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/weather-arc.js"), "utf8").replace(/^const\b/gm, "var");
@@ -34,14 +35,14 @@ function boot() {
   };
   ctx.Particles = { rainShow() {} };
   vm.runInContext(SRC, ctx, { filename: absSrc("js/race/weather-arc.js") });
-  const G = {
+  const G = fakeG({
     state: "race", flow: "single", season: null, seasonMode: false,
     raceWeather: "dry", raceRound: 0, raceLaps: 25, lapsTarget: 25,
     track: { total: 5800 }, soundOn: false,
     simSeed: () => 1, netPlay: { active: () => false },
-    announce() {}, applyRaceSettings() {}, isWetRoad: () => false, isRaining: () => false,
+    announce() {}, applyRaceSettings() {}, isWetRoad: () => false,
     initRainDrops() {},
-  };
+  });
   const wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
   return { G, wa, calls };
 }

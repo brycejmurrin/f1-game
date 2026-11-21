@@ -34,21 +34,10 @@ function envFor(Q, extra) {
     webgpu: true, mobile: false, phys: false, hdr: true }, extra || {});
 }
 
-test("index 0 of every budget is today's shipped constant in tsl-post.js", () => {
-  const tsl = read("js/render/three/tsl-post.js");
+test("the hi budgets build on today's index 0", () => {
   const B = GI.BUDGET;
-  const kernel = tsl.slice(tsl.indexOf("const SSAO_K = ["), tsl.indexOf("];", tsl.indexOf("const SSAO_K = [")));
-  assert.equal((kernel.match(/\[-?[\d.]+, -?[\d.]+\]/g) || []).length, B.ssaoTaps[0], "SSAO_K holds today's taps");
-  assert.match(tsl, /godray = makeGodray\(16, GR_MAX_LIGHTS, "tlx-post-godray"\)/);
-  assert.equal(Number(/const GR_MAX_LIGHTS = (\d+)/.exec(tsl)[1]), B.rayLamps[0]);
-  assert.equal(B.raySteps[0], 16);
-  assert.match(tsl, /const marchSteps = select\(quality\.greaterThan\(1\.5\), int\(8\), select\(quality\.greaterThan\(0\.5\), int\(16\), int\(24\)\)\)/);
-  assert.equal(B.ssrMarch[0], 24);
-  assert.match(tsl, /int\(1\), select\(quality\.greaterThan\(0\.5\), int\(2\), int\(4\)\)\)/);
-  assert.equal(B.ssrRefine[0], 4);
-  assert.match(tsl, /float\(1\.16\)\)\)/);
-  assert.match(tsl, /float\(0\.55\)\)\)\.toVar\(\)/);
-  assert.deepEqual([B.ssrStep[0], B.ssrGrowth[0]], [0.55, 1.16]);
+  assert.deepEqual([B.ssaoTaps[0], B.raySteps[0], B.rayLamps[0], B.ssrMarch[0], B.ssrRefine[0], B.ssrStep[0], B.ssrGrowth[0]],
+    [8, 16, 6, 24, 4, 0.55, 1.16], "today's budgets (the built graph proves tsl-post.js matches, below)");
   // Every hi budget is at least today's, and the hi sample counts double.
   assert.equal(B.ssaoTaps[1], 2 * B.ssaoTaps[0]);
   assert.equal(B.raySteps[1], 2 * B.raySteps[0]);
@@ -245,7 +234,7 @@ function withStore(ls, fn) {
     value: { getItem: (k) => (k in ls ? ls[k] : null), setItem() {}, removeItem() {} } });
   try { return fn(); } finally { if (had) Object.defineProperty(globalThis, "localStorage", had); else delete globalThis.localStorage; }
 }
-async function rig(t, features) {
+async function rig(t, features, tsl = TSL) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
@@ -262,7 +251,7 @@ async function rig(t, features) {
   const mats = [];
   let post;
   try {
-    post = withStore({}, () => T.postChain(THREE, TSL, { renderer, isMobile: false,
+    post = withStore({}, () => T.postChain(THREE, tsl, { renderer, isMobile: false,
       chunks: T.chunks(THREE, TSL), shadow, viz: null, ssrTag: true, softDest: () => null,
       wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
   } finally { T.post = orig; }
@@ -273,8 +262,81 @@ async function rig(t, features) {
   const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity, upVS: [0, 1, 0],
     eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], sunVS: [0, 0, -1], time: 0, cloud: 0, lights };
   const opts = { ssao: 0.8, contact: 0.5, godray: 0.8, bloom: 0.5, reflect: 0.5, carReflect: 0.3, mist: 0.5, lampVol: 0.5 };
-  return { P, post, fg, mats, present: (o) => post.present(o || opts, frame), on };
+  return { P, post, fg, mats, present: (o) => post.present(o || opts, frame), on, shadow };
 }
+
+// A numeric reading of a built TSL node (three r187 node types) for the few node kinds the budget graphs use;
+// `leaf(node)` answers the graph's inputs. The budget test asserts what the built post graph computes.
+const OPS = { "+": (a, b) => a + b, "-": (a, b) => a - b, "*": (a, b) => a * b, ">": (a, b) => +(a > b) };
+function tslEval(n, leaf = () => undefined) {
+  const v = leaf(n);
+  if (v !== undefined) return v;
+  switch (n.type) {
+    case "ConstNode": return n.value;
+    case "VarNode": case "ConvertNode": return tslEval(n.node, leaf);
+    case "ConditionalNode": return tslEval(n.condNode, leaf) ? tslEval(n.ifNode, leaf) : tslEval(n.elseNode, leaf);
+    case "OperatorNode": return OPS[n.op](tslEval(n.aNode, leaf), tslEval(n.bNode, leaf));
+    case "MathNode": if (n.method === "cos" || n.method === "sin") return Math[n.method](tslEval(n.aNode, leaf));
+  }
+  throw new Error(`tslEval: no reading for ${n.type} ${n.op || n.method || ""}`);
+}
+const kidsOf = (n) => ["aNode", "bNode", "node"].map((k) => n[k]).filter((x) => x && typeof x === "object");
+const findIn = (n, pred) => (pred(n) ? n : kidsOf(n).reduce((hit, k) => hit || findIn(k, pred), null));
+
+test("index 0 of every budget is what today's built post graph computes (tsl-post.js)", async (t) => {
+  // Record what the post chain builds: every select (with its result), the Loop nest around each sun-shadow tap, and
+  // the SSAO kernel rotations. Pass-through: the built programs are unchanged.
+  const sel = [], vec2s = [], sunTaps = [], X = Object.assign({}, TSL);
+  X.select = (...a) => { const r = TSL.select(...a); sel.push(r); return r; };
+  X.vec2 = (...a) => { const r = TSL.vec2(...a); if (a.length === 2) vec2s.push(a); return r; };
+  // Loop and If bodies run when three builds them, not when they are declared: each carries the Loop nest it was
+  // declared in, so a tap knows the loop bounds around it.
+  let nest = [];
+  const scoped = (fn, inner) => (...a) => {
+    const body = a[a.length - 1], outer = nest, mine = inner(a, outer);
+    a[a.length - 1] = (...b) => { const prev = nest; nest = mine; try { return body(...b); } finally { nest = prev; } };
+    return fn(...a);
+  };
+  X.Loop = scoped(TSL.Loop, (a, outer) => [...outer, tslEval(a[0].end)]);
+  X.If = scoped(TSL.If, (a, outer) => outer);
+  let sunTex = null;
+  X.texture = (tex, ...r) => { if (tex && tex === sunTex) sunTaps.push(nest.join("/")); return TSL.texture(tex, ...r); };
+  const h = await rig(t, [], X);
+  sunTex = h.shadow.sunTex;
+  h.present();
+  const B = GI.BUDGET;
+  // God-rays: the sun march runs B.raySteps[0] steps, and the pass carries B.rayLamps[0] lamp slots.
+  assert.deepEqual([...new Set(sunTaps)], [String(B.raySteps[0])], "the sun shadow tap sits in a 16-step march");
+  assert.equal(h.P.godray.maxLights, B.rayLamps[0]);
+  assert.equal(h.P.godray.mat.customProgramCacheKey(), "tlx-post-godray");
+  // SSAO: the taps the kernel loop builds (each tap's rotation at angle 0 is its kernel vector).
+  const kernels = new Map();
+  for (const a of vec2s) {
+    const cos = a.every((x) => x && x.type === "OperatorNode") && findIn(a[0], (n) => n.type === "MathNode" && n.method === "cos");
+    if (!cos) continue;
+    const ang = cos.aNode, k = a.map((x) => tslEval(x, (n) => (n.id === ang.id ? 0 : undefined)));
+    if (!kernels.has(ang.id)) kernels.set(ang.id, []);
+    kernels.get(ang.id).push(k);
+  }
+  const sizes = [...new Set([...kernels.values()].map((k) => k.length))];
+  assert.deepEqual(sizes, [B.ssaoTaps[0]], "every SSAO term (the pass and the god-ray fold) builds 8 taps");
+  for (const k of kernels.values()) for (const [x, y] of k) assert.ok(near(Math.hypot(x, y), 1, 1e-4), `unit tap ${x},${y}`);
+  // SSR: the per-quality ladders on the road budget (quality 0 full, 1 medium, 2 low), read off the selects that
+  // branch on the SSR quality var; quality 0 is the budget's index 0.
+  const qU = h.P.composite.U.ssrQuality.id;
+  const qVar = sel.map((r) => r.condNode && r.condNode.aNode).find((n) => n && n.type === "VarNode" && n.node.type === "ConditionalNode"
+    && n.node.elseNode.id === qU);
+  assert.ok(qVar, "the SSR march's quality var (a car-dominant pixel's 0, else the ssrQuality uniform)");
+  const seen = new Set(), ladders = [];
+  for (const r of sel) {
+    if (seen.has(r.id) || !r.condNode || !r.condNode.aNode || r.condNode.aNode.id !== qVar.id || r.elseNode.type !== "ConditionalNode") continue;
+    seen.add(r.id);
+    ladders.push([0, 1, 2].map((q) => +tslEval(r, (n) => (n.id === qVar.id ? q : undefined)).toFixed(6)));
+  }
+  assert.deepEqual([...new Set(ladders.map(String))], ["24,16,8", "4,2,1", "1.16,1.22,1.5", "0.55,0.75,1.4"],
+    "march steps, refine steps, step growth, first step at quality 0 / 1 / 2");
+  assert.deepEqual([ladders[0][0], ladders[1][0], ladders[2][0], ladders[3][0]], [B.ssrMarch[0], B.ssrRefine[0], B.ssrGrowth[0], B.ssrStep[0]]);
+});
 
 test("no desktop extra: today's material set, no hi state", async (t) => {
   const h = await rig(t, []);
