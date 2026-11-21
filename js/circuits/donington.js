@@ -38,6 +38,12 @@
     // while only the line and grid move.
     startFrac: 0.2551,
     sceneryStartFrac: 0.0000,
+    // PIT SIDE (#5316 CIRC1-01 leftover): driver61 + ukCircuits + oversteer48 put
+    // the pit wall / pit entry on the driver's LEFT of the Wheatcroft Straight
+    // (outside the racing loop for this clockwise lap). Default +1 built the
+    // complex on the infield right. Engine apron stays level under -1 (measured
+    // 2026-11-21); scenery frontage re-dress is the #6007 lane.
+    pit: { side: -1 },
     name: "DONINGTON",
     gp: "European GP",
     country: "UK",

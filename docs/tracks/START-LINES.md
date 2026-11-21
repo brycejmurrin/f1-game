@@ -209,9 +209,8 @@ committed trace's frame (each OSM ring re-stitched with
   lands 3.8 m off the 491 m segment 24→25 at t = 0.402, 294 m before node 25 (the
   earlier candidate 0.2577). One collinear point was added there (`pts[25]`, ≤ 0.01 m
   off the chord) and `startFrac` 0.9072 → **0.2551** (25/98).
-  **Open:** driver61 puts the pit wall on the driver's LEFT approaching Redgate; the
-  def's default `pit.side` is +1 (right). Not flipped: it is a full re-dress of the
-  frontage, a separate pass.
+  **Pit side fixed 2026-11-21 (#5316):** `pit: { side: -1 }` — driver's LEFT
+  (ukCircuits / oversteer48 / driver61). Scenery frontage re-dress is #6007.
 
 The scenery stays on its authored frame (`sceneryStartFrac` 0); only the
 line-anchored frontage was re-fitted so no clip, coplanar, ground or props count
