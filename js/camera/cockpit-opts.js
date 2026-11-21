@@ -24,9 +24,9 @@ const LEAD_MAX = 1;
 const CHOICES = {
   visor:    { key: "apex26.helmetVisor", url: "helmetvisor", values: ["off", "clear", "smoke"],
               labels: { off: "OFF", clear: "CLEAR", smoke: "TINTED" } },
-  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", values: ["neutral", "amber", "ice", "rose"],
+  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", def: "amber", values: ["neutral", "amber", "ice", "rose"],
               labels: { neutral: "NEUTRAL", amber: "AMBER", ice: "ICE BLUE", rose: "ROSE" } },
-  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", values: ["light", "medium", "strong"],
+  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", def: "medium", values: ["light", "medium", "strong"],
               labels: { light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
   visorRefraction: { key: "apex26.helmetVisorRefraction", url: "visorrefraction", values: ["off", "light", "medium", "strong"],
               labels: { off: "OFF", light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
@@ -40,7 +40,7 @@ const CHOICES = {
               labels: { f1: "F1 2026", gt: "GT RIM", butterfly: "BUTTERFLY", yoke: "OPEN YOKE", endurance: "ENDURANCE", retro: "2000s", round: "CLASSIC", none: "NONE" } },
   body:     { key: "apex26.cockpitBody", url: "ckbody", values: ["standard", "sculpted", "wide", "tapered", "stepped"],
               labels: { standard: "STANDARD", sculpted: "SCULPTED", wide: "WIDE", tapered: "TAPERED", stepped: "STEPPED" } },
-  seat:     { key: "apex26.cockpitSeat", url: "ckseat", values: ["std", "low", "high", "fwd"],
+  seat:     { key: "apex26.cockpitSeat", url: "ckseat", def: "fwd", values: ["std", "low", "high", "fwd"],
               labels: { std: "STANDARD", low: "LOW", high: "HIGH", fwd: "FORWARD" } },
   interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "suede", "ribbed", "classic"],
               labels: { carbon: "CARBON", team: "TEAM", suede: "SUEDE", ribbed: "RIBBED", classic: "CLASSIC" } },
@@ -189,14 +189,14 @@ function choice(name) {
       const q = new RegExp("[?&]" + C.url + "=([a-z0-9]+)", "i").exec(location.search);
       if (q) v = q[1].toLowerCase();
     } catch (_) { /* no location in a headless VM: the stored value stands */ }
-    picked[name] = C.values.includes(v) ? v : C.values[0];
+    picked[name] = C.values.includes(v) ? v : (C.def || C.values[0]);
   }
   return picked[name];
 }
 
 function setChoice(name, v) {
   const C = CHOICES[name];
-  picked[name] = C.values.includes(v) ? v : C.values[0];
+  picked[name] = C.values.includes(v) ? v : (C.def || C.values[0]);
   GameStore.store.rawSet(C.key, picked[name]);
   if (name.startsWith("visor")) paintVisor();
   for (const fn of listeners) fn(name, picked[name]);

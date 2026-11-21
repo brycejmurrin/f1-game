@@ -745,11 +745,16 @@ body:not(.desktop) {
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
 }
+/* Roomy desktop menus, mirrored by the UI SIZE row in js/ui/scale.js. */
+@media (pointer: fine) and (min-width: 1600px) and (min-height: 900px) {
+  :root { --ui-scale: 1.15; }
+}
 /* Why: docs/notes/TOKENS-RATIONALE.md §R7. */
 @media (pointer: coarse) {
   /* Fixed touch-control default; HUD SIZE does not move this axis. */
   :root {
     --ui-scale: 1.09; --hud-scale: 1;
+    --portrait-btn-base: 1.25;
     --hud-btn-mult: 1.25;
     --hud-btn-scale: var(--hud-btn-mult);
   }
@@ -757,7 +762,7 @@ body:not(.desktop) {
 /* A PHONE (touch, short side <= 500 px) ships UI SIZE 70 % (#5358, the owner's 2026-11-10 profile).
    The mirror of PHONE_UI_DEFAULT / phoneUi() in js/ui/scale.js: CSS owns first paint. */
 @media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px) {
-  :root { --ui-scale: 0.7; }
+  :root { --ui-scale: 0.7; --hud-btn-mult: 1.4325; }
 }
 
 /* Why: docs/notes/TOKENS-RATIONALE.md §R8. */
@@ -798,6 +803,13 @@ body:not(.desktop) {
 :root[data-menu-accent="violet"] { --red: #7a5cff; }
 :root[data-menu-accent="lime"]   { --red: #b7e11b; }
 
+:root {
+  /* ENDURANCE / DRAFTING palettes; css/screen-arranger.css scopes them. */
+  --endurance-bg: #081511; --endurance-carbon: #16342b; --endurance-text: #fbf8e9; --endurance-dim: #c3d8ca; --endurance-line: #738e80;
+  --drafting-bg: #0b192b; --drafting-carbon: #192e45; --drafting-text: #eef7ff; --drafting-dim: #bfd4e9; --drafting-line: #7895ac;
+}
+:root[data-ui-theme="endurance"] { --bg: var(--endurance-bg); --carbon: var(--endurance-carbon); --text: var(--endurance-text); }
+:root[data-ui-theme="drafting"] { --bg: var(--drafting-bg); --carbon: var(--drafting-carbon); --text: var(--drafting-text); }
 /* ---- APPEARANCE: light / system theme ----------------------------------
    Light rewrites the surface ladder; SYSTEM follows the OS preference. */
 :root[data-ui-theme="light"] {

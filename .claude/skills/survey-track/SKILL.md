@@ -42,7 +42,7 @@ circuits run in parallel or the diagnosis would flood this context.
 3. Capture: `node tools/track/survey-track.mjs <id> before` (aerial/orbit/EYE; `--oblique` for a
    satellite comparison, [loop.md](references/loop.md) §2). It hard-codes a 1280×720 viewport and
    day/dry (`runSurvey` in its source): other light or weather, and any HUD or driver-view capture
-   at 844×390 landscape, is a **playwright-probe** `tools/shot/shot.mjs` frame.
+   at 852×393 landscape, is a **playwright-probe** `tools/shot/shot.mjs` frame.
 4. Build the evidence packet (the delegation prompt cites it): research dated satellite/OSM/
    official-map/onboard sources (WebSearch/WebFetch; cite URLs, year, uncertainty; separate source
    claims from measurements) and fill [evidence-template.json](references/evidence-template.json)

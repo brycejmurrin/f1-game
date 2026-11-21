@@ -715,7 +715,7 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
   // shell's min/max/value. Hand-checking them is how a range gets widened in
   // one place and not the others — a slider that stops short of its trim's
   // maximum is a control the player cannot reach the end of, and one that
-  // cannot hit 1.0 exactly is a panel that cannot return to the shipped sound.
+  // cannot hit 1.0 exactly cannot reproduce a neutral trim.
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
   const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const A = boot().GameAudio;
@@ -732,8 +732,9 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
     assert.ok(Math.abs(lo - rLo) < 1e-9, `${key}: the panel starts at ${lo}, the engine's range at ${rLo}`);
     assert.ok(Math.abs(lo + max * step - rHi) < 1e-9,
       `${key}: the slider tops out at ${lo + max * step}, the engine allows ${rHi} — the player cannot reach the end`);
-    assert.ok(Math.abs(lo + dflt * step - 1) < 1e-9,
-      `${key}: the default position is ${lo + dflt * step}, not 1.0 — the panel cannot return to the shipped sound`);
+    const neutral = (1 - lo) / step;
+    assert.ok(Math.abs(neutral - Math.round(neutral)) < 1e-9, `${key}: neutral trim is reachable`);
+    assert.ok(Math.abs(lo + dflt * step - A.tuneDefaults()[key]) < 1e-9, `${key}: shell starts at the team trim`);
   }
 });
 

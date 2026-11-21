@@ -4,7 +4,7 @@
 //
 // The owner sends a 2000x923 screenshot; the report used to be re-typed by hand as measurements. This boots the working
 // tree on the shared preset (tools/lib/bryce-phone.mjs: 852x393, insets, his export), drives it to the same screen
-// (--eval), screenshots it at the screenshot's own pixel density, lists the visible UI elements, and finds each one in
+// (--eval), screenshots it at native density, lists the visible UI elements, and finds each one in
 // the phone image by template matching over scale (tools/lib/shot-match.mjs). It prints
 //   - the SCREEN factor: the median phone/live size over confident matches ("the phone draws this screen at 0.47x:
 //     an effective UI SIZE of about 51 % against the 109 % the profile says"), and
@@ -15,7 +15,7 @@
 //
 //   node tools/ui/phone-shot-diff.mjs --shot artifacts/phone-shots/5218/shot-1.png
 //   node tools/ui/phone-shot-diff.mjs --shot s.png --eval "__apex.open('settings')" --ui-scale 109 --json
-//   --selector "#pause *"   only elements under it     --max 30   element cap     --window standalone|safari (default: from the image's aspect)
+//   --selector "#pause *"   only elements under it     --max 30   element cap     --window standalone|portrait|safari|w844 (default: from the image's aspect)
 // Starts a browser: parent session only, one at a time (AGENTS.md rule 5). Exit 0 reported, 2 usage, 3 the image is unusable.
 import fs from "node:fs";
 import path from "node:path";
@@ -25,7 +25,7 @@ import { classifyShot, openBrycePhone, BRYCE_WINDOWS } from "../lib/bryce-phone.
 import { halve, matchElement, summarize } from "../lib/shot-match.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-export const USAGE = `usage: node tools/ui/phone-shot-diff.mjs --shot <image> [--eval "<js>"] [--url /path] [--selector <css>] [--max N] [--window standalone|safari]
+export const USAGE = `usage: node tools/ui/phone-shot-diff.mjs --shot <image> [--eval "<js>"] [--url /path] [--selector <css>] [--max N] [--window standalone|portrait|safari|w844]
                                         [--ui-scale P] [--no-profile] [--wait ms] [--keep <dir>] [--json]
   Boots the working tree on the Bryce-phone preset, reaches the screen (--eval runs in the page first), and reports which
   visible elements are a different size in the screenshot: the screen-wide factor, per-element outliers, and what did not match.`;
@@ -93,15 +93,18 @@ async function main(flags) {
   const meta = await sharp(file).metadata();
   const cls = classifyShot(meta.width, meta.height);
   const window = flags.flag("--window", null) || cls.window;
-  if (!window || !BRYCE_WINDOWS[window]) { console.error(`phone-shot-diff: ${meta.width}x${meta.height} is neither of his windows by aspect (nearest ${cls.nearest}, off ${(cls.aspectError * 100).toFixed(1)} %): cropped, or pass --window`); return 3; }
-  if (cls.orientation !== "landscape") { console.error("phone-shot-diff: portrait screenshots are not supported yet"); return 3; }
+  if (!window || !BRYCE_WINDOWS[window]) { console.error(`phone-shot-diff: ${meta.width}x${meta.height} does not match his phone windows by aspect (nearest ${cls.nearest}, off ${(cls.aspectError * 100).toFixed(1)} %): cropped, or pass --window`); return 3; }
   const win = BRYCE_WINDOWS[window];
+  if ((meta.width > meta.height) !== (win.width > win.height)) {
+    console.error(`phone-shot-diff: ${meta.width}x${meta.height} does not match the orientation of --window ${window}`); return 3;
+  }
+  const pxPerCss = +(meta.width / win.width).toFixed(4);
   const { launchChromium, startStaticServer, shutdown } = await import("../lib/harness.mjs");
   const srv = await startStaticServer(ROOT);
   const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
   try {
     const ui = flags.flag("--ui-scale", null);
-    const { page } = await openBrycePhone(browser, { window, dpr: 2, profile: !flags.has("--no-profile"), ...(ui ? { uiScale: Number(ui) } : {}) });
+    const { page } = await openBrycePhone(browser, { window, profile: !flags.has("--no-profile"), ...(ui ? { uiScale: Number(ui) } : {}) });
     await page.goto(srv.url + String(flags.flag("--url", "/")).replace(/^\//, ""), { waitUntil: "load" });
     await page.waitForTimeout(Number(flags.flag("--wait", 1500)));
     if (flags.flag("--eval", null)) { await page.evaluate(String(flags.flag("--eval"))); await page.waitForTimeout(600); }
@@ -121,8 +124,8 @@ async function main(flags) {
       return again.ok && (!r.match.ok || again.score > r.match.score) ? { ...r, match: again } : r;
     })()));
     const sum = summarize(rows);
-    if (flags.has("--json")) console.log(JSON.stringify({ shot, window, pxPerCss: cls.pxPerCss, liveUiScale, ...sum }, null, 2));
-    else console.log(reportLines(sum, { shot, window, pxPerCss: cls.pxPerCss, liveUiScale }).join("\n"));
+    if (flags.has("--json")) console.log(JSON.stringify({ shot, window, pxPerCss, liveUiScale, ...sum }, null, 2));
+    else console.log(reportLines(sum, { shot, window, pxPerCss, liveUiScale }).join("\n"));
     return 0;
   } finally { await browser.close().catch(() => {}); await srv.close?.(); shutdown?.(); }
 }

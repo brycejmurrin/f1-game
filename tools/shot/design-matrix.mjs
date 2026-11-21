@@ -50,7 +50,7 @@ async function main() {
   const save = () => { const tmp = join(outDir, `.manifest-${randomUUID()}.tmp`); writeFileSync(tmp, JSON.stringify(manifest, null, 2), { flag: "wx" }); renameSync(tmp, mfPath); };
   const indexes = () => {
     writeFileSync(metadataFile(outDir, "gallery.json"), JSON.stringify(galleryIndex(allGroups, manifest), null, 2));
-    writeFileSync(metadataFile(outDir, "sheet.html"), sheetHtml(allGroups, manifest, { title: `design matrix ${run}`, phone: o.phone || o.viewport[0] === 844 }));
+    writeFileSync(metadataFile(outDir, "sheet.html"), sheetHtml(allGroups, manifest, { title: `design matrix ${run}` }));
   };
   save();
   if (!o.indexOnly && todo.length) {

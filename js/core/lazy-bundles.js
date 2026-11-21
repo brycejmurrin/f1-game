@@ -638,8 +638,8 @@ function restoreOnEngine() {
   audioRestored = true;
   try {
     GameAudio.setEnabled(!!G.soundOn);
-    GameAudio.setMusicVolume(store.get("volMusic"));
-    GameAudio.setSfxVolume(store.get("volSfx"));
+    GameAudio.setMusicVolume(store.get("volMusic", 0.7));
+    GameAudio.setSfxVolume(store.get("volSfx", 0.4));
     if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(store.get("radioFocusDb", 0));
     const radio = G.radio;
     if (radio && radio.setVolume) radio.setVolume(store.get("volRadio", 0.8));

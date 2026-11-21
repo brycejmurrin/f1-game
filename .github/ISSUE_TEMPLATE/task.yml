@@ -18,7 +18,7 @@ body:
     id: done
     attributes:
       label: Done when
-      description: The observable check — a hook value, a test, a screenshot at phone-landscape-844x390, a verify command.
+      description: The observable check — a hook value, a test, an iPhone 15 landscape screenshot (852×393 CSS px at 3×), a verify command.
     validations:
       required: true
   - type: input

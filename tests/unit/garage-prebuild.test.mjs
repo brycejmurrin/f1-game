@@ -651,7 +651,7 @@ test("garage release frees arrival crew meshes once and the next arrival rebuild
   const beforeArrival = h.handles.length;
   garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
   const crew = h.handles.slice(beforeArrival);
-  assert.equal(crew.length, 3, "the real arrival crew creates two figures and its pole");
+  assert.equal(crew.length, 4, "the pitstop crew adds its posed crew mesh alongside the two figures and pole");
   for (const mesh of crew) assert.equal(h.live.has(mesh), true);
   const afterArrival = h.handles.length;
   garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
@@ -669,7 +669,7 @@ test("garage release frees arrival crew meshes once and the next arrival rebuild
   const beforeNextArrival = h.handles.length;
   garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
   const rebuiltCrew = h.handles.slice(beforeNextArrival);
-  assert.equal(rebuiltCrew.length, 3, "the same paint still rebuilds released crew on the next visit");
+  assert.equal(rebuiltCrew.length, crew.length, "the same paint still rebuilds released crew on the next visit");
   for (const mesh of rebuiltCrew) {
     assert.equal(h.live.has(mesh), true);
     assert.equal(crew.includes(mesh), false, "no disposed crew handle is reused");
@@ -717,7 +717,7 @@ test("renderer replacement releases garage resources through their original owne
   const beforeArrival = h.handles.length;
   garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {}, { door: 0.5, x: 0, z: 0 });
   const crew = h.handles.slice(beforeArrival);
-  assert.equal(crew.length, 3, "the arrival creates its two figure meshes and pole");
+  assert.equal(crew.length, 4, "the pitstop arrival creates its two figure meshes, posed crew and pole");
   for (const mesh of crew) assert.equal(h.live.has(mesh), true);
   const held = h.live.size;
   const freed = h.freed.length;

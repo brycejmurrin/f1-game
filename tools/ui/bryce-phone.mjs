@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// @doc Print the shared "Bryce's phone" preset, or boot the page on it and prove the emulation took (--measure).
+// @doc Inspect the iPhone 15 viewport and native resolution, check emulation (--measure) or save a screenshot (--shot).
 // bryce-phone.mjs — the one command for tools/lib/bryce-phone.mjs (docs/notes/TOOLING-HUNT-2026-11-09.md).
 //
 //   node tools/ui/bryce-phone.mjs                         # the preset: window, DPR, insets, profile summary
 //   node tools/ui/bryce-phone.mjs --json                  # all of it, localStorage entries included
 //   node tools/ui/bryce-phone.mjs --measure               # boot the working tree on it; read viewport, env() insets, stored sizes back
 //   node tools/ui/bryce-phone.mjs --measure --eval "document.querySelector('#title').getBoundingClientRect().width" --shot artifacts/phone/title.png
-//   --window standalone|safari|w844   --dpr N (1 on this software-GL box for HUD fit work)   --ui-scale P (percent)
-//   --profile live|legacy (default live: his 2026-11-09 Home Screen export; legacy: the 2026-10-05 file)   --no-profile
+//   --window standalone|portrait|safari|w844   --dpr N (1 on this software-GL box for HUD fit work)   --ui-scale P (percent)
+//   --profile live|legacy (default live: his 2026-11-10 Home Screen export; legacy: the 2026-10-05 file)   --no-profile
 //
 // --measure starts a browser: parent session only, one browser at a time (AGENTS.md rule 5). Exit 0 the page reported
 // what the preset asked for, 1 it did not (each mismatch is printed), 2 usage.
@@ -18,7 +18,7 @@ import { strictFlags, makeFlags } from "../lib/cli-args.mjs";
 import { brycePhone, openBrycePhone, readBackInPage, mismatches } from "../lib/bryce-phone.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-export const USAGE = `usage: node tools/ui/bryce-phone.mjs [--window standalone|safari|w844] [--dpr N] [--ui-scale P] [--profile live|legacy] [--no-profile] [--json]
+export const USAGE = `usage: node tools/ui/bryce-phone.mjs [--window standalone|portrait|safari|w844] [--dpr N] [--ui-scale P] [--profile live|legacy] [--no-profile] [--json]
        node tools/ui/bryce-phone.mjs --measure [--url /path] [--eval "<js expression>"] [--shot out.png] [--wait ms] [same preset flags]
   The owner's iPhone as one emulation recipe (tools/lib/bryce-phone.mjs): 852x393, DPR 3, env() insets 59/0/59/21, his live settings export (the 2026-11-10 file: UI SIZE 70 %, BUTTON SIZE 143.25 %).
   --measure boots the working tree on it (one browser; parent session only) and prints what the page reports; exit 1 on a mismatch.`;
@@ -38,6 +38,7 @@ export function presetOptions(flags) {
 export function describe(p) {
   const i = p.insets;
   return [`${p.name}: ${p.viewport.width}x${p.viewport.height} CSS px, DPR ${p.deviceScaleFactor}, env() insets L${i.left} T${i.top} R${i.right} B${i.bottom}`,
+    ...(p.nativeScreen ? [`  ${p.model} display: ${p.contextOptions.screen.width}x${p.contextOptions.screen.height} logical px, ${p.nativeScreen.width}x${p.nativeScreen.height} native px`] : []),
     `  verified: ${p.verified}`,
     p.profile ? `  profile: ${p.profile.file} (exported ${p.profile.exportedAt}), ${Object.keys(p.localStorage).length} keys, UI SIZE ${p.profile.uiScale === "export" ? "as exported" : p.profile.uiScale + " %"}` : "  profile: none (fresh boot)",
     `  limits: ${p.limits}`].join("\n");

@@ -553,6 +553,8 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
   };
   assert.equal(/role="main"[^>]*aria-label="Title menu"/.test(openTag("overlay") || ""), true, "#overlay is the titled main landmark");
   for (const id of loadLayerIds()) {
+    // Built on demand: tests/specs/appearance-orientation.spec.js checks the live dialog's name and its Escape door.
+    if (id === "screen-arranger") continue;
     if (SKIP[id]) continue;
     const tag = openTag(id);
     assert.ok(tag, `#${id} is in index.html`);
@@ -590,9 +592,10 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   const NO_DOOR = { overlay: "the title has nothing to go back to", "rotate-device": "CSS-gated blocker; Escape falls through to pause" };
   assert.ok(loadLayerIds().includes("loading"), "#loading is in UiLayers.LAYER_IDS so Escape/anyOpen see it");
   for (const id of loadLayerIds()) {
+    if (id === "screen-arranger") continue;   // the live dialog's door: appearance-orientation.spec.js
     if (id === "hud-arrange-bar") {
-      assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-done"\)/);
-      assert.match(read("js/ui/hud-arrange.js"), /mk\("DONE", "Done arranging the HUD", \(\) => setEditing\(false\), "hud-arrange-done"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);
       continue;
     }
     const tag = openTag(id);
@@ -602,7 +605,8 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
     const inShell = ids.has(via[1]);
     const built = new RegExp(`\\.id = "${via[1]}"`).test(read("js/data/hub.js"));
     const photoDoor = id === "photo-studio" && via[1] === "ps-close" && /button\("DONE", \(\) => close\(true\), "ps-close"\)/.test(read("js/ui/photo-studio.js"));
-    assert.ok(inShell || built || photoDoor, `#${id} → #${via[1]} exists (shell or declared dynamic owner)`);
+    const titleDoor = id === "tl-editor" && via[1] === "tl-cancel" && /btn\("tl-cancel", "Cancel", "Discard title changes", \(\) => exit\(false\)\)/.test(read("js/ui/title-layout.js"));
+    assert.ok(inShell || built || photoDoor || titleDoor, `#${id} → #${via[1]} exists (shell or declared dynamic owner)`);
   }
   // Both Escape paths press the same control: the dialog `cancel` and the document keydown.
   const tm = code("js/ui/modal.js");
@@ -671,6 +675,7 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
   const SKIP = {
     "rotate-device": "CSS-gated, never toggled by `hidden`; two buttons, no scroll region, no selected state",
     "photo-controls": "no scroll region; its buttons are actions, none carries a selected class",
+    "screen-arranger": "mounted on demand, native overflow and native region and step selects",
     "hud-arrange-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
     loading: "status plate — no scroll region, no selected chips",
   };

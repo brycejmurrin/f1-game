@@ -873,7 +873,9 @@ const PhonePadPage = (function () {
     const show = (on) => { if (dom.sheet) dom.sheet.hidden = !on; if (on && dom.done && dom.done.focus) dom.done.focus(); else if (!on && dom.open && dom.open.focus) dom.open.focus(); };
     // ARRANGE: capture-phase pointers on the stage, so a drag on GAS moves GAS and never presses it.
     const A = dom.arrange || {}, idOf = new Map(Object.entries(A).map(([id, el]) => [el, id]));
-    let picked = null, drag = null;
+    let picked = null, drag = null, baseline, opener, frame = 0, coarse = false;
+    const history = [];
+    const remember = () => { if (history.length >= 50) history.shift(); history.push(cur); };
     const pts = new Map();
     const W = () => (typeof innerWidth === "number" ? innerWidth : 800), H = () => (typeof innerHeight === "number" ? innerHeight : 400);
     const placeOf = (id) => cur.place[id] || { x: 0, y: 0, s: 100 };
@@ -892,23 +894,71 @@ const PhonePadPage = (function () {
     function pick(id) {
       if (picked && A[picked] && A[picked].classList) A[picked].classList.remove("picked");
       picked = id; if (id && A[id] && A[id].classList) A[id].classList.add("picked");
-      if (dom.barName) dom.barName.textContent = id ? label(id).toUpperCase() + " · " + Math.round(placeOf(id).s) + "%" : "TAP A CONTROL";
+      if (dom.picker && id) dom.picker.value = id;
+      if (dom.undo) dom.undo.disabled = !history.length;
+      const p = placeOf(id);
+      if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "%" : "Select a control";
       markClashes();
     }
     function put(id, p, save) {
       const place = Object.assign({}, cur.place, { [id]: p });
       if (save) set(Object.assign({}, cur, { place })); else { cur = Object.assign({}, cur, { place: normalisePlace(place) }); placeEl(A[id], cur.place[id]); }
-      pick(id);
+      if (!drag) pick(id);
     }
     function sizeBy(id, factor, save) {
       const el = A[id], p = placeOf(id), r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
       put(id, { x: p.x, y: p.y, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
     }
     const arranging = () => !!(dom.body && dom.body.classList && dom.body.classList.contains("arranging"));
-    function arrange(on) {
-      if (dom.body && dom.body.classList) dom.body.classList.toggle("arranging", on);
+    function restore(snapshot) { cur = applyLayout(dom, snapshot); paint(); pick(picked); }
+    function arrange(on, accept = true) {
+      if (on === arranging()) return;
+      if (on) { baseline = cur; opener = dom.doc?.activeElement; }
+      else { stopDrag(true); if (accept && cur !== baseline) set(cur); else restore(baseline); }
+      dom.body.classList.toggle("arranging", on);
       if (dom.bar) dom.bar.hidden = !on;
-      if (on) { show(false); pick(null); } else { pts.clear(); drag = null; pick(null); }
+      history.length = 0;
+      if (on) {
+        show(false);
+        if (dom.tools) { dom.tools.hidden = true; dom.adjust.setAttribute("aria-expanded", "false"); }
+        dom.bar?.removeAttribute("data-bottom");
+        const ids = Object.keys(A).filter(id => A[id]?.getClientRects().length);
+        if (dom.picker) {
+          dom.picker.replaceChildren();
+          for (const id of ids) {
+            const option = dom.doc.createElement("option");
+            option.value = id; option.textContent = id === "screen" ? "Dashboard" : label(id);
+            dom.picker.appendChild(option);
+          }
+          dom.picker.focus();
+        }
+        pick(ids[0] || null);
+      } else {
+        pick(null);
+        (opener?.getClientRects?.().length ? opener : dom.open)?.focus?.();
+      }
+    }
+    function paintDrag() {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      if (!drag || !drag.next) return;
+      put(drag.id, drag.next, false);
+      drag.next = null;
+    }
+    function stopDrag(keep) {
+      if (!drag) return;
+      if (keep) paintDrag();
+      else {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0; restore(drag.before);
+      }
+      const before = drag.before;
+      drag = null; pts.clear();
+      if (keep && cur !== before) {
+        if (history.length >= 50) history.shift();
+        history.push(before);
+      }
+      pick(picked);
     }
     if (dom.stage) {
       const stop = (e) => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); };
@@ -916,10 +966,16 @@ const PhonePadPage = (function () {
       dom.stage.addEventListener("pointerdown", (e) => {
         if (!arranging()) return;
         stop(e);
-        const id = hit(e.target); if (!id) return;
+        const id = hit(e.target); if (!id || (drag && (id !== drag.id || pts.size >= 2))) return;
+        if (dom.tools && !dom.tools.hidden) {
+          dom.tools.hidden = true;
+          dom.adjust.setAttribute("aria-expanded", "false");
+        }
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pts.size === 1) { const p = placeOf(id); drag = { id, x0: e.clientX, y0: e.clientY, p }; pick(id); }
-        else if (pts.size === 2 && drag) { const [a, b] = [...pts.values()]; drag.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: placeOf(drag.id).s }; }
+        if (pts.size === 1) { const p = placeOf(id); drag = { id, before: cur, x0: e.clientX, y0: e.clientY, p }; pick(id); }
+        else if (pts.size === 2 && drag) { const [a, b] = [...pts.values()]; paintDrag();
+          const box = A[id].getBoundingClientRect(), floor = minScale(box.width, box.height, placeOf(id).s);
+          drag.pinch = { floor, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: placeOf(drag.id).s }; }
         try { dom.stage.setPointerCapture && dom.stage.setPointerCapture(e.pointerId); } catch (_) { /* a drag without capture still tracks while over the stage */ }
       }, true);
       dom.stage.addEventListener("pointermove", (e) => {
@@ -927,25 +983,66 @@ const PhonePadPage = (function () {
         stop(e); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (drag.pinch && pts.size >= 2) {
           const [a, b] = [...pts.values()], f = Math.hypot(a.x - b.x, a.y - b.y) / drag.pinch.d0;
-          const p = placeOf(drag.id); sizeBy(drag.id, (drag.pinch.s0 * f) / p.s, false);
+          drag.next = { ...placeOf(drag.id), s: Math.max(drag.pinch.floor, drag.pinch.s0 * f) };
         } else if (!drag.pinch) {
-          put(drag.id, { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s }, false);
+          drag.next = { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s };
         }
+        if (!frame && typeof requestAnimationFrame === "function") frame = requestAnimationFrame(paintDrag);
+        else if (!frame) paintDrag();
       }, true);
       const end = (e) => {
         if (!arranging()) return;
+        if (!pts.has(e.pointerId)) return;
         stop(e); pts.delete(e.pointerId);
-        if (drag && !pts.size) { const id = drag.id; drag = null; set(Object.assign({}, cur)); pick(id); }
+        if (!pts.size || e.type !== "pointerup") stopDrag(e.type === "pointerup");
+        else if (drag) {
+          paintDrag();
+          const [point] = pts.values();
+          Object.assign(drag, {pinch:null, p:placeOf(drag.id), x0:point.x, y0:point.y});
+        }
       };
       dom.stage.addEventListener("pointerup", end, true); dom.stage.addEventListener("pointercancel", end, true);
-      for (const t of ["click", "contextmenu"]) dom.stage.addEventListener(t, (e) => { if (arranging()) stop(e); }, true);
+      dom.stage.addEventListener("lostpointercapture", end, true);
+      for (const t of ["click", "contextmenu", "keydown", "keyup"]) dom.stage.addEventListener(t, (e) => { if (arranging()) stop(e); }, true);
     }
     if (dom.arrangeBtn) dom.arrangeBtn.addEventListener("click", () => arrange(true));
     if (dom.arrangeDone) dom.arrangeDone.addEventListener("click", () => arrange(false));
-    if (dom.minus) dom.minus.addEventListener("click", () => { if (picked) sizeBy(picked, 0.9, true); });
-    if (dom.plus) dom.plus.addEventListener("click", () => { if (picked) sizeBy(picked, 1.1, true); });
-    if (dom.resetOne) dom.resetOne.addEventListener("click", () => { if (!picked) return; const place = Object.assign({}, cur.place); delete place[picked]; const id = picked; set(Object.assign({}, cur, { place })); pick(id); });
-    if (dom.resetAll) dom.resetAll.addEventListener("click", () => { set(Object.assign({}, cur, { place: {} })); pick(null); });
+    dom.cancel?.addEventListener("click", () => arrange(false, false));
+    dom.picker?.addEventListener("change", () => pick(dom.picker.value));
+    dom.adjust?.addEventListener("click", () => {
+      dom.tools.hidden = !dom.tools.hidden; dom.adjust.setAttribute("aria-expanded", String(!dom.tools.hidden));
+    });
+    dom.edge?.addEventListener("click", () => dom.bar.toggleAttribute("data-bottom"));
+    dom.step?.addEventListener("click", () => {
+      coarse = !coarse; dom.step.textContent = coarse ? "Coarse" : "Fine"; dom.step.setAttribute("aria-pressed", String(coarse));
+    });
+    const edit = fn => { stopDrag(true); remember(); fn(); };
+    const dirs = {left:[-1,0], right:[1,0], up:[0,-1], down:[0,1]};
+    for (const button of dom.nudges || []) button.addEventListener("click", () => {
+      if (!picked) return;
+      const [x,y] = dirs[button.dataset.nudge], n = coarse ? 5 : 1;
+      edit(() => { const p = placeOf(picked); put(picked, { ...p, x:p.x + x*n, y:p.y + y*n }, false); });
+    });
+    for (const [button, factor] of [[dom.minus, 0.9], [dom.plus, 1.1]]) button?.addEventListener("click", () => {
+      if (picked) edit(() => sizeBy(picked, factor, false));
+    });
+    dom.undo?.addEventListener("click", () => { stopDrag(true); if (history.length) restore(history.pop()); });
+    dom.resetOne?.addEventListener("click", () => { if (picked) edit(() => put(picked, {x:0,y:0,s:100}, false)); });
+    dom.resetAll?.addEventListener("click", () => edit(() => restore(LAYOUT_PRESETS.classic)));
+    dom.bar?.addEventListener("keydown", e => {
+      if (e.key !== "Tab") return;
+      const controls = Array.from(dom.bar.querySelectorAll("button,select")).filter(el => !el.disabled && el.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (e.shiftKey ? e.target === first : e.target === last) {
+        e.preventDefault(); (e.shiftKey ? last : first).focus();
+      }
+    });
+    dom.doc?.addEventListener?.("keydown", e => {
+      if (arranging() && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); arrange(false, false); }
+    }, true);
+    if (typeof window !== "undefined") {
+      for (const name of ["blur", "resize"]) window.addEventListener(name, () => stopDrag(false));
+    }
     if (dom.open) dom.open.addEventListener("click", () => show(true));
     if (dom.done) dom.done.addEventListener("click", () => show(false));
     cur = applyLayout(dom, cur); paint();

@@ -21,7 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 seedLogGlobal();
 seedStoreGlobal();
 
-function loadQuality() {
+function loadQuality(navigator = globalThis.navigator) {
   const qsrc = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
   return eval(qsrc + ";GfxQuality");
 }
@@ -64,6 +64,12 @@ test("defaultId: weak phones LOW, capable MEDIUM, desktop HIGH, legacy phone HIG
   assert.equal(Q.defaultId(true, { weak: true }), "high",
     "legacy opt-in still cannot land ULTRA on a phone");
   GameStore.store.rawSet("apex26.gfxHigh", null);
+});
+
+test("a fresh WebGPU-capable iPhone uses LOW; an iPad or Android phone uses MEDIUM", () => {
+  for (const [userAgent, expected] of [["Mozilla/5.0 (iPhone; CPU iPhone OS 18)", "low"], ["iPad", "medium"], ["Android", "medium"]]) {
+    assert.equal(loadQuality({ userAgent, gpu: {} }).defaultId(true), expected);
+  }
 });
 
 test("isWeakPhone: deviceMemory < 4 and missing navigator.gpu", () => {

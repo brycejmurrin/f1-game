@@ -27,9 +27,9 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 
 ## Default-first visual verification
 
-Bryce's profile first — 844×390 landscape, touch (AGENTS.md §Critical conventions): one cell is
-`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens=<id>` (parent only; the default
-viewport `ios-iphone-landscape` is not his phone — `--help`). Then shipped settings, stress cases labelled separately:
+Use Bryce’s saved settings and standard iPhone 15 landscape window (852×393 CSS px at 3×) first:
+`node tools/ui/layout-audit.mjs --viewports=bryce-standalone --screens=<id>` (parent only).
+Then test shipped settings and label stress cases separately. See
 **survey-ui-matrix** `references/verification.md` §Default-first visual verification (one copy).
 
 ## Quick Reference

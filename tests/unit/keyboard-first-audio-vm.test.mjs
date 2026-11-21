@@ -16,7 +16,7 @@ const turns = async (n) => { for (let i = 0; i < n; i++) await new Promise((r) =
 
 test("keyboard-first Enter on the title loads real GameAudio and title music", async () => {
   let fa = null;
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  const g = await createGame({ carMeshes: false, storage: { sound: true, music: true }, onSandbox: (sb) => { fa = install(sb); } });
   try {
     const sb = g.sandbox;
     assert.equal(sb.GameAudio._stub, true, "precondition: title boots on LAZY_AUDIO stub");

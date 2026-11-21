@@ -106,11 +106,20 @@ const SettingsNav = (function () {
     if (presetsLoad) return presetsLoad;
     if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
-    presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
+    const files = R.LAZY_UI_PRESETS.filter(file => file !== "js/ui/screen-arranger.js" && file !== "js/ui/hud-arrange.js");
+    presetsLoad = ScriptLoader.create().load(files, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
       .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
     return presetsLoad;
   }
   enterFns.push((id) => { if (id === "appearance") presets(); });
+  if (typeof document !== "undefined" && document.addEventListener) {
+    // Contextual editors become available on first navigation. A customized
+    // installation restores its regions before the first navigation instead.
+    document.addEventListener("pointerdown", presets, { once: true, capture: true });
+    document.addEventListener("keydown", presets, { once: true, capture: true });
+    document.addEventListener("click", presets, { once: true, capture: true });
+    if (typeof GameStore !== "undefined" && GameStore.store.get("screenPlacement", null)) presets();
+  }
 
   function panels() {
     return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
