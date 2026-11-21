@@ -19063,10 +19063,12 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "snapshot": [
-        "tests/unit/appearance-studio.test.mjs"
+        "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
       ],
       "undo": [
-        "tests/unit/appearance-studio.test.mjs"
+        "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
       ],
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -20363,6 +20365,9 @@
       "state": [
         "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs"
       ]
     },
     "js/ui/photo-studio.js": {
