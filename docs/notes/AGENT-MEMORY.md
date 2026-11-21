@@ -14,19 +14,18 @@ the `assume-unchanged` mark are retired.
 
 | store | where | loaded | written by |
 |---|---|---|---|
-| Instructions | `AGENTS.md` (via `CLAUDE.md`), `docs/WORKERS.md`, `.claude/rules/` (by `paths:`) | every session | people, reviewed |
+| Instructions | `AGENTS.md` (via `CLAUDE.md`), `.claude/skills/steward/SKILL.md`, `.claude/rules/` (by `paths:`) | every session | people, reviewed |
 | Decisions | `docs/DECISIONS.md` (`D-NNN` rows) | when a rule or test cites one | a PR, one row per decision |
 | Measured facts | the doc that uses them; a note with `Kind:` + `Re-measure-by:` | when cited | a PR; `tools/docs/knowledge-gc.mjs` flags an overdue re-measure |
 | Preferences (auto memory) | tracked: `.claude/memory/`; Claude live: `~/.claude/projects/<repo>/memory/` | every host reads the tracked copy; Claude also loads the first 200 lines / 25 KB of `MEMORY.md` | people and Claude, through a PR |
 
 Coordination behaviour (merge commits, the `hold` label, `land`, subscribe, PT,
-phone-first) lives in AGENTS.md §Coordination and `docs/WORKERS.md` — never in
+phone-first) lives in AGENTS.md §Coordination and `.claude/skills/steward/SKILL.md` — never in
 the memory index (`agent-config.test.mjs` refuses the keywords there).
 
 ## One-way restore (the design since 2026-11-03)
 
-- **The tracked `.claude/memory/` is the only store.** `session-start.sh` runs
-  `memory-sync.sh restore`: copy `.claude/memory/*.md` into the live auto-memory
+- **The tracked `.claude/memory/` is the only store.** `memory-sync.sh restore` is its own SessionStart hook in `.claude/settings.json`, listed after `session-start.sh`: copy `.claude/memory/*.md` into the live auto-memory
   dir before the first prompt, overwriting what is there (the repo wins). That
   is the whole hook: no `save` on PostToolUse or Stop, no baseline directory
   under `artifacts/`, no three-way merge, no `git update-index --assume-unchanged`

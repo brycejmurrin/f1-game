@@ -589,7 +589,7 @@ const SP_VIEWS = {
 // POINT, AND IT IS THE CAR'S CENTRE. These used to be [0, 0.35, -1.0] and
 // [0, 0.35, 0] — a camera circling a point 1 m BEHIND the one it looked at,
 // swinging the car across the frame instead of rotating it in place. The drawn
-// body spans z -2.69..3.18 (measured), so its centre is z +0.245, not 0 and not -1.
+// body spans z -2.69..2.72, centre z ≈ +0.015, not 0 and not -1.
 const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();

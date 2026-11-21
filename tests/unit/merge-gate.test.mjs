@@ -2040,7 +2040,7 @@ test("#5407 evaluate: the retest row is local (never --trusted), waits with a pe
 /** A fixture ratchets.d fragment path no tree carries, built so the source-path lint does not read it as a reference. */
 const FRAG = (name) => ["tests", "data", "ratchets.d", `${name}.json`].join("/");
 
-test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bound to the head; lower, unchanged and per-file pass", () => {
+test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet-raise (D-042), bound to the head; lower, unchanged and per-file pass", () => {
   assert.equal(RAISE_LABEL, "ratchet-raise");
   const b64 = (o) => ({ json: { encoding: "base64", content: Buffer.from(JSON.stringify(o)).toString("base64") } });
   const MB = "m".repeat(40);
@@ -2086,11 +2086,19 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   let r = rowOf();
   assert.equal(r.ok, false);
   assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (assertPins 105→108) — lower the count instead, or ask him");
-  // An agent's label (through an app) never counts.
+  // An agent's label (through the Claude app) counts since D-042 (Bryce 2026-11-20 "Routine both"), bound to the head.
   f.pull.labels = [{ name: "ratchet-raise" }]; f.events.push(ev("ratchet-raise", "2026-11-03T10:00:00Z", { app: APP }));
   r = rowOf();
+  assert.equal(r.ok, true, r.evidence);
+  assert.equal(r.evidence, "ratchet-raise added by agent (brycejmurrin via app claude) at 2026-11-03T10:00:00Z covers assertPins 105→108 (labelled after the head aaaaaaaa was pushed)");
+  // Bryce's own removal vetoes the agent's re-add until his own click.
+  f.events.push({ ...ev("ratchet-raise", "2026-11-03T10:10:00Z"), event: "unlabeled" }, ev("ratchet-raise", "2026-11-03T10:20:00Z", { app: APP }));
+  r = rowOf();
   assert.equal(r.ok, false);
-  assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the label was last added by brycejmurrin via app claude — only his own click counts (raises assertPins 105→108)");
+  assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: he removed it himself at 2026-11-03T10:10:00Z, so an agent's re-add does not count until his own (raises assertPins 105→108)");
+  // A label from another login or another app never counts.
+  assert.equal(raiseVerdict([{ metric: "assertPins", from: 105, to: 108 }], ["ratchet-raise"], [{ ...ev("ratchet-raise", "2026-11-03T10:00:00Z"), actor: { login: "someone" } }]).evidence,
+    "needs ratchet-raise from brycejmurrin: the label was last added by someone — only his own click, or an agent's (claude app), counts (raises assertPins 105→108)");
   // Bryce's own click after the head was pushed (its first ci.yml run, 09:00): passes.
   f.events.push(ev("ratchet-raise", "2026-11-03T10:30:00Z"));
   r = rowOf();

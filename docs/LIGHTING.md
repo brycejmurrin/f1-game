@@ -58,11 +58,11 @@ divisors so every exposed slider extreme remains finite.
 
 | ID | Range | Neutral | Purpose |
 |---|---:|---:|---|
-| `blacks` | −1.5…1.5 | 0 | Deepest near-black detail (shader stop gain ×3, then `exp2` clamps ±4) |
-| `shadows` | −1.5…1.5 | 0 | Dark asphalt, tyres and unlit surfaces (stop gain ×2) |
-| `midtones` | −3…3 | 0 | Middle-grey paint and environment detail |
-| `highlights` | −3…3 | 0 | Bright surfaces below peak white |
-| `whites` | −3…3 | 0 | Brightest HDR values entering the ACES shoulder |
+| `blacks` | −0.6…0.6 | 0 | Deepest near-black detail (shader stop gain ×3, then `exp2` clamps ±4) |
+| `shadows` | −0.55…0.55 | 0 | Dark asphalt, tyres and unlit surfaces (stop gain ×2) |
+| `midtones` | −2…1.4 | 0 | Middle-grey paint and environment detail |
+| `highlights` | −1…1.5 | 0 | Bright surfaces below peak white |
+| `whites` | −1.8…3 | 0 | Brightest HDR values entering the ACES shoulder |
 | `toe` | −1…1 | 0 | Transition out of black |
 | `shoulder` | −1…1 | 0 | Highlight compression before ACES |
 
@@ -440,14 +440,16 @@ per-track subagents read it, and it tracks which tracks are done.
 ### How a preset resolves (later wins)
 
 ```
-TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localStorage
+TUNE_DEFS default  →  file "*"  →  shared "*|<tod>|<wx>"
+  →  file "track|tod|wx"  →  "*|<tod>" (after track key)
+  →  each knob shippedMax cap  →  player "*"  →  player "track|tod|wx"
+  →  clamp to min/max
 ```
 
 - `js/lighting/knobs.js` `TUNE_DEFS` holds each knob's factory **default**.
-- `js/lighting/presets.js` `window.LightPresets` holds the shipped overrides:
-  - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35` near-matte paint, plus the shipped broadcast HDR grade: blacks/shadows/midtones/highlights/whites/toe/shoulder and small gainR/gainB trims).
-  - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
-- A player's live tuner edits always win over the file; RESET falls back to the file.
+- `js/lighting/profiles.js` `shippedAt` walks `js/lighting/presets.js` `window.LightPresets` in that order (later stamps win). `"*"` is the global baseline (e.g. `carGloss: 0.35` and the shipped broadcast HDR grade). `"*|<tod>|<wx>"` shares knobs across tracks for one time-of-day and weather. `"track|tod|wx"` is the per-condition override. `"*|<tod>"` applies **after** the track key (time-of-day-only shared stamps). Each knob's `shippedMax` caps the shipped value before player layers.
+- **Exception:** `perChunkLights` merges the track pin and the `"*|<tod>"` layer as `Math.max(trackPin, condValue)` instead of a straight override (`mergePerChunkShipped`).
+- Player overrides live in localStorage (`"*"` then `"track|tod|wx"`); the tuner always wins over shipped presets. RESET drops player layers and falls back through `shippedAt` / `base()`.
 - **The sun is keyed by track × time of day.** `sunElev` / `sunAzim` resolve from the
   `"track|tod|dry"` profile for every weather (shipped and player layers alike), and the
   tuner writes them there whatever the weather on screen — weather does not move the sun.

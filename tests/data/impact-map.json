@@ -17819,6 +17819,9 @@
       "fromRaw": [
         "tests/unit/track-def-factory.test.mjs"
       ],
+      "realPoints": [
+        "tests/unit/circuit-def-fields.test.mjs"
+      ],
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hw-zones.test.mjs"
