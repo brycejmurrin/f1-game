@@ -6,6 +6,7 @@
     }
   },
   "tree": {
-    "eagerCodeBytes": 2510
+    "assertPinsAll": -1,
+    "eagerCodeBytes": 2519
   }
 }

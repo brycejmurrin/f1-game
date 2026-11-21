@@ -75,6 +75,8 @@ export default function register() {
       const night = await inspect("night");
       return {
         definition: {
+          firstPoolChicaneExit: definition.turns[13], // T14, exit of the first pool chicane
+          afterPool: definition.turns[16], // T17, on the approach to Rascasse
           terrainOuter: definition.terrainOuter,
           sceneryCoordinates: definition.sceneryCoordinates,
           dressingExclusions: definition.dressingExclusions,
@@ -123,8 +125,8 @@ export default function register() {
       expect(Math.abs(session.elevation.range - 41.8)).toBeLessThan(1);
       expect(session.elevation.maxFrac).toBeGreaterThan(0.20);
       expect(session.elevation.maxFrac).toBeLessThan(0.29);
-      expect(session.elevation.minFrac).toBeGreaterThan(0.75);
-      expect(session.elevation.minFrac).toBeLessThan(0.85);
+      expect(session.elevation.minFrac).toBeGreaterThan(result.definition.firstPoolChicaneExit);
+      expect(session.elevation.minFrac).toBeLessThan(result.definition.afterPool);
 
       expect(session.walls.anyNaN).toBe(false);
       expect(session.walls.tightFrac).toBe(1);

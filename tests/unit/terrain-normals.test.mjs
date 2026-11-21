@@ -170,6 +170,37 @@ test("Hugenholtz asphalt and paint coordinates follow the progressive bank acros
   }
 });
 
+test("the shoulders retain the asphalt edge lift and shed its crossfall", () => {
+  const Tracks = _ctx || (_ctx = buildContext());
+  const def = Tracks.LIST.find(d => d.id === "zandvoort");
+  const tr = Tracks.buildCenterline(def);
+  const M = Tracks._vmContext.TrackMesh;
+  const banked = M.buildRoad(tr), flat = M.buildRoad({ ...tr, bankP: null });
+  const k = Math.round(def.turns[2] * tr.n), s = k * tr.total / tr.n;
+  const up = M.upOf(tr, k);
+  for (const side of [-1, 1]) {
+    const edgeX = side * tr.hw[k];
+    const edge = Tracks.banking(tr, s, edgeX);
+    const expectedDeg = side < 0 ? 4.5 : 19;
+    assert.ok(Math.abs(edge.roll * 180 / Math.PI - expectedDeg) < 0.01);
+    assert.equal(Tracks.bankAngle(tr, s, edgeX), edge.roll);
+    for (const col of side < 0 ? [0, 1] : [12, 13]) {
+      const i = 3 * (k * 14 + col);
+      const x = banked.trk[i + 1];
+      assert.ok(side * (x - edgeX) > 0);
+      // Subtract the unbanked mesh to isolate camber from the verge's own drainage slope.
+      const lift = up.reduce((h, u, j) => h + u * (banked.pos[i + j] - flat.pos[i + j]), 0);
+      assert.ok(Math.abs(lift - edge.dy) < 1e-5);
+      for (const smooth of [false, true]) {
+        const shoulder = Tracks.banking(tr, s, x, {}, smooth);
+        assert.ok(Math.abs(shoulder.dy - lift) < 1e-5);
+        assert.equal(shoulder.roll, 0);
+      }
+      assert.equal(Tracks.bankAngle(tr, s, x), 0);
+    }
+  }
+});
+
 // The AI brake planner reads Tracks.bankAngle; the executor reads banking().
 // They must be one channel: on Zandvoort the planner saw 0 while the executor
 // applied a 19° bowl's grip.

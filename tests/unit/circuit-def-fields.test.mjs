@@ -505,7 +505,7 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
   near(crest, mc.T(4), "Monaco high point = Casino");
   // OpenF1 2024 qualifying, laps 25 (Leclerc) and 23 (Piastri):
   // the low section continues past the chicane alongside the pool.
-  assert.ok(low.f > 0.75 && low.f < 0.85, `Monaco harbour low at ${low.f}`);
+  assert.ok(low.f > mc.T(14) && low.f < mc.T(17), `Monaco harbour low at ${low.f}`);
   const tunnel = mc.ext(0.51, 0.56, -1);
   assert.ok(tunnel.y - low.y > 5, "Monaco tunnel deck sits above the harbour low");
   assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);

@@ -188,8 +188,9 @@ test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", () => {
     const bank = Tracks.banking(track, frac * track.total, x);
     return Math.abs((bank?.roll || 0) * 180 / Math.PI);
   };
-  const peak = Math.round(def.turns[2] * track.n) / track.n;  // T3, banked left
-  const inside = rollDeg(peak, -Infinity), outside = rollDeg(peak, Infinity);
+  const k = Math.round(def.turns[2] * track.n);  // T3, banked left
+  const peak = k / track.n, edge = track.hw[k];
+  const inside = rollDeg(peak, -edge), outside = rollDeg(peak, edge);
   const luyendyk = rollDeg(def.turns[13]);     // T14, the banked final RIGHT
   const others = def.turns.filter((_, i) => i !== 2 && i !== 13).map(f => rollDeg(f));
   closeTo(inside, 4.5, 1, "Hugenholtz inside banking");

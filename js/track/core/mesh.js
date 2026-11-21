@@ -557,9 +557,10 @@ const TrackMesh = (function () {
     if (!signedLift) return 0;
     const w0 = track.hw[k], w1 = track.hw[j];
     const w = w0 + (w1 - w0) * f;
+    if (x < -w || x > w) return 0;
     if (x && bp.varying) {
       const change = lerp(bp.varying[k] * bp.lift[k], bp.varying[j] * bp.lift[j], f);
-      return Math.atan2(signedLift + change * Math.max(-1, Math.min(1, x / w)), 2 * w);
+      return Math.atan2(signedLift + change * (x / w), 2 * w);
     }
     return Math.atan2(signedLift, 2 * w);
   }
@@ -610,7 +611,8 @@ const TrackMesh = (function () {
       laneLift = change * cx / w;
     }
     o.dy = (signedLift + laneLift / 2) * cx / (2 * w);
-    o.roll = Math.atan2(signedLift + laneLift, 2 * w);
+    // Beyond the asphalt the kerb and verge carry the edge lift across their width.
+    o.roll = x === cx ? Math.atan2(signedLift + laneLift, 2 * w) : 0;
     return o;
   }
 
