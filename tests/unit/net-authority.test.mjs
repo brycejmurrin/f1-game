@@ -525,6 +525,8 @@ function lobbyG() {
     raceTyreWear: "off", raceReliability: "off",   // a test re-defines these as persisting accessors
     setNetRoom: () => {},
     store: { get: (k, dflt) => dflt, set: () => {} },
+    // Real members a test sets, or beginRace writes, later (the fake is closed, #5982).
+    openQualiForNet: undefined, seed: 0, flow: undefined,
   });
   REC.set(G, r);
   return G;
