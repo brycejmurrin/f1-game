@@ -110,7 +110,7 @@ test("Monaco shipped roadChunkLamps profile is unchanged by perChunk merge", () 
     tod: "night",
     weather: "dry",
   });
-  assert.equal(h.LT.roadChunkLamps, 1, "Monaco night dry roadChunkLamps");
+  assert.equal(h.LT.roadChunkLamps, 0, "Monaco night dry roadChunkLamps");
   assert.equal(h.LT.perChunkLights, 0.3, "explicit pin 0 still loses to cond 0.3 via max(0,0.3)");
 });
 

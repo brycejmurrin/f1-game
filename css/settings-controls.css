@@ -137,6 +137,17 @@
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
+/* A single native choice owns each touch-response row. Size it to its longest
+   option, retaining the platform arrow. The flex row wraps on narrow sheets. */
+#pmsettings-inner #pm-touch-response-fields .set-row > .tune-label {
+  white-space: normal; overflow-wrap: anywhere; text-align: start;
+}
+#pmsettings-inner #pm-touch-response-fields .set-row > div { flex: 0 1 auto; }
+#pmsettings-inner #pm-touch-response-fields .set-row select {
+  -webkit-appearance: auto; appearance: auto;
+  flex: 0 1 auto; width: max-content; max-width: 100%; min-width: min(100%, 9em);
+  min-height: max(var(--chip-h), var(--tap-paint));
+}
 /* tuner.css sets .adv-help { opacity: 0.6 } on --text — on a 225px card that
    is low-contrast grey. Restore full ink inside Settings; dim via --steel. */
 #pmsettings-inner .adv-help {

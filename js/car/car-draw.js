@@ -1148,9 +1148,7 @@ const CarDraw = (function () {
           // calls during race warm (before the first clean present) and trip
           // INVALID_OPERATION on later baked-material frames (assets-api).
           const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
-          for (let th = 0; th <= 4; th++) {
-            for (let br = 0; br <= 4; br++) getWheelStatus(mph, th, br);
-          }
+          getWheelStatus(mph);   // unit plate and the two continuous pedal fills
           getAeroLamp(0); getAeroLamp(1); getAeroLamp(2);
           getAeroBar(false); getAeroBar(true);
         } catch (e) { Log.warn("gfx", "cockpit/LCD mesh warm failed", e); }
@@ -1619,7 +1617,7 @@ const CarDraw = (function () {
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
       d(getErsBar(), _rigFx); _rigFxA.alpha = 0.75; d(getErsBar(), _rigFxA);
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
-      if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
+      if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 9; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
       if (paint) {
         const co = coOpt(paint), cars = G.cars;

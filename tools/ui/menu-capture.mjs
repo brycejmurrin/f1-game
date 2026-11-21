@@ -12,6 +12,7 @@
 //   await runMenuGallery({ jobs: 2, force: false });
 //
 // CLI: node tools/ui/layout-audit.mjs --gallery | --screen=ID | --list | --report
+import { imageSize } from "./issue-shots.mjs";
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import fs from "node:fs";
 import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
@@ -67,9 +68,19 @@ export function cellPaths(outDir, screenId, vpName) {
   };
 }
 
-export function cellRecorded(outDir, screenId, vpName) {
+export function cellRecorded(outDir, screenId, vpName, options) {
   const { png, dom } = cellPaths(outDir, screenId, vpName);
-  return fs.existsSync(png) && fs.existsSync(dom);
+  if (!fs.existsSync(png) || !fs.existsSync(dom)) return false;
+  if (!options?.viewport) return true;
+  // A gallery directory may still contain the former 2× iPhone captures.
+  const fd = fs.openSync(png, "r");
+  try {
+    const header = Buffer.alloc(24);
+    if (fs.readSync(fd, header) !== header.length) return false;
+    const size = imageSize(header);
+    const dpr = options.deviceScaleFactor || 1;
+    return size?.type === "png" && size.width === options.viewport.width * dpr && size.height === options.viewport.height * dpr;
+  } finally { fs.closeSync(fd); }
 }
 
 function resolveViewport(name) {
@@ -196,7 +207,7 @@ export async function runMenuShot(opts = {}) {
   const outDir = opts.outDir || DEFAULT_OUT;
   const force = !!opts.force;
 
-  if (!force && cellRecorded(outDir, screen.id, vpTag)) {
+  if (!force && cellRecorded(outDir, screen.id, vpTag, vpOpts)) {
     const paths = cellPaths(outDir, screen.id, vpTag);
     return { ok: true, skipped: true, screen: screen.id, viewport: vpTag, ...paths };
   }
@@ -290,7 +301,7 @@ export async function runMenuGallery(opts = {}) {
         onCell(`${cell.screen.padEnd(13)} ${vpName.padEnd(28)} SKIPPED: boot failed`);
         continue;
       }
-      if (!force && cellRecorded(outDir, screen.id, vpName)) {
+      if (!force && cellRecorded(outDir, screen.id, vpName, vpOpts)) {
         const paths = cellPaths(outDir, screen.id, vpName);
         cell.shot = paths.relShot;
         cell.dom = paths.relDom;

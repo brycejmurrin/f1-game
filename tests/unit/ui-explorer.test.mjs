@@ -581,12 +581,13 @@ test("UI profiles preserve descriptor browser chrome, DPR and touch while labeli
   const { resolveUIProfile, uiTestOptions } = await import("../../tools/lib/ui-device-profile.mjs");
   const { devices } = await import("playwright");
   const phone = resolveUIProfile({ touch: true });
-  assert.equal(phone.contextOptions.userAgent, devices['iPhone 13'].userAgent);
+  assert.equal(phone.profile.device, 'iPhone 15');
   assert.equal(phone.contextOptions.deviceScaleFactor, 3);
   assert.equal(phone.contextOptions.isMobile, true);
   assert.equal(phone.contextOptions.hasTouch, true);
-  assert.deepEqual(phone.contextOptions.viewport, devices['iPhone 13'].viewport);
-  assert.deepEqual(phone.contextOptions.screen, devices['iPhone 13'].screen);
+  assert.deepEqual(phone.contextOptions.viewport, { width: 393, height: 852 });
+  assert.deepEqual(phone.contextOptions.screen, devices['iPhone 15'].screen);
+  assert.deepEqual(resolveUIProfile({ touch: true, viewport: { width: 852, height: 368 } }).contextOptions.screen, { width: 852, height: 393 });
   assert.equal(phone.profile.kind, 'device-emulation');
   const tablet = uiTestOptions({ device: 'iPad Mini' });
   assert.deepEqual(tablet.contextOptions.screen, { width: 768, height: 1024 });
@@ -617,7 +618,29 @@ test("full-screen catalog cells stay full-screen when Playwright's browser-chrom
     assert.deepEqual(options.viewport, { width, height });
     assert.deepEqual(options.screen, { width, height });
     assert(options.isMobile && options.hasTouch);
+    if (id !== 'ios-iphone-landscape-844') assert.equal(options.deviceScaleFactor, 3);
   }
+  for (const [id, viewport, screen] of [
+    ['bryce-standalone', [852, 393], [852, 393]],
+    ['bryce-portrait', [393, 852], [393, 852]],
+    ['bryce-safari', [852, 368], [852, 393]],
+    ['ios-iphone-landscape-safari', [852, 368], [852, 393]],
+  ]) {
+    const [, options] = VIEWPORTS.find(([name]) => name === id);
+    assert.deepEqual(options.viewport, { width: viewport[0], height: viewport[1] });
+    assert.deepEqual(options.screen, { width: screen[0], height: screen[1] });
+    assert.equal(options.deviceScaleFactor, 3);
+  }
+});
+
+test("16-inch M4 MacBook gallery uses default Retina screen geometry and native-density captures", async () => {
+  const { VIEWPORTS } = await import('../../tools/ui/menu-screens.mjs');
+  const [, options, , , capture] = VIEWPORTS.find(([name]) => name === 'desktop-macbook-pro-16-m4');
+  assert.deepEqual(options.viewport, { width: 1728, height: 1117 });
+  assert.deepEqual(options.screen, options.viewport);
+  assert.equal(options.deviceScaleFactor, 2);
+  assert.equal(capture.nativeDensity, true);
+  assert.ok(!options.hasTouch && !options.isMobile);
 });
 
 test("replay emits native taps for mobile profiles and clicks for desktop", async () => {

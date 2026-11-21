@@ -22,7 +22,8 @@ const SEED = 42;
 
 let g = null;
 before(async () => {
-  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
+  // The fixed 45 m/s recipe and yaw bounds were calibrated at notch 11.
+  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
 });
 after(() => { if (g) g.close(); });

@@ -2,6 +2,7 @@
 // (split from one 3,158-line file, T1-16, #3043): paths, the stdio / `call` transports, the browser lock
 // path, a batched tools/call runner and an apex-extras context stub. Moved verbatim; only `export` added.
 import assert from "node:assert/strict";
+import { after } from "node:test";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -67,7 +68,16 @@ export function callCli(name, args = {}, extraEnv = {}) {
   return r;
 }
 
-export const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
+// Keep in-process calls and their CLI children on the same suite-private lock.
+const lockDir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-test-browser-"));
+export const LOCK = path.join(lockDir, "browser.lock");
+const previousLock = process.env.APEX_BROWSER_LOCK;
+process.env.APEX_BROWSER_LOCK = LOCK;
+after(() => {
+  if (previousLock === undefined) delete process.env.APEX_BROWSER_LOCK;
+  else process.env.APEX_BROWSER_LOCK = previousLock;
+  fs.rmSync(lockDir, { recursive: true, force: true });
+});
 
 export const callTools = (calls) => {
   const out = rpc([

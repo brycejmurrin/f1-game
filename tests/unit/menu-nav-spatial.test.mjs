@@ -361,11 +361,11 @@ test("step(): Up from a tab rail reaches the sheet head's close, not the wrap to
 });
 
 test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => {
-  // freecam joins photo-controls / tl-editor so photo-cam arrows are not stolen.
-  assert.equal(/t\.id === "photo-controls" \|\| t\.id === "freecam" \|\| t\.id === "tl-editor"/.test(SRC), true);
   const overlay = { id: "overlay" };
   assert.equal(loadMenuNav({ layer: overlay }).activeLayer(), overlay);
-  for (const id of ["photo-controls", "freecam", "tl-editor"]) {
+  const toolbar = { id: "tl-editor" };
+  assert.equal(loadMenuNav({ layer: toolbar }).activeLayer(), toolbar);
+  for (const id of ["photo-controls", "freecam"]) {
     assert.equal(loadMenuNav({ layer: { id } }).activeLayer(), null, id);
   }
 });
@@ -436,4 +436,14 @@ test("page keys over a pane that does not scroll reach its ends and stay inside 
   sound.focus({ preventScroll: true });
   assert.equal(key("PageUp"), true);
   assert.equal(dom.document.activeElement, doors[0], "from the layer, PageUp reaches the layer's first item");
+});
+
+test("Down from the sheet footer reaches the editor below and outside its column", () => {
+  const { step } = loadMenuNav();
+  const options = el("options", 350, 350, 500, 40);
+  const start = el("rs-go", 620, 700, 140, 40, { closest: selector => selector === ".sheet-foot" ? {} : null });
+  const arrange = el("race-settings-arrange-entry", 1040, 754, 180, 40, {
+    classList: { contains: name => name === "screen-arrange-entry" },
+  });
+  assert.equal(step(start, 0, 1, [options, start, arrange]), arrange);
 });

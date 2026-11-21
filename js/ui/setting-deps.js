@@ -134,7 +134,7 @@ const SettingDeps = (function () {
     { key: "photo-scene", ids: ["ps-background"], runtime: true, reason: "Needs My photo scene",
       when: () => {
         if (typeof GameStore === "undefined" || !GameStore.store) return null;
-        if (GameStore.store.get("homeScene", "photo") === "photo") return true;
+        if (GameStore.store.get("homeScene", "static") === "photo") return true;
         const prev = byId("ps-preview");
         if (prev && prev.hidden) return null;
         return false;
