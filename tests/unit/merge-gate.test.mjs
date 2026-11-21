@@ -838,8 +838,8 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 });
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
-  assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
-  assert.deepEqual(jobsWhere(usesSecret), ["post", "train"], "LAND_TOKEN lives in post and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
+  assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry", "sweep"]);
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm", "train"], "LAND_TOKEN lives in post (disarm), arm and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train-screen", "train"], "only the read-only legs and the train check out or run code");
   // The train screen (#5864) runs the fold's own scripts (gen:check, the ratchets), so it is read-only like land-gate;
   // the build reads its verdict artifact as data and only ever runs the deploy branch's merge-train.mjs.
@@ -1056,16 +1056,16 @@ test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's o
 test("land.yml retry job: actions write only, no checkout, no repo code, no secret; runs after post and arm", () => {
   const j = LAND.jobs.retry;
   assert.deepEqual(j.permissions, { actions: "write" });
-  assert.deepEqual(j.needs, ["resolve", "post"]);
+  assert.deepEqual(j.needs, ["resolve", "post", "arm"]);
   assert.equal(runsRepoCode(j), false);
   assert.equal(usesSecret(j), false, "GITHUB_TOKEN: its workflow_dispatch is one of the two events it may start");
-  const needs = (post, arm) => ({ needs: { resolve: { result: "success" }, post: { outputs: { retry: post, arm_retry: arm } } } });
+  const needs = (post, arm) => ({ needs: { resolve: { result: "success" }, post: { outputs: { retry: post } }, arm: { outputs: { retry: arm } } } });
   assert.equal(ghExpr(j.if, needs("[]", "")), false);
   assert.equal(ghExpr(j.if, needs("", "")), false, "post skipped");
   assert.equal(ghExpr(j.if, needs('[{"number":7}]', "")), true);
   assert.equal(ghExpr(j.if, needs("[]", '{"number":7}')), true);
   assert.equal(j.steps[0].env.POST_RETRY, "${{ needs.post.outputs.retry }}");
-  assert.equal(j.steps[0].env.ARM_RETRY, "${{ needs.post.outputs.arm_retry }}");
+  assert.equal(j.steps[0].env.ARM_RETRY, "${{ needs.arm.outputs.retry }}");
   for (const result of ["success", "failure", "skipped"]) {
     const ctx = needs('[{"number":7}]', ""); ctx.needs.post.result = result;
     assert.equal(ghExpr(j.if, ctx), true, `${result}: available post retry survives an arm failure or skip`);
@@ -1073,32 +1073,57 @@ test("land.yml retry job: actions write only, no checkout, no repo code, no secr
 
 });
 
-test("land.yml post and arm share one no-checkout runner with stage caps and independent retry outputs", () => {
-  const j = LAND.jobs.post, post = j.steps.find(s => s.id === "post"), arm = j.steps.find(s => s.id === "arm");
-  assert.equal(LAND.jobs.arm, undefined, "no separate arm scheduling boundary");
-  assert.equal(j["timeout-minutes"], 13, "old 10-minute post plus 3-minute arm allowance");
+test("land.yml arm (finding 3): its own job, serialized across PRs in one queue; post keeps its stage caps", () => {
+  const j = LAND.jobs.post, post = j.steps.find(s => s.id === "post");
+  assert.equal(j.steps.find(s => s.id === "arm"), undefined, "arm left post");
+  assert.equal(j["timeout-minutes"], 13);
   assert.equal(post["timeout-minutes"], 10);
-  assert.equal(arm["timeout-minutes"], 3);
   assert.equal(j.steps.find(s => /download-artifact/.test(s.uses || ""))["timeout-minutes"], 10, "artifact download retains its old job's ceiling");
   assert.ok(j.steps.findIndex(s => s.id === "post_budget") < j.steps.findIndex(s => /download-artifact/.test(s.uses || "")));
   assert.equal(post.env.POST_DEADLINE, "${{ steps.post_budget.outputs.deadline }}");
-  assert.deepEqual(j.steps.map(s => s.id || "download"), ["post_budget", "download", "post", "arm"]);
-  assert.equal(arm.if, "success() && steps.post.outputs.arm != ''");
-  assert.equal(arm.env.ARM, "${{ steps.post.outputs.arm }}");
-  assert.deepEqual(j.outputs, { arm: "${{ steps.post.outputs.arm }}", retry: "${{ steps.post.outputs.retry }}", arm_retry: "${{ steps.arm.outputs.retry }}" });
-  assert.deepEqual(j.permissions, { statuses: "write", checks: "read", contents: "write", "pull-requests": "write", actions: "read", issues: "read" });
+  assert.deepEqual(j.steps.map(s => s.id || "download"), ["post_budget", "download", "post"]);
+  assert.deepEqual(j.outputs, { arm: "${{ steps.post.outputs.arm }}", retry: "${{ steps.post.outputs.retry }}" });
   assert.equal(j.env, undefined, "LAND_TOKEN is never job-scoped");
-  assert.equal(arm.env.LAND_TOKEN, "${{ secrets.LAND_TOKEN }}");
   assert.equal(runsRepoCode(j), false);
+  // The ruleset does not require a PR to be up to date (strict_required_status_checks_policy false, read
+  // 2026-11-21), so two PRs gated on one tip could both arm: every arm, of every PR, runs in ONE queue.
+  const a = LAND.jobs.arm, step = a.steps.find(s => s.id === "arm");
+  assert.deepEqual(a.concurrency, { group: "land-arm", queue: "max" });
+  assert.deepEqual(a.needs, ["resolve", "post"]);
+  assert.equal(a["timeout-minutes"], 3);
+  assert.deepEqual(a.outputs, { retry: "${{ steps.arm.outputs.retry }}" });
+  assert.deepEqual(a.environment, { name: "land", deployment: false });
+  assert.equal(a.env, undefined, "LAND_TOKEN is never job-scoped");
+  assert.equal(step.env.LAND_TOKEN, "${{ secrets.LAND_TOKEN }}");
+  assert.equal(step.env.ARM, "${{ needs.post.outputs.arm }}");
+  assert.equal(runsRepoCode(a), false);
+  const ctx = (result, arm) => ({ needs: { resolve: { result: "success" }, post: { result, outputs: { arm } } } });
+  assert.equal(ghExpr(a.if, ctx("success", '{"number":7}')), true);
+  assert.equal(ghExpr(a.if, ctx("success", "")), false, "nothing to arm");
+  assert.equal(ghExpr(a.if, ctx("failure", '{"number":7}')), false, "a failed post's partial candidate never arms");
   assert.equal(Number(LAND.env.RETRY_MAX), 3, "the per-head retry budget is unchanged");
+});
+
+test("land.yml arm (finding 3): another armed, unmerged PR into the deploy branch defers this arm to retry", () => {
+  const { env, files } = postFixture();
+  const other = JSON.stringify([{ number: 9, autoMergeRequest: { enabledAt: "2026-10-27T10:00:00Z" } }, { number: 7, autoMergeRequest: null }]);
+  const r = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_LANDS: other }, files);
+  assert.equal(r.arm.status, 0, r.arm.stderr);
+  assert.equal(r.arm.calls.some(c => c.startsWith("gh pr merge ")), false, "#9 is armed onto the same tip: #7 waits");
+  assert.deepEqual(JSON.parse(r.arm_retry), { number: 7, head: HEAD7 }, "and is re-gated once #9 has moved the tip");
+  const self = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_LANDS: JSON.stringify([{ number: 7, autoMergeRequest: { enabledAt: "x" } }]) }, files);
+  assert.equal(self.arm.calls.filter(c => c.startsWith("gh pr merge ")).length, 1, "its own earlier arm is no other PR");
+  const unread = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_LANDS: "not json" }, files);
+  assert.equal(unread.arm.calls.some(c => c.startsWith("gh pr merge ")), false, "unreadable: no arm (fail closed)");
+  assert.deepEqual(JSON.parse(unread.arm_retry), { number: 7, head: HEAD7 });
 });
 
 // Execute both production shell steps with separate processes, as Actions does.
 // The production step expression decides whether the second shell may execute.
 function postThenArm(postEnv = {}, armEnv = {}, files) {
-  const post = LAND.jobs.post.steps.find(s => s.id === "post"), arm = LAND.jobs.post.steps.find(s => s.id === "arm");
+  const post = LAND.jobs.post.steps.find(s => s.id === "post"), arm = LAND.jobs.arm.steps.find(s => s.id === "arm");
   const p = runStep(post.run, postEnv, files);
-  const shouldArm = ghExpr(arm.if, { success: p.status === 0, steps: { post: { outputs: { arm: p.out.arm || "" } } } });
+  const shouldArm = ghExpr(LAND.jobs.arm.if, { needs: { resolve: { result: "success" }, post: { result: p.status === 0 ? "success" : "failure", outputs: { arm: p.out.arm || "" } } } });
   const a = shouldArm ? runStep(arm.run, { GITHUB_TOKEN: "read-token", LAND_TOKEN: "land-token", FAKE_STATUSES: OWN_GATE, ...armEnv, ARM: p.out.arm }) : null;
   return { post: p, arm: a, retry: p.out.retry || "", arm_retry: a?.out.retry || "", result: p.status === 0 && (!a || a.status === 0) ? "success" : "failure" };
 }
@@ -1153,8 +1178,8 @@ test("land.yml combined steps: failed post or rejected status write cannot arm",
   assert.notEqual(r.post.status, 0, r.post.stderr);
   assert.equal(r.arm, null);
   assert.equal(r.result, "failure");
-  assert.equal(ghExpr(LAND.jobs.post.steps.find(s => s.id === "arm").if,
-    { success: false, steps: { post: { outputs: { arm: '{"number":7}' } } } }), false, "a failed step's partial candidate never arms");
+  assert.equal(ghExpr(LAND.jobs.arm.if,
+    { needs: { resolve: { result: "success" }, post: { result: "failure", outputs: { arm: '{"number":7}' } } } }), false, "a failed post's partial candidate never arms");
   r = postThenArm({ ...env, GH_POST_RC: "1" }, {}, files);
   assert.equal(r.arm, null, "status POST failed: no gated head was emitted");
   assert.equal(r.post.out.arm, "");
@@ -1267,7 +1292,7 @@ test("land.yml combined outputs: retries survive a skipped or failed arm and sta
 });
 
 test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other veto is not", () => {
-  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
   const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
   const go = (pr, now, extra = {}) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
   let r = go(pr7(), TIP_B);
@@ -1298,7 +1323,7 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
 });
 
 test("land.yml arm: only a proven base-modified race re-gates after a failed single merge call", () => {
-  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
   const error = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {
@@ -1341,7 +1366,7 @@ test("land.yml arm: only a proven base-modified race re-gates after a failed sin
 });
 
 test("land.yml arm: clean-status auto-merge refusal re-checks vetoes and tip, then one direct --merge", () => {
-  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
   const cleanErr = "GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {

@@ -453,13 +453,13 @@ jobs:
   # POST: the only job that writes `gate`. No checkout and no repo code. Also turns `gate` red for a PR that no longer
   # asks to land, disarms, and picks the ONE PR `arm` may merge. A success is written only onto the tip it measured.
   post:
-    name: post + arm
+    name: post
     needs: [resolve, trusted-rows, land-gate]
     if: >-
       !cancelled() && needs.resolve.result == 'success'
       && (needs.resolve.outputs.landable == 'true' || needs.resolve.outputs.notasked != '[]' || needs.resolve.outputs.disarm != '[]')
     runs-on: ubuntu-latest
-    # One runner replaces the old post (10 min) + arm (3 min) job boundary.
+    # The 10-minute post phase plus runner and download margin; arm is its own queued job (finding 3).
     timeout-minutes: 13
     # LAND_TOKEN can live in this environment, restricted to the deploy branch (every trigger of this file runs on
     # it). Until it is moved there the repository secret serves. `deployment: false`: no deployment record per run.
@@ -476,7 +476,6 @@ jobs:
     outputs:
       arm: ${{ steps.post.outputs.arm }}
       retry: ${{ steps.post.outputs.retry }}
-      arm_retry: ${{ steps.arm.outputs.retry }}
     steps:
       # Start one shared post-phase clock before download. Runner setup is outside this
       # clock, but remains covered by the combined 13-minute job cap.
@@ -689,14 +688,37 @@ jobs:
           echo "arm=${arm:-none} retry=$retry"
           LAND_POST
 
+  # ARM (finding 3, 2026-11-21): its own job so every PR's arm runs in ONE queue (`land-arm`, queue: max; GitHub keeps
+  # each queued job, unlike the default single pending slot). The step re-reads the deploy tip and every veto inside the
+  # queue, so the arm that waited behind a merge sees the moved tip and hands the PR to `retry`. The ruleset does not
+  # require an up-to-date branch (strict_required_status_checks_policy false), which is why the order matters.
+  arm:
+    name: arm
+    needs: [resolve, post]
+    if: >-
+      !cancelled() && needs.resolve.result == 'success' && needs.post.result == 'success' && needs.post.outputs.arm != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    concurrency:
+      group: land-arm
+      queue: max
+    environment:
+      name: land
+      deployment: false
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: read
+      issues: read
+    outputs:
+      retry: ${{ steps.arm.outputs.retry }}
+    steps:
       - name: Re-check the vetoes and the tip, then arm pinned to the gated head
         id: arm
-        if: success() && steps.post.outputs.arm != ''
-        timeout-minutes: 3
         env:
           LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          ARM: ${{ steps.post.outputs.arm }}
+          ARM: ${{ needs.post.outputs.arm }}
         run: |
           set -euo pipefail
           export GH_TOKEN="$GITHUB_TOKEN"
@@ -740,6 +762,17 @@ jobs:
           # Skipped ONLY for that reason: hand the PR to `retry`, which re-gates it at once (bounded per head).
           if [ "$now" != "$tip" ]; then
             echo "::notice::not arming #$n: deploy tip moved ${tip:0:12} -> ${now:0:12}; re-gating at once" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # ONE ARMED PR AT A TIME (finding 3, 2026-11-21). The ruleset does not require an up-to-date branch, and
+          # `--auto` can merge a few seconds after this job ends, so the queue alone does not stop two PRs gated on the
+          # same tip from both merging. While another PR into the deploy branch is armed and unmerged, this one waits:
+          # `retry` re-gates it (RETRY_MAX per head), by which time that merge has moved the tip. Unreadable = wait.
+          others=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --limit 100 --json number,autoMergeRequest \
+            --jq "[.[] | select(.autoMergeRequest != null and .number != $n) | .number] | map(tostring) | join(\" \")") || others="unreadable"
+          if [ -n "$others" ]; then
+            echo "::notice::not arming #$n: another PR is armed onto the deploy branch (${others}); re-gating once it lands" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -808,10 +841,10 @@ jobs:
   # checkout, no repo code, no secret: GITHUB_TOKEN's workflow_dispatch is one of the two events it may start.
   retry:
     name: retry
-    needs: [resolve, post]
+    needs: [resolve, post, arm]
     if: >-
       !cancelled() && needs.resolve.result == 'success'
-      && ((needs.post.outputs.retry != '' && needs.post.outputs.retry != '[]') || needs.post.outputs.arm_retry != '')
+      && ((needs.post.outputs.retry != '' && needs.post.outputs.retry != '[]') || needs.arm.outputs.retry != '')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -822,7 +855,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ATTEMPT: ${{ needs.resolve.outputs.attempt }}
           POST_RETRY: ${{ needs.post.outputs.retry }}
-          ARM_RETRY: ${{ needs.post.outputs.arm_retry }}
+          ARM_RETRY: ${{ needs.arm.outputs.retry }}
         run: |
           set -euo pipefail
           a=0; [[ "${ATTEMPT:-}" =~ ^[0-9]{1,3}$ ]] && a=$ATTEMPT
