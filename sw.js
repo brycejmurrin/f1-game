@@ -228,15 +228,23 @@ async function openCache(name) {
   if (!known || !known.includes(name)) invalidateCacheOrder();
   return caches.open(name);
 }
-async function matchPreferCurrent(req) {
+async function matchPreferCurrent(req, accept) {
   let ordered;
-  try { ordered = await cacheOrder(); } catch (_) { return caches.match(req); }
+  try { ordered = await cacheOrder(); } catch (_) { ordered = []; }
   for (const name of ordered) {
     const hit = await caches.match(req, { cacheName: name });
-    if (hit) return hit;
+    if (hit && (!accept || await accept(hit))) return hit;
   }
-  // Only a cache the memoised order never listed can answer here.
-  try { return await caches.match(req); } catch (_) { return undefined; }
+  try {
+    // A different worker may have created a new generation since the order was
+    // memoised. A rejected legacy entry can mask that new hit in an all-cache lookup.
+    if (!accept) return await caches.match(req);
+    for (const name of await caches.keys()) {
+      if (ordered.includes(name)) continue;
+      const hit = await caches.match(req, { cacheName: name });
+      if (hit && await accept(hit)) return hit;
+    }
+  } catch (_) { /* cache unavailable: let the caller use the network */ }
 }
 
 // THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`: the first generation
@@ -859,7 +867,10 @@ async function carryEntry(cache, req, old) {
   const url = new URL(req.url);
   // A previous worker may have stored a newer response under an older hash.
   // Even a matching HTTP validator would only authenticate those wrong bytes.
-  if (isHashedPackRequest(url) && !(await packResponseMatches(old, url.search.slice(3)))) return;
+  if (isHashedPackRequest(url)) {
+    old = await verifiedPackCopy(old, url.search.slice(3));
+    if (!old) return;
+  }
   const etag = old.headers.get("ETag"), modified = old.headers.get("Last-Modified");
   if (!etag && !modified) {
     // Nothing to ask with: only an address that names its content is safe to keep.
@@ -1261,8 +1272,15 @@ function packDigest(bytes) {
   }
   return hex;
 }
-async function packResponseMatches(response, hash) {
-  return packDigest(await response.clone().arrayBuffer()) === hash;
+// Stamp only copies admitted to CacheStorage. A retained legacy generation
+// (or a newer cache opened early by its old worker) may contain unverified bytes.
+const VERIFIED_PACK_HEADER = "X-Apex-Verified-Pack-MD5";
+async function verifiedPackCopy(response, hash) {
+  const body = await response.clone().arrayBuffer();
+  if (packDigest(body) !== hash) return null;
+  const copy = new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+  copy.headers.set(VERIFIED_PACK_HEADER, hash);
+  return copy;
 }
 // THE PACK MANIFEST UNDER THE PAGE'S BUILD (#5629): assets.js asks for
 // `assets/pack/manifest.json?b=<shell build>`. One deploy ships one manifest, so
@@ -1279,18 +1297,28 @@ function isBuildKeyedManifest(url) {
 }
 function packCacheFirst(event, req, hash) {
   let cacheWrite = Promise.resolve();
+  function store(copy) {
+    cacheWrite = (async () => {
+      const cache = await openCache(await currentCacheName());
+      await cache.put(req, copy);
+    })().catch(noteCacheWriteFail);
+  }
   const response = (async () => {
-    const hit = await matchPreferCurrent(req);
+    const hit = await matchPreferCurrent(req, async (candidate) => {
+      if (candidate.headers.get(VERIFIED_PACK_HEADER) === hash) return true;
+      let checked;
+      try { checked = await verifiedPackCopy(candidate, hash); } catch (_) { return false; }
+      if (!checked) return false;
+      store(checked);   // future warm hits need neither a body read nor a digest
+      return true;
+    }).catch(() => undefined);
     if (hit) return hit;
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        if (!(await packResponseMatches(res, hash))) return Response.error();
-        const copy = res.clone();
-        cacheWrite = (async () => {
-          const cache = await openCache(await currentCacheName());
-          await cache.put(req, copy);
-        })().catch(noteCacheWriteFail);
+        const checked = await verifiedPackCopy(res, hash);
+        if (!checked) return Response.error();
+        store(checked);
       }
       return res;
     } catch (_) { return Response.error(); }

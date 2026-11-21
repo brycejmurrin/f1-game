@@ -125,3 +125,12 @@ test("custom circuits travel in their apex26.tracks collection and merge through
   assert.deepEqual(b.P.apply(file), { applied: 0, skipped: 1, rejected: 0, failed: 0 }, "an existing design wins");
   assert.deepEqual(b.P.apply({ circuits: { format: "apex26.tracks", v: 9, items: [] } }), { applied: 0, skipped: 0, rejected: 1, failed: 0 });
 });
+
+test("circuit-only restore counts the registry's duplicate-write retry by durability", () => {
+  const collection = { format: "apex26.tracks", v: 1, items: [] };
+  let durable = false;
+  const b = device({}, { CustomTracks: { importCollection: () => ({ ok: true, added: 0, retried: true, durable }) } });
+  assert.deepEqual(b.P.apply({ circuits: collection }), { applied: 0, skipped: 0, rejected: 0, failed: 1 });
+  durable = true;
+  assert.deepEqual(b.P.apply({ circuits: collection }), { applied: 1, skipped: 0, rejected: 0, failed: 0 });
+});

@@ -556,6 +556,37 @@ test("put, prune, and commit failures roll back all durable changes and retain a
   }
 });
 
+test("a visit-only save survives clock rollback, reopen, and a later durable save", async () => {
+  const future = Date.now() + 60_000;
+  const seed = seededPhotos(6).map((p) => ({ ...p, at: future + p.at }));
+  const db = photoDb(seed), b = boot({ indexedDB: db });
+  const titles = () => Array.from(b.dom.byId("ps-library").children, (row) => row.children[1].textContent);
+  b.api.open({ metadata: { title: "Visit photo" } });
+  await b.api.capture(); db.failNext("put"); await b.api.savePhoto();
+  assert.deepEqual([...db.rows.values()], seed);
+  assert.equal(titles()[0], "Visit photo");
+  b.api.close(false); b.api.open({ metadata: { title: "Durable photo" } });
+  assert.deepEqual(Array.from(await b.api.album(), (p) => p.title), titles());
+  assert.equal(titles()[0], "Visit photo");
+  await b.api.capture(); await b.api.savePhoto();
+  assert.deepEqual(titles().slice(0, 2), ["Durable photo", "Visit photo"]);
+  assert.equal(titles().length, 6);
+});
+
+test("a failed album deletion leaves a reopened Studio's notice alone", async () => {
+  const db = photoDb(seededPhotos(1)), b = boot({ indexedDB: db });
+  b.api.open(); await b.api.album();
+  const remove = () => b.dom.byId("ps-library").children[0].children[4].click();
+  db.failNext("delete"); remove();
+  b.api.close(false); b.api.open({ source: "garage" });
+  const notice = b.dom.byId("ps-message").textContent;
+  await b.api.album();
+  assert.equal(b.dom.byId("ps-message").textContent, notice);
+  db.failNext("delete"); remove(); await b.api.album();
+  assert.equal(b.dom.byId("ps-message").textContent, "Photo could not be deleted.");
+  assert.equal(db.rows.size, 1);
+});
+
 test("equal timestamps prune deterministically by ID instead of request or enumeration order", async () => {
   const seed = seededPhotos(8).map((row) => ({ ...row, at: 1 })).reverse(), idb = photoDb(seed), b = boot({ indexedDB: idb });
   b.api.open(); await b.api.capture(); await b.api.savePhoto();

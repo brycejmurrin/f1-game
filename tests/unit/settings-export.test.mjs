@@ -2075,3 +2075,40 @@ test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it",
   assert.equal(JSON.parse(b.disk.get("apex26.circuitMastery")).entries[0].best, 81);
   assert.equal(b.disk.get("apex26.pitTaught"), "1");
 });
+
+test("retrying a mixed settings and progress backup saves cache-only merges before reload", async () => {
+  const b = bootImportUI({ realStore: true });
+  vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+  const samples = [0, 1, 2, 3, 4, 5, 6, 7];
+  const progress = {
+    circuitMastery: { version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] },
+    ghosts: { monza: { time: 80, t: samples, s: samples, x: samples.map(() => 0) } },
+    onboardRaces: 4,
+  };
+  const file = { format: b.SettingsExport.FORMAT, settings: { audio: { volMusic: 0.8 } }, progress };
+  const progressKeys = ["apex26.circuitMastery", "apex26.ghost.v1", "apex26.onboardRaces"];
+  const setItem = b.sb.localStorage.setItem;
+  let refuse = true, progressWrites = 0;
+  b.sb.localStorage.setItem = (k, v) => {
+    if (progressKeys.includes(k)) {
+      progressWrites++;
+      if (refuse) throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" });
+    }
+    return setItem(k, v);
+  };
+  const choose = async () => { b.choose(Promise.resolve(JSON.stringify(file))); await Promise.resolve(); b.flushReloads(); };
+  await choose();
+  assert.equal(b.reloads(), 0);
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+  assert.deepEqual(progressKeys.filter((k) => b.disk.has(k)), []);
+  await choose();
+  assert.equal(b.reloads(), 0, "retry still refuses to reload while the progress lives only in memory");
+  refuse = false;
+  await choose();
+  assert.equal(b.reloads(), 1);
+  assert.deepEqual(progressKeys.map((k) => JSON.parse(b.disk.get(k))), [progress.circuitMastery, progress.ghosts, 4]);
+  const before = progressWrites;
+  const again = b.loadSettings(file);
+  assert.deepEqual([again.applied, again.skipped, again.failed], [1, 3, 0]);
+  assert.equal(progressWrites, before, "already-durable progress is left alone");
+});

@@ -1682,7 +1682,7 @@ test("host(): private exchange and unreadable-answer failures release their tran
 function wakePad(over = {}, extra = {}) {
   const events = {}, requests = [], transports = [], timeouts = [];
   const sb = { URL, URLSearchParams, Promise, Log: { info() {}, warn() {} }, NetTransport,
-    setInterval: () => 1, clearInterval() {},
+    setInterval: extra.interval || (() => 1), clearInterval() {},
     // Recorded, never run: a test fires one by hand (the re-dial backoff).
     setTimeout: (fn, ms) => { timeouts.push({ fn, ms, cleared: false }); return timeouts.length; },
     clearTimeout(id) { if (timeouts[id - 1]) timeouts[id - 1].cleared = true; },
@@ -1696,6 +1696,7 @@ function wakePad(over = {}, extra = {}) {
   };
   sb.window = sb;
   if (extra.location) sb.location = extra.location;
+  if (extra.sensor) { sb.DeviceOrientationEvent = {}; sb.TiltRoll = TiltRoll; }
   const ctx = vm.createContext(sb);
   for (const f of ["js/input/pedal-travel.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -1715,7 +1716,7 @@ function wakePad(over = {}, extra = {}) {
     return { releases: 0, addEventListener(_t, fn) { onRelease = fn; },
       release() { this.releases++; return Promise.resolve(); }, signal() { if (onRelease) onRelease(); } };
   };
-  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t) => { for (const fn of events[t] || []) fn(); } };
+  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t, e) => { for (const fn of events[t] || []) fn(e); } };
 }
 
 test("phone wake lock is released on pairing failure, including acquisition arriving after failure", async () => {
@@ -2520,6 +2521,42 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   h.fire("pageshow"); await settle();
   assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no CONNECT tap");
   assert.equal(h.ctl.state().linked, true);
+  h.ctl.cancel();
+});
+
+test("the phone heartbeat releases tilt on background and redial until a fresh reading", async () => {
+  const streams = [];
+  let heartbeat;
+  const h = wakePad({ rtc: () => {
+    let close;
+    const samples = [];
+    streams.push(samples);
+    return { status: "open", pump() {}, onMessage() {}, onClose(fn) { close = fn; },
+      send(channel, data) {
+        if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+        return true;
+      },
+      close() { this.status = "closed"; close("local"); } };
+  } }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  await h.ctl.connect("ABC234");
+  h.fire("deviceorientation", { beta: 0, gamma: 35 });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, 35);
+  h.fire("touchend", { touches: [] });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, 35, "lifting the last finger preserves motion steering");
+
+  h.doc.hidden = true; h.doc.visibilityState = "hidden"; h.fire("visibilitychange");
+  h.fire("deviceorientation", { beta: 0, gamma: 45 });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, null, "a hidden sensor event cannot renew stale steering");
+  h.fire("pagehide");
+  h.doc.hidden = false; h.doc.visibilityState = "visible"; h.fire("pageshow"); await settle();
+  heartbeat();
+  assert.equal(streams[1][0].roll, null, "the new link starts without a steering owner");
+  h.fire("deviceorientation", { beta: 0, gamma: -20 });
+  heartbeat();
+  assert.equal(streams[1].at(-1).roll, -20, "the next visible sensor event restores steering");
   h.ctl.cancel();
 });
 

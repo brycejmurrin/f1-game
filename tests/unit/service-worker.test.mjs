@@ -2371,6 +2371,61 @@ test("install carries runtime entries into the new generation, revalidated, and 
   assert.equal(await (await strip.responsePromise).text(), "pack-x");
 });
 
+test("a retained generation cannot supply wrong pack bytes after an upgrade", async () => {
+  const asset = `${ORIGIN}/assets/pack/x.bin`, contents = "expected bytes";
+  const url = asset + "?h=" + createHash("md5").update(contents).digest("hex");
+  const base = installFetch();
+  let online = false, attempts = 0;
+  const h = createHarness({ clientWindows: 1, fetchImpl: (request, init) => {
+    if (requestKey(request) !== url) return base(request, init);
+    attempts++;
+    if (!online) throw new TypeError("offline");
+    return new Response(contents);
+  } });
+  const previous = new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    [url, new Response("wrong generation")],
+  ]);
+  h.stores.set("apex26-320", previous);
+  await h.lifecycleEvent("install").done();
+  await h.lifecycleEvent("activate").done();
+  assert.ok(h.stores.has("apex26-320"), "an open window retains its shell");
+  async function read() {
+    const event = h.fetchEvent(new Request(url));
+    const response = await event.responsePromise;
+    await Promise.all(event.lifetimes);
+    return response;
+  }
+  assert.equal((await read()).type, "error", "offline must not serve the rejected predecessor");
+  online = true;
+  assert.equal(await (await read()).text(), contents, "an online retry repairs it");
+  online = false;
+  assert.equal(await (await read()).text(), contents, "the repaired copy works offline");
+  assert.equal(attempts, 2, "only the miss and online recovery needed the network");
+
+  // An old worker can also pre-fill the new cache before its own worker installs.
+  // It must not mask a valid retained copy when the network is unavailable.
+  h.stores.get("apex26-321").set(url, new Response("bad pre-fill"));
+  previous.set(url, new Response(contents));
+  assert.equal(await (await read()).text(), contents);
+  assert.equal(attempts, 2);
+});
+
+test("a failed cache read still lets a hashed pack file recover from the network", async () => {
+  const contents = "pack", url = ORIGIN + "/assets/pack/x.bin?h=" + createHash("md5").update(contents).digest("hex");
+  const h = createHarness({
+    globals: { caches: {
+      async keys() { return ["apex26-321"]; },
+      async match(req) { if (requestKey(req) === url) throw new Error("cache read failed"); },
+      async open() { return { async put() {} }; },
+    } },
+    fetchImpl: async (req) => requestKey(req) === url ? new Response(contents) : new Response('{"build":321}'),
+  });
+  const event = h.fetchEvent(new Request(url));
+  assert.equal(await (await event.responsePromise).text(), contents);
+  await Promise.all(event.lifetimes);
+});
+
 // ── W24 row 4: the version.json kill switch ──
 function killHarness({ fetchImpl } = {}) {
   let unregistered = 0;
