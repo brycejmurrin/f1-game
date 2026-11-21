@@ -123,9 +123,10 @@ name: Land
 # RETRY_MAX times per head since its CI finished. Removing and re-adding `land` does the same by hand, and so does a
 # dispatch on the deploy branch with `stale=true` (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f stale=true`).
 # GitHub delays scheduled runs under load (this repo's other cron workflows fire hours apart), so the dispatch is also
-# how the sweep is proven live. A push to the deploy branch sweeps too, and the sweep also re-gates a green, unarmed PR
-# whose `gate` predates the tip commit: pages.yml's paths-ignore starts no Pages train on a docs-only merge, so that
-# train re-gate never comes (audit 2026-11-21, finding 2).
+# how the sweep is proven live. A push to the deploy branch also sweeps (rate-capped to one per SWEEP_GAP_MIN), and the
+# sweep re-gates a green, unarmed PR whose `gate` predates the tip commit: pages.yml's paths-ignore starts no Pages
+# train on a docs-only merge, so that train re-gate never comes (audit 2026-11-21, finding 2). The sweep does NOT ride
+# CI/Pages `workflow_run` (that path from #6029 burned installation quota; class of #4666).
 #
 # DRAFT + `land`. A draft that carries `land` gets `gate` failure "draft: flip ready first …" and, once per head, a
 # comment with the route (ready-gate, `update_pull_request` draft:false, `land`); `ready_for_review` re-gates it.
@@ -923,17 +924,16 @@ jobs:
   # 15 min with CI finished. No checkout, no repo code, no secret: gh and jq with a token that may only dispatch.
   # Bounded: STALE_MAX dispatches per run, and per head at most RETRY_MAX re-gates since CI finished (counted as the
   # workflow_dispatch land.yml runs that wrote a `gate` status after that CI run; nothing is counted in repo files).
-  # ALSO ON A GREEN CI OR DEPLOY FINISH (2026-11-20): the `17,47` cron fired 54 times in 672 slots over 14 days
-  # (gaps of 3.3-10.4 h, docs/notes/CI-CRON-DELAY-2026-11-20.md), so a green PR with a stale gate sat for hours.
-  # A finished CI run is exactly when a gate goes stale, so the sweep rides `workflow_run` too, at most once per
-  # SWEEP_GAP_MIN (the `rate` step); the cron stays as the backstop.
+  # ALSO ON A DEPLOY-BRANCH PUSH (finding 2, 2026-11-21): pages.yml's paths-ignore starts no Pages train on a docs-only
+  # merge, so the push sweeps too — at most once per SWEEP_GAP_MIN (the `rate` step). The cron and a stale=true
+  # dispatch are never rate-limited. A green CI/Pages `workflow_run` does NOT start the sweep (removed after #6029
+  # burned installation quota when unreadable history swept anyway; class of #4666).
   sweep:
     name: sweep
     if: >-
       github.event_name == 'schedule'
       || (github.event_name == 'push' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
-      || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -944,10 +944,11 @@ jobs:
     steps:
       # RATE LIMIT: a sweep whose RE-GATE STEP ran (or is running) in another land.yml run in the last SWEEP_GAP_MIN
       # minutes answers for this one. Matched on that step, never the job: a sweep that skipped here also concludes
-      # success, and counting it would make every later sweep skip forever. Unreadable history sweeps anyway: the sweep itself is bounded by STALE_MAX and RETRY_MAX.
-      - name: Rate limit (one CI-driven sweep per SWEEP_GAP_MIN)
+      # success, and counting it would make every later sweep skip forever. Unreadable history (403, rate limit, error)
+      # SKIPS the sweep — never sweep anyway (class of #4666 / #6029).
+      - name: Rate limit (one push-driven sweep per SWEEP_GAP_MIN)
         id: rate
-        if: github.event_name == 'workflow_run'
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           SWEEP_GAP_MIN: "20"
@@ -958,10 +959,11 @@ jobs:
           since=$(date -u -d "-${SWEEP_GAP_MIN} min" +%Y-%m-%dT%H:%M:%SZ)
           ids=$(gh api "repos/$R/actions/workflows/land.yml/runs?created=>=$since&per_page=50" \
             --jq "[.workflow_runs[] | select(.id != $RUN_ID) | .id] | .[]") \
-            || { echo "recent sweeps unreadable: sweeping"; echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0; }
+            || { echo "recent sweeps unreadable: skipping" | tee -a "$GITHUB_STEP_SUMMARY"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
           for id in $ids; do
             hit=$(gh api "repos/$R/actions/runs/$id/jobs?per_page=100" \
-              --jq '[.jobs[] | select(.name == "sweep") | .steps[]? | select(.name == "Re-gate the land PRs whose gate is older than their last green CI" and (.conclusion == "success" or .status == "in_progress"))] | length > 0') || continue
+              --jq '[.jobs[] | select(.name == "sweep") | .steps[]? | select(.name == "Re-gate the land PRs whose gate is older than their last green CI" and (.conclusion == "success" or .status == "in_progress"))] | length > 0') \
+              || { echo "recent sweeps unreadable: skipping (jobs of run $id)" | tee -a "$GITHUB_STEP_SUMMARY"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
             if [ "$hit" = true ]; then
               echo "stale-gate sweep skipped: land.yml run $id swept within ${SWEEP_GAP_MIN} min" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0

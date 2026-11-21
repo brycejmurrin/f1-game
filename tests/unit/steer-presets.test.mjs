@@ -32,6 +32,9 @@ import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 
+import { seedStore } from "../helpers/seed-store.mjs";
+import { makeStorageFaults } from "../helpers/storage-faults.mjs";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/input/steer-tuning.js"), "utf8");
 
@@ -146,7 +149,7 @@ test("RELAX is the most forgiving bundle, which is the whole point of it", () =>
 // PRO's value. WEIGHT (carWeight, hand-wired) did the same. Only a preset-owned
 // row may clear the chip. SteerTuning.create runs in a VM against a stub DOM, a
 // disk-backed store and an Input whose every setter is a no-op.
-function bootTuning(input = {}, disk = {}, g = {}) {
+function bootTuning(input = {}, disk = {}, g = {}, initStore) {
   const els = {};
   const noop = () => {};
   const mk = () => {
@@ -173,7 +176,9 @@ function bootTuning(input = {}, disk = {}, g = {}) {
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/input/steer-tuning.js") });
-  const G = { $, store, soundOn: false, clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), ...g };
+  // Keep G (pace/aria tests) and initStore (cue restart/quota tests from #6084).
+  const G = { $, store: initStore ? initStore(ctx) : store, soundOn: false,
+    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), ...g };
   const api = vm.runInContext("SteerTuning", ctx).create(G);
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
   return { $, disk, G, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
@@ -221,6 +226,50 @@ test("adaptive buttons use strength 6 on fresh settings and Standard, preserving
   saved.$("pm-preset-standard").onclick();
   assert.equal(saved.disk.adaptiveButtons, 6);
   assert.equal(applied, 5 / 9);
+});
+
+const lineSource = readFileSync(join(ROOT, "js/ui/driving-line-opts.js"), "utf8");
+
+function bootCueControls(storage) {
+  let line, store;
+  const ui = bootTuning({}, {}, {}, (ctx) => {
+    ctx.localStorage = storage;
+    ctx.DrivingLine = { setPalette() {}, setOpacity() {} };
+    seedStore(ctx);
+    line = vm.runInContext(lineSource + "\nDrivingLineOpts", ctx, { filename: absSrc("js/ui/driving-line-opts.js") });
+    store = ctx.GameStore.store;
+    return store;
+  });
+  return { ui, line, store };
+}
+
+test("moving Predictive Cue preserves a legacy Line-Speed Cue after a restart", () => {
+  const { storage } = makeStorageFaults({ initial: { "apex26.brakeCue": JSON.stringify("on") } });
+  const first = bootCueControls(storage);
+  assert.equal(first.line.brakeCue(), true);
+  first.ui.move("pm-brakecue", 7);
+  assert.equal(storage.getItem("apex26.brakeCue"), "7");
+  const restarted = bootCueControls(storage);
+  restarted.ui.apply();
+  assert.equal(Number(restarted.ui.$("pm-brakecue").value), 7);
+  assert.equal(restarted.line.brakeCue(), true, "the independent line-speed assist survives the slider change");
+});
+
+test("an interrupted cue migration preserves the legacy flag across a quota-limited restart", () => {
+  // A numeric notch fits under the shorter legacy key, but the new flag does not.
+  const faults = makeStorageFaults({ initial: { "apex26.brakeCue": JSON.stringify("on") }, quotaBytes: 17 });
+  const first = bootCueControls(faults.storage);
+  first.ui.move("pm-brakecue", 7);
+  const restarted = bootCueControls(faults.storage);
+  assert.equal(restarted.line.brakeCue(), true, "restarting before retry must not discard the saved flag");
+
+  restarted.ui.move("pm-brakecue", 8);
+  faults.set({ quotaBytes: Infinity });
+  assert.equal(restarted.store.retryFailed().durable, true);
+  const recovered = bootCueControls(faults.storage);
+  recovered.ui.apply();
+  assert.equal(recovered.line.brakeCue(), true);
+  assert.equal(Number(recovered.ui.$("pm-brakecue").value), 8, "retry saves the latest slider choice");
 });
 
 test("the open settings haptics row follows phone capability changes and pad disconnects", () => {

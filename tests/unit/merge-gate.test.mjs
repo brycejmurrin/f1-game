@@ -1722,7 +1722,7 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
 });
 
-test("land.yml sweep (finding 2): a push to the deploy branch sweeps at once; a green, unarmed gate older than the tip is re-gated", () => {
+test("land.yml sweep (finding 2): a push to the deploy branch sweeps (rate-capped); a green, unarmed gate older than the tip is re-gated", () => {
   // pages.yml ignores docs-only pushes, so no Pages workflow_run re-gates the land PRs after a docs merge.
   const job = LAND.jobs.sweep;
   assert.deepEqual(LAND.on.push, { branches: [DEPLOY_BRANCH] });
@@ -1734,7 +1734,7 @@ test("land.yml sweep (finding 2): a push to the deploy branch sweeps at once; a 
   assert.equal(ghExpr(LAND.concurrency.group, push()), "land-stale-sweep", "pushes share the sweep's group, never a per-sha group");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], push()), false);
   const [rate, sweep] = job.steps;
-  assert.equal(ghExpr(rate.if, push()), false, "a push sweep is never rate-limited away");
+  assert.equal(ghExpr(rate.if, push()), true, "a push sweep shares the SWEEP_GAP_MIN rate cap (#6057 quota)");
   const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
   const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
   const pr = (o = {}) => JSON.stringify([{ number: 7, headRefOid: "1".repeat(40), isDraft: false, labels: [{ name: "land" }], autoMergeRequest: null, ...o }]);
@@ -1777,20 +1777,31 @@ test("land.yml sweep (finding 5): the per-head budget counts land.yml re-gate DI
   assert.equal(attempt(r), "0", "re-gates before CI finished do not count");
 });
 
-test("land.yml sweep also rides a green CI or Deploy finish, at most once per SWEEP_GAP_MIN, with no PR code", () => {
+test("land.yml sweep: no workflow_run path; push is SWEEP_GAP_MIN-capped; unreadable history skips (never sweeps anyway)", () => {
+  // Quota regression (class of #4666): #6029 rode every green CI/Pages finish, and on unreadable history swept
+  // anyway; #6057 added an uncapped deploy-push sweep. Keep cron + stale=true dispatch; rate-cap push; fail closed.
   const job = LAND.jobs.sweep;
   const wr = (conclusion) => ({ event_name: "workflow_run", event: { workflow_run: { conclusion } } });
-  assert.deepEqual([ghExpr(job.if, wr("success")), ghExpr(job.if, wr("failure")), ghExpr(job.if, wr("cancelled"))], [true, false, false],
-    "a green CI/Deploy finish runs the sweep; a red or cancelled one does not");
-  assert.deepEqual(LAND.on.workflow_run.workflows, ["CI", "Deploy to GitHub Pages"]);
+  const push = { event_name: "push", ref: `refs/heads/${DEPLOY_BRANCH}`, run_id: 5, event: {} };
+  assert.deepEqual([ghExpr(job.if, wr("success")), ghExpr(job.if, wr("failure")), ghExpr(job.if, wr("cancelled"))], [false, false, false],
+    "a CI/Pages workflow_run never starts the sweep (cron + stale dispatch + rate-capped push remain)");
+  assert.equal(ghExpr(job.if, push), true, "a deploy-branch push still runs the sweep job");
+  assert.equal(ghExpr(job.if, { event_name: "schedule" }), true, "the :17/:47 cron stays");
+  assert.equal(ghExpr(job.if, { event_name: "workflow_dispatch", ref: `refs/heads/${DEPLOY_BRANCH}`, event: { inputs: { stale: "true" } } }), true,
+    "manual stale=true dispatch stays");
+  assert.deepEqual(LAND.on.workflow_run.workflows, ["CI", "Deploy to GitHub Pages"], "workflow_run stays for resolve/retry, not for sweep");
   assert.ok(LAND.on.schedule[0].cron, "the cron stays as the backstop");
   assert.ok(!runsRepoCode(job) && !usesSecret(job), "no PR code, no secret");
   const [rate, sweep] = job.steps;
   assert.equal(rate.id, "rate");
-  assert.equal(ghExpr(rate.if, wr("success")), true);
+  assert.equal(ghExpr(rate.if, wr("success")), false, "workflow_run is not a sweep path, so it is not rate-checked");
+  assert.equal(ghExpr(rate.if, push), true, "push sweeps share the SWEEP_GAP_MIN rate cap");
   assert.equal(ghExpr(rate.if, { event_name: "schedule" }), false, "the cron and a stale dispatch are never rate-limited");
   assert.equal(sweep.if, "steps.rate.outputs.skip != 'true'");
   assert.equal(rate.env.SWEEP_GAP_MIN, "20");
+  // Behaviour check via equal+/re/.test so the pin ceilings stay flat.
+  assert.equal(/recent sweeps unreadable: skipping/.test(rate.run) && /echo "skip=true"/.test(rate.run), true,
+    "unreadable rate-limit history must set skip=true (never sweep anyway)");
   const go = (env) => {
     const r = runStep(rate.run, { RUN_ID: "9", SWEEP_GAP_MIN: "20", ...env });
     assert.equal(r.status, 0, r.stderr);
@@ -1810,9 +1821,11 @@ test("land.yml sweep also rides a green CI or Deploy finish, at most once per SW
     [{ FAKE_RUNS: runs(5), FAKE_RUN: jobs({ name: "resolve", status: "completed", conclusion: "success", steps: [{ name: sweep.name, status: "completed", conclusion: "success" }] }) }, "false", "another job is no sweep"],
     [{ FAKE_RUNS: runs(9), FAKE_RUN: jobs(sw("in_progress", null, step("in_progress", null))) }, "false", "this run's own sweep does not count"],
     [{ FAKE_RUNS: runs() }, "false", "no recent run: sweep"],
-    [{ FAKE_RUNS: "not json" }, "false", "unreadable history sweeps anyway"],
+    [{ FAKE_RUNS: "not json" }, "true", "unreadable history skips (never sweeps anyway)"],
   ];
   for (const [env, want, why] of cases) assert.equal(go(env).skip, want, why);
+  const unread = go({ FAKE_RUNS: "not json" });
+  assert.equal(/unreadable|skip/i.test(`${unread.summary}\n${unread.stdout}`), true, "log the skip when history is unreadable");
   const listed = go({ FAKE_RUNS: runs() }).calls.find((c) => c.includes("land.yml/runs?"));
   const since = Date.parse(listed.split("created=>=")[1].split("&")[0]);
   assert.ok(Math.abs(since - (Date.now() - 20 * 60000)) < 120000, `the window is the last SWEEP_GAP_MIN minutes: ${listed}`);

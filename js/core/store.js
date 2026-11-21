@@ -162,6 +162,13 @@ const GameStore = (function () {
         try { beforeDisk = localStorage.getItem(key); } catch (_) { /* unavailable */ }
       }
       try {
+        // The legacy line-speed flag and the predictive slider shared one key. Under quota
+        // pressure a smaller notch could fit even while copying the flag to its own key fails.
+        // Keep the notch in the normal session/retry queue until the flag has reached disk.
+        const pendingCue = k === "brakeCue" && _writeFails.get("apex26.lineBrakeCue");
+        if (pendingCue && ['"on"', '"off"'].includes(localStorage.getItem(key))) {
+          throw Object.assign(new Error("Line-speed cue migration is pending"), { name: pendingCue.name });
+        }
         if (json === undefined) localStorage.removeItem(key);
         else setRoomy(key, json);
         _writeFails.delete(key);

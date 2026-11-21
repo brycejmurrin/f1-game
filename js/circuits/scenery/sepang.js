@@ -285,9 +285,12 @@
         grandstandEx(s, side, gap, len, null, null, Object.assign(
           { roofCol: TENT_ROOF, fasciaCol: TENT_FASCIA }, opts));
 
-      // K1 Grandstand at Turn 1 & 2 — positive rake (rows rise away from track).
-      // https://www.sepangcircuit.com/k1-grandstand
+      // K1 Grandstand at Turn 1 & 2 approach — positive rake (rows rise away
+      // from track). https://www.sepangcircuit.com/k1-grandstand
       // Outside of the T1 right-hander (side -1); +1 clipped the infield fold.
+      // Stays at K(0.058): moving it toward the apex floats (unsupported 8 m).
+      // "approach" on this head line is load-bearing — corner-frames grants
+      // APPROACH_M for the 72 m run-up before T1 (KIT_M would fail it).
       const emitT1Stand = (stage) => {
         const SHELL = [0.84, 0.85, 0.86];
         const depth = 12, h = 13, len = 40;
