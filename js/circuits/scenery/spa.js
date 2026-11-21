@@ -290,19 +290,21 @@
 
       const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
       // Main-straight grandstands ~s 0.00–0.02, facing the pits across the road.
-      // Gap 11.5 (was 8): catch fence moves to 10.3 behind the 9 m run-off
-      // (#6007); stands stay just behind that fence.
+      // Gaps 11.5 / 12.5 (were 8): catch fence at 10.3 behind the 9 m run-off
+      // (#6007); stagger keeps the two shells from going coplanar on the move.
       grandstandEx(0.00, STAND, 11.5, 52, null, null,
         { livery: "darkSteel", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.018, STAND, 11.5, 30, null, null,
+      grandstandEx(0.018, STAND, 12.5, 30, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, tiers: 2, h: 10 });
       // Gold 3 Raidillon amphitheatre: dual-bay stand row + jumbotron on the
       // OUTSIDE of the descent into the Eau Rouge compression (authored
       // 0.142-0.17 = racing 0.10-0.13), facing the valley floor (racing ≈0.14)
       // and the Raidillon climb. Was authored 0.068-0.092 = racing 0.026-0.05,
       // the La Source exit, before the elevation fix put the valley where it is.
-      // Gaps 11.5 (were 8/9): same #6007 fence/stand stack as the main straight.
-      for (const [s, gp, len] of [[0.142, 11.5, 30], [0.154, 11.5, 32], [0.166, 11.5, 28]]) {
+      // Gaps 14/15 (were 8/9): shell reaches gap+12.5, so 11.5 put the back
+      // face into the spectatorHill at 24 (clip-audit SEVERE 1.58 m). Pull the
+      // row clear of the 10.3 m fence and keep the hill/jumbotron offset.
+      for (const [s, gp, len] of [[0.142, 14, 30], [0.154, 15, 32], [0.166, 15, 28]]) {
         grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
@@ -310,9 +312,9 @@
       {
         // Gold 3 amphitheatre hero: two unmistakable screen bays in one deep
         // fascia mass, high enough to read from the Raidillon climb and Kemmel.
-        // Same footprint relative to the stand row as before (gap 19, midway
-        // between the 2nd and 3rd stands), moved with it to the valley.
-        const a = anchor(K(0.159), 1, 19), b = [a.r, a.u, a.t];
+        // Same footprint relative to the stand row as before (gap was 19 with
+        // stands at 8/9; now 25 with stands at 14/15).
+        const a = anchor(K(0.159), 1, 25), b = [a.r, a.u, a.t];
         const SCREEN = [0.025, 0.035, 0.055], FASCIA = [0.88, 0.52, 0.08];
         const LEG = [0.30, 0.32, 0.34];
         if (foundation) {
@@ -357,7 +359,9 @@
       // indexes its own footprint against the treelines.
       // The relocated bank spans authored .146–.170; the matching OPEN
       // window below keeps the deep forest ranks clear of its footprint.
-      spectatorHill(0.146, 0.170, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
+      // Gap 30.5 (was 24): keeps the ~16.5 m stand-to-hill offset after the
+      // Gold-3 row moved to 14 (#6007 clip-audit).
+      spectatorHill(0.146, 0.170, 1, 30.5, { rows: 5, rise: 1.5, density: 0.6, step: 6,
         grass: [0.22, 0.36, 0.18], riser: [0.34, 0.33, 0.30] });
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
@@ -371,9 +375,10 @@
       // the crowd from the chase camera), longer, and a fuller crowd.
       ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 7, { rows: 6, roof: false, skip: 0.12 });
       // Bus Stop chicane: braking-zone stand facing the final complex.
-      // Gap 11.5 (was 8): behind the 10.3 m catch fence (#6007). The longer
-      // concrete bay at 0.848 stays at 12 (already clear of the fence).
-      grandstandEx(0.92, 1, 11.5, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
+      // Gap 11.5 (was 8): behind the 10.3 m catch fence (#6007). endWalls off:
+      // with them on, the moved bay went coplanar with the 0.848 concrete shell
+      // (coplanar-audit 50 m² same-facing pair). Bay at 0.848 stays at 12.
+      grandstandEx(0.92, 1, 11.5, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: false });
       grandstandEx(0.848, 1, 12, 36, null, null,
         { livery: "concrete", tiers: 2, roof: "truss" });
 
@@ -682,11 +687,11 @@
       chalet(K(0.706), -1, 62, 7, 4.7, 11, [0.75, 0.72, 0.65], [0.29, 0.19, 0.15]);
 
       if (circuitKit) {
-        // Gaps 10.5 (were 7 / 8): inner face behind the 9 m run-off + car
-        // half-width (#6007). Blanchimont already had a tighter wall in front;
-        // keep both shelters on the same side of the run-off edge.
+        // Les Combes: gap 14 (was 7). 10.5 clipped the Gold-3 / fence stack
+        // (clip-audit SEVERE addBox×addCyl @frac 0.126). Blanchimont 10.5
+        // (was 8) clears the 9 m run-off + car half-width (#6007).
         circuitKit.marshalShelter({ id: "kit:spa:les-combes-shelter", frac: 0.168,
-          side: -1, gap: 10.5, size: [5, 3.2, 5] });
+          side: -1, gap: 14, size: [5, 3.2, 5] });
         circuitKit.recoveryBay({ id: "kit:spa:pouhon-recovery", frac: 0.565,
           side: -1, gap: 18, size: [12, 4.5, 18] });
         circuitKit.marshalShelter({ id: "kit:spa:blanchimont-shelter", frac: 0.858,
