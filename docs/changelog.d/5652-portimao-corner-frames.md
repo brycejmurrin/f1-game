@@ -1,1 +1,1 @@
-Fixed: Portimao T12 bank zone and Norte Turn-1 braking stand now sit on the corners they name (#5652).
+Fixed: Portimao T12 bank zone is turn-anchored on T12; Norte Turn-1 grandstand stays on its braking approach with a braking kit label (#5652).
