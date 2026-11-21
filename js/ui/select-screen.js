@@ -755,7 +755,7 @@ function trackFilterBar() {
     const selected = !!current && current.day === p.day && current.class === "standard";
     b.className = "sel-chip" + (selected ? " active" : "");
     b.id = "sel-daily";
-    const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
+    const extraBits = [typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase(), p.tod.toUpperCase()];
     if (done && done.best != null) extraBits.push("ALL SETUPS ★ " + fmtTime(done.best));
     b.textContent = (selected ? "DAILY STANDARD" : "TODAY'S CHALLENGE") + " · " + p.trackName.toUpperCase();
     const extra = document.createElement("span");

@@ -124,7 +124,7 @@ const ScreenLooks = (function () {
     }),
     Object.freeze({
       id: "popups", key: "lookPopups", title: "POPUPS",
-      help: "Every pop-up sheet — standings, results, qualifying, the team and duel pickers, season setup, VS FRIEND, customise, HOW TO PLAY, music, the career offers / guide / history and circuit details. WIDTH scales each one's own size.",
+      help: "Every pop-up sheet — standings, results, qualifying, the team and duel pickers, season setup, RACE A FRIEND, customise, HOW TO PLAY, music, the career offers / guide / history and circuit details. WIDTH scales each one's own size.",
       target: () => byId("standings"),
       knobs: Object.freeze([
         ...core(["w", "density", "btn", "corners", "dim", "head"]),

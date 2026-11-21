@@ -7,7 +7,7 @@ import { absSrc } from "./abs-src.mjs";
 
 export const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null, rankLights = false, dpr } = {}) {
+export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null, rankLights = false, dpr, mirrorMax } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -66,6 +66,7 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
   let st = { dead: false, ready: false };
   const gfx = {
     width: 1280, height: 720, mobileTier: mobile, isMobile: mobile || isMobile,
+    ...(mirrorMax ? { mirrorMax } : {}),
     softPresent: () => soft,
     mirrorBegin: (frame, w, h) => { calls.push(["begin", w, h, frame.viewProj, frame.eye.slice(), frame.cullDist]); return true; },
     mirrorEnd: () => { calls.push(["end"]); st = { dead: false, ready: true }; },

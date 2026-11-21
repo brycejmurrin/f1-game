@@ -260,6 +260,7 @@ missing class, a file that left, or a file that joined.
 - `.hud-top` — `hud` + `watch-transport`
 - `.hud-bottom` — `hud` + `touch-controls` + `watch-transport`
 - `.hud-unit` — `hud` + `touch-controls`
+- `.hud-energy-label` — `hud` + `touch-controls`. The ERS bar's label: styled in `hud`; the ≤740 px touch layout keeps it on one line so the value stays inside the bar (clean-room fix 49).
 - `.touchbtn` — `hud` + `overlays` + `tokens` + `touch-controls` + `watch-transport`
 - `.hud-hidden` — `helmet-visor` + `hud` + `responsive` + `touch-controls`. Hides the driving HUD, including manually positioned instruments detached from the bottom cluster; the visor refraction filter also steps aside so a clean frame stays unbent.
 - `.hud-hide-map` — `hud` + `overlays`. Body class for MAP OFF: `hud` parks the gap strip in the map's corner; the ≥1200px tier in `overlays` (which wins the layer order whatever the specificity) steps aside with `body:not(.hud-hide-map)` so its 178px beside-the-map anchor cannot leave the strip floating.

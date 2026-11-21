@@ -4,6 +4,8 @@
     "size": 256,
     "albedo": "mat-albedo-256.png",
     "normal": "mat-normal-256.png",
+    "albedoMd5": "d7c21c5f34dc46cffd4f279654952a91",
+    "normalMd5": "95a9d4bd450f745d82a66f0eeef80148",
     "layers": [
       {
         "mat": 1,
@@ -122,6 +124,8 @@
       "size": 128,
       "albedo": "mat-albedo-128.png",
       "normal": "mat-normal-128.png",
+      "albedoMd5": "65e32c76512843491b211ffec92e65c9",
+      "normalMd5": "2793b6b4827222ef2a6d7f89862dfcb3",
       "layers": [
         {
           "mat": 1,
@@ -235,12 +239,129 @@
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         }
-      ],
-      "albedoMd5": "65e32c76512843491b211ffec92e65c9",
-      "normalMd5": "2793b6b4827222ef2a6d7f89862dfcb3"
+      ]
     },
-    "albedoMd5": "d7c21c5f34dc46cffd4f279654952a91",
-    "normalMd5": "95a9d4bd450f745d82a66f0eeef80148"
+    "hd": {
+      "size": 512,
+      "albedo": "mat-albedo-512.png",
+      "normal": "mat-normal-512.png",
+      "albedoMd5": "a8d34b61951fd78d9aa353f44f66c3bf",
+      "normalMd5": "790be64a3c6f61e001a2c70772e44cac",
+      "layers": [
+        {
+          "mat": 1,
+          "id": "concrete",
+          "scale": 5.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 2,
+          "id": "brick",
+          "scale": 2.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 4,
+          "id": "metal",
+          "scale": 2.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 5,
+          "id": "wood",
+          "scale": 2.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 6,
+          "id": "foliage",
+          "scale": 4,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 7,
+          "id": "fabric",
+          "scale": 1.8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 8,
+          "id": "sand",
+          "scale": 11,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 9,
+          "id": "grass",
+          "scale": 4.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 10,
+          "id": "rock",
+          "scale": 8,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 11,
+          "id": "snow",
+          "scale": 7,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 12,
+          "id": "roof",
+          "scale": 2.6,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 13,
+          "id": "stone",
+          "scale": 3.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 14,
+          "id": "rust",
+          "scale": 2.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        },
+        {
+          "mat": 16,
+          "id": "asphalt",
+          "scale": 3.5,
+          "source": "procedural:tools/gen/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
+        }
+      ]
+    }
   },
   "models": {
     "k_bannertowergreen": {

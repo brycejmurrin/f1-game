@@ -65,7 +65,7 @@ const CareerExperience = (function () {
     card.appendChild(image);
     const body = el("div");
     body.append(el("div", "cr-nr-round", "ROUND " + (c.season.round + 1) + " OF " + st.rounds),
-      el("h3", "cr-nr-name", t.name), el("p", "cr-nr-country", t.gp || t.country || ""));
+      el("h3", "cr-nr-name", t.name), el("p", "cr-nr-country", (typeof SeasonCal !== "undefined" && SeasonCal.gpName ? SeasonCal.gpName(t, seasonCal().map((x) => x.id)) : t.gp) || t.country || ""));
     const facts = part("div", "facts");
     if (t.lengthKm) facts.appendChild(el("span", "", t.lengthKm + " km"));
     if (t.country) facts.appendChild(el("span", "", t.country));

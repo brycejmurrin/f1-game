@@ -5600,17 +5600,18 @@ window.LightPresets = {
     "tint": -0.08
   },
   "singapore|night|dry":   {
+    "bloomKnee": 0.72,
     "starBright": 1.6,
+    "mistDensity": 1.28,
+    "ssrDryNight": 0.05,
     "fogTint": 0.06,
     "lampFlicker": 0,
+    "lampTemp": -0.792,
     "roadRough": 1.13,
     "ssrWetMul": 0.34,
     "surfDetail": 2.45,
     "tint": 0.06,
-    "wetDark": 1.47,
-    "bleedMul": 0.6,
-    "beamCone": 0.5,
-    "beamCore": 0.5
+    "wetDark": 1.47
   },
   "singapore|night|fog": {
     "fogDensityMul": 1.8,

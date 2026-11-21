@@ -389,8 +389,10 @@ window.TopModal = (function () {
       // opened from inside the GARAGE). If focus fell to <body>, hand it to
       // what the layer now on top remembers: the title's own show could not,
       // because the plate was still modal when the title came back.
+      // Focus still on the closing layer counts as lost: it is about to be blurred to <body>.
+      const lost = !a || a === document.body || layer.contains(a);
       const mem = top && lastFocus.get(top);
-      if ((!a || a === document.body) && connected(mem) && top.contains(mem) && usable(mem)) focusQuiet(mem);
+      if (lost && connected(mem) && top.contains(mem) && usable(mem)) focusQuiet(mem);
       return;
     }
     if (a && a !== document.body && !layer.contains(a)) return;   // something else took focus

@@ -23,7 +23,7 @@ const AMB_SKY = [0.200, 0.215, 0.250], AMB_GROUND = [0.130, 0.125, 0.118];
 // Mesh primitives, room dimensions and the shared colours live in
 // js/garage/scene-prims.js (GaragePrims); the pit equipment in scene-equipment.js
 // (GarageEquipment); the live atlas in scene-live.js (GarageLive).
-const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css, pushMat, tile } = GaragePrims;
+const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css, pushMat, tile, ex } = GaragePrims;
 
 // ── the bay shell ──────────────────────────────────────────────────────────
 // A CLOSED six-sided room whose every face is wound to be seen from INSIDE.
@@ -166,9 +166,10 @@ const SIDES = ["nx", "px", "back", "door", "mid", "shutter", "barrier"];
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
 function tyreStack(out, x, z, seed) {
   for (let t = 0; t < 4; t++) {
-    const y = t * 0.345;
+    const y = t * 0.345, c = COMPOUND[(seed + t) % 3];
+    if (ex("stack", out, x, y, z, c)) continue;   // EXTREME: a lathed slick
     cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 14);
-    cyl(out, x, y + 0.30, z, 0.305, 0.025, COMPOUND[(seed + t) % 3], 14);
+    cyl(out, x, y + 0.30, z, 0.305, 0.025, c, 14);
   }
 }
 function toolChest(out, x, z, c1) {
@@ -1213,7 +1214,7 @@ function roomStamp(team, liv, info, ctx) {
   const o = _rkNow;
   o.length = 0;
   const d0 = seatDriverAt(team, 0), d1 = seatDriverAt(team, 1);
-  o.push(team && team.id, (team && team.legend) || "", info, d0 && d0.num, d1 && d1.num, logoGen, GaragePrims.lookId());
+  o.push(team && team.id, (team && team.legend) || "", info, d0 && d0.num, d1 && d1.num, logoGen, GaragePrims.lookKey());
   rkColour(o, liv && liv.c1); rkColour(o, liv && (liv.accent || liv.stripe || liv.c2)); rkColour(o, liv && liv.c2);
   rkColour(o, liv && liv.logo); rkColour(o, liv && liv.logo2); rkColour(o, liv && liv.logo3);
   o.push((liv && liv.sponsors) || "-", !!ctx);
@@ -1250,7 +1251,7 @@ function roomKeyStrings(team, liv, info, ctx) {
   // Shell, floor, LEDs, props and the career desks. Not the crest, the sponsor
   // banners or the pit-board numbers — those are atlas texels.
   const geom = `${team && team.id}|${(team && team.legend) || ""}|${paint}`
-               + `|${hourNight(ctx) ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
+               + `|${hourNight(ctx) ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookKey()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
   const board = boardKey(info);
@@ -1312,38 +1313,38 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
     const look = GaragePrims.look();   // design-preview room look; null = shipped
-    const shell = acc();
-    buildShell(shell, liv, look);
-    shellMesh = _gfx.createMesh(shell);
     // Roof geometry and wall-decal UVs never depend on paint, team or context.
     // Keep their GPU handles until release(), including across colour drags.
-    if (!trussMesh || trussLook !== GaragePrims.lookId()) {
-      if (trussMesh) _gfx.freeMesh(trussMesh);
-      const truss = acc();
-      buildTruss(truss, look, true);
-      trussMesh = _gfx.createMesh(truss);
-      trussLook = GaragePrims.lookId();
-    }
-    const led = {};
-    for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
-    buildLed(led, liv);
-    if (look) GarageDress.lookLed(led, liv, look);
+    const lk = GaragePrims.lookKey(), roof = !trussMesh || trussLook !== lk;
+    // The CPU buffers first, then the uploads: GaragePrims.run runs the builders in the EXTREME
+    // (garageHi) dense scope once GarageHiPrims has landed; a throw there runs them again for today's room.
+    let shell, truss, led, flr, fallback, g;
+    GaragePrims.run("room", () => {
+      shell = acc(); buildShell(shell, liv, look);
+      if (roof) buildTruss(truss = acc(), look, true);
+      led = {};
+      for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
+      buildLed(led, liv);
+      if (look) GarageDress.lookLed(led, liv, look);
+      flr = acc(); buildBayFloor(flr, liv, look);
+      fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, hourNight(ctx));
+      g = {};
+      for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
+      buildProps(g, liv);
+      GarageEquipment.build(g, liv, ctx);
+      GarageExperience.buildFacility(g, liv, ctx);
+      if (look) GarageDress.lookProps(g, liv, look);
+      ex("roomExtras", g, truss, look);
+    });
+    shellMesh = _gfx.createMesh(shell);
+    if (roof) { if (trussMesh) _gfx.freeMesh(trussMesh); trussMesh = _gfx.createMesh(truss); trussLook = lk; }
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
-    const flr = acc();
-    buildBayFloor(flr, liv, look);
-    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, hourNight(ctx));
     exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = hourNight(ctx) ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
     floorMesh = _gfx.createMesh(flr);
-    const g = {};
-    for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
-    buildProps(g, liv);
-    GarageEquipment.build(g, liv, ctx);
-    GarageExperience.buildFacility(g, liv, ctx);
-    if (look) GarageDress.lookProps(g, liv, look);
     for (let i = 0; i < SIDES.length; i++)
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     // A new team or paint: the "what changed" marker on the spec board starts

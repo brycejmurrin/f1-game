@@ -103,11 +103,13 @@ const TrackBuildProps = (function () {
     // NOT opted into GRAPHICS: HIGH) coarsen that grid, cutting ~20-24% of the props
     // verts on the dense street tracks that OOM-crash iOS — the exact jetsam trigger.
     // CITY_LOD = 1 on desktop and HIGH-tier phones ⇒ geometry is byte-identical there;
-    // `lod()` only ever shrinks a count and never below its floor.
+    // `lod()` never goes below its floor; only the EXTREME `density` flag (never a phone) grows a count.
     // Façade wiring: read mobileTier off the injected backend (stashed on the
     // track by build()), falling back to the GLX global for VM/stub callers.
     const G = track._gfx || (typeof GLX !== "undefined" ? GLX : null);
-    const CITY_LOD = (G && G.mobileTier) ? 0.72 : 1;
+    // Desktop DETAIL (js/track/scenery/detail.js): `density` at EXTREME raises the same knob above 1.
+    const DF = track._detailFeatures || {};
+    const CITY_LOD = (G && G.mobileTier) ? 0.72 : DF.density ? 1.3 : 1;
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
     // Props run ~70-290 verts per metre of lap (median ~130; 52-circuit sweep): start at 100/m so a
     // typical build grows once, not seven times from 8192. Glass and water stay small.
@@ -1333,6 +1335,8 @@ const TrackBuildProps = (function () {
       // output buffers + per-build state
       out, glassBuf, waterBuf, track, def, theme, pal, n, ds, px, py, pz, hw,
       pyMin, NIGHT, MAT, lod,
+      // desktop detail level (0 today) and its feature flags (TrackDetail.NAMES; all false at 0)
+      detail: track._detail || 0, detailFeatures: DF,
       // guarded emitters + the raw escape hatch
       addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain,
       emit, RAW: raw, rejBox, rejRad,
@@ -1377,6 +1381,7 @@ const TrackBuildProps = (function () {
     if (def.street) {
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
+      const streetHi = typeof TrackModels !== "undefined" && TrackModels.propsHi(track);
       const panel = (kA, kB, col, side) => {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
@@ -1397,6 +1402,23 @@ const TrackBuildProps = (function () {
           if (Number.isFinite(g) && y - g > drop) drop = y - g;
         }
         drop = drop > 0.3 ? Math.min(drop + 0.1, 6) : 0;
+        // EXTREME props detail (TrackModels.propsHi): a W-beam armco face on a dark backing inside the same
+        // 0.4 x 1.1 m envelope (visual only: markBarrier below is unchanged). A skirted panel keeps the box.
+        if (streetHi && drop === 0) {
+          const d = -side * (rr[0] * rA[0] + rr[1] * rA[1] + rr[2] * rA[2] < 0 ? -1 : 1);   // canonical x toward the road
+          instance(`street-barrier-hi|${col.join(",")}|${d}`,
+            { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+            (rec) => {
+              const dk = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.58];
+              rec.box([-d * 0.09, 0, 0], [0.22, WH, 1], dk);                     // backing
+              TrackModels.wBeam(rec, d, -0.08, 0.84, col, d * 0.1);              // lower rail
+              TrackModels.wBeam(rec, d, 0.30, 0.84, col, d * 0.1);               // upper rail
+              rec.box([0, WH / 2 - 0.02, 0], [WT, 0.04, 1], dk);                 // cap
+              rec.box([d * 0.05, -WH / 2 + 0.1, 0], [0.1, 0.2, 1], dk);           // kick plate
+            },
+            { kind: "streetBarrier", k: kA, side });
+          return [cx, cz];
+        }
         instance(`street-barrier|${col.join(",")}`,
           { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len] },
           (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),

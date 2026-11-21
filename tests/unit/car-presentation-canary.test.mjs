@@ -205,7 +205,7 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
 test("the first-person caster is pinned to the car loop's cockpit branch", () => {
   const game = read("js/game.js");
   assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\)\); \}/);
-  assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster \}\)/);
+  assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster, sharedRivalBody: carDraw\.sharedRivalBodyMesh \}\)/);
   assert.match(game, /if \(c\.isPlayer && _plBodyOk\) \{\s*\/\/[^\n]*\n\s*const S = _smpPlayer, p = smp2\.p, t = smp2\.t, r = smp2\.r;/,
     "the car loop restores the player's smp2 from _smpPlayer");
   assert.match(game, /const yv = yawVisInterp\(c\);/);

@@ -305,7 +305,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
     let _mirReady = false;
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
-    ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
+    ${tslice("      let _ssrMrt = null, _ssrMrtV = null;", "      let _poolNow = ")}
     ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
     // mirrorBegin's refusals, in the real order (pinned below), and present()'s warm dispatch line, verbatim.
     function mirrorBegin() {

@@ -65,7 +65,13 @@ const BOX_F = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 
 // the whole class of bug at the primitive instead of at ~150 call sites.
 const WALL_KEYED = [1, 2, 4, 5, 7, 12, 13, 14];
 const sideOnly = (mid, ny) => (ny !== 0 && WALL_KEYED.indexOf(mid) >= 0 ? 0 : mid);
+// EXTREME ("garageHi" / "crewHi"): H is the lazy GarageHiPrims while its dense()
+// build scope runs (it sets it through hi()), else null and every primitive is today's.
+// ex(name, ...) is a builder's hook: truthy = GarageHiPrims[name] built the EXTREME form.
+let H;
+const ex = (n, ...a) => H && H[n](...a);
 function block(out, cx, cy, cz, hx, hy, hz, col, mid) {
+  if (H && H.block(arguments, sideOnly)) return;
   const c = [cx, cy, cz], h = [hx, hy, hz];
   for (let f = 0; f < 6; f++) {
     const n = BOX_F[f];
@@ -90,7 +96,7 @@ function block(out, cx, cy, cz, hx, hy, hz, col, mid) {
 }
 
 function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
-  seg = seg || 10;
+  seg = H ? H.segs(seg || 10) : seg || 10;
   const base = out.pos.length / 3;
   for (let i = 0; i < seg; i++) {
     const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
@@ -122,7 +128,7 @@ function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
 // cyl's top cap and the a-end reverses it. Caps take sideOnly on their axis so
 // a horizontal cap of a wall-keyed material never streaks (see block()).
 function tube(out, a, b, rad, col, seg, mid) {
-  seg = seg || 8;
+  seg = H ? H.segs(seg || 8) : seg || 8;
   const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
   const n = [d[0] / L, d[1] / L, d[2] / L];
@@ -161,6 +167,7 @@ function tube(out, a, b, rad, col, seg, mid) {
 }
 // A hose or cable through a polyline of points: one tube per leg.
 function hose(out, pts, rad, col, seg, mid) {
+  if (H && H.hose(arguments)) return;
   for (let i = 1; i < pts.length; i++) tube(out, pts[i - 1], pts[i], rad, col, seg, mid);
 }
 
@@ -333,6 +340,9 @@ const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
   // BOX_F / WALL_KEYED / sideOnly / mix stay module-local: only block/cyl/tube + LOOKS use them.
   return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
-    LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
+    LOOKS, LOOK_IDS, setLook, lookId, look, lookCol, ex, hi: (h) => (H = h),
+    // EXTREME seams GarageHiPrims replaces when it lands: the room's geometry key (the look + "+hi")
+    // and run(kind, build, undo), a room / crew build in its dense scope (it also sets crewHi, a key bit).
+    lookKey: lookId, run: /** @type {(kind: string, build: () => any, undo?: () => any) => any} */ ((k, f) => f()) };
 })();
 if (typeof window !== "undefined") window.GaragePrims = GaragePrims;

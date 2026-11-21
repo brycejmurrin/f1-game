@@ -131,7 +131,6 @@ function setConfig(next) {
   Log.info("game", `SeasonCal.setConfig rounds=${cfg.trackIds.length}`);
   return cfg;
 }
-function resetConfig() { return setConfig(null); }
 
 function frozenConfig(raw) {
   const out = normalize(raw);
@@ -178,10 +177,10 @@ function track(round) { return list()[round] || null; }
  *  Barcelona-Catalunya GP now that the Spanish GP is Madrid's. Only an unedited
  *  2026 calendar (the preset's ids, in order) takes those names. */
 const REAL_2026_GP = Object.freeze({ sepang: "Bahrain GP", catalunya: "Barcelona-Catalunya GP" });
-function gpName(t) {
+function gpName(t, calIds) {
   if (!t) return "";
-  if (fmtActive() && REAL_2026_GP[t.id]) {
-    const ids = rulesConfig().trackIds || [];
+  if (REAL_2026_GP[t.id] && (calIds || fmtActive() || flow === "career")) {
+    const ids = calIds || (fmtActive() ? rulesConfig().trackIds || [] : list().map((x) => x.id));
     if (ids.length === REAL_2026.length && REAL_2026.every((r, i) => r.id === ids[i])) return REAL_2026_GP[t.id];
   }
   return t.gp || "";
@@ -751,7 +750,7 @@ function shuffled(ids, seed) {
 // SHORT_POINTS / resetWeekend stay module-local (payTable / restart / applyConfig).
 return {
   SPRINT_POINTS, CLASSIC_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
-  config, setConfig, resetConfig, applyConfig, matchesConfig, fresh, normalize,
+  config, setConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, canRace, hasProgress,

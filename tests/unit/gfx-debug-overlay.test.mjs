@@ -174,6 +174,24 @@ test("gfx-debug prints the memory line a crash report can paste (#1648)", () => 
   assert.match(text, /mem heap=80\.0MB rObj=56 geo=12 tex=34 tier=2 crashStrikes=1/);
 });
 
+test("gfx-debug pastes the desktop detail level, the upper-ladder shed count and the GPU ms (§gov-42)", () => {
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null, querySelector: () => null },
+    location: { search: "" }, localStorage: store, sessionStorage: store, performance: { now: () => 0 },
+    GLX: { gpuErrors: () => 0 },
+    GfxQuality: { detail: () => 2, shed: () => 3, cinema: () => true, SHED_ORDER: [1, 2, 3, 4, 5, 6, 7] },
+    PerfGov: { gpuMs: () => 11.256 },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: absSrc("js/perf/gfx-debug-overlay.js") });
+  const line =vm.runInContext("GfxDebug.text()", ctx).split("\n").filter((l) => l.startsWith("detail="));
+  assert.deepEqual(line, ["detail=2 shed=3/7 cinema=1 gpuMs=11.26"]);
+  delete sandbox.GfxQuality;
+  assert.equal(vm.runInContext("GfxDebug.text()", ctx).split("\n").some((l) => l.startsWith("detail=")), false, "no quality module: no line, no throw");
+});
+
 test("gpu-game-check reports heap, three memory and an opt-in A-B-A switch (#1648)", () => {
   const ggc = read("tools/gfx/gpu-game-check.mjs");
   assert.match(ggc, /usedJSHeapSize/);

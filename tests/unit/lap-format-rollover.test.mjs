@@ -75,3 +75,16 @@ test("the results sheet's PB delta takes its sign from the rounded value", () =>
   assert.match(src, /const shown = \+delta\.toFixed\(3\);/, "round first");
   assert.match(src, /\$\{shown >= 0 \? "\+" : ""\}\$\{shown\.toFixed\(3\)\}s/, "then sign and print the rounded value");
 });
+
+// #5897: the Daily history printed raw seconds ("83.163s") where every other lap reads m:ss.mmm.
+test("the Daily history prints laps as m:ss.mmm", () => {
+  const SRC = read("js/ui/title-menu.js");
+  const ctx = vm.createContext({ Math, Number, String, Array, Object, Date, isFinite, WeakMap });
+  vm.runInContext(read("js/ui/dom.js"), ctx, { filename: absSrc("js/ui/dom.js") });
+  vm.runInContext(fnSource(SRC, "function lapStr(t) {") + "\n" + fnSource(SRC, "function dailyHistory(daily) {"), ctx,
+    { filename: absSrc("js/ui/title-menu.js") });
+  ctx.daily = { data: () => ({ days: { "2026-11-19": { classes: { standard: { best: 83.163 } } }, "2026-11-18": { best: 119.9996 } } }) };
+  const rows = vm.runInContext("dailyHistory(daily)", ctx);
+  assert.equal(rows[0].text, "Saved class 1: 1:23.163");
+  assert.equal(rows[1].text, "Day best (legacy / mixed classes): 2:00.000");
+});

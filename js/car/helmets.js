@@ -786,7 +786,7 @@ const Helmets = (function () {
   const MEMO_MAX = 24, MEMO_BYTES = 8 * 1024 * 1024, _memo = new Map();
   let _memoBytes = 0;
   const ARRS = ["pos", "nrm", "col", "mat"];
-  const _cornersFull = new Map(), _cornersField = new Map();   // t -> (az -> corner), see paintLid
+  const _cornersFull = new Map(), _cornersField = new Map(), _cornersHi = new Map();   // t -> (az -> corner), see paintLid
   function build(out, cx, cy, cz, design, S) {
     let key = null;
     try { key = JSON.stringify([cx, cy, cz, design, S || null]); } catch (_) { key = null; }
@@ -822,8 +822,11 @@ const Helmets = (function () {
     // builds keep the full painter and boundary subdivision.
     const simplePaint = !!(S && S.simplePaint);
     const skin = simplePaint ? null : shell(design);
-    const rings = simplePaint ? FIELD_RINGS : RINGS;
-    const slices = simplePaint ? FIELD_SLICES : SLICES;
+    // S.hi (meshHi, detail >= 1, full paint only): RINGS x2 and SLICES x2. ringT(2i) at 2*RINGS IS ringT(i) at
+    // RINGS, so every band snapped to a detail-0 ring line (snapT) still lands on a ring line of the finer grid.
+    const hi = !simplePaint && !!(S && S.hi);
+    const rings = simplePaint ? FIELD_RINGS : RINGS * (hi ? 2 : 1);
+    const slices = simplePaint ? FIELD_SLICES : SLICES * (hi ? 2 : 1);
     const meshRingT = (i) => Math.pow(i / rings, 1.25);
     const clamp1 = (c) => [Math.min(c[0], 1), Math.min(c[1], 1), Math.min(c[2], 1)];
     // (t, azimuth in degrees) -> position, smooth normal, and the pair itself.
@@ -834,7 +837,7 @@ const Helmets = (function () {
     // lattice is small (base grid plus MAX_SPLIT midpoints), so 22 lids share one table per detail level instead
     // of solving the superellipse five times per corner each (pointAt: 52 ms of a grid warm, 2026-11-18).
     // Entries are read-only: emit() copies p and n out.
-    const table = simplePaint ? _cornersField : _cornersFull;
+    const table = simplePaint ? _cornersField : hi ? _cornersHi : _cornersFull;
     const corner = (t, az) => {
       let row = table.get(t);
       if (!row) { if (table.size > 512) table.clear(); row = new Map(); table.set(t, row); }

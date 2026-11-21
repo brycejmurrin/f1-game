@@ -215,7 +215,8 @@
     "XrSession",
     "XrUi",
     "StoppedCars",
-    "RetiredCard"
+    "RetiredCard",
+    "TLXCarSurf"
   ],
   "mutable": [
     "GLX",

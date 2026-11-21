@@ -1,0 +1,33 @@
+{
+  "_doc": "Triangle totals per circuit at detail 0 and 2 (EXTREME): drawn road, props, glass, floor. tests/unit/track-detail.test.mjs.",
+  "circuits": {
+    "monza": {
+      "detail0": {
+        "road": 51394,
+        "props": 285079,
+        "glass": 1392,
+        "floor": 4
+      },
+      "detail2": {
+        "road": 55882,
+        "props": 567361,
+        "glass": 2208,
+        "floor": 36864
+      }
+    },
+    "monaco": {
+      "detail0": {
+        "road": 31334,
+        "props": 255839,
+        "glass": 48,
+        "floor": 4
+      },
+      "detail2": {
+        "road": 37882,
+        "props": 457854,
+        "glass": 48,
+        "floor": 4
+      }
+    }
+  }
+}

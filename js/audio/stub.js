@@ -116,9 +116,12 @@ var AudioPanel = {
     }
     if (els && els.soundbtn) {
       const stubClick = () => {
-        const next = !G.soundOn;
+        // Nothing has been audible yet, so this press asks to hear the game: keep (or turn) sound on.
+        const next = true;
         // game.js sets AudioPanel._ensure = ensureAudio while the stub is resident.
         const ensure = AudioPanel._ensure;
+        // OFF needs no audio bundle (#5900).
+        if (!next) { setSound(false); return; }
         if (typeof ensure === "function") {
           ensure().then(() => {
             // The real panel bound over this button while the bundle loaded: hand the

@@ -769,6 +769,47 @@ const SceneryPits = (function () {
         }
         yield;
       }
+      // ── 4b. EXTREME props detail (TrackModels.propsHi; sources in models.js) ──
+      // A pass of its own, after the canopy, so a bay stays the eight prims the clip
+      // audit reads as one model. Per bay: a steel reveal lining the door opening, the
+      // hospitality storey's mullions and transoms on its lane face, a glass balustrade
+      // on the roof terrace in front of it, and — on the platform opposite — the team's
+      // pit-wall stand (desk, posts, canopy, an LED bar). Visual only: no limit reads it.
+      if (typeof TrackModels !== "undefined" && TrackModels.propsHi(track)) for (let i = 0; i < count; i++) {
+        const box = boxes[i], k = box.k;
+        const f = frameAtS(box.s), bs = f.basis, h = f.hw;
+        const lift = (i & 1) ? TrackGeom.MIN_SEP : 0, bump = sd * lift, MS = TrackGeom.MIN_SEP;
+        const slide = (c, a) => [c[0] + bs[2][0] * a, c[1] + bs[2][1] * a, c[2] + bs[2][2] * a];
+        const STEEL = [0.20, 0.21, 0.24];
+        const trimLat = sd * (h + garage - 0.29 - 2 * MS) - bump;
+        for (const side of [-1, 1])
+          rawBox(out, slide(atF(f, trimLat, (doorH + 0.12) / 2, k), side * (doorW / 2 - 0.05)), [0.10, doorH + 0.12, 0.10], STEEL, bs);
+        rawBox(out, atF(f, trimLat, doorH + 0.06, k), [0.10, 0.12, doorW], STEEL, bs);
+        const y0 = B.h + 0.4 + lift, glassLat = sd * (h + garage + 1.1 - 0.05);
+        const nm = Math.max(2, Math.round(seg / 1.8));
+        for (let j = 0; j <= nm; j++) {
+          const a = (-0.5 + j / nm) * (seg - 0.3);
+          rawBox(out, slide(atF(f, glassLat, y0 + 1.7, k), a), [0.14, 3.34, 0.10], STEEL, bs);
+        }
+        for (const y of [y0 + 0.10, y0 + 3.30])
+          rawBox(out, atF(f, glassLat, y, k), [0.16, 0.10, seg * 0.98], STEEL, bs);
+        const railLat = sd * (h + garage - 0.10);
+        rawBox(out, atF(f, railLat, y0 + 0.48, k), [0.05, 0.9, seg * 0.98], GLASS, bs);
+        rawBox(out, atF(f, railLat, y0 + 0.96, k), [0.09, 0.06, seg * 0.98], STEEL, bs);
+        const pb = p.bands;
+        if (p.hasWall && pb && p.v[k] >= 0.98 && pb.platform > 1.2) {
+          const v0 = pb.verge + 0.25, v1 = pb.verge + pb.platform - 0.10, wb = basisAt(k);
+          const lat = (q) => sd * (hw[k] + q);
+          const mid = (v0 + v1) / 2, wid = v1 - v0;
+          rawBox(out, at(k, lat(mid), 0.35 + 0.45), [wid * 0.7, 0.9, 2.8], STEEL, wb);           // desk
+          for (const q of [v0 + 0.15, v1 - 0.15]) for (const a of [-1.6, 1.6]) {
+            const c = at(k, lat(q), 0.35 + 1.4);
+            rawBox(out, [c[0] + wb[2][0] * a, c[1] + wb[2][1] * a, c[2] + wb[2][2] * a], [0.10, 2.8, 0.10], STEEL, wb);
+          }
+          rawBox(out, at(k, lat(mid), 0.35 + 2.86), [wid + 0.3, 0.12, 3.6], ROOF, wb);           // canopy
+          rawBox(out, at(k, lat(v1 - 0.2), 0.35 + 2.76), [0.08, 0.06, 3.0], lensCol, wb);        // LED bar
+        }
+      }
       roof = foldedRoof();
       // Race control, stepped up at the exit end of the row: 12 m square,
       // its near face 3 m past the last bay's end wall, inside the row's

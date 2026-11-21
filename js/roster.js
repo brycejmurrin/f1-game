@@ -32,10 +32,13 @@
     "three": [
       "js/render/three/tsl-chunks.js",
       "js/render/three/tsl-viewport.js",
+      "js/render/three/tsl-carsurf.js",
       "js/render/three/tsl-lit.js",
       "js/render/three/tsl-sky.js",
       "js/render/three/tsl-fx.js",
+      "js/render/three/tsl-gi.js",
       "js/render/three/tsl-post.js",
+      "js/render/three/tsl-aa.js",
       "js/render/three/tlx-shadow.js",
       "js/render/three/tlx-chunked.js",
       "js/render/three/tlx-post.js",
@@ -162,6 +165,7 @@
     ]
   ],
     LAZY_AGENT: [
+    "js/render/shared/puddles.js",
     "js/agent/agentview-raster.js",
     "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
@@ -247,7 +251,8 @@
     "js/garage/entrance-motion.js",
     "js/lighting/presets.js",
     "js/garage/garage-data.js",
-    "js/garage/arrival-rows.js"
+    "js/garage/arrival-rows.js",
+    "js/garage/hi-prims.js"
   ],
     LAZY_RACE_SESSION: [
     "js/data/garage-departure-motion.js",
@@ -860,7 +865,13 @@
       "js/share/share-card.js"
     ]
   ],
+    LAZY_GFX_HI: [
+    "js/render/shared/gfx-hi.js",
+    "js/car/car-hero.js"
+  ],
+    LAZY_GFX_HI_EDGES: [],
     LAZY_TRACK_BUILD: [
+    "js/render/shared/mesh-detail.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
@@ -878,6 +889,7 @@
     "js/track/scenery/guards.js",
     "js/track/scenery/api-wrap.js",
     "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
     "js/track/scenery/build-props.js"
   ],
     LAZY_TRACK_BUILD_EDGES: [
@@ -962,6 +974,7 @@
     "js/core/log.js",
     "js/core/dev-flags.js",
     "js/core/mat4.js",
+    "js/render/shared/mesh-detail.js",
     "js/track/core/geom.js",
     "js/track/core/pit.js",
     "js/track/scenery/data.js",
@@ -989,6 +1002,7 @@
     "js/track/scenery/guards.js",
     "js/track/scenery/api-wrap.js",
     "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",
