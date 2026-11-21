@@ -17,12 +17,12 @@
 // Sizes: 44 px (WCAG 2.5.5 AAA / Apple HIG) for the race, pause and settings controls; 24 px (WCAG 2.5.8 AA)
 // for the title doors, whose utility row (SETTINGS, HELP, SAVES, PHONE PAD) measured 40 px tall at this cell on
 // 6c356f1 — named in #5242, not hidden by a number. PAUSE keeps its fixed 44-48 px (#5179).
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { exportStore } from "../helpers/title-fit.mjs";
 import { judgeNamed } from "../helpers/control-judge.mjs";
 
-const W = 852, H = 393;
-const INSETS = { top: 0, left: 59, bottom: 21, right: 59 };
+const { width: W, height: H, insets: INSETS } = BRYCE_WINDOWS.standalone;
 
 const TITLE = { "mb-race": { min: 24, safe: true }, "mb-career": { min: 24, safe: true }, "mb-garage": { min: 24, safe: true },
   "mb-practice": { min: 24, safe: true }, "mb-settings": { min: 24, safe: true } };

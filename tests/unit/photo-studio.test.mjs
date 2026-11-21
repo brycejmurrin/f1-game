@@ -60,7 +60,7 @@ function boot(options = {}) {
     Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
-    NativeDownload: options.nativeDownload,
+    NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
       TUNE_DEFS: options.tuneDefs || [
@@ -69,7 +69,7 @@ function boot(options = {}) {
         { id: "sunElev", group: "SUN & MOON", label: "Sun elevation", min: -20, max: 90, step: 1 },
       ],
     },
-    LightStore: { reapply: () => { order.push("lt-reapply"); } },
+    LightStore: { reapply: () => { Object.assign(LT, ltProfiles.value["test|day|dry"]); order.push("lt-reapply"); } },
     DrivingLine: { shown: () => true, setPhoto: () => {} },
     GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; },
       // js/core/store.js rawSet/rawDel: false (never a throw) when the write fails.
@@ -743,6 +743,51 @@ test("Photo Lighting clones the profile store, writes via the light store, and r
   b.api.close(false);
   assert.equal(b.G._ltStore, original, "close restores the exact original profiles reference");
   assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
+});
+
+test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {
+  const original = { "test|day|dry": { exposureMul: 1 } };
+  const b = boot({ profiles: original });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-exposureMul"), exact = b.dom.byId("ps-lt-num-exposureMul");
+  const change = (value, valid = true) => {
+    exact.value = value;
+    exact.valueAsNumber = value === "" ? NaN : Number(value);
+    exact.validity = { valid }; // the mini DOM does not implement native range / step validation
+    exact.dispatchEvent({ type: "change" });
+  };
+  assert.equal(exact.type, "number");
+  assert.match(exact.getAttribute("aria-label"), /exposure/i);
+  assert.deepEqual([exact.min, exact.max, exact.step], [slider.min, slider.max, slider.step]);
+  exact.value = "1."; exact.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [], "typing an incomplete decimal does not edit the session");
+  change("1.35");
+  assert.equal(slider.value, "1.35");
+  assert.equal(b.dom.byId("ps-lt-v-exposureMul").textContent, "1.35");
+  for (const bad of ["", "3.5", "1.33"]) { change(bad, false); assert.equal(exact.value, "1.35"); }
+  slider.value = "1.55"; slider.dispatchEvent({ type: "input" });
+  assert.equal(exact.value, "1.55");
+  assert.deepEqual(b.ltWrites, [["exposureMul", 1.35], ["exposureMul", 1.55]]);
+  b.dom.byId("ps-lt-reset").click();
+  assert.equal(exact.value, "1"); assert.equal(slider.value, "1");
+  assert.equal(b.dom.byId("ps-lt-reset").disabled, true);
+  b.api.close(false);
+  change("2");
+  assert.equal(b.ltWrites.length, 2);
+  assert.equal(b.G._ltStore, original);
+});
+
+test("Photo Lighting locks both controls for desktop-only knobs on mobile", () => {
+  const b = boot({ mobile: true, LT: { carShadow: 1 }, tuneDefs: [
+    { id: "carShadow", label: "Car shadows", group: "Shadows", min: 0, max: 1, step: 1, desktopOnly: true },
+  ] });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-carShadow"), exact = b.dom.byId("ps-lt-num-carShadow");
+  assert.equal(slider.disabled, true);
+  assert.equal(exact.disabled, true);
+  assert.match(exact.getAttribute("aria-label"), /desktop only/i);
+  exact.value = "0"; exact.dispatchEvent({ type: "change" });
+  assert.deepEqual(b.ltWrites, []);
 });
 
 test("Photo Lighting stays out of the garage subject", () => {

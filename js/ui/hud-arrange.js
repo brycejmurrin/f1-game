@@ -1,25 +1,5 @@
 "use strict";
-/* Apex 26 — HudArrange: ARRANGE HUD, the on-screen editor for MOVE & SIZE.
-
-   The numeric editor (js/ui/hud-layout.js, SETTINGS › DISPLAY › HUD › MOVE & SIZE)
-   edits one element at a time behind a settings sheet. This is the
-   same setting edited by hand: a button on the pause card, every HUD element
-   gets a dashed outline, DRAG moves it, a PINCH (or the toolbar's − / +) sizes
-   it, and a pair of elements — or an element and a touch control — that overlap
-   turn red. It writes the offsets HudLayout already stores (x / y as a share of
-   the screen in %, s as a percent, per HUD style and camera set), so presets,
-   RESET and camera sets keep working; explicit placements bypass automatic fitting.
-
-   Mirrors DockLayout's REPOSITION editor: entering hides SETTINGS and PAUSED
-   (showModal dialogs make the rest of the document inert, so a drag could not
-   start), a floating toolbar ends it; so does Escape, or any dialog opening
-   while it is on. Pointer events are taken in the CAPTURE phase so a press on
-   a piece over GAS never reaches the pedal (THROTTLE = LATCH would launch the
-   car on RESUME).
-
-   Pieces the race hides until something happens (the radio card, the caution
-   flag, the LIMITS chip, DAMAGE) are shown with sample content while
-   arranging and put back exactly as they were on exit. */
+/* Live race HUD arrangement. See docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
   const TOUCH_CARRIED = ["ot", "aero", "bb"];
@@ -116,7 +96,26 @@ const HudArrange = (() => {
     let shown = null;      // dialogs WE hid: { settings, pause }
     let preview = null;    // title-screen HUD shell visibility, never saved as a preference
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
-    let bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
+    let move, bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
+    let expanded = false, coarse = false;
+    const moveControls = [], sizeControls = [], history = [];
+    let initial, visibilityDraft = {}, undo;
+    function visibility(id) {
+      const state = HudLayout.visibility(id);
+      return state && visibilityDraft[id] ? { ...state, value: visibilityDraft[id] } : state;
+    }
+    function remember() {
+      if (history.length >= 64) history.shift();
+      history.push({ layout: HudLayout.arrangeSnapshot(context.set, context.profile), choices: {...visibilityDraft} });
+    }
+    function undoEdit() {
+      if (!history.length) return;
+      pending = null; paint(); drag = null; pinch = null; pointers.clear();
+      const previous = history.pop();
+      HudLayout.restoreSnapshot(context.set, context.profile, previous.layout);
+      visibilityDraft = previous.choices;
+      ghosts(); after();
+    }
     const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
 
     const elOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? document.querySelector(row[2]) : null; };
@@ -128,15 +127,7 @@ const HudArrange = (() => {
       return null;
     };
 
-    /* ---- the toolbar (built once; inline styles — the shell is not this module's to edit) ----
-       FIXED-SIZE CHROME, ONE STRIP (#5198). Every size below is a CSS px constant: the bar is an editing tool laid
-       over the HUD, so HUD SIZE, BUTTON SIZE and TEXT SIZE must not grow it (the CAM / PAUSE rule, #5179). It used
-       to ride --fs-micro (16 px at TEXT SIZE large) with wrapping rows and native selects, and on Bryce's iPhone
-       (852x393, insets 59/21/59, HUD 155 %, BUTTON 245 %) it painted ~715x217 over the widgets being arranged,
-       the selects as empty ~135x100 boxes. Now: one nowrap row of 44 px targets in a 52 px strip (BAR_H), selects
-       drawn by us (appearance none, explicit 44 px height: inline beats the coarse-pointer `select` floor in
-       css/components.css), the hint clamped to two short lines. It wraps only where one row cannot fit at all
-       (portrait), see placeBar. */
+    // Fixed chrome stays at 44px even when the HUD is zoomed.
     const ctl = "box-sizing:border-box;flex:none;height:" + T + "px;min-height:" + T + "px;max-height:" + T + "px;margin:0;" +
       "font:inherit;font-weight:700;color:inherit;border:1px solid var(--text,#fff);border-radius:6px;";
     const selectCss = ctl + "-webkit-appearance:none;appearance:none;padding:0 20px 0 8px;line-height:normal;" +
@@ -149,13 +140,13 @@ const HudArrange = (() => {
       bar.id = "hud-arrange-bar";
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", "Arrange HUD");
-      bar.setAttribute("data-esc-close", "hud-arrange-done");
+      bar.setAttribute("data-esc-close", "hud-arrange-cancel");
       bar.style.cssText = "position:fixed;z-index:9999;" +
         "display:flex;flex-wrap:nowrap;box-sizing:border-box;align-items:center;gap:4px;padding:2px 4px;border-radius:8px;" +
         "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);" +
         "font-family:inherit;font-size:13px;line-height:1.15;letter-spacing:0.02em;width:max-content;" +
         "max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));" +
-        "overflow-x:auto;overflow-y:hidden;scrollbar-width:none;";
+        "overflow:auto;scrollbar-width:none;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
@@ -176,24 +167,44 @@ const HudArrange = (() => {
         "white-space:normal;overflow-wrap:anywhere;flex:1 1 0;min-width:72px;";   // no inline display: [hidden] must still win
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
-      picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
+      picker.setAttribute("aria-label", "HUD element; use arrow keys on Tools to position");
       picker.setAttribute("data-arrows", "own");
       picker.style.cssText = selectCss + "width:128px;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
       bar.appendChild(picker);
-      const move = mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move");
+      move = mk("Controls", "Layout controls", () => {
+        expanded = !expanded;
+        after();
+      }, "hud-arrange-move");
       move.setAttribute("data-arrows", "own");
       bar.appendChild(move);
+      for (const [label, x, y] of [["Left", -1, 0], ["Right", 1, 0], ["Up", 0, -1], ["Down", 0, 1]]) {
+        moveControls.push(mk(label, "Move " + label.toLowerCase(), () => nudge(x, y, coarse ? 5 : 1), "hud-arrange-" + label.toLowerCase()));
+      }
+      const step = mk("Fine", "Toggle fine or coarse movement", () => {
+        coarse = !coarse;
+        step.textContent = coarse ? "Coarse" : "Fine";
+        step.setAttribute("aria-pressed", String(coarse));
+      }, "hud-arrange-step");
+      moveControls.push(step, mk("Reset HUD", "Restore this HUD profile and camera group", () => {
+        flush();
+        remember(); HudLayout.resetSet(context.set, context.profile, true);
+        after("Restored " + context.profile + " · " + context.set);
+      }, "hud-arrange-reset-screen"));
+      for (const control of moveControls) { control.hidden = true; bar.appendChild(control); }
       bar.appendChild(nameEl);
       bar.appendChild(hintEl);
-      bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
-      bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
+      const smaller = mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"), larger = mk("+", "Larger", () => size(1), "hud-arrange-larger");
+      bar.appendChild(smaller);
+      bar.appendChild(larger);
       const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
       recover.setAttribute("aria-describedby", "hud-arrange-hint");
       // The one long label wraps to two 11 px lines inside its 44 px box instead of widening the strip.
       recover.style.whiteSpace = "normal"; recover.style.width = "72px"; recover.style.fontSize = "11px"; recover.style.padding = "0 4px";
       bar.appendChild(recover);
-      bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
+      const reset = mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); remember(); HudLayout.resetEl(selected, context.set, context.profile, true); after(); } }, "hud-arrange-reset");
+      bar.appendChild(reset);
+      sizeControls.push(smaller, larger, recover, reset);
       visibilityRow = document.createElement("label");
       // No visible "VISIBILITY" caption: the select names itself (aria-label) and paints SHOW / HIDE / AUTO.
       visibilityRow.style.cssText = "display:flex;flex:none;align-items:center;";
@@ -205,11 +216,17 @@ const HudArrange = (() => {
       visibilityPick.setAttribute("aria-describedby", "hud-arrange-hint");
       visibilityPick.style.cssText = selectCss + "width:76px;";
       visibilityRow.appendChild(visibilityPick);
-      SettingRow.wire(visibilityRow, { values: [], read: () => HudLayout.visibility(selected)?.value || "", write: (value) => {
-        flush(); HudLayout.setVisibility(selected, value); ghosts(); after();
+      SettingRow.wire(visibilityRow, { values: [], read: () => visibility(selected)?.value || "", write: (value) => {
+        flush(); remember();
+        if (value === HudLayout.visibility(selected)?.value) delete visibilityDraft[selected];
+        else visibilityDraft[selected] = value;
+        ghosts(); after();
       } });
       bar.appendChild(visibilityRow);
-      bar.appendChild(mk("DONE", "Done arranging the HUD", () => setEditing(false), "hud-arrange-done"));
+      undo = mk("Undo", "Undo last HUD edit", undoEdit, "hud-arrange-undo");
+      bar.appendChild(undo);
+      bar.appendChild(mk("Cancel", "Discard HUD edits", () => setEditing(false, true, false), "hud-arrange-cancel"));
+      bar.appendChild(mk("Apply", "Apply HUD edits", () => setEditing(false), "hud-arrange-done"));
       bar.hidden = true;
       document.body.appendChild(bar);
       if (typeof TopModal !== "undefined" && TopModal.wireLayer) TopModal.wireLayer(bar);
@@ -229,25 +246,36 @@ const HudArrange = (() => {
       bar.style.transform = "none";
       bar.style.left = slot.l + "px"; bar.style.top = slot.t + "px";
     }
+    function sizeLabel(id, size) {
+      const relative = HudLayout.relativeSize(size, id, context.set, context.profile);
+      const painted = paintedSize(size, elOf(id)?.currentCSSZoom);
+      return relative === painted ? relative + "%" : relative + "% · " + painted + "% painted";
+    }
     function paintBar(clash, message, rects) {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? paintedSize(cur.s, elOf(selected)?.currentCSSZoom) + "%" : "";
+      nameEl.textContent = cur ? sizeLabel(selected, cur.s) : "";
       nameEl.hidden = !cur;
-      const visibility = selected && HudLayout.visibility(selected);
-      const off = visibility && visibility.value === "off";
+      undo.disabled = !history.length;
+      const vis = selected && visibility(selected);
+      const off = vis && vis.value === "off";
       hintEl.textContent = message || (clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
         : off ? "hidden in the race \u00b7 SHOW brings it back"
-        : visibility && visibility.value === "mixed" ? "some tower readouts are hidden"
-        : selected && !visibility ? "shown automatically with race events"
+        : vis && vis.value === "mixed" ? "some tower readouts are hidden"
+        : selected && !vis ? "shown automatically with race events"
         : "");
       hintEl.hidden = !hintEl.textContent;
       if (visibilityRow) {
-        SettingRow.paint(visibilityRow, visibility ? visibility.value : "", visibility ? visibility.choices : []);
-        SettingRow.disable(visibilityRow, !visibility);
-        visibilityRow.title = visibility ? "" : "Shown automatically with race events";
+        SettingRow.paint(visibilityRow, vis ? vis.value : "", vis ? vis.choices : []);
+        SettingRow.disable(visibilityRow, !vis);
+        visibilityRow.title = vis ? "" : "Shown automatically with race events";
       }
+      for (const control of moveControls) control.hidden = !expanded;
+      move.setAttribute("aria-expanded", String(expanded));
+      for (const el of sizeControls) el.hidden = !expanded;
+      undo.hidden = visibilityRow.hidden = !expanded;
+      if (!expanded) nameEl.hidden = hintEl.hidden = true;
       placeBar(rects || rectsNow());
     }
 
@@ -319,9 +347,9 @@ const HudArrange = (() => {
       const p = pending; pending = null;
       if (!p) return;
       const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
-      if (nameEl && e && p.id === selected) nameEl.textContent = paintedSize(e.s, elOf(p.id)?.currentCSSZoom) + "%";
+      if (nameEl && e && p.id === selected) nameEl.textContent = sizeLabel(p.id, e.s);
     }
-    function flush() { paint(); HudLayout.commit(); }
+    function flush() { paint(); }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
       if (id === "map" && v.s != null) { const orig = dragOrig(id); v = Object.assign({ x: orig.x, y: orig.y }, v); }
@@ -342,15 +370,25 @@ const HudArrange = (() => {
       for (const [id, , sel] of ELEMENTS) {
         const el = document.querySelector(sel);
         if (!el) continue;
-        if (HudLayout.visibility(id)?.value !== "off") { if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off"); }
+        if (visibility(id)?.value !== "off") { if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off"); }
         else el.setAttribute("data-hl-off", "");
       }
+    }
+    function nudge(x, y, amount) {
+      if (!selected) return;
+      flush();
+      remember();
+      const cur = dragOrig(selected);
+      const next = { x: cur.x + x * amount, y: cur.y + y * amount };
+      HudLayout.set(selected, next, context.set, context.profile, true);
+      after("X " + next.x.toFixed(1) + "% · Y " + next.y.toFixed(1) + "%");
     }
     function size(dir) {
       if (!selected) return;
       flush();
+      remember();
       const orig = dragOrig(selected);
-      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile);
+      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile, true);
       after();
     }
 
@@ -381,9 +419,10 @@ const HudArrange = (() => {
       };
       let delta = move(rect);
       if (!delta.x && !delta.y) { after(oversized ? message : "Already in view. Size unchanged."); return; }
+      remember();
       const orig = dragOrig(selected);
       delta = move(el.getBoundingClientRect());
-      HudLayout.set(selected, Object.assign({}, orig, dragTo(orig, delta.x, delta.y, window.innerWidth, window.innerHeight)), context.set, context.profile);
+      HudLayout.set(selected, Object.assign({}, orig, dragTo(orig, delta.x, delta.y, window.innerWidth, window.innerHeight)), context.set, context.profile, true);
       after(message);
     }
 
@@ -467,13 +506,16 @@ const HudArrange = (() => {
       if (was.pause && pause) pause.hidden = false;
     }
 
-    function setEditing(on, restore) {
+    function setEditing(on, restore, accept = true) {
       const was = editing;
       editing = !!on;
       if (editing && !was) {
         ensureBar();
+        expanded = false;
         opener = document.activeElement;
         context = { set: HudLayout.shown(), profile: HudLayout.profile() };
+        history.length = 0; visibilityDraft = {};
+        initial = HudLayout.arrangeSnapshot(context.set, context.profile);
         HudLayout.holdArrangePreview(true);
         hideDialogs();
         reveal();
@@ -496,6 +538,9 @@ const HudArrange = (() => {
       }
       if (!editing && was) {
         flush();
+        HudLayout.endArrangeDraft(accept, context.set, context.profile, initial);
+        if (accept) for (const [id, value] of Object.entries(visibilityDraft)) HudLayout.setVisibility(id, value);
+        history.length = 0; visibilityDraft = {};
         if (reflow) { cancelAnimationFrame(reflow); reflow = 0; }
         document.body.removeAttribute("data-hud-arrange");
         for (const [, , sel] of ELEMENTS) {
@@ -530,29 +575,9 @@ const HudArrange = (() => {
       }
     }
 
-    /* ---- the pause-card button, beside REPOSITION TOUCH CONTROLS ---- */
-    (function ensureControls() {
-      if ($("pm-hud-arrange")) return;
-      const hudHost = $("pm-hud-details");
-      const anchor = hudHost ? $("pm-hud-details-sum") : ($("pm-dock-reset") || $("pm-dock-reposition-help") || $("pm-mirror"));
-      const host = anchor && anchor.parentNode;
-      if (!host) return;
-      const btn = document.createElement("button");
-      btn.id = "pm-hud-arrange";
-      btn.type = "button";
-      btn.setAttribute("aria-pressed", "false");
-      btn.textContent = "ARRANGE HUD";
-      const tip = document.createElement("p");
-      tip.className = "adv-help";
-      tip.id = "pm-hud-arrange-help";
-      tip.textContent = "Choose a readout to show, hide, move or resize. AUTO follows the camera and HUD style. Drag to move; pinch or use − / + to size. Red outlines mark overlaps. Positions are saved per HUD STYLE and camera set.";
-      btn.onclick = () => setEditing(!editing);
-      host.insertBefore(btn, anchor.nextSibling);
-      host.insertBefore(tip, btn.nextSibling);
-    })();
-
-    /* The hidden toolbar exists from boot: it is a UiLayers layer whose data-esc-close
-       (hud-arrange-done) must name a real button before the first edit. */
+    /* The pause-card button is DockLayout.arrangeDoor's (eager): its first tap loads this file and calls
+       create(G), so the toolbar (a UiLayers layer whose data-esc-close names hud-arrange-cancel) exists
+       before the first edit. */
     ensureBar();
 
     /* ---- pointers ---- */
@@ -579,8 +604,10 @@ const HudArrange = (() => {
         try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
         return;
       }
+      if (drag) return;   // another finger must not switch the gesture to a different piece
       flush();
       selected = id;
+      remember();
       let orig = dragOrig(id);
       drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
       pinch = null;
@@ -611,25 +638,32 @@ const HudArrange = (() => {
         drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
         ended = true;
       } else if (drag && e.pointerId === drag.pid) { drag = null; ended = true; }
-      // The one save of the gesture: when the last finger on the piece lifts.
-      if (!drag) HudLayout.commit();
       if (ended) after();
     }
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("pointermove", onPointerMove, true);
     document.addEventListener("pointerup", onPointerUp, true);
-    document.addEventListener("pointercancel", onPointerUp, true);
+    function cancelGesture(e) {
+      if (!drag || (e.pointerId != null && e.pointerId !== drag.pid && e.pointerId !== pinch?.pid)) return;
+      pending = null;
+      paint();
+      const previous = history.pop();
+      if (previous) HudLayout.restoreSnapshot(context.set, context.profile, previous.layout);
+      drag = null; pinch = null; pointers.clear(); after();
+    }
+    document.addEventListener("pointercancel", cancelGesture, true);
+    document.addEventListener("lostpointercapture", cancelGesture, true);
     const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
     if (watched.length && typeof MutationObserver !== "undefined") {
-      const mo = new MutationObserver(() => { if (editing && watched.some((el) => !el.hidden)) setEditing(false, false); });
+      const mo = new MutationObserver(() => { if (editing && watched.some((el) => !el.hidden)) setEditing(false, false, false); });
       for (const el of watched) mo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
     }
     if (typeof MutationObserver !== "undefined") {
       const rotate = $("rotate-device");
       const mo = new MutationObserver(() => {
         if (!editing) return;
-        if (HudLayout.shown() !== context.set || HudLayout.profile() !== context.profile) setEditing(false);
-        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false);
+        if (HudLayout.shown() !== context.set || HudLayout.profile() !== context.profile) setEditing(false, true, false);
+        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false, true, false);
       });
       mo.observe(document.body, { attributes: true, attributeFilter: ["class", "data-hl-set"] });
       if (rotate) mo.observe(rotate, { attributes: true, attributeFilter: ["aria-hidden"] });
@@ -638,15 +672,14 @@ const HudArrange = (() => {
       if (!editing || e.defaultPrevented) return;
       const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
-        e.preventDefault(); e.stopPropagation(); flush();
-        const cur = dragOrig(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
-        HudLayout.set(selected, { x: cur.x + d[0] * step, y: cur.y + d[1] * step }, context.set, context.profile);
-        after(); return;
+        e.preventDefault(); e.stopPropagation();
+        nudge(...dirs[e.key], e.shiftKey || coarse ? 5 : 1);
+        return;
       }
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
-      setEditing(false);
+      setEditing(false, true, false);
     }, true);
     if (typeof window !== "undefined" && window.addEventListener) {
       const resize = () => {
@@ -660,6 +693,7 @@ const HudArrange = (() => {
           if (editing) { HudLayout.fit(); after(); }
         });
       };
+      window.addEventListener("blur", cancelGesture);
       window.addEventListener("resize", resize, { passive: true });
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", resize, { passive: true });

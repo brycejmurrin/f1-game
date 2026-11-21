@@ -618,3 +618,116 @@ test("clean-room 14: a controller that vanishes without a disconnect event drops
   assert.equal(Input.throttleLevel(), 0);
   assert.equal(Input.lookingBack(), false);
 });
+
+
+test("separate Gas and Brake profiles apply at contact and hand-off; the edge meter clears on cancel", () => {
+  const { sb, gas, brake, mid, btn, win } = bootDock();
+  for (const el of [gas, brake]) el.style = {
+    setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; },
+  };
+  sb.PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 80 });
+  sb.PedalTravel.setButtonProfile("brake", { slide: "ease", feedback: false });
+  const point = mid("btn-throttle");
+  gas.fire("pointerdown", point);
+  assert.equal(btn().throttleVal, 0.12);
+  assert.equal(gas.attrs["data-touch-feedback"], "on");
+  // A setting edited mid-gesture applies to the next press.
+  sb.PedalTravel.setButtonProfile("gas", { travel: 160 });
+  gas.fire("pointermove", { clientX: point.clientX - 24, clientY: point.clientY - 32 });
+  assert.equal(btn().throttleVal, 0.56);
+  assert.equal(gas.style["--touch-level"], "0.56");
+  gas.fire("pointermove", point);
+  assert.equal(btn().throttleVal, 0.12);
+  gas.setAttribute("data-grip-cue", "spin");
+  gas.fire("pointermove", mid("btn-brake"));
+  assert.deepEqual([btn().throttleVal, btn().brakeVal], [0, 0.12]);
+  assert.equal(gas.attrs["data-grip-cue"], undefined);
+  assert.equal(gas.style["--touch-level"], undefined);
+  assert.equal(brake.attrs["data-touch-feedback"], undefined);
+  win("pointercancel");
+  assert.equal(btn().brakeVal, 0);
+  brake.fire("pointerdown", mid("btn-brake"));
+  assert.equal(btn().brakeVal, 1);
+});
+
+test("customized left and right travel reaches the wheel with adaptive steering disabled", () => {
+  const { sb, Input, left, right, mid, lift, clock } = bootDock();
+  Input.setSteerMode("buttons"); Input.setAdaptiveButtons(0); Input.setSteerExpo(1);
+  const wheel = () => {
+    let value;
+    for (let i = 0; i < 100; i++) { clock.t += 16; value = Input.steer(); }
+    return value;
+  };
+  sb.PedalTravel.setButtonProfile("left", { press: "progressive", travel: 80 });
+  sb.PedalTravel.setButtonProfile("right", { travel: 40 });
+  left.style = { setProperty(k, v) { this[k] = v; }, removeProperty(k) { delete this[k]; } };
+  const point = mid("btn-steer-left");
+  left.fire("pointerdown", point);
+  assert.equal(Number(left.style["--touch-level"]), 0.12);
+  assert.ok(Math.abs(wheel() + 0.12) < 0.0001);
+  left.fire("pointermove", { ...point, clientY: point.clientY + 40 });
+  assert.ok(Math.abs(wheel() + 0.56) < 0.0001);
+  lift("btn-steer-left");
+  const other = mid("btn-steer-right");
+  right.fire("pointerdown", other);
+  right.fire("pointermove", { ...other, clientX: other.clientX - 32 });
+  assert.ok(Math.abs(wheel() - 0.5) < 0.0001);
+  right.fire("pointermove", point);
+  assert.ok(Math.abs(wheel() + 0.12) < 0.0001, "progressive arrow starts light at crossover");
+  left.fire("pointermove", { ...point, clientY: point.clientY - 80 });
+  assert.equal(wheel(), -1);
+  left.fire("pointermove", other);
+  assert.equal(wheel(), 1, "instant arrow takes full travel at crossover");
+  Input.reset();
+  assert.equal(wheel(), 0);
+});
+
+test("the shipped steering meter tracks the effective arrow command as Adaptive Buttons changes", () => {
+  const { Input, left, mid, btn, clock } = bootDock();
+  left.style = { setProperty(k, v) { this[k] = v; }, removeProperty(k) { delete this[k]; } };
+  Input.setSteerMode("buttons"); Input.setSteerExpo(1);
+  const point = mid("btn-steer-left");
+  left.fire("pointerdown", point);
+  left.fire("pointermove", { ...point, clientX: point.clientX + 48 });
+  assert.ok(Math.abs(btn().leftVal - 0.6) < 0.0001, "raw finger travel is independent of assist");
+  for (const [mix, expected] of [[0, 1], [0.5, 0.8], [1, 0.6]]) {
+    Input.setAdaptiveButtons(mix);
+    const displayed = Number(left.style["--touch-level"]);
+    assert.ok(Math.abs(displayed - expected) < 0.0001);
+    for (let i = 0; i < 100; i++) { clock.t += 16; Input.steer(); }
+    assert.ok(Math.abs(Input.steer() + displayed) < 0.0001);
+  }
+});
+
+test("each touch arrow uses its own speed sensitivity for building lock, with independent global fallback", () => {
+  const { sb, Input, left, right, mid, lift } = bootDock();
+  Input.setSteerMode("buttons"); Input.setSteerExpo(1); Input.setKeyRampIn(6);
+  Input.setSteerSpeedRef(40); Input.setSpeedStd(40); Input.setAdaptiveButtons(0.5);
+  const check = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.00001, actual + " should be " + expected);
+  const px = mid("btn-steer-left"), rx = mid("btn-steer-right");
+  sb.PedalTravel.setButtonProfile("left", { adaptive: 10 });
+  sb.PedalTravel.setButtonProfile("right", { adaptive: 1 });
+  left.fire("pointerdown", px);
+  check(Input.steer(0.05), -0.15);  // 6/s halved at the reference speed
+  check(Input.steer(0.05), -0.30);
+  right.fire("pointerdown", { ...rx, pointerId: 2 });
+  check(Input.steer(0.0125), -0.15); // direction change first unwinds at 12/s
+  check(Input.steer(0.0625), 0.30);  // remaining 0.05 s builds right at full 6/s
+  lift("btn-steer-right", 2); lift("btn-steer-left");
+  check(Input.steer(0.05), 0);
+  sb.PedalTravel.resetButtonProfile("right");
+  right.fire("pointerdown", rx);
+  check(Input.steer(0.05), 0.225);  // unpinned right follows the global 4.5/s
+  Input.reset();
+  Input.setSpeedStd(40);
+  sb.PedalTravel.setButtonProfile("left", { press: "progressive", travel: 40 });
+  left.fire("pointerdown", px);
+  left.fire("pointermove", { ...px, clientY: px.clientY + 40 });
+  for (let i = 0; i < 10; i++) Input.steer(0.05);
+  left.fire("pointermove", px);
+  check(Input.steer(0.05), -0.775); // easing a held arrow preserves the global return rate
+  Input.reset(); sb.PedalTravel.setButtonProfile("left", { press: "instant" });
+  Input.setSpeedStd(0);
+  left.fire("pointerdown", px);
+  check(Input.steer(0.05), -0.30); // no reduction at rest, even at strength 10
+});

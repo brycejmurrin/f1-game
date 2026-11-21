@@ -49,6 +49,7 @@ const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]
 // These literal reads run in the isolated preview document, never index.html.
 // Verify against that actual host rather than treating its IDs as exemptions.
 const AUXILIARY_HOSTS = {
+  "js/ui/screen-regions.js": { shell: "controller.html", ids: ["ctl", "lay-arrange"] },
   "js/camera/cockpit-preview.js": { shell: "cockpit-view.html", ids: ["view", "hud", "tip", "err"] },
 };
 

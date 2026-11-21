@@ -130,7 +130,8 @@ cmd_run() {
   # Opt-ins, read once at server start (measured 2026-10-19,
   # docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md):
   #   APEX_PW_CDP=http://127.0.0.1:9222  attach to tools/mcp/debug-chrome.mjs's
-  #     browser instead of launching one, so js-debugger / browser-use share it.
+  #     browser instead of launching one. Its phone-landscape preset supplies the owner’s
+  #     iPhone 15 full-screen CSS viewport, native DPR and safe-area insets.
   #   APEX_PW_DEVICE="iPhone 15"  a Playwright device descriptor: hasTouch, UA
   #     and DPR on the context. Without it browser_resize is viewport-only,
   #     page.touchscreen throws ("hasTouch must be enabled") and GLX.isMobile

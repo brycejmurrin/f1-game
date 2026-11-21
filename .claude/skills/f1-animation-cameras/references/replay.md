@@ -32,7 +32,7 @@ blend after the snap.
    on a missing `ffmpeg-<revision>`, install it first
    ([prerequisites](replay-diagnosis.md)). Review every phase's frame/camera
    anchors and pixels, including exit and reentry. Preserve failure receipts.
-   Then a second run at Bryce's phone shape (`--viewport 844x390`): WATCH is
+   Then a second run at Bryce's phone shape (`--viewport 852x393`): WATCH is
    used on the phone. A motion bug (snap then ease) needs `--frames` ≥ 8: one frame per
    phase cannot show it.
 
