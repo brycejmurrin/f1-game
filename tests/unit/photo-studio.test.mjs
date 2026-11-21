@@ -956,3 +956,22 @@ test("a submitted read timing out after reopen leaves the next photo queued", as
   queued.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
   assert.equal(await second, true);
 });
+
+// Mirrors tests/specs/photo-studio.spec.js's bare page (no Log, no ScriptLoader): the
+// stub must finish evaluating so PhotoStudio is defined (#4978 draft CI red).
+test("boot stub evaluates and create() works without Log or ScriptLoader", () => {
+  const ctx = vm.createContext({
+    Object, String, Math, Promise, JSON, Error,
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    window: { dispatchEvent: () => {} },
+    CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    GameStore: { store: { rawSet: () => true, rawDel: () => true, get: (_k, d) => d, set: () => true } },
+  });
+  ctx.window = ctx;
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
+  assert.equal(typeof ctx.PhotoStudio, "object");
+  assert.equal(typeof ctx.PhotoStudio.create, "function");
+  const api = ctx.PhotoStudio.create({ $: () => null, setTimeOfDay: () => "day", weather: () => "dry" }, { garage: {} });
+  assert.equal(api.state().open, false);
+  assert.equal(ctx.PhotoStudio.loaded(), false);
+});

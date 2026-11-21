@@ -28,31 +28,29 @@ const PhotoStudio = (function () {
     } catch (_) { return false; }
   }
   const shareCancelled = (e) => typeof NativeDownload !== "undefined" && !!NativeDownload.isCancelled && NativeDownload.isCancelled(e);
+  const logWarn = (msg) => { if (typeof Log !== "undefined") Log.warn("ui", msg); };
 
   function ensureBody() {
     if (typeof PhotoStudioBody !== "undefined") return Promise.resolve(true);
     if (_load) return _load;
     const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS) || [];
     const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS_EDGES) || [];
-    if (!files.length || typeof ScriptLoader === "undefined") {
-      Log.warn("ui", "photo studio body is not in this build");
-      return Promise.resolve(false);
-    }
+    // No ScriptLoader / Log on bare Playwright pages — stay silent and resolve false.
+    if (!files.length || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const presets = typeof SettingsNav !== "undefined" && SettingsNav.presets ? SettingsNav.presets() : null;
     _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), presets]).then(() => {
-      if (typeof PhotoStudioBody === "undefined") { _load = null; Log.warn("ui", "photo studio body did not load"); return false; }
+      if (typeof PhotoStudioBody === "undefined") { _load = null; logWarn("photo studio body did not load"); return false; }
       if (newest) newest();
       return true;
     }).catch((e) => {
       _load = null;
-      Log.warn("ui", "photo studio body did not load: " + (e && e.message || e));
+      logWarn("photo studio body did not load: " + (e && e.message || e));
       return false;
     });
     return _load;
   }
 
   function create(G, deps) {
-    Log.info("ui", "PhotoStudio.create (boot stub)");
     deps = deps || {};
     let /** @type {ReturnType<typeof PhotoStudioBody.create> | null} */ mine = null;
     /** Guarded creation: bare `G` so check-gctx's scanRealFactories finds PhotoStudioBody. */
@@ -83,7 +81,7 @@ const PhotoStudio = (function () {
     };
   }
 
-  ensureBody();
+  // No eager ensureBody(): bare specs load this stub without Log/ScriptLoader (#4978).
   return Object.freeze({
     create, shareCancelled, background, setBackground, crop, filename,
     album: () => { const r = live; return r && r.album ? r.album() : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.album ? impl.album() : Promise.reject(new Error("Photo library unavailable")); }); },
