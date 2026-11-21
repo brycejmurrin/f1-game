@@ -54,6 +54,12 @@ function _rigMark(out,start,surface) {
   for(let i=start;i<out.mat.length;i++)out.mat[i]=surface;
 }
 function _rigMaterials(out) { _rigMark(out,out.pos.length/3,26); return out; }
+// heroCar (EXTREME player car, the lazy CarHero; read once, boot-time): the rig's round parts take twice the
+// segments (tubes, grips, discs, bezels, rounded corners), and the wheel and dash meshes are welded and refined once
+// (CarHero.rig). 1 below EXTREME, on phones and in node: today's rig exactly.
+let _rigX = 0;
+const rigX = () => _rigX || (_rigX = typeof CarHero !== "undefined" && CarHero.on() ? 2 : 1);
+const _rigHero = (out) => rigX() > 1 ? CarHero.rig(out) : out;
 function _rigPlate(out, pts, z, depth, col) {
   const start=out.pos.length/3;
   let area = 0;
@@ -78,7 +84,7 @@ function _rigRounded(out, x, y, z, w, h, d, r, col, surface) {
   const start=out.pos.length/3;
   const a=w/2, b=h/2, c=Math.min(r,a,b), pts=[];
   for (const [cx,cy,start] of [[a-c,b-c,0],[-a+c,b-c,Math.PI/2],[-a+c,-b+c,Math.PI],[a-c,-b+c,Math.PI*1.5]])
-    for(let i=0;i<=4;i++) {const t=start+i*Math.PI/8; pts.push([x+cx+c*Math.cos(t),y+cy+c*Math.sin(t)]);}
+    for(let i=0,k=4*rigX();i<=k;i++) {const t=start+i*Math.PI/(2*k); pts.push([x+cx+c*Math.cos(t),y+cy+c*Math.sin(t)]);}
   _rigPlate(out,pts,z,d,col);
   if(surface!=null)_rigMark(out,start,surface);
 }
@@ -117,12 +123,12 @@ function _rigButton(out, x, y, z, r, col, rotary = false) {
 function _rigGrip(out, path, radius, depth, col) {
   const raw=path;
   path=[];
-  for(let i=0;i<raw.length-1;i++) for(let j=0;j<3;j++) {
-    const t=j/3,a=raw[Math.max(0,i-1)],b=raw[i],c=raw[i+1],d=raw[Math.min(raw.length-1,i+2)];
+  for(let i=0,J=3*rigX();i<raw.length-1;i++) for(let j=0;j<J;j++) {
+    const t=j/J,a=raw[Math.max(0,i-1)],b=raw[i],c=raw[i+1],d=raw[Math.min(raw.length-1,i+2)];
     path.push(b.map((v,k)=>.5*(2*v+(-a[k]+c[k])*t+(2*a[k]-5*v+4*c[k]-d[k])*t*t+(-a[k]+3*v-3*c[k]+d[k])*t*t*t)));
   }
   path.push(raw[raw.length-1]);
-  const N = 8, start = out.pos.length / 3;
+  const N = 8 * rigX(), start = out.pos.length / 3;
   for (let i = 0; i < path.length; i++) {
     const a = path[Math.max(0, i-1)], b = path[Math.min(path.length-1, i+1)];
     const L = Math.hypot(b[0]-a[0], b[1]-a[1]), nx = -(b[1]-a[1])/L, ny = (b[0]-a[0])/L;
@@ -408,7 +414,7 @@ function getCockpitWheel(liv, style) {
     }
   }
   _wheelHands(out, acc, c1);
-  cockpitWheelMesh = _gfx.createMesh(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc, c1, liv));
+  cockpitWheelMesh = _gfx.createMesh(_rigHero(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc, c1, liv)));
   return cockpitWheelMesh;
 }
 // STEERING LOCK. The wheel used to roll a fixed 0.80 rad (±46 deg) at full
@@ -558,7 +564,7 @@ function getCockpitDash() {
   }
   for (const side of [-1,1]) for (let i=0;i<4;i++)
     _rigRounded(out,side*(0.22+i*0.026),-0.080,0.298,0.012,0.078,0.008,0.003,DARK);
-  cockpitDashMesh = _gfx.createMesh(_rigMaterials(out));
+  cockpitDashMesh = _gfx.createMesh(_rigHero(_rigMaterials(out)));
   return cockpitDashMesh;
 }
 // The bodywork an interior adds around its seat, CAR-LOCAL (the frame the body
@@ -595,26 +601,27 @@ function _rigBeam(out, p0, p1, w, col) {
 // exposing the corners of a rectangular beam at the driver's eye.
 function _rigTube(out, path, r, col, surface=22) {
   const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-  const unit=v=>{const L=Math.hypot(...v);return v.map(x=>x/L);}, start=out.pos.length/3, dirs=[];
+  const unit=v=>{const L=Math.hypot(...v);return v.map(x=>x/L);}, start=out.pos.length/3, dirs=[], S=8*rigX();
   for(let i=0;i<path.length;i++) {
     const p=path[i], lo=path[Math.max(0,i-1)], hi=path[Math.min(path.length-1,i+1)];
     const d=unit(hi.map((x,k)=>x-lo[k])), a=unit(cross(d,Math.abs(d[1])<0.9?[0,1,0]:[1,0,0])), b=cross(d,a); dirs.push(d);
-    for(let j=0;j<8;j++) {
-      const t=j/8*Math.PI*2, n=a.map((x,k)=>x*Math.cos(t)+b[k]*Math.sin(t));
+    for(let j=0;j<S;j++) {
+      const t=j/S*Math.PI*2, n=a.map((x,k)=>x*Math.cos(t)+b[k]*Math.sin(t));
       out.pos.push(...p.map((x,k)=>x+r*n[k])); out.nrm.push(...n); out.col.push(...col);
     }
   }
-  for(let i=0;i<path.length-1;i++) for(let j=0;j<8;j++) {
-    const a=start+i*8+j,b=start+i*8+(j+1)%8;out.idx.push(a,b,b+8,a,b+8,a+8);
+  for(let i=0;i<path.length-1;i++) for(let j=0;j<S;j++) {
+    const a=start+i*S+j,b=start+i*S+(j+1)%S;out.idx.push(a,b,b+S,a,b+S,a+S);
   }
   for(const i of [0,path.length-1]) {
     const c=out.pos.length/3;out.pos.push(...path[i]);out.nrm.push(...dirs[i].map(x=>i===0?-x:x));out.col.push(...col);
-    for(let j=0;j<8;j++) {const a=start+i*8+j,b=start+i*8+(j+1)%8;out.idx.push(c,i===0?b:a,i===0?a:b);}
+    for(let j=0;j<S;j++) {const a=start+i*S+j,b=start+i*S+(j+1)%S;out.idx.push(c,i===0?b:a,i===0?a:b);}
   }
   _rigMark(out,start,surface);
 }
 // A flat disc facing the driver (-z) at z = cz: gauge faces.
 function _rigDisc(out, cx, cy, cz, r, n, col) {
+  n *= rigX();
   const i0 = out.pos.length / 3;
   out.pos.push(cx, cy, cz); out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]);
   for (let i = 0; i < n; i++) {
@@ -626,6 +633,7 @@ function _rigDisc(out, cx, cy, cz, r, n, col) {
 }
 // A ring (bezel) about (cx, cy) in the plane z = cz.
 function _rigRing(out, cx, cy, cz, r, n, w, d, col) {
+  n *= rigX();
   const ext = w * 0.18;
   for (let i = 0; i < n; i++) {
     const t0 = i / n * Math.PI * 2, t1 = (i + 1) / n * Math.PI * 2;

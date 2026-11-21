@@ -609,6 +609,7 @@ const TRACK_VM = [
   // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
   // Leaving it out is how the track engine ended up with four private lerps.
   "js/core/mat4.js",
+  "js/render/shared/mesh-detail.js", // MeshDetail for the build worker and Node VM builds
   "js/track/core/geom.js",
   "js/track/core/pit.js",
   "js/track/scenery/data.js",
@@ -636,6 +637,7 @@ const TRACK_VM = [
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
   "js/track/scenery/region.js",
+  "js/track/scenery/detail.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -1000,10 +1002,13 @@ const DEFERRED = {
   three: [
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-viewport.js",
+    "js/render/three/tsl-carsurf.js",   // TLX car surface detail (EXTREME carSurf): read by tsl-lit at factory time
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-gi.js",   // TLXShaders.gi: desktop-tier post passes + plan (read inside post(), not at eval)
     "js/render/three/tsl-post.js",
+    "js/render/three/tsl-aa.js",   // TLXAA: TRAA / supersample / HDR-out maths (desktop tiers)
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
@@ -1121,6 +1126,7 @@ const LAZY_RACE = [
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
   "js/garage/arrival-rows.js",   // the GARAGE ENTER & LEAVE tuner's extra rows (#5660: off the boot wall)
+  "js/garage/hi-prims.js",       // GarageHiPrims: EXTREME garage/crew dense primitives (garageHi / crewHi); absent = today's room
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,
@@ -1384,6 +1390,16 @@ const LAZY_RESULTS_SHEET = [
 ];
 const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/share-card.js"]];
 
+// DESKTOP DETAIL ABOVE ULTRA (EXTREME / CINEMA, docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md; Bryce's B for
+// #6003, 2026-11-20: the tier code rides a lazy bundle, not a boot-wall raise). RendererBoot.start fetches it beside
+// the backend, so it is resident before Gfx.create and the first car build, and only when GfxQuality.detail() >= 2:
+// a phone (detail 0 always) and ULTRA and below never fetch a byte. Absent, every seam keeps the ULTRA path.
+const LAZY_GFX_HI = [
+  "js/render/shared/gfx-hi.js", // GfxHi: the EXTREME render / perf extras (governor upper ladder, cascades, lamp maps, light slots)
+  "js/car/car-hero.js",         // CarHero: the EXTREME car detail (hero refine, modelled parts, bevels, loft UVs)
+];
+const LAZY_GFX_HI_EDGES = [];
+
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
 // the eval order. TRACK_VM keeps the same files for verify-track / the build
@@ -1391,6 +1407,7 @@ const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/sh
 // eval (hunt-2 T5). Race-only scripts (race-insights, flyby-seq) stay FULL;
 // real-replay and the coach body went lazy in their own groups (#4978, #4748).
 const LAZY_TRACK_BUILD = [
+  "js/render/shared/mesh-detail.js", // MeshDetail: subdivide / bevel / normals / simplify kit for the detail tiers above ULTRA (call-time only)
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",
   "js/track/scenery/landmark-kit.js",
@@ -1408,6 +1425,7 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
   "js/track/scenery/region.js",
+  "js/track/scenery/detail.js", // TrackDetail: crowd figures, dense trees, kerb profile, far terrain for the detail tiers above ULTRA
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
@@ -1871,6 +1889,7 @@ module.exports = {
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
   LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
+  LAZY_GFX_HI, LAZY_GFX_HI_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,

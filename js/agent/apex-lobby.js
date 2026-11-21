@@ -61,13 +61,13 @@ const ApexLobby = (function () {
     dtAcc = Math.max(0, dtAcc - steps / 60);
     return [1 / 60, steps];
   }
-  // One step()/act() tick: render anchors first (the rAF loop snapshots them before each step); in
-  // "results" the rAF loop's finished-car loop (G.stepResultsField, once game.js exposes it), else update().
+  // One step()/act() tick: render anchors first (the rAF loop snapshots them before each step), then update().
+  // The results-state finished-car loop (W25 row 8) waits on its game.js seam (#5100).
   function tick(G, d) {
     AgentView.syncRenderAnchors(G.cars);
     // Detached call: as a method the frame reads "Object.update", and stack walks over game.js's update()
     // (tests/unit/rank-sort-alloc-vm.test.mjs) look for "at update (".
-    if (G.state === "results" && G.stepResultsField) G.stepResultsField(d); else { const update = G.update; update(d); }
+    const update = G.update; update(d);
     afterStep(G);
   }
 

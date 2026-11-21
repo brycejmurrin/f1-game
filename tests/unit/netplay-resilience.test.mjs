@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { netStubG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -30,20 +31,9 @@ const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 globalThis.Tracks = { sample: (_track, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };
 
 function stubG(n = 4, local = 0) {
-  const cars = Array.from({ length: n }, (_, i) => ({
-    idx: i, local: i === local, human: i === local, isPlayer: i === local,
-    s: i * 10, x: 0, px: 0, pz: 0, speed: 0, head: 0, lap: 1,
-    name: "D" + i, code: "D" + i, driverId: "drv" + i,
-  }));
-  return {
-    cars, player: local >= 0 ? cars[local] : null,
-    track: { total: 5000, n: 500, def: { id: "monza" } },
-    lapsTarget: 3, raceT: 20, netNow: null, netStart: null, COUNTDOWN_S: 3,
-    wireId: (car) => car.idx,
-    setCarRole(car, human, isLocal) { car.human = human; car.local = isLocal; },
-    worldFromTrack: (s, x) => ({ x, z: s }),
-    announce() {},
-  };
+  const G = netStubG(n, local, { track: { total: 5000, n: 500, def: { id: "monza" } } });
+  for (const c of G.cars) c.lap = 1;
+  return G;
 }
 
 function fakeSession() {

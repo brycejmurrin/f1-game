@@ -493,15 +493,6 @@ test("step(dt) runs whole 1/60 physics steps: 1/120 x 240 and 1/30 x 60 equal 1/
   truthy(g.record.console.some((c) => /runs as whole 1\/60/.test(c[1])), "the quantisation warns");
 });
 
-test("step() in results routes to the finished-car loop when game.js exposes it", async () => {
-  await load("monza", 0.05, 0);
-  const G = g.G, calls = [];
-  G.state = "results";
-  G.stepResultsField = (dt) => calls.push(dt);
-  try { g.apex.step(1 / 30, 2); } finally { delete G.stepResultsField; G.state = "race"; }
-  assert.deepEqual(calls, [1 / 60, 1 / 60, 1 / 60, 1 / 60]);
-});
-
 test("spin(+deg) turns the nose LEFT (counter-clockwise from above), as its doc now says", async () => {
   await load("monza", 0.03, 40);
   g.apex.setInput({ steer: 0, throttle: false });

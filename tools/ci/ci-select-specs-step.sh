@@ -85,7 +85,7 @@ node -e '
   for (const s of (r.overflow || []))
     console.log(`OVERFLOW (routed; packed into the plan past the budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.spill || []))
-    console.log(`SPILL (overflow full; runs in a bounded spill job): ${s.file} (${s.tests} tests)`);
+    console.log(s.tail ? `SPILL TAIL (overflow and spill full; its own spill job, never dropped): ${s.file} (${s.tests} tests)` : `SPILL (overflow full; runs in a bounded spill job): ${s.file} (${s.tests} tests)`);
   // Past overflow AND spill: never a quiet skip. An error annotation names it
   // on the PR checks page, and `dropped` below reds selected-verdict.
   for (const s of r.skipped) console.log(`::error::DROPPED (over budget; overflow AND spill are full — NOT RUN ANYWHERE): ${s.file} (${s.tests} tests) — run its group with tools/ci/remote-group.mjs or split the change`);

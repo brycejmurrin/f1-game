@@ -3015,11 +3015,10 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
 let /** @type {ReturnType<typeof LightStore.create> | null} */ ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 
 // ── The shared ctx façade over game.js closure state ─────────────────────────
-// Extracted modules (js/ui/results-sheet.js, hud.js, apex.js, …) can't reach the
-// closure `let`s in this file, so game.js hands them ONE object of live
-// getters/setters + stable helpers. Getters read the current value at call
-// time; setters write back into the closure. Grown as extractions need it —
-// add a getter here rather than passing state ad hoc.
+// Modules can't reach the closure `let`s, so game.js hands them ONE object of
+// live getters/setters + helpers; add a getter here, never pass state ad hoc.
+// CLOSED (#5982): a typo'd new name throws. Not seal: select-screen.js
+// re-defines startRace/state in place.
 let /** @type {ReturnType<typeof RaceSettings.create> | null} */ raceSettings = null, /** @type {ReturnType<typeof CustomTeam.create> | null} */ customTeam = null, /** @type {ReturnType<typeof TitleMenu.create> | null} */ titleMenu = null, /** @type {ReturnType<typeof UiExperience.create> | null} */ uiExperience = null, /** @type {ReturnType<typeof PhotoStudio.create> | null} */ photoStudio = null;
 
 const G = {
@@ -3443,7 +3442,7 @@ const G = {
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu,
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
-};
+}; Object.preventExtensions(G);
 
 // Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
 // the module wires: it reads the saved profiles at construction, and
@@ -3538,7 +3537,7 @@ const titleWarm = TitleWarm.create(G, { $, ui: () => uiExperience, schedule: () 
 titleWarm.start();
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
-const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });
+const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster, sharedRivalBody: carDraw.sharedRivalBodyMesh });
 // The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
 const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, drawCar: carDraw.drawMirrorCar, renderPosOf, playerAnchor, yawVisInterp, basisMat,
   carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
@@ -6880,7 +6879,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
         track.meshes.roadChunked = null;
         if (track.roadGeo && gfx.createChunkedMesh) {
           track.roadGeo._keepPositions = true;
-          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadDrawGeo || track.roadGeo, 72);   // roadDrawGeo: kerbProfile
           if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(track);
         }
       }
@@ -8515,6 +8514,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
   if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
+  if (typeof GfxQuality !== "undefined") GfxQuality.setCinema(setupPreviewOn || photoMode || replayBuf.isScrubbing());   // CINEMA: garage / photo / replay (EXTREME only)
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,

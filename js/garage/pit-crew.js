@@ -29,14 +29,15 @@ const PitCrewAnim = (function () {
   const rigs = new Map();   // team colour → { body, props }
   function rigFor(c) {
     const team = c.team || {}, c1 = team.color || [0.30, 0.32, 0.36], c2 = team.color2 || [0.85, 0.86, 0.88];
-    const key = c1.join(",") + "|" + c2.join(",");
+    const key = c1.join(",") + "|" + c2.join(",") + GaragePrims.crewHi;   // EXTREME: GarageHiPrims' landing sets the bit (ready() implies GaragePrims)
     let r = rigs.get(key);
     if (r) return r;
     if (rigs.size >= 2) {   // a third colour pair: free the old rigs' meshes on this live backend, then forget them
       for (const o of rigs.values()) { GarageCrewMotion.free(o.body, gfx); GarageCrewChoreo.freeProps(o.props, gfx); }
       rigs.clear();
     }
-    r = { body: GarageCrewMotion.create(gfx, c1, c2, GarageCrew.helmet), props: GarageCrewChoreo.createProps(gfx, c2) };
+    // EXTREME (crewHi): GaragePrims.run builds denser crew parts once GarageHiPrims has landed.
+    r = GaragePrims.run("pit", () => ({ body: GarageCrewMotion.create(gfx, c1, c2, GarageCrew.helmet), props: GarageCrewChoreo.createProps(gfx, c2) }));
     rigs.set(key, r);
     return r;
   }

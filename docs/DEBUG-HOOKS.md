@@ -1951,11 +1951,9 @@ deterministic substitute for the rAF loop — drive the whole model from a test.
 `dt` is QUANTISED to whole 1/60 s steps: `k = round(dt × 60)` (minimum 1) physics
 steps of 1/60 run per tick, so `step(1/30, n)` is `2n` steps of 1/60; `dt = 0`
 stays a zero-length refresh, and a `dt` that is not a multiple of 1/60 logs one
-warning per page. `act()` quantises the same way. In state `"results"` a tick
-drives the finished-car cooldown loop (`G.stepResultsField(dt)`) when the game
-exposes that seam, so cars still running after the leader is flagged keep
-moving; without it the tick behaves as before. Each tick also banks the per-car
-lap log `fieldLaps()` reads.
+warning per page. `act()` quantises the same way. Driving the finished-car
+cooldown loop in state `"results"` waits on its game.js seam (#5100). Each tick
+also banks the per-car lap log `fieldLaps()` reads.
 
 ### `setEnergy(v) → {energy} | false`
 Set the player's ERS charge level. `v` is clamped to `[0, 1]`. Returns the new

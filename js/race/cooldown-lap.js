@@ -21,7 +21,7 @@ var CooldownLap = (function () {
     if (G.session === "quali" || G.session === "practice") return false;
     if (G.duel) return false;
     if (G.netPlay && typeof G.netPlay.active === "function" && G.netPlay.active()) return false;
-    if (G.watchMode || (G.realRace && typeof G.realRace.isWatch === "function" && G.realRace.isWatch())) return false;
+    if (G.realRace && typeof G.realRace.isWatch === "function" && G.realRace.isWatch()) return false;
     return G.session === "race" || G.session === "sprint";
   }
 

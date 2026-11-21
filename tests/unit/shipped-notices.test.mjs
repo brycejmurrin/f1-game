@@ -48,6 +48,8 @@ test("assets/pack: the files, the manifest and CREDITS.md name the same items", 
   const named = [
     ...Object.values(m.models).map((x) => x.file),
     m.materials.albedo, m.materials.normal, m.materials.low.albedo, m.materials.low.normal,
+    // The EXTREME packHd tier (512 px), when the manifest has one: named, so it must be on disk, and vice versa.
+    ...(m.materials.hd ? [m.materials.hd.albedo, m.materials.hd.normal] : []),
   ];
   const onDisk = [...ls("assets/pack/models").map((f) => "models/" + f), ...ls("assets/pack").filter((f) => /\.(png|webp|ktx2|bin|glb)$/i.test(f))];
   assert.deepEqual(sorted(onDisk), sorted(named), "pack binaries ≠ the files the manifest names");

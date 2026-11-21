@@ -253,8 +253,8 @@ test("a full drag costs ONE bake, not one per input event", () => {
   // inner binding, so wrap by re-running the source with a counting shim.
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const Counted = new Function(
-    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
-                "function buildTable(lights, chunks, knob) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob, capMax) {",
+                "function buildTable(lights, chunks, knob, capMax) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
     + "; return LampChunks;")();
   globalThis.__bakes = 0;
   for (let k = 0; k <= 1.0001; k += 0.001) Counted.resolve(lights, chunks, Math.round(k * 1000) / 1000);
@@ -464,8 +464,8 @@ function tlxLampGrid(countReads = false) {
   const block = liftBlock(TLX, "if (lit && lit.setLampGrid) {");
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const LC = new Function(
-    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
-                "function buildTable(lights, chunks, knob) { __n.bakes++;")
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob, capMax) {",
+                "function buildTable(lights, chunks, knob, capMax) { __n.bakes++;")
     + "; return LampChunks;")
   ;
   const n = { bakes: 0, grids: 0, tints: 0 };
@@ -473,6 +473,8 @@ function tlxLampGrid(countReads = false) {
   const LampChunksC = LC();
   const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => { n.tints++; } };
   const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs"), liftDecl(TLX, "_lgGroups")].join("\n");
+  // The block reads LightBudget.bakeChunk() (EXTREME lightsHi): the real budget, detail 0 here.
+  const LB = new Function(DEPS + "; return LightBudget;")();
   // Use the real record pool and submission/reset paths so a small frame can
   // reuse the slots of a much larger one, exactly as it does after the grid.
   const pool = TLX.slice(TLX.indexOf("const _recPool = [];"), TLX.indexOf("function pushRec("));
@@ -481,7 +483,7 @@ function tlxLampGrid(countReads = false) {
     if (reads.scanning && typeof key === "string" && /^\d+$/.test(key)) reads.count++;
     return arr[key];
   } }) : [];
-  const run = new Function("LampChunks", "Log", "lit", "records", "reads", `
+  const run = new Function("LampChunks", "Log", "lit", "records", "reads", "LightBudget", `
     ${decls}
     ${pool.replace("const _recPool = [];", "const _recPool = records;")}
     const _roadSplitOn = false;
@@ -497,7 +499,7 @@ function tlxLampGrid(countReads = false) {
       ${block}
       reads.scanning = false;
       return _lampGridState;
-    };`)(LampChunksC, { info() {} }, lit, records, reads);
+    };`)(LampChunksC, { info() {} }, lit, records, reads, LB);
   return { run, n, reads };
 }
 

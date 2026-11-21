@@ -28,6 +28,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = path.join(PACK, "manifest.json");
 const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/gen/assets.mjs
+const HD_BUDGET_BYTES = 12 * 1024 * 1024;     // the desktop hd tier's own budget, must match tools/gen/assets.mjs
 const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 // What every pack-strip createImageBitmap must ask for (see the P1 test below).
 const STRAIGHT_BITMAP = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
@@ -72,12 +73,14 @@ test("GLTF accessors stay inside their declared bufferView and reject invalid st
   assert.throws(() => gltf.toMesh(makeGlb(100)), /GLTF: accessor exceeds bufferView bounds/);
 });
 
-function assetLoader(overrides = {}) {
+// gfxHi: also load the lazy EXTREME bundle (js/render/shared/gfx-hi.js: GfxHi.hd is the packHd gate).
+function assetLoader(overrides = {}, { gfxHi = false } = {}) {
   const vm = require("node:vm");
   const sandbox = { ...overrides };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
+  if (gfxHi) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gfx-hi.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/gfx-hi.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/assets.js") });
   return sandbox.Assets;
 }
@@ -945,7 +948,7 @@ async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
   // eslint-disable-next-line no-new-func
   const gfx = new Function("THREE", "Assets", "localStorage", "lit", "OffscreenCanvas", `"use strict";
     let matPlaceAlbedo = null, matPlaceNormal = null, matOwnedAlbedo = null, matOwnedNormal = null;
-    let materialArrayDetail = null; const renderer = {};   // materialArrayAnisotropy(): no renderer cap here -> 1
+    let materialArrayDetail = null; const renderer = {}, _ultra = false;   // materialArrayAnisotropy(): no renderer cap here -> 1
     ${TLX.slice(a, b)}
     ${fnSource(TLX, "function materialArrayAnisotropy() {")}
     return { ${fnSource(TLX, "createTextureArray(size, images, layers) {")}, ${fnSource(TLX, "setMaterialMaps(maps) {")} };`)(
@@ -1079,6 +1082,50 @@ test("the material pack takes the low tier under Save-Data or 2G (#3110 F2)", as
   assert.ok(sd.strips.length && sd.strips.every((u) => /128/.test(u)), "only 128 px strips fetched: " + sd.strips);
   assert.equal((await run({ saveData: false, effectiveType: "2g" })).tier, "low", "2G takes the low tier");
   assert.equal((await run({ saveData: true }, { tier: "high" })).tier, "high", "an explicit tier still wins");
+});
+
+test("packHd: the 512 px tier loads only on a desktop TLX with the feature on, and never under Save-Data", async () => {
+  const run = async ({ backend = "three", feature = true, mobile = false, hdInManifest = true, connection, tier, throws, hi = true } = {}) => {
+    const urls = [];
+    const assets = assetLoader({
+      navigator: connection === undefined ? {} : { connection },
+      GfxQuality: { current: () => "extreme", feature: (n) => { if (throws) throw new Error("boom"); return n === "packHd" && feature; } },
+      async fetch(url) {
+        urls.push(url);
+        return url.endsWith("manifest.json")
+          ? { ok: true, json: async () => ({ materials: {
+              size: 4, albedo: "a256.png", normal: "n256.png", layers: [{ mat: 1, scale: 1 }],
+              low: { size: 2, albedo: "a128.png", normal: "n128.png", layers: [{ mat: 1, scale: 1 }] },
+              ...(hdInManifest ? { hd: { size: 8, albedo: "a512.png", normal: "n512.png", layers: [{ mat: 1, scale: 1 }] } } : {}),
+            } }) }
+          : { ok: true, blob: async () => ({ size: 16 }) };
+      },
+      async createImageBitmap() { return { close() {} }; },
+    }, { gfxHi: hi });
+    const sizes = [];
+    assets.init({ backend, isMobile: mobile, createTextureArray(size) { sizes.push(size); return {}; }, setMaterialMaps() {} });
+    await assets.load(tier ? { tier } : undefined);
+    return { tier: assets.state().tier, sizes, strips: urls.filter((u) => /\.png$/.test(u)).map((u) => u.split("/").pop()) };
+  };
+  const on = await run();
+  assert.equal(on.tier, "hd");
+  assert.deepEqual(on.strips.sort(), ["a512.png", "n512.png"], "only the hd strips are fetched");
+  assert.ok(on.sizes.every((s) => s === 8), "arrays built at the hd size");
+  for (const [why, o] of [["feature off", { feature: false }], ["GLX", { backend: "glx" }], ["WGX", { backend: "webgpu" }],
+    ["a phone", { mobile: true }], ["no hd in the manifest", { hdInManifest: false }], ["GfxQuality throws", { throws: true }],
+    ["no GfxHi bundle (ULTRA path)", { hi: false }]]) {
+    const r = await run(o);
+    assert.notEqual(r.tier, "hd", why);
+    assert.ok(!r.strips.some((u) => /512/.test(u)), why + ": no hd strip fetched");
+  }
+  assert.equal((await run({ connection: { saveData: true } })).tier, "low", "Save-Data still wins");
+  assert.equal((await run({ tier: "high" })).tier, "high", "an explicit tier wins over the feature");
+  assert.equal((await run({ feature: false, tier: "hd" })).tier, "hd", "an explicit hd tier loads it (A/B)");
+});
+
+test("packHd: a failed hd load retries at 256 px, not at 512 px again", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8");
+  assert.match(src, /_lastWant === "hd" \? \{ tier: "high" \}/);
 });
 
 test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {
@@ -1282,7 +1329,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
       credits: [],
     }));
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic"],
+      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--no-hd"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-synthetic failed:\n${r.stdout}\n${r.stderr}`);
     const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
@@ -1290,6 +1337,8 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     assert.ok(m.materials.low && m.materials.low.size === 128, "default bake must include low 128");
     assert.ok(fs.existsSync(path.join(dir, m.materials.albedo)));
     assert.ok(fs.existsSync(path.join(dir, m.materials.low.albedo)));
+    // --no-hd: the 512 px desktop tier costs ~4x this whole bake; the next test covers it at small sizes.
+    assert.equal(m.materials.hd, undefined, "--no-hd writes no hd tier");
     assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
     for (const L of m.materials.layers) {
       assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
@@ -1297,6 +1346,42 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     }
     assert.ok(m.models.keep, "bake-synthetic must preserve models");
     assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("bake-synthetic --hd writes a hashed, separately budgeted hd tier that verify accepts", () => {
+  // The default bake adds hd at HD_SIZE (512); baked here at 32 + 64 so the test stays fast.
+  assert.match(TOOL_SRC, /const HD_SIZE = 512;/);
+  assert.match(TOOL_SRC, /intArg\(args, "--hd", only \? 0 : HD_SIZE\)/, "the default bake (no --size) includes hd");
+  const os = require("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-hd-"));
+  try {
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ version: 1, materials: null, models: {}, env: {}, credits: [] }));
+    const tool = path.join(ROOT, "tools", "gen", "assets.mjs"), env = { ...process.env, APEX_PACK_DIR: dir };
+    const r = cp.spawnSync(process.execPath, [tool, "bake-synthetic", "--size", "32", "--hd", "64"], { env, encoding: "utf8" });
+    assert.equal(r.status, 0, `bake-synthetic --hd failed:\n${r.stdout}\n${r.stderr}`);
+    const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    const hd = m.materials.hd;
+    assert.equal(m.materials.size, 32);
+    assert.ok(hd && hd.size === 64, "hd tier at the --hd size");
+    for (const which of ["albedo", "normal"]) {
+      assert.ok(fs.existsSync(path.join(dir, hd[which])), `hd ${which} strip written`);
+      assert.match(hd[`${which}Md5`] || "", /^[0-9a-f]{32}$/, `hd ${which} hashed`);
+      assert.notEqual(hd[which], m.materials[which], "hd strips are their own files");
+    }
+    assert.deepEqual(hd.layers.map((L) => [L.mat, L.scale, L.source]), m.materials.layers.map((L) => [L.mat, L.scale, L.source]));
+    const v = cp.spawnSync(process.execPath, [tool, "verify"], { env, encoding: "utf8" });
+    assert.equal(v.status, 0, `verify on the hd bake:\n${v.stdout}\n${v.stderr}`);
+    assert.match(v.stdout, /hd tier \d+ KB \/ 12 MB/, "verify counts the hd tier on its own budget");
+    // A tampered hd strip fails verify like any other strip.
+    fs.appendFileSync(path.join(dir, hd.albedo), Buffer.from([0]));
+    const bad = cp.spawnSync(process.execPath, [tool, "verify"], { env, encoding: "utf8" });
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /materials\.hd: mat-albedo-64\.png/);
+    const tooSmall = cp.spawnSync(process.execPath, [tool, "bake-synthetic", "--size", "32", "--hd", "32"], { env, encoding: "utf8" });
+    assert.notEqual(tooSmall.status, 0, "an hd size not above the high tier is refused");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1344,7 +1429,8 @@ test("every referenced file exists and the strip is the right height",
   { skip: !hasPack && "no pack installed" }, () => {
   const mats = manifest.materials;
   for (const f of [mats.albedo, mats.normal,
-                   mats.low && mats.low.albedo, mats.low && mats.low.normal].filter(Boolean)) {
+                   mats.low && mats.low.albedo, mats.low && mats.low.normal,
+                   mats.hd && mats.hd.albedo, mats.hd && mats.hd.normal].filter(Boolean)) {
     const p = path.join(PACK, f);
     assert.ok(fs.existsSync(p), `missing ${f}`);
     // PNG signature + IHDR width/height, so a truncated or wrong-shaped
@@ -1354,7 +1440,8 @@ test("every referenced file exists and the strip is the right height",
     const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
     // Each variant declares its own size; a strip must be square-per-layer and
     // exactly 17 layers tall whichever tier it belongs to.
-    const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size : mats.size;
+    const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size
+      : (mats.hd && (f === mats.hd.albedo || f === mats.hd.normal)) ? mats.hd.size : mats.size;
     assert.equal(w, expect, `${f} width ${w} != declared size ${expect}`);
     assert.equal(h, expect * MAT_N,
       `${f} height ${h} != size*${MAT_N} (${expect * MAT_N}) — the filmstrip must have one slot per MAT id`);
@@ -1364,19 +1451,31 @@ test("every referenced file exists and the strip is the right height",
 });
 
 test("pack stays inside the clone-time budget", { skip: !hasPack && "no pack installed" }, () => {
-  let bytes = 0;
+  // The desktop hd strips (materials.hd, EXTREME only) carry their own budget; everything else counts here.
+  const hd = manifest.materials && manifest.materials.hd;
+  const hdFiles = new Set(hd ? [hd.albedo, hd.normal].filter(Boolean).map((f) => path.join(PACK, f)) : []);
+  let bytes = 0, hdBytes = 0;
   const walk = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       // `src/` is the author-time fetch cache (gitignored) — verify() already
       // ignores it; counting it here would fail every local bake-material run.
       if (e.name === "src") continue;
       const p = path.join(d, e.name);
-      if (e.isDirectory()) walk(p); else bytes += fs.statSync(p).size;
+      if (e.isDirectory()) walk(p);
+      else if (hdFiles.has(p)) hdBytes += fs.statSync(p).size;
+      else bytes += fs.statSync(p).size;
     }
   };
   walk(PACK);
   assert.ok(bytes <= BUDGET_BYTES,
     `pack is ${(bytes / 1048576).toFixed(2)} MB, budget is ${(BUDGET_BYTES / 1048576).toFixed(0)} MB`);
+  assert.ok(hdBytes <= HD_BUDGET_BYTES,
+    `hd tier is ${(hdBytes / 1048576).toFixed(2)} MB, its budget is ${(HD_BUDGET_BYTES / 1048576).toFixed(0)} MB`);
+});
+
+test("the two budgets match the bake tool", () => {
+  assert.match(TOOL_SRC, /const BUDGET_BYTES = 8 \* 1024 \* 1024;/);
+  assert.match(TOOL_SRC, /const HD_BUDGET_BYTES = 12 \* 1024 \* 1024;/);
 });
 
 test("bake-synthetic-models drops retired procedural bins and keeps CC0 imports", () => {
@@ -2269,7 +2368,7 @@ test("unknown bake flag is refused before rewriting the pack", () => {
   const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
     { encoding: "utf8" });
   assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
-  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
+  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --hd --no-hd --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
 });
 
 test("assets.mjs --help prints usage and exits 0", () => {

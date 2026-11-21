@@ -171,6 +171,10 @@ const ShadowPass = (function () {
       if (ch && ch.chunks) G.gfx.castShadowChunked(ch, MAT_IDENT);
       else G.gfx.castShadow(plain, MAT_IDENT);
     }
+    // GRAPHICS: EXTREME casters for the TLX far cascades and extra lamp maps (gfx.shadowX): GfxHi.shadow (lazy).
+    const _hx = typeof GfxHi !== "undefined" ? GfxHi.shadow(G, deps, { mats: _shadowMats, cars: _shadowCars, ok: _shadowCast,
+      teams: _shadowTeams, pm: _playerMat, castP: _castPlayer, ctr: _shadowCtr, reach: _flReach, rib: _castRibbonSh,
+      pb: _castPropBatchesShadow, I: MAT_IDENT, n: () => _shadowCount }) : null;
 
     // Sun-shadow snap caches — loadTrack invalidates them so a new track whose
     // first snapped cell + sunDir happen to match the previous track's last values
@@ -185,6 +189,7 @@ const ShadowPass = (function () {
       // _shadowMats stays pooled — pushCaster overwrites it slot by slot.
       _shadowCount = 0;
       _shadowCars.length = 0; _shadowTeams.length = 0; _shadowCast.length = 0;
+      if (_hx) _hx.reset();
       // The car map holds the PREVIOUS session's cars: the cadence keep must not
       // re-arm it until a pass of this session draws it (#2180).
       _carMapEmpty = true;
@@ -321,6 +326,7 @@ const ShadowPass = (function () {
         // gate onto a stale map and hold it until the next cell crossing.
         const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
         const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+        let _sunBuilt = false;
         if (!_shadowsRead) {
           _shadowSnapX = _shadowSnapZ = _shadowBox = null;
           _shadowSunX = _shadowSunY = _shadowSunZ = null;
@@ -341,7 +347,7 @@ const ShadowPass = (function () {
         // and needs real hardware, not a gate.
         } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
             sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
-          _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
+          _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox; _sunBuilt = true;
           _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
           // Rebuild the snapped centre in world space. The along-sun component needs
           // no snap — it only shifts depth values, which the bias absorbs.
@@ -390,6 +396,7 @@ const ShadowPass = (function () {
           }
           G.gfx.shadowEnd();
         }
+        if (_hx) _hx.csm(sd, sBox, SUN_FAR, _sunBuilt, _shadowsRead, _frameNo, _hasLivePlayerShadow);
         // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
         // the snap-cached static map above; that's why cars only had blob shadows).
         // AI casts use the preceding frame's pooled transforms; the player is
@@ -735,6 +742,7 @@ const ShadowPass = (function () {
             } // end lamp-shadow snap rebuild
             } // end near-pool gate
           }
+          if (_hx) _hx.lamp(L, nRec, tailFrom, lum, flBest, _frameNo, _hasLivePlayerShadow);
         }
       }
     }
