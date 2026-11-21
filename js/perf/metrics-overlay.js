@@ -174,7 +174,7 @@ function store(key, val, pinRe) {
 // first paint that finds the overlay ON asks LazyBundles for the perf rig (sw.js
 // precaches it); the 4 Hz loop paints on the first tick after it lands.
 // One ask per ON: a failed fetch leaves the overlay off-screen, never a retry loop.
-let _impl = null;
+let /** @type {ReturnType<typeof GameMetricsPanel.create> | null} */ _impl = null;
 let _panelAsked = false;
 function panel() {
   if (!_impl && typeof GameMetricsPanel !== "undefined")

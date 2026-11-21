@@ -2011,6 +2011,11 @@
       "presentation": "native",
       "preserve": "Correctness and timing separate"
     },
+    "tools/mcp/lsp-coverage.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Raw-server vs tool counts and the TypeScript version"
+    },
     "tools/mcp/lsp-mcp.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -2040,6 +2045,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Meaningful nonempty-result check and exit"
+    },
+    "tools/mcp/member-check.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/mcp/output-level-mcp.mjs": {
       "action": "targeted-summary",

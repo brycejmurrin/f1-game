@@ -20,8 +20,9 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
 - Settle every human step before launch (a device check, a `config-ok` the diff will need, a decision) and cite the
   comment URL, so the worker verifies it instead of waiting [10].
-- `config-ok` on a ROUTINE config path you add yourself, after you have read the PR's config diff (D-034); never let
-  the PR's own worker add it. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
+- `config-ok` on a ROUTINE config path and `ratchet-raise` you add yourself, after you have read the PR's config diff
+  or its raise and the CEILING-HISTORY reason, with one comment per add naming them (D-034, D-042); never let the
+  PR's own worker add either. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
   `land.yml`, every host's hooks and settings) needs Bryce's own tap (#5455); `ci.yml`, `pick-tests`, `preflip-probe`
   and the other `tools/ci/` files are routine. The gate cannot tell you from the worker: this half is a rule, not a check.
 - A TAKEOVER brief states evidence, not a verdict: the lease line, the newest commit trailer and comment time on the
@@ -35,7 +36,7 @@ brief adds only task facts.
 
 ASK (Bryce's words, with the time): "<quote>"
 TASK: <the one unit; what a player or an agent would see when it is done>
-EVIDENCE: <the measurement or repro, its command, the precedent PR to copy>
+EVIDENCE: <the measurement or repro, its command, the precedent PR to copy; name JS symbols as apex-lsp calls, e.g. `lsp_callers Tracks.curvature`>
 STATE: head <sha> at <time>; open PRs that touch the same paths (shared, not a blocker: D-033): <list>; decisions already made: <comment URLs>
 PROFILE (phone UI only): newest `tests/data/settings-live-export-*.json`, dated <date>; quote it, do not trust a
   number in this brief over that file [16]

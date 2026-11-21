@@ -51,7 +51,7 @@ had redeclared `gateSrc` and Dawn refused the SSR module); WGX SSR `sinT` Nv
 fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX
 corrugation AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking
 mip uses unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso /
-desktop GLX 4× MSAA / peel-then-bump stay matched. TLX flat-`mat` and
+desktop GLX MSAA (4× ULTRA, 2× HIGH−, 0 mobile) / peel-then-bump stay matched. TLX flat-`mat` and
 geometric baked UVs were reverted — they blanked the garage car.
 
 SAA mixes geometric N with a uniform-CF peel hoist on all three backends
@@ -216,7 +216,7 @@ The gaps fall into three kinds:
 |---|---|---|
 | **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
-| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else. Desktop GLX now picks 4× to match. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
+| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else. GLX picks 4× only on GRAPHICS: ULTRA desktop, 2× on HIGH and below, 0 on mobile or when the format cannot multisample (`js/render/glx/post.js`). Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
 (`requiredFeatures`). Everything else in the §3 inventory is core.
@@ -228,7 +228,7 @@ The gaps fall into three kinds:
 Do not re-port these. They are the Phase 2–4b ceiling:
 
 - Adapter / device / swapchain, `Z01` GL→WebGPU clip remap, device-lost → GLX fallback
-- LIT into `rgba16float` + `depth24plus`; FRAME UBO + 32-light storage buffer
+- LIT into `rgba16float` + `depth24plus`; FRAME UBO + 48-light storage buffer
 - Sun + car shadow maps, comparison-sampler PCF, 512² `r32float` blocker map (textureLoad, unfilterable)
 - Sky, chunked cull, env-probe cube (LOD 0), road-only SSR pass
 - Post: SSAO + separable denoise, world-space god-ray + lamp vol + separable blur, bloom mip chain, ACES composite, FXAA

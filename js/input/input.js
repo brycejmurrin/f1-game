@@ -615,7 +615,7 @@ const Input = (function () {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
-  let deviceProfiles = null;
+  let /** @type {ReturnType<typeof ControllerProfiles.create> | null} */ deviceProfiles = null;
   function profileChanged() { if (deviceProfiles) deviceProfiles.save(); }
   const bindings = InputBindings.create({
     onKeysChanged() { heldKeys.clear(); keyThrottleToggle = keyLookBackToggle = false; syncHeldKeys(); },

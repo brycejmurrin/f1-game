@@ -1277,7 +1277,9 @@
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/lsp-navigation-efficiency.test.mjs",
+        "tests/unit/lsp-port-cleanroom.test.mjs",
         "tests/unit/lsp-reference-fixes.test.mjs",
+        "tests/unit/lsp-stress-fixes.test.mjs",
         "tests/unit/lsp-workflow-fixes.test.mjs",
         "tests/unit/mcp-listing-cost.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
@@ -3254,11 +3256,6 @@
       "roster": "LAZY_DATA"
     },
     {
-      "path": "js/data/flyby-overrides.js",
-      "global": "FlybyOverrides",
-      "roster": "tag"
-    },
-    {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
       "roster": "tag"
@@ -5002,6 +4999,11 @@
       "path": "js/ui/post-fx-opts.js",
       "global": "PostFxOpts",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/progress-backup.js",
+      "global": "ProgressBackup",
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/quali-sheet.js",
