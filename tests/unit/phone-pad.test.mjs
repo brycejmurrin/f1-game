@@ -2524,6 +2524,38 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   h.ctl.cancel();
 });
 
+test("returning to tilt after touch steering waits for a fresh sensor reading", async () => {
+  let receive, heartbeat;
+  const samples = [];
+  const h = wakePad({ rtc: () => ({
+    status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
+    send(channel, data) {
+      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      return true;
+    },
+  }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  try {
+    await h.ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    h.fire("deviceorientation", { beta: 0, gamma: 35 });
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 35, "keeping the same mode preserves its current reading");
+
+    assert.equal(h.ctl.setSteeringMode("touch"), true);
+    h.fire("deviceorientation", { beta: 0, gamma: 0 });
+    heartbeat();
+    assert.equal(samples.at(-1).steer, 0, "the touch axis owns steering");
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    assert.equal(samples.at(-1).roll, null, "the handoff packet cannot revive the previous tilt");
+    heartbeat();
+    assert.equal(samples.at(-1).roll, null);
+    h.fire("deviceorientation", { beta: 0, gamma: -20 });
+    heartbeat();
+    assert.equal(samples.at(-1).roll, -20, "a fresh tilt reading restores motion steering");
+  } finally { h.ctl.cancel(); }
+});
+
 test("the phone heartbeat releases tilt on background and redial until a fresh reading", async () => {
   const streams = [];
   let heartbeat;

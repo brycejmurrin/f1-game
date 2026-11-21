@@ -3,3 +3,6 @@ Fixed: Visit-only photos remain visible after a device clock change, and a faile
 Fixed: Phone steering returns to neutral after a disconnect until the controller receives a fresh tilt reading.
 Fixed: WATCH follows the same neighboring driver after a retirement whether the replay was played or scrubbed.
 Fixed: Offline asset requests reject mismatched bytes from a retained cache after a deployment.
+Fixed: Settings backups keep practice scores for places gained, metres closed and time defended, and preserve completion counts when merging older backups.
+Fixed: Photos with identical timestamps appear in retention order, so saving another photo evicts the last one shown.
+Fixed: Switching from touch steering back to tilt stays neutral until the phone supplies a new reading.

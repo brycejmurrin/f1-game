@@ -14553,6 +14553,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/ui-experience.test.mjs"
       ],
       "debrief": [
@@ -14594,6 +14595,7 @@
         "tests/unit/radio-voice.test.mjs"
       ],
       "*": [
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ]
     },

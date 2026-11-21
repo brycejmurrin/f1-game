@@ -40,6 +40,8 @@ function openDb() {
     req.onblocked = () => { abandoned = true; reject(new Error("Close another game tab to open photo storage")); };
   });
 }
+// Both views show the same newest-first order used when a full album evicts its last row.
+function newestPhotoFirst(a, b) { return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0); }
 // A failed write may precede the first successful read of the device album.
 // Place visit-only photos after that durable history, in their save order, once.
 function orderVisitPhotos(stored, session) {
@@ -66,8 +68,7 @@ async function library(action, value, session) {
         // transactions on the same store serialize across tabs; an await here
         // would let this transaction become inactive and lose that isolation.
         try {
-          const photos = req.result.filter((p) => p.id !== value.id)
-            .sort((a, b) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+          const photos = req.result.filter((p) => p.id !== value.id).sort(newestPhotoFirst);
           // Commit order decides which photos to keep, even if the device clock moved backward.
           const at = Math.max(value.at, latest + 1);
           for (const old of photos.slice(LIMIT - 1)) store.delete(old.id);
@@ -753,7 +754,7 @@ function create(G, deps) {
     if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(box, render); else render();
   }
   function paintPhotos(box, photos) {
-    photos = photos.concat(session).sort((a, b) => b.at - a.at).slice(0, LIMIT);
+    photos = photos.concat(session).sort(newestPhotoFirst).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     const bgOk = sceneIsPhoto();
     for (const p of photos) {
@@ -809,7 +810,7 @@ function create(G, deps) {
     let photos;
     try { photos = await library("list", null, session); } catch (e) { if (!session.length) throw e; photos = []; }
     const seen = new Set();
-    return photos.concat(session).sort((a, b) => b.at - a.at || String(a.id).localeCompare(String(b.id)))
+    return photos.concat(session).sort(newestPhotoFirst)
       .filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return /^data:image\/(jpeg|png);base64,/.test(p.thumb || "") && p.thumb.length < 240000; })
       .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, at: +p.at || 0 }));
   }

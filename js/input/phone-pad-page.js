@@ -253,6 +253,7 @@ const PhonePadPage = (function () {
     function setSteeringMode(mode) {
       if (mode !== "tilt" && mode !== "touch") return false;
       if (mode === "touch" && (!session || !session.health().touchSupported)) { say("Touch steering needs an updated game. Reload the game and reconnect.", true); return false; }
+      if (mode !== steeringMode) { roll = null; paintRoll(); }
       steeringMode = mode; steer = 0; push();
       if (dom.steeringMode) dom.steeringMode.value = mode;
       if (dom.steer) dom.steer.hidden = mode !== "touch";

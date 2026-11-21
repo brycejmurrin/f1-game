@@ -2059,10 +2059,15 @@ test("fix 70: a newer local season survives an older file's season", async () =>
 });
 
 // #5992: the settings file's `progress` section (js/ui/progress-backup.js rides LAZY_SAVES_DATA before the body).
+function loadProgressBackup(ctx) {
+  for (const path of ["js/race/race-insights.js", "js/ui/progress-backup.js"]) {
+    vm.runInContext(read(path), ctx, { filename: absSrc(path) });
+  }
+}
 test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it", () => {
   const withProgress = (disk) => {
     const b = boot({ realStore: true, disk });
-    vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+    loadProgressBackup(b.sb);
     return b;
   };
   const a = withProgress({ "apex26.circuitMastery": JSON.stringify({ version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] }), "apex26.pitTaught": "1" });
@@ -2076,9 +2081,51 @@ test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it",
   assert.equal(b.disk.get("apex26.pitTaught"), "1");
 });
 
+test("practice mastery keeps signed scores through a Settings export and merge", () => {
+  function entry(mode, best, completed) {
+    return { key: "c2|monza|ferrari:" + mode + ":all", best, completed };
+  }
+  function device(entries) {
+    const b = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify({ version: 1, entries }) } });
+    loadProgressBackup(b.sb);
+    return b;
+  }
+  const incoming = [entry("slipstream", -24, 2), entry("start", -2, 3), entry("lap", 81, 1)];
+  const file = JSON.parse(JSON.stringify(device(incoming).collect("all")));
+  assert.deepEqual(file.progress.circuitMastery.entries, incoming);
+  file.progress.circuitMastery.entries.push(entry("launch", -1, 1));   // a negative launch time is invalid
+  const dst = device([entry("defend", -5, 2), entry("start", -4, 1)]);
+  assert.equal(dst.loadSettings(file).failed, 0);
+  assert.deepEqual(JSON.parse(dst.disk.get("apex26.circuitMastery")).entries, [
+    entry("defend", -5, 2), entry("start", -4, 3), entry("slipstream", -24, 2), entry("lap", 81, 1),
+  ]);
+});
+
+test("historical mastery classes add on one device and take the larger count across devices", () => {
+  const current = "c2|bahrain|ferrari:lap:all";
+  const historical = tune => JSON.stringify({ circuit: "bahrain", car: ["ferrari", 1], tune: [tune] }) + ":lap:all";
+  const entry = (key, best, completed) => ({ key, best, completed });
+  function device(entries) {
+    const b = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify({ version: 1, entries }) } });
+    loadProgressBackup(b.sb);
+    return b;
+  }
+  const oldEntries = [entry(historical(1), 90, 2), entry(historical(2), 88, 3)];
+  const file = JSON.parse(JSON.stringify(device(oldEntries).collect("all")));
+  assert.deepEqual(file.progress.circuitMastery.entries, [entry(current, 88, 5)]);
+  // A file exported before normalization still has one row per historical class.
+  file.progress.circuitMastery.entries = oldEntries;
+  const dst = device([entry(historical(3), 86, 1), entry(current, 89, 3)]);
+  assert.equal(dst.loadSettings(file).failed, 0);
+  const saved = () => JSON.parse(dst.disk.get("apex26.circuitMastery")).entries;
+  assert.deepEqual(saved(), [entry(current, 86, 5)]);
+  assert.equal(dst.loadSettings(file).skipped, 1);
+  assert.deepEqual(saved(), [entry(current, 86, 5)]);
+});
+
 test("retrying a mixed settings and progress backup saves cache-only merges before reload", async () => {
   const b = bootImportUI({ realStore: true });
-  vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+  loadProgressBackup(b.sb);
   const samples = [0, 1, 2, 3, 4, 5, 6, 7];
   const progress = {
     circuitMastery: { version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] },

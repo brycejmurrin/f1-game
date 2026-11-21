@@ -35,6 +35,7 @@ function device(disk = {}, globals = {}) {
   const ctx = vm.createContext(sb);
   seedSaveMigrate(ctx);
   vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
+  vm.runInContext(read("js/race/race-insights.js"), ctx, { filename: absSrc("js/race/race-insights.js") });
   vm.runInContext(read("js/ui/progress-backup.js").replace(/^const\b/m, "var"), ctx, { filename: absSrc("js/ui/progress-backup.js") });
   const GameStore = vm.runInContext("GameStore", ctx);
   const disk1 = (k) => { const v = map.get("apex26." + k); return v === undefined ? undefined : JSON.parse(v); };

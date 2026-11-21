@@ -592,6 +592,18 @@ test("equal timestamps prune deterministically by ID instead of request or enume
   b.api.open(); await b.api.capture(); await b.api.savePhoto();
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-3", "old-4", "old-5", "old-6", "old-7"]);
 });
+test("saving to a full album evicts the last displayed photo when legacy timestamps tie", async () => {
+  const db = photoDb(seededPhotos(6).map((row) => ({ ...row, at: 100 })));
+  const b = boot({ indexedDB: db });
+  const titles = () => Array.from(b.dom.byId("ps-library").children, (row) => row.children[1].textContent);
+  b.api.open({ metadata: { title: "New capture" } });
+  const before = Array.from(await b.api.album(), (photo) => photo.title);
+  assert.deepEqual(titles(), before);
+  await b.api.capture(); await b.api.savePhoto();
+  const expected = ["New capture", ...before.slice(0, 5)];
+  assert.deepEqual(titles(), expected);
+  assert.deepEqual(Array.from(await b.api.album(), (photo) => photo.title), expected);
+});
 test("a committed save from a closed Studio retains its original metadata without touching a reopened session", async () => {
   const idb = photoDb(), b = boot({ indexedDB: idb });
   b.api.open({ metadata: { title: "Earlier session" } }); await b.api.capture();
