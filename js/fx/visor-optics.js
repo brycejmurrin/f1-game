@@ -311,12 +311,15 @@ const VisorOptics = (function () {
     return _knobs;
   }
 
-  // The scene comes from game.js's G façade (the script-scope `const G`, read by name like
-  // js/perf/race-entry-profile.js does) — NOT only through window.__apex: the agent surface is LAZY_AGENT, absent
-  // on a player's Pages build, and gating on it left the visor glint unpainted for every player.
+  // The scene comes from game.js's G façade, handed in by bind(G) at boot — NOT only through window.__apex: the
+  // agent surface is LAZY_AGENT, absent on a player's Pages build, and gating on it left the visor glint unpainted
+  // for every player. G is a function-scoped const inside game.js's IIFE, so a `typeof G` read from this script is
+  // always "undefined" (#5964): it has to be passed in.
+  let _G = null;
+  function bind(G) { _G = G || null; }
   function readScene() {
     try {
-      if (typeof G !== "undefined" && G && G.frame) return sceneFromG(G);
+      if (_G && _G.frame) return sceneFromG(_G);
     } catch (_) { /* G mid-boot: try the agent surface */ }
     const A = typeof window !== "undefined" ? window.__apex : null;
     if (!A) return null;
@@ -744,6 +747,6 @@ const VisorOptics = (function () {
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

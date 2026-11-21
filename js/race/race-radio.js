@@ -81,7 +81,7 @@ var RaceRadio = (function () {
     let comm = readSetting("commentary", COMM, "tv");
 
     let battleOn = !!(store && store.get && store.get("battleEarcon", false));
-    let battle = null;
+    let /** @type {ReturnType<typeof BattleEarcon.create> | null} */ battle = null;
     function battleService() {
       // AUDIO is lazy: constructing the race need not load or unlock sound.
       if (!battle && typeof BattleEarcon !== "undefined" && typeof GameAudio !== "undefined") battle = BattleEarcon.create(GameAudio);

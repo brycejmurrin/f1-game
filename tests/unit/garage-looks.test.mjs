@@ -272,7 +272,7 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
   assert.equal(scene.setMood("night"), "night");
   assert.equal(scene.mood(), "night");
   assert.equal(saved.get("apex26.garageMood"), "night");
-  assert.equal(scene.setMood("no-such-mood"), "showroom", "an unknown id falls back to the shipped rig");
+  assert.equal(scene.setMood("no-such-mood"), "shipped", "an unknown id falls back to the shipped rig");
 });
 
 test("new working-light moods preserve fixtures and restore the standard rig", () => {

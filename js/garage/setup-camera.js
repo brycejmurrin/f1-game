@@ -868,7 +868,7 @@ function getSetupPreviewMesh() {
   return _spMesh;
 }
 // Optional, detached circuit slice shared by every garage camera/animation.
-let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
+let /** @type {ReturnType<typeof GarageExterior.create> | null} */ exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
 // OUTSIDE (#5660): a drive-out / pit drive-in shows the session's circuit (trackIdx), not the garage's next race;

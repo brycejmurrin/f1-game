@@ -43,7 +43,6 @@ const SettingsDefaults = (function () {
     "homeCamera": "side",
     "garageLook": "flood",
     "crewLook": "pitstop",
-    "garageMood": "showroom",
   };
   // @gen-settings-defaults end
 

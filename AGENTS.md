@@ -106,8 +106,8 @@ Dispatch: `.github/workflows/dispatch.yml`; a launched session loads skill `stew
 
 ## Agent extensions
 Available workflows are skills (index `.claude/skills/README.md`; Codex mirror `.agents/skills`); subagents
-(`.claude/agents/`) isolate noisy work; CLI wraps `apex_*`: `docs/AGENT-SURFACE.md`. A JS symbol → MCP `apex-lsp`
-(skill `code-nav`). Hooks: `.claude/rules/claude-config.md`; a refusal is the rule. Decisions:
+(`.claude/agents/`) isolate noisy work; CLI wraps `apex_*`: `docs/AGENT-SURFACE.md`. A JS symbol → MCP `apex-lsp`,
+not grep (skill `code-nav`). Hooks: `.claude/rules/claude-config.md`; a refusal is the rule. Decisions:
 `docs/DECISIONS.md`. Memory: `.claude/memory/MEMORY.md`.
 
 # Compact instructions

@@ -5,4 +5,4 @@ Improved: Wide desktop title screens now use the landscape phone’s centered bu
 Improved: Fresh installs use the static title drawing and standard readability settings. Phone title, Pause, Garage panel, Data Hub, Career and racing HUD follow the owner profile.
 Fixed: Title width can step directly between Auto and its first explicit width setting. Engine sliders can reproduce every named preset, camera adjustments display 0.025 m steps precisely, and audio and steering controls first appear at their actual defaults.
 New: Enter precise values in Lighting Tuner and Photo Studio. The title drawing and menu wash each support a Medium strength.
-Improved: New games start with the owner’s audio mix, solo race setup, cockpit, garage and lighting choices. On iPhone, graphics start at Low and 3D resolution at High.
+Improved: New games start with the owner’s audio mix, solo race setup, cockpit, garage and lighting choices. The garage keeps its Standard lighting by default; Showroom stays selectable. On iPhone, graphics start at Low and 3D resolution at High.

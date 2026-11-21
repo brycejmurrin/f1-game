@@ -804,7 +804,7 @@ body:not(.desktop) {
 :root[data-menu-accent="lime"]   { --red: #b7e11b; }
 
 :root {
-  /* ENDURANCE / DRAFTING palettes: one home for the values; css/screen-arranger.css scopes them onto the HUD. */
+  /* ENDURANCE / DRAFTING palettes; css/screen-arranger.css scopes them. */
   --endurance-bg: #081511; --endurance-carbon: #16342b; --endurance-text: #fbf8e9; --endurance-dim: #c3d8ca; --endurance-line: #738e80;
   --drafting-bg: #0b192b; --drafting-carbon: #192e45; --drafting-text: #eef7ff; --drafting-dim: #bfd4e9; --drafting-line: #7895ac;
 }

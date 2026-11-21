@@ -2305,6 +2305,11 @@ jobs:
           # NIGHTLY_OVER_BUDGET_SHARDS; at the default 9 the day's union diff dropped 2 routed specs and the verdict
           # redded three nights running). Every other event keeps MAX_OVER_BUDGET_SHARDS.
           OVER_BUDGET_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
+          # THE LANE COUNT (D-LANES, 2026-11-20): `vars.APEX_CI_LANES` ONLY when this run's `selected` legs resolve to
+          # the variable runner (the same condition as their runs-on: this repo's own pull_request or ci.yml's own
+          # dispatch, never a pages.yml call or the nightly, APEX_CI_BROWSER_RUNNER set). Otherwise '' and select-specs keeps LANES (28): a GitHub-hosted run never
+          # gets more lanes than the 40-slot pool was budgeted for. select-specs ciLanes validates [1, 128].
+          APEX_CI_LANES: ${{ inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && vars.APEX_CI_BROWSER_RUNNER != '' && vars.APEX_CI_LANES || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # THE PLAN RECORD (#5426). Every run's plan, as one `apex-selected` annotation (plan key, dropped count, base
       # sha), so a later ready flip on the same head can ask what this run's legs proved.
@@ -2649,10 +2654,13 @@ jobs:
     if: ${{ needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}
     # THE RUNNER IS A REPO VARIABLE (D-RUNNER, 2026-11-20), separate from browser-group.yml's so a trial can start there
     # alone. Unset or empty, every leg runs on `ubuntu-latest` exactly as before. Only this repo's own code may run
-    # on it: a fork's pull_request (and any pull_request_target, which this workflow does not take today) falls
-    # back to `ubuntu-latest` whatever the variable says. Push (the pages.yml train), schedule and dispatch run this
-    # repo's refs. docs/TESTING.md §CI runners; tests/unit/ci-runner-variable.test.mjs pins it.
-    runs-on: ${{ github.event_name != 'pull_request_target' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.APEX_CI_BROWSER_RUNNER || 'ubuntu-latest' }}
+    # on it, and only where a managed runner's outage cannot block a deploy: this repo's own pull_request and ci.yml's
+    # own workflow_dispatch read it. Everything else stays on `ubuntu-latest` whatever the variable says: a fork's
+    # pull_request, any pull_request_target, ci.yml's own schedule (the nightly), and EVERY pages.yml call (push,
+    # cron or "deploy now" dispatch: a workflow_call carries the caller's event_name, so the train is told apart by
+    # its `concurrency_key` input). Pages run 44835564654 (2026-11-20) failed in mesa-xvfb setup on a Ubicloud leg
+    # whose apt mirrors were unreachable. docs/TESTING.md §CI runners; tests/unit/ci-runner-variable.test.mjs pins it.
+    runs-on: ${{ inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && vars.APEX_CI_BROWSER_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:

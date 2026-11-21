@@ -719,7 +719,7 @@ function litRig(src) {
 }
 // ── lighting MOODS (the setup sheet's LIGHTING row) ─────────────────────────
 // "shipped" is the identity — every factor 1, nothing overridden — so the
-// base rig remains available alongside the default Showroom mood: GarageScene.setMood(id) (the
+// default and base rig; Showroom stays selectable: GarageScene.setMood(id) (the
 // picker; saves apex26.garageMood), mood(id), or the URL ?garageMood=<id>. Gains scale the rig
 // GROUPS of FIXTURES (key 0-1, fill 2-5, wash 6-9), the team dado uplights
 // and the night gantry; sky/amb/ambG (a number or per-channel rgb) scale the skylight and hemisphere ambient
@@ -788,7 +788,7 @@ const MOODS = {
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
 const _bdBase = BACKDROP.slice();
-const DEFAULT_MOOD = "showroom";
+const DEFAULT_MOOD = "shipped";
 let moodId, MD;
 function mood(id) {
   if (id === undefined) return moodId;

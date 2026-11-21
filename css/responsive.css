@@ -250,7 +250,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   translate: calc(var(--tl-title-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-title-y, 0px) + var(--tf-dy, 0px));
   zoom: calc(var(--ui-scale) * var(--tl-title-size, 1) * var(--tf, 1));
 }
-/* Compact keeps its cap (css/menus.css); a layout scales that (390x844 @200: 2.1 overflowed). */
+/* A layout scales compact's cap (css/menus.css). */
 :root[data-title-layout] :where(body[data-density="compact"]) #menu-buttons {
   zoom: calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
 }
@@ -327,9 +327,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
 :root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
 :root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }   /* a ring would read through the ghost; it returns with the page */
-/* Title editing intercepts button presses so each group can be dragged.
-   The drawing uses #tl-art beneath the doors for hit testing. Keep #tl-editor
-   unzoomed because its fixed handle follows the selected corner. */
+/* Title edit: groups drag; #tl-editor stays unzoomed (its handle tracks a corner). */
 :root[data-tl-edit] :is(#menu-buttons, #menu-brand, #tl-art) {
   outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
   outline-offset: 4px;

@@ -6262,6 +6262,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
 });
 
 test("TLX post warm compiles serially and holds each target across awaits", async () => {
+  const disposed = false;
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
@@ -7308,6 +7309,11 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   G.mirrorRect(rect);
   assert.equal(G.drawMirrorGlass(glass, id, null), true);
   assert.equal(G.mirrorState().glass, 2);
+  // opts: the shared (mesh, model, opts) slot TLX and WGX take too; GLX forwards it and draws the same glass.
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, { lod: 2 }), true, "an opts object is accepted, not a refusal");
+  assert.equal(h.count("drawElements"), 1, "one glass draw, as with null opts");
+  assert.equal(G.mirrorState().glass, 3);
 
   // A dead target (an incomplete framebuffer at a new size): refused for good.
   h.answers.checkFramebufferStatus = () => 0;
@@ -7315,7 +7321,7 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   assert.equal(G.mirrorState().dead, true);
   G.begin(h.frame());
   assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
-  assert.equal(G.mirrorState().glass, 2);
+  assert.equal(G.mirrorState().glass, 3);
 });
 
 // The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's
@@ -7327,7 +7333,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   const run = (st) => {
     const recs = [];
     const make = new Function("st", "recs", `
-      let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let { _mirActive, _mirDead, mirRT, _mirReady, _mirFlip, fx } = st, _mirGlass = 0;
       let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
       const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
@@ -7338,13 +7344,13 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     return { ok, recs, glass: t.glass() };
   };
   const tex = { rt: true }, mat = { glassMat: true };
-  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirRenders: 3, _mirFlip: true,
+  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirReady: true, _mirFlip: true,
     fx: { mirrorGlassMaterial: (t) => (t === tex ? mat : null) } };
   const r = run(live);
   assert.equal(r.ok, true);
   assert.equal(r.glass, 1);
   assert.deepEqual(r.recs, [["glassGeo", "model", mat, undefined, undefined, 0, null, null]], "one opaque, un-lit record on mirRT's texture");
-  for (const [why, over] of [["no image yet", { _mirRenders: 0 }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
+  for (const [why, over] of [["no image yet", { _mirReady: false }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
     ["the PiP", { _mirFlip: false }], ["an open mirror pass", { _mirActive: true }], ["no fx", { fx: null }]]) {
     const x = run(Object.assign({}, live, over));
     assert.equal(x.ok, false, why);
@@ -7352,7 +7358,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   }
   const tlx = code("js/render/three/tlx.js");
   assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
-  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
+  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post && post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
   // useTag (perf hunt 3 R3) = usePost on a chain that has the ssrTag attachment.
   const mrt = spanBack(tlx, "renderer.setMRT(useTag ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");

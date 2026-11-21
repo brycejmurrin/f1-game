@@ -804,11 +804,15 @@ before:
 | variable | job | events that read it |
 |---|---|---|
 | `APEX_BROWSER_RUNNER` | `browser-group.yml` `group` (every shard) | `workflow_dispatch` (its only trigger) |
-| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request`, the pages.yml train, schedule, dispatch |
+| `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request` and ci.yml's own dispatch only; the pages.yml train (any event) and the nightly stay on `ubuntu-latest` so a managed-runner outage never blocks a deploy |
 
 The value is ONE `runs-on` label string. Nothing else reads a variable for its runner. Land, the gate, Pages, the
 deploy, the structural guards and the fast tier stay literal `ubuntu-latest`, and so does `renderer-macos`
 (`tests/unit/ci-runner-variable.test.mjs` pins the list).
+
+**Train stays hosted (2026-11-20).** Pages run 44835564654 redded in mesa-xvfb setup on a Ubicloud leg (no apt mirror
+answered), so the train and the nightly no longer read the variable. Bryce deleted `APEX_CI_BROWSER_RUNNER` as a
+stopgap the same day; with this rule merged it is safe to re-add.
 
 **Fork code never runs there.** The repo is public and takes fork PRs. In `ci.yml`, a `pull_request` whose head
 repository is not this one, and any `pull_request_target`, falls back to `ubuntu-latest` whatever the variable says.
@@ -837,6 +841,23 @@ First measurement (browser-group run 44823706583, 2026-11-20, `ubicloud-standard
 orchestrator): the runner was picked up 21 s after dispatch. Shard wall time was `logging` 96 s against 68–95 s on
 GitHub-hosted and `boot-guard` 90 s against 51–63 s. So a 2-vCPU leg runs up to ~1.5x slower than this repo's 4-vCPU
 `ubuntu-latest`. If legs near their budget, `ubicloud-standard-4` is the fallback.
+
+**Lane counts (D-LANES, 2026-11-20).** The lanes cap how many browser legs hold a runner at once. They were sized for
+GitHub's 40-slot pool: `LANES` 28 (`tools/ci/select-specs.mjs`) plus `GROUP_LANES` 8 (`tools/ci/remote-group.mjs`).
+A leg on the variable runner takes no slot of that pool, so two more repository variables can raise the counts:
+
+| variable | read by | used only when | unset or invalid |
+|---|---|---|---|
+| `APEX_CI_LANES` | ci.yml's select step → select-specs `ciLanes` | the run's `selected` legs resolve to `APEX_CI_BROWSER_RUNNER` (same condition as their `runs-on`: own `pull_request` or ci.yml dispatch, never the train or nightly, the runner variable set) | 28 |
+| `APEX_GROUP_LANES` | remote-group.mjs `groupLanes` (env, or `--group-lanes <n>`) | the dispatcher sets it only when the target branch's browser-group.yml reads `APEX_BROWSER_RUNNER` (synced past 0575bc45) and that variable is set | 8 |
+
+Each value is an integer in [1, 128]; anything else falls back to the default. A fork or unset case can never get more
+lanes than the GitHub-hosted pool was budgeted for (`tests/unit/ci-runner-variable.test.mjs` pins the condition).
+Lanes are assigned when a run is planned, so only runs planned after a change use it; runs already queued keep their
+lanes. Bryce's values with Ubicloud (2026-11-20): `APEX_CI_LANES` 64, `APEX_GROUP_LANES` 24.
+**Cost:** more lanes means more legs billed at once on the provider. The lane cap no longer throttles spend, so
+the Ubicloud bill scales with the legs that would otherwise have queued. Watch the provider console after raising them.
+**Rollback:** delete the variable (or unset the env). The next planned run is back at 28 / 8, with no commit.
 
 **What the image must provide.** The jobs assume GitHub's Ubuntu runner image:
 - passwordless `sudo` and `apt` for `.github/actions/mesa-xvfb` (`mesa-utils libgl1-mesa-dri libegl1 libgles2
