@@ -179,6 +179,18 @@ test("Kyalami runs anticlockwise with the SRO turns, line and infield pits", () 
   assert.ok(inside, "a point 100 m to the driver's left of the line is on the infield");
 });
 
+test("Portimao T12 bank is turn-anchored and Norte stand is a T1 braking kit", () => {
+  // #5652: bankZones frac 0.640 sat 72 m past T12 with no turn claim; the Norte
+  // / MEO kit names Turn 1 but its head line omitted "braking", so the 96 m
+  // approach window was judged against KIT_M (60) instead of APPROACH_M (300).
+  const CF = require("../../tools/track/corner-frames.cjs");
+  const { def } = circuit("portimao");
+  assert.ok(def.bankZones.some((b) => b.turn === 12),
+    "T12 bank must use { turn: 12 }, not a bare frac");
+  const bad = CF.audit(["portimao"]).filter((r) => r.bad).map((r) => `${r.key} ${r.offsetM}m`);
+  assert.deepEqual(bad, [], "portimao must have no corner-frame offenders");
+});
+
 test("Bahrain scenery landmarks track the current arc-length origin", () => {
   const { def, track } = circuit("bahrain");
   const source = readFileSync(new URL("../../js/circuits/scenery/bahrain.js", import.meta.url), "utf8");
