@@ -217,7 +217,7 @@
     "tests/unit/ci-coverage.test.mjs",
     "tests/unit/ci-gate-selection.test.mjs",
     "tests/unit/ci-gpu-census.test.mjs",
-    "// CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml joins ci.yml's PR group. Pure, no network or browser.",
+    "// CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml spares CI from a later reopening. Pure, no network or browser.",
     "tests/unit/ci-guard-tools.test.mjs",
     "tests/unit/ci-pages-train.test.mjs",
     "tests/unit/ci-pr-base.test.mjs",
