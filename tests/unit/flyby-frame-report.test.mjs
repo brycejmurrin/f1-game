@@ -57,6 +57,10 @@ test("frame report: the subject landmark stays in the scene (Spa's stands framed
     assert.ok(spa[id].every((f) => f.subject.inFramePct >= 40), `spa ${id}: ${spa[id].map((f) => f.subject.inFramePct)} % of the lap in frame (a raised eye must not frame it out)`);
   }
   assert.ok(spa.wide.every((f) => f.subject.visiblePct >= 56), `spa wide: ${spa.wide.map((f) => f.subject.visiblePct)} % of the lap visible (was 45-48)`);
+  // Tip df5e12faa7 (post-#6118 Gold-3 dual-tier at gap 14/15): wide2 was
+  // 49–50 % visible through grandstand #484/#485 (SUBJECT_OCCLUDED). Single-
+  // tier Gold-3 clears the report's 50 % floor; pin the measured clear.
+  assert.ok(spa.wide2.every((f) => f.subject.visiblePct >= 50), `spa wide2: ${spa.wide2.map((f) => f.subject.visiblePct)} % of the lap visible (was 49–50 through Gold-3)`);
 });
 
 test("frame report: Monza's wide shots tilt the horizon down out of the lawn; Monaco's grid walk steps off its barrier", async () => {

@@ -304,9 +304,13 @@
       // Gaps 14/15 (were 8/9): shell reaches gap+12.5, so 11.5 put the back
       // face into the spectatorHill at 24 (clip-audit SEVERE 1.58 m). Pull the
       // row clear of the 10.3 m fence and keep the hill/jumbotron offset.
+      // Single tier (was 2): tip flyby wide2 saw the lap at 49–50 % through
+      // the dual-tier 23 m AABBs (SUBJECT_OCCLUDED by grandstand #484/#485 at
+      // racing 0.10–0.12). Lowering the shell clears the 50 % floor; pushing
+      // the gap further out made the silhouette worse.
       for (const [s, gp, len] of [[0.142, 14, 30], [0.154, 15, 32], [0.166, 15, 28]]) {
         grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
-          { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
+          { tiers: 1, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
       ardennesTerrace("spa-terrace-raidillon", K(0.200), -1, 16, 7, { rows: 7 });   // Raidillon inside bank
       {
@@ -770,9 +774,13 @@
         forestRank(0.115, 0.180, 14, 6, 12, 22, 1);
         // Deep ranks, lap-wide minus the OPEN windows: taller toward the back
         // so the canopy steps up into a wall.
-        forestRank(0.000, 0.999, 28, 8, 15, 26, 2);
-        forestRank(0.000, 0.999, 44, 12, 17, 29, 3);
-        forestRank(0.000, 0.999, 62, 16, 18, 31, 4);
+        // Gaps 33/49/67 (were 28/44/62): #6007 moved stands/hill solid-index
+        // outward; the old ranks then sat in the wide flyby's sightline and
+        // dropped spa wide start from ~62 % to 54.5 % (below the 56 % pin).
+        // +5 m restores wide without re-occluding wide2 (tiers:1 Gold-3).
+        forestRank(0.000, 0.999, 33, 8, 15, 26, 2);
+        forestRank(0.000, 0.999, 49, 12, 17, 29, 3);
+        forestRank(0.000, 0.999, 67, 16, 18, 31, 4);
       }
 
       // Pouhon (racing 0.515-0.548): the grass spectator bank on the OUTSIDE
