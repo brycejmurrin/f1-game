@@ -111,7 +111,7 @@ test("production CSP allows prepaint preferences before deferred modules load", 
     reducedMotion: "no-preference",
     storageState: { cookies: [], origins: [{ origin, localStorage: [
       { name: "apex26.gfxBackend", value: "webgl2" },
-      ...Object.entries({ motion: "reduce", titleIntro: "off", menuWash: "off", titleArt: "off", homeScene: "static", pauseLayout: "compact" })
+      ...Object.entries({ motion: "reduce", titleIntro: "off", menuWash: "medium", titleArt: "medium", homeScene: "static", pauseLayout: "compact" })
         .map(([key, value]) => ({ name: `apex26.${key}`, value: JSON.stringify(value) })),
     ] }] },
   });
@@ -135,7 +135,8 @@ test("production CSP allows prepaint preferences before deferred modules load", 
       uiLoaded: typeof UiLayers !== "undefined",
     }));
     expect(beforeModules.uiLoaded).toBe(false);
-    expect(beforeModules.attrs).toMatchObject({ motion: "reduce", titleIntro: "off", menuWash: "off", titleArt: "off", homeScene: "static", pauseLayout: "compact" });
+    expect(beforeModules.attrs).toMatchObject({ motion: "reduce", titleIntro: "off", menuWash: "medium", titleArt: "medium", homeScene: "static", pauseLayout: "compact" });
+    await expect(page.locator("#title-car")).toHaveCSS("opacity", "0.57");
     expect(beforeModules.density).toBe("normal");
     expect(beforeModules.shape).toBe("wide");
     releaseScripts();

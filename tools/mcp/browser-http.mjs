@@ -15,6 +15,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { openBrycePhone } from "../lib/bryce-phone.mjs";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { chromiumArgsForBackend, gotoGame, installProbeInit } from "../shot/probe-page.mjs";
 
@@ -69,12 +70,6 @@ function presentedToken(req, url) {
   return bearer || url.searchParams.get("token") || "";
 }
 
-const PHONE = {
-  landscape: { width: 852, height: 393 },
-  portrait: { width: 393, height: 852 },
-};
-const PHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
-
 export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) {
   if (!token) throw new Error("token required");
   const state = { browser: null, context: null, page: null, game: null, orient: null };
@@ -102,15 +97,9 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
           args: chromiumArgsForBackend("webgl2"),
         });
       }
-      const size = PHONE[orient];
-      state.context = await state.browser.newContext({
-        viewport: size,
-        screen: size,
-        isMobile: true,
-        hasTouch: true,
-        userAgent: PHONE_UA,
-      });
-      state.page = await state.context.newPage();
+      const { context, page } = await openBrycePhone(state.browser, { window: orient === "portrait" ? "portrait" : "standalone", profile: false });
+      state.context = context;
+      state.page = page;
       state.orient = orient;
       await installProbeInit(state.page, { backend: "webgl2" });
     }
@@ -139,6 +128,7 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
         apex: !!(window.__apex && window.__apex.race),
         width: window.innerWidth,
         height: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio,
         desktop: document.body.classList.contains("desktop"),
         coarse: window.matchMedia("(pointer: coarse)").matches,
       }));

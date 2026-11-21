@@ -834,10 +834,19 @@
     ]
   ],
     LAZY_UI_PRESETS: [
+    "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js",
+    "js/ui/screen-arranger.js",
+    "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js"
   ],
-    LAZY_UI_PRESETS_EDGES: [],
+    LAZY_UI_PRESETS_EDGES: [
+    [
+      "js/ui/screen-regions.js",
+      "js/ui/screen-placement.js"
+    ]
+  ],
     LAZY_SAVES_DATA: [
     "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js"

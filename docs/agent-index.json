@@ -1631,6 +1631,7 @@
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/input-clock-rotate.test.mjs",
@@ -4905,7 +4906,7 @@
     {
       "path": "js/ui/hud-arrange.js",
       "global": "HudArrange",
-      "roster": "tag"
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/hud-damage.js",
@@ -5088,9 +5089,24 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/screen-arranger.js",
+      "global": "ScreenArranger",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/screen-looks.js",
       "global": "ScreenLooks",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/screen-placement.js",
+      "global": "ScreenPlacement",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
+      "path": "js/ui/screen-regions.js",
+      "global": "ScreenRegions",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/scroll-fade.js",

@@ -150,8 +150,10 @@ function bootTuning(input = {}, disk = {}, g = {}) {
   const els = {};
   const noop = () => {};
   const mk = () => {
+    const attrs = {};
     const el = { value: "", textContent: "", hidden: false, oninput: null, onclick: null, listeners: [],
-      classList: { toggle: noop, add: noop, remove: noop }, setAttribute: noop };
+      classList: { toggle: noop, add: noop, remove: noop },
+      setAttribute: (key, value) => { attrs[key] = value; }, getAttribute: (key) => attrs[key] };
     el.addEventListener = (t, f) => { el.listeners.push([t, f]); };
     return el;
   };
@@ -171,11 +173,55 @@ function bootTuning(input = {}, disk = {}, g = {}) {
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/input/steer-tuning.js") });
-  const api = vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
-    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), ...g });
+  const G = { $, store, soundOn: false, clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), ...g };
+  const api = vm.runInContext("SteerTuning", ctx).create(G);
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
-  return { $, disk, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
+  return { $, disk, G, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
 }
+
+test("steering sliders and labels show their fresh-store values in the HTML shell", () => {
+  const { $ } = bootTuning();
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  for (const id of ["pm-rate", "pm-expo", "pm-smooth", "pm-lock", "pm-speedsteer", "pm-help", "pm-adaptbtn", "pm-pace"]) {
+    const value = html.match(new RegExp('<input id="' + id + '"[^>]*?value="([^"]+)"'))[1];
+    const label = html.match(new RegExp('<b id="' + id + '-v">([^<]+)</b>'))[1];
+    assert.equal(value, String($(id).value), id);
+    assert.equal(label, String($(id + "-v").textContent), id + " label");
+  }
+});
+
+test("overall speed defaults to notch 11 (84% of reference) and reads each notch's physical pace", () => {
+  const fresh = bootTuning();
+  assert.deepEqual([fresh.$("pm-pace").value, fresh.$("pm-pace-v").textContent, fresh.G.PACE], [11, "84%", Math.pow(1.06, -3)]);
+  const shell = readFileSync(join(ROOT, "index.html"), "utf8");
+  assert.match(shell, /<input id="pm-pace"[^>]* min="1" max="19"[^>]* aria-valuetext="84%"/);
+  assert.equal(fresh.$("pm-pace").getAttribute("aria-valuetext"), "84%");
+  assert.equal(fresh.disk.pace, undefined, "a new default doesn't write a stored choice");
+  for (let notch = 1; notch <= 19; notch++) {
+    fresh.move("pm-pace", notch);
+    assert.equal(fresh.disk.pace, notch);
+    assert.equal(fresh.G.PACE, Math.pow(1.06, notch - 14));
+    assert.equal(fresh.$("pm-pace-v").textContent, Math.round(Math.pow(1.06, notch - 14) * 100) + "%");
+    assert.equal(fresh.$("pm-pace").getAttribute("aria-valuetext"), fresh.$("pm-pace-v").textContent);
+  }
+  const saved = bootTuning({}, { steerSchema: 5, pace: 11 });
+  assert.deepEqual([saved.disk.pace, saved.$("pm-pace-v").textContent, saved.G.PACE], [11, "84%", Math.pow(1.06, -3)]);
+  assert.equal(saved.$("pm-pace").getAttribute("aria-valuetext"), "84%");
+});
+
+test("adaptive buttons use strength 6 on fresh settings and Standard, preserving a saved strength", () => {
+  let applied;
+  const input = { setAdaptiveButtons: (mix) => { applied = mix; } };
+  const fresh = bootTuning(input);
+  assert.equal(fresh.$("pm-adaptbtn").value, 6);
+  assert.equal(applied, 5 / 9);
+  const saved = bootTuning(input, { steerSchema: 5, adaptiveButtons: 5 });
+  assert.equal(saved.$("pm-adaptbtn").value, 5);
+  assert.equal(applied, 4 / 9);
+  saved.$("pm-preset-standard").onclick();
+  assert.equal(saved.disk.adaptiveButtons, 6);
+  assert.equal(applied, 5 / 9);
+});
 
 test("the open settings haptics row follows phone capability changes and pad disconnects", () => {
   let supported = false;
@@ -347,7 +393,7 @@ test("refreshPresetButtons reconciles a stale preset chip against live values", 
   disk.drivingHelp = 1;
   disk.raceLine = 0;
   disk.steerRate = 2; disk.steerExpo = 6; disk.steerLock = 7; disk.steerSpeed = 7;
-  disk.tiltDeg = 8; disk.steerSmooth = 3; disk.adaptiveButtons = 5;
+  disk.tiltDeg = 8; disk.steerSmooth = 3; disk.adaptiveButtons = 6;
   disk.brakeCue = 1; disk.audioCues = 1; disk.gripSteer = 1;
   apply();
   assert.equal(disk.preset, "standard",

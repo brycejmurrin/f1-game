@@ -392,14 +392,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 }
 /* BUTTON SIZE IN A PORTRAIT RACE (#5061). RACE IN PORTRAIT is a shipped path, and every --hud-btn-scale
    rule sat in the landscape block below, so the ladder painted 76 / 84 px at any setting. The ladder
-   follows the slider RELATIVE TO THE TOUCH DEFAULT (--hud-btn-mult): an untouched slider keeps today's
-   sizes, 143 % paints 76 * 1.43 / 1.25. Declared on the buttons and the cluster that stands on them, not
+   uses its original sizing units: a stored 143 % paints 76 * 1.43 / 1.25. Declared on the buttons and the cluster that stands on them, not
    on :root: photo mode reads --steer too. --btn-room is the px one ladder px may take: two arrows and a
    pedal across the width, the five-high column under the top band. Never under the 44 px rung.
    js/ui/hud.js (capPortrait) keeps the gear cluster and TYRES between the columns as they grow. */
 @media (orientation: portrait) {
   .touchbtn, .hud-bottom {
-    --btn-k: calc(var(--hud-btn-scale) / var(--hud-btn-mult, 1));
+    --btn-k: calc(var(--hud-btn-scale) / var(--portrait-btn-base, 1));
     --btn-room: min(calc((100vw - var(--sal) - var(--sar) - 54px) / 244), calc((100vh - var(--sat) - var(--sab) - 264px) / 380));
     --btn: clamp(44px, calc(76px * var(--btn-k)), max(76px, calc(var(--btn-room) * 76)));
     --steer: clamp(calc(44px * 84 / 76), calc(84px * var(--btn-k)), max(84px, calc(var(--btn-room) * 84)));

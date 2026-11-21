@@ -63,7 +63,7 @@ row. Grep the symbol; check `hooks-documented`, `global-registry`,
 names built in JS: grep the stem too) and `controller.html`; the proof is a green
 `tests/unit/css-tokens.test.mjs` (tokens) and `tests/unit/component-inventory.test.mjs` (the dead-class list in
 `docs/COMPONENTS.md`; `node tools/check/class-usage.mjs` lists class use) after the cut plus one screenshot of the touched screen by the parent
-(844×390 touch first). Restructuring what is left is **css-play**.
+(852×393 touch first). Restructuring what is left is **css-play**.
 
 **Duplicate:** keep one seam. Shared scalars already live on `M4`
 (`clamp`/`lerp`/`wrapDelta`) — do not add a private copy

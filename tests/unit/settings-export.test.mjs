@@ -87,6 +87,10 @@ function boot(opts = {}) {
       }));
     } };
   }
+  if (opts.regions) {
+    sb.ScreenRegions = opts.regions;
+    vm.runInContext(read("js/ui/screen-placement.js"), ctx, { filename: absSrc("js/ui/screen-placement.js") });
+  }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
@@ -478,6 +482,22 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.deepEqual(all.changed, []);
 });
 
+test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
+  const mobile = true;
+  const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
+  const draft = { weather: "storm", tod: "dusk", mixed: true, laps: "5" };
+  const disk = { "apex26.raceDraft": JSON.stringify(draft), "apex26.hudElements": "{}" };
+  const file = boot({ mobile, globals, disk }).collect("changes");
+  assert.deepEqual(file.settings.driving.raceDraft, draft);
+  assert.deepEqual(file.settings.hud.hudElements, {});
+  const target = boot({ mobile, globals });
+  assert.equal(target.loadSettings(file).ok, true);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.raceDraft")), draft);
+  assert.equal(target.disk.get("apex26.hudElements"), "{}");
+  target.loadSettings({ ...file, settings: { driving: { raceDraft: null } } });
+  assert.equal(target.disk.has("apex26.raceDraft"), false);
+});
+
 test("a changed key carries its value, the default it replaced and the source that owns it", () => {
   const { collect } = boot({ disk: {
     "apex26.volMusic": "0.8", "apex26.pace": "14", "apex26.difficulty": JSON.stringify("normal"),
@@ -494,7 +514,7 @@ test("a changed key carries its value, the default it replaced and the source th
   const f = collect("changes");
   assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneCar", "camera.camTuneGlobal", "camera.camTuneTrack", "camera.cockpitHalo", "camera.motionBlur", "camera.speedLines", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
-  assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
+  assert.equal(f.defaults.audio.volMusic, 0.7, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
   assert.equal(f.defaults.steering.pace, 11);
   // The halo SHIPS faired; "0" is what counts as a change now.
@@ -1302,9 +1322,10 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const src = read("js/ui/appearance-opts.js");
   const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);
   assert.ok(keys.length >= 8, "found appearance-opts.js's K_* keys: " + keys.join(", "));
-  // Store non-default values so CHANGES includes them (shipped: large / high).
+  // Store non-default values so CHANGES includes them (shipped: normal / standard contrast).
   const { SettingsExport, collect } = boot({ disk: {
-    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("off"),
+    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("high"),
+    "apex26.titleArt": JSON.stringify("medium"), "apex26.menuWash": JSON.stringify("medium"),
     "apex26.speedUnits": JSON.stringify("mph"), "apex26.ldCard": JSON.stringify({ scale: 1.2, x: 4, y: -3 }),
     "apex26.flybyShots": JSON.stringify([{ id: "a" }]),
   } });
@@ -1312,7 +1333,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   for (const k of keys) assert.ok(inSpec.has(k), k + " (js/ui/appearance-opts.js) needs a SPEC row");
   const f = collect("changes");
   assert.equal(f.settings.appearance.textSize, "larger");
-  assert.equal(f.settings.appearance.uiContrast, "off");
+  assert.equal(f.settings.appearance.uiContrast, "high");
   assert.equal(f.settings.appearance.speedUnits, "mph");
   assert.deepEqual(f.settings.camera.ldCard, { scale: 1.2, x: 4, y: -3 });
   assert.equal(f.settings.camera.flybyShots.length, 1);
@@ -1320,6 +1341,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const res = b.loadSettings(f);
   assert.equal(res.ok, true);
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
+  for (const key of ["titleArt", "menuWash"]) assert.equal(JSON.parse(b.disk.get("apex26." + key)), "medium");
 });
 
 test("caption settings keys are in SPEC and round-trip", () => {
@@ -1361,6 +1383,7 @@ test("Home settings and bounded visual profiles survive settings backup without 
     assert.equal(JSON.parse(b.disk.get("apex26.homeCamera")), "front");
     const values = JSON.parse(b.disk.get("apex26.appearanceProfiles"))[0].values;
     assert.equal(values.uiScale, 109.25); assert.equal(values.homeCamera, "rear");
+    assert.equal(values.titleLayout.tall, undefined, "an unset orientation follows the destination device");
     assert.equal(values.titleLayout.wide.btns.x, 18); assert.equal(values.lookCareer.density, "roomy");
     assert.equal(values.steering, undefined); assert.equal(values.account, undefined);
   }
@@ -1378,7 +1401,7 @@ test("appearance import rejects malformed bags and enums and clamps profile cont
   const saved = JSON.parse(b.disk.get("apex26.appearanceProfiles"));
   assert.ok(saved.length <= 12); assert.equal(new Set(saved.map(p => p.id)).size, saved.length);
   assert.equal(saved[0].name.length, 40); assert.equal(saved[0].values.uiScale, 200);
-  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "photo");
+  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "static");
   assert.equal(saved[0].values.lookCareer.density, "auto"); assert.equal(saved[0].values.career, undefined);
 });
 
@@ -2020,6 +2043,38 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
     const same = boot({ mobile }).loadSettings(file({ device: { desktop: !mobile } }));
     assert.deepEqual([same.applied, same.skipped], [2, 0], "same kind of device: everything applies");
   }
+});
+
+test("relative placements and named profiles round-trip across devices without saving automatic dimensions", () => {
+  const regions = { carsetup: { regions: { panel: {} } } };
+  const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28 } } } } };
+  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement } }];
+  const source = boot({ mobile: true, appearance: true, realStore: true, denyWrites: true });
+  assert.equal(source.collect("all").settings.appearance.screenPlacement, null);
+  assert.equal(source.collect("changes").settings.appearance?.screenPlacement, undefined);
+  source.GameStore.store.set("screenPlacement", placement);
+  source.GameStore.store.set("appearanceProfiles", profile);
+  for (const mode of ["all", "changes"]) for (const mobile of [true, false]) {
+    const backup = source.collect(mode), target = boot({ mobile, regions, appearance: true });
+    assert.deepEqual(backup.settings.appearance.screenPlacement, placement);
+    assert.equal(target.loadSettings(backup).failed, 0);
+    assert.deepEqual(target.GameStore.store.get("screenPlacement"), placement);
+    assert.deepEqual(target.GameStore.store.get("appearanceProfiles")[0].values.screenPlacement, placement);
+  }
+});
+
+test("placement backup normalization bounds geometry and ignores removed regions", () => {
+  const regions = { carsetup: { regions: { panel: { maxWidth: 65, scale: false } } } };
+  const source = boot({ regions });
+  const saved = source.collect("changes");
+  saved.settings.appearance = { screenPlacement: { v: 1, screens: {
+    missing: { portrait: { gone: { y: 10 } } },
+    carsetup: { portrait: { panel: { width: 999, scale: 1.3, x: -1000, height: "45" }, retired: { x: 7 } } }
+  } } };
+  assert.equal(source.loadSettings(saved).failed, 0);
+  assert.deepEqual(source.GameStore.store.get("screenPlacement"), { v: 1, screens: {
+    carsetup: { portrait: { panel: { x: -50, width: 65 } } }
+  } });
 });
 
 // Clean-room fix 70: SAVE CAREER FILE carried only career slots, so a player with a standalone season,

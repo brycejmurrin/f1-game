@@ -53,7 +53,7 @@ Load from the SKILL.md index when the task needs this detail.
 
 7. **Verify through hooks before UI assertions.** Browser steps are session
    only (a subagent reports them unverified); reproduce hub/HUD UI at Bryce's
-   phone profile first (844×390 landscape, touch).
+   iPhone 15 profile first (852×393 CSS px in full-screen landscape, touch).
    - Start with `careerState()`, `careerSlots()`, `careerSim()`, and
      `qualiSim()` to prove the rule.
    - **`careerSim()` needs the career hub plus a loaded track/grid first** — stage

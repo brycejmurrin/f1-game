@@ -28,6 +28,7 @@
 //   node tools/ui/fit-audit.mjs --scale=100,130,150   # ...crossed with interface size
 //
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { brycePhone } from "../lib/bryce-phone.mjs";
 import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
@@ -64,8 +65,10 @@ const SCALES = parseScales(argv);
 const SIZES = (arg("sizes") || [
   "375x667",   // iPhone SE portrait — the smallest screen that matters
   "667x375",   // iPhone SE landscape — the tightest height in the matrix
-  "393x852",   // iPhone 15 portrait
-  "852x393",   // iPhone 15 landscape — the primary play orientation
+  ...["portrait", "standalone"].map((window) => {
+    const { width, height } = brycePhone({ window, profile: false }).viewport;
+    return `${width}x${height}`;
+  }),
   "430x932",   // Pro Max portrait
   "932x430",   // Pro Max landscape
   "768x1024",  // iPad portrait

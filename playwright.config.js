@@ -100,7 +100,7 @@ const RENDER_SPECS = [
   "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "parts-liveries", "parts-livery-designs",
-  "ui-audit", "ui-button-touch", "ui-scale", "menu-survey", "menu-keyboard", "photo-studio",
+  "appearance-orientation", "ui-audit", "ui-button-touch", "ui-scale", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
   "menu-baseline", "track-designer",

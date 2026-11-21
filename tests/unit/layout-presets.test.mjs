@@ -33,7 +33,7 @@ const VISIBLE = new Set(["pause.btn=150", "pause.w=70", "pause.w=200", "pause.ga
   "popups.density=roomy", "popups.btn=80", "popups.btn=150", "popups.dim=solid", "popups.dim=off", "popups.vpos=top",
   "popups.vpos=bottom"]);
 
-function boot({ stored = {}, studio = true, dropScreen = null } = {}) {
+function boot({ stored = {}, studio = true, dropScreen = null, phone = false } = {}) {
   const dom = makeDom();
   const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
   for (const id of ["pausemenu", "datahub", "race-settings", "standings", "trackdesigner"]) mk("dialog", id).hidden = true;
@@ -70,6 +70,7 @@ function boot({ stored = {}, studio = true, dropScreen = null } = {}) {
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     SheetShape: { reclassify() {} }, innerWidth: 844, innerHeight: 390,
   };
+  if (phone) sb.matchMedia = (query) => ({ matches: query === "(pointer: coarse)" });
   sb.window = sb;
   const ctx = vm.createContext(sb);
   const run = (f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
@@ -91,6 +92,16 @@ test("table: four presets, SHIPPED first; every row is a real knob at a VISIBLE 
     assert.ok(M.expected(p.id), p.id);
   }
   assert.deepEqual(warns, [], "no row is skipped against the real registries");
+});
+
+test("the shipped phone preset includes Roomy Career and a stored change reads Custom", () => {
+  const { M, S } = boot({ phone: true });
+  assert.equal(S.read("career").density, "roomy");
+  assert.equal(M.current(), "shipped");
+  S.set("career", "density", "auto");
+  assert.equal(M.current(), "custom");
+  S.reset("career");
+  assert.equal(M.current(), "shipped");
 });
 
 test("fresh install reads SHIPPED; the row mounts above the studio with a disabled CUSTOM", () => {
@@ -230,7 +241,7 @@ test("an unknown preset or knob is skipped with a Log.warn, never thrown", () =>
 });
 
 test("lazy: LAZY_UI_PRESETS, no <script> tag, loaded by SettingsNav on APPEARANCE; layoutPreset is exported", () => {
-  assert.deepEqual(MANIFEST.LAZY_UI_PRESETS, ["js/ui/look-avail.js", "js/ui/layout-presets.js"]);
+  assert.deepEqual(MANIFEST.LAZY_UI_PRESETS, ["js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js", "js/ui/hud-arrange.js", "js/ui/look-avail.js", "js/ui/layout-presets.js"]);
   const full = new Set(MANIFEST.FULL);
   assert.deepEqual(MANIFEST.LAZY_UI_PRESETS.filter((f) => full.has(f)), [], "lazy, never eager");
 });

@@ -49,6 +49,9 @@ function summary(list) {
 export function buildAll(read, opts) {
   const H = load(read, opts);
   const Scene = H.get("GarageScene"), Crew = H.get("GarageCrew"), Arrival = H.get("GarageArrival");
+  // The pins describe the STOCK room. The shipped default look is a player setting (#5977 ships "flood"), not
+  // what this harness measures, so name the look instead of inheriting the default.
+  H.get("GaragePrims").setLook("stock");
   Scene.init(H.gfx);
   const r0 = H.meshes.length;
   Scene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);

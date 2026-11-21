@@ -40,7 +40,8 @@
    loads it at idle, at the garage door, with the agent surface and with the career screen. Before
    it lands a body call returns a Promise of the same answer, and garageRow / careerRow return null
    (their callers already guard that). SettingsExport.create(G) is wired from js/game.js and
-   records G; the first call after the body lands creates it with that G. */
+   records G; the first call after the body lands creates it with that G.
+   Storage contract (screenPlacement, profiles): docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const SettingsExport = (function () {
   "use strict";
 
@@ -75,13 +76,13 @@ const FORMAT = "apex26-settings-v1";
 // noImport = exported for context, never written back by LOAD SETTINGS (#5032).
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
-  { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
+  { k: "sound", lane: "json", group: "audio", def: false, src: "js/game.js",
     subsystem: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this" },
   { k: "sfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
   { k: "menuSfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
-  { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
-  { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
-  { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
+  { k: "music", lane: "json", group: "audio", def: false, src: "js/game.js" },
+  { k: "volMusic", lane: "json", group: "audio", def: 0.7, src: "js/audio/panel.js" },
+  { k: "volSfx", lane: "json", group: "audio", def: 0.4, src: "js/audio/panel.js" },
   { k: "battleEarcon", lane: "json", group: "audio", def: false, src: "js/race/race-radio.js" },
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
   { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
@@ -106,9 +107,9 @@ const SPEC = [
   // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
-  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; 109% on touch, 70% on a phone)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, 70 ui on a phone, scale.js scaleDefault)" },
-  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = independent: 125 % on touch, 100 % otherwise)" },
+  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null follows viewport: 115% on fine-pointer windows at least 1600×900 CSS px, 70% on phones, 109% on other touch screens, 100% otherwise)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%)" },
+  { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = factory size: phone 143.25, tablet 125, fine pointer 100; displayed as 100%)" },
   { k: "hudBotKeep", lane: "json", group: "display", def: null, src: "js/ui/scale.js gear row kept on BUTTON SIZE moves (null = none)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
@@ -118,12 +119,15 @@ const SPEC = [
   { k: "cbCues", lane: "json", group: "a11y", def: "off", src: "js/ui/a11y-opts.js COLOURBLIND CUES", oneOf: ["off", "on"] },
   { k: "holdMode", lane: "json", group: "a11y", def: { throttle: "hold", lookBack: "hold" }, src: "js/ui/a11y-opts.js GAS / LOOK BACK hold mode" },
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
-  { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
-  { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
+  { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | medium | soft | off)", oneOf: ["full", "medium", "soft", "off"] },
+  { k: "titleButtonStyle", lane: "json", group: "appearance", def: "auto", src: "js/ui/title-fx.js BUTTON STYLE", oneOf: ["auto", "racing", "flat"] },
+  { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | medium | soft | off)", oneOf: ["on", "medium", "soft", "off"] },
   { k: "pauseLayout", lane: "json", group: "appearance", def: "grid", src: "js/ui/pause-opts.js PAUSE MENU › LAYOUT (grid | list | compact | wide | sidebar)", oneOf: ["grid", "list", "compact", "wide", "sidebar"] },
   { k: "pauseSide", lane: "json", group: "appearance", def: "centre", src: "js/ui/pause-opts.js PAUSE MENU › SIDE (centre | left | right)", oneOf: ["centre", "left", "right"] },
   { k: "pauseDim", lane: "json", group: "appearance", def: "full", src: "js/ui/pause-opts.js PAUSE MENU › BACKGROUND (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "pauseConfirm", lane: "json", group: "appearance", def: "on", src: "js/ui/pause-opts.js PAUSE MENU › CONFIRM QUIT (on | off; two presses on QUIT / RESTART)", oneOf: ["on", "off"] },
+  { k: "screenPlacement", lane: "json", group: "appearance", def: null, src: "js/ui/screen-placement.js (explicit viewport-relative regions by orientation)",
+    normalize: v => normalizePlacement(v, typeof ScreenRegions === "undefined" ? null : ScreenRegions) },
   { k: "titleLayout", lane: "json", group: "appearance", def: null, src: "js/ui/title-layout.js TITLE LAYOUT (null = shipped; else {v:2, wide, tall}, one {btns,title,art,layout,side} per shape — a missing shape is shipped; a v1 object is both)" },
   { k: "lookPause", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js PAUSE MENU buttons & card (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookDatahub", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js DATA HUB (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
@@ -134,14 +138,14 @@ const SPEC = [
   { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookDesigner", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js TRACK DESIGNER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "layoutPreset", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js LAYOUT PRESET (null = none recorded; the last preset applied — it reads CUSTOM once the knobs above no longer match it)", oneOf: ["shipped", "thumb", "compact", "big"] },
-  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (AUTO everywhere; a phone's AUTO is capped at MED's scale)", perDevice: true },
+  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (HIGH on iPhone, AUTO otherwise)", perDevice: true },
   { k: "resSchema", lane: "json", group: "display", def: 1, info: true, src: "js/ui/scale.js RES_SCHEMA (migration version — boot writes the current one, so never a change)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"], perDevice: true },
   { k: "portraitOk", lane: "raw", group: "display", def: "0", src: "js/game.js RACE IN PORTRAIT (\"1\" = race upright, else the rotate blocker)", oneOf: ["0", "1"] },
   { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/post-fx-opts.js (PostFxOpts.debris) + js/physics/debris-world.js create() (only \"1\" is on)" },
-  { k: "gfxSsao", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
+  { k: "gfxSsao", lane: "raw", group: "display", def: () => typeof PostFxOpts !== "undefined" && !PostFxOpts.defaultSsao() ? "0" : "1", perDevice: true, src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
@@ -158,16 +162,16 @@ const SPEC = [
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
-  { k: "hudElements", lane: "json", group: "hud", def: {}, src: "js/ui/hud-elements.js per-element on/off (missing key = on)" },
-  { k: "hudLayout", lane: "json", group: "hud", def: null, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements and older formats use SHIPPED layouts)" },
+  { k: "hudElements", lane: "json", group: "hud", def: () => typeof HudElements !== "undefined" ? HudElements.defaults() : {}, src: "js/ui/hud-elements.js phone and desktop visibility defaults", perDevice: true, whole: true },
+  { k: "hudLayout", lane: "json", group: "hud", def: null, deviceBound: true, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements in saved layouts use automatic placement)" },
   { k: "hudMirror", lane: "json", group: "hud", def: "auto", src: "js/render/shared/mirror-pass.js", oneOf: ["auto", "on", "off"] },
   { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
   { k: "flybyShots", lane: "json", group: "camera", def: null, src: "js/camera/flyby-panel.js FLYBY SHOT EDITOR (null = shipped shots)" },
   { k: "ldCard", lane: "json", group: "camera", def: null, src: "js/ui/loading-screen.js loading card {scale, x, y} (null = shipped)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "helmetVisor", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visor", oneOf: ["off", "clear", "smoke"] },
-  { k: "helmetVisorColor", lane: "raw", group: "camera", def: "neutral", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose"] },
-  { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["light", "medium", "strong"] },
+  { k: "helmetVisorColor", lane: "raw", group: "camera", def: "amber", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose"] },
+  { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "medium", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["light", "medium", "strong"] },
   { k: "helmetVisorRefraction", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visorRefraction", oneOf: ["off", "light", "medium", "strong"] },
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
   { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
@@ -191,7 +195,7 @@ const SPEC = [
   { k: "cockpitHaloFinish", lane: "raw", group: "camera", def: "livery", src: "js/camera/cockpit-finishes.js", oneOf: ["livery", "gloss", "matte", "satin", "carbon", "brushed", "chrome"] },
   { k: "cockpitWheel", lane: "raw", group: "camera", def: "f1", src: "js/camera/cockpit-opts.js CHOICES.wheel", oneOf: ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"] },
   { k: "cockpitBody", lane: "raw", group: "camera", def: "sculpted", src: "js/camera/cockpit-opts.js CHOICES.body", oneOf: ["standard", "sculpted", "wide", "tapered", "stepped"] },
-  { k: "cockpitSeat", lane: "raw", group: "camera", def: "std", src: "js/camera/cockpit-opts.js CHOICES.seat", oneOf: ["std", "low", "high", "fwd"] },
+  { k: "cockpitSeat", lane: "raw", group: "camera", def: "fwd", src: "js/camera/cockpit-opts.js CHOICES.seat", oneOf: ["std", "low", "high", "fwd"] },
   { k: "cockpitInterior", lane: "raw", group: "camera", def: "team", src: "js/camera/cockpit-opts.js CHOICES.interior", oneOf: ["carbon", "team", "suede", "ribbed", "classic"] },
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   { k: "lookBackLatch", lane: "json", group: "camera", def: false, src: "js/camera/feel.js LOOK BACK LATCH (hold vs press-to-latch)" },
@@ -257,13 +261,13 @@ const SPEC = [
   { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
   // APPEARANCE (js/ui/appearance-opts.js) — theme + dual accents
-  { k: "uiTheme", lane: "json", group: "appearance", def: "dark", src: "js/ui/appearance-opts.js" },
+  { k: "uiTheme", lane: "json", group: "appearance", def: "dark", src: "js/ui/appearance-opts.js", oneOf: ["dark", "light", "system", "endurance", "drafting"] },
   { k: "menuAccent", lane: "json", group: "appearance", def: "ember", src: "js/ui/appearance-opts.js" },
   { k: "hudAccent", lane: "json", group: "appearance", def: "team", src: "js/ui/appearance-opts.js" },
   { k: "menuAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
   { k: "hudAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
-  { k: "textSize", lane: "json", group: "appearance", def: "large", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
-  { k: "uiContrast", lane: "json", group: "appearance", def: "high", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
+  { k: "textSize", lane: "json", group: "appearance", def: "normal", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
+  { k: "uiContrast", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
   { k: "appIcon", lane: "json", group: "appearance", def: "default", src: "js/ui/appearance-opts.js APP ICON", oneOf: ["default", "A", "B", "C", "D", "E", "F"] },
   { k: "cvdMode", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js COLOUR VISION", oneOf: ["off", "deutan", "protan", "tritan"] },
   { k: "captions", lane: "json", group: "appearance", def: "on", src: "js/ui/captions.js CAPTIONS", oneOf: ["on", "off", "spoken"] },
@@ -273,13 +277,13 @@ const SPEC = [
   { k: "captionSpeakerInk", lane: "json", group: "appearance", def: "on", src: "js/ui/captions.js SPEAKER COLOUR", oneOf: ["on", "off"] },
   { k: "speedUnits", lane: "json", group: "appearance", def: "kmh", src: "js/ui/appearance-opts.js SPEED UNITS", oneOf: ["kmh", "mph"] },
   { k: "menuHelp", lane: "json", group: "appearance", def: "on", src: "js/ui/appearance-opts.js HELP TEXT (on = SHOW | off = HIDE)", oneOf: ["on", "off"] },
-  { k: "homeScene", lane: "json", group: "appearance", def: "photo", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
+  { k: "homeScene", lane: "json", group: "appearance", def: "static", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
   { k: "backgroundMotion", lane: "json", group: "appearance", def: "ambient", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
   { k: "homeCamera", lane: "json", group: "appearance", def: "side", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
   // GARAGE › GARAGE / CREW / LIGHTING looks (#5023). The readers validate on load too; oneOf mirrors
   // GaragePrims LOOKS, GarageCrew.LOOKS and GarageScene.MOODS (garage bundle is lazy, so the lists are pinned by test).
-  { k: "garageLook", lane: "raw", group: "appearance", def: "stock", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
-  { k: "crewLook", lane: "raw", group: "appearance", def: "classic", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
+  { k: "garageLook", lane: "raw", group: "appearance", def: "flood", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
+  { k: "crewLook", lane: "raw", group: "appearance", def: "pitstop", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
   { k: "garageMood", lane: "raw", group: "appearance", def: "shipped", src: "js/garage/scene.js setMood (LIGHTING row)", oneOf: ["shipped", "broadcast", "night", "showroom", "daylight", "inspection", "goldenhour", "endurance", "podium", "rain", "neon"] },
   // #4529 PORTRAIT & LANDSCAPE: null = SHARED (shipped); SEPARATE = {v:2, mode, live, park}. A v:1 (#4897, reverted) or junk is skipped.
   { k: "appearanceShapes", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js PORTRAIT & LANDSCAPE",
@@ -318,7 +322,7 @@ const SPEC = [
   // PRE-RACE MEMORY. Both unset until used: the race sheet saves a draft only
   // when a solo one-off GP STARTs, and the list exists only once a circuit is
   // starred. Their readers validate every field, so a file cannot poison them.
-  { k: "raceDraft", lane: "json", group: "driving", def: null, src: "js/race/race-settings.js REMEMBER LAST RACE SETUP (null = 3 laps / dry / default; else {laps: \"3\"|\"5\"|\"10\"|\"25\"|\"FULL\", weather, tod, mixed})" },
+  { k: "raceDraft", lane: "json", group: "driving", def: () => typeof RaceSettings !== "undefined" ? RaceSettings.DEFAULT_DRAFT : { weather: "storm", tod: "dusk", mixed: true, laps: "3" }, src: "js/race/race-settings.js solo Grand Prix draft", whole: true, nullable: true },
   { k: "favTracks", lane: "json", group: "driving", def: null, src: "js/ui/select-screen.js FAVOURITE CIRCUITS (null = none; else an array of track ids)" },
   // STEERING (js/input/steer-tuning.js applySteerTuning)
   { k: "preset", lane: "json", group: "steering", def: "standard", src: "js/input/steer-tuning.js",
@@ -332,7 +336,7 @@ const SPEC = [
   { k: "steerLock", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "steerSpeed", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)", perDevice: true },
-  { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js",
+  { k: "adaptiveButtons", lane: "json", group: "steering", def: 6, src: "js/input/steer-tuning.js",
     subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "brakeCue", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js" },
   { k: "gripSteer", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF; own-state cap via js/physics/grip-steer.js)" },
@@ -360,6 +364,37 @@ if (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.ingestSettin
   SaveSchemaRegistry.ingestSettingsSpec(SPEC);
 }
 
+
+// The settings file and named profiles can be used before the optional editor is loaded.
+// With its registry available, discard retired regions and their inapplicable controls.
+function normalizePlacement(raw, registry) {
+  if (raw === null) return null;
+  if (!raw || raw.v !== 1 || !isObj(raw.screens)) return undefined;
+  const screens = {}, validId = id => /^[a-z][a-z0-9-]{0,63}$/i.test(id) && !(id in Object.prototype);
+  const bounds = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [.5, 2] };
+  for (const id of Object.keys(raw.screens).slice(0, 128)) {
+    if (!validId(id) || !isObj(raw.screens[id]) || (registry && !Object.hasOwn(registry, id))) continue;
+    for (const orientation of ["portrait", "landscape"]) {
+      const map = raw.screens[id][orientation];
+      if (!isObj(map)) continue;
+      for (const region of Object.keys(map).slice(0, 64)) {
+        if (!validId(region) || !isObj(map[region])) continue;
+        const definitions = registry && registry[id].regions;
+        if (definitions && !Object.hasOwn(definitions, region)) continue;
+        const fields = {};
+        for (const [key, [lo, hi]] of Object.entries(bounds)) {
+          const value = map[region][key];
+          if (!Number.isFinite(value) || definitions?.[region][key] === false) continue;
+          if ((key === "x" || key === "y") && value === 0 || key === "scale" && value === 1) continue;
+          const cap = key === "width" ? definitions?.[region].maxWidth : key === "height" ? definitions?.[region].maxHeight : hi;
+          fields[key] = Math.round(Math.min(cap || hi, Math.max(lo, value)) * 1000) / 1000;
+        }
+        if (Object.keys(fields).length) ((screens[id] ||= {})[orientation] ||= {})[region] = fields;
+      }
+    }
+  }
+  return Object.keys(screens).length ? { v: 1, screens } : null;
+}
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 /** GameAudio's default table, or undefined while only the stub's empty answer is there. */
 function engineTable(fn) {
@@ -614,7 +649,7 @@ const _core = Object.freeze({
 });
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, ...api, isGarageKey, isCareerKey, garageValue, create,
-         ensureMounted, mount: ensureMounted, ready, loaded: () => !!bodyApi(),
+         normalizePlacement, ensureMounted, mount: ensureMounted, ready, loaded: () => !!bodyApi(),
          garageRow: row("garageRow"), careerRow: row("careerRow"), _core, _bind };
 })();
 Object.freeze(SettingsExport);

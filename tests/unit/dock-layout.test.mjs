@@ -249,6 +249,41 @@ test("setEditing(true) hides SETTINGS and PAUSED so the docks are reachable, and
   assert.equal(made[0].hidden, true);
 });
 
+test("dock tools open compact and keep Done available in both states", () => {
+  const { api, made } = bootCreate();
+  api.setEditing(true);
+  const bar = made[0], control = key => bar.querySelector("[data-k=" + key + "]");
+  assert.equal(control("tools").textContent, "Size & shape");
+  for (const key of ["size", "shape", "smaller", "bigger"]) assert.equal(control(key).hidden, true);
+  control("tools").onclick();
+  assert.equal(control("shape").hidden, false);
+  assert.equal(Boolean(control("done").hidden), false);
+  control("done").onclick();
+  api.setEditing(true);
+  assert.equal(control("shape").hidden, true);
+});
+
+test("an interrupted dock drag rolls back without saving or switching to a second finger", () => {
+  for (const interrupt of ["pointercancel", "lostpointercapture", "blur"]) {
+    const { api, docL, winL, els, sets } = bootCreate();
+    const target = { closest() { return target; } };
+    els["dock-right"].contains = t => t === target;
+    els["dock-left"].contains = () => false;
+    const press = (pid, x) => ({ target, pointerId: pid, clientX: x, clientY: 500, preventDefault() {} });
+    api.setEditing(true);
+    docL.pointerdown(press(1, 180));
+    docL.pointermove(press(1, 140));
+    docL.pointerdown(press(2, 130));
+    docL.pointermove(press(2, 90));
+    assert.equal(api.bag().buttons.R.x, 0.1);
+    if (interrupt === "blur") winL.blur({});
+    else docL[interrupt](press(1, 140));
+    docL.pointerup(press(1, 140));
+    assert.equal(api.bag().buttons.R.x, 0);
+    assert.equal(sets.length, 0);
+  }
+});
+
 test("only what REPOSITION hid comes back (settings opened from the menu, no pause card)", () => {
   const { api, settings, pause } = bootCreate();
   settings.hidden = false; pause.hidden = true;

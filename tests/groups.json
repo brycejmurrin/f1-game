@@ -2550,6 +2550,7 @@
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/input-clock-rotate.test.mjs",

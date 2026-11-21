@@ -55,6 +55,7 @@ test("SFX OFF builds no engine graph; SFX ON mid-race builds it", async () => {
     const oscs = () => [...fa.live].filter((n) => (n.kind === "osc" || n.kind === "src") && n.started && n.stopAt === undefined).length;
     sb.GameAudio.setSfxEnabled(false);
     const before = oscs();
+    sb.GameAudio.setEnabled(true);
     sb.GameAudio.startEngine();
     assert.equal(oscs(), before, "no engine sources start with SFX off");
     sb.GameAudio.setSfxEnabled(true);
