@@ -185,10 +185,11 @@ for (const id of ["spa", ID]) test(`every pack model the ${id} build asks for is
   if (id === ID) assert.equal(quotedIn(r.src, "pine_lod0"), false, "a circuit without the flag does not fetch the pine");
 });
 
-// A BAKED TREE MUST HAVE A CROWN (#6035). #5782 made the page fetch pine_lod0 at Spa, and the pack's pine turned out to
-// be a 0.64 m square trunk (8.2 m^2 of WOOD) with six leaf slivers (1.8 m^2 of FOLIAGE): every Spa pine became a
-// brown post. Any tree model an ENGINE_MODELS flag stamps must carry at least as much foliage surface as bark before
-// a shipped circuit may set that flag; geometry, not pixels, so it holds on every backend.
+// A BAKED TREE MUST HAVE A CROWN (#6035 / #6037). #5782 made the page fetch pine_lod0 at Spa, and the old pack pine
+// was a 0.64 m square trunk (8.2 m^2 of WOOD) with six leaf slivers (1.8 m^2 of FOLIAGE): every Spa pine became a
+// brown post. #6037 rebaked pine/tree with a real crown (foliage ≥ wood, crown width ≥ ~30 % of height). Any tree
+// model an ENGINE_MODELS flag stamps must still carry at least as much foliage surface as bark before a shipped
+// circuit may set that flag; geometry, not pixels, so it holds on every backend.
 const { parseModel } = require(path.join(ROOT, "tools", "lib", "pack-assets.cjs"));
 function surfaceByMat(id) {
   const b = fs.readFileSync(path.join(ROOT, "assets", "pack", "models", id + ".bin"));
@@ -204,11 +205,33 @@ function surfaceByMat(id) {
   }
   return area;
 }
+function crownExtents(id) {
+  const b = fs.readFileSync(path.join(ROOT, "assets", "pack", "models", id + ".bin"));
+  const { pos: P } = parseModel(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
+  let yMin = 1e9, yMax = -1e9, xMin = 1e9, xMax = -1e9, zMin = 1e9, zMax = -1e9;
+  for (let i = 0; i < P.length; i += 3) {
+    xMin = Math.min(xMin, P[i]); xMax = Math.max(xMax, P[i]);
+    yMin = Math.min(yMin, P[i + 1]); yMax = Math.max(yMax, P[i + 1]);
+    zMin = Math.min(zMin, P[i + 2]); zMax = Math.max(zMax, P[i + 2]);
+  }
+  const height = yMax - yMin, width = Math.max(xMax - xMin, zMax - zMin);
+  return { height, width, ratio: width / height };
+}
 const hasCrown = (id) => { const a = surfaceByMat(id); return a.foliage >= a.wood; };
-test("pine_lod0 has no crown (#6035): the reading this gate stands on", () => {
+test("pine_lod0 has a real crown (#6037): foliage ≥ wood and width ≥ 30% height", () => {
   const a = surfaceByMat("pine_lod0");
-  assert.ok(a.wood > 4 * a.foliage, `pine_lod0 is mostly trunk: ${JSON.stringify(a)}`);
-  assert.equal(hasCrown("pine_lod0"), false);
+  const e = crownExtents("pine_lod0");
+  assert.ok(a.foliage >= a.wood, `pine_lod0 needs a canopy: ${JSON.stringify(a)}`);
+  assert.equal(hasCrown("pine_lod0"), true);
+  assert.ok(e.ratio >= 0.3, `crown too skinny: ${JSON.stringify(e)}`);
+});
+test("baked pine/tree LODs keep a crown under the triangle caps (#6037)", () => {
+  for (const id of ["pine_lod0", "pine_lod1", "tree_lod0", "tree_lod1"]) {
+    const a = surfaceByMat(id);
+    const e = crownExtents(id);
+    assert.ok(a.foliage >= a.wood, `${id} foliage < wood: ${JSON.stringify(a)}`);
+    assert.ok(e.ratio >= 0.3, `${id} crown width < 30% height: ${JSON.stringify(e)}`);
+  }
 });
 test("no circuit sets an ENGINE_MODELS flag whose baked tree has no crown", () => {
   const env = buildContext(), vm = require("node:vm");
