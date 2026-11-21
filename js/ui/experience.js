@@ -174,7 +174,6 @@ const UiExperience = (function () {
       const s = AppearanceStudio.scene();
       if (!photoScene) return s;
       _sceneScratch.mode = photoScene;
-      _sceneScratch.shot = s.shot;
       _sceneScratch.motion = s.motion;
       return _sceneScratch;
     };
@@ -470,8 +469,8 @@ const UiExperience = (function () {
       const selected = selectedScene();
       const varied = variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen);
       s = _sceneScratch;
-      s.mode = (varied && varied.mode) || selected.mode;
-      s.shot = (varied && varied.shot) || selected.shot;
+      s.mode = varied.mode;
+      s.shot = varied.shot; // varied: never null
       // Motion is AppearanceStudio's alone — homeVariation._values is mode/shot
       // only. Never read varied.motion (a stale own-property would freeze ambient).
       s.motion = selected.motion;

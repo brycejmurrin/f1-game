@@ -639,3 +639,33 @@ test('#5743 P4: a second openPhoto while the studio is open keeps the first rest
   open=false; back();
   assert.deepEqual(paused.at(-1),[false,'photo-done'],'the one restore unpauses to what the race had');
 });
+
+// AppearanceStudio.scene() is { mode, motion } only: the Home SHOT is homeVariation's (its fixed homeCamera,
+// else the visit's pick), on the stored scene and on a Photo SUBJECT override alike (lsp TS2339 on .shot).
+test('Home shot comes from the fixed homeCamera on the stored scene and on a Photo subject override', () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  const begun = [];
+  const setupCam = { captureCamera: () => ({}), restoreCamera() {}, beginHome: (mode, o) => { begun.push([mode, o.shot]); return true; },
+    endHome() {}, homeState: () => ({}), renderHome: () => true };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ begin: () => true, end() {}, active: () => false, wantsTrack: () => false, needsFrame: () => true, camera: () => null, didRender: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'night', motion: 'still' }), homeCamera: () => 'rear', onSceneChange() {} },
+    UiLayers: { top: () => null }, SettingsNav: { current: () => 'home' },
+    addEventListener() {}, Log: { warn() {} }, setTimeout, Date: { now: () => 0 } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local, { filename: absSrc('js/race/race-insights.js') });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+  const G = { $: dom.byId, state: 'menu', setupPreviewOn: false };
+  const ui = local.api.create(G, { setupCam, trackReady: () => false, prepareTrack() {} });
+  ui.renderHome(1 / 60);
+  assert.deepEqual(begun.at(-1), ['night', 'rear'], 'the stored scene draws with the fixed camera');
+  assert.equal(dom.byId('overlay').dataset.homeShot, 'rear');
+  ui.photoSubject('garage');
+  ui.renderHome(1 / 60);
+  assert.deepEqual(begun.at(-1), ['garage', 'rear'], 'the Photo subject override keeps the fixed camera');
+  assert.equal(ui.state().scene.shot, 'rear');
+});

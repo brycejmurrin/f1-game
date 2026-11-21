@@ -191,7 +191,7 @@ const WallClamp = (function () {
         // the player just drives off the barrier — no sticky pin, no auto-rescue.
       } else {
         // AI has no world-space heading to slide; clamp + gentle scrub.
-        c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub(!!track.street) * dt);
+        c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub() * dt);
         // Offline AI wall SFX (#2212). The VS FRIEND path above needs c.human
         // (heading incidence); offline AI is human:false and never reached it.
         // Incidence proxy: |vLat|/speed, steer-into-wall, and a first-pin

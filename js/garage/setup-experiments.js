@@ -6,7 +6,7 @@ const SetupExperiments = (function () {
   function create(G, refreshStats) {
     const { $, getTeamParts } = G;
     if (typeof SetupTrials !== "undefined") SetupTrials.mountPause(G);
-    let trialUi = null;
+    let /** @type {ReturnType<typeof SetupTrials.mount> | null} */ trialUi = null;
     let csVisitTunes = new Map();
     let csTuneExperiments = new Map();
     function capture(team) {
