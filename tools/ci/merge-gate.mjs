@@ -79,7 +79,7 @@
 // nothing checked out or run. land.yml's `trusted-rows` job runs it, so `post` never takes those rows from the
 // artifact of the leg that ran the PR's scripts (WP-L2).
 //
-// Exit: 0 every row ok, 2 a row failed, 3 waiting on CI, 1 usage or API/git error. `--check` is accepted (the
+// Exit: 0 every row ok, 2 a row failed, 3 waiting on CI, 4 trusted API quota backoff, 1 other usage/API/git error. `--check` is accepted (the
 // workflow's spelling). `--json <path>` writes the row summary there; nothing else is written outside the
 // throw-away worktree under artifacts/merge-gate/.
 import { spawnSync } from "node:child_process";
@@ -1253,7 +1253,16 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
     log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)");
     return 1;
   }
-  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner, credit });
+  const trusted = argv.includes("--trusted");
+  let quota;
+  const trustedRequest = (pathQs) => {
+    if (quota) return quota;
+    const result = request(pathQs, { deferRateLimit: true });
+    if (result.rateLimited) quota = result;
+    return result;
+  };
+  const v = evaluate({ pr, sha: opt("--sha") || "", request: trusted ? trustedRequest : request, root, localMerge, trusted, owner, credit });
+  if (quota) { log(`= merge-gate deferred — GitHub API rate limit: ${quota.error}`); return 4; }
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");
