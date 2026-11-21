@@ -123,9 +123,12 @@ const GLXBackend = (function () {
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
   const _ambScratchG = [0, 0, 0], _ambScratchS = [0, 0, 0];
   let skyProg = null, skyU = null;
-  let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
   let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null, markBatchCap = 0;
+  // F5 (#3115): blob shadows → one draw; shares skid VAO/VBO (_markBatchStale).
+  let blobBatchProg = null, blobBatchU = null, _blobN = 0, _markBatchStale = false;
+  const BLOB_CAP = 64, _blobVerts = new Float32Array(BLOB_CAP * 30);
+  const BLOB_XZ = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
   let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
@@ -270,12 +273,12 @@ const GLXBackend = (function () {
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
   let _activeProg = null;
-  // A switch away from the road-decal programs also lifts their ROAD_BIAS:
-  // drawShadow/drawMark leave it on, so a field of shadows and skid stamps
-  // states it once instead of enable/offset/offset/disable per draw (perf hunt 6).
+  // Road-decal ROAD_BIAS stays on across shadow/mark/blob; lift on other programs
+  // (perf hunt 6). F5: flush pending blob batch before binding a non-blob program.
   function useProg(p) {
+    if (_blobN > 0 && p !== blobBatchProg) flushBlobShadows();
     if (p === _activeProg) return;
-    if (_polyOn && p !== shadowProg && p !== markProg) setPolyOffset(null);
+    if (_polyOn && p !== markProg && p !== blobBatchProg) setPolyOffset(null);
     gl.useProgram(p); _activeProg = p;
   }
 
@@ -285,7 +288,7 @@ const GLXBackend = (function () {
   // re-uploading the same 16-float matrix. Track which program last received the
   // frame's matrix so the upload happens at most once per program per frame.
   let _frameToken = 0;
-  const _vpTok = { shadow: -1, mark: -1 };
+  const _vpTok = { mark: -1, blob: -1 };
   // Tuner-knob upload cache (PERF-FINDINGS §3). envFaceBegin() calls begin()
   // and the main camera calls begin() again in the same game frame with the
   // same LIGHTING TUNER scalars; WebGL uniforms persist on the program, so
@@ -768,21 +771,22 @@ const GLXBackend = (function () {
     beginLinks();   // the eight core programs compile as one parallel batch
     litProg = link(LIT_VS, litFsFor(litSlots));
     skyProg = link(SKY_VS, SKY_FS);
-    shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
     markBatchProg = link(MARK_BATCH_VS, MARK_FS);
+    blobBatchProg = link(MARK_BATCH_VS, SHADOW_FS);   // F5: one draw for a field of blob shadows
     glowProg = link(GLOW_VS, GLOW_FS);
     lineProg = LINE_VS && LINE_FS ? link(LINE_VS, LINE_FS) : null;
     particleProg = link(PARTICLE_VS, PARTICLE_FS);
     decalProg = link(DECAL_VS, DECAL_FS);
     const _bad = resolveLinks(), _ok = (p) => (p && !_bad.has(p) ? p : null);
-    litProg = _ok(litProg); skyProg = _ok(skyProg); shadowProg = _ok(shadowProg); markProg = _ok(markProg);
-    markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
+    litProg = _ok(litProg); skyProg = _ok(skyProg); markProg = _ok(markProg);
+    markBatchProg = _ok(markBatchProg); blobBatchProg = _ok(blobBatchProg);
+    glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
     if (!litProg && litSlots > LightBudget.LITE) litProg = link(LIT_VS, litFsFor(litSlots = LightBudget.LITE));   // drivers pack differently: one retry
     LightBudget.setSlots(litSlots);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
       "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
-    if (!litProg || !skyProg || !shadowProg || !markProg) return false;
+    if (!litProg || !skyProg || !markProg || !blobBatchProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules
@@ -898,7 +902,6 @@ const GLXBackend = (function () {
       "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale", "uBakeShCol", "uBakeGrid", "uBakeAtlas",
       "uNumLights", "uLight[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
-    shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
       markBatchU = locs(markBatchProg, ["uViewProj"]);
@@ -912,6 +915,7 @@ const GLXBackend = (function () {
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, mst, 12);
       gl.bindVertexArray(null);
     }
+    if (blobBatchProg) blobBatchU = locs(blobBatchProg, ["uViewProj"]);
     if (lineProg) {
       lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uOnPace", "uLift", "uBrake", "uOpacity", "uStr"]);
       // Static interleaved strip: [x, y, z, across, speed, zone, along] per
@@ -2488,21 +2492,33 @@ const GLXBackend = (function () {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  // F5 (#3115): pack into mark-batch VAO; flush = one drawArrays (TLX A6).
   function drawShadow(modelMat, w, l) {
-    if (ctxGone()) return;
-    useProg(shadowProg);
-    if (_vpTok.shadow !== _frameToken) {
-      gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
-      _vpTok.shadow = _frameToken;
+    if (ctxGone() || !markBatchVAO) return;
+    if (_blobN >= BLOB_CAP) flushBlobShadows();
+    let o = _blobN * 30; const m = modelMat, dst = _blobVerts;
+    for (let i = 0; i < 12; i += 2) {
+      const ax = BLOB_XZ[i], az = BLOB_XZ[i + 1], lx = ax * w, lz = az * l;
+      dst[o++] = m[0] * lx + m[4] * 0.02 + m[8] * lz + m[12];
+      dst[o++] = m[1] * lx + m[5] * 0.02 + m[9] * lz + m[13];
+      dst[o++] = m[2] * lx + m[6] * 0.02 + m[10] * lz + m[14];
+      dst[o++] = ax * 2; dst[o++] = az * 2;
     }
-    gl.uniformMatrix4fv(shadowU.uModel, false, modelMat);
-    gl.uniform2f(shadowU.uSize, w, l);
-    setBlend(true);
-    setDepthMask(false);
-    // Pull the quad toward the camera so it can't z-fight the coplanar road.
-    setPolyOffset(ROAD_BIAS);
-    bindVAO(shadowVAO);
-    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    _blobN++;
+  }
+  function flushBlobShadows() {
+    const n = _blobN; _blobN = 0;
+    if (!(n > 0) || !blobBatchProg || ctxGone()) return;
+    useProg(blobBatchProg);
+    if (_vpTok.blob !== _frameToken) {
+      gl.uniformMatrix4fv(blobBatchU.uViewProj, false, frameViewProj); _vpTok.blob = _frameToken;
+    }
+    setBlend(true); setDepthMask(false); setPolyOffset(ROAD_BIAS);
+    bindVAO(markBatchVAO); gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
+    const nF = n * 30;
+    if (nF > markBatchCap) { markBatchCap = nF; gl.bufferData(gl.ARRAY_BUFFER, markBatchCap * 4, gl.DYNAMIC_DRAW); }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, _blobVerts, 0, nF);
+    gl.drawArrays(gl.TRIANGLES, 0, n * 6); _markBatchStale = true;
   }
 
   function drawMark(modelMat, w, l) {
@@ -2535,7 +2551,8 @@ const GLXBackend = (function () {
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
-    if (dirty) {
+    if (dirty || _markBatchStale) {
+      _markBatchStale = false;
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       const nF = vertCount * 5;
       if (nF > markBatchCap) {
@@ -2779,6 +2796,7 @@ const GLXBackend = (function () {
     setRenderSizeOverride,
     present: (opts) => {
       if (ctxGone()) return;
+      if (_blobN > 0) flushBlobShadows();   // F5: before post takes GL state
       // Occlusion queries go LAST and before post, which is the only moment in
       // the frame when the opaque depth buffer is both complete and still
       // bound. A no-op unless apex26.occlusionCull is on (GLXChunked).

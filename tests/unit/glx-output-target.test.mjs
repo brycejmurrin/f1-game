@@ -252,3 +252,37 @@ test("tap texels are one PHYSICAL texel: square on a phone cover, logical on des
   assert.deepEqual(dTex[1], [1 / half(dW), 1 / half(dH)], "desktop first bloom downsample: 1/level-0 size");
   assert.deepEqual(dTex[dTex.length - 1], [1 / dW, 1 / dH], "desktop FXAA: 1/render size");
 });
+
+// F3 (#3115): GLX SSR must march at half-res (WGX already does), not inside the
+// full-res composite. Cost model: march fragment work ∝ pixels; half-res is 1/4.
+test("GLX SSR is a half-res pass, not a full-res composite march (F3 #3115)", () => {
+  const postSrc = fs.readFileSync(path.join(GLX_DIR, "shaders/glsl-post.js"), "utf8");
+  const compStart = postSrc.indexOf("const COMPOSITE_FS = `");
+  const compEnd = postSrc.indexOf("`;", postSrc.indexOf("outColor = vec4(", compStart));
+  assert.ok(compStart > 0 && compEnd > compStart, "COMPOSITE_FS located");
+  const composite = postSrc.slice(compStart, compEnd);
+  assert.doesNotMatch(composite, /for \(int i = 0; i < 24/,
+    "SSR march must leave COMPOSITE_FS (full-res) for a half-res SSR_FS pass");
+  assert.match(postSrc, /const SSR_FS = `/, "SSR_FS half-res pass shader exists");
+
+  const h = bootGlx({ userAgent: CHROME_UA, extensions: ["EXT_color_buffer_float"] });
+  const ident = new Float32Array(16);
+  ident[0] = ident[5] = ident[10] = ident[15] = 1;
+  const frame = h.frame({
+    proj: ident, invProj: ident, upViewDir: [0, 1, 0], viewProj: ident, invViewProj: ident,
+  });
+  h.GLX.begin(frame);
+  h.reset();
+  h.GLX.present({
+    reflect: 0.5, carReflect: 0.05, ssao: 0, bloom: 0, godray: 0, mist: 0,
+  });
+  const W = h.GLX.width, H = h.GLX.height;
+  const halfW = Math.max(1, Math.floor(W / 2)), halfH = Math.max(1, Math.floor(H / 2));
+  const halfViewports = h.calls.filter((c) =>
+    c[0] === "viewport" && c[1][0] === 0 && c[1][1] === 0 && c[1][2] === halfW && c[1][3] === halfH);
+  assert.ok(halfViewports.length >= 1,
+    `SSR must draw at half-res ${halfW}x${halfH}; full-res composite alone paid ${W * H} march pixels`);
+  // Cost proof: half-res pixels are ≤ 1/4 of the composite's full-res coverage.
+  assert.ok(halfW * halfH * 4 <= W * H + 3,
+    `half-res SSR pixels ${halfW * halfH} must be ≤ 1/4 of full-res ${W * H}`);
+});
