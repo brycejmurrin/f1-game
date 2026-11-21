@@ -870,24 +870,25 @@ const GameStore = (function () {
       return o;
     }) });
   }
+  const ttCtx = (e) => e.context || null;
   function ttBoard(trackId, context) {
-    return ttRead(trackId).filter(e => context === undefined || (e.context || null) === context);
+    return ttRead(trackId).filter(e => context === undefined || ttCtx(e) === context);
   }
   function ttBoardAddResult(trackId, entry) {
-    if (!isFinite(entry.t) || entry.t <= 0) return { ok: false, durable: false, reason: "invalid-lap", laps: ttBoard(trackId) };
+    const t = entry.t;
+    if (!(typeof t === "number" && Number.isFinite(t) && t > 0.0))
+      return { ok: false, durable: false, reason: "invalid-lap", laps: ttBoard(trackId) };
     const b = ttBoard(trackId);
     b.push(entry);
     b.sort((a, z) => a.t - z.t);
     // Ten laps PER comparable class. Existing unversioned entries stay legacy.
-    const counts = new Map();
-    let kept = b.filter(e => { const k = e.context || null; const n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
-    const last = new Map();
-    for (const e of kept) { const k = e.context || null; last.set(k, Math.max(last.has(k) ? last.get(k) : -Infinity, Number(e.ts) || 0)); }
+    const counts = new Map(), last = new Map();
+    let kept = b.filter(e => { const k = ttCtx(e), n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
+    for (const e of kept) { const k = ttCtx(e); last.set(k, Math.max(last.has(k) ? last.get(k) : -Infinity, +e.ts || 0)); }
     if (last.size > TT_CLASS_MAX) {
-      const keep = new Set([kept[0].context || null, entry.context || null]);
-      const rest = [...last.keys()].filter(k => !keep.has(k)).sort((a, z) => last.get(z) - last.get(a));
-      for (const k of rest.slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
-      kept = kept.filter(e => keep.has(e.context || null));
+      const keep = new Set([ttCtx(kept[0]), ttCtx(entry)]);
+      for (const k of [...last.keys()].filter(k => !keep.has(k)).sort((a, z) => last.get(z) - last.get(a)).slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
+      kept = kept.filter(e => keep.has(ttCtx(e)));
     }
     return { ...ttWrite(trackId, kept), laps: kept };
   }
