@@ -604,7 +604,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
     if (!via) { assert.match(tag, /data-esc="none"/, `#${id} either names a close control or refuses Escape outright`); continue; }
     const inShell = ids.has(via[1]);
     const built = new RegExp(`\\.id = "${via[1]}"`).test(read("js/data/hub.js"));
-    const photoDoor = id === "photo-studio" && via[1] === "ps-close" && /button\("DONE", \(\) => close\(true\), "ps-close"\)/.test(read("js/ui/photo-studio.js"));
+    const photoDoor = id === "photo-studio" && via[1] === "ps-close" && /button\("DONE", \(\) => close\(true\), "ps-close"\)/.test(read("js/ui/photo-studio-ui.js"));
     const titleDoor = id === "tl-editor" && via[1] === "tl-cancel" && /btn\("tl-cancel", "Cancel", "Discard title changes", \(\) => exit\(false\)\)/.test(read("js/ui/title-layout.js"));
     assert.ok(inShell || built || photoDoor || titleDoor, `#${id} → #${via[1]} exists (shell or declared dynamic owner)`);
   }

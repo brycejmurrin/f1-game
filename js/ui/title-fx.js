@@ -251,7 +251,7 @@ const TitleFx = (function () {
     }
     const body = byId("pm-titlescreen-body");
     if (body && !byId(STYLE_ROW)) {
-      const row = SettingRow.build(STYLE_ROW, "BUTTON STYLE");
+      const row = SettingRow.build(STYLE_ROW, "TITLE BUTTON STYLE");
       const help = document.createElement("p");
       help.id = STYLE_ROW + "-help";
       help.className = "adv-help";

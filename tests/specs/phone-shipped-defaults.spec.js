@@ -190,9 +190,15 @@ test("the title Button Style setting survives rotation and reload", async ({ bro
   const choose = async (current, next) => {
     await page.locator("#mb-settings").tap();
     await page.locator("#pm-open-appearance").tap();
-    const fold = page.locator("#pm-titlescreen");
-    if (await fold.getAttribute("open") === null) await fold.locator("summary").first().tap();
-    const selector = fold.getByRole("combobox", { name: "BUTTON STYLE", exact: true });
+    const selector = page.locator("#ap-menu-customization").getByRole("combobox", { name: "TITLE BUTTON STYLE", exact: true });
+    await expect(selector).toBeVisible();
+    if (current === "auto") {
+      for (const [id, name] of [["menu", "MENU ACCENT"], ["hud", "HUD ACCENT"]]) {
+        await expect(page.locator("#pm-" + id + "accent-sel")).toHaveAccessibleName(name);
+        await expect(page.locator("#pm-" + id + "accent-hex")).toHaveAttribute("aria-labelledby", "pm-" + id + "accent-hex-label");
+        await expect(page.locator("#pm-" + id + "accent-hex-label")).toHaveText("CUSTOM " + id.toUpperCase());
+      }
+    }
     await expect(selector).toHaveValue(current);
     await selector.selectOption(next);
     await page.locator("#pm-settings-close").tap();

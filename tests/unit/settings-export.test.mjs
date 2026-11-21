@@ -91,7 +91,7 @@ function boot(opts = {}) {
     sb.ScreenRegions = opts.regions;
     vm.runInContext(read("js/ui/screen-placement.js"), ctx, { filename: absSrc("js/ui/screen-placement.js") });
   }
-  if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
+  if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio-ui", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });

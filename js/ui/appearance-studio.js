@@ -1,9 +1,10 @@
-/* AppearanceStudio — visual presets, named profiles and a readable preview.
-   Only VISUAL_KEYS cross the save/apply boundary; driving and career state never do.
-   The existing Appearance folds remain the advanced controls for every screen. */
+/* AppearanceStudio — FULL boot stub (#4978 row 5). Title home reads scene/homeCamera/
+   onSceneChange/attach at eval; the DOM studio (AppearanceStudioBody) is LAZY_UI_PRESETS
+   and lands with Settings › APPEARANCE (or the first initUI). Until then every answer
+   comes from GameStore the same way the body does. */
 const AppearanceStudio = (function () {
   "use strict";
-  const store = GameStore.store;
+
   const PROFILE_KEY = "appearanceProfiles";
   const ENUMS = {
     uiTheme: ["dark", "light", "system", "endurance", "drafting"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
@@ -16,8 +17,6 @@ const AppearanceStudio = (function () {
     homeScene: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"], backgroundMotion: ["still", "ambient"],
     homeCamera: ["auto", "hero", "front", "side", "rear"],
   };
-  // Visual RESET SCOPE writes this snapshot. Prefer SettingsDefaults when a key
-  // is listed there so RESET restores the same shipped prefs a fresh install gets.
   const shipped = (k, d) => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
     ? SettingsDefaults.get(k) : d;
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
@@ -28,12 +27,7 @@ const AppearanceStudio = (function () {
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
     homeScene: shipped("homeScene", "static"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
-  // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
-  // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
-  // Cosmetic presets must not replace readability, comfort, unit, size or layout
-  // preferences (#5058): a preset value never names one of these keys, and a
-  // screen look the preset names is merged into the current one, not replaced.
   const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleButtonStyle", "titleLayout", "hudLayout", "dockLayout", "screenPlacement", "pauseLayout", "pauseSide", "pauseDim"]);
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleButtonStyle", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
@@ -48,6 +42,7 @@ const AppearanceStudio = (function () {
     { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
     { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
   ]);
+  const store = () => GameStore.store;
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
   function normalizeSnapshot(input) {
@@ -57,8 +52,6 @@ const AppearanceStudio = (function () {
       if (ENUMS[k]) out[k] = ENUMS[k].includes(v) ? v : DEFAULTS[k];
       else if (k.endsWith("Hex")) out[k] = /^#[0-9a-f]{6}$/i.test(v || "") ? v.toLowerCase() : DEFAULTS[k];
       else if (k.endsWith("Scale") || k.endsWith("Opacity")) {
-        // HUD_SCALE_MIN 70: css/hud.css .hud-label floors painted size at this zoom
-        // (14×0.7 would be 9.8px without max(--fs-micro, --fs-micro/1.4/--hud-z)).
         const lo = k.endsWith("Opacity") ? 20 : k === "hudScale" ? 70 : 40, hi = k.endsWith("Opacity") ? 100 : k === "hudBtnScale" ? 300 : 200;
         out[k] = typeof v === "number" && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v)) * 4) / 4 : null;
       } else if (LOOKS[k]) out[k] = isObject(v) && typeof ScreenLooks !== "undefined" ? ScreenLooks.normalize(LOOKS[k], v) : null;
@@ -79,83 +72,17 @@ const AppearanceStudio = (function () {
     }
     return out;
   }
-  function snapshot() { const out = {}; for (const k of VISUAL_KEYS) out[k] = store.get(k, DEFAULTS[k]); return normalizeSnapshot(out); }
-  let hooks = {}, ui = null, previewPage = "home", previewShape = "desktop", scope = "global", selectedProfile = "", activePreset = "";
-  let muted = false, pending = 0, last = snapshot(), previewSceneKey = "";
-  const undoStack = [], sceneListeners = [];
-  let photoRows = [], photoGeneration = 0, photoPanelVisible = false;
-  function say(message) { if (ui) ui.status.textContent = message; }
-  function invoke(name, ...args) { try { if (typeof hooks[name] === "function") return hooks[name](...args); } catch (e) { Log.warn("ui", "Appearance " + name + ": " + e.message); say("Your appearance is saved; the scene preview could not refresh. Try another scene."); } }
-  function scene() { const mode = store.get("homeScene", "static"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : DEFAULTS.homeScene, motion: motion === "ambient" ? "ambient" : "still" }; }
-  function homeCamera() { const value = store.get("homeCamera", "side"); return ENUMS.homeCamera.includes(value) ? value : "side"; }
-  function setHomeCamera(value) { const next = snapshot(); next.homeCamera = value; return applySnapshot(next); }
+  function snapshot() { const out = {}; for (const k of VISUAL_KEYS) out[k] = store().get(k, DEFAULTS[k]); return normalizeSnapshot(out); }
+  function scene() {
+    const mode = store().get("homeScene", DEFAULTS.homeScene), motion = store().get("backgroundMotion", "ambient");
+    return { mode: ENUMS.homeScene.includes(mode) ? mode : DEFAULTS.homeScene, motion: motion === "ambient" ? "ambient" : "still" };
+  }
+  function homeCamera() { const value = store().get("homeCamera", "side"); return ENUMS.homeCamera.includes(value) ? value : "side"; }
   function effectiveSceneMotion() {
     const s = scene();
     const os = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     return s.motion === "ambient" && !os && (typeof TitleFx === "undefined" || TitleFx.mode() !== "reduce") ? "ambient" : "still";
   }
-  function sceneChanged(force = false) {
-    const value = scene(), key = value.mode + ":" + value.motion + ":" + effectiveSceneMotion() + ":" + homeCamera();
-    if (!force && key === previewSceneKey) return;
-    previewSceneKey = key;
-    for (const fn of sceneListeners) { try { fn(value); } catch (e) { Log.warn("ui", "Appearance scene listener: " + e.message); } }
-    if (ui) { if (["static", "photo"].includes(value.mode)) ui.preview.style.removeProperty("--studio-scene-image"); invoke("previewScene", value, ui.preview); }
-  }
-  function onSceneChange(fn) { if (typeof fn !== "function") return () => {}; sceneListeners.push(fn); return () => { const i = sceneListeners.indexOf(fn); if (i >= 0) sceneListeners.splice(i, 1); }; }
-  function remember(before) { if (JSON.stringify(before) === JSON.stringify(snapshot())) return false; undoStack.push(clone(before)); if (undoStack.length > 30) undoStack.shift(); activePreset = ""; last = snapshot(); return true; }
-  function refreshOwners(values) {
-    if (typeof AppearanceOpts !== "undefined" && AppearanceOpts.restore) AppearanceOpts.restore(values);
-    if (typeof TitleFx !== "undefined") { TitleFx.apply(); TitleFx.wireRows(); }
-    if (typeof TitleLayout !== "undefined") { TitleLayout.apply(); TitleLayout.build(); }
-    if (typeof PauseOpts !== "undefined") { PauseOpts.apply(); PauseOpts.wireRows(); }
-    if (typeof ScreenLooks !== "undefined") { ScreenLooks.apply(); ScreenLooks.refresh(); }
-    if (typeof HudLayout !== "undefined") HudLayout.apply();
-    invoke("applyVisuals", values);
-    sceneChanged();
-  }
-  function keysFor(chosenScope) { return chosenScope === "screen" ? SCREEN_KEYS[previewPage] : VISUAL_KEYS; }
-  function applySnapshot(value, options = {}) {
-    const next = normalizeSnapshot(value), before = snapshot(), keys = keysFor(options.scope || "global");
-    if (options.scope === "screen" && (next.screenPlacement || before.screenPlacement)) {
-      const screens = { ...(before.screenPlacement && before.screenPlacement.screens) };
-      const id = ({ garage: "carsetup", race: "race-settings", pause: "pausemenu" })[previewPage] || previewPage;
-      const selected = next.screenPlacement && next.screenPlacement.screens[id];
-      if (selected) screens[id] = selected;
-      else delete screens[id];
-      next.screenPlacement = Object.keys(screens).length ? { v: 1, screens } : null;
-    }
-    let durable = true;
-    clearTimeout(pending); muted = true;
-    // Only keys whose value actually changes are written: an untouched key stays
-    // unset (it keeps following SettingsDefaults), and a null motion REMOVES the
-    // key instead of pinning "on".
-    try {
-      for (const k of options.scope === "screen" ? [...keys, "screenPlacement"] : keys) {
-        if (JSON.stringify(before[k]) === JSON.stringify(next[k])) continue;
-        if (store.set(k, k === "motion" && next[k] === null ? undefined : clone(next[k])) === false) durable = false;
-      }
-      refreshOwners(snapshot());
-    }
-    finally { muted = false; }
-    if (options.history !== false) remember(before);
-    last = snapshot(); if (options.render !== false) render();
-    return { ok: true, durable };
-  }
-  function applyPreset(id, chosenScope = scope) {
-    const p = PRESETS.find((v) => v.id === id); if (!p) return false;
-    const current = snapshot(), next = Object.assign({}, DEFAULTS, p.values);
-    for (const key of PRESET_PRESERVE) next[key] = current[key];
-    for (const key in LOOKS) next[key] = p.values[key] ? Object.assign({}, current[key], p.values[key]) : current[key];
-    const result = applySnapshot(next, { scope: chosenScope, render: false });
-    activePreset = id; render(); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + (result.durable ? "." : " for this session; browser storage is unavailable.")); return true;
-  }
-  function setScene(mode, motion) {
-    const next = snapshot(); if (mode !== undefined) next.homeScene = mode; if (motion !== undefined) next.backgroundMotion = motion;
-    return applySnapshot(next);
-  }
-  function durabilityNote(result) { return result.durable ? "." : " for this session; browser storage is unavailable."; }
-  function undo() { const previous = undoStack.pop(); if (!previous) return false; activePreset = ""; const result = applySnapshot(previous, { history: false }); say("Previous visual settings restored" + durabilityNote(result)); return true; }
-  function reset(chosenScope = scope) { const result = applySnapshot(DEFAULTS, { scope: chosenScope, render: false }); activePreset = ""; render(); say((chosenScope === "screen" ? pageLabel() : "All visual settings") + " reset" + durabilityNote(result) + " Undo restores your previous choices."); }
   function normalizeProfiles(raw) {
     if (!Array.isArray(raw)) return [];
     const ids = new Set();
@@ -167,242 +94,123 @@ const AppearanceStudio = (function () {
         return { id: p.id, name: p.name.trim().slice(0, 40), values };
       });
   }
-  function profiles() { return normalizeProfiles(store.get(PROFILE_KEY, [])); }
-  function writeProfiles(rows) {
-    const result = store.write ? store.write(PROFILE_KEY, rows) : { ok: true, durable: store.set(PROFILE_KEY, rows) !== false };
-    say(result.durable ? "Appearance profile saved." : "Profile saved for this session. Browser storage could not save it for your next visit."); render(); return result;
+  function profiles() { return normalizeProfiles(store().get(PROFILE_KEY, [])); }
+  const shapeNow = () => { const s = typeof document !== "undefined" && document.body ? document.body.getAttribute("data-shape") : null; return s === "tall" || s === "wide" ? s : null; };
+
+  let body = null;
+  let pendingHooks = null;
+  const pendingListeners = [];
+  let _load = null;
+
+  function takeBody() {
+    if (body || typeof AppearanceStudioBody === "undefined") return body;
+    body = AppearanceStudioBody;
+    if (pendingHooks) { body.attach(pendingHooks); pendingHooks = null; }
+    while (pendingListeners.length) body.onSceneChange(pendingListeners.shift());
+    return body;
   }
-  function saveProfile(name, id) {
-    const label = String(name || "").trim().slice(0, 40); if (!label) { say("Give your profile a name first."); return { ok: false, reason: "name" }; }
-    const rows = profiles(), at = rows.findIndex((p) => p.id === id);
-    if (at < 0 && rows.length >= 12) { say("You have 12 profiles. Select one to update, or delete one first."); return { ok: false, reason: "limit" }; }
-    let newId = id; if (at < 0) { let n = 1; while (rows.some((p) => p.id === "profile-" + n)) n++; newId = "profile-" + n; }
-    const row = { id: newId, name: label, values: snapshot() }; if (at < 0) rows.push(row); else rows[at] = row;
-    selectedProfile = newId; return writeProfiles(rows);
+
+  function ensureBody() {
+    if (takeBody()) return Promise.resolve(true);
+    if (_load) return _load;
+    const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS) || [];
+    const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS_EDGES) || [];
+    if (!files.length || typeof ScriptLoader === "undefined") {
+      Log.warn("ui", "appearance studio body is not in this build");
+      return Promise.resolve(false);
+    }
+    // LayoutPresets already rides this group; SettingsNav.presets() may be in flight.
+    const presets = typeof SettingsNav !== "undefined" && SettingsNav.presets ? SettingsNav.presets() : null;
+    _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), presets]).then(() => {
+      if (!takeBody()) { _load = null; Log.warn("ui", "appearance studio body did not load"); return false; }
+      return true;
+    }).catch((e) => {
+      _load = null;
+      Log.warn("ui", "appearance studio body did not load: " + (e && e.message || e));
+      return false;
+    });
+    return _load;
   }
-  function loadProfile(id, chosenScope = scope) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot({ ...snapshot(), ...p.values }, { scope: chosenScope }); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + durabilityNote(result)); return true; }
-  function deleteProfile(id) { const rows = profiles(); if (!rows.some((p) => p.id === id)) return false; selectedProfile = ""; const result = writeProfiles(rows.filter((p) => p.id !== id)); say(result.durable ? "Profile deleted. Your current appearance stays in place." : "Profile deleted for this session. Browser storage could not save that change for your next visit."); return true; }
-  function attach(value) { hooks = value || {}; invoke("applyVisuals", snapshot()); sceneChanged(); }
-  function setPreviewFrame(url) {
-    if (!ui || typeof url !== "string" || !/^(data:image\/(png|jpeg|webp);base64,|blob:)/.test(url)) return false;
-    ui.preview.style.setProperty("--studio-scene-image", 'url("' + url.replace(/["\\\n\r]/g, "") + '")'); return true;
+
+  function via(name, fallback) {
+    return (...args) => {
+      const b = takeBody();
+      if (b && typeof b[name] === "function") return b[name](...args);
+      return typeof fallback === "function" ? fallback(...args) : fallback;
+    };
   }
-  const pageLabel = () => ({ home: "Home", pause: "Pause Menu", datahub: "Data Hub", select: "Track Selector", career: "Career", race: "Race Setup", garage: "Garage", hud: "HUD", popups: "Popup" })[previewPage];
-  function node(tag, cls, text) { const e = document.createElement(tag); if (cls) e.dataset.as = cls.replace(/^as-/, ""); if (text != null) e.textContent = text; return e; }
-  function button(text, fn, cls) { const e = node("button", cls, text); e.type = "button"; e.addEventListener("click", fn); return e; }
-  function group(host, title) { const box = node("section", "as-box"); box.appendChild(node("h3", "as-heading", title)); host.appendChild(box); return box; }
-  function choice(host, label, key, values) {
-    const row = node("div", "as-row"), text = node("span", "as-label", label), controls = node("div", "as-segment");
-    // Stable search target for Settings › FIND A SETTING.  The studio is
-    // built lazily, so the search descriptor is registered after this DOM
-    // exists rather than pointing at an absent static shell node.
-    controls.id = "as-" + key;
-    const list = []; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", label);
-    for (const [id, name] of values) { const b = button(name, () => { const v = snapshot(); v[key] = id; applySnapshot(v); }); controls.appendChild(b); list.push({ id, b }); }
-    row.append(text, controls); host.appendChild(row); ui.choices.push({ key, list }); return row;
+
+  function attach(value) {
+    const b = takeBody();
+    if (b) return b.attach(value);
+    pendingHooks = value || {};
+    try { if (typeof pendingHooks.applyVisuals === "function") pendingHooks.applyVisuals(snapshot()); } catch (e) { Log.warn("ui", "Appearance attach: " + e.message); }
   }
-  function previewContent(s) {
-    const body = ui.preview; body.replaceChildren();
-    body.appendChild(node("div", "as-preview-brand", "APEX 26"));
-    const plate = node("div", "as-preview-content");
-    if (previewPage === "home") { for (const name of ["RACE", "WATCH", "GARAGE", "SETTINGS"]) plate.appendChild(node("div", "as-preview-door", name)); }
-    else if (previewPage === "career") { plate.append(node("h3", "", "DRIVER CAREER"), node("p", "", "NEXT RACE · MONZA"), node("div", "as-preview-door", "CONTINUE WEEKEND"), node("p", "", "DEVELOPMENT     TEAM     SEASON")); }
-    else if (previewPage === "race") { plate.append(node("h3", "", "RACE SETTINGS"), node("p", "", "MONZA · GRAND PRIX")); for (const name of ["WEEKEND     RACE", "WEATHER     DRY", "LAPS     12", "START RACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
-    else if (previewPage === "pause") { plate.append(node("h3", "", "PAUSED")); for (const name of ["RESUME", "RESTART", "SETTINGS", "QUIT"]) plate.appendChild(node("div", "as-preview-door", name)); }
-    else if (previewPage === "datahub") { plate.append(node("h3", "", "F1 DATA HUB"), node("p", "", "LAP ANALYSIS     TYRES     TELEMETRY")); for (const name of ["SECTOR TIMES", "SPEED TRACE", "RACE PACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
-    else if (previewPage === "select") { plate.append(node("h3", "", "TRACK SELECTOR"), node("p", "", "CLASSICS     SEASON")); for (const name of ["MONZA", "SUZUKA", "MONACO"]) plate.appendChild(node("div", "as-preview-door", name)); }
-    else if (previewPage === "garage") { plate.append(node("h3", "", "GARAGE"), node("p", "", "CAR SETUP")); for (const name of ["ENGINE", "AERO", "CHASSIS", "LIVERY"]) plate.appendChild(node("div", "as-preview-door", name)); }
-    else if (previewPage === "hud") {
-      plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", s.speedUnits === "mph" ? "178 MPH" : "287 KM/H"));
-      if (s.hudGapsVis !== "off" && s.hudProfile !== "minimal") plate.appendChild(node("p", "", "P2 NOR +1.2     P4 LEC −0.8"));
-      if (s.hudMetricsLayout !== "compact") plate.appendChild(node("p", "", s.hudMetricsLayout === "timing" ? "S1 28.412     S2 31.090" : "TYRES 82%     ENERGY 64%"));
-    } else { plate.append(node("h3", "", "RACE RESULTS")); for (const name of ["1   NORRIS", "2   VERSTAPPEN", "3   YOU · +8 POSITIONS"]) plate.appendChild(node("div", "as-preview-door", name)); plate.appendChild(node("p", "", "CONTINUE")); }
-    body.appendChild(plate); body.dataset.screen = previewPage;
-    const lookKey = ({ pause: "lookPause", datahub: "lookDatahub", select: "lookSelect", career: "lookCareer", race: "lookRace", garage: "lookGarage", popups: "lookPopups" })[previewPage], look = lookKey && s[lookKey];
-    plate.style.borderRadius = look && look.corners === "sharp" ? "0" : look && look.corners === "pill" ? "var(--r-lg)" : "var(--r-md)";
-    plate.style.textAlign = look && look.head === "centre" ? "center" : "left";
-    plate.style.setProperty("--preview-density", look && look.density === "tight" ? ".7" : look && look.density === "roomy" ? "1.3" : "1");
-    body.dataset.scene = s.homeScene; body.dataset.motion = effectiveSceneMotion();
-    body.style.setProperty("--preview-panel-opacity", s.uiContrast === "high" ? 1 : (s.hudPanelOpacity || 100) / 100);
-    body.style.setProperty("--preview-hud-accent", typeof getComputedStyle === "function" ? getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "var(--accent)" : "var(--accent)");
+  function onSceneChange(fn) {
+    if (typeof fn !== "function") return () => {};
+    const b = takeBody();
+    if (b) return b.onSceneChange(fn);
+    pendingListeners.push(fn);
+    return () => { const i = pendingListeners.indexOf(fn); if (i >= 0) pendingListeners.splice(i, 1); };
   }
-  function render() {
-    if (!ui) return; const s = snapshot();
-    for (const c of ui.choices) for (const { id, b } of c.list) b.setAttribute("aria-pressed", String(s[c.key] === id));
-    for (const { id, b } of ui.presets) b.setAttribute("aria-pressed", String(activePreset === id));
-    for (const { id, b } of ui.pages) b.setAttribute("aria-pressed", String(previewPage === id));
-    for (const { id, b } of ui.shapes) b.setAttribute("aria-pressed", String(previewShape === id));
-    ui.previewWrap.dataset.shape = previewShape;
-    ui.undo.disabled = !undoStack.length; ui.delete.disabled = !selectedProfile; ui.load.disabled = !selectedProfile;
-    ui.scopeGlobal.setAttribute("aria-pressed", String(scope === "global")); ui.scopeScreen.setAttribute("aria-pressed", String(scope === "screen"));
-    ui.scopeNote.textContent = scope === "global" ? "Presets, profile application and reset apply across menus, HUD and scene. Presets keep your placements and accessibility choices. Global profiles and reset include screen placements, cockpit and touch controls, readability, and units." : "Presets, profile application and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
-    const rows = profiles(); ui.profileSelect.replaceChildren(); const empty = node("option", "", "New profile"); empty.value = ""; ui.profileSelect.appendChild(empty);
-    for (const row of rows) { const opt = node("option", "", row.name); opt.value = row.id; ui.profileSelect.appendChild(opt); }
-    ui.profileSelect.value = selectedProfile;
-    ui.sceneNote.textContent = s.backgroundMotion === "ambient" && effectiveSceneMotion() === "still" ? "Background motion is paused by reduced motion. Your ambient preference is saved." : "Background motion is separate from menu transitions. Auto camera and mixed environments vary between Home visits. Static and photo backgrounds remain still.";
-    previewContent(s);
-    ui.photoBox.hidden = s.homeScene !== "photo";
-    const visible = photoPickerOpen();
-    if (visible && !photoPanelVisible) refreshPhotos();
-    else if (!visible && photoPanelVisible) { photoGeneration++; ui.photoBox.removeAttribute("aria-busy"); }
-    photoPanelVisible = visible;
+  function setScene(mode, motion) {
+    const b = takeBody();
+    if (b) return b.setScene(mode, motion);
+    const next = snapshot();
+    if (mode !== undefined) next.homeScene = mode;
+    if (motion !== undefined) next.backgroundMotion = motion;
+    return applySnapshot(next);
   }
-  function photoPickerOpen() {
-    const panel = document.getElementById("pm-panel-appearance"), settings = document.getElementById("pmsettings");
-    return !!ui && !panel.hidden && (!settings || !settings.hidden) && scene().mode === "photo";
+  function setHomeCamera(value) {
+    const b = takeBody();
+    if (b) return b.setHomeCamera(value);
+    const next = snapshot(); next.homeCamera = value; return applySnapshot(next);
   }
-  function photoSelection() {
-    const row = photoRows.find((p) => p.id === ui.photoSelect.value);
-    ui.photoChoose.disabled = !row; ui.photoPreview.hidden = !row;
-    if (row) { ui.photoPreview.src = row.thumb; ui.photoPreview.alt = "Preview: " + row.title; }
-    else { ui.photoPreview.removeAttribute("src"); ui.photoPreview.alt = "Saved photo preview"; }
-  }
-  async function refreshPhotos() {
-    if (!photoPickerOpen()) return;
-    const generation = ++photoGeneration, selected = ui.photoSelect.value;
-    ui.photoChoose.disabled = true; ui.photoSelect.disabled = true;
-    ui.photoNote.textContent = "Loading saved photos…"; ui.photoBox.setAttribute("aria-busy", "true");
+  function applySnapshot(value, options = {}) {
+    const b = takeBody();
+    if (b) return b.applySnapshot(value, options);
+    const next = normalizeSnapshot(value), before = snapshot(), keys = options.scope === "screen" ? (SCREEN_KEYS.home || VISUAL_KEYS) : VISUAL_KEYS;
+    let durable = true;
     try {
-      if (typeof PhotoStudio === "undefined" || typeof PhotoStudio.album !== "function") throw new Error("Photo library unavailable");
-      const rows = await PhotoStudio.album();
-      if (generation !== photoGeneration || !photoPickerOpen()) return;
-      const seen = new Set();
-      photoRows = (Array.isArray(rows) ? rows : []).filter((p) => p && typeof p.id === "string" && !seen.has(p.id)
-        && typeof p.thumb === "string" && /^data:image\/(jpeg|png);base64,/.test(p.thumb) && p.thumb.length < 240000 && seen.add(p.id))
-        .slice(0, 6).map((p) => ({ id: p.id, title: String(p.title || "Saved photo").slice(0, 80), thumb: p.thumb }));
-      ui.photoSelect.replaceChildren();
-      const placeholder = node("option", "", "Select a saved photo"); placeholder.value = ""; ui.photoSelect.appendChild(placeholder);
-      for (const row of photoRows) { const option = node("option", "", row.title); option.value = row.id; ui.photoSelect.appendChild(option); }
-      ui.photoSelect.value = photoRows.some((p) => p.id === selected) ? selected : "";
-      ui.photoSelect.disabled = !photoRows.length; photoSelection();
-      ui.photoNote.textContent = photoRows.length ? "Preview a saved photo, then choose it as your menu background." : "No saved photos yet. Open Photo Studio to import or capture a photo, then save it.";
-    } catch (_) {
-      if (generation !== photoGeneration || !photoPickerOpen()) return;
-      photoRows = []; ui.photoSelect.replaceChildren(); ui.photoSelect.value = ""; photoSelection();
-      ui.photoNote.textContent = "Saved photos could not load. Try Refresh, or open Photo Studio to import a photo.";
-    } finally { if (generation === photoGeneration) ui.photoBox.removeAttribute("aria-busy"); }
+      for (const k of keys) {
+        if (JSON.stringify(before[k]) === JSON.stringify(next[k])) continue;
+        if (store().set(k, k === "motion" && next[k] === null ? undefined : clone(next[k])) === false) durable = false;
+      }
+    } catch (e) { Log.warn("ui", "Appearance apply: " + e.message); }
+    return { ok: true, durable };
   }
-  function choosePhoto() {
-    const row = photoRows.find((p) => p.id === ui.photoSelect.value);
-    if (!row || !photoPickerOpen() || ui.photoChoose.disabled) return;
-    let saved = false;
-    try { saved = typeof PhotoStudio !== "undefined" && PhotoStudio.setBackground(row.thumb); } catch (_) { /* Preserve the current scene on storage failure. */ }
-    if (!saved) { ui.photoNote.textContent = "Background could not be saved. Your current background stays in place; try again or import through Photo Studio."; return; }
-    setScene("photo"); sceneChanged(true);
-    ui.photoNote.textContent = row.title + " chosen as your menu background.";
+  function notify(message) {
+    const b = takeBody();
+    if (b) return b.notify(message);
   }
   function initUI() {
-    if (ui || typeof document === "undefined") return;
-    const panel = document.getElementById("pm-panel-appearance"); if (!panel) return;
-    Log.info("ui", "AppearanceStudio.initUI");
-    ui = { choices: [], presets: [], pages: [], shapes: [] };
-    const studio = node("div", "as-studio"), controls = node("div", "as-controls"), previewSide = node("section", "as-preview-side");
-    studio.id = "appearance-studio"; studio.append(controls, previewSide); panel.prepend(studio); panel.dataset.appearanceStudio = "on";
-    const gallery = group(controls, "APPLY APPEARANCE PRESET"), presets = node("div", "as-preset-list"); gallery.appendChild(presets);
-    for (const p of PRESETS) { const b = button("", () => applyPreset(p.id)); b.dataset.preset = p.id; b.append(node("span", "as-preset-art"), node("strong", "", p.name)); b.title = p.note; presets.appendChild(b); ui.presets.push({ id: p.id, b }); }
-    const profile = group(controls, "APPEARANCE PROFILE"), names = node("div", "as-profile-row"); ui.profileSelect = node("select"); ui.profileSelect.setAttribute("aria-label", "Saved appearance profiles"); ui.name = node("input"); ui.name.type = "text"; ui.name.maxLength = 40; ui.name.placeholder = "Name your appearance"; ui.name.setAttribute("aria-label", "Appearance profile name");
-    ui.profileSelect.addEventListener("change", () => { selectedProfile = ui.profileSelect.value; const p = profiles().find((r) => r.id === selectedProfile); ui.name.value = p ? p.name : ""; render(); });
-    ui.load = button("APPLY PROFILE", () => loadProfile(selectedProfile)); ui.load.id = "ap-profile-apply"; const save = button("SAVE PROFILE", () => saveProfile(ui.name.value, selectedProfile)); const newProfile = button("SAVE AS NEW", () => saveProfile(ui.name.value)); ui.delete = button("DELETE", () => deleteProfile(selectedProfile)); ui.delete.id = "ap-profile-delete"; names.append(ui.profileSelect, ui.name, ui.load, save, newProfile, ui.delete); profile.appendChild(names);
-    const scopeRow = node("div", "as-profile-row"); ui.scopeGlobal = button("GLOBAL", () => { scope = "global"; render(); }); ui.scopeScreen = button("THIS SCREEN", () => { scope = "screen"; render(); }); ui.undo = button("UNDO", undo); scopeRow.append(ui.scopeGlobal, ui.scopeScreen, ui.undo, button("RESET SCOPE", () => reset())); profile.appendChild(scopeRow); ui.scopeNote = node("p", "as-note"); profile.appendChild(ui.scopeNote);
-    // ONE HOME (#2846): the shell's own rows (index.html #pm-appearance-menu /
-    // #pm-appearance-hud, wired by appearance-opts.js and scale.js) are the only
-    // copy of theme, accents, sizes and contrast; the studio adopts them rather
-    // than building second rows. HUD style / size / layout and reduce motion
-    // live on HUD & CAMERA and ACCESSIBILITY: the studio jumps there.
-    const adopt = (box, id) => { const home = document.querySelector("#" + id); if (home) box.appendChild(home); return home; };
-    const jump = (box, text, page, target) => { const b = node("button", "as-jump", text + " \u203a"); b.className = "adv-more-btn"; b.type = "button"; b.dataset.settingsJump = page; b.dataset.jumpTarget = target; box.appendChild(b); };
-    const menu = group(controls, "MENU CUSTOMIZATION"); menu.id = "ap-menu-customization";
-    controls.insertBefore(menu, profile);
-    // Reuse the real editor door: its owner keeps Home-only gating, Escape
-    // and focus restoration, including after the door moves out of its fold.
-    if (typeof TitleLayout !== "undefined" && TitleLayout.build) TitleLayout.build();
-    const editMenu = adopt(menu, "pm-tl-edit"); if (editMenu) editMenu.textContent = "EDIT MAIN MENU";
-    menu.appendChild(node("p", "as-note", "From Home, move and size buttons, title and artwork. Landscape and portrait save separately."));
-    const titleScreen = adopt(menu, "pm-titlescreen"); if (titleScreen) titleScreen.dataset.studioHome = "title";
-    adopt(menu, "pm-appearance-menu");
-    jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
-    const hud = group(controls, "RACE HUD"); adopt(hud, "pm-appearance-hud"); jump(hud, "HUD STYLE is in HUD & CAMERA", "display", "pm-hudprofile-sel"); jump(hud, "HUD SIZE is in HUD & CAMERA", "display", "pm-hudscale"); jump(hud, "HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel");
-    const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
-    ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
-    ui.photoSelect = node("select"); ui.photoSelect.id = "ap-photo-select"; ui.photoSelect.setAttribute("aria-label", "Saved photo"); ui.photoSelect.addEventListener("change", photoSelection);
-    ui.photoPreview = node("img", "as-photo-preview"); ui.photoPreview.alt = "Saved photo preview"; ui.photoPreview.hidden = true;
-    ui.photoChoose = button("CHOOSE PHOTO", choosePhoto); ui.photoChoose.id = "ap-photo-choose"; ui.photoChoose.disabled = true;
-    const photoActions = node("div", "as-profile-row"); photoActions.append(ui.photoSelect, ui.photoChoose, button("REFRESH PHOTOS", refreshPhotos));
-    ui.photoNote = node("p", "as-note"); ui.photoNote.setAttribute("role", "status"); ui.photoNote.setAttribute("aria-live", "polite");
-    ui.photoBox.append(node("h3", "as-heading", "SAVED PHOTOS"), photoActions, ui.photoPreview, ui.photoNote); sceneBox.appendChild(ui.photoBox);
-    const tools = node("div", "as-preview-toolbar"), pages = node("div", "as-segment"); pages.setAttribute("role", "group"); pages.setAttribute("aria-label", "Preview screen");
-    for (const [id, name] of [["home", "HOME"], ["pause", "PAUSE"], ["datahub", "DATA HUB"], ["select", "TRACK SELECTOR"], ["career", "CAREER"], ["race", "RACE SETUP"], ["garage", "GARAGE"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
-    const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
-    tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Representative preview. Use the advanced screen controls below for exact layout and the real-screen preview."));
-    if (typeof CustomEvent === "function") previewSide.dispatchEvent(new CustomEvent("apex:appearance-picker", { bubbles: true }));
-    ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
-    const advanced = node("details", "as-advanced"), sum = node("summary", "", "ADVANCED · GLOBAL & PER-SCREEN CUSTOMISATION"), body = node("div"); advanced.append(sum, body); panel.appendChild(advanced);
-    for (const child of [...panel.children]) if (child !== studio && child !== advanced) body.appendChild(child);
-    // The adopted shell rows (data-studio-home) record undo like any other fold.
-    const own = (t) => studio.contains(t) && !(t.closest && t.closest("[data-studio-home]"));
-    panel.addEventListener("input", (e) => { if (own(e.target)) return; clearTimeout(pending); pending = setTimeout(() => { const changed = remember(last); last = snapshot(); if (changed) render(); }, 350); });
-    panel.addEventListener("click", (e) => { if (own(e.target)) return; queueMicrotask(() => { const changed = remember(last); last = snapshot(); if (changed) render(); }); });
-    if (store.subscribe) store.subscribe((change) => { if (!muted && VISUAL_KEYS.includes(change.key)) { clearTimeout(pending); pending = setTimeout(() => { const changed = remember(last); last = snapshot(); if (changed) render(); if (["homeScene", "homeCamera", "backgroundMotion", "motion"].includes(change.key)) sceneChanged(); }, 80); } });
-    if (typeof MutationObserver !== "undefined") {
-      const settings = document.getElementById("pmsettings");
-      let openGen = 0;
-      // Defer render + garage preview off the click stack: sceneChanged →
-      // previewScene used to call stopHome/beginHome synchronously and freeze
-      // the tab before the Appearance sheet could paint.
-      const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame
-        : (fn) => setTimeout(fn, 0);
-      const visible = () => {
-        if (panel.hidden || (settings && settings.hidden)) {
-          photoGeneration++; photoPanelVisible = false; ui.photoBox.removeAttribute("aria-busy");
-          openGen++;
-          panel.removeAttribute("aria-busy");
-          // Drop a pending input/store debounce so render()/sceneChanged() cannot
-          // run after Appearance (or Settings) has closed.
-          clearTimeout(pending); pending = 0;
-          if (typeof ScreenLooks !== "undefined") ScreenLooks.endPeek();
-          return;
-        }
-        if (!settings || settings.hidden) return;
-        const gen = ++openGen;
-        panel.setAttribute("aria-busy", "true");
-        raf(() => raf(() => {
-          if (gen !== openGen || panel.hidden || settings.hidden) return;
-          try { render(); sceneChanged(true); }
-          finally { if (gen === openGen) panel.removeAttribute("aria-busy"); }
-        }));
-      };
-      const observer = new MutationObserver(visible); observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
-      if (settings) observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
-    }
-    render();
-    if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
-      { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
-      { id: "title-button-style", label: "Title button style", page: "appearance", target: "pm-titlebuttonstyle-sel", aliases: "main menu home racing flat auto portrait landscape" },
-      { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system endurance drafting colour color" },
-      { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
-      { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
-      { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "pm-contrast-sel", aliases: "readability sunlight outlines" },
-      { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "pm-hudaccent-sel", aliases: "race colour color" },
-      { id: "appearance-home-scene", label: "Home scene", page: "appearance", target: "as-homeScene", aliases: "garage night studio circuit pitlane background" },
-      { id: "appearance-home-camera", label: "Home camera", page: "appearance", target: "as-homeCamera", aliases: "hero front side rear view" },
-      { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
-    ]);
+    const run = () => { const b = takeBody(); if (b) b.initUI(); };
+    if (takeBody()) { run(); return; }
+    // Do not re-enter SettingsNav.lazy: this initUI is often already the gated
+    // callback (#4798), and a second lazy() after flush would never run.
+    ensureBody().then((ok) => { if (ok) run(); });
   }
-  // #4529 PORTRAIT & LANDSCAPE. SHARED (the default: no apex26.appearanceShapes, or anything but v:2 —
-  // the reverted #4897's v:1 included) does nothing. SEPARATE swaps through the lazy LayoutPresets.syncShape
-  // only once body[data-shape] (SheetShape's ICB classifier) has held the other answer SHAPE_SETTLE_MS with
-  // the tab visible, so a stale boot or mid-rotation reading never swaps sizes.
+  function setPreviewFrame(url) {
+    const b = takeBody();
+    return b ? b.setPreviewFrame(url) : false;
+  }
+
+  // #4529 PORTRAIT & LANDSCAPE — eager: SEPARATE must swap without opening APPEARANCE.
   const SHAPE_SETTLE_MS = 2000;
-  const shapeNow = () => { const s = typeof document !== "undefined" && document.body ? document.body.getAttribute("data-shape") : null; return s === "tall" || s === "wide" ? s : null; };
   let shapeTimer = 0;
   function shapeSettle() {
     clearTimeout(shapeTimer);
-    const st = store.get("appearanceShapes", null), at = shapeNow();
+    const st = store().get("appearanceShapes", null), at = shapeNow();
     if (!isObject(st) || st.v !== 2 || st.mode !== "separate" || !at || st.live === at) return;
     shapeTimer = setTimeout(() => {
       if (shapeNow() !== at || document.hidden) return;
-      const run = () => { if (typeof LayoutPresets !== "undefined" && LayoutPresets.syncShape(at)) { undoStack.length = 0; render(); } };
-      if (typeof LayoutPresets !== "undefined") run(); else if (typeof SettingsNav !== "undefined" && SettingsNav.presets) SettingsNav.presets().then(run);
+      const run = () => {
+        if (typeof LayoutPresets === "undefined" || !LayoutPresets.syncShape(at)) return;
+        const b = takeBody();
+        if (b && typeof b.afterShapeSwap === "function") b.afterShapeSwap();
+      };
+      if (typeof LayoutPresets !== "undefined") run();
+      else if (typeof SettingsNav !== "undefined" && SettingsNav.presets) SettingsNav.presets().then(run);
     }, SHAPE_SETTLE_MS);
   }
   try {
@@ -412,11 +220,21 @@ const AppearanceStudio = (function () {
       shapeSettle();
     }
   } catch (e) { Log.warn("ui", "orientation watch: " + e.message); }
-  // #4798 gate
+
+  // Prefetch with the rest of LAZY_UI_PRESETS so APPEARANCE / Photo open cold rarely.
+  ensureBody();
   if (typeof document !== "undefined") {
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI()), { once: true });
     else initUI();
   }
-  return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, PRESET_PRESERVE, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
-    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, shapeNow, attach, setPreviewFrame, notify: say, initUI });
+
+  return Object.freeze({
+    PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, PRESET_PRESERVE,
+    normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
+    applySnapshot, applyPreset: via("applyPreset", false), undo: via("undo", false), reset: via("reset"),
+    profiles, normalizeProfiles, saveProfile: via("saveProfile", { ok: false, reason: "loading" }),
+    loadProfile: via("loadProfile", false), deleteProfile: via("deleteProfile", false),
+    shapeNow, attach, setPreviewFrame, notify, initUI, ensureLoaded: ensureBody, loaded: () => !!takeBody(),
+  });
 })();
+Object.freeze(AppearanceStudio);

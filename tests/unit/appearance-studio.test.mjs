@@ -7,6 +7,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
+const bodySource = fs.readFileSync(new URL("../../js/ui/appearance-studio-ui.js", import.meta.url), "utf8").replace(/^const AppearanceStudioBody/m, "var AppearanceStudioBody");
 // Appearance adopts existing controls; mini-dom's default insertions omit
 // detaching. These fixtures need the browser's single-parent DOM ownership.
 function movingDom(document) {
@@ -36,7 +37,7 @@ function load(initial = {}, durable = true, reduced = false, document, globals =
   const context = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     AppearanceOpts: { restore: (v) => owners.push(v) }, ScreenLooks: { normalize: (_id, v) => ({ ...v }), apply() {}, refresh() {} },
     window: { matchMedia: () => ({ matches: reduced }) }, document, ...globals });
-  vm.runInContext(source, context); return { studio: context.AppearanceStudio, values, writes, owners };
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") }); return { studio: context.AppearanceStudio, values, writes, owners };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
@@ -56,7 +57,8 @@ test("game's Studio integration refreshes touch button size after profile apply,
       els: {}, store, gfx: {} } });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/scale.js", import.meta.url), "utf8"), context);
   vm.runInContext("const uiScale = UiScale.create(scaleDeps);", context);
-  vm.runInContext(source, context);
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
   const game = gameSource();
   const attachment = game.match(/AppearanceStudio\.attach\(\{[\s\S]*?\n\}\);/);
   assert.ok(attachment, "game must attach the Studio's live visual owners");
@@ -96,7 +98,7 @@ function loadWithControls(moving = false) {
   // Keep Studio's illustrative preview unmounted; the advanced controls above
   // use their real owners and real SettingRow selects.
   context.document = { readyState: "loading", addEventListener() {} };
-  vm.runInContext(source, context); context.document = dom.document;
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") }); context.document = dom.document;
   return { studio: context.AppearanceStudio, appearance: context.AppearanceOpts, dom, values, title: context.TitleLayout };
 }
 
@@ -288,7 +290,8 @@ test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD 
     const v = structuredClone(initial), store = { get: (k, d) => k in v ? v[k] : d, set: (k, x) => { v[k] = x; return true; } };
     const ctx = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
       AppearanceOpts: { restore() {} }, ScreenLooks: { normalize: (_id, x) => ({ ...x }), apply() {}, refresh() {} }, window: { matchMedia: () => ({ matches: false }) } });
-    vm.runInContext(source.replace('previewPage = "home"', 'previewPage = "' + page + '"'), ctx, { filename: absSrc("js/ui/appearance-studio.js") });
+    vm.runInContext(bodySource.replace('previewPage = "home"', 'previewPage = "' + page + '"'), ctx, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+    vm.runInContext(source, ctx, { filename: absSrc("js/ui/appearance-studio.js") });
     return { s: ctx.AppearanceStudio, v };
   };
   const pause = on("pause", { pauseLayout: "sidebar", pauseSide: "left", pauseDim: "off", uiTheme: "light" });
@@ -312,7 +315,7 @@ test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD 
 });
 
 test("every ScreenLooks page has a screen scope and a preview entry", () => {
-  const { studio } = load();
+  const { studio, dom } = loadStudioRenderCounts();
   const keys = id => Array.from(studio.SCREEN_KEYS[id]);
   assert.deepEqual(keys("pause"), ["lookPause", "pauseLayout", "pauseSide", "pauseDim"]);
   assert.deepEqual(keys("datahub"), ["lookDatahub"]);
@@ -321,9 +324,14 @@ test("every ScreenLooks page has a screen scope and a preview entry", () => {
   assert.deepEqual(keys("career"), ["lookCareer"]);
   assert.deepEqual(keys("garage"), ["lookGarage"]);
   assert.deepEqual(keys("popups"), ["lookPopups"]);
-  const sourceText = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8");
-  for (const id of ["pause", "datahub", "select", "career", "race", "garage", "hud", "popups"]) {
-    assert.match(sourceText, new RegExp('\\[\\"' + id + '\\",'), id + " preview button");
+  const panel = dom.byId("appearance-studio");
+  for (const [page, label] of Object.entries({ pause: "PAUSE", datahub: "DATA HUB", select: "TRACK SELECTOR",
+    career: "CAREER", race: "RACE SETUP", garage: "GARAGE", hud: "HUD", popups: "POPUP" })) {
+    const button = panel.querySelectorAll("button").find(el => el.textContent === label);
+    assert.ok(button, label + " preview entry");
+    button.click();
+    assert.equal(button.getAttribute("aria-pressed"), "true");
+    assert.equal(panel.querySelector('[aria-label="Illustrative appearance preview"]').dataset.screen, page);
   }
 });
 
@@ -466,7 +474,7 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
     innerWidth: 1000, innerHeight: 500,
   });
   context.window = context;
-  vm.runInContext(source, context);
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   sceneHits.length = 0; // attach() refreshes the live Home scene once; this test is about OPEN
   // The other observer is the PORTRAIT & LANDSCAPE watch on body[data-shape] (#4529).
@@ -518,6 +526,7 @@ test("closing Appearance cancels a pending store debounce so sceneChanged cannot
   context.window = context;
   // Force initUI now (document complete) so the MutationObserver and store.subscribe wire.
   Object.defineProperty(dom.document, "readyState", { value: "complete" });
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") });
   vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   assert.ok(subs.length >= 1 && observers.length >= 1);

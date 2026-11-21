@@ -324,6 +324,8 @@ test("Two tabs atomically retain six durable photos after concurrent saves", asy
     for (const [i, tab] of tabs.entries()) {
       await tab.goto("/__photo-storage");
       await tab.addScriptTag({ url: "/js/ui/setting-row.js" });
+      // Body is LAZY_UI_PRESETS (#4978); this bare page has no ScriptLoader, so load it explicitly.
+      await tab.addScriptTag({ url: "/js/ui/photo-studio-ui.js" });
       await tab.addScriptTag({ url: "/js/ui/photo-studio.js" });
       await tab.evaluate((i) => {
         window.DrivingLine = { shown: () => true, setPhoto: () => {} };   // this bare page loads no render modules

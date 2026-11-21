@@ -1453,8 +1453,9 @@ test("START FROM hydrates a metadata-only pick and revokes stale replacements", 
   b.D.close();
 });
 
-// Hydration may finish between pointermove and pointerup. Exercise the real
-// gesture handlers rather than calling the final commit hooks directly.
+// Hydration may finish while a gesture is still live. startFrom waits for the
+// map/profile to go idle, then re-checks the generation so a deliberate move
+// revokes and a selection-only tap still applies (#6031).
 for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test(`pending START FROM ${move ? "yields to an in-progress " : "survives a selection-only "}${gesture} gesture`, async () => {
   const b = bootScreen(), captured = {}, arcs = [];
   for (const [global, key] of [["DesignerCanvas", "map"], ["DesignerProfile", "profile"]]) {
@@ -1493,15 +1494,81 @@ for (const gesture of ["map", "profile", "draw"]) for (const move of [true, fals
     if (gesture === "draw") fire("pointermove", x + 60, y + 30);
   }
   assert.deepEqual(plain(b.D.state().design), before, "live gesture has not committed");
-  release(); assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement before pointerup");
-  if (move) assert.deepEqual(plain(b.D.state().design), before);
+  release();
   fire("pointerup", x + 60, y + 30);
+  assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement");
   const after = b.D.state();
   assert.equal(after.design.name, move ? before.name : "MONZA REMIX");
   assert.equal(after.undo, undo + 1, "one gesture or replacement remains one undo transaction");
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.pts), before.pts);
   assert.deepEqual(plain(b.D.state().design.heights), before.heights);
+  b.D.close();
+});
+
+// Hydration between pointerdown and the drag threshold used to apply the remix
+// under the finger; the drag then mutated MONZA REMIX (#6031 press-window).
+test("pending START FROM yields when hydrate finishes during a map press before the drag arms", async () => {
+  const b = bootScreen(), captured = {};
+  const real = b.ctx.DesignerCanvas;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks); captured.map = { canvas: c, api }; return api;
+  } });
+  openGreen(b); b.D.setMode("edit"); b.D.setSelectionMode("point"); b.D.preview();
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured.map; h.api.resize(); h.api.fit();
+  const v = h.api.view(), p = before.pts[4];
+  const x = (p[0] - v.cx) * v.scale + v.w / 2, y = (p[1] - v.cz) * v.scale + v.h / 2;
+  const fire = (type, cx, cy) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: cx, clientY: cy });
+  fire("pointerdown", x, y);
+  release();
+  fire("pointermove", x + 30, y - 15);
+  fire("pointerup", x + 60, y + 30);
+  assert.equal(await pending, false, "a press that becomes a drag revokes even when hydrate won the race");
+  assert.equal(b.D.state().design.name, before.name);
+  assert.notDeepEqual(plain(b.D.state().design.pts), before.pts);
+  assert.equal(b.D.state().undo, undo + 1);
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  b.D.close();
+});
+
+// A Loading / SW reflow used to re-fit (#6000) under stale aim coords so the
+// press missed into a pan: no onBegin, startFrom resolved true (#6031).
+test("pending START FROM holdFit keeps a pre-reflow map aim on the grip after a large resize", async () => {
+  const b = bootScreen(), captured = {};
+  const real = b.ctx.DesignerCanvas;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks); captured.map = { canvas: c, api }; return api;
+  } });
+  openGreen(b); b.D.setMode("edit"); b.D.setSelectionMode("point"); b.D.preview();
+  const before = plain(b.D.state().design);
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured.map;
+  h.canvas._rect = { left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 };
+  h.api.resize(); h.api.fit();
+  const v1 = h.api.view(), p = before.pts[4];
+  const at = { x: (p[0] - v1.cx) * v1.scale + v1.w / 2, y: (p[1] - v1.cz) * v1.scale + v1.h / 2 };
+  h.canvas._rect = { left: 0, top: 0, right: 900, bottom: 600, width: 900, height: 600 };
+  h.api.resize();
+  const v2 = h.api.view();
+  assert.equal(v2.scale, v1.scale, "holdFit skipped the re-fit");
+  const fire = (type, cx, cy) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: cx, clientY: cy });
+  fire("pointerdown", at.x, at.y);
+  fire("pointermove", at.x + 30, at.y - 15);
+  release();
+  fire("pointerup", at.x + 60, at.y + 30);
+  assert.equal(await pending, false, "stale pre-reflow aim still hits the grip and revokes");
+  assert.equal(b.D.state().design.name, before.name);
   b.D.close();
 });
 

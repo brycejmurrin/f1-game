@@ -839,12 +839,18 @@
     "js/ui/screen-arranger.js",
     "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",
-    "js/ui/layout-presets.js"
+    "js/ui/layout-presets.js",
+    "js/ui/appearance-studio-ui.js",
+    "js/ui/photo-studio-ui.js"
   ],
     LAZY_UI_PRESETS_EDGES: [
     [
       "js/ui/screen-regions.js",
       "js/ui/screen-placement.js"
+    ],
+    [
+      "js/ui/appearance-studio-ui.js",
+      "js/ui/photo-studio-ui.js"
     ]
   ],
     LAZY_SAVES_DATA: [

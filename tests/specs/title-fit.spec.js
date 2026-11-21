@@ -85,6 +85,10 @@ for (const geo of GEOS) {
           const withContinue = await measure(page);
           const rows = {};
           for (const d of withContinue.m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
+          expect(Object.values(rows).slice(0, 2), "Career has the top row, with Continue and Daily below").toEqual([["mb-career"], ["mb-continue", "mb-daily"]]);
+          // offsetWidth excludes the Racing skin's skewed corners, and measures the full clickable tile.
+          const widths = await page.evaluate(() => ["mb-career", "menu-retention"].map(id => document.getElementById(id).offsetWidth));
+          expect(Math.abs(widths[0] - widths[1]), "Career spans the entire retention row").toBeLessThanOrEqual(1);
           expect(Object.values(rows).map((r) => r.length), `${geo.name} ${prof.name} rows ${JSON.stringify(rows)}`).toEqual(prof.name === "fresh" ? geo.freshRows : geo.rows);
           expect(judge(withContinue.m, { offsets: prof.offsets }), `${geo.name} ${prof.name} with CONTINUE`).toEqual([]);
           expect(judgeLabels(withContinue.m), `${geo.name} ${prof.name} with CONTINUE: no clipped label (#5378)`).toEqual([]);

@@ -483,11 +483,13 @@
           center: vadd(foot, a.u, 8), size: [20, 18, 140], basis: b,
         }, dressMainStand, { required: true });
       }
-      // Grandstand Norte / MEO — uncovered multi-tier OUTSIDE the Turn 1
-      // downhill braking zone (3ddigitalvenue / ticket seating plans). Past the
-      // amphitheatre terraces (gap ≥ 42 clears 8×2.9 m rows from gap 16) so the
-      // stand shells do not coplanar-fight the terrace slabs. Rows rise away
-      // from the track. No Craig Jones statue (removed 2009).
+      // Grandstand Norte / MEO — uncovered multi-tier OUTSIDE Turn 1 braking
+      // zone (3ddigitalvenue / ticket seating plans). "braking" on this head
+      // line is load-bearing: corner-frames grants APPROACH_M (was judged as a
+      // kit 96 m before T1 under KIT_M when "braking" lived on the next line).
+      // Past the amphitheatre terraces (gap ≥ 42 clears 8×2.9 m rows from gap
+      // 16) so the stand shells do not coplanar-fight the terrace slabs. Rows
+      // rise away from the track. No Craig Jones statue (removed 2009).
       {
         const sT1 = 0.055;
         const a0 = anchor(K(sT1), 1, 48);
