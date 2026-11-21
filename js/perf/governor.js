@@ -76,9 +76,13 @@ let _tierFutile = false;
 // only 3.8–6.4 ms of 17–28 ms frames (GPU/fill-bound), yet the governor still
 // restored to autoTier 0 once EMA looked calm at the shed quality — and the
 // full look-post stack came back. A verified feature shed on a phone therefore
-// latches for the rest of the session: the restore branch must not promote
-// effects back. Cleared by clearStrikes / safeMode(false), or when the player
-// RAISES GRAPHICS (setUserTier to a lower rung) to opt back in.
+// latches for the rest of the RACE: the restore branch must not promote
+// effects back. Cleared by clearStrikes / safeMode(false), when the player
+// RAISES GRAPHICS (setUserTier to a lower rung) to opt back in, and at race
+// start (sentinelArm): a slowdown measured on one circuit (heat, weather, a
+// heavy scene) is not evidence about the next, so each race gets ONE climb
+// back. A refused tier climb sets the latch again, so a still-hot phone is
+// probed once per race, not every cooldown (clean-room fix 38).
 let _phoneSlowLatch = false;
 // Why: docs/GOVERNOR-RATIONALE.md §gov-9.
 let _computeBound = false;
@@ -253,7 +257,7 @@ function sentinelArm(on) {
             _scaleMoves = 0; _degradeArm = 0;
             // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
             _tierFutile = false; _scaleFutile = false;
-            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; } else _live = false;   // §2au verdicts are race-local too
+            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; _phoneSlowLatch = false; } else _live = false;   // §2au verdicts are race-local too
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
     _raceTicked = false;
@@ -428,6 +432,8 @@ function tick(dtMs, drawn) {
       // that reaches here is final — the continuations above returned — and
       // final indifference clears the latch. See _computeBound.
       if (v.up) _latchBound(); else _computeBound = false;
+      // A refused TIER climb on a phone is the same evidence a verified shed is.
+      if (v.up && v.kind === "tier" && _gfx && _gfx.isMobile) _phoneSlowLatch = true;
       return;
     }
     // Verified feature shed on a phone: latch so headroom cannot restore full

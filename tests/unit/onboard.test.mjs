@@ -308,3 +308,14 @@ test("a mark the banner refuses stays unseen and fires once the banner accepts i
   assert.match(a.said[0][0], /^BRAKE/);
   assert.equal(a.stored.get("onboarded") & 1, 1, "saved only now");
 });
+
+// Clean-room audit fix 59: G.state stays "race" on the cool-down lap
+// (game.js soloPlayerDone), so a tip could land after the chequered flag.
+test("no first-race tip once the player has finished or retired", () => {
+  for (const flag of ["finished", "retired"]) {
+    const a = load({ urgency: 0.9 });
+    a.G.player[flag] = true;
+    step(a.on, 30);
+    assert.deepEqual(a.said, [], "no tip after the player's race is over (" + flag + ")");
+  }
+});

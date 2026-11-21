@@ -73,7 +73,7 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     await expect(page.locator("#daily-history-list")).toBeVisible();
     await expect(page.locator("#daily-history")).toContainText(today);
     await expect(page.locator("#daily-history")).toContainText(yesterday);
-    await expect(page.locator("#daily-history")).toContainText("71.200s");
+    await expect(page.locator("#daily-history")).toContainText("1:11.200");
     await expect(page.locator("#daily-history")).toContainText("legacy / mixed classes");
     const dailyFit = await page.locator("#daily-history").evaluate(el => ({
       clipped: el.scrollWidth > el.clientWidth + 1,

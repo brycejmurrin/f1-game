@@ -4265,6 +4265,7 @@
       "calendar": [
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs"
       ],
       "chooseObjective": [
@@ -5102,6 +5103,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/bahrain.js": {
+      "*": [
+        "tests/unit/select-specs.test.mjs"
+      ]
+    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -5386,6 +5392,7 @@
     "js/circuits/spa.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -14124,6 +14131,7 @@
       ],
       "*": [
         "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchets.test.mjs"
       ]
@@ -15070,6 +15078,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "*": [
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs"
       ]
     },
@@ -16853,7 +16862,8 @@
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "half": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
@@ -18691,10 +18701,14 @@
     },
     "js/ui/dom.js": {
       "fmtLap": [
-        "tests/unit/i18n-number-format.test.mjs"
+        "tests/unit/i18n-number-format.test.mjs",
+        "tests/unit/lap-format-rollover.test.mjs"
       ],
       "fmtRaceClock": [
         "tests/unit/i18n-number-format.test.mjs"
+      ],
+      "paintFold": [
+        "tests/unit/steer-tuning-lock.test.mjs"
       ],
       "*": [
         "tests/specs/browser-ui-hunt.spec.js",
@@ -19971,14 +19985,14 @@
     },
     "js/ui/results-story.js": {
       "render": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/podium-beat.test.mjs"
       ],
       "summary": [
         "tests/unit/career-experience.test.mjs",
         "tests/unit/results-story.test.mjs"
       ],
       "*": [
-        "tests/unit/podium-beat.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ]
     },
@@ -20684,6 +20698,12 @@
       "create": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/title-menu-even.test.mjs"
+      ],
+      "dailyHistory": [
+        "tests/unit/lap-format-rollover.test.mjs"
+      ],
+      "lapStr": [
+        "tests/unit/lap-format-rollover.test.mjs"
       ],
       "organize": [
         "tests/unit/title-menu-even.test.mjs"

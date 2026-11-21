@@ -147,6 +147,8 @@ const TitleMenu = (function () {
   }
 
   // Historical medals are not stored; keep each record class separate instead.
+  // m:ss.mmm like every other lap (#5897).
+  function lapStr(t) { return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "") : t.toFixed(3) + "s"; }
   function dailyHistory(daily) {
     const data = daily && daily.data ? daily.data() : null, days = data && data.days;
     if (!days || typeof days !== "object" || Array.isArray(days)) return [];
@@ -157,8 +159,8 @@ const TitleMenu = (function () {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
       const classes = entry.classes && typeof entry.classes === "object" && !Array.isArray(entry.classes)
         ? Object.entries(entry.classes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).filter(([, value]) => value && positive(value.best)) : [];
-      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + value.best.toFixed(3) + "s")
-        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + entry.best.toFixed(3) + "s"] : [];
+      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + lapStr(value.best))
+        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + lapStr(entry.best)] : [];
       return results.length ? [{ day, text: results.join(" · ") }] : [];
     });
   }
@@ -247,7 +249,7 @@ const TitleMenu = (function () {
       const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
       if (dailyBtn && dailySub) {
         const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
-        setText(dailySub, p.trackName + " · " + p.weather.toUpperCase()
+        setText(dailySub, p.trackName + " · " + (typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase())
           + (streak > 0 ? " · STREAK " + streak : ""));
         // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
         setAttr(dailyBtn, "aria-label", "Daily time trial — " + dailySub.textContent);
