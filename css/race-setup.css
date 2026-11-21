@@ -529,6 +529,14 @@
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
   #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
+/* Portrait phones only (window 480 px or less): at UI SIZE 70 a 390 px sheet is 523 own px, two columns
+   pushed each row's › past the sheet edge (#rs-weather-next, #rs-time-next by 14 px; clean-room fix 48).
+   The 500 px rule above stays for the landscape band (contract rule 6); the COLUMNS look still wins. */
+@media (max-width: 480px) {
+  @container sheet (max-width: 559.98px) {
+    #rs-body, #rs-body > details { grid-template-columns: minmax(0, 1fr); }
+  }
+}
 /* SCREEN LOOKS — RACE SETTINGS (js/ui/screen-looks.js; core knobs in
    css/responsive.css). COLUMNS overrides the 500px container query above in
    both directions: the body and its folds share one lattice, so both are

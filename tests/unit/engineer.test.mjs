@@ -731,3 +731,15 @@ test("RAIN IN N LAPS counts to the first wet stage of the arc, not its end", () 
   const d = carOn(w.tyres, { wear: 0 });
   assert.equal(w.eng.senseOf(d).rainInLaps, null);
 });
+
+// Clean-room audit fix 57: before the first line crossing the car's lap is 0
+// (game.js grid build), and it is already racing lap 1, so a 5-lap race has
+// 5 laps to the flag, not 6.
+test("laps to the flag on the grid side of the line count the race, not one more", () => {
+  for (const lap of [0, 1]) {
+    const { eng, tyres } = sessionFor({ laps: 5 });
+    const c = carOn(tyres, { life: 0.7 });
+    c.lap = lap;
+    assert.equal(eng.senseOf(c).stintLeft, 5, "lap " + lap + " of a 5-lap race");
+  }
+});

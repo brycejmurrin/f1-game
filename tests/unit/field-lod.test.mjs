@@ -230,7 +230,7 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   const g = read("js/game.js");
   const legacy = g.indexOf("if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);");
   const cull = g.indexOf("if (_out) continue;", legacy);
-  const lod = g.indexOf("if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));");
+  const lod = g.indexOf("if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2, fovY));");
   assert.ok(legacy > 0 && cull > legacy && lod > cull, "legacy push before the frustum test, the LOD push after it");
   assert.match(g, /const body = carDraw\.modelBuf \? null/, "every procedural rival keeps its body mesh (no whole-car swap)");
   assert.match(g, /if \(_lod < 2\) queueCarDecals\(pt, tmpMat/, "and no decal for a rival past 120 m");
@@ -239,7 +239,7 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
     "flaps gate from the table: past it `still`, the player never");
   assert.doesNotMatch(g, /\bdrawFlaps\b/, "no flag that skips the flap draw");
   assert.equal(g.split("drawAeroFlaps(pt, aSt.val").length - 1, 1, "one race call site");
-  assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
+  assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2, fovY\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
   assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && \(haveTier \? lodT >= 1 : FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)\)/);
@@ -269,6 +269,19 @@ test("the LOD scales by the lens: a long lens keeps the livery, a wide one cuts 
   assert.equal(L.tier(at(121 / k), 18 * DEG), 2, "just past it: gone");
   assert.equal(L.tier(at(100), 90 * DEG), 2, "a 90° lens shrinks a car at 100 m below the decal cut");
   assert.ok(!L.wheelsLite(at(130), 18 * DEG) && L.wheelsLite(at(130)), "the wheel extras take the same lens");
+});
+
+// Clean-room fix 51: the shadow and flame cut-offs used raw metres, so a car at
+// full detail under the trackside lens was drawn with no shadow and no flame.
+test("the shadow and flame cut-offs take the same lens as the detail tier", () => {
+  const { FieldLod: L } = loadLod();
+  for (const m of [70, 100, 150]) {
+    assert.equal(L.tier(at(m), 18 * DEG), 0, m + " m at 18°: full detail");
+    assert.equal(L.castsShadow(at(m), 18 * DEG), true, m + " m at 18°: casts a shadow");
+    assert.equal(L.flame(at(m), 18 * DEG), true, m + " m at 18°: keeps the flame");
+    assert.equal(L.castsShadow(at(m)), false, m + " m with no lens: the table (unchanged)");
+    assert.equal(L.flame(at(m)), false, m + " m with no lens: the table (unchanged)");
+  }
 });
 
 test("hysteresis: a car hovering at a threshold does not flicker between tiers", () => {

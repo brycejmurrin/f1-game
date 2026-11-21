@@ -1893,3 +1893,34 @@ test("the replay is deterministic", () => {
 });
 
 test("an unknown mode is refused", () => { assert.throws(() => phoneReplay({ base: 9, fill: 9, mode: "ultra" }), /mode wants/); });
+
+// Clean-room fix 38: the phone slow latch used to hold for the whole SESSION, so
+// one slow race (a hot phone, a heavy circuit, rain) kept the next, lighter race
+// on reduced detail. It is race-local now, like every other verdict sentinelArm
+// resets; a refused climb latches it again, so a still-hot phone is probed once.
+test("the phone slow latch clears at the next race start, and a refused climb sets it again", () => {
+  const race1 = (Gov) => feed(Gov, (i) => (i % 20 === 0 ? 12 : 34 - Gov.autoShed() * 6), 3000);
+  const light = makeGovAtFloor();
+  light.sentinelArm(true);
+  race1(light);
+  assert.equal(light.phoneSlowLatch(), true, "precondition: race 1 measured a helpful shed");
+  assert.ok(light.tier() >= 2, "precondition: race 1 shed detail, got tier " + light.tier());
+  light.cleanRace(); light.sentinelArm(true);
+  assert.equal(light.phoneSlowLatch(), false, "a new race starts unlatched");
+  feed(light, () => 12, 3000);
+  assert.equal(light.tier(), 0, "a light race 2 climbs back to full detail");
+
+  // Still hot in race 2: full detail costs 34 ms, each shed tier 6 ms less.
+  const hot = makeGovAtFloor();
+  const cost = () => Math.max(14, 34 - hot.tier() * 6);
+  hot.sentinelArm(true);
+  feed(hot, cost, 3000);
+  const shedTier = hot.tier();
+  assert.equal(hot.phoneSlowLatch(), true, "precondition: race 1 latched");
+  hot.cleanRace(); hot.sentinelArm(true);
+  let changes = 0, last = hot.tier();
+  for (let i = 0; i < 6000; i++) { hot.tick(cost()); if (hot.tier() !== last) { changes++; last = hot.tier(); } }
+  assert.equal(hot.phoneSlowLatch(), true, "the refused climb latched again");
+  assert.equal(hot.tier(), shedTier, "and the shed tier holds");
+  assert.ok(changes <= 2, "one probe up and back, not a cycle: " + changes + " tier changes");
+});

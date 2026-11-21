@@ -4478,7 +4478,7 @@
     {
       "path": "js/render/shared/puddles.js",
       "global": "Puddles",
-      "roster": "tag"
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/render/shared/shadow-pass.js",
