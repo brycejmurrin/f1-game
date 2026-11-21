@@ -71,19 +71,17 @@ window.LightPresets = {
   // Shared night lighting. Track profiles retain circuit-specific exceptions.
   "*|night|dry": {
     "nightAmbLift": 1.45,
-    "ambientMul": 1.09,
-    "keyMul": 0.52,
-    "lampLevel": 0.15,
+    "ambientMul": 1.05,
+    "keyMul": 1.2,
+    "lampLevel": 0.2,
     "floodEmitMul": 0.3,
-    "bloomMul": 0,
+    "bloomMul": 1.1,
     "glowAmp": 1.85,
     "exposureMul": 0.92,
-    "poolEnergy": 0.695,
+    "poolEnergy": 0.6,
     "cityGlowMul": 0.55,
-    "lampRadiusMul": 0.842,
-    "bounceK": 0.06,
-    "sunShaftDecay": 0.663,
-    "ambTemp": 6.904
+    "lampRadiusMul": 0.8,
+    "bounceK": 0.06
   },
   "*|night|rain": {
     "ambientMul": 0.82,

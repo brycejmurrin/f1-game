@@ -54,8 +54,7 @@ const STAMP_MAX_FRAC = 0.9;
 const STAMP_ALLOWLIST = {
   "*|dawn|dry": ["grMul=2.279@max", "bleedMul=2.425@max", "godrayAniso=0.943@max", "godrayBase=0@min",
     "lampFlicker=0.011@min", "roadRough=1.175@max", "ssrDryNight=0.014@min"],
-  // Night lighting intentionally disables bloom in dry weather and bounce in rain.
-  "*|night|dry": ["bloomMul=0@min"],
+  // Night lighting intentionally disables bounce in rain.
   "*|night|rain": ["bounceK=0@min"],
   "*|day|rain": ["lampLevel=0@min"],
   "*|day|overcast": ["lampLevel=0@min"],

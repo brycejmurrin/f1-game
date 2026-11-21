@@ -290,15 +290,15 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
   const shared = P["*|night|dry"];
   assert.ok(shared, "expected LightPresets['*|night|dry']");
   assert.equal(shared.nightAmbLift, 1.45);
-  assert.equal(shared.ambientMul, 1.09);
-  assert.equal(shared.keyMul, 0.52);
-  assert.equal(shared.lampLevel, 0.15);
+  assert.equal(shared.ambientMul, 1.05);
+  assert.equal(shared.keyMul, 1.2);
+  assert.equal(shared.lampLevel, 0.2);
   assert.equal(shared.floodEmitMul, 0.3);
-  assert.equal(shared.bloomMul, 0);
+  assert.equal(shared.bloomMul, 1.1);
   assert.equal(shared.glowAmp, 1.85);
   assert.equal(shared.exposureMul, 0.92);
-  assert.equal(shared.poolEnergy, 0.695);
-  assert.equal(shared.lampRadiusMul, 0.842);
+  assert.equal(shared.poolEnergy, 0.6);
+  assert.equal(shared.lampRadiusMul, 0.8);
   assert.equal(shared.cityGlowMul, 0.55);
   // Fleet core authenticity knobs must not re-pin the pre-stamp crush/wash values.
   const CORE = ["nightAmbLift", "ambientMul", "bloomMul", "glowAmp", "exposureMul"];
@@ -584,7 +584,7 @@ test("shared *|night|wet stamp supplies the fleet wet-night authenticity knobs",
 test("Spa keeps independent wet and dry night lamp settings", () => {
   const wet = resolveLive("spa", "night", "wet").LT, dry = resolveLive("spa", "night", "dry").LT;
   assert.equal(wet.lampRadiusMul, 0.9);
-  assert.equal(dry.lampRadiusMul, 0.842);
+  assert.equal(dry.lampRadiusMul, 0.8);
   assert.equal(dry.beamCone, 0.5);
   assert.equal(dry.bleedMul, 0.6);
   const player = resolveLive("spa", "night", "rain", { saved: { "spa|night|rain": { lampLevel: 0 } } });

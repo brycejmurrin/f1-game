@@ -33,7 +33,8 @@ test("night mast and street lamps use the shared dry pools with their local beam
     assert.ok(P[key], key);
     const resolved = { ...defaults, ...P["*"], ...P["*|night|dry"], ...P[key] };
     for (const [knob, value] of Object.entries({
-      poolEnergy: 0.695, keyMul: 0.52, lampRadiusMul: 0.842, bounceK: 0.06,
+      // The fleet *|night|dry entry is the tip's (Bryce 2026-11-21 "A2: tip fleet entry"; retune #6046).
+      poolEnergy: 0.6, keyMul: 1.2, lampRadiusMul: 0.8, bounceK: 0.06,
       beamCore: 0.5, beamCone: 0.5, bleedMul: 0.6, lampTemp: 0,
     })) assert.equal(resolved[knob], value, key + "." + knob);
     if (id === "qatar") assert.equal(resolved.ssrDryNight, 0.08);
