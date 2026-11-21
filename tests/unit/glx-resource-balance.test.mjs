@@ -107,9 +107,12 @@ test("a field of blob shadows and skid stamps states ROAD_BIAS once, and the nex
   for (let i = 0; i < 30; i++) h.GLX.drawMark(M, 0.3, 0.5);     // per-mark skid fallback
   const POLY = h.gl.POLYGON_OFFSET_FILL;
   const polyCalls = () => h.count("polygonOffset") + h.count("enable", (a) => a[0] === POLY) + h.count("disable", (a) => a[0] === POLY);
-  assert.equal(h.count("drawElements"), 52, "every decal still draws");
+  // F5 (#3115): 22 blob shadows batch to one draw; 30 skid stamps stay per-mark.
+  const blobDraws = h.count("drawElements") + h.count("drawArrays") + h.count("drawElementsInstanced") - 30;
+  assert.equal(blobDraws, 1, "22 blob shadows must be one batched draw, not one per car");
+  assert.equal(h.count("drawElements"), 30, "skid stamps still one drawElements each on the fallback path");
   // Before: enable + offset + offset(0,0) + disable around EACH draw = 208 calls.
-  assert.ok(polyCalls() <= 2, `polygon-offset state calls for 52 decals: ${polyCalls()}`);
+  assert.ok(polyCalls() <= 2, `polygon-offset state calls for the decal run: ${polyCalls()}`);
   assert.equal(h.count("disable", (a) => a[0] === POLY), 0, "the bias stays on across the decal run");
   // Any other program must not inherit the bias: a sky draw is the next pass.
   h.reset();
@@ -119,4 +122,24 @@ test("a field of blob shadows and skid stamps states ROAD_BIAS once, and the nex
   const iPoly = h.calls.findIndex((c) => c[0] === "disable" && c[1][0] === POLY);
   const iDraw = h.calls.findIndex((c) => c[0] === "drawArrays");
   assert.ok(iDraw > iPoly, "the bias is lifted before the sky draws");
+});
+
+// F5 (#3115): prove the per-car blob-shadow draw cost before / after the batch.
+test("GLX blob shadows: 22 cars cost one draw, not 22 (F5 #3115)", () => {
+  const h = bootGlx();
+  h.GLX.begin(h.frame());
+  h.reset();
+  const M = new Float32Array(16);
+  M[0] = M[5] = M[10] = M[15] = 1;
+  for (let i = 0; i < 22; i++) {
+    M[12] = i * 3;
+    h.GLX.drawShadow(M, 2.4, 5.8);
+  }
+  // Flush the pending blob run by leaving the shadow program (sky).
+  const v3 = [0.5, 0.5, 0.5];
+  h.GLX.drawSky({ invViewProj: M, zenith: v3, horizon: v3, sunDir: v3, sunColor: v3, moonDir: v3, moonColor: v3, cityGlow: v3, nightGlow: v3 });
+  const allDraws = h.calls.filter((c) => /^draw(Arrays|Elements)/.test(c[0]));
+  // Last draw is sky; every earlier draw is a blob-shadow submission.
+  assert.ok(allDraws.length >= 2, "blob flush + sky must both draw");
+  assert.equal(allDraws.length - 1, 1, "22 blob shadows must flush as a single draw before sky (was one drawElements per car)");
 });

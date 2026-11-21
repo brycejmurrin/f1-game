@@ -15824,6 +15824,9 @@
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "drawShadow": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "init": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
