@@ -69,6 +69,7 @@ test("LoadingScreen re-exports LoadingCard's pure helpers by reference", () => {
     assert.ok(Object.prototype.hasOwnProperty.call(LS, k), `LoadingScreen missing re-export ${k}`);
     assert.equal(LS[k], LC[k], `${k} must be the same reference on LoadingScreen`);
   }
+  assert.equal(Object.prototype.hasOwnProperty.call(LS, "SLOW_TEXT"), false, "SLOW_TEXT is local to slowNotice");
 });
 
 test("the registry is complete: every key has a range, a step, a label and a default inside it", () => {
