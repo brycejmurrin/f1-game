@@ -24,7 +24,8 @@
  */
 const LoadingScreen = (function () {
   // Pure helpers (fly budget, card geometry, grid graphic) live in LoadingCard.
-  // Re-exported below so LoadingScreen.* stays the public surface.
+  // Re-exported below so LoadingScreen.* stays the public surface (SLOW_TEXT is
+  // local to slowNotice — nothing reads LoadingScreen.SLOW_TEXT).
   const {
     FLY_MS, isAutomation, CARD_MS, SHORT_FLY_MS, SKIP_GRACE_MS, SKIP_STREAK, FLY_MAX_MS,
     flyMsFor, packSettled, warmPresentReady, metaRows, nextSkips,
@@ -760,7 +761,7 @@ const LoadingScreen = (function () {
     });
   }
 
-  return { create, slowNotice, failed, SLOW_TEXT, FAIL_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars, fitCard,
+  return { create, slowNotice, failed, FAIL_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars, fitCard,
     packSettled, warmPresentReady,
     gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();
