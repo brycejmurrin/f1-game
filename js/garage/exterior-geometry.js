@@ -260,7 +260,8 @@ const GarageExteriorGeometry = (function () {
     // The ordinary scenery stops at the active doorway. The garage row alone
     // extends behind it, at its own exact per-box yaw and banked origin.
     const rowLimits = limits.slice(); rowLimits[4] = -Infinity;
-    const laneBays = yield* clipSteps(rowWorld, anchor, rowLimits, budget);
+    const bayFixtures = empty();
+    const laneBays = yield* clipSteps(rowWorld, anchor, rowLimits, budget, bayFixtures);
     yield { phase: "pit-clipped" };
     const ground = yield* clipSteps(TrackMesh.buildFloor(track), anchor, floorLimits, budget);
     const c = Math.cos(anchor.yaw), s = Math.sin(anchor.yaw);
@@ -275,7 +276,25 @@ const GarageExteriorGeometry = (function () {
     const scenery = yield* clipSteps(TrackModels.sealGeometry(dressing.out), anchor, outward, budget, sceneryLights);
     const glass = yield* clipSteps(dressing.glass, anchor, outward, budget);
     const water = yield* clipSteps(dressing.water, anchor, outward, budget);
-    return { supported: true, trackId: def.id, road, props, laneBays, ground, terrain, scenery, sceneryLights, glass, water, palette: def.palette, surface, anchor,
+    const lamps = [];
+    if (track._night && typeof TrackLights !== "undefined") {
+      const records = TrackLights.buildTrackLights(track, false, 1);
+      for (let i = 0; i < records.length; i += 15) {
+        const lamp = records.slice(i, i + 15);
+        const dx = lamp[0] - anchor.position[0], dz = lamp[2] - anchor.position[2];
+        lamp[0] = dx * c - dz * s;
+        lamp[1] -= anchor.position[1];
+        lamp[2] = dx * s + dz * c;
+        const ax = lamp[7], az = lamp[9];
+        lamp[7] = ax * c - az * s;
+        lamp[9] = ax * s + az * c;
+        lamps.push(lamp);
+      }
+      const distance = lamp => lamp[0] ** 2 + lamp[2] ** 2;
+      lamps.sort((a, b) => distance(a) - distance(b));
+      lamps.splice(12);
+    }
+    return { supported: true, trackId: def.id, road, props, laneBays, bayFixtures, lamps, ground, terrain, scenery, sceneryLights, glass, water, palette: def.palette, surface, anchor,
       stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, contextScale: options.contextScale, groundBounds: floorLimits, night: track._night, terrainVertices: terrain.pos.length / 3, sceneryVertices: (scenery.pos.length + sceneryLights.pos.length) / 3, sceneryLightVertices: sceneryLights.pos.length / 3, glassVertices: glass.pos.length / 3, waterVertices: water.pos.length / 3, region: track.sceneryRegion, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
   }
   function* buildSteps(def, options = {}) {

@@ -870,6 +870,7 @@ function getSetupPreviewMesh() {
   return _spMesh;
 }
 // Optional, detached circuit slice shared by every garage camera/animation.
+const exteriorLamps = { lampLevel: .26, poolEnergy: .55 };
 let /** @type {ReturnType<typeof GarageExterior.create> | null} */ exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
@@ -1294,6 +1295,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else context.cue = null;
   const liv = _spLiv();
   const lightsRig = GarageScene.live(liv, sceneTime, context);
+  if (context.realExterior && context.showLaneBays) {
+    const tune = typeof LightStore !== "undefined" && exteriorRequested ? LightStore.garageLamps(exteriorRequested, exteriorLamps) : liveTune();
+    exterior.appendLights(lightsRig, _tuneNum(tune, "lampLevel", .26), _tuneNum(tune, "poolEnergy", .55));
+  }
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction

@@ -1126,7 +1126,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let fallbackBaysMesh = null, exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
+let fallbackBaysMesh = null, fallbackFixtures = null, exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -1389,6 +1389,7 @@ function rebuild(team, liv, info, ctx) {
 // real spot lights streak across it. The sheen is emergent from the lamp
 // energies above — it does not appear at a dimmer rig's levels.
 const FLOOR_OPTS = { roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
+const BAY_LIGHT_OPTS = { emissive: 1, roughness: .65 };
 const SHELL_OPTS = { roughness: 0.86, metalness: 0.05, specular: 0.16, clearcoat: 0 };
 
 const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -1421,12 +1422,14 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
     if (ctx && ctx.showLaneBays) {
       if (!fallbackBaysMesh) {
-        const bays = acc();
+        const bays = acc(), fixtures = acc();
         for (const bay of [-2, -1, 1, 2])
-          GaragePrims.buildLaneBay(bays, bay * TrackPit.PITCH, bay % 2 ? [0.22, 0.34, 0.50] : [0.55, 0.23, 0.14]);
+          GaragePrims.buildLaneBay(bays, bay * TrackPit.PITCH, bay % 2 ? [0.22, 0.34, 0.50] : [0.55, 0.23, 0.14], HALF_W, HALF_W, fixtures);
         fallbackBaysMesh = _gfx.createMesh(bays);
+        fallbackFixtures = _gfx.createMesh(fixtures);
       }
       _gfx.draw(fallbackBaysMesh, MAT_I, SHELL_OPTS);
+      _gfx.draw(fallbackFixtures, MAT_I, BAY_LIGHT_OPTS);
     }
   }
   const studio = !!(ctx && ctx.studio);
@@ -1707,6 +1710,7 @@ function release() {
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
   fallbackBaysMesh = fm(fallbackBaysMesh);
+  fallbackFixtures = fm(fallbackFixtures);
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);

@@ -3519,7 +3519,7 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
   prepareExterior: async (id) => {
     const idx = Tracks.LIST.findIndex((t) => t.id === id); if (idx < 0) return null;
-    const ok = await Promise.all([ensureGarageExterior(), ensureScenery(idx)]);
+    const ok = await Promise.all([ensureGarageExterior(), ensureScenery(idx), ensureLightPresets()]);
     return ok[0] && ok[1] && Tracks.LIST[idx].id === id ? Tracks.LIST[idx] : null;
   },
   teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render,

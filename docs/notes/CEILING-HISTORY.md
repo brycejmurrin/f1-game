@@ -3987,3 +3987,8 @@ Trim first, then raise:
 
 Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed `decision: A` on #5686
 (comment 7013079936, 15:09:10Z). The raise lands under his `ratchet-raise`.
+
+## 2026-11-21 — PR #6131 (codex/pitlane-neighbor-garages): pit workshop lighting
+
+`(tree) eagerCodeBytes` 3956234 → **3957854** (+1620). The fallback garage renders overhead fixtures, the lighting profile store resolves lamp settings for the selected circuit, and the setup camera supplies them to the exterior renderer on arrival and departure. The detached circuit lamp selection and mesh upload remain in the lazy exterior bundle.
+Fragment: `ratchets.d/codex--pitlane-neighbor-garages.json`.

@@ -1160,12 +1160,19 @@ test('Bahrain at night and Monaco by day retain departure contact heights and vi
   const { createRequire } = await import('node:module');
   const require = createRequire(import.meta.url), h = require('../../tools/lib/track-build-vm.cjs').buildContext({ assets: false });
   const ctx = vm.createContext(h.sandbox);
+  if (vm.runInContext('typeof TrackLights', ctx) === 'undefined') {
+    for (const f of ['js/lighting/knobs.js', 'js/lighting/track-lights.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  }
   for (const f of ['js/garage/exterior-geometry.js', 'js/garage/exterior.js', 'js/data/garage-departure-motion.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Builder = vm.runInContext('GarageExteriorGeometry', ctx), Motion = vm.runInContext('GarageDepartureMotion', ctx), Exterior = vm.runInContext('GarageExterior', ctx);
   for (const [id, expected] of [['bahrain', [.1229, .1484, .1229, .1484]], ['monaco', [-.0121, .0012, -.0120, .0014]]]) {
     const it = Builder.buildSteps(h.Tracks.LIST.find(d => d.id === id), { teamId: 'ferrari', night: id === 'bahrain' });
     let next; do { next = it.next(); } while (!next.done);
     const data = next.value; assert.equal(data.supported, true);
+    assert.ok(data.bayFixtures.idx.length > 0);
+    assert.ok(data.bayFixtures.col.every(v => v > 1));
+    assert.equal(data.lamps.length, id === 'bahrain' ? 12 : 0);
+    for (const lamp of data.lamps) assert.ok(lamp.length === 15 && lamp.every(Number.isFinite));
     const row = [data.props, data.laneBays].filter(Boolean);
     checkNeighborBays(row, h.TrackPit.PITCH, id);
     assert.equal(bayHitZ(row, 0), -Infinity, id + ': the selected team still owns its doorway');
