@@ -666,7 +666,7 @@ test("race and paired-phone button feedback illuminates the entire face without 
   }
   assert.equal(decl(race, "#btn-throttle[aria-pressed][data-touch-feedback]::after", "display"), "none");
   const hud = cssRules(read("css/hud.css"));
-  assert.equal(decl(hud, ':root[data-motion="reduce"] #hud .touchbtn[data-touch-feedback="on"]::after', "transition-duration"), "0s !important");
+  assert.equal(decl(hud, ':root[data-motion="reduce"] #hud .touchbtn[data-touch-feedback="on"]::after', "--hud-feedback-transition"), "0s");
 });
 
 test("resting marks identify only progressive buttons that have enabled feedback", () => {

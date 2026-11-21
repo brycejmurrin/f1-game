@@ -1148,12 +1148,12 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
 :root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
+  transition-duration: var(--hud-feedback-transition, 0.01ms) !important;
 }
 /* Input strength is a live sample. Even the 0.01ms backstop holds the old
    opacity until the next animation frame when a player moves their thumb. */
 :root[data-motion="reduce"] #hud .touchbtn[data-touch-feedback="on"]::after {
-  transition-duration: 0s !important;
+  --hud-feedback-transition: 0s;
 }
 /* …BUT NEVER ON GEOMETRY fitHud MEASURES. A duration on the initial
    `transition-property: all` animates `zoom` and every var()-driven size too,
