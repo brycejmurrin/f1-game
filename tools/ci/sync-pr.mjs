@@ -235,9 +235,24 @@ export function leftoverAction(localBranch, prBranch, readGit = git) {
 /** True when origin/<branch> moved from `startSha` (a warning during the run, not a refusal). */
 export const headMoved = (startSha, nowSha) => !!startSha && !!nowSha && startSha !== nowSha;
 
-/** True when origin/<branch> holds a commit our merge result does not contain: someone pushed meanwhile. */
-export function remoteMoved(localBranch, prBranch, readGit = git) {
-  return readGit(["merge-base", "--is-ancestor", `${REMOTE}/${prBranch}`, localBranch]).code !== 0;
+/** True when the sync result does not contain the remote PR head. */
+export function remoteMoved(localBranch, prBranch, readGit = git, remoteHead = `${REMOTE}/${prBranch}`) {
+  return readGit(["merge-base", "--is-ancestor", remoteHead, localBranch]).code !== 0;
+}
+
+/** Publish only a fast-forward of the exact PR head this sync started from. */
+export function publishSync(localBranch, prBranch, expectedHead, runGit = git) {
+  const target = `refs/heads/${prBranch}`;
+  must(runGit(["fetch", "--no-tags", REMOTE, target]), `fetch ${target}`);
+  const remoteHead = must(runGit(["rev-parse", "--verify", "FETCH_HEAD^{commit}"]), "read fetched PR head");
+  if (!expectedHead || remoteHead !== expectedHead)
+    throw new Error(`origin/${prBranch} moved during this sync; re-run sync-pr to merge the new commits`);
+  const verified = must(runGit(["rev-parse", "--verify", `refs/heads/${localBranch}^{commit}`]), "read verified commit");
+  if (remoteMoved(verified, prBranch, runGit, expectedHead))
+    throw new Error(`the verified commit does not contain origin/${prBranch}; re-run sync-pr`);
+  // Pin both sides: the ancestry check rules out a rewrite, and the explicit
+  // lease rejects a deletion or replacement between the fetch and the push.
+  must(runGit(["push", `--force-with-lease=${target}:${expectedHead}`, REMOTE, `${verified}:${target}`]), `push to origin/${prBranch}`);
 }
 
 /** Put the working tree back on `startedOn` and SAY WHERE IT IS (2026-10-04).
@@ -306,7 +321,7 @@ export async function main() {
     const lo = leftoverAction(localBranch, branch);
     if (lo.action === "resume") { log(`${localBranch}: ${lo.why}`); resume = true; }
   }
-  const headAtStart = git(["rev-parse", "--verify", `${REMOTE}/${branch}`]).out;
+  const headAtStart = must(git(["rev-parse", "--verify", `refs/remotes/${REMOTE}/${branch}^{commit}`]), "read starting PR head");
   if (resume) {
     if (!exists) throw new Error(`--resume: no local ${localBranch} to resume (run without --resume)`);
     if (startedOn !== localBranch) must(git(["checkout", localBranch]), `checkout ${localBranch}`);
@@ -356,10 +371,6 @@ export async function main() {
     return 1;
   }
 
-  git(["fetch", "--no-tags", REMOTE, branch]);
-  if (headMoved(headAtStart, git(["rev-parse", "--verify", `${REMOTE}/${branch}`]).out))
-    log(`WARNING: origin/${branch} moved during this run (${headAtStart.slice(0, 9)} → now); re-run sync-pr to merge the new commits${flag("--push") ? "" : " before publishing"}`);
-  const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
     // Structural guards before any push: --verify=fast alone skipped them and left Structural CI red.
     const guards = pushGuardsStage();
@@ -369,21 +380,22 @@ export async function main() {
       log(returnTo(startedOn, localBranch).line);
       return 1;
     }
-    // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a
-    // verified sync publishes at once. Re-fetch first: another session may have pushed a base merge to this branch.
-    git(["fetch", "--no-tags", REMOTE, branch]);
-    if (remoteMoved(localBranch, branch)) {
-      log(`STOPPED: origin/${branch} gained commits while this sync ran (another session pushed); re-run sync-pr to merge them — nothing pushed`);
+    try {
+      publishSync(localBranch, branch, headAtStart);
+    } catch (e) {
+      log(`STOPPED: ${e.message}`);
       log(returnTo(startedOn, localBranch).line);
       return 1;
     }
-    must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
     const back = returnTo(startedOn, localBranch);
     log(back.line);
     if (back.ok) git(["branch", "-D", localBranch]);
   } else {
-    log(`verified on ${localBranch} — review, then publish with: ${pushCmd} (or re-run with --push, which runs Structural guards first)`);
+    must(git(["fetch", "--no-tags", REMOTE, `refs/heads/${branch}`]), "refresh PR head");
+    if (headMoved(headAtStart, must(git(["rev-parse", "--verify", "FETCH_HEAD^{commit}"]), "read refreshed PR head")))
+      log(`WARNING: origin/${branch} moved during this run; re-run sync-pr to merge the new commits before publishing`);
+    log(`verified on ${localBranch} — review, then re-run with --push to publish after Structural guards`);
   }
   return 0;
 }
