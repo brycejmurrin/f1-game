@@ -88,6 +88,12 @@ name: Land
 # run; a train arming one PR and the next train arming the next is unchanged. Anyone with write access may dispatch
 # it by hand too (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f pr=<n>`): a re-gate now.
 #
+# LATE WAIT (#6045, 2026-11-21). A run that read CI as running can post `ci=WAIT` minutes after CI finished (#6040:
+# read 00:11, CI green 00:20:25, posted 00:23:05). post then re-reads ci.yml's `CI` check-run, and when it has
+# concluded hands the PR to `retry`. And arm re-reads the head's `gate` up to three times before it gives up on "the
+# newest gate status is not this run's success" (#6042: a read 2 s after the write listed the older pending first),
+# then hands that mismatch to `retry` too instead of stopping. Both stay inside RETRY_MAX per head.
+#
 # STALE TIP. A `gate` success is only as good as the tip it measured. post writes success only after re-reading the
 # deploy tip (GET …/branches/<deploy>) and finding the verdict's `tip=` still there; a moved tip writes pending
 # "re-gating" instead and hands the PR to `retry` (same RETRY_MAX budget per head). arm's own tip check is not
@@ -549,6 +555,15 @@ jobs:
           }
           # want_retry <n> <head>: hand the PR to the `retry` job (an immediate re-gate, RETRY_MAX per head).
           want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '. + [{number: $n, head: $h}]' <<<"$retry"); }
+          # ci_now <head>: the conclusion of ci.yml's own newest `CI` check-run on the head now ("" while it runs, or
+          # unreadable). ci.yml's runs only: a job named `CI` in another workflow is an Actions-app check-run too (WP-L3e).
+          ci_now() {
+            local suites
+            suites=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$1&per_page=100" \
+              --jq '[.workflow_runs[] | select((.path | sub("@.*$"; "")) == ".github/workflows/ci.yml") | .check_suite_id]') || suites='[]'
+            gh api "repos/$R/commits/$1/check-runs?check_name=CI&per_page=100" | jq -r --argjson s "$suites" \
+              '[.check_runs[] | select(.app.slug == "github-actions" and (.check_suite.id as $id | $s | index($id) != null))] | sort_by(.id) | last | .conclusion // ""' || echo ""
+          }
           # A PR that no longer asks to land: an existing `gate` status turns red ("not asked" is not a pass).
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); why=$(jq -r .why <<<"$row")
@@ -615,11 +630,7 @@ jobs:
             if [ "$code" = 0 ]; then
               # The verdict came from a job that ran PR code: re-read what GitHub itself can say before posting a pass.
               pr=$(gh api "repos/$R/pulls/$n") || pr='{}'
-              # ci.yml's own `CI` only: a job named `CI` in another workflow is an Actions-app check-run too (WP-L3e).
-              suites=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" \
-                --jq '[.workflow_runs[] | select((.path | sub("@.*$"; "")) == ".github/workflows/ci.yml") | .check_suite_id]') || suites='[]'
-              ci=$(gh api "repos/$R/commits/$head/check-runs?check_name=CI&per_page=100" | jq -r --argjson s "$suites" \
-                '[.check_runs[] | select(.app.slug == "github-actions" and (.check_suite.id as $id | $s | index($id) != null))] | sort_by(.id) | last | .conclusion // ""') || ci=""
+              ci=$(ci_now "$head") || ci=""
               if [ "$(jq -r .head.sha <<<"$pr")" != "$head" ] || [ "$(jq -r .draft <<<"$pr")" != false ] || [ "$ci" != success ] \
                  || ! jq -e '[.labels[].name] | index("land") and (index("hold") | not)' <<<"$pr" >/dev/null; then
                 echo "::warning::PR #$n: the land-gate verdict disagrees with GitHub now (head, draft, labels or CI=$ci); not posted, the next event re-gates"
@@ -644,7 +655,17 @@ jobs:
                    [ -n "$arm" ] || [ "$WROTE" != success ] || arm=$(jq -c -n --argjson n "$n" --arg h "$head" --arg t "$tip" '{number: $n, head: $h, tip: $t}')
                  else ok=false
                  fi ;;
-              3) write_gate "$head" in_progress "" "$line" "$out" || ok=false ;;
+              3) write_gate "$head" in_progress "" "$line" "$out" || ok=false
+                 # #6045 (#6040, #6017 on 2026-11-21): this run read CI as running minutes ago and posts `ci=WAIT`
+                 # after CI already finished. The CI-completion re-gate may have run first (its newer verdict is then
+                 # kept above) or still be queued; hand the PR to `retry` too so the WAIT never outlives CI.
+                 if [[ " $line " == *" ci=WAIT "* ]]; then
+                   cnow=$(ci_now "$head") || cnow=""
+                   if [ -n "$cnow" ]; then
+                     echo "PR #$n: posted ci=WAIT but CI is now $cnow on ${head:0:12}; re-gating" | tee -a "$GITHUB_STEP_SUMMARY"
+                     want_retry "$n" "$head"
+                   fi
+                 fi ;;
               2) write_gate "$head" completed failure "$line" "$out" || ok=false ;;
               *) echo "::error::PR #$n: merge-gate error (exit $code): ${line:-no verdict}"
                  write_gate "$head" in_progress "" "= merge-gate error, will retry — ${line:-exit $code}" "$out" || ok=false ;;
@@ -685,10 +706,28 @@ jobs:
           self="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           [ "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/land.yml@refs/heads/$DEPLOY_BRANCH" ] \
             || skip="this run is not the deploy branch's land.yml ($GITHUB_WORKFLOW_REF)"
-          gate=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
-            --jq '[.[] | select(.context == "gate")] | first | "\(.state) \(.creator.login // "-") \(.target_url // "-")"') || gate="unreadable"
-          [ "$gate" = "success github-actions[bot] $self" ] || skip="the newest gate status on ${head:0:12} is not this run's success ($gate)"
+          # #6045 (#6042, run 44847006825, 2026-11-21): post wrote its success at 00:59:08 and this read, two seconds
+          # later, still listed the older pending first. Read up to three times, GATE_REREAD_S apart; a mismatch that
+          # outlasts them is handed to `retry` (RETRY_MAX per head) instead of stopping, so the PR is not left green
+          # and unarmed until a person dispatches it. Every other skip above stays final.
+          regate=false
+          if [ -z "$skip" ]; then
+            for try in 1 2 3; do
+              gate=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
+                --jq '[.[] | select(.context == "gate")] | first | "\(.state) \(.creator.login // "-") \(.target_url // "-")"') || gate="unreadable"
+              [ "$gate" != "success github-actions[bot] $self" ] || break
+              [ "$try" = 3 ] || sleep "${GATE_REREAD_S:-5}"
+            done
+            if [ "$gate" != "success github-actions[bot] $self" ]; then
+              skip="the newest gate status on ${head:0:12} is not this run's success ($gate)"; regate=true
+            fi
+          fi
           if [ -n "$skip" ]; then
+            if [ "$regate" = true ]; then
+              echo "::notice::not arming #$n: $skip; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "::notice::not arming #$n: $skip" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           # The gate measured gen:check and the ratchets on a merge onto `tip`; a moved tip is an ungated combination.
