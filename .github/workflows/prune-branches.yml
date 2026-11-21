@@ -74,7 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr list --repo "$GITHUB_REPOSITORY" --state all --limit 5000 --json number,state,headRefName,headRefOid,title,mergedAt,closedAt,createdAt > "$RUNNER_TEMP/prs.json"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state all --limit 5000 --json number,state,headRefName,headRefOid,baseRefName,title,mergedAt,closedAt,createdAt > "$RUNNER_TEMP/prs.json"
           echo "PRs: $(jq length "$RUNNER_TEMP/prs.json") ($(jq '[.[] | select(.state == "OPEN")] | length' "$RUNNER_TEMP/prs.json") open)"
           gh run list --repo "$GITHUB_REPOSITORY" --limit 2000 --json headSha,conclusion,status,workflowName,createdAt > "$RUNNER_TEMP/runs.json"
           echo "CI runs: $(jq length "$RUNNER_TEMP/runs.json")"

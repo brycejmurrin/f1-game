@@ -135,6 +135,13 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
     "once the environment job starts, unpublishable must fail rather than report success");
 });
 
+test("Pages publishes the staged artifact directly after the in-lock recheck", () => {
+  const { steps } = parseYAML(pagesWorkflow).jobs.deploy;
+  const recheck = steps.findIndex(step => step.id === "recheck");
+  assert.ok(recheck >= 0);
+  assert.match(steps[recheck + 1].uses, /^actions\/deploy-pages@/);
+});
+
 test("a deploy-only rerun publishes the artifact from the successful staging attempt", () => {
   const { stage, deploy } = parseYAML(pagesWorkflow).jobs;
   const name = stage.steps.find(step => step.id === "artifact");
