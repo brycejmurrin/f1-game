@@ -20326,6 +20326,7 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "close": [
+        "tests/specs/photo-studio.spec.js",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
@@ -20333,6 +20334,7 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "create": [
+        "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
@@ -20349,6 +20351,7 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "open": [
+        "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
       ],
       "savePhoto": [
@@ -20358,6 +20361,7 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "state": [
+        "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
       ]
     },
