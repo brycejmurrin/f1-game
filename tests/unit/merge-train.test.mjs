@@ -7,7 +7,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  TRAIN_MAX, TRAIN_PREFIX, CAR_ROWS, newestRun, trainManifest, renderManifest, trainResult, trainBody, carCandidates, carVerdict,
+  TRAIN_MAX, TRAIN_PREFIX, TRAIN_LABEL, CAR_ROWS, RESOLVE_CAP, newestRun, trainManifest, renderManifest, trainResult, trainBody,
+  carCandidates, carVerdict, openTrainCarIds, boardedTrainOf, resolveLandable,
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
   readScreen, screenAccept, screenFold, screenMain,
 } from "../../tools/ci/merge-train.mjs";
@@ -55,6 +56,41 @@ test("carCandidates: land only, priority first then oldest, with an exact skip l
     { pr: 14, why: "draft" }, { pr: 15, why: "hold" }, { pr: 16, why: "a train itself" }, { pr: 17, why: "a fork" },
     { pr: 18, why: "alone in a red train at this head" }, { pr: 19, why: "its own gate already passed (it arms alone)" },
   ]);
+});
+
+// ---- #6055 merge-train starvation: resolve's 4-cap + cars arming alone ------------------------------------
+
+test("#6055: resolveLandable keeps an open train in the 4-cap and drops its cars (fails on pre-fix sort+cap)", () => {
+  assert.equal(RESOLVE_CAP, 4);
+  const hx = (c) => c.repeat(40);
+  // Five older cars fill the cap; the train is newest (land.yml's sort_by(.prio,.created,.number)|.[:4] drops it).
+  const cars = [1, 2, 3, 4, 5].map((n) => ({
+    number: n, head: hx(String(n)), prio: 1, created: `2026-11-20T0${n}:00:00Z`,
+  }));
+  const train = {
+    number: 99, head: hx("9"), prio: 1, created: "2026-11-20T12:00:00Z", train: true,
+    ref: `${TRAIN_PREFIX}20261120T1200-1-2-3-4-5`,
+  };
+  const trainCarIds = new Set(cars.map(c => `${c.number}@${c.head}`));
+  const picked = resolveLandable([...cars, train], { trainCarIds, cap: RESOLVE_CAP });
+  assert.deepEqual(picked.map((r) => r.number), [99], "open train is the only landable PR: cars of that train are not gated or armed alone");
+  // A non-car land PR older than the train still yields after the train (prio, then age).
+  const other = { number: 50, head: hx("5"), prio: 1, created: "2026-11-20T08:00:00Z" };
+  assert.deepEqual(resolveLandable([...cars, other, train], { trainCarIds }).map((r) => r.number), [99, 50]);
+  // priority still beats a non-train; a train still beats priority cars of its own set.
+  const prioCar = { number: 2, head: hx("2"), prio: 0, created: "2026-11-20T01:00:00Z" };
+  assert.deepEqual(resolveLandable([prioCar, train], { trainCarIds: new Set([`2@${hx("2")}`]) }).map((r) => r.number), [99]);
+});
+
+test("#6055: openTrainCarIds / boardedTrainOf read the open train manifest", () => {
+  const body = trainBody({ base: sha("a"), cars: [{ pr: 5, head: sha("b"), ref: "r5" }, { pr: 7, head: sha("c"), ref: "r7" }] });
+  const trains = [
+    { number: 90, state: "open", head: { ref: `${TRAIN_PREFIX}x-5-7` }, body, labels: [{ name: "land" }, { name: TRAIN_LABEL }] },
+    { number: 91, state: "closed", head: { ref: `${TRAIN_PREFIX}y` }, body },
+    { number: 8, state: "open", head: { ref: "cursor/x" }, body: "not a train" },
+  ];
+  assert.deepEqual([...openTrainCarIds(trains)], [`5@${sha("b")}`, `7@${sha("c")}`]);
+  assert.deepEqual([boardedTrainOf(5, sha("b"), trains), boardedTrainOf(7, sha("c"), trains), boardedTrainOf(5, sha("d"), trains), boardedTrainOf(5, sha("b"), [])], [90, 90, null, null]);
 });
 
 test("carVerdict: every CAR_ROWS row must pass; base and the merge rows are the train's", () => {
