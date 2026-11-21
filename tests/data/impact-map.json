@@ -5092,6 +5092,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/bahrain.js": {
+      "*": [
+        "tests/unit/select-specs.test.mjs"
+      ]
+    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -5376,6 +5381,7 @@
     "js/circuits/spa.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -16824,7 +16830,8 @@
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "half": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
