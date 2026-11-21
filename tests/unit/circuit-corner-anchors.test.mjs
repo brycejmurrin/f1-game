@@ -150,6 +150,23 @@ test("Brands Hatch starts on the Brabham straight, so Paddock Hill is Turn 1 and
   assert.ok(!def.pit || def.pit.side !== -1, "the pit wall stays on the driver's right (driver61)");
 });
 
+test("Donington pit wall is on the driver's left of the Wheatcroft Straight", () => {
+  // #5316 CIRC1-01 leftover: tip defaulted pit.side to +1 (right / infield).
+  // Real guides put pit entry and the concrete pit wall on the LEFT
+  // (ukCircuits paddock tour; oversteer48; driver61 / START-LINES.md).
+  // buildCenterline has no pit complex — side is authored on the def; the
+  // shoelace check uses the centreline only (same shape as the Kyalami pin).
+  const { def, track } = circuit("donington");
+  assert.equal(def.pit.side, -1);
+  const probe = [track.px[0] - track.rx[0] * 80, track.pz[0] - track.rz[0] * 80];
+  let inside = false;
+  for (let i = 0, j = track.n - 1; i < track.n; j = i++) {
+    const [xi, zi, xj, zj] = [track.px[i], track.pz[i], track.px[j], track.pz[j]];
+    if ((zi > probe[1]) !== (zj > probe[1]) && probe[0] < (xj - xi) * (probe[1] - zi) / (zj - zi) + xi) inside = !inside;
+  }
+  assert.equal(inside, false, "a point 80 m to the driver's left of the line is outside the loop");
+});
+
 test("Kyalami runs anticlockwise with the SRO turns, line and infield pits", () => {
   // SRO/IGTC 2023 Kyalami 9 Hour briefing notes p. 8-9 (#5316 CIRC2-05): 16
   // turns, T1 The Kink a flat right a few hundred metres after S/F, T2

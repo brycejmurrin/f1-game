@@ -51,12 +51,14 @@
       { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // racing arc 0.295-0.315 Roggia
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // racing arc 0.608-0.652 Ascari
     ],
+    // Turn-anchored (#5316): bare fracs sat 80–200 m off the named apexes after
+    // centreline edits; { turn } re-resolves through any future startFrac move.
     bankZones: [
-      { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande
-      { frac: 0.3831, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
-      { frac: 0.4323, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
-      { frac: 0.6310, angleDeg: 3.5, widthM: 110 },   // Ascari
-      { frac: 0.8222, angleDeg: 4.0, widthM: 300 },   // Parabolica
+      { turn: 3, angleDeg: 3.0, widthM: 240 },   // Curva Grande (FIA T3)
+      { turn: 6, angleDeg: 6.0, widthM: 140 },   // Lesmo 1 (FIA T6)
+      { turn: 7, angleDeg: 6.0, widthM: 80 },    // Lesmo 2 (FIA T7)
+      { turn: 9, angleDeg: 3.5, widthM: 110 },   // Ascari middle (FIA T9)
+      { turn: 11, angleDeg: 4.0, widthM: 300 },  // Parabolica (FIA T11)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
