@@ -6069,7 +6069,8 @@
         "tests/unit/store-key-types.test.mjs"
       ],
       "ttBoardAddResult": [
-        "tests/unit/settings-ttlb-backup.test.mjs"
+        "tests/unit/settings-ttlb-backup.test.mjs",
+        "tests/unit/store-key-types.test.mjs"
       ],
       "*": [
         "tests/specs/parts-physics.spec.js",
