@@ -21182,6 +21182,7 @@
         "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "normalize": [
+        "tests/specs/title-fit.spec.js",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
