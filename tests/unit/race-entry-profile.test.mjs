@@ -99,6 +99,53 @@ test("tickFrame ends the window two frames after present:ready", () => {
   assert.ok(P.snapshot().marks.some((m) => m.n === "end"));
 });
 
+test("entry totals count only overlapping task time and drain queued records at close", () => {
+  let t = 100, callback;
+  const queue = [];
+  class Observer {
+    constructor(fn) { callback = fn; }
+    observe() {}
+    takeRecords() { return queue.splice(0); }
+    disconnect() { queue.length = 0; }
+  }
+  const profile = load({ PerformanceObserver: Observer, performance: { now: () => t } });
+  profile.begin("race");
+  t = 115;
+  callback({ getEntries: () => [
+    { startTime: 40, duration: 60 },
+    { startTime: 20, duration: 90 },
+  ] });
+  queue.push({ startTime: 120, duration: 60 });
+  t = 200;
+  profile.end();
+  const snapshot = profile.snapshot();
+  assert.deepEqual(Array.from(snapshot.longTasks, task => [task.start, task.ms]), [[100, 10], [120, 60]]);
+  assert.equal(snapshot.blockMs, 70);
+  assert.equal(snapshot.maxBlockMs, 60);
+});
+
+test("entry totals include tasks beyond the retained detail limit and reset for the next race", () => {
+  let t = 0, callback;
+  class Observer {
+    constructor(fn) { callback = fn; }
+    observe() {}
+    disconnect() {}
+  }
+  const profile = load({ PerformanceObserver: Observer, performance: { now: () => t } });
+  profile.begin("race");
+  const tasks = Array.from({ length: 65 }, (_, i) => ({ startTime: i * 60, duration: i === 64 ? 90 : 50 }));
+  t = 3930;
+  callback({ getEntries: () => tasks });
+  profile.end();
+  const snapshot = profile.snapshot();
+  assert.equal(snapshot.longTasks.length, 64);
+  assert.equal(snapshot.blockMs, 3290);
+  assert.equal(snapshot.maxBlockMs, 90);
+  profile.begin("second race");
+  assert.equal(profile.snapshot().blockMs, 0);
+  assert.equal(profile.snapshot().maxBlockMs, 0);
+});
+
 test("PerformanceObserver longtask entries are recorded when supported", () => {
   let cb = null;
   class FakePO {

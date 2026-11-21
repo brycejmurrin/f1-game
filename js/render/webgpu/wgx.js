@@ -479,7 +479,8 @@ const WGX = (function () {
     // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
     let _capReq = null;
-    function _rejectCapture(reason) {
+    function _rejectCapture(reason, owner) {
+      if (owner && _capReq?.owner !== owner) return;
       const req = _capReq; _capReq = null;
       if (req) req.reject(new Error(reason || "device lost"));
     }
@@ -4274,10 +4275,10 @@ const WGX = (function () {
     // frame encoder; _capFinish maps after onSubmittedWorkDone. Optional
     // readback oracle — visible #game is the soft-present 2D blit; prefer
     // gfx-probe.mjs for the primary visible-canvas gate. One request in flight.
-    function capturePixels() {
+    function capturePixels(owner) {
       if (_lost) return Promise.reject(new Error("device lost"));
       if (_capReq) return Promise.reject(new Error("capture already pending"));
-      return new Promise((resolve, reject) => { _capReq = { resolve, reject }; });
+      return new Promise((resolve, reject) => { _capReq = { resolve, reject, owner }; });
     }
     // Encode the readback copy into the FRAME'S OWN encoder (call just before
     // its finish/submit), then start the map after submit. Split in two
@@ -6034,7 +6035,7 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       // The caller gave up on a pending capture (photo studio's timeout): free the one slot (#5743 P3).
-      cancelCapture: (why) => _rejectCapture(why || "capture cancelled"),
+      cancelCapture: (why, owner) => _rejectCapture(why || "capture cancelled", owner),
       awaitSoftPresent,
       invalidateSoftPresent,
       holdSoftPresent,

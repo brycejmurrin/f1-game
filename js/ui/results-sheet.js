@@ -859,7 +859,10 @@ function buildTTResults() {
     // Arm-then-confirm (G.armConfirm): one tap deleted the PB ghost AND its medal (#5672).
     clrBtn.onclick = () => G.armConfirm(clrBtn, tr("results.clearGhostConfirm", null, "TAP AGAIN TO CLEAR"), () => {
       if (guestGhost) GhostShare.clearGuest();
-      else Ghost.clear(track.def.id);
+      else if (!Ghost.clear(track.def.id)) {
+        clrBtn.textContent = tr("results.clearGhostFailed", null, "GHOST KEPT — RETRY CLEAR");
+        return;
+      }
       const remaining = G.records.board(track.def.id);
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
       // The rebuild destroys this button: keep focus on its slot (js/ui/modal.js).

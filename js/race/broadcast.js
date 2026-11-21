@@ -260,9 +260,8 @@ const Broadcast = (function () {
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
     let graphics = null, fastCode = null;
 
-    // TV graphics (OverlayFeed + TvGraphics) load eagerly before this file in
-    // every shell that creates a Broadcast (tools/manifest.cjs FULL); overlay.html
-    // loads Broadcast only for its pure helpers and never calls create().
+    // RealReplay creates the broadcast after its bundle loads TvGraphics. The
+    // ordinary race director and overlay.html only use the pure helpers.
     function makeGraphics() {
       const factory = TvGraphics;
       return Reflect.apply(factory.create, factory, [G, null, { fastest: () => fastCode }]);

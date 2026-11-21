@@ -2,7 +2,7 @@
 //
 // The census (tools/perf/vm-alloc-census.mjs) measures a whole race frame; this measures ONE function in
 // isolation, so a fix gets a test that fails before it and passes after. A child
-// `node --expose-gc --max-semi-space-size=64` (no scavenge inside the window; the flags cannot leak into the
+// `node --expose-gc --max-semi-space-size=64` (room for small allocations; the flags cannot leak into the
 // runner) evaluates `setup` (a JS source whose completion value is the function to call), warms it WARM
 // times so the JIT has tiered, gc()s twice, then reads used_heap_size around N calls. A window with a GC
 // inside it is reported (gcInside), never retried silently.
@@ -14,19 +14,31 @@ import { readFileSync } from "node:fs";
 
 const CHILD = String.raw`
 const v8 = require("node:v8"), vm = require("node:vm"), fs = require("node:fs");
-const { PerformanceObserver } = require("node:perf_hooks");
+const { performance, PerformanceObserver } = require("node:perf_hooks");
 const a = JSON.parse(process.argv[1]);
 const gcs = []; const obs = new PerformanceObserver((l) => { for (const e of l.getEntries()) gcs.push(e); }); obs.observe({ entryTypes: ["gc"] });
 const ctx = vm.createContext({ Log: { info() {}, warn() {}, error() {}, debug() {} }, console });
 for (const f of a.prelude) vm.runInContext(fs.readFileSync(f, "utf8"), ctx, { filename: f });
 const fn = vm.runInContext(a.setup, ctx);
-for (let i = 0; i < a.warm; i++) fn(i);
+// Warm the same call and loop sites that the measurement will exercise.
+function run(n) { for (let i = 0; i < n; i++) fn(i); }
+run(a.warm);
+const used = () => v8.getHeapStatistics().used_heap_size;
 global.gc(); global.gc();
-const n0 = gcs.length; const used = () => v8.getHeapStatistics().used_heap_size;
+used();  // Prime heap-statistics bookkeeping after collection, outside the baseline.
+const start = performance.now();
 const b0 = used();
-for (let i = 0; i < a.n; i++) fn(i);
+run(a.n);
 const b1 = used();
-setImmediate(() => { obs.disconnect(); process.stdout.write("\n" + JSON.stringify({ delta: b1 - b0, gcInside: gcs.length > n0 }) + "\n"); });
+const end = performance.now();
+// Node queues native GC entries after this synchronous turn. Drain entries
+// still pending delivery as well as those the observer already received.
+setImmediate(() => {
+  gcs.push(...obs.takeRecords());
+  obs.disconnect();
+  const gcInside = gcs.some(e => e.startTime < end && e.startTime + e.duration > start);
+  process.stdout.write("\n" + JSON.stringify({ delta: b1 - b0, gcInside }) + "\n");
+});
 `;
 
 /** Measure bytes per call of the function `setup` evaluates to. `prelude`: absolute paths of IIFE files to load first. */

@@ -308,15 +308,34 @@ test("#3656: a live view below native resolution captures at renderScale 1, then
   assert.equal(await b.api.capture(), false);
   assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5);
 });
-test("software presentation is awaited while raw pixels are captured before compositing", async () => {
-  const b = boot(); let present;
+test("valid raw pixels finish capture even while software presentation is pending", async () => {
+  const b = boot(); let rejectPresent;
   b.G.gfx.softPresent = () => true;
   b.G.gfx.invalidateSoftPresent = () => b.order.push("invalidate");
-  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((resolve) => { present = resolve; }); };
+  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((_, reject) => { rejectPresent = reject; }); };
   b.api.open(); const pending = b.api.capture();
   assert.deepEqual(b.order.slice(-4), ["invalidate", "wait", "draw", "read"]);
-  assert.equal(b.canvasOps.length, 0, "composition waits for the presentation result"); present(); await pending;
+  const early = await Promise.race([pending, new Promise((resolve) => setImmediate(() => resolve("pending")))]);
+  rejectPresent(new Error("2D blit timed out"));
+  assert.equal(await pending, true);
+  assert.equal(early, true);
+  assert.deepEqual(b.canvasOps[0], ["pixels", 123]);
   assert.equal(b.order.at(-1), "read");
+});
+test("failed raw readback waits for the software canvas before copying it", async () => {
+  const b = boot(), soft = b.dom.byId("game-soft");
+  let present;
+  soft.width = 160; soft.height = 90;
+  b.G.gfx.softPresent = () => true;
+  b.G.gfx.awaitSoftPresent = () => new Promise((resolve) => { present = resolve; });
+  b.G.gfx.capturePixels = () => Promise.reject(new Error("No readback target"));
+  b.api.open();
+  const pending = b.api.capture();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(b.canvasOps.length, 0);
+  present();
+  assert.equal(await pending, true);
+  assert.equal(b.canvasOps[0][0], "draw");
 });
 test("a backend without readback falls back to an immediate canvas copy", async () => {
   const b = boot(); b.G.canvas.width = 160; b.G.canvas.height = 90;
@@ -506,6 +525,17 @@ test("saving repairs a previously oversized library in the same transaction", as
   b.api.open(); await b.api.capture(); await b.api.savePhoto();
   assert.equal(idb.rows.size, 6); assert.equal(idb.writes, 1);
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-4", "old-5", "old-6", "old-7", "old-8"]);
+});
+test("a save after the device clock goes backward is committed and remains the newest photo", async () => {
+  const future = Date.now() + 60_000;
+  const idb = photoDb(seededPhotos(6).map((row) => ({ ...row, at: future + row.at })));
+  const b = boot({ indexedDB: idb });
+  b.api.open({ metadata: { title: "After clock adjustment" } });
+  await b.api.capture(); await b.api.savePhoto();
+  assert.equal(idb.rows.size, 6);
+  assert.equal(idb.rows.has("old-0"), false);
+  assert.equal((await b.api.album())[0].title, "After clock adjustment");
+  assert.equal(b.dom.byId("ps-message").textContent, "Saved to My Photos on this device.");
 });
 test("save remains busy and unannounced until the write transaction commits", async () => {
   const idb = photoDb(seededPhotos(6)), b = boot({ indexedDB: idb });
@@ -865,9 +895,9 @@ test("#5743 P1: a borrowCar that throws hands FreeCam and photo mode back and op
 test("#5743 P3: a readback that never resolves times out to Capture failed, not busy, and frees the slot", async () => {
   const timers = [];
   const b = boot({ setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } });
-  let cancelled = null;
-  b.G.gfx.capturePixels = () => new Promise(() => {});
-  b.G.gfx.cancelCapture = (why) => { cancelled = why; };
+  let cancelled = null, readOwner;
+  b.G.gfx.capturePixels = (owner) => { readOwner = owner; return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (why, owner) => { assert.ok(owner); assert.equal(owner, readOwner); cancelled = why; };
   b.api.open();
   const pending = b.api.capture();
   assert.equal(b.api.state().busy, true);
@@ -879,4 +909,49 @@ test("#5743 P3: a readback that never resolves times out to Capture failed, not 
   assert.equal(b.api.state().captured, false);
   assert.equal(cancelled, "capture timed out");
   assert.equal(b.dom.byId("ps-message").textContent.split(":")[0], "Capture failed");
+});
+
+
+test("closing a capture releases its render scale before the next capture takes ownership", async () => {
+  const b = boot(), reads = [];
+  let scale = 0.5;
+  b.G.gfx.getRenderScale = () => scale;
+  b.G.gfx.setRenderScale = (value) => { scale = value; return true; };
+  b.G.gfx.capturePixels = () => new Promise((resolve) => reads.push(resolve));
+  const pixels = { width: 1, height: 1, data: new Uint8ClampedArray(4) };
+  b.api.open();
+  const first = b.api.capture();
+  b.api.close(false);
+  assert.equal(scale, 0.5);
+  b.G.gfx.setRenderScale(0.75);
+  b.api.open();
+  const second = b.api.capture();
+  reads[0](pixels);
+  assert.equal(await first, false);
+  assert.equal(scale, 1);
+  reads[1](pixels);
+  assert.equal(await second, true);
+  assert.equal(scale, 0.75);
+});
+
+test("a submitted read timing out after reopen leaves the next photo queued", async () => {
+  const timers = [], requests = [];
+  const b = boot({ setTimeout: (fn, ms) => { if (ms === 8000) timers.push(fn); return timers.length; } });
+  let queued;
+  b.G.gfx.capturePixels = (owner) => new Promise((resolve, reject) => {
+    queued = { owner, resolve, reject }; requests.push(queued);
+  });
+  b.G.gfx.cancelCapture = (why, owner) => {
+    if (queued && queued.owner === owner) { queued.reject(new Error(why)); queued = null; }
+  };
+  b.api.open();
+  const first = b.api.capture();
+  queued = null;   // WGX submitted this read, but its buffer has not mapped yet
+  b.api.close(false); b.api.open({ source: "garage" });
+  const second = b.api.capture();
+  timers[0]();
+  assert.equal(await first, false);
+  assert.equal(queued, requests[1], "the reopened studio still owns its queued GPU read");
+  queued.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await second, true);
 });

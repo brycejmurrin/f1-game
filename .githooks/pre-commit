@@ -17,7 +17,7 @@
 #
 # AGENTS.md rule 12: a commit runs test:guards; a prose-only commit (every staged
 # path a .md, or a survey image/report) runs docs-integrity alone; ratchet growth
-# <= 40 lines is auto-raised into the commit. There is no skip: a red guard is
+# <= 20 lines is auto-raised into the commit (ratchets.mjs --auto-raise, bare = 20). There is no skip: a red guard is
 # fixed, including when the guards are the change. Inside an agent's Bash tool the suite runs under THAT call's timeout
 # (Claude Code: 2 min by default), so give the commit call a longer one, or run
 # `npm run test:guards` first: a green run for the same staged tree, < 10 min

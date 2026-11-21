@@ -54,7 +54,7 @@ Load is bursty by day: 10 of 14 days were near idle all day, and the four burst 
 
 ## The change
 - ci.yml nightly `17 16 * * *`: with the measured delay it starts 23:03-01:23 UTC (median 00:38).
-- ratchets-fold `17 17 * * *`: starts 23:55-03:11 UTC (median 01:49), after the nightly.
+- ratchets-fold `17 17 * * *` (`13 17 * * *` since 2026-11-21, off the shared :17 minute): starts 23:55-03:11 UTC (median 01:49), after the nightly.
 - Untouched: gpu-census (05:47, starts about 14 UTC, still in the busy window), process-dashboard,
   garage-before, land.yml and pages.yml. gpu-census stays staggered from the nightly
   (`tests/unit/ci-gpu-census.test.mjs`).
