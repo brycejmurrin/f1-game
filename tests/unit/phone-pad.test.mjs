@@ -673,7 +673,8 @@ test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, 
 function fakeEl() {
   const listeners = {};
   const el = {
-    children: [], append(...nodes) { this.children.push(...nodes); }, setAttribute() {},
+    children: [], append(...nodes) { this.children.push(...nodes); },
+    attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; },
     textContent: "", disabled: false, value: "", style: { setProperty(k, v) { this[k] = v; } },
     classes: new Set(),
     addEventListener(t, f) { (listeners[t] ||= []).push(f); },
@@ -699,7 +700,11 @@ test("phone pedals use the selected response independently, and carry it across 
     assert.equal(ctl.state().brk, 0, "fresh profiles keep their legacy capture when dragging across the other pedal");
     assert.equal(ctl.state().thr, 1);
     gas("pointerup", 60, 100);
-    PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40, feedback: false });
+    PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
+    assert.equal(dom.gas.attrs["data-touch-response"], "progressive", "the wheel shows the mark before the first progressive press");
+    assert.equal(dom.brake.attrs["data-touch-response"], undefined);
+    PedalTravel.setButtonProfile("gas", { feedback: false });
+    assert.equal(dom.gas.attrs["data-touch-response"], undefined);
     PedalTravel.setButtonProfile("brake", { slide: "ease" });
     gas("pointerdown", 120, 100);
     assert.equal(ctl.state().thr, PedalTravel.MIN);

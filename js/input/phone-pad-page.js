@@ -166,6 +166,11 @@ const PhonePadPage = (function () {
       const ids = new Set();
       const anchors = new Map();   // Freeze the response and landing point for each contact.
       const levels = new Map();    // each contact keeps its own pedal travel
+      if (travel) PedalTravel.watchButtonProfile(travel, profile => {
+        el.classList.toggle("feedback-off", !profile.feedback);
+        if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
+        else el.removeAttribute?.("data-touch-response");
+      });
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
       const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v, edge); };
       const paintLevel = (edge = true) => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest, edge); };
@@ -191,7 +196,6 @@ const PhonePadPage = (function () {
         anchors.set(e.pointerId, contact);
         pedalOwners.set(e.pointerId, target);
         levels.set(e.pointerId, cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0));
-        el.classList.toggle("feedback-off", !profile.feedback);
         paintLevel();
       };
       const down = (e) => {
@@ -239,7 +243,7 @@ const PhonePadPage = (function () {
         e.preventDefault();
         if (ids.has(id)) return;
         ids.add(id); el.classList.add("on");
-        if (travel) { el.classList.toggle("feedback-off", !PedalTravel.buttonProfile(travel).feedback); levels.set(id, 1); paintLevel(); } else on(1);
+        if (travel) { levels.set(id, 1); paintLevel(); } else on(1);
       });
       el.addEventListener("keyup", (e) => {
         const id = keyId(e.key);
