@@ -2,7 +2,7 @@
 
 Bryce asked (2026-10-30 ~08:45Z): "analyze session transcripts again from the perspective of agent
 efficiency, how it uses tool calls, how it was prompted, etc. let's really consider the process".
-[ORCHESTRATION-REVIEW-2026-10-29.md](ORCHESTRATION-REVIEW-2026-10-29.md) covered outcomes; this
+[ORCHESTRATION-REVIEW-2026-10-29.md](../../notes/ORCHESTRATION-REVIEW-2026-10-29.md) covered outcomes; this
 pass covers how turns, tool calls and tokens were spent.
 
 **Method.** Four Opus reviewers read 49 cloud sessions from 2026-10-27 to 2026-10-30 through
