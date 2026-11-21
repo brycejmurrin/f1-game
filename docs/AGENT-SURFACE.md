@@ -588,8 +588,8 @@ harness and on the deployed site, and nothing under `vendor/three-0.187.0/addons
 ### The owner's phone, one preset (2026-11-10)
 
 - `node tools/ui/bryce-phone.mjs [--measure]` prints, or boots and reads back, the ONE emulation recipe for his iPhone
-  (`tools/lib/bryce-phone.mjs`: 852x393, DPR 3, real `env()` insets 59/0/59/21 through CDP, his settings export seeded;
-  `--window safari`, `--ui-scale P`, `--dpr 1` for HUD fit on this box). A tool or spec imports `openBrycePhone(browser)`.
+  (`tools/lib/bryce-phone.mjs`: 852x393, DPR 3, real `env()` insets 59/0/59/20 through CDP, his settings export seeded;
+  `--window safari` for the 852×368 tab (assumed insets), `--window safari-short` for 852×283 (measured insets), `--ui-scale P`, `--dpr 1` for HUD fit on this box). A tool or spec imports `openBrycePhone(browser)`.
 - `node tools/ui/issue-shots.mjs <n> [--branch]` saves the screenshots attached to an issue and names the window each
   one shows from its aspect. A cloud worker's proxy refuses GitHub attachment URLs: use `--branch`, which reads
   `origin/phone-shots:<n>/`, filled by `.github/workflows/phone-shots.yml` whenever the owner attaches an image (#5246).

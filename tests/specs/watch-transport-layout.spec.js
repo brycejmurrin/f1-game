@@ -6,6 +6,7 @@
 // 852×393 and 61 % of the 852×283 Safari window as three rows); the open popover
 // sits above the bar inside the safe area; JUMP TO EVENT shares its row with the
 // picker (it used to wrap onto a row of its own, 70 % of an 844×390 screen).
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // A: the Home Screen app, C: the Safari tab (toolbar showing), plus the two cells the
@@ -13,8 +14,8 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 const CELLS = [
   { name: "932x430", width: 932, height: 430, sal: 0, sar: 0, sab: 0 },
   { name: "844x390", width: 844, height: 390, sal: 0, sar: 0, sab: 0 },
-  { name: "A-852x393-insets", width: 852, height: 393, sal: 59, sar: 59, sab: 21 },
-  { name: "C-852x283-insets", width: 852, height: 283, sal: 59, sar: 59, sab: 0 },
+  { name: "A-852x393-insets", width: 852, height: 393, sal: 59, sar: 59, sab: BRYCE_WINDOWS.standalone.insets.bottom },
+  { name: "C-852x283-insets", width: 852, height: 283, sal: 59, sar: 59, sab: BRYCE_WINDOWS["safari-short"].insets.bottom },
 ];
 
 for (const vp of CELLS) {

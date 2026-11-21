@@ -1326,6 +1326,11 @@
       "presentation": "native",
       "preserve": "GitHub ::error annotations, unknown/missing evidence and existing nonzero gate exit."
     },
+    "tools/gfx/chunk-merge-timing.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Keep per-boot samples, adapter identity, repeat spread, missing measurements and the exit status."
+    },
     "tools/gfx/chunk-reach.cjs": {
       "action": "keep-native",
       "presentation": "native",

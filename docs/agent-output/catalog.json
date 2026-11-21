@@ -2068,6 +2068,12 @@
       ]
     },
     {
+      "path": "tools/gfx/chunk-merge-timing.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gfx/chunk-reach.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

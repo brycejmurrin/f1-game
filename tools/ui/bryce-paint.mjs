@@ -31,6 +31,8 @@ const MENU = new Set(["title", "select", "garage", "settings"]);
 export const ACCEPT_ROOTS = Object.freeze({ title: "#overlay", select: "#select", garage: "#carsetup", settings: "#pmsettings", hud: "body", pause: "#pausemenu", results: "#results" });
 export const cellKey = (window, uiScale) => `${window}@${uiScale}`;
 
+// Landscape windows with recorded paint ceilings. Other device readings can be measured with --window.
+export const PAINT_WINDOWS = Object.freeze(["standalone", "safari", "w844"]);
 export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 50,70,109] [--screens title,select,garage,settings,hud,pause,results]
                                      [--profile live|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
   Painted sizes on Bryce's phone (tools/lib/bryce-phone.mjs + tools/lib/paint-floor.mjs): text >= 12 px, taps >= 44 px, nothing outside
@@ -41,7 +43,7 @@ export const KNOWN = ["--window", "--ui-scale", "--screens", "--profile", "--no-
 /** argv → the run plan. Pure; throws on a bad value. */
 export function planRun(flags) {
   const csv = (name, all) => { const v = flags.flag(name); return v ? String(v).split(",").filter(Boolean) : [...all]; };
-  const windows = csv("--window", Object.keys(BRYCE_WINDOWS));
+  const windows = csv("--window", PAINT_WINDOWS);
   for (const w of windows) if (!BRYCE_WINDOWS[w]) throw new Error(`--window: unknown "${w}" (${Object.keys(BRYCE_WINDOWS).join(" | ")})`);
   const scales = csv("--ui-scale", UI_SIZE_AXIS).map((s) => { const n = Number(s); if (!Number.isFinite(n) || n < 40 || n > 200) throw new Error(`--ui-scale: "${s}" is not a percent in [40, 200]`); return n; });
   const screens = csv("--screens", ACCEPT_SCREENS);
@@ -89,6 +91,8 @@ export async function measureCell(browser, baseUrl, { window = "standalone", uiS
   await context.addInitScript(() => { window.__TEST_MODE = true; try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) { /* storage refused */ } });
   const out = { preset: preset.name, uiScale: preset.uiScale, screens: {} };
   try {
+    // Measure the settled screen. The parked renderer can leave the touch entrance at opacity zero.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 60000 });
     // Geometry, not frames: stop render() so every wait and evaluate below is not behind a SwiftShader frame.

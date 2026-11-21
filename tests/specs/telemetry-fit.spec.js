@@ -4,7 +4,7 @@
 // the trace takes the free width, and the whole body scrolls as ONE column so
 // the last row (map key, legend toggles) is reachable above the bottom edge.
 // Notch insets are injected (headless reports env(safe-area-inset-*) as 0).
-import { readProfile } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
@@ -13,7 +13,7 @@ import { BOOT_MS } from "../helpers/fixtures.js";
 const LEGACY_PROFILE = readProfile("legacy");
 
 const VIEWS = [
-  { name: "landscape-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "landscape-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS.standalone.insets.bottom },
   { name: "portrait-390x844", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
 ];
 
@@ -128,8 +128,8 @@ test.describe("portrait 390x844", () => {
  * Measured 2026-11-07 (probe at the export): ✕ right 775 of 793 safe (A), card
  * bottom 275 of 283 (C), one row in all 15 cells. */
 const HEAD_WINDOWS = [
-  { name: "A 852x393 notch", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
-  { name: "C 852x283 Safari toolbar", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
+  { name: "A 852x393 notch", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS.standalone.insets.bottom },
+  { name: "C 852x283 Safari toolbar", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom },
   { name: "D 844x390", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 },
 ];
 // [textSize, uiScale %]: the export's own (large, UI 109 % by the coarse-pointer default), then the grid.

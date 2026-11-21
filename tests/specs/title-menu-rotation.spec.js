@@ -9,6 +9,7 @@
 // flip, and #menu-buttons still painted a thumb that clipped door labels on a
 // narrow landscape column. This spec drives the rotation sequences that would
 // have caught those — phone sizes, tablet, and a settings open/close round-trip.
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { exportStore, measureInPage, settleInPage, judge } from "../helpers/title-fit.mjs";
 
@@ -250,7 +251,7 @@ test.describe("title rotation late-iOS size settle", () => {
    the Home Screen launch depends on is pinned by tests/unit/sheetshape-orientation.test.mjs. */
 test.describe("title rotation bryce-852x393 (insets, export)", () => {
   const PORT = { width: 393, height: 852, insets: { top: 59, left: 0, bottom: 34, right: 0 } };
-  const LAND = { width: 852, height: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 } };
+  const LAND = { width: 852, height: 393, insets: BRYCE_WINDOWS.standalone.insets };
   test.use({ viewport: { width: PORT.width, height: PORT.height }, hasTouch: true, isMobile: true });
 
   test("a portrait launch turned landscape fits like a landscape launch, and back", async ({ page }) => {

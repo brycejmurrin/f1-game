@@ -213,7 +213,7 @@ const ApexBridge = (function () {
       out.insets = { left: r2(e.left - full.left), top: r2(e.top - full.top), right: r2(full.right - e.right), bottom: r2(full.bottom - e.bottom), fixedBox: [r2(full.width), r2(full.height)] };
       const z = box("left:0;top:0;width:100px;height:50px;zoom:2");
       const c = d.createElement("div");
-      c.style.cssText = "width:10vw;height:1px;padding-left:env(safe-area-inset-left,0px)";
+      c.style.cssText = "box-sizing:content-box;width:10vw;height:1px;padding-left:env(safe-area-inset-left,0px)";
       p.appendChild(c);
       const cr = c.getBoundingClientRect(), vw = out.units.vw || 0, cps = getComputedStyle(c);
       out.zoom = {

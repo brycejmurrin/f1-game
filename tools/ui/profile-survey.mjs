@@ -13,16 +13,16 @@ import { bootPage, resetToTitle, waitScreenReady } from "./menu-capture.mjs";
 import { chromiumArgs } from "../shot/hud-survey.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
 import { probeMenu, leaveToMenu } from "./menu-mock.mjs";
-import { readProfile } from "../lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, readProfile } from "../lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 // SURVEY_PROFILE=live|legacy (default legacy, the file the report notes were measured on); live = his phone today.
 const EXPORT = readProfile(process.env.SURVEY_PROFILE || "legacy");
 const WINDOWS = {
-  A: { w: 852, h: 393, l: 59, r: 59, t: 0, b: 21, standalone: true },
-  C: { w: 852, h: 283, l: 59, r: 59, t: 0, b: 0 },
+  A: { w: 852, h: 393, l: 59, r: 59, t: 0, b: BRYCE_WINDOWS.standalone.insets.bottom, standalone: true },
+  C: { w: 852, h: 283, l: 59, r: 59, t: 0, b: BRYCE_WINDOWS["safari-short"].insets.bottom },
   D: { w: 844, h: 390, l: 47, r: 47, t: 0, b: 21, standalone: true },
-  As: { w: 852, h: 393, l: 59, r: 59, t: 0, b: 21, standalone: true, stale: true },
+  As: { w: 852, h: 393, l: 59, r: 59, t: 0, b: BRYCE_WINDOWS.standalone.insets.bottom, standalone: true, stale: true },
 };
 const wantW = (process.argv[2] || "A,C,D").split(",");
 const wantS = process.argv[3] && process.argv[3] !== "*" ? process.argv[3].split(",") : null;

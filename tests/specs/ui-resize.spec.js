@@ -49,7 +49,7 @@ import fs from "node:fs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
-import { readProfile } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -575,7 +575,7 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 // THE UI CONTRACT'S SETTINGS AND DIALOG CELLS (UI contract 2026-11-06 §4.2, §4.4, gaps 3/4/5/14 and
 // §6; PR B of #5153). The exception to this file's "same as a fresh load" oracle, and deliberately so: the contract
 // names the ONE phone-landscape layout, so these cells assert values — the owner's three windows, A the Home
-// Screen app (852x393, insets 59/21/59), C the same phone as a Safari tab (852x283, 59/0/59), D the spec phone
+// Screen app (852x393, insets 59/20/59), C the same phone as a Safari tab (852x283, 59/20/59), D the spec phone
 // (844x390, no insets) — × TEXT SIZE normal/large × UI SIZE 100/130, seeded from Bryce's LOAD SETTINGS export (UI
 // 109, HUD 155, HIGH CONTRAST, textSize large). `SheetShape.layoutProbe` is the assertion (the `__apex.sheetFit()`
 // alias waits on #5155, which owns js/agent/apex.js); a screenshot is sign-off only. One boot per window; the four
@@ -586,10 +586,10 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 // the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
 const LEGACY_PROFILE = readProfile("legacy");
 const CONTRACT_WINDOWS = [
-  { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS.standalone.insets.bottom },
   // C carries the fit-band cell: at UI 130 its 267 px safe box caps the 220-own settings sheet (1.214), the only
   // A/C/D cell that is capped at all.
-  { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0, band: true },
+  { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom, band: true },
   { name: "D-spec-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
 const twoFrames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -758,14 +758,14 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
 
 // UI contract cells (#5153 gap 10; PR D of #5153 — `LEGACY_PROFILE` is PR B's constant above, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
 // measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pause card in the owner's three
-// windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the Safari tab (852x283,
-// insets 59/0/59), D the spec phone (844x390) — seeded from the legacy export (TEXT large,
+// windows — A the iOS Home Screen app (852x393, insets 59/20/59), C the Safari tab (852x283,
+// insets 59/20/59), D the spec phone (844x390) — seeded from the legacy export (TEXT large,
 // UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
 // card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
 // LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.
 const PHONE_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
+  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS.standalone.insets.bottom } },
+  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS["safari-short"].insets.bottom } },
   { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
 ];
 for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + win.name, () => {

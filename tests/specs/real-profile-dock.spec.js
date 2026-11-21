@@ -15,10 +15,10 @@
 //
 // Seeds the export the way a boot reads it (tools/lib/bryce-phone.mjs ownerStore) with CDP safe-area
 // insets. Not emulated: iOS itself (display-mode: standalone); nothing measured here reads it.
-import { OWNER_EXPORT, ownerStore } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, OWNER_EXPORT, ownerStore } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
-const GEO = { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 } };
+const GEO = { name: "852x393-standalone", w: 852, h: 393, insets: BRYCE_WINDOWS.standalone.insets };
 
 /** His live export (tools/lib/bryce-phone.mjs `live`, the 2026-11-10 file) as the store keys a boot writes. */
 function liveStore() {
