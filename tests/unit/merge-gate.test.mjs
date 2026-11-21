@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict, raisesCovered,
+  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
   baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
@@ -2312,6 +2312,78 @@ test("#5407 evaluate: the retest row is local (never --trusted), waits with a pe
 
 /** A fixture ratchets.d fragment path no tree carries, built so the source-path lint does not read it as a reference. */
 const FRAG = (name) => ["tests", "data", "ratchets.d", `${name}.json`].join("/");
+
+test("raise row reads pinned ratchet blobs locally with the same result as the Contents API", t => {
+  const root = scratch("gate-ratchet-objects-");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => {
+    const r = spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=test", ...args], { cwd: root, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim();
+  };
+  git("init", "-q");
+  function commit() {
+    git("add", "-A");
+    git("commit", "-qm", "fixture");
+    return git("rev-parse", "HEAD");
+  }
+  const table = "tests/data/ratchets.json", fragments = path.posix.dirname(FRAG("first"));
+  function write(file, content) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), content);
+  }
+  const rows = { [table]: { tree: { widgets: { ceiling: 12, absorb: 1 }, flags: 4 } } };
+  write(table, JSON.stringify(rows[table]));
+  const base = commit(), versions = { [base]: { ...rows } };
+  const changes = { first: { widgets: 4 }, second: { widgets: -1, flags: -2 } };
+  for (const [name, tree] of Object.entries(changes)) {
+    rows[FRAG(name)] = { tree };
+    write(FRAG(name), JSON.stringify({ tree }));
+  }
+  const head = commit();
+  versions[head] = rows;
+  write(table, "the uncommitted working copy must never be read");
+  const calls = [];
+  function request(route) {
+    calls.push(route);
+    if (route === `compare/${base}...${head}`) return { json: { merge_base_commit: { sha: base } } };
+    const [, file, ref] = /^contents\/(.+)\?ref=([a-f0-9]{40})$/.exec(route) || [];
+    const files = versions[ref] || {};
+    if (file === fragments && files[FRAG("first")]) {
+      return { json: Object.keys(files).filter(f => f.startsWith(fragments + "/"))
+        .map(f => ({ type: "file", name: path.basename(f), path: f })) };
+    }
+    return Object.hasOwn(files, file)
+      ? { json: { encoding: "base64", content: Buffer.from(JSON.stringify(files[file])).toString("base64") } }
+      : { error: "HTTP 404" };
+  }
+  const remote = prRaisesAt(head, base, request);
+  assert.deepEqual(remote, { raises: [{ metric: "widgets", from: 12, to: 15 }] });
+  assert.ok(calls.some(route => route.startsWith("contents/")));
+  calls.length = 0;
+  assert.deepEqual(prRaisesAt(head, base, request, root), remote);
+  assert.deepEqual(calls, [`compare/${base}...${head}`], "one compare, zero per-fragment API calls");
+  const unavailable = "1".repeat(40);
+  versions[unavailable] = rows;
+  assert.deepEqual(treeCeilingsAt(unavailable, request, root), { tree: { widgets: 15, flags: 2 }, absorb: { widgets: 1 } });
+  assert.ok(calls.some(route => route.endsWith("?ref=" + unavailable)), "a missing local commit uses the immutable remote ref");
+
+  assert.ok(treeCeilingsAt("HEAD", request, root).error, "a symbolic ref cannot read a moving local HEAD as a pinned commit");
+
+  write(table, JSON.stringify(rows[table]));
+  write(FRAG("first"), "broken JSON");
+  const malformed = commit();
+  fs.rmSync(path.join(root, FRAG("first")));
+  fs.symlinkSync("../ratchets.json", path.join(root, FRAG("first")));
+  const symbolic = commit();
+  fs.rmSync(path.join(root, table));
+  const missing = commit();
+  calls.length = 0;
+  assert.ok(treeCeilingsAt(malformed, request, root).error, "malformed committed fragment refuses the measurement");
+  assert.ok(treeCeilingsAt(symbolic, request, root).error, "a symbolic link is not a ratchet fragment");
+  assert.ok(treeCeilingsAt(missing, request, root).error, "missing base table refuses the measurement");
+  assert.deepEqual(calls, [], "malformed committed input does not silently switch sources");
+});
 
 test("#5405 raise: a tree-wide ceiling raise needs Bryce's or an agent's ratchet-raise (D-042), bound to the head; lower, unchanged and per-file pass", () => {
   assert.equal(RAISE_LABEL, "ratchet-raise");
