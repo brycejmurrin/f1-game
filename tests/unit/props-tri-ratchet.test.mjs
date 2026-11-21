@@ -43,9 +43,10 @@ const require = createRequire(import.meta.url);
 // where the phantom stand stood (mexico +17 trees, cota +2); and curved stand rows
 // span midpoint to midpoint instead of stopping short (#2204: fuji's back terraces
 // gapped up to 28.8 m). Compaction stays identical on every circuit.
-// 2026-11-21 (#6035/#6036): spa 348438 -> 390048 (+11.9 %). Spa's furniture.bakedPines is OFF, so every pine is
-// the procedural tiered cone again, as players had it before #5782. The VM always saw the pack models, so this row
-// had measured the baked pine (a square trunk with six leaf slivers: no crown) that players got only on 2026-11-20.
+// 2026-11-21 (#6035/#6036): spa 348438 -> 390048 (+11.9 %). Spa's furniture.bakedPines was OFF, so every pine was
+// the procedural tiered cone again. The VM always saw the pack models, so the prior row had measured the baked pine
+// (a square trunk with six leaf slivers: no crown) that players got only on 2026-11-20.
+// 2026-11-21 (#6037): spa 390048 -> 376884 with bakedPines ON again after the crown rebake (instanced pack pine).
 // Compaction stays identical (props-tris.cjs spa: identical true).
 // 2026-11-18 (#5303, Bryce `decision: A`): hungaroring 213167 -> 214279 (+0.52 %). The
 // deploy tip alone measured 214232 (+0.4996 %); this PR's midpoint-to-midpoint stand

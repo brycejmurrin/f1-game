@@ -153,7 +153,7 @@ test("the record and the batch order are deterministic; the pack's arrays are un
 
 // THE MODEL SET IS READ FROM TEXT. The per-circuit loader (Assets.modelIds / modelsReady) fetches only the pack ids it
 // finds QUOTED in the text it is handed, so an id an ENGINE helper stamps was never fetched: Spa asks for baked pines
-// (furniture.bakedPines) through nature.js, its closure names no pine, and Spa shipped procedural pines.
+// (furniture.bakedPines) through nature.js; its closure names no pine. #6037 ships Spa with bakedPines on again.
 // TrackDef.scenerySource is the one place the page and the build worker get that text, engine-implied ids included.
 // The guard is behavioural: every id a build actually asks Assets for must be quoted in that circuit's text.
 const quotedIn = (src, id) => src.includes('"' + id + '"') || src.includes("'" + id + "'") || src.includes("`" + id + "`");
@@ -162,15 +162,15 @@ function buildRecording(id, furniture) {
   const TrackDef = vm.runInContext("TrackDef", env.sandbox);
   const registry = vm.runInContext("typeof TrackScenery !== 'undefined' ? TrackScenery : {}", env.sandbox);
   const base = env.Tracks.LIST.find((d) => d.id === id), asked = new Set(), real = env.sandbox.Assets.modelSync;
-  // furniture: a flag turned on for this build only (Spa's bakedPines is off until pine_lod0 has a crown, #6035).
+  // Optional furniture override for circuits that do not ship the flag (Monza in the pair below).
   const def = furniture ? { ...base, furniture: { ...base.furniture, ...furniture } } : base;
   env.sandbox.Assets.modelSync = (m) => { const got = real(m); if (got) asked.add(m); return got; };
   const track = env.Tracks.build(def);
   return { def, track, asked: [...asked], src: TrackDef.scenerySource(def, registry), closure: String(def.scenery || registry[id]), TrackDef };
 }
 test("Spa's model text names the baked pine its def asks for, and the build stamps it", () => {
-  const spa = buildRecording("spa", { bakedPines: true });
-  assert.equal(!!(spa.def.furniture && spa.def.furniture.bakedPines), true, "Spa with bakedPines is the build this test stands on");
+  const spa = buildRecording("spa");
+  assert.equal(!!(spa.def.furniture && spa.def.furniture.bakedPines), true, "Spa ships bakedPines after the #6037 crown rebake");
   assert.equal(quotedIn(spa.closure, "pine_lod0"), false, "the closure itself still names no pine: the engine helper does");
   assert.equal(quotedIn(spa.src, "pine_lod0"), true, "the text the loader scans quotes the pine");
   assert.equal(spa.src.startsWith(spa.closure), true, "and still carries the whole closure, so every id it names");
@@ -178,7 +178,7 @@ test("Spa's model text names the baked pine its def asks for, and the build stam
   assert.equal(Object.values(spa.TrackDef.ENGINE_MODELS).includes("pine_lod0"), true);
 });
 for (const id of ["spa", ID]) test(`every pack model the ${id} build asks for is quoted in the text its loader scans`, () => {
-  const r = buildRecording(id, id === "spa" ? { bakedPines: true } : null);
+  const r = buildRecording(id);
   assert.ok(r.asked.length > 0, "the build placed pack models");
   assert.deepEqual(r.asked.filter((m) => !quotedIn(r.src, m)), [],
     "a model id spelled only in an engine helper is never fetched on a player's page: add its def flag to TrackDef.ENGINE_MODELS");
