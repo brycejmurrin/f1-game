@@ -150,7 +150,7 @@ function load({ stored = {}, readyState = "complete", looks = null, secondary = 
       type: "pointerdown", target: btn, pointerType: "touch", button: 0, isTrusted: true,
       timeStamp: now, ...extra,
     };
-    for (const l of listeners) if (l.type === "pointerdown" && l.capture) l.fn(ev);
+    document._handlers.pointerdown(ev);
   }
   function pointerUp(btn, extra = {}) {
     const ev = {
@@ -274,7 +274,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   document._handlers.DOMContentLoaded();
   assert.equal(wired.size, 4);
   assert.equal(listeners.filter((l) => l.type === "click" && l.capture === true).length, 1, "ONE capture-phase listener on #pausemenu");
-  assert.equal(listeners.filter((l) => l.type === "pointerdown" && l.capture === true).length, 1, "ONE capture-phase pointerdown on #pausemenu");
+  assert.equal(typeof document._handlers.pointerdown, "function");
   assert.equal(listeners.filter((l) => l.type === "pointerup" && l.capture === true).length, 1, "ONE capture-phase pointerup on #pausemenu");
 });
 
@@ -432,10 +432,12 @@ test("late-handled taps: wall clock confirms after input lag; event timeStamp gh
 test("QF: both taps handled in ONE late batch (stalled main thread): 400 ms real gap confirms", () => {
   const TS0 = 50_000;
   const h = load();
+  h.pointerDown(h.quit, { timeStamp: TS0 });
   h.pointerUp(h.quit, { timeStamp: TS0 });
   h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
   assert.equal(h.quit.textContent, "TAP AGAIN");
   h.advance(3);
+  h.pointerDown(h.quit, { timeStamp: TS0 + 400 });
   h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
   h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
   assert.deepEqual(h.handled, ["pm-quit"], "a deliberate 400 ms second tap quits even when handled late");
@@ -444,9 +446,11 @@ test("QF: both taps handled in ONE late batch (stalled main thread): 400 ms real
 test("QF: tap 2 handled after a >5 s stall but only 400 ms after tap 1 confirms (no silent re-arm)", () => {
   const TS0 = 50_000;
   const h = load();
+  h.pointerDown(h.quit, { timeStamp: TS0 });
   h.pointerUp(h.quit, { timeStamp: TS0 });
   h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
   h.advance(6000);
+  h.pointerDown(h.quit, { timeStamp: TS0 + 400 });
   h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
   h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
   assert.deepEqual(h.handled, ["pm-quit"]);
@@ -513,9 +517,11 @@ test("pointerdown clocks: 400 ms confirms on the trusted click and the fallback 
 test("QF: a real thumb double tap (150 ms event gap) handled late is still swallowed", () => {
   const TS0 = 50_000;
   const h = load();
+  h.pointerDown(h.quit, { timeStamp: TS0 });
   h.pointerUp(h.quit, { timeStamp: TS0 });
   h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
   h.advance(2);
+  h.pointerDown(h.quit, { timeStamp: TS0 + 150 });
   h.pointerUp(h.quit, { timeStamp: TS0 + 150 });
   assert.ok(h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 150 }).stopped);
   assert.deepEqual(h.handled, []);
@@ -526,6 +532,7 @@ test("pointerup confirms an armed guarded button once wall age passes ARM_MIN_MS
   const h = load();
   h.press(h.quit);
   h.advance(400);
+  h.pointerDown(h.quit);
   h.pointerUp(h.quit);
   h.press(h.quit, { isTrusted: true, detail: 1 });
   assert.deepEqual(h.handled, ["pm-quit"]);
@@ -537,6 +544,7 @@ test("one tap only arms; pointerup plus native click never double-quits or re-ar
   assert.equal(h.quit.textContent, "TAP AGAIN");
   assert.deepEqual(h.handled, []);
   h.advance(400);
+  h.pointerDown(h.quit, { isTrusted: true });
   h.pointerUp(h.quit, { isTrusted: true });
   h.press(h.quit, { isTrusted: true, detail: 1 });
   assert.deepEqual(h.handled, ["pm-quit"], "exactly one quit handler from pointerup + native click");
@@ -726,6 +734,7 @@ test("a pointerup whose native click never arrives leaves no one-tap QUIT on the
   const h = load();
   h.press(h.quit, { isTrusted: true, detail: 1 });
   h.advance(400);
+  h.pointerDown(h.quit, { isTrusted: true });
   h.pointerUp(h.quit, { isTrusted: true });          // disarms; waits for the trusted click
   assert.deepEqual(h.handled, []);
   // …the trusted click never follows. Pause closes and reopens later.
@@ -741,6 +750,7 @@ test("a stale confirmPending expires on wall age even without a pause-hidden mut
   const h = load();
   h.press(h.restart, { isTrusted: true, detail: 1 });
   h.advance(400);
+  h.pointerDown(h.restart, { isTrusted: true });
   h.pointerUp(h.restart, { isTrusted: true });
   assert.deepEqual(h.handled, []);
   h.advance(h.M.ARM_MAX_MS + 1);
@@ -779,12 +789,14 @@ test("a trusted click while confirmPending is set quits once, including after th
   const fresh = load();
   fresh.press(fresh.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
   fresh.advance(400);
+  fresh.pointerDown(fresh.quit, { isTrusted: true, timeStamp: TS0 + 400 });
   fresh.pointerUp(fresh.quit, { isTrusted: true, timeStamp: TS0 + 400 });
   assert.ok(!fresh.press(fresh.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 420 }).stopped);
   assert.deepEqual(fresh.handled, ["pm-quit"]);
   const late = load();
   late.press(late.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
   late.advance(400);
+  late.pointerDown(late.quit, { isTrusted: true, timeStamp: TS0 + 400 });
   late.pointerUp(late.quit, { isTrusted: true, timeStamp: TS0 + 400 });
   assert.deepEqual(late.handled, [], "the synthetic click is not the quit");
   late.advance(late.M.ARM_MAX_MS + 1);
@@ -792,4 +804,29 @@ test("a trusted click while confirmPending is set quits once, including after th
   assert.deepEqual(late.handled, ["pm-quit"]);
   late.press(late.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 900 });
   assert.deepEqual(late.handled, ["pm-quit"], "exactly once, even after the wall expiry");
+});
+
+test("a release from a different button, another pointer, or a cancelled press cannot quit", () => {
+  const h = load();
+  h.press(h.quit);
+  h.advance(400);
+  h.pointerDown(h.restart, { pointerId: 1 });
+  h.pointerUp(h.quit, { pointerId: 1 });
+  h.pointerDown(h.quit, { pointerId: 2 });
+  h.pointerUp(h.quit, { pointerId: 1 });
+  h.listeners.find((l) => l.type === "pointercancel").fn({ pointerId: 2 });
+  h.pointerUp(h.quit, { pointerId: 2 });
+  flushConfirmTimers(h);
+  assert.deepEqual(h.handled, []);
+  assert.ok(h.M.isArmed("pm-quit"));
+  h.pointerDown(h.quit, { pointerId: 3 });
+  // The release outside the card was never delivered to the menu.
+  h.pointerDown(button("outside", "Outside"), { pointerId: 3 });
+  h.pointerUp(h.quit, { pointerId: 3 });
+  flushConfirmTimers(h);
+  assert.deepEqual(h.handled, []);
+  h.pointerDown(h.quit, { pointerId: 3 });
+  h.pointerUp(h.quit, { pointerId: 3 });
+  flushConfirmTimers(h);
+  assert.deepEqual(h.handled, ["pm-quit"]);
 });

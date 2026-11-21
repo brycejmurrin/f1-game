@@ -60,10 +60,17 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   });
   if (G.soundOn) GameAudio.uiSelect();
 };
-function openTimeTrial(selectDaily) {
+function openTimeTrial(selectDaily, staged) {
   G.flow = "gp"; G.session = "tt";
-  if (selectDaily) G.daily.select();
-  else restoreFreePlaySelection();
+  if (selectDaily) G.daily.select(staged?.day, staged?.mode);
+  else {
+    if (staged?.track) G.daily.stop();
+    restoreFreePlaySelection();
+    if (staged?.track) {
+      const idx = Tracks.LIST.findIndex(entry => entry.id === staged.track);
+      if (idx >= 0) G.trackIdx = idx;
+    }
+  }
   G.buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (G.soundOn) GameAudio.uiSelect();
@@ -126,11 +133,9 @@ async function consumeGhostHash() {
           if (ti >= 0) G.teamIdx = ti;
         },
         openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
-        openDaily: (decoded) => {
+        openDaily: (_decoded, staged) => {
           G.flow = "gp"; G.session = "tt";
-          const today = DailyChallenge.dayKey();
-          if (decoded.day === today) G.daily.select(decoded.day);
-          else G.daily.select(today);
+          G.daily.select(staged.day, staged.mode);
           G.buildSelect();
           vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
           G.scheduleFlybyTrack(true);
@@ -138,17 +143,7 @@ async function consumeGhostHash() {
         // A card's lap link (#share=APXC1): today's Daily goes through openDaily;
         // any other day stages the circuit in free-play time trial.
         today: DailyChallenge.dayKey(),
-        openTrack: (decoded) => {
-          const idx = Tracks.LIST.findIndex((entry) => entry.id === decoded.track);
-          if (idx < 0) return;
-          G.flow = "gp"; G.session = "tt";
-          G.daily.stop();
-          restoreFreePlaySelection();
-          G.trackIdx = idx;
-          G.buildSelect();
-          vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-          G.scheduleFlybyTrack(true);
-        },
+        openTrack: (decoded) => openTimeTrial(false, decoded),
       }),
       notify: (message, result) => {
         if (started.n) Log.warn("game", "share apply tried startRace — ignored");

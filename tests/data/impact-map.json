@@ -2495,6 +2495,9 @@
       "onPause": [
         "tests/unit/replay-buf.test.mjs"
       ],
+      "onRaceStart": [
+        "tests/unit/replay-buf.test.mjs"
+      ],
       "onTick": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/replay-buf.test.mjs",
@@ -3391,8 +3394,10 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -3400,7 +3405,14 @@
       ],
       "getCustomLiveries": [
         "tests/unit/data-hardening-4477.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs"
+      ],
+      "getLiveryId": [
+        "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "identityValue": [
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "normalizeImported": [
         "tests/unit/livery-paint-zones.test.mjs"
@@ -3414,15 +3426,20 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
+      "saveAndFitLivery": [
+        "tests/unit/career-save-kept.test.mjs"
+      ],
       "saveLiveryId": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setCustomLiveries": [
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setIdentityValue": [
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "wingColorOf": [
@@ -4138,6 +4155,7 @@
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
@@ -4428,7 +4446,8 @@
       ],
       "identityValue": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/career-data-audio-improvements.test.mjs"
+        "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-save-kept.test.mjs"
       ],
       "inCareer": [
         "tests/unit/career-backup.test.mjs",
@@ -4850,6 +4869,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -5426,7 +5446,8 @@
     },
     "js/core/clipboard.js": {
       "read": [
-        "tests/unit/gfx-debug-overlay.test.mjs"
+        "tests/unit/gfx-debug-overlay.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "*": [
         "tests/unit/free-cam.test.mjs",
@@ -5863,6 +5884,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rain-cells.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -6059,6 +6081,7 @@
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
@@ -7050,9 +7073,6 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "shareCard": [
-        "tests/unit/track-designer-dom.test.mjs"
-      ],
-      "shareCode": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "showPane": [
@@ -10891,6 +10911,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "setReady": [
+        "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"
@@ -11730,7 +11751,8 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "create": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "download": [
         "tests/unit/phone-recorder.test.mjs"
@@ -11739,7 +11761,8 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "frame": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "init": [
         "tests/unit/phone-recorder.test.mjs"
@@ -11751,7 +11774,8 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "sample": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "serialize": [
         "tests/unit/phone-recorder.test.mjs"
@@ -11760,10 +11784,12 @@
         "tests/unit/phone-recorder.test.mjs"
       ],
       "start": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "stop": [
-        "tests/unit/phone-recorder.test.mjs"
+        "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/soak-run.test.mjs"
       ],
       "*": [
         "tests/unit/save-schema-registry.test.mjs"
@@ -13617,6 +13643,9 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
+      "today": [
+        "tests/unit/daily-challenge.test.mjs"
+      ],
       "*": [
         "tests/unit/start-race-latch.test.mjs"
       ]
@@ -14375,7 +14404,8 @@
       "classify": [
         "tests/unit/career-settle.test.mjs",
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/race-control.test.mjs"
+        "tests/unit/race-control.test.mjs",
+        "tests/unit/share-card-data.test.mjs"
       ],
       "clearHold": [
         "tests/unit/race-control.test.mjs"
@@ -15239,10 +15269,18 @@
     "js/race/tv-graphics.js": {
       "create": [
         "tests/unit/game-ctx-surface.test.mjs",
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "diff": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
+      ],
+      "status": [
+        "tests/unit/real-race-lazy.test.mjs"
+      ],
+      "stop": [
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "tick": [
         "tests/unit/overlay-feed.test.mjs"
@@ -19908,6 +19946,7 @@
       ],
       "*": [
         "tests/specs/ui-button-touch.spec.js",
+        "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/ui-reset-tap-floor.test.mjs"
       ]
@@ -20156,6 +20195,7 @@
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "onFocusIn": [
+        "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
@@ -20941,6 +20981,7 @@
     "js/ui/share-code.js": {
       "apply": [
         "tests/unit/game-state-audit-vm.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "consumeHash": [
@@ -20952,17 +20993,21 @@
       ],
       "decode": [
         "tests/unit/ghost-share.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "encode": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/ghost-share.test.mjs",
-        "tests/unit/share-code.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/share-code.test.mjs",
+        "tests/unit/title-flow.test.mjs"
       ],
       "lastSession": [
         "tests/unit/share-code.test.mjs"
       ],
       "messageFor": [
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "recordSession": [
@@ -21034,7 +21079,8 @@
     "js/ui/title-flow.js": {
       "consumeGhostHash": [
         "tests/unit/ghost-share.test.mjs",
-        "tests/unit/source-pin-hygiene.test.mjs"
+        "tests/unit/source-pin-hygiene.test.mjs",
+        "tests/unit/title-flow.test.mjs"
       ],
       "create": [
         "tests/unit/ghost-share.test.mjs",

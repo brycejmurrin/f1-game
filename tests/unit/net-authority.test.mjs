@@ -525,6 +525,8 @@ function lobbyG() {
     raceTyreWear: "off", raceReliability: "off",   // a test re-defines these as persisting accessors
     setNetRoom: () => {},
     store: { get: (k, dflt) => dflt, set: () => {} },
+    // Real members a test sets, or beginRace writes, later (the fake is closed, #5982).
+    openQualiForNet: undefined, seed: 0, flow: undefined,
   });
   REC.set(G, r);
   return G;
@@ -682,8 +684,11 @@ test("LOBBY phase: a guest rate-limits the host's QUALI/QLIVE at the room's wind
   } finally { lobby.cancel(); }
 });
 
-test("LOBBY phase: SETTINGS is validated atomically before guest state changes", async () => {
+test("LOBBY phase: SETTINGS is validated atomically before guest state changes", async (t) => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  let wireOffset = 0;
+  const now = performance.now.bind(performance);
+  t.mock.method(performance, "now", () => now() + wireOffset);
   const snapshot = () => ({
     track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather,
     tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty, grid: G.raceGrid,
@@ -708,12 +713,16 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
       // Atomicity: valid fields alongside one invalid field change nothing.
       { track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: "yes" },
     ];
+    // Keep validation independent from burst delivery: every invalid payload
+    // must reach applySettings, including the one just before the recovery.
     for (const payload of invalid) {
+      wireOffset += 250;
       peerSays("settings", payload);
       await settle();
       assert.deepEqual(snapshot(), before, JSON.stringify(payload));
     }
 
+    wireOffset += 250;
     peerSays("settings", {
       track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false, grid: "random",
       changeable: true, wxArc: { to: "rain", dur: 240 },
@@ -982,10 +991,6 @@ test("a peer WITHOUT a grid slot cannot arm the start", () => {
 });
 
 test("pickRemoteSlot keeps any-fallback only when profile is null", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/net/netplay.js"), "utf8");
-  assert.match(src, /lastSlotFallback = "profile-miss"/);
-  assert.match(src, /pickRemoteSlot\(null\) has always had the any-free-car/);
-
   const tagged = (n) => {
     const G = stubG(n);
     const ids = ["mclaren", "ferrari", "redbull"];
@@ -2044,4 +2049,70 @@ test("broadcast() serialises an event ONCE for every session, and each session's
   assert.equal(payloadStringifies, 1, "the payload must be serialised once, not once per session");
   const want = JSON.stringify({ t: NetPlay.EV.LAP, d: data });
   for (const w of wires) assert.deepEqual(w, [want], "each session's wire carries the same bytes as the per-session encoding");
+});
+
+test("a partial lobby roster seats connected drivers awaiting HELLO after named peers", () => {
+  const G = stubG(4);
+  G.cars[1].team = { id: "alpha" }; G.cars[1].seat = 0;
+  const net = NetPlay.create(G);
+  const profiled = fakeSession(), late = fakeSession(), watching = fakeSession();
+  const started = net.start({
+    role: "host", session: profiled,
+    sessions: [{ id: "late", session: late }, { id: "watch", kind: "spectator", session: watching },
+      { id: "known", session: profiled }],
+    peers: [{ id: "known", profile: { team: "alpha", driver: 0 } }],
+  });
+  assert.equal(started.ok, true);
+  assert.deepEqual(net.status().remotes.map((r) => r.id), [1, 2]);
+  assert.equal(net.status().spectators, 1);
+  net.hostStart();
+  profiled.deliver("armed", {});
+  assert.equal(G.netStart, null, "the profiled driver alone cannot release the late driver's grid hold");
+  late.deliver("armed", {});
+  assert.ok(G.netStart, "both connected drivers are seated; a spectator does not hold the grid");
+  net.stop();
+});
+
+test("a guest receives the last host settings after a burst and cancels a pending revision on exit", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  let starts = 0; G.openQualiForNet = () => { starts++; };
+  const send = (laps, revision) => peerSays("settings", {
+    track: 1, laps, weather: "dry", tod: "day", quali: true, difficulty: "normal", revision,
+  });
+  try {
+    for (let i = 0; i < 8; i++) send(3 + i, i + 1);
+    await settle();
+    assert.ok(G.raceLaps < 10, "the burst is still rate limited");
+    lobby.setReady(true);
+    assert.equal(lobby.roomState().selfReady, false, "a guest cannot confirm stale rules");
+    peerSays("go", {}); await settle();
+    assert.equal(starts, 0, "revisionless GO waits for current rules");
+    await sleep(1050);
+    assert.equal(G.raceLaps, 10, "the final valid snapshot reached the guest");
+    lobby.setReady(true);
+    assert.equal(lobby.roomState().selfReady, true, "the final revision can be confirmed");
+    for (let i = 0; i < 8; i++) send(4 + i, i + 9);
+    await settle();
+    lobby.cancel();
+    const restored = G.raceLaps;
+    await sleep(1050);
+    assert.equal(G.raceLaps, restored, "the expired room cannot apply its queued snapshot");
+  } finally { lobby.cancel(); }
+});
+
+test("a GO behind a burst of unchanged settings starts the approved race once", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  let starts = 0; G.openQualiForNet = () => { starts++; };
+  try {
+    lobby.setReady(true);
+    for (let i = 0; i < 6; i++) peerSays("settings", {
+      track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
+      quali: G.raceQuali, difficulty: G.difficulty,
+    });
+    peerSays("go", { revision: 0 });
+    await settle();
+    assert.equal(starts, 0);
+    await sleep(1050);
+    assert.equal(starts, 1);
+  } finally { lobby.cancel(); }
 });

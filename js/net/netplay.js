@@ -821,33 +821,23 @@ const NetPlay = (function () {
       localCar = role === SpectatePolicy.SPECTATOR ? null
         : (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
-      // One profile today, an array when the room grows; Phase C only changes
-      // where the list comes from.
-      //
-      // `opts.peers` is built from the lobby's _peers map (filled from HELLO),
-      // so it starts empty until a HELLO arrives — a guest that walks straight
-      // into the garage, or whose HELLO is simply late, has a wide-open session
-      // and an empty peers list. `[] || fallback` kept that empty array instead
-      // of falling back, so joining was empty, remotes stayed empty, and
-      // start() bailed no_slot: measured on the guest-in-the-garage path
-      // (bahrain, 22 cars), race built then a full teardown on "Could not find
-      // a grid slot for both drivers".
-      //
-      // A profile only decides WHICH slot, and
-      // pickRemoteSlot(null) has always had the any-free-car arm for that — so
-      // an empty or profile-less join must still fall through to it rather
-      // than being read as "no peers".
-      const joining = ((opts.peers && opts.peers.length) ? opts.peers
-        : (opts.sessions && opts.sessions.length)
-          ? opts.sessions.map((e) => ({ profile: null, mods: null, kind: peerKind(e), id: e.id != null ? e.id : PEER_ONE }))
-          : [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }])
-        .filter((peer) => !SpectatePolicy.isSpectator(peer));
+      // Reserve named seats first, including guests whose HELLO was relayed by
+      // the host. A connected driver whose HELLO is late gets a remaining seat.
+      const joining = (opts.peers || []).slice();
+      for (const entry of opts.sessions || []) {
+        const id = entry.id != null ? entry.id : PEER_ONE;
+        if (!joining.some((peer) => (peer.id ?? PEER_ONE) === id)) {
+          joining.push({ id, kind: peerKind(entry) });
+        }
+      }
+      if (!joining.length) joining.push({ id: PEER_ONE, profile: peerProfile, mods: opts.peerMods });
       const hasSpectator = incoming.some((entry) => {
         const id = entry.id != null ? entry.id : PEER_ONE;
         return SpectatePolicy.isSpectator((opts.peers || []).find((peer) => peer.id === id) || entry);
       });
       peerCar.clear();
       for (const j of role === SpectatePolicy.SPECTATOR ? [] : joining) {
+        if (SpectatePolicy.isSpectator(j)) continue;
         const car = pickRemoteSlot(j.profile);
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));

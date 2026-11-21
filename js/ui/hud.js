@@ -119,7 +119,7 @@ const teamCss = (c) => {
 // The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
 const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
 let _secRows = null;
-let _secFlash = [0, 0, 0];
+const _secFlash = [0, 0, 0];
 // THE GAIN, not only the split: each sector row shows the split's delta to the
 // best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
 // _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
@@ -2169,16 +2169,8 @@ function updateHud(force, dtMs) {
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
       if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
-      if (_secFlash[i] > 0) {
-        _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
-        hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
-        hToggle(_secRows[i].parentElement, "sec-flash-pb", _secFlash[i] > 0 && pb);
-        hToggle(_secRows[i].parentElement, "sec-flash-slow", _secFlash[i] > 0 && !pb && t != null);
-      } else {
-        hToggle(_secRows[i].parentElement, "sec-flash", false);
-        hToggle(_secRows[i].parentElement, "sec-flash-pb", false);
-        hToggle(_secRows[i].parentElement, "sec-flash-slow", false);
-      }
+      if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
+      paintSectorFlash(i, pb, t != null);
     }
   }
   if (els.hudLimits) {
@@ -2259,7 +2251,15 @@ function invalidateMap() { _minimap.invalidate(); }
 // against the LAST race's finishing position and flashed "down" at lights-out.
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 let _pitSideTrack = null, _pitSide = 1;
+function paintSectorFlash(i, personalBest, hasSplit) {
+  const row = _secRows[i].parentElement, active = _secFlash[i] > 0;
+  hToggle(row, "sec-flash", active);
+  hToggle(row, "sec-flash-pb", active && personalBest);
+  hToggle(row, "sec-flash-slow", active && !personalBest && hasSplit);
+}
 function resetRace() {
+  _secFlash.fill(0);
+  if (_secRows) for (let i = 0; i < _secRows.length; i++) paintSectorFlash(i, false, false);
   _pitSideTrack = null; _pitSide = 1;   // per race: left set, it pinned the last pit-cue circuit across races
   if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
   if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud

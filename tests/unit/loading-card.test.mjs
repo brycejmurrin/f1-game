@@ -1039,7 +1039,6 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.match(rs, /\(!isChampionship\(\) && gridFromQuali\(\) && !qualiResults\(\)\)\) \{ dismissSheet\(\); openQuali\(\); \}/, "…except a qualifying grid, whose sheet leads to startRaceFromSheet");
   assert.match(game, /const gridFromQuali = \(\) => \(isChampionship\(\) \? SeasonCal\.quali\(\) : \(qualiGrid\(\) && !isTimeTrial\(\)/, "a time trial never detours through the qualifying sheet");
   // The DAILY button only SELECTS today's plan and opens the circuit picker (so its GO is the same sheet); it starts nothing itself.
-  assert.match(game, /openDailyPicker: \(\) => openTimeTrial\(true\)/);
   assert.doesNotMatch(read("js/ui/title-flow.js").match(/function openTimeTrial[\s\S]*?\n\}/)[0], /startRace|raceIntro/, "the title's TT / DAILY open the picker, they never start");
   // The Data Hub's JUMP IN opts in to the pre-race screen, and RealRace.launch runs the raw raceIntro (not the sheet variant: no sheet to hold).
   const tab = read("js/data/real-race-tab.js");

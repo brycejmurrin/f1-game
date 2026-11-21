@@ -88,7 +88,7 @@ const Ghost = (function () {
     g.x = indices.map(i => g.x[i]);
     return true;
   }
-  function trimStore(store) {
+  function trimStore(store, detachTrace = false) {
     let json = JSON.stringify(store);
     if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
     let changed = false;
@@ -113,6 +113,8 @@ const Ghost = (function () {
     }
     json = JSON.stringify(store);
     const last = oldest[0];
+    // A candidate deletion shares the surviving trace with the live cache until the write commits.
+    if (detachTrace && last) store[last] = { ...store[last] };
     while (last && byteLength(json) > MAX_STORE_BYTES && thinTrace(store[last])) {
       changed = true;
       json = JSON.stringify(store);
@@ -384,19 +386,16 @@ const Ghost = (function () {
   }
 
   function clear(id) {
-    if (id == null) {
-      pending.clear();
-      saveStore({});
-      best = null;
-      return;
-    }
-    const store = loadStore();
-    const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
-    const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    const contextPrefix = id != null && !id.startsWith("v2:") ? "v2:" + id + ":" : null;
+    const matches = key => id == null || key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    const next = id == null ? {} : { ...loadStore() };
+    for (const key of Object.keys(next)) if (matches(key)) delete next[key];
+    trimStore(next, true);
+    if (!GameStore.store.write(STORE_KEY, next, { requireDurable: true }).durable) return false;
+    storeCache = next;
     for (const key of pending.keys()) if (matches(key)) pending.delete(key);
-    for (const key of Object.keys(store)) if (matches(key)) delete store[key];
-    saveStore(store);
-    if (storageId != null && matches(storageId)) best = null;
+    if (id == null || (storageId != null && matches(storageId))) best = null;
+    return true;
   }
   function speedAt(t) {
     if (!best || !Number.isFinite(t) || t < 0 || t > best.time) return null;

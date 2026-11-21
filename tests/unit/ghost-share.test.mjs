@@ -538,10 +538,11 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     medal: () => null,
     context: () => null,
     snapshot: () => ghost,
-    clear() {},
+    clear() { ghost = null; return true; },
   };
   const GhostShare = {
     hasGuest: () => guest,
+    clearGuest() { guest = false; },
     guest: () => ({ context: recordedContext }),
     contextNotice: harness().GhostShare.contextNotice,
     bestTime: () => guest ? 79 : Infinity,
@@ -626,6 +627,29 @@ test("CLEAR GHOST rebuilds the sheet inside TopModal.keepFocus on the results ro
   h.dom.byId("res-ghost-clear").onclick();
   assert.equal(scopes.length, 1);
   assert.equal(scopes[0], h.G.els.results, "focus is kept within #results across the rebuild");
+});
+
+test("Results retains the clear control on refusal and keeps the local PB when clearing a guest", () => {
+  let allowed = false, writes = 0, rebuilt = 0;
+  const TopModal = { keepFocus(scope, fn) { rebuilt++; fn(); } };
+  const Ghost = { hasGhost: () => true, bestTime: () => 80, snapshot: () => null,
+    clear() { writes++; return allowed; } };
+  const h = resultsHarness({ ghost: fixture, guest: true, extra: { Ghost, TopModal } });
+  const confirm = btn => { btn.onclick(); btn.onclick(); };
+  const guest = h.dom.byId("res-ghost-clear");
+  assert.equal(guest.textContent, "✕ CLEAR RIVAL GHOST");
+  confirm(guest);
+  assert.equal(writes, 0, "clearing the in-memory rival never writes to storage");
+  const local = h.dom.byId("res-ghost-clear");
+  assert.equal(local.textContent, "✕ CLEAR GHOST");
+  confirm(local);
+  assert.equal(writes, 1);
+  assert.equal(rebuilt, 1, "a refused deletion preserves the active sheet");
+  assert.equal(local.textContent, "GHOST KEPT — RETRY CLEAR");
+  allowed = true;
+  confirm(local);
+  assert.equal(writes, 2);
+  assert.equal(rebuilt, 2, "the successful retry rebuilds the sheet");
 });
 
 test("time-trial results identify a loaded guest as the rival ghost", () => {
