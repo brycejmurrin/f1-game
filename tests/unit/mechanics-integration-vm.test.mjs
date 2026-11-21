@@ -127,14 +127,14 @@ for (const action of ["retry", "rewind"]) {
     field[0] = before;
     const firstSector = G.track.def.sectors[0];
     const approach = firstSector - 8 / G.track.total;
-    apex.jump(approach, 0, 0);
+    apex.jump(approach, 0, 0, { keepLap: true });
     G.player.lap = 1;
     g.step(180);  // more than the field timing minimum and the rewind sampling interval
     const personal = G.sectorBests[0];
     if (action === "retry") assert.equal(G.coach.mark(), true);
     else assert.equal(G.coach.rewindReady(), true);
 
-    apex.jump(approach, 60, 0);
+    apex.jump(approach, 60, 0, { keepLap: true });
     for (let i = 0; i < 120 && G.sectorIdx === 0; i++) g.step(1);
     assert.equal(G.sectorIdx, 1);
     assert.ok(field[0] >= 2 && field[0] < before, "the crossing earned a new field best");
