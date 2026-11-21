@@ -587,7 +587,7 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 const LEGACY_PROFILE = readProfile("legacy");
 const CONTRACT_WINDOWS = [
   { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS.standalone.insets.bottom },
-  // C carries the fit-band cell: at UI 130 its 267 px safe box caps the 220-own settings sheet (1.214), the only
+  // C carries the fit-band cell: at UI 130 its 255 px content box caps the 220 px settings sheet (1.159), the only
   // A/C/D cell that is capped at all.
   { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom, band: true },
   { name: "D-spec-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
@@ -700,8 +700,8 @@ for (const v of CONTRACT_WINDOWS) {
       expect(bad, JSON.stringify(cells)).toEqual([]);
       if (!v.band) return;
       // THE FIT BAND (gap 14), from the last cell (large / 130, the capped one). A Safari toolbar show/hide moves the
-      // host a few px: within ±0.03 the painted cap holds (283 -> 289 is +0.027), a release is never held back
-      // (310 fits 130% outright) and the way back re-caps at the same value — no ratchet.
+      // host a few px: within ±0.03 the painted cap holds (283 -> 289 is +0.027).
+      // With 8 px top and 20 px bottom padding, the 220 px settings sheet fits at 130% in a 314 px host.
       const at = async (h) => {
         await page.setViewportSize({ width: v.w, height: h });
         await page.waitForFunction((hh) => document.getElementById("pmsettings").clientHeight === hh, h, { polling: 50, timeout: 10_000 });
@@ -715,8 +715,11 @@ for (const v of CONTRACT_WINDOWS) {
       expect(base.zoom).toBeLessThan(1.3);
       const taller = await at(v.h + 6);
       expect(taller.sheetScale, "6 px of toolbar keeps the painted cap " + JSON.stringify(taller)).toBe(base.sheetScale);
-      const released = await at(310);
+      const justBelow = await at(313);
+      expect(justBelow.fit, "the sheet is still capped one pixel below release " + JSON.stringify(justBelow)).toBe("on");
+      const released = await at(314);
       expect(released.fit, "a release is never held back " + JSON.stringify(released)).not.toBe("on");
+      expect(released.zoom).toBeCloseTo(1.3, 3);
       const back = await at(v.h);
       expect(back.sheetScale, "the way back re-caps at the same value " + JSON.stringify(back)).toBe(base.sheetScale);
     });
