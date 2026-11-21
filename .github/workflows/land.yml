@@ -125,7 +125,8 @@ name: Land
 # comment with the route (ready-gate, `update_pull_request` draft:false, `land`); `ready_for_review` re-gates it.
 #
 # MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing, syncs nothing and disarms
-# what this event touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train
+# what this event touches. It counts only when the label's newest `labeled` event is the repository owner's own click
+# with no app (`merge_paused`, the same provenance dispatch.mjs reads); an agent's pause is ignored. Removing the label re-gates nothing by itself: the next push, label flip, CI or train
 # run does.
 #
 # TOKEN. "events triggered by the GITHUB_TOKEN will not create a new workflow run"
@@ -255,8 +256,20 @@ jobs:
           # The moment the PR state was read, in WHOLE seconds like a status's `created_at`; post compares the two
           # as epoch seconds (a string compare of `…:05Z` against `…:05.123Z` read a same-second older status as newer).
           at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          paused=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
-            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0')
+          # merge_paused (finding 7, 2026-11-21): true only while the open `Dispatch` issue carries dispatch:merge-pause AND
+          # that label's newest `labeled` event is the repository owner's own click (no app), as dispatch.mjs counts it; an
+          # agent's pause is ignored. Prints true|false; fails, printing nothing, when a read fails.
+          merge_paused() {
+            local n
+            n=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+              --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not)) | .number] | first // 0') || return 1
+            [[ "$n" =~ ^[0-9]+$ ]] || return 1
+            [ "$n" != 0 ] || { echo false; return 0; }
+            gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$n/events?per_page=100" \
+              --jq '.[] | select(.event == "labeled" and .label.name == "dispatch:merge-pause") | {login: .actor.login, app: .performed_via_github_app}' \
+              | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
+          }
+          paused=$(merge_paused)
           numbers=()
           train=false   # the tip moved: re-gate every open `land` PR (at most 4 per run)
           attempt=0
@@ -684,9 +697,21 @@ jobs:
         run: |
           set -euo pipefail
           export GH_TOKEN="$GITHUB_TOKEN"
+          # merge_paused (finding 7, 2026-11-21): true only while the open `Dispatch` issue carries dispatch:merge-pause AND
+          # that label's newest `labeled` event is the repository owner's own click (no app), as dispatch.mjs counts it; an
+          # agent's pause is ignored. Prints true|false; fails, printing nothing, when a read fails.
+          merge_paused() {
+            local n
+            n=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+              --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not)) | .number] | first // 0') || return 1
+            [[ "$n" =~ ^[0-9]+$ ]] || return 1
+            [ "$n" != 0 ] || { echo false; return 0; }
+            gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$n/events?per_page=100" \
+              --jq '.[] | select(.event == "labeled" and .label.name == "dispatch:merge-pause") | {login: .actor.login, app: .performed_via_github_app}' \
+              | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
+          }
           n=$(jq -r .number <<<"$ARM"); head=$(jq -r .head <<<"$ARM"); tip=$(jq -r .tip <<<"$ARM")
-          paused=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
-            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0')
+          paused=$(merge_paused)
           pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
           now=$(gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha)
           skip=""
@@ -740,8 +765,7 @@ jobs:
             *"is in clean status (enablePullRequestAutoMerge)"*)
               now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || exit "$merge_rc"
               pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || exit "$merge_rc"
-              paused=$(GH_TOKEN="$GITHUB_TOKEN" gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
-                --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || exit "$merge_rc"
+              paused=$(GH_TOKEN="$GITHUB_TOKEN" merge_paused) || exit "$merge_rc"
               [ "$paused" = false ] || { echo "::notice::not merging #$n: dispatch:merge-pause is set" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
               jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
                 and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null \
@@ -768,8 +792,7 @@ jobs:
           esac
           now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || exit "$merge_rc"
           pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || exit "$merge_rc"
-          paused=$(GH_TOKEN="$GITHUB_TOKEN" gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
-            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || exit "$merge_rc"
+          paused=$(GH_TOKEN="$GITHUB_TOKEN" merge_paused) || exit "$merge_rc"
           [ "$paused" = false ] || exit "$merge_rc"
           [[ "$now" =~ ^[0-9a-f]{40}$ ]] && [ "$now" != "$tip" ] || exit "$merge_rc"
           jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
@@ -875,8 +898,20 @@ jobs:
           set -uo pipefail
           R="$GITHUB_REPOSITORY"
           say() { echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"; }
-          paused=$(gh api --method GET "repos/$R/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
-            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || paused=unreadable
+          # merge_paused (finding 7, 2026-11-21): true only while the open `Dispatch` issue carries dispatch:merge-pause AND
+          # that label's newest `labeled` event is the repository owner's own click (no app), as dispatch.mjs counts it; an
+          # agent's pause is ignored. Prints true|false; fails, printing nothing, when a read fails.
+          merge_paused() {
+            local n
+            n=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+              --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not)) | .number] | first // 0') || return 1
+            [[ "$n" =~ ^[0-9]+$ ]] || return 1
+            [ "$n" != 0 ] || { echo false; return 0; }
+            gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$n/events?per_page=100" \
+              --jq '.[] | select(.event == "labeled" and .label.name == "dispatch:merge-pause") | {login: .actor.login, app: .performed_via_github_app}' \
+              | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
+          }
+          paused=$(merge_paused) || paused=unreadable
           if [ "$paused" != false ]; then say "stale-gate sweep skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
           now=$(date -u +%s)
           lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,isDraft,labels,autoMergeRequest \

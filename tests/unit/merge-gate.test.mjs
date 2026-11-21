@@ -993,7 +993,11 @@ function runStep(script, env, files = {}) {
     `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
     `    *"/issues/"*"/comments"*) data=\${FAKE_COMMENTS:-[]} ;;`,
-`    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
+    `    *"/issues/"*"/events"*) data=\${FAKE_PAUSE_EVENTS:-'[{"event":"labeled","label":{"name":"dispatch:merge-pause"},"actor":{"login":"o"},"performed_via_github_app":null}]'} ;;`,
+    // PAUSED true|false is the Dispatch issue list (open, labelled) the first read sees; PAUSED_AFTER the later ones;
+    // anything else is answered as-is (unreadable).
+    `    *"/issues"*) if [ "$(grep -c '/issues -f' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; p="\${PAUSED_AFTER-\${PAUSED:-false}}"; else p="\${PAUSED:-false}"; fi;`,
+    `      case "$p" in true) data='[{"number":12,"title":"Dispatch"}]' ;; false) data='[]' ;; *) data=$p ;; esac ;;`,
     `    *"/branches/"*) bc=$(grep -c '/branches/' "$GH_LOG" || true);`,
     `      if [ "$bc" -gt 2 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}";`,
     `      elif [ "$bc" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31;`,
@@ -1025,7 +1029,7 @@ function runStep(script, env, files = {}) {
     fs.writeFileSync(path.join(dir, rel), text);
   }
   const r = spawnSync("bash", ["-c", `${stub}\nexport -f gh\n${script}`], { encoding: "utf8", cwd: dir,
-    env: { ...process.env, GH_TOKEN: "fixture-read-token", GITHUB_TOKEN: "fixture-read-token", LAND_TOKEN: "", GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
+    env: { ...process.env, GH_TOKEN: "fixture-read-token", GITHUB_TOKEN: "fixture-read-token", LAND_TOKEN: "", GITHUB_REPOSITORY: "o/r", GITHUB_REPOSITORY_OWNER: "o", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
       GITHUB_WORKFLOW_REF: `o/r/.github/workflows/land.yml@refs/heads/${DEPLOY_BRANCH}`,
       POST_DEADLINE: String(Math.floor(Date.now() / 1000) + 600), RETRY_MAX: String(LAND.env.RETRY_MAX), ...logs, ...env } });
   const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
@@ -1473,6 +1477,39 @@ test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budge
   assert.notEqual(r.status, 0, "a non-numeric pr input is refused");
   r = go({ EVENT: "pull_request_target", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "" });
   assert.equal(r.out.attempt, "0", "every other event starts at 0");
+});
+
+test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's own click added it, in resolve, arm and the sweep", () => {
+  // dispatch.mjs counts the label only when its newest `labeled` event is the owner's, with no app; land.yml honoured it
+  // from any labeller. An agent's pause is ignored here too, as it is on the Board.
+  const ev = (login, app = null) => JSON.stringify([{ event: "labeled", label: { name: "dispatch:merge-pause" }, actor: { login }, performed_via_github_app: app },
+    { event: "labeled", label: { name: "other" }, actor: { login: "o" }, performed_via_github_app: null }]);
+  const both = (login, app = null) => JSON.stringify([{ event: "labeled", label: { name: "dispatch:merge-pause" }, actor: { login: "o" }, performed_via_github_app: null },
+    { event: "unlabeled", label: { name: "dispatch:merge-pause" }, actor: { login: "o" }, performed_via_github_app: null },
+    { event: "labeled", label: { name: "dispatch:merge-pause" }, actor: { login }, performed_via_github_app: app }]);
+  const resolve = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const res = (events) => runStep(resolve, { EVENT: "workflow_dispatch", PR_NUMBER: "", RUN_CONCLUSION: "", RUN_BRANCH: "", RUN_REPO: "", RUN_SHA: "", CANDIDATES: "null",
+    FAKE_PR: pr7(), IN_PR: "7", IN_HEAD: HEAD7, IN_ATTEMPT: "0", PAUSED: "true", FAKE_PAUSE_EVENTS: events });
+  assert.equal(res(ev("o")).out.paused, "true", "the owner's own click pauses");
+  assert.equal(res(ev("o", { slug: "claude" })).out.paused, "false", "the owner's account through an app is an agent");
+  assert.equal(res(ev("someone")).out.paused, "false", "another labeller is ignored");
+  assert.equal(res(both("someone")).out.paused, "false", "the NEWEST labeled event decides");
+  assert.equal(res("[]").out.paused, "false", "no label event found: not the owner's click");
+  assert.notEqual(runStep(resolve, { EVENT: "workflow_dispatch", PR_NUMBER: "", RUN_CONCLUSION: "", RUN_BRANCH: "", RUN_REPO: "", RUN_SHA: "", CANDIDATES: "null",
+    FAKE_PR: pr7(), IN_PR: "7", IN_HEAD: HEAD7, IN_ATTEMPT: "0", PAUSED: "unreadable" }).status, 0, "an unreadable pause read still fails closed");
+  // arm: an agent's pause does not stop the arm; the owner's does.
+  const { env, files } = postFixture();
+  const agentArm = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), PAUSED: "true", FAKE_PAUSE_EVENTS: ev("someone") }, files);
+  assert.equal(agentArm.arm.calls.filter((c) => c.startsWith("gh pr merge ")).length, 1, agentArm.arm.stdout + agentArm.arm.stderr);
+  const ownerArm = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), PAUSED: "true", FAKE_PAUSE_EVENTS: ev("o") }, files);
+  assert.equal(ownerArm.arm.calls.filter((c) => c.startsWith("gh pr merge ")).length, 0);
+  // sweep
+  const sweep = LAND.jobs.sweep.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
+  const lands = JSON.stringify([{ number: 7, headRefOid: "1".repeat(40), isDraft: false, labels: [{ name: "land" }], autoMergeRequest: null }]);
+  const sw = (events) => runStep(sweep, { FAKE_LANDS: lands, FAKE_RUNS: JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:30:00Z" }] }),
+    FAKE_STATUSES: "[]", STALE_MAX: "4", PAUSED: "true", FAKE_PAUSE_EVENTS: events }).calls.filter((c) => c.includes("land.yml/dispatches")).length;
+  assert.equal(sw(ev("someone")), 1, "an agent's pause does not stop the sweep");
+  assert.equal(sw(ev("o")), 0, "the owner's pause does");
 });
 
 // ---- AUTO-SYNC retired 2026-11-03 with merge-gate's distance row (plan §6): land.yml never update-branches ----------
