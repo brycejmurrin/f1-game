@@ -285,6 +285,7 @@ const LoadingCard = (function () {
   return {
     FLY_MS, isAutomation, CARD_MS, SHORT_FLY_MS, SKIP_GRACE_MS, SKIP_STREAK, FLY_MAX_MS,
     flyMsFor, packSettled, warmPresentReady, metaRows, nextSkips,
+    wxWord: (w) => WX[w] || String(w || "").toUpperCase(),   // the one weather word: overcast is CLOUDY everywhere (#5897)
     CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     isGridShot, gridField, gridLayout, gridColour, gridInk, GRID_ROW_MIN,
   };

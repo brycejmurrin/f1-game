@@ -40,7 +40,7 @@ test("replacing the results host disconnects the prior spoken-card observer", ()
   });
   // Absolute filename: tip vmSrcLoads is at ceiling; a missing filename would raise it.
   vm.runInContext(
-    "var saidFor = null, saidWatch = null, saidMo = null;\n" + SPOKEN + "\n" + SAY,
+    "var saidFor = null, saidWatch = null, saidMo = null, saidPending = null;\n" + SPOKEN + "\n" + SAY,
     ctx,
     { filename: absSrc("js/ui/results-sheet.js") },
   );
@@ -58,6 +58,31 @@ test("replacing the results host disconnects the prior spoken-card observer", ()
   assert.equal(observers.length, 2, "a new host gets a fresh observer");
   assert.equal(observers[0].alive, false, "the prior host's observer is disconnected");
   assert.equal(observers[1].alive, true);
+});
+
+// #5898: a race quit during the ceremony (sheet still hidden) left its show-then-speak observer
+// behind; the next results screen then spoke every earlier race's winner before its own.
+test("a results screen speaks only its own race, however many were quit during the ceremony", () => {
+  const SRC = fs.readFileSync(path.join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  const observers = [], said = [];
+  class MutationObserver {
+    constructor(fn) { this.fn = fn; this.alive = true; observers.push(this); }
+    observe() {}
+    disconnect() { this.alive = false; }
+  }
+  const ctx = vm.createContext({ MutationObserver, LiveRegion: { say(t) { said.push(t); } }, setTimeout: (fn) => fn(), Array, String });
+  vm.runInContext("var saidFor = null, saidWatch = null, saidMo = null, saidPending = null;\n"
+    + fnSource(SRC, "function spokenText(n) {") + "\n" + fnSource(SRC, "function sayCards(sheet, table, key) {"),
+  ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  const sheet = { hidden: true };
+  const run = (winner) => {
+    Object.assign(ctx, { sheet, key: [winner], table: { querySelectorAll: () => [{ textContent: "P1 " + winner, children: [] }] } });
+    vm.runInContext("sayCards(sheet, table, key)", ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  };
+  run("LEC"); run("NOR"); run("VER");   // two ceremonies quit, the third shows
+  sheet.hidden = false;
+  for (const o of observers) if (o.alive) o.fn();
+  assert.deepEqual(said, ["P1 VER"]);
 });
 
 // GameResults.create hands out the #quali painter's stub: a call made before LAZY_RESULTS_SHEET lands
@@ -84,3 +109,4 @@ test("the quali stub replays early calls on QualiSheet once the bundle loads", a
   q.build(["late"]);
   assert.deepEqual(calls, [["open", ["row"]], ["close"], ["build", ["late"]]]);
 });
+

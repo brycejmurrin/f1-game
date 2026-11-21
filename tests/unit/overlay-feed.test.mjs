@@ -327,6 +327,33 @@ test("TV graphics frame carries the race-control flag and the player's lap", () 
   assert.deepEqual([0, 1, 2, 3, 4].map((l) => Tv.flagOf({ cautionLevel: () => l })), ["green", "yellow", "vsc", "sc", "red"]);
 });
 
+// #5885 item 2: G.ranked drops retired cars, so when the car ahead retires the one behind moves up a
+// place by array index. That is no overtake: the lower third said "NOR PASSED LEC" for a retirement.
+test("TV graphics show no OVERTAKE when the place was gained because the car ahead retired", () => {
+  const Tv = loadTv(makeDom().document);
+  const first = Tv.diff(null, [{ code: "LEC" }, { code: "NOR" }, { code: "PIA" }]);
+  const retired = Tv.diff(first.snapshot, [{ code: "LEC" }, { code: "PIA" }]);   // NOR retired
+  assert.equal(retired.lower, null);
+  // A real pass in the same frame as a retirement still names the car actually passed.
+  const a = Tv.diff(null, [{ code: "LEC" }, { code: "NOR" }, { code: "PIA" }, { code: "RUS" }]);
+  const b = Tv.diff(a.snapshot, [{ code: "RUS" }, { code: "LEC" }, { code: "PIA" }]);   // NOR out, RUS past LEC and PIA
+  assert.deepEqual(JSON.parse(JSON.stringify(b.lower)), { code: "RUS", from: 4, to: 1, over: "LEC" });
+});
+
+// #5941: live cars carry their best lap as c.best and never a .fastest flag, so the FASTEST LAP card
+// never showed. The car with the lowest best lap holds it; a lap that beats it moves the card.
+test("TV graphics show FASTEST LAP from the live cars' best laps, and move it when a lap beats it", () => {
+  const Tv = loadTv(makeDom().document);
+  const a = Tv.diff(null, [{ code: "LEC", best: 0 }, { code: "NOR", best: 0 }]);
+  assert.equal(a.fastest, null, "no lap set yet");
+  const b = Tv.diff(a.snapshot, [{ code: "LEC", best: 81.2 }, { code: "NOR", best: 0 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.fastest)), { code: "LEC" });
+  const c = Tv.diff(b.snapshot, [{ code: "LEC", best: 81.2 }, { code: "NOR", best: 80.9 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.fastest)), { code: "NOR" });
+  const d = Tv.diff(c.snapshot, [{ code: "LEC", best: 81.2 }]);   // NOR retires: the mark is not LEC's
+  assert.equal(d.fastest, null);
+});
+
 test("TV graphics paint only in the broadcast HUD profile", () => {
   const dom = makeDom();
   const Tv = loadTv(dom.document);

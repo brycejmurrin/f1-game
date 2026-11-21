@@ -7,22 +7,30 @@ const TvGraphics = (function () {
   const LOWER_S = 5;
 
   function codeOf(c) { return String(c && (c.code || c.id || c.num) || "—"); }
+  // Live cars carry only c.best (#5941): the lowest holds FASTEST LAP.
   function snapshot(ranked) {
-    return (ranked || []).map((c, i) => ({ code: codeOf(c), pos: Number.isFinite(c.pos) ? c.pos : i + 1,
-      fastest: !!(c.fastest || c.fastestLap) }));
+    const rows = (ranked || []).map((c, i) => ({ code: codeOf(c), pos: Number.isFinite(c.pos) ? c.pos : i + 1,
+      fastest: !!(c.fastest || c.fastestLap), best: c.best > 0 ? c.best : Infinity }));
+    const top = rows.reduce((a, r) => (r.best < (a ? a.best : Infinity) ? r : a), null);
+    if (top) top.fastest = true;
+    return rows;
   }
   function diff(previous, ranked) {
-    const next = snapshot(ranked), old = new Map();
+    const next = snapshot(ranked), old = new Map(), now = new Map();
     for (const row of previous || []) old.set(row.code, row.pos);
-    let lower = null, fastest = null;
+    for (const row of next) now.set(row.code, row.pos);
+    let lower = null, fastest = null, held = Infinity;
+    // A holder who retires leaves the mark to no one.
+    for (const r of previous || []) if (r.fastest && r.best < held) held = r.best;
     for (const row of next) {
       const from = old.get(row.code);
       if (from != null && row.pos < from && (!lower || row.pos < lower.to)) {
-        const over = (previous || []).find((r) => r.pos === row.pos);
-        lower = { code: row.code, from, to: row.pos, over: over ? over.code : "" };
+        // The car PASSED was ahead and is still racing behind: a retirement is no overtake (#5885).
+        const over = (previous || []).find((r) => r.pos < from && now.get(r.code) > row.pos);
+        if (over) lower = { code: row.code, from, to: row.pos, over: over.code };
       }
       const was = (previous || []).find((r) => r.code === row.code);
-      if (row.fastest && (!was || !was.fastest)) fastest = { code: row.code };
+      if (row.fastest && (!was || !was.fastest) && (row.best === Infinity || row.best < held)) fastest = { code: row.code };
     }
     return { snapshot: next, lower, fastest };
   }
