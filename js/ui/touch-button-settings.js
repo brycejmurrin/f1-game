@@ -38,7 +38,7 @@ const TouchButtonSettings = (() => {
     const adaptive = choice("adaptive", "ADAPTIVE BUTTONS", [["inherit", "FOLLOW GLOBAL"], ...strengths]);
     const adaptiveHelp = node("p", "Higher levels soften this arrow’s steering taps at speed. Follow Global uses Adaptive Buttons in Driving Aids.");
     adaptiveHelp.className = "adv-help"; adaptiveHelp.id = host.id + "-adaptive-help"; adaptive.setAttribute("aria-describedby", adaptiveHelp.id); host.appendChild(adaptiveHelp);
-    const feedback = choice("feedback", "VISUAL FEEDBACK", [["on", "ON"], ["off", "OFF"]]);
+    const feedback = choice("feedback", "ON-BUTTON FEEDBACK", [["on", "ON"], ["off", "OFF"]]);
     const feedbackHelp = node("p"); feedbackHelp.className = "adv-help"; feedbackHelp.id = host.id + "-feedback-help";
     feedback.setAttribute("aria-describedby", feedbackHelp.id); host.appendChild(feedbackHelp);
     const reset = node("button"), note = node("p");
@@ -56,7 +56,8 @@ const TouchButtonSettings = (() => {
       const pedal = id === "gas" || id === "brake";
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
       slide.parentElement.parentElement.hidden = !pedal; slideHelp.hidden = !pedal;
-      feedbackHelp.textContent = id === "gas" ? "Show throttle input and wheelspin on Gas." : id === "brake" ? "Show brake input and lock-up on Brake." : "Show how much steering this button applies.";
+      feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
+      if (profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
       const overrides = PedalTravel.buttonOverrides(id);
       slide.value = overrides.slide || "inherit";
       adaptive.parentElement.parentElement.hidden = pedal; adaptiveHelp.hidden = pedal;

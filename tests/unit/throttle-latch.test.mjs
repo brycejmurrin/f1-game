@@ -20,6 +20,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
@@ -620,7 +621,7 @@ test("clean-room 14: a controller that vanishes without a disconnect event drops
 });
 
 
-test("separate Gas and Brake profiles apply at contact and hand-off; the edge meter clears on cancel", () => {
+test("separate Gas and Brake profiles apply at contact and hand-off; the face fill clears on cancel", () => {
   const { sb, gas, brake, mid, btn, win } = bootDock();
   for (const el of [gas, brake]) el.style = {
     setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; },
@@ -648,6 +649,39 @@ test("separate Gas and Brake profiles apply at contact and hand-off; the edge me
   assert.equal(btn().brakeVal, 0);
   brake.fire("pointerdown", mid("btn-brake"));
   assert.equal(btn().brakeVal, 1);
+});
+
+test("race and paired-phone button feedback illuminates the entire face without fading its label", () => {
+  const race = cssRules(read("css/touch-controls.css"));
+  const phone = cssRules(read("controller.html").split("<style>")[1].split("</style>")[0]);
+  for (const [rules, selector, opacity] of [
+    [race, '.touchbtn[data-touch-feedback="on"]::after', "var(--touch-level)"],
+    [phone, ".pedal.on:not(.feedback-off)::after", "var(--travel, 1)"],
+  ]) {
+    assert.equal(decl(rules, selector, "inset"), "0");
+    assert.equal(decl(rules, selector, "opacity"), opacity);
+    assert.equal(decl(rules, selector, "z-index"), "-1");
+    assert.equal(decl(rules, selector, "pointer-events"), "none");
+    assert.doesNotMatch(decl(rules, selector, "background"), /gradient/);
+  }
+  assert.equal(decl(race, "#btn-throttle[aria-pressed][data-touch-feedback]::after", "display"), "none");
+  const hud = cssRules(read("css/hud.css"));
+  assert.equal(decl(hud, ':root[data-motion="reduce"] #hud .touchbtn[data-touch-feedback="on"]::after', "transition-duration"), "0s !important");
+});
+
+test("resting marks identify only progressive buttons that have enabled feedback", () => {
+  const { sb, left, gas, mid, win } = bootDock();
+  sb.PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
+  assert.equal(gas.attrs["data-touch-response"], "progressive");
+  assert.equal(left.attrs["data-touch-response"], undefined);
+  gas.fire("pointerdown", mid("btn-throttle"));
+  win("pointercancel");
+  assert.equal(gas.attrs["data-touch-response"], "progressive");
+  sb.PedalTravel.setButtonProfile("gas", { feedback: false });
+  assert.equal(gas.attrs["data-touch-response"], undefined);
+  sb.PedalTravel.setButtonProfile("gas", { feedback: true });
+  sb.PedalTravel.resetButtonProfile("gas");
+  assert.equal(gas.attrs["data-touch-response"], undefined);
 });
 
 test("customized left and right travel reaches the wheel with adaptive steering disabled", () => {

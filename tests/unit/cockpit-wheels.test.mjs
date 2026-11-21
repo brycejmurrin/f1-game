@@ -686,21 +686,35 @@ test("retro telemetry draws live speed, gear, battery and shift lamps without un
   assert.ok(draws.every(d=>d.mat.every(Number.isFinite)),"all telemetry transforms remain finite");
   const dark=draws.length;
   CarMesh.drawRetroTelemetry(mat,{...c,aeroX:.8,otT:1,deploying:true,throttleDemand:1},200,.2);
-  assert.equal(draws.length-dark,11,"active aero travel and overtake lamp remain available on retro");
+  assert.equal(draws.length-dark,12,"throttle fill, active aero travel and overtake lamp remain available on retro");
   assert.ok(draws.at(-1).mesh.col.some(c=>c>1),"overtake emits a functioning indicator");
 });
 
 test("pedal indicators and speed-unit legends follow live state, with a bounded cache",()=>{
   const {CarMesh,draws,made}=loadMesh({AppearanceOpts:{units:()=>"mph"}});
   const mat=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
-  CarMesh.drawWheelExtras(mat,{throttleDemand:0,brakeDemand:0},0);const idle=draws[0].mesh;
-  CarMesh.drawWheelExtras(mat,{throttleDemand:1,brakeDemand:0},0);const throttle=draws[2].mesh;
-  CarMesh.drawWheelExtras(mat,{throttleDemand:0,brakeDemand:1},0);const brake=draws[4].mesh;
-  assert.ok(throttle.idx.length>idle.idx.length && brake.idx.length>idle.idx.length,"real pedal demand fills its bar");
-  assert.notDeepEqual(throttle.pos,brake.pos,"throttle and brake fill separate slots");
-  const count=made.length;
-  for(let i=0;i<30;i++)CarMesh.drawWheelExtras(mat,{throttleDemand:1,brakeDemand:0},i);
-  assert.equal(made.length,count,"holding a pedal never rebuilds the status mesh");
+  function paint(throttleDemand, brakeDemand) {
+    draws.length = 0;
+    CarMesh.drawWheelExtras(mat, { throttleDemand, brakeDemand }, 0);
+    return draws.slice(1, -1); // between the status plate and the aero lamp
+  }
+  assert.equal(paint(0, 0).length, 0, "both empty slots remain visible on the plate");
+  const count = made.length;
+  const [gas, brake] = paint(1, 1);
+  assert.notDeepEqual(gas.mesh.col, brake.mesh.col);
+  assert.ok(gas.mat[12] < brake.mat[12], "fixed left and right slots");
+  for (const demand of [.01, .12, .56, .99, 1.5]) {
+    const [g, b] = paint(demand, demand);
+    for (const [live, full] of [[g, gas], [b, brake]]) {
+      assert.equal(live.mesh, full.mesh);
+      assert.equal(live.mat[12], full.mat[12], "fill grows from a fixed edge");
+      assert.ok(Math.abs(live.mat[0] - Math.min(1, demand)) < 1e-6);
+    }
+  }
+  assert.equal(paint(NaN, -1).length, 0);
+  assert.equal(paint(.12, 0)[0].mesh, gas.mesh);
+  assert.equal(paint(0, .56)[0].mesh, brake.mesh);
+  assert.equal(made.length, count, "new analog values allocate no new meshes");
 });
 
 
