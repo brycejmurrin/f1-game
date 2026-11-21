@@ -329,7 +329,7 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = c
  * ratchet-raise row reads it). `touches` picks the paths compared (the raise row passes ratchetFiles) and `what`
  * names them. Side effects only through `request` and `pkgGeneratedAt`.
  */
-export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null, touches = configFiles, what = "config path" }) {
+export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null, touches = configFiles, what = "config path", credited = "" }) {
   const t = (iso) => Date.parse(iso || "") || 0;
   const L = t(labelAt);
   if (!L) return { state: "unknown", evidence: "no config-ok label time" };
@@ -337,8 +337,10 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
   if (runs.error) return { state: "unknown", evidence: `${CI_WORKFLOW} runs: ${runs.error}` };
   const mine = runs.rows.filter((w) => (w?.pull_requests || []).some((p) => Number(p?.number) === Number(pr)) && t(w.created_at));
   const onHead = mine.filter((w) => String(w.head_sha || "").toLowerCase() === head);
-  if (!onHead.length) return { state: "unknown", evidence: `no ${CI_WORKFLOW} pull_request run of PR #${pr} on ${head.slice(0, 8)} yet` };
-  const pushedAt = Math.min(...onHead.map((w) => t(w.created_at)));
+  // A credited head (D-045) may have no run of its own yet: its push time is unknown, so skip the "labelled after
+  // the push" shortcut and compare the own config diff with the newest run before the label (never looser).
+  if (!onHead.length && !credited) return { state: "unknown", evidence: `no ${CI_WORKFLOW} pull_request run of PR #${pr} on ${head.slice(0, 8)} yet` };
+  const pushedAt = onHead.length ? Math.min(...onHead.map((w) => t(w.created_at))) : Infinity;
   if (L > pushedAt) return { state: "covered", evidence: `labelled after the head ${head.slice(0, 8)} was pushed` };
   const before = mine.filter((w) => t(w.created_at) < L).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
   if (!before) return { state: "after", evidence: `no run of PR #${pr} predates the label, so the head ${head.slice(0, 8)} was pushed` };
@@ -458,14 +460,14 @@ export function raisesCovered(now, then) {
  *  Bound to what Bryce labelled: a push after his click that touches a ratchet file still counts as covered when the
  *  PR's own raise at the head is no wider than its own raise at the head he labelled, so a sync that brings in other
  *  PRs' ratchets.d fragments does not need a fresh click, and any further raise does. */
-export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request }) {
+export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request, credited = "" }) {
   if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
   const now = prRaisesAt(head, base, request);
   if (now.error) return { error: now.error };
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
   let push = raises.length && configLabelKind(last, owner)
-    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file" }) : null;
+    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file", credited }) : null;
   if (push?.state === "after" && push.from) {
     const then = prRaisesAt(push.from, base, request);
     if (then.error) return { error: then.error };
@@ -1071,11 +1073,11 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
   const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
   const pkgGeneratedAt = generated?.ok ? (ref) => (ref === head ? true : generatedPkgCheck({ head: ref, base, request }).ok) : null;
-  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt }) : null;
+  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt, ...(credited ? { credited: credited.sha } : {}) }) : null;
   if (!isTrain) {
     rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
     // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
-    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });
+    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request, credited: credited?.sha || "" });
     if (raise.error) return { error: raise.error };
     rows.raise = raise;
   }

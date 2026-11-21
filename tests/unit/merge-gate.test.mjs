@@ -235,6 +235,9 @@ test("configPushState: config-ok binds to the PR's own config diff at label time
   assert.equal(s([run(H2, at(11))]), "after", "no run before the label");
   assert.equal(s([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
   assert.equal(s([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+  // D-045: a credited head has no run of its own yet, so its push time is unknown; the own config diff decides.
+  assert.equal(s([run(H0, at(8))], { [H0]: [hook], [H2]: [hook] }, H2, { credited: H0 }), "covered", "a credited clean sync keeps the label");
+  assert.equal(s([run(H0, at(8))], { [H0]: [hook], [H2]: [{ ...hook, sha: "b9", patch: "@@ -1 +1 @@\n-a\n+z" }] }, H2, { credited: H0 }), "after", "credit never loosens: a changed own config diff still needs a fresh label");
   assert.equal(s([run(H2, at(8)), run(H2, at(11))]), "covered", "a re-run on the labelled head dates it by its first run");
 });
 
@@ -2202,7 +2205,10 @@ test("D-045 cleanTipSync: only a two-parent, conflict-free merge of a deploy fir
     assert.deepEqual([edited.ok, edited.kind], [false, "edited"], edited.why);
     // A conflict resolved by hand.
     f.g("reset", "-q", "--hard", f.h0); f.tipMove("docs/a.md", "tip-a\n", "tip edits the PR's line");
-    spawnSync("git", ["merge", "-q", "--no-ff", "deploy-x"], { cwd: f.W, encoding: "utf8" });
+    // A conflicting merge exits 1; it needs an identity too (a runner has none), or it stops before MERGE_HEAD.
+    const conflicted = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "merge", "-q", "--no-ff", "deploy-x"], { cwd: f.W, encoding: "utf8" });
+    assert.equal(conflicted.status, 1, conflicted.stderr);
+    assert.equal(spawnSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: f.W }).status, 0, "the merge is in progress");
     f.write("docs/a.md", "resolved\n"); f.g("add", "-A"); f.g("commit", "-q", "-m", "resolve the conflict by hand");
     const resolved = cleanTipSync({ cwd: f.W, sha: f.g("rev-parse", "HEAD"), firstParents: fp() });
     assert.deepEqual([resolved.ok, resolved.kind], [false, "conflict"], resolved.why);
@@ -2255,6 +2261,30 @@ test("D-045 evaluate: a missing head CI takes the credit and the retest runs aga
   asked.length = 0;
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, credit }).rows[k].ok), ["ci", "retest"]);
   assert.deepEqual(asked, [], "a finished red CI on the head is evidence: no credit is asked");
+});
+
+test("D-045 evaluate: on a credited head with no run of its own, the config and retest rows resolve against the credited run, not WAIT", () => {
+  const f = fakes();
+  const H0 = "c".repeat(40), run0 = { id: 600, created_at: "2026-11-02T08:00:00Z" };
+  const credit = () => ({ credit: { sha: H0, run: run0, hops: [{}], evidence: "CI success (check-run 61)" } });
+  f.checks.splice(1, 1);
+  f.prRuns.splice(0, f.prRuns.length, { head_sha: H0, created_at: "2026-11-02T08:00:00Z", pull_requests: [{ number: 7 }] });
+  // A routine config path (dispatch.yml), Bryce's config-ok after H0's run; the sync left the PR's own diff alone.
+  const own = { filename: ".github/workflows/dispatch.yml", status: "modified", sha: "d1", changes: 1, patch: "@@ -1 +1 @@\n-a\n+b" };
+  f.files.push({ filename: own.filename });
+  f.pull.labels = [{ name: "config-ok" }]; f.events.push(ev("config-ok", "2026-11-02T09:00:00Z"));
+  const request = (p) => {
+    if (p === `compare/deploy-x...${H0}` || p === `compare/deploy-x...${HEAD}`) return { json: { files: [own] } };
+    if (p === `git/trees/${H0}?recursive=1` || p === `git/trees/${HEAD}?recursive=1`) return { json: { tree: [{ path: own.filename, mode: "100644" }] } };
+    return f.deps.request(p);
+  };
+  const v = evaluate({ pr: 7, ...f.deps, request, credit });
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), [], JSON.stringify(v.rows));
+  assert.equal(v.rows.config.pending, undefined, "config resolved, not waiting on the head's own run");
+  assert.equal(f.calls.at(-1).ciAt, run0.created_at, "the retest window opens at the credited run");
+  // Without the credit, the same head waits on both rows.
+  const plain = evaluate({ pr: 7, ...f.deps, request });
+  assert.deepEqual(ROWS.filter((k) => plain.rows[k].pending), ["ci", "config", "retest"]);
 });
 
 test("D-045 retest: a credited head is never skipped, and a red re-test refuses", () => {
