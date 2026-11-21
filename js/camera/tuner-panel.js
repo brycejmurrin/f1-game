@@ -51,7 +51,7 @@ function setComfort(d, value) {
 }
 function fmtCt(d, v) {
   const dec = (String(d.step).split(".")[1] || "").length;
-  const s = Math.abs(v).toFixed(Math.min(dec, 2));
+  const s = Math.abs(v).toFixed(dec);
   const sign = (v > 0 && d.min < 0) ? "+" : v < 0 ? "−" : "";
   return sign + s + d.unit;
 }

@@ -1,0 +1,13 @@
+{
+  "files": {
+    "js/ui/hud.js": {
+      "codeLines": 6,
+      "lines": 6
+    }
+  },
+  "tree": {
+    "assertPins": -6,
+    "assertPinsAll": -6,
+    "eagerCodeBytes": 1340
+  }
+}

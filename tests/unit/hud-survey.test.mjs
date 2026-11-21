@@ -987,7 +987,7 @@ test("hud-survey: DEFAULT_CELL.contrast is the game's shipped default (appearanc
   // A knobless cell carries no contrast part in its id; naming the non-default does.
   const parts = (c) => M.cellId(M.normalizeCell(c)).split("-");
   assert.deepEqual(parts({}).filter((p) => p === "contrast"), []);
-  assert.deepEqual(parts({ contrast: "off" }).slice(-2), ["contrast", "off"]);
+  assert.deepEqual(parts({ contrast: "high" }).slice(-2), ["contrast", "high"]);
 });
 
 test("hud-survey: classifyFindings flags text below WCAG 1.4.3 (4.5:1 small, 3:1 large)", () => {

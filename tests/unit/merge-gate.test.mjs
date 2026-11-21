@@ -1105,7 +1105,7 @@ function runStep(script, env, files = {}) {
   const stub = [
     `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a data args=("$@");`,
     `  if [[ "$*" == *"/statuses?"* && -n "\${GH_ARM_STATUS_ERROR:-}" ]]; then echo "$GH_ARM_STATUS_ERROR" >&2; return 1; fi;`,
-    `  if [[ "$*" == "pr list "* && -n "\${GH_ARM_LIST_ERROR:-}" ]]; then echo "$GH_ARM_LIST_ERROR" >&2; return 1; fi;`,
+    `  if [[ "$*" == *"repos/$GITHUB_REPOSITORY/pulls "* && -n "\${GH_ARM_LIST_ERROR:-}" ]]; then echo "$GH_ARM_LIST_ERROR" >&2; return 1; fi;`,
     `  if [ "\${GH_STALL:-}" = true ]; then read -r -t 60 _ <&9; fi;`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
     `  case " \${args[*]} " in`,
@@ -1132,6 +1132,12 @@ function runStep(script, env, files = {}) {
     `      [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *"/commits/"*"/pulls "*) [ "\${GH_DISCOVERY_FAILURE:-}" != commit ] || return 31; data=\${FAKE_COMMIT_PULLS:-[]} ;;`,
     `    *" pr list "*) [ "\${GH_DISCOVERY_FAILURE:-}" != queue ] || return 31; data=\${FAKE_LANDS:-[]} ;;`,
+    `    *"/pulls "*) data=\${FAKE_ARM_BOARD:-[]};`,
+    `      if [ -n "\${FAKE_ARM_BOARD_AFTER+x}" ] && [ "$(grep -c '/pulls ' "$GH_LOG")" -gt 1 ]; then data=$FAKE_ARM_BOARD_AFTER; fi;`,
+    `      if [[ " \${args[*]} " == *" --paginate "* ]] && [ -n "\${FAKE_ARM_BOARD_PAGE2:-}" ]; then echo "$data"; data=$FAKE_ARM_BOARD_PAGE2; fi;`,
+    `      if [ "\${GH_QUEUE_FAILURE:-}" = list ]; then echo "$data"; echo "page 2: HTTP 403" >&2; return 31; fi ;;`,
+    `    *"/compare/"*) data=\${FAKE_ARM_COMPARE:-null} ;;`,
+    `    *" api graphql "*) [ "\${GH_QUEUE_FAILURE:-}" != checks ] || { echo "\${GH_WRAPPER_ERROR:-Bad Gateway (HTTP 502)}" >&2; return 31; }; data=\${FAKE_WRAPPER_CHECKS:-null} ;;`,
         `    *"/statuses"*) [ "\${GH_DISCOVERY_FAILURE:-}" != status ] || return 31; src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
         `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
     `    *"/check-runs"*) if [ -n "\${GH_CHECKS_READ_ERR:-}" ]; then echo "$GH_CHECKS_READ_ERR" >&2; return 1; fi; data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
@@ -1231,16 +1237,105 @@ test("land.yml arm (finding 3): its own job, serialized across PRs in one queue;
 
 test("land.yml arm (finding 3): another armed, unmerged PR into the deploy branch defers this arm to retry", () => {
   const { env, files } = postFixture();
-  const other = JSON.stringify([{ number: 9, autoMergeRequest: { enabledAt: "2026-10-27T10:00:00Z" } }, { number: 7, autoMergeRequest: null }]);
-  const r = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_LANDS: other }, files);
+  const other = JSON.stringify([{ number: 9, auto_merge: { enabled_at: "2026-10-27T10:00:00Z" } }, { number: 7, auto_merge: null }]);
+  const r = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_ARM_BOARD: other }, files);
   assert.equal(r.arm.status, 0, r.arm.stderr);
   assert.equal(r.arm.calls.some(c => c.startsWith("gh pr merge ")), false, "#9 is armed onto the same tip: #7 waits");
   assert.deepEqual(JSON.parse(r.arm_retry), { number: 7, head: HEAD7 }, "and is re-gated once #9 has moved the tip");
-  const self = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_LANDS: JSON.stringify([{ number: 7, autoMergeRequest: { enabledAt: "x" } }]) }, files);
+  const self = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_ARM_BOARD: JSON.stringify([{ number: 7, auto_merge: {} }]) }, files);
   assert.equal(self.arm.calls.filter(c => c.startsWith("gh pr merge ")).length, 1, "its own earlier arm is no other PR");
-  const unread = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_LANDS: "not json" }, files);
+  const unread = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_ARM_BOARD: "not json" }, files);
   assert.equal(unread.arm.calls.some(c => c.startsWith("gh pr merge ")), false, "unreadable: no arm (fail closed)");
   assert.deepEqual(JSON.parse(unread.arm_retry), { number: 7, head: HEAD7 });
+});
+
+// The final serialized arm runs after the earlier trusted/post checks. Its queue can have changed meanwhile.
+test("#6055: the production arm rechecks whether this exact head is boarded before merging it alone", () => {
+  const run = LAND.jobs.arm.steps.find(s => s.id === "arm").run;
+  const entry = (number, sha, ref) => ({ number, head: { sha, ref, repo: { full_name: "o/r" } },
+    state: "open", base: { ref: DEPLOY_BRANCH }, draft: false, labels: [{ name: "land" }], auto_merge: null });
+  const car = entry(7, HEAD7, "fix/car"), sibling = entry(8, "d".repeat(40), "fix/sibling");
+  const wrapper = { ...entry(99, TIP_B, "train/fold"), labels: [{ name: "land" }, { name: "train" }],
+    body: `<!-- merge-train ${JSON.stringify({ base: TIP_A, cars: [car, sibling].map(p => ({
+      pr: p.number, head: p.head.sha, ref: p.head.ref,
+    })) })} -->` };
+  const checks = (state, head = TIP_B) => JSON.stringify({ data: { repository: { pullRequest: {
+    mergeable: "MERGEABLE", headRefOid: head, commits: { nodes: [{ commit: { oid: head, status: { context: { state } } } }] },
+  } } } });
+  const ciCheck = (name, conclusion, status = "completed") => JSON.stringify({ check_runs: [{
+    name, app: { slug: "github-actions" }, status, conclusion,
+  }] });
+  const ciRuns = (...runs) => JSON.stringify({ workflow_runs: runs.map(([id, status, conclusion]) => ({
+    id, status, conclusion, head_sha: TIP_B, path: ".github/workflows/ci.yml",
+  })) });
+  const siblingRead = (state, merged_at) => ({ FAKE_PRS: JSON.stringify({
+    7: JSON.parse(pr7()), 8: { ...sibling, state, merged_at },
+  }) });
+  const oldBase = { ...wrapper, body: wrapper.body.replace(TIP_A, "0".repeat(40)) };
+  const board = [car, sibling, wrapper];
+  const firstPage = Array.from({ length: 100 }, (_, i) => entry(100 + i, HEAD7, `fix/other-${i}`));
+  const go = (pulls, extra = {}) => runStep(run, {
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), NOW_TIP: TIP_A, FAKE_PR: pr7(),
+    LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token", FAKE_STATUSES: OWN_GATE,
+    FAKE_ARM_BOARD: JSON.stringify(pulls), FAKE_WRAPPER_CHECKS: checks("PENDING"), ...extra,
+  });
+  const merges = result => result.calls.filter(call => call.startsWith("gh pr merge "));
+  for (const [why, pulls, extra, retry] of [
+    ["eligible wrapper", board, {}, false],
+    ["a newer run is in progress", board, {
+      FAKE_RUNS: ciRuns([9, "completed", "failure"], [10, "in_progress", null]),
+    }, false],
+    ["viable ancestor base", [car, sibling, oldBase], { FAKE_ARM_COMPARE: '{"status":"ahead"}' }, false],
+    ["unreadable ancestry", [car, sibling, oldBase], { FAKE_ARM_COMPARE: "null" }, true],
+    ["advisory-only red", board, { FAKE_CHECKS: ciCheck("advisory", "failure") }, false],
+    ["merged sibling", [car, wrapper], siblingRead("closed", "2026-11-21T00:00:00Z"), false],
+    ["missing sibling reopened during pagination", [car, wrapper], siblingRead("open", null), true],
+    ["wrapper on the second page", firstPage, { FAKE_ARM_BOARD_PAGE2: JSON.stringify(board) }, false],
+    ["unreadable wrapper", board, { GH_QUEUE_FAILURE: "checks" }, true],
+    ["failed second page after a partial queue", firstPage, { GH_QUEUE_FAILURE: "list" }, true],
+    ["wrapper moved during checks read", board, { FAKE_WRAPPER_CHECKS: checks("FAILURE", HEAD7) }, true],
+  ]) {
+    const result = go(pulls, extra);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(merges(result), [], why);
+    assert.deepEqual(JSON.parse(result.out.retry ?? "null"), retry ? { number: 7, head: HEAD7 } : null, why);
+  }
+  for (const [why, pulls, extra] of [
+    ["standalone", [car], {}],
+    ["sibling closed without merging", [car, wrapper], siblingRead("closed", null)],
+    ["standalone after a full first page", firstPage, { FAKE_ARM_BOARD_PAGE2: JSON.stringify([car]) }],
+    ["held wrapper", [car, sibling, { ...wrapper, labels: [...wrapper.labels, { name: "hold" }] }], {}],
+    ["stale sibling", [car, { ...sibling, head: { ...sibling.head, sha: "e".repeat(40) } }, wrapper], {}],
+    ["fork wrapper", [car, sibling, { ...wrapper, head: { ...wrapper.head, repo: { full_name: "fork/r" } } }], {}],
+    ["wrapper gate failed", board, { FAKE_WRAPPER_CHECKS: checks("FAILURE") }],
+    ...["cancelled", "failure", "timed_out", "startup_failure"].map(conclusion =>
+      [`latest CI run ended ${conclusion} before posting its check`, board,
+        { FAKE_RUNS: ciRuns([9, "in_progress", null], [10, "completed", conclusion]) }]),
+    ["pending CI check with a terminal run", board, { FAKE_CHECKS: ciCheck("CI", null, "in_progress"),
+      FAKE_RUNS: ciRuns([10, "completed", "cancelled"]) }],
+    ["nested train sibling", [car, { ...sibling, head: { ...sibling.head, ref: "train/nested" } },
+      { ...wrapper, body: wrapper.body.replace("fix/sibling", "train/nested") }], {}],
+    ["wrapper CI failed", board, { FAKE_CHECKS: ciCheck("CI", "failure") }],
+    ["unrelated base", [car, sibling, oldBase], { FAKE_ARM_COMPARE: '{"status":"diverged"}' }],
+  ]) {
+    const result = go(pulls, extra);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(merges(result), [`gh pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`], why);
+  }
+  const quota = go(board, { GH_QUEUE_FAILURE: "checks", GH_WRAPPER_ERROR: "HTTP 429: Too Many Requests" });
+  assert.deepEqual(merges(quota), []);
+  assert.notEqual(quota.status, 0);
+  assert.equal(quota.out.backoff, "true");
+  assert.equal(quota.out.retry, undefined);
+  const cleanRace = go([car], {
+    FAKE_ARM_BOARD_AFTER: JSON.stringify(board),
+    GH_CLEAN_PATH: "true", GH_MERGE_RC: "1", GH_MERGE_STDERR: "Pull request is in clean status (enablePullRequestAutoMerge)",
+    GH_MERGE_RC2: "0",
+  });
+  assert.equal(cleanRace.status, 0, cleanRace.stderr);
+  assert.equal(cleanRace.out.retry, undefined);
+  assert.deepEqual(merges(cleanRace), [`gh pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`],
+    "a wrapper formed after the first merge call prevents the direct merge fallback");
 });
 
 // Execute both production shell steps with separate processes, as Actions does.

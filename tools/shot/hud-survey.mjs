@@ -70,7 +70,7 @@
 // Playwright run (check /proc/loadavg < 3).
 import fs from "node:fs";
 import path from "node:path";
-import { OWNER_EXPORT } from "../lib/bryce-phone.mjs";
+import { BRYCE_DPR, OWNER_EXPORT, openBrycePhone } from "../lib/bryce-phone.mjs";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -378,7 +378,7 @@ export function shotTimeoutMs(w, h) {
   return w * h > 1.5e6 ? 180000 : 60000;
 }
 
-async function cdpShot(page, file) {
+async function cdpShot(page, file, dpr = 1) {
   // CDP directly, not page.screenshot(): Playwright's path waits on
   // document.fonts.ready, which hung GHA smoke shards (probe-page.mjs).
   // file null: a 1x1 capture whose only job is to PRODUCE a frame (see the
@@ -388,7 +388,7 @@ async function cdpShot(page, file) {
     const opts = { format: "png", captureBeyondViewport: false };
     if (!file) opts.clip = { x: 0, y: 0, width: 1, height: 1, scale: 1 };
     const vp = page.viewportSize() || { width: 0, height: 0 };
-    const cap = shotTimeoutMs(vp.width, vp.height);
+    const cap = shotTimeoutMs(vp.width * dpr, vp.height * dpr);
     // A CLEARED timer: a bare sleep(cap) kept node alive 60-180 s after the last capture (2026-10-10).
     let timer;
     const { data } = await Promise.race([
@@ -419,10 +419,16 @@ export const REPAINT_FRAMES = 4;
 async function runGroup(browser, group, plan, log) {
   const c0 = group.cells[0];
   const dev = DEVICES[c0.device];
-  // DPR 1 deliberately reduces raster cost for this CSS-geometry survey.
-  const ctx = await browser.newContext(resolveUIProfile({ touch: dev.touch,
-    viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 1 }).contextOptions);
-  const page = await ctx.newPage();
+  // Only native iPhone shots pay the full raster cost. Geometry stays in CSS pixels.
+  let ctx, page;
+  const dpr = dev.window && plan.shots ? BRYCE_DPR : 1;
+  if (dev.window) {
+    ({ context: ctx, page } = await openBrycePhone(browser, { window: dev.window, profile: false, dpr }));
+  } else {
+    ctx = await browser.newContext(resolveUIProfile({ touch: dev.touch,
+      viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: dpr }).contextOptions);
+    page = await ctx.newPage();
+  }
   let current = "boot";
   const errs = [];
   page.on("pageerror", (e) => errs.push({ cell: current, msg: String(e && e.message || e).slice(0, 300) }));
@@ -451,7 +457,7 @@ async function runGroup(browser, group, plan, log) {
     }
     await loadAllModels(page);
     const ins = dev.ins;
-    if (ins.sal || ins.sar || ins.sat || ins.sab) {
+    if (!dev.window && (ins.sal || ins.sar || ins.sat || ins.sab)) {
       await page.addStyleTag({ content: `:root{--sal:${ins.sal}px;--sar:${ins.sar}px;--sat:${ins.sat}px;--sab:${ins.sab}px;}` });
     }
     await page.evaluate((id) => window.__apex.race(id), c0.track);
@@ -533,7 +539,7 @@ async function runGroup(browser, group, plan, log) {
         await cdpShot(page, null);
         if (plan.shots) {
           const file = path.join(plan.out, "shots", `${cell.id}.png`);
-          await cdpShot(page, file);
+          await cdpShot(page, file, dpr);
           rec.shot = path.relative(ROOT, file);
           rec.shotRel = path.relative(plan.out, file);
         }

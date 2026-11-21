@@ -952,6 +952,7 @@ declare const DrivingCoachBody: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
 
 declare const PlatformSession: GameModuleFactory;
+declare const PhonePairingUI: GameModuleFactory;
 
 declare const DeepLink: GameModuleFactory;
 declare const TitleFlow: GameModuleFactory;

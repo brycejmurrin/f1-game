@@ -1,6 +1,6 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing every screen across phone landscape (844x390), orientations, viewport sizes, UI scale and touch vs mouse, or proving a CSS change broke nothing. Not for: one cramped screen → ui-menu-a11y; restructuring → css-play; game screenshots → playwright-probe."
+description: "Use when reviewing every screen across iPhone 15 landscape (852x393 CSS px), orientations, viewport sizes, UI scale and touch vs mouse, or proving a CSS change broke nothing. Not for: one cramped screen → ui-menu-a11y; restructuring → css-play; game screenshots → playwright-probe."
 ---
 
 # Surveying the whole UI across the whole matrix
@@ -15,9 +15,9 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 - **Parent-only runs.** No hook names these CLIs; a subagent may run `--help`/`--list`/`--plan` and analyse
   finished artifacts, and any run that launches Chromium (layout-audit, fit-audit, hud-mock, hud-survey,
   menu-mock, explorer) throws from `launchChromium` under `APEX_SUBAGENT` (`tools/lib/harness.mjs`; AGENTS.md rule 10).
-- **Bryce's cells are not the default.** `--viewport`'s default (`--help`) is not his phone. `ios-iphone-landscape-844`
+- **Saved and shipped settings.** The default iPhone 15 landscape viewport uses shipped settings. `ios-iphone-landscape-844`
   is the generic 844x390 iPhone cell (AGENTS.md §Critical conventions); his own are `bryce-standalone` (852x393,
-  Home Screen app) and `bryce-safari` (`layout-audit --list`), which boot on his live export (`OWNER_PROFILES.live`
+  Home Screen app), `bryce-portrait` (393x852) and `bryce-safari` (`layout-audit --list`), which boot on his live export (`OWNER_PROFILES.live`
   in `tools/lib/bryce-phone.mjs`). Name them explicitly and run them first. `tests/data/settings-defaults-export.json`
   is his legacy 2026-10-05 export (`hud-survey.mjs --settings`, `explorer.mjs --settings`); every other cell and
   menu-mock boot fresh shipped settings.
@@ -39,7 +39,7 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 on the PRE-edit tree: `git stash` or a worktree at the base sha): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
 3. **Bryce's cell first**, pictures AND DOM, as ONE background task (AGENTS.md rule 4), after
    `mkdir -p artifacts/logs`:
-   `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*' --shots --dom > artifacts/logs/layout-audit-844.log 2>&1`.
+   `node tools/ui/layout-audit.mjs --viewports=bryce-standalone --screens='*' --shots --dom > artifacts/logs/layout-audit-bryce.log 2>&1`.
    Browser runs need `/proc/loadavg` < 3 and no live Playwright run (AGENTS.md rules 5, 7).
 4. **Widen to the scoped axes** (a background task with a log, like step 3), e.g. the whole "0.8-1.5x, touch + mouse" ask in one run:
    `node tools/ui/layout-audit.mjs --screens='*' --viewports='ios-*,desktop-*' --scale=80,100,150 --shots`.

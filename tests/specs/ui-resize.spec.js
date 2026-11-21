@@ -45,16 +45,15 @@
 // the general answer, since a sheet whose box does not depend on the scale would
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
+import { CONTRACT_WINDOWS as PHONE_WINDOWS, LANDSCAPE as PHONE_LANDSCAPE, PORTRAIT as PHONE_PORTRAIT } from "../helpers/iphone15.mjs";
 import fs from "node:fs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
-import { readProfile } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 900 };
-const PHONE_LANDSCAPE = { width: 852, height: 393 };
-const PHONE_PORTRAIT = { width: 393, height: 852 };
 // 490, NOT 462. `--compact-at: 480` (css/carsetup.css) plus SHORT_HYST: 40 means
 // the garage's density classifier RELEASES from compact back to normal only
 // above 520 of its own units. At UI SIZE 50% a 490-tall viewport is ~980 own
@@ -574,8 +573,8 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 
 // THE UI CONTRACT'S SETTINGS AND DIALOG CELLS (UI contract 2026-11-06 §4.2, §4.4, gaps 3/4/5/14 and
 // §6; PR B of #5153). The exception to this file's "same as a fresh load" oracle, and deliberately so: the contract
-// names the ONE phone-landscape layout, so these cells assert values — the owner's three windows, A the Home
-// Screen app (852x393, insets 59/21/59), C the same phone as a Safari tab (852x283, 59/0/59), D the spec phone
+// names the ONE phone-landscape layout, so these cells assert values — three contract windows, A the Home
+// Screen app (852x393, insets 59/21/59), C the legacy toolbar stress case (852x283, 59/0/59), D the spec phone
 // (844x390, no insets) — × TEXT SIZE normal/large × UI SIZE 100/130, seeded from Bryce's LOAD SETTINGS export (UI
 // 109, HUD 155, HIGH CONTRAST, textSize large). `SheetShape.layoutProbe` is the assertion (the `__apex.sheetFit()`
 // alias waits on #5155, which owns js/agent/apex.js); a screenshot is sign-off only. One boot per window; the four
@@ -585,8 +584,9 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 // <dialog> 180 px in every cell (it was 29 / 8); C at UI 130 caps the sheet at 1.214 and holds it across 277–289.
 // the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
 const LEGACY_PROFILE = readProfile("legacy");
+const { left: sal, right: sar, top: sat, bottom: sab } = BRYCE_WINDOWS.standalone.insets;
 const CONTRACT_WINDOWS = [
-  { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "A-home-screen-852x393", w: PHONE_LANDSCAPE.width, h: PHONE_LANDSCAPE.height, sal, sar, sat, sab },
   // C carries the fit-band cell: at UI 130 its 267 px safe box caps the 220-own settings sheet (1.214), the only
   // A/C/D cell that is capped at all.
   { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0, band: true },
@@ -729,16 +729,16 @@ for (const v of CONTRACT_WINDOWS) {
 // and SheetShape.classifyBody now read documentElement.clientWidth/Height; this cell fakes exactly that launch.
 test.describe("UI contract boot cell — a stale portrait inner* at a landscape launch", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: PHONE_LANDSCAPE, hasTouch: true });
   test("innerWidth/innerHeight 393x852 while the ICB is 852x393 on the export: body wide + compact, the probe shows the disagreement", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), LEGACY_PROFILE);
     expect(imp.ok && !imp.failed, "the export seeds the store " + JSON.stringify(imp)).toBe(true);
-    await page.addInitScript(() => {
-      Object.defineProperty(window, "innerWidth", { configurable: true, get() { return 393; } });
-      Object.defineProperty(window, "innerHeight", { configurable: true, get() { return 852; } });
-    });
+    await page.addInitScript(({ width, height }) => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, get() { return width; } });
+      Object.defineProperty(window, "innerHeight", { configurable: true, get() { return height; } });
+    }, PHONE_PORTRAIT);
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const s = await page.evaluate(() => {
@@ -749,8 +749,8 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
     // Preconditions: the stale pair held through boot, and the ICB is the landscape window; the export's UI 109 makes
     // 393 / 1.09 = 360 own (compact under the body's 600) and 852 / 1.09 = 781 own (wide over 620) — the old inner*
     // reading gave 781 tall / 360 narrow, i.e. normal + narrow.
-    expect(s.inner, "the stub held " + JSON.stringify(s)).toEqual([393, 852]);
-    expect(s.viewport, "the layout viewport is the landscape window").toEqual([852, 393]);
+    expect(s.inner, "the stub held " + JSON.stringify(s)).toEqual([PHONE_PORTRAIT.width, PHONE_PORTRAIT.height]);
+    expect(s.viewport, "the layout viewport is the landscape window").toEqual([PHONE_LANDSCAPE.width, PHONE_LANDSCAPE.height]);
     expect(s.body.shape, "body shape from the ICB " + JSON.stringify(s)).toBe("wide");
     expect(s.body.density, "body density from the ICB " + JSON.stringify(s)).toBe("compact");
   });
@@ -758,16 +758,11 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
 
 // UI contract cells (#5153 gap 10; PR D of #5153 — `LEGACY_PROFILE` is PR B's constant above, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
 // measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pause card in the owner's three
-// windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the Safari tab (852x283,
+// windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the legacy toolbar stress case (852x283,
 // insets 59/0/59), D the spec phone (844x390) — seeded from the legacy export (TEXT large,
 // UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
 // card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
 // LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.
-const PHONE_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
-  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
-];
 for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + win.name, () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("one phone card for every stored layout: no scroll, every door on screen, labels fit", async ({ page }) => {
@@ -900,7 +895,7 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
 });
 
 // UI contract cells for the circuit picker and race settings (#5153 gaps 13 and 16, UI contract 2026-11-06 §4.5;
-// measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): on the owner's three windows and export, the picker is
+// measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): on three contract windows and export, the picker is
 // ONE four-row card — the filter chips share the title row, the flag strip, the hero still (never a scroller, the
 // two key numbers riding on it), the foot — and race settings are compact like their siblings with head and START
 // RACE fixed around the one body scroller and two columns on both phones. Before: the hero section scrolled 58-155

@@ -955,17 +955,82 @@ jobs:
             echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # ONE ARMED PR AT A TIME (finding 3, 2026-11-21). The ruleset does not require an up-to-date branch, and
-          # `--auto` can merge a few seconds after this job ends, so the queue alone does not stop two PRs gated on the
-          # same tip from both merging. While another PR into the deploy branch is armed and unmerged, this one waits:
-          # `retry` re-gates it (RETRY_MAX per head), by which time that merge has moved the tip. Unreadable = wait.
-          others=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --limit 100 --json number,autoMergeRequest \
-            --jq "[.[] | select(.autoMergeRequest != null and .number != $n) | .number] | map(tostring) | join(\" \")" 2>"$read_error") || { defer_if_limited; others="unreadable"; }
-          if [ -n "$others" ]; then
-            echo "::notice::not arming #$n: another PR is armed onto the deploy branch (${others}); re-gating once it lands" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          # Reuse the one-armed-PR inventory to also catch direct CI/dispatch events for boarded cars.
+          # Complete all pages before deciding: a failed later page must not look like a short, clear queue.
+          queue_blocker() {
+            local inventory wrappers wrapper wrapper_head base missing sibling pull detail state ci relation rows
+            inventory=$(gh api --paginate --method GET "repos/$GITHUB_REPOSITORY/pulls" -f state=open -f base="$DEPLOY_BRANCH" \
+              -f sort=created -f direction=asc -F per_page=100 | jq -ces '
+                if length > 0 and all(.[]; type == "array") then add else error("incomplete inventory") end') || return 1
+            wrappers=$(jq -cer --argjson n "$n" --arg head "$head" --arg repo "$GITHUB_REPOSITORY" '
+              def landable: .draft == false and ([.labels[].name] | index("land") != null and index("hold") == null);
+              (map({key:(.number|tostring), value:.}) | from_entries) as $pulls |
+              if any(.[]; .number != $n and .auto_merge != null) then {armed:true}
+              else {trains: [.[] | select(.number != $n and landable and .head.repo.full_name == $repo
+                       and (.head.ref | startswith("train/")) and any(.labels[]; .name == "train")) as $train |
+                $train.body // "" | capture("<!-- merge-train (?<json>\\{[^\\n]*\\}) -->")? | .json | fromjson? |
+                select((.base | strings | test("^[0-9a-f]{40}$")) and (.cars | type == "array") and any(.cars[]; .pr == $n and .head == $head)
+                  and (.cars | map(.pr) | unique | length) == (.cars | length)
+                  and all(.cars[]; (.pr | type == "number" and . > 0 and floor == .) and (.head | strings | test("^[0-9a-f]{40}$")))
+                  and all(.cars[]; . as $car | $pulls[$car.pr|tostring] | . == null or (landable and .head.sha == $car.head and (.head.ref | startswith("train/") | not))))
+                | {number:$train.number,head:$train.head.sha,base,missing:[.cars[] | select($pulls[.pr|tostring] == null)]}]} end' <<<"$inventory") || return 1
+            if [ "$(jq -r .armed <<<"$wrappers")" = true ]; then echo "another PR is armed"; return; fi
+            rows=$(jq -r '.trains[] | [.number,.head,.base,(.missing|tojson)] | @tsv' <<<"$wrappers") || return 1
+            while read -r wrapper wrapper_head base missing; do
+              [ -n "$wrapper" ] || continue
+              if [ "$base" != "$tip" ]; then
+                relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$base...$tip" --jq .status) || return 1
+                case "$relation" in ahead|identical) ;; behind|diverged) continue ;; *) return 1 ;; esac
+              fi
+              # An absent sibling can still be valid: trainRow accepts an already merged car at its exact head.
+              for sibling in $(jq -r '.[].pr' <<<"$missing"); do
+                pull=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$sibling") || return 1
+                # If it is open again, the listing changed under us. Defer for a consistent re-read.
+                state=$(jq -er --argjson cars "$missing" --argjson n "$sibling" --arg branch "$DEPLOY_BRANCH" '
+                  select(.number == $n and .state == "closed" and has("merged_at")) |
+                  if .merged_at != null and .base.ref == $branch and .head.sha == ($cars[] | select(.pr==$n).head)
+                  then "merged" else "stale" end' <<<"$pull") || return 1
+                [ "$state" = merged ] || continue 2
+              done
+              # GraphQL binds these variables through gh, independently of shell expansion.
+              # shellcheck disable=SC2016
+              detail=$(gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f repo="${GITHUB_REPOSITORY#*/}" -F number="$wrapper" \
+                -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){headRefOid mergeable commits(last:1){nodes{commit{oid status{context(name:"gate"){state}}}}}}}}') || return 1
+              state=$(jq -er --arg h "$wrapper_head" '
+                select(.errors == null) | .data.repository.pullRequest |
+                select(.headRefOid == $h and .commits.nodes[-1].commit.oid == $h) |
+                if .mergeable == "CONFLICTING" then "FAILURE"
+                else .commits.nodes[-1].commit | select(has("status")) | .status.context.state // "PENDING" end' <<<"$detail") || return 1
+              case "$state" in FAILURE|ERROR) continue ;; PENDING|EXPECTED|SUCCESS) ;; *) return 1 ;; esac
+              # Use the CI check that trainDisposition reads. Optional red checks do not release boarded cars.
+              ci=$(gh api "repos/$GITHUB_REPOSITORY/commits/$wrapper_head/check-runs?check_name=CI&per_page=20" \
+                --jq '.check_runs | map(select(.app.slug == "github-actions" and .name == "CI")) | first |
+                      if .status == "completed" then .conclusion else "pending" end') || return 1
+              if [ "$ci" = pending ]; then
+                # A terminal workflow can leave no completed CI check (the #5814 cancelled-train case).
+                ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$wrapper_head&per_page=20" \
+                  --jq '.workflow_runs | max_by(.id) | if .status == "completed" and
+                         (.conclusion // "" | test("^(cancelled|failure|timed_out|startup_failure)$")) then .conclusion else "pending" end') || return 1
+              fi
+              case "$ci" in
+                failure|cancelled|timed_out|startup_failure|action_required|skipped|neutral|stale) continue ;;
+                success|pending) echo "car of open train #$wrapper"; return ;;
+                *) return 1 ;;
+              esac
+            done <<<"$rows"
+          }
+          queue_allows_arm() {
+            local reason
+            reason=$(GH_TOKEN="$GITHUB_TOKEN" queue_blocker 2>"$read_error") || { defer_if_limited; reason="open PR inventory unreadable"; }
+            [ -n "$reason" ] || return 0
+            echo "::notice::not arming #$n: $reason" | tee -a "$GITHUB_STEP_SUMMARY"
+            # A healthy train owns this car until its next lifecycle event; immediate retries waste quota.
+            if [[ "$reason" != "car of open train #"* ]]; then
+              echo "retry=$(jq -cn --argjson n "$n" --arg h "$head" '{number:$n,head:$h}')" >> "$GITHUB_OUTPUT"
+            fi
+            return 1
+          }
+          queue_allows_arm || exit 0
           who=GITHUB_TOKEN
           if [ -n "$LAND_TOKEN" ]; then
             export GH_TOKEN="$LAND_TOKEN"; who=LAND_TOKEN
@@ -1001,6 +1066,7 @@ jobs:
                 echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
+              queue_allows_arm || exit 0
               if merge_out=$(gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --merge --match-head-commit "$head" 2>&1); then
                 printf '%s\n' "$merge_out"
                 echo "merged #$n @ ${head:0:12} onto ${tip:0:12} with $who (PR was already CLEAN; auto-merge refused)" | tee -a "$GITHUB_STEP_SUMMARY"

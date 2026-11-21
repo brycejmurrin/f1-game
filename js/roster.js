@@ -576,8 +576,10 @@
     "js/net/netplay.js",
     "js/net/lobby.js",
     "js/input/phone-pad-codec.js",
+    "js/ui/touch-button-settings.js",
     "js/input/phone-pad-page.js",
-    "js/input/phone-pad.js"
+    "js/input/phone-pad.js",
+    "js/net/phone-pairing-ui.js"
   ],
     LAZY_NET_EDGES: [
     [
@@ -834,12 +836,20 @@
     ]
   ],
     LAZY_UI_PRESETS: [
+    "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js",
+    "js/ui/screen-arranger.js",
+    "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
     "js/ui/appearance-studio-ui.js",
     "js/ui/photo-studio-ui.js"
   ],
     LAZY_UI_PRESETS_EDGES: [
+    [
+      "js/ui/screen-regions.js",
+      "js/ui/screen-placement.js"
+    ],
     [
       "js/ui/appearance-studio-ui.js",
       "js/ui/photo-studio-ui.js"
