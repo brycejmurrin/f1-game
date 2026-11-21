@@ -495,6 +495,7 @@ const DrivingCoachBody = (function () {
     function captureWorld() {
       const cars = (G.cars || []).map((c) => captureCar(c));
       return { cars, raceT: G.raceT, sectorIdx: G.sectorIdx, sectorStartT: G.sectorStartT,
+        fieldSectorBests: G.fieldSectorBests?.slice(),
         sectorBests: Array.isArray(G.sectorBests) ? G.sectorBests.slice() : null,
         sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
     }
@@ -513,6 +514,7 @@ const DrivingCoachBody = (function () {
       if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
       if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
       if (w.sectorBests) G.sectorBests = w.sectorBests.slice();
+      if (w.fieldSectorBests) G.fieldSectorBests.splice(0, G.fieldSectorBests.length, ...w.fieldSectorBests);
       // sectorLast has no setter — mutate the live array in place.
       if (w.sectorLast && Array.isArray(G.sectorLast)) {
         G.sectorLast.length = 0;

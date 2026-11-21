@@ -30,6 +30,7 @@ import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { netStubG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -87,23 +88,9 @@ function fakeSession() {
 }
 
 function stubG(n) {
-  const car = (i, local) => ({
-    idx: i, local: !!local, human: !!local, isPlayer: !!local,
-    s: i * 10, x: 0, px: 0, pz: 0, speed: 0, head: 0, lap: 0, mods: null,
-    name: "D" + i, code: "D" + i, driverId: "drv" + i, dnfAt: 0.5 + i,
-  });
-  const cars = [];
-  for (let i = 0; i < n; i++) cars.push(car(i, i === 0));
-  return {
-    cars, player: cars[0], track: { total: 5000, n: 500 },
-    netStart: null, netNow: null, announced: [],
-    lapsTarget: 3, raceT: 400,
-    worldFromTrack: (s, x) => ({ x: s, z: x }),
-    wireId: (c) => c.idx,
-    setCarRole: (c, human, local) => { c.human = human; c.local = local; },
-    announce: (m) => { /* recorded */ },
-    COUNTDOWN_S: 3,
-  };
+  const G = netStubG(n, 0, { raceT: 400, worldFromTrack: (s, x) => ({ x: s, z: x }), netRaceT: undefined });
+  G.cars.forEach((c, i) => { c.dnfAt = 0.5 + i; });
+  return G;
 }
 
 test("host: a guest's session closing broadcasts LEFT for that wire id to the others", () => {

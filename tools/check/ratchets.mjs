@@ -507,18 +507,28 @@ export function mergeBase(root = ROOT) {
  * delta this branch's fragment already carries: an over row that only gives
  * back part of it (a colour re-added) re-snaps instead of blocking as a raise.
  * Rows outside AT_REF, or with no base, pass unchanged (the old rule). */
-export async function attributeTree(rows, { name, base = mergeBase(), at } = {}) {
+export async function attributeTree(rows, { name, base = mergeBase(), at, own, pinGrowth = pinDelta } = {}) {
   if (!name || !base) return rows;
   const file = path.join(FRAG_DIR, name);
-  const own = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")).tree || {} : {};
+  own ||= fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")).tree || {} : {};
   const out = [];
   for (const r of rows) {
-    const ownFrag = own[r.metric] || 0;
-    if (!(r.tree && (r.slack > r.slackMax || (r.over > 0 && ownFrag < 0)))) { out.push(r); continue; }
+    const ownFrag = r.tree ? own[r.metric] || 0 : 0;
+    // Any tree row this fragment already moves carries ownFrag, AT_REF form or not (#6032).
+    const row = ownFrag ? { ...r, ownFrag } : r;
+    // A pin row is measured at any slack: its slackMax (200) is a band, and a branch's own cut is its to book (#6023).
+    const pin = r.tree && Object.hasOwn(PIN_METRICS, r.metric) && r.slack > 0;
+    if (!(pin || (r.tree && (r.slack > r.slackMax || (r.over > 0 && ownFrag < 0))))) { out.push(row); continue; }
+    // A pin counter (D-037) measures the branch's own delta from the files it changed, as ownGrowth does (#6023).
+    if (Object.hasOwn(PIN_METRICS, r.metric)) {
+      try { out.push({ ...row, ownMin: Math.min(0, await pinGrowth(r.metric, base)) }); }
+      catch { out.push(row); /* base not readable: the old rule */ }
+      continue;
+    }
     at ||= (await import("./tree-counts.mjs")).AT_REF;   // only when a tree row needs it
-    if (!Object.hasOwn(at, r.metric)) { out.push(r); continue; }
-    try { out.push({ ...r, ownMin: Math.min(0, r.value - await at[r.metric](base)), ownFrag }); }
-    catch { out.push(r); /* base not readable (a shallow clone): the old rule */ }
+    if (!Object.hasOwn(at, r.metric)) { out.push(row); continue; }
+    try { out.push({ ...row, ownMin: Math.min(0, r.value - await at[r.metric](base)) }); }
+    catch { out.push(row); /* base not readable (a shallow clone): the old rule */ }
   }
   return out;
 }
@@ -533,15 +543,18 @@ export function scopeToBranch(rows, touched = changedFiles()) {
   // result (2026-10-27, PRs #3970/#3981/#3985). Tree lowering is the deploy
   // branch's `--update` / `--fold`, never a topic branch's (#2583 for files) —
   // except by the branch's OWN reduction, measured at its merge-base (#4257:
-  // attributeTree sets ownMin < 0, and mergeFragment bounds the delta by it).
-  const treeOk = (r) => r.value >= r.ceiling || r.ownMin < 0;
+  // attributeTree sets ownMin < 0, and mergeFragment bounds the delta by it) —
+  // or by giving back its own fragment's raise (#6032: ownFrag > 0; mergeFragment
+  // stops the fragment at 0, the rest is the deploy branch's to lower).
+  const treeOk = (r) => r.value >= r.ceiling || r.ownMin < 0 || r.ownFrag > 0;
   if (!touched) return rows.filter((r) => !r.tree || treeOk(r));
   return rows.filter((r) => (r.tree ? treeOk(r) : r.value >= r.ceiling || touched.has(r.file)));
 }
 
 /** Add `rows`' (value - ceiling) to fragment `frag` in place. A tree delta that
  *  nets below zero is dropped, not kept, unless the row carries the branch's own
- *  reduction (`ownMin`, attributeTree): then it is kept, never below ownMin.
+ *  reduction (`ownMin`, attributeTree): then it is kept, never below ownMin. A
+ *  lowering of the branch's own raise (`ownFrag` > 0, #6032) stops at zero.
  *  Before #3996 the commit hook wrote stale lowerings (assertPins −50) into open fragments; re-snapping one kept it
  *  negative at zero slack, so each pin the tip gained turned the PR red again
  *  (2026-10-27, #3970/#3981/#3985). Dropping it leaves the deploy's ceiling.

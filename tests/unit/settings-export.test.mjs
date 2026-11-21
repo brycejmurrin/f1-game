@@ -238,6 +238,43 @@ test("Files share feedback stays visible and accessible with Undo instructions",
   assert.match(b.dom.byId("pm-share-code-help").textContent, /Ghost recording codes and links are imported separately/);
 });
 
+test("FILES imports a Daily result into the correct class and explains an expired code", () => {
+  const b = bootImportUI({ globals: { Tracks: { LIST: [{ id: "monza", name: "Monza" }] }, TextEncoder, TextDecoder, btoa, atob } });
+  vm.runInContext(read("js/ui/share-code.js"), b.sb, { filename: absSrc("js/ui/share-code.js") });
+  const codes = vm.runInContext("ShareCode", b.sb), today = "2026-10-10";
+  b.G.store = b.GameStore.store;
+  b.G.daily = { dayKey: () => today };
+  let staged, notice, closed = false;
+  b.G.closeSettings = () => { closed = true; };
+  b.G.announce = text => { assert.equal(closed, true); notice = text; };
+  b.G.openTimeTrialPicker = plan => { staged = plan; };
+  for (const [day, cls, expected] of [[today, "open", "open"], [today, undefined, "standard"], ["2026-10-09", "open", "standard"]]) {
+    const code = codes.encode("daily", { day, track: "monza", class: cls });
+    assert.equal(code.ok, true);
+    b.dom.byId("pm-share-code-in").value = code.code;
+    b.dom.byId("pm-share-code-import").click();
+    assert.equal(staged.day, today);
+    assert.equal(staged.mode, expected);
+    assert.equal(notice,
+      day === today ? "Daily challenge — MONZA." : "That daily challenge has ended — here is today's.");
+  }
+  for (const day of [undefined, "2026-10-09", today]) {
+    staged = notice = null; closed = false;
+    const code = codes.encode("lap", { day, track: "monza", time: 80 });
+    b.dom.byId("pm-share-code-in").value = code.code;
+    b.dom.byId("pm-share-code-import").click();
+    assert.equal(closed, true);
+    if (day === today) assert.equal(staged.mode, "standard");
+    else assert.equal(staged.track, "monza");
+    assert.match(notice, /Lap challenge.*BEAT/);
+  }
+  b.G.paused = true; closed = false; staged = null;
+  b.dom.byId("pm-share-code-import").click();
+  assert.equal(closed, false);
+  assert.equal(staged, null);
+  assert.match(b.dom.byId("pm-share-code-status").textContent, /Return to the main menu/);
+});
+
 for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files ${kind} share import releases the Settings modal only when navigating`, () => {
   const events = [];
   const b = bootImportUI({ globals: { ShareCode: {
@@ -256,7 +293,7 @@ for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files 
   settings.close = () => { settings.open = false; events.push("native-close"); };
   b.G.closeSettings = () => { settings.hidden = true; settings.close(); events.push("settings-cleanup"); };
   b.G.openGarage = (from) => { events.push("garage:" + from); garage.hidden = false; };
-  b.G.openDailyPicker = () => { events.push("daily"); };
+  b.G.openTimeTrialPicker = () => { events.push("daily"); };
 
   b.dom.byId("pm-share-code-in").value = "share code";
   b.dom.byId("pm-share-code-import").click();
@@ -546,6 +583,32 @@ test("SAVE ALL from a desktop does not pin desktop defaults on a phone", () => {
   const phone = boot({ mobile: true });
   phone.SettingsExport.applySettings(file, phone.G);
   assert.equal(phone.collect("all").settings.display.resMode, null, "the phone keeps its own resolution default");
+});
+
+test("SAVE ALL restores unpinned adaptive settings for the same device class", () => {
+  const source = boot({ mobile: true });
+  const target = boot({ mobile: true, disk: {
+    "apex26.resMode": JSON.stringify("high"), "apex26.gfxPreset": JSON.stringify("high"), "apex26.buildWorker": "0",
+  } });
+  const file = source.collect("all");
+  assert.equal(file.settings.display.resMode, null);
+  assert.equal(file.settings.display.gfxPreset, null);
+  assert.equal(file.settings.display.buildWorker, null);
+  assert.equal(target.loadSettings(file).failed, 0);
+  for (const k of ["resMode", "gfxPreset", "buildWorker"]) assert.equal(target.disk.has(`apex26.${k}`), false, k);
+});
+
+test("adaptive pins survive cross-device, unknown-device and CHANGED imports", () => {
+  const source = boot({ mobile: true });
+  const all = source.collect("all");
+  const changes = source.collect("changes");
+  assert.equal(changes.settings.display?.resMode, undefined);
+  const disk = { "apex26.resMode": JSON.stringify("high"), "apex26.gfxPreset": JSON.stringify("high"), "apex26.buildWorker": "0" };
+  for (const file of [{ ...all, device: { desktop: true } }, { ...all, device: undefined }, changes, { ...all, mode: "changes" }]) {
+    const target = boot({ mobile: true, disk });
+    assert.equal(target.loadSettings(file).failed, 0);
+    for (const [key, value] of Object.entries(disk)) assert.equal(target.disk.get(key), value, key);
+  }
 });
 
 // UI hunt 3: a device-picked BUILD IN BACKGROUND was pinned ON by an ALL file,

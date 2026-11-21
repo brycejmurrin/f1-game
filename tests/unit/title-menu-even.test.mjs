@@ -106,7 +106,7 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   assert.match(title, /const dailyBtn = \$\("mb-daily"\)[\s\S]*if \(dailyBtn\) dailyBtn\.onclick/);
   assert.doesNotMatch(title, /\$\("mb-tt"\)\.click\(\)/,
     "Daily does not enter through free-play restore and its speculative flyby");
-  assert.match(title, /G\.openDailyPicker\(\)/, "the title uses the dedicated staged-daily picker path");
+  assert.match(title, /G\.openTimeTrialPicker\(\{ kind: "daily" \}\)/, "the title uses the dedicated staged-daily picker path");
   assert.match(title, /setText\(dailySub, p\.trackName[\s\S]*STREAK/);
   assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
   const experience = read("css/experience.css");
@@ -491,7 +491,7 @@ test("title refresh counts saves without cloning them and skips unchanged door t
       },
     },
     daily: { plan: () => ({ trackName: "Monza", weather: "dry" }), liveStreak: () => 3 },
-    openCareerSlots() {}, openCareer() {}, openDailyPicker() {},
+    openCareerSlots() {}, openCareer() {}, openTimeTrialPicker() {},
   });
   // Bracket call: this file must not spell that method as name-paren.
   // impact-map.json is held by other PRs, so a new edge cannot be regenerated.
@@ -531,7 +531,7 @@ test("Daily history populates the Saves and Data blueprint, keeps classes separa
     Tracks: { SEASON: [] }, Teams: { LIST: [] } });
   vm.runInContext(read("js/ui/title-menu.js"), sandbox, { filename: absSrc("js/ui/title-menu.js") });
   const api = vm.runInContext("TitleMenu", sandbox).create({ $: dom.byId, store: {}, daily: { data: () => data,
-    plan: () => ({ trackName: "Monza", weather: "dry" }) }, openDailyPicker() {} });
+    plan: () => ({ trackName: "Monza", weather: "dry" }) }, openTimeTrialPicker() {} });
   assert.equal(dom.byId("pm-panel-files").querySelector("#daily-history"), history);
   assert.equal(dom.byId("menu-buttons").querySelector("#daily-history"), null); assert.equal(history.children[0].style.minHeight, "44px");
   history.open = true; dom.dispatch(history, { type: "toggle" });
@@ -561,7 +561,7 @@ test("the DAILY door repaints when the page becomes visible on a new day, and on
   const api = vm.runInContext("TitleMenu.create", ctx)({
     $: (id) => nodes[id] || null, store: { raw: () => null },
     daily: { dayKey: () => day, plan: () => (plans++, { trackName: day === "2026-11-05" ? "Monza" : "Suzuka", weather: "dry" }), liveStreak: () => 0 },
-    openCareerSlots() {}, openCareer() {}, openDailyPicker() {},
+    openCareerSlots() {}, openCareer() {}, openTimeTrialPicker() {},
   });
   api["refresh"]();
   assert.equal(nodes["mb-daily-sub"].textContent, "Monza · DRY");

@@ -54,6 +54,8 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
   reset). Six PRs sat ownerless 7.8–9.1 h on 2026-11-18 because nothing read the children between waves.
 - Messages reach a busy worker when its turn ends (median 0.3 min, p90 7.5, max 78). Send a hold or stop with
   priority "now", name its exceptions in the same message, and expect a push to cross it [12].
+- Push rules for every worker (D-046): one push per fix round, never while CI runs on that head; flip draft→ready only
+  after the draft CI run has finished. A flip or push that cancels a live run is the orchestrator's to name in the PR.
 - Never push to, flip or label a live owner's PR, nor edit its body beyond ticking a Plan line: message the owner
   [11, 17]. What you may do unasked and report after: AGENTS.md §Coordination.
 - A base red: one message naming the failing leg and the one fix PR; workers hold, the fixer lands, then one release

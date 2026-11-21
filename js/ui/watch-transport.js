@@ -100,7 +100,15 @@ const WatchTransport = (function () {
         if (typeof requestAnimationFrame !== "function") { flushSeek(); return; }
         if (!seekFrame) seekFrame = requestAnimationFrame(flushSeek);
       });
-      seek.addEventListener("change", () => { scrubbing = false; pendingSeek = null; replay.seek(+seek.value); paint(); });
+      seek.addEventListener("change", () => {
+        const target = +seek.value;
+        // Release may follow the scrub frame, or arrive before it. Playback
+        // may also have advanced since that frame posed the field.
+        const alreadyPosed = scrubbing && pendingSeek == null && replay.isPausedAt?.(target);
+        scrubbing = false; pendingSeek = null;
+        if (!alreadyPosed) replay.seek(target);
+        paint();
+      });
       seek.addEventListener("blur", () => { scrubbing = false; paint(); });
       track.appendChild(seek); timeline.appendChild(track); timeline.appendChild(node("span", "duration", clock(duration)));
       root.appendChild(timeline);

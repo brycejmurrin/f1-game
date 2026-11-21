@@ -95,6 +95,23 @@ test("the game's own addresses still fall back to the precached shell on a slow 
   }
 });
 
+test("an evicted game shell waits for the successful late navigation response", async () => {
+  let release;
+  const h = harness({ fetchImpl: (req) => typeof req === "string"
+    ? Promise.resolve(new Response('{"build":321}'))
+    : new Promise((resolve) => { release = resolve; }) });
+  const response = h.nav("/");
+  // The harness expires the network/cache race in a microtask.
+  await new Promise((resolve) => setImmediate(resolve));
+  release(new Response(GAME));
+  assert.equal(await (await response).text(), GAME);
+});
+
+test("offline with an evicted game shell, navigation returns a network error", async () => {
+  const h = harness({ fetchImpl: async () => { throw new TypeError("offline"); } });
+  assert.equal((await h.nav("/")).type, "error");
+});
+
 test("install seeds controller.html as an optional (non-fatal) precache", async () => {
   const fetched = [];
   const h = harness({
