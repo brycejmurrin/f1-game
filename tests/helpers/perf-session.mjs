@@ -11,28 +11,7 @@ export {
 
 export const TRACK = "monza";
 
-/** Pins read by the spec before goto. three + tlxForceGL so software GL stays on WebGL2. */
-export function installSessionPins() {
-  window.__TEST_MODE = true;
-  try {
-    localStorage.setItem("apex26.gfxBackend", "three");
-    localStorage.setItem("apex26.tlxForceGL", "1");
-    localStorage.setItem("apex26.gfxBootStepMs", "45000");
-  } catch (_) { /* private mode */ }
-  const bag = { samples: [], on: false, until: 0, last: 0 };
-  window.__perfSessionFrames = bag;
-  const tick = (t) => {
-    // An in-flight callback can carry a stamp from before the seed
-    // (measured −33 ms). Ignore it and keep the seed so the next stamp
-    // records the real gap. A backward last would invent a negative frame.
-    if (bag.on && bag.last && t > bag.last) {
-      bag.samples.push(+(t - bag.last).toFixed(3));
-      bag.last = t;
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
+export { installSessionPins } from "./perf-session-pins.mjs";
 
 /** Which renderer actually bound, plus the software-GL string when WebGL2 will answer. */
 export function readBackend() {
@@ -169,10 +148,9 @@ export async function sampleRaceWindow(page, windowMs) {
       } catch (_) { /* probe is optional; throttle already held */ }
     }, 50);
   }, windowMs);
-  await page.waitForFunction(() => performance.now() >= window.__perfSessionFrames.until, null, { polling: 200, timeout: windowMs + 20_000 });
+  await page.waitForFunction(() => !window.__perfSessionFrames.on, null, { polling: 200, timeout: windowMs + 20_000 });
   return page.evaluate((how) => {
     const bag = window.__perfSessionFrames;
-    bag.on = false;
     if (window.__perfSessionDrive) { clearInterval(window.__perfSessionDrive); window.__perfSessionDrive = 0; }
     try { window.__apex.clearInput(); } catch (_) { /* already clear */ }
     let governor = null;

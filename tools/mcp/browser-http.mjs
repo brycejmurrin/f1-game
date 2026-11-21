@@ -7,9 +7,12 @@
  * landscape 852×393, or portrait 393×852). Grok's custom connector cannot see
  * loopback, so tunnel that port and paste the https URL from the phone.
  *
- *   node tools/mcp/browser-http.mjs
+ *   node tools/mcp/browser-http.mjs [--port 3001] [--idle-min 30] [--allow-query-token]
  *   node tools/mcp/browser-http-up.mjs   (cloudflared quick tunnel; it starts this server too)
- *   grok.com/connectors → New Connector → Custom → https://<tunnel>/mcp?token=<printed>
+ *   grok.com/connectors → New Connector → Custom → https://<tunnel>/mcp, header Authorization: Bearer <printed>
+ * The token is read from the Authorization header only; --allow-query-token also accepts ?token= for a
+ * connector that cannot send headers (that URL is then itself a credential). The server exits after
+ * --idle-min minutes with no authenticated request (default 30; 0 disables).
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
@@ -63,10 +66,46 @@ function tokenOk(got, want) {
   return timingSafeEqual(a, b);
 }
 
-function presentedToken(req, url) {
+/** The bearer token from the Authorization header; ?token= only when the server was started with allowQueryToken. */
+export function presentedToken(req, url, { allowQueryToken = false } = {}) {
   const header = req.headers.authorization || "";
   const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return bearer || url.searchParams.get("token") || "";
+  if (bearer || header) return bearer;   // a header is authoritative: a bad bearer is never rescued by the query
+  return allowQueryToken ? url.searchParams.get("token") || "" : "";
+}
+
+export const USAGE = "usage: node tools/mcp/browser-http.mjs [--port 3001] [--idle-min 30] [--allow-query-token]";
+/** Strict argv: every flag known, every value valid; {help} or {error} otherwise (the caller exits 2 on error). */
+export function parseServerArgs(argv) {
+  const out = { port: 3001, idleMin: 30, allowQueryToken: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") return { help: true };
+    if (a === "--allow-query-token") { out.allowQueryToken = true; continue; }
+    if (a === "--port" || a === "--idle-min") {
+      const v = argv[++i];
+      const n = Number(v);
+      if (v == null || v === "" || !Number.isInteger(n)) return { error: `${a} needs an integer` };
+      if (a === "--port") { if (n < 0 || n > 65535) return { error: "--port must be 0-65535" }; out.port = n; }
+      else { if (n < 0 || n > 24 * 60) return { error: "--idle-min must be 0-1440" }; out.idleMin = n; }
+      continue;
+    }
+    return { error: `unknown argument ${JSON.stringify(a)}` };
+  }
+  return out;
+}
+
+/** A restartable one-shot timer: fire() after ms of no touch(); ms <= 0 never fires. */
+export function idleTimer(ms, fire, { setT = setTimeout, clearT = clearTimeout } = {}) {
+  let t = null, stopped = false;
+  const arm = () => {
+    if (stopped || !(ms > 0)) return;
+    if (t) clearT(t);
+    const mine = t = setT(() => { if (stopped || t !== mine) return; t = null; fire(); }, ms);   // only the latest arm fires
+    t?.unref?.();
+  };
+  arm();
+  return { touch: arm, stop: () => { stopped = true; if (t) clearT(t); t = null; } };
 }
 
 const PHONE = {
@@ -75,8 +114,10 @@ const PHONE = {
 };
 const PHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
-export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) {
+export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQueryToken = false, idleMs = 0, onIdle = null } = {}) {
   if (!token) throw new Error("token required");
+  let mcp;
+  const idle = idleTimer(idleMs, () => { (onIdle || (() => mcp?.close()))(); });
   const state = { browser: null, context: null, page: null, game: null, orient: null };
   const uploads = new Set(), pending = new Set();
   let closing = false, closePromise;
@@ -201,11 +242,12 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
         res.end("MCP is at /mcp");
         return;
       }
-      if (!tokenOk(presentedToken(req, url), token)) {
+      if (!tokenOk(presentedToken(req, url, { allowQueryToken }), token)) {
         res.writeHead(401, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: "unauthorized" }));
         return;
       }
+      idle.touch();   // only an authenticated request keeps the server up
       if (req.method === "GET" || req.method === "DELETE") {
         res.writeHead(405, { allow: "POST" });
         res.end();
@@ -263,13 +305,14 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
     server.listen(port, "127.0.0.1", ok);
   });
   const actual = server.address().port;
-  return {
+  return mcp = {
     port: actual,
     token,
     url: `http://127.0.0.1:${actual}/mcp`,
     close: () => {
       if (!closePromise) closePromise = (async () => {
         closing = true;
+        idle.stop();
         const stopped = new Promise((r) => server.close(() => r()));
         // server.close does not end active uploads (Node's HTTP contract).
         // Stop those first, while letting already-dispatched calls finish.
@@ -288,24 +331,19 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
   };
 }
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : fallback;
-}
-
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("usage: node tools/mcp/browser-http.mjs [--port 3001]");
-    process.exit(0);
-  }
+  const opts = parseServerArgs(process.argv.slice(2));
+  if (opts.help) { console.log(USAGE); process.exit(0); }
+  if (opts.error) { console.error(`browser-http: ${opts.error}\n${USAGE}`); process.exit(2); }
   const token = process.env.APEX_MCP_TOKEN || randomBytes(18).toString("hex");
-  const mcp = await startBrowserMcp({ port: Number(arg("--port", "3001")), token });
+  const exitIdle = () => { console.log(`apex browser MCP: no authenticated request for ${opts.idleMin} min; exiting`); mcp.close().then(() => process.exit(0)); };
+  const mcp = await startBrowserMcp({ port: opts.port, token, allowQueryToken: opts.allowQueryToken, idleMs: opts.idleMin * 60000, onIdle: exitIdle });
   console.log("apex browser MCP");
-  console.log("  local:  " + mcp.url + "?token=" + token);
+  console.log("  local:  " + mcp.url);
   console.log("  header: Authorization: Bearer " + token);
+  if (opts.allowQueryToken) console.log("  query:  " + mcp.url + "?token=" + token + "   (this URL is a credential)");
+  console.log("  idle:   exits after " + (opts.idleMin || "no") + " idle minute(s)");
   console.log("  tunnel: node tools/mcp/browser-http-up.mjs (cloudflared, port " + mcp.port + ")");
-  console.log("  Grok:   grok.com/connectors → New Connector → Custom");
-  console.log("          https://<the-tunnel-host>/mcp?token=" + token);
   const stop = async () => { await mcp.close(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

@@ -93,12 +93,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const { script, skipTf, extraArgs } = parseRunGroupArgs(process.argv.slice(2));
     filesFor(script);   // an unknown / empty / non-node group fails here, before the guards lookup
     const g = skipTf ? liveGuardsRan() : null;
-    // Behaviour-neutral with the old generated lines (#5427): the per-file verdict ran for an isolated group
-    // (run-node-group.mjs) and for a --skip-tf PR arm; a plain `node --test` group did not, so a deploy or nightly
-    // run of one gains no new way to fail here. Widening it is its own change.
+    // EVERY node group gets the per-file verdict (W25 row 13, 2026-11), not only an isolated group or a --skip-tf
+    // arm: a bare `node --test` exits 0 when a test file calls process.exit(0) mid-run (the file reads as one
+    // passing test and every test after the exit never runs), so a plain group could go green on a file that
+    // never finished. (#5427 kept the old split when it folded the lines into this wrapper; this widens it.)
     const doc = loadGroups();
-    const fileVerdict = skipTf || (doc.groups[script].files || []).some((f) => (doc.isolatedFiles || []).includes(f));
-    code = runGroup(script, { skipTf, extraArgs, doc, fileVerdict, ran: g ? g.files : null,
+    code = runGroup(script, { skipTf, extraArgs, doc, fileVerdict: true, ran: g ? g.files : null,
       ranWhy: g ? `guards mode=${g.mode}${g.selection ? ` selection=${g.selection}` : ""}: ${g.reason}` : "" });
   } catch (e) {
     console.error(String(e && e.message || e));

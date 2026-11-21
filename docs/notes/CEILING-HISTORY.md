@@ -74,6 +74,29 @@ were 2,847,130 B (35.7 %) of the old count. A branch's own growth up to 5000 B i
 label; past it, `ratchet-raise` as before. Open fragments' `eagerBytes` deltas are inert from here (applyFragments
 skips a metric ratchets.json no longer names). Evidence: docs/notes/RATCHET-REVIEW-2026-11-20.md.
 
+### PR #5296 (2026-11-20) (claude/audit-fix-hud-perf-covers): eagerCodeBytes for the same W22 growth
+
+`(tree) eagerCodeBytes` 4018312 → **4019863** (+1551), re-measured +1518 on the merge of tip eef0e45f (33 B now shared with the tip). The tip retired `eagerBytes` for
+`eagerCodeBytes` (stripped code, #5975), so this branch's `eagerBytes` +1225 fragment
+(the 2026-11-19 entry below) is dropped and replaced by this one. Same code, measured on
+the merge of tip 322c63a3: the W22 stall/readback covers (race-entry-profile, governor,
+loop-health), onboard `resetControls`, css-zoom's ancestor zoom product, tv-graphics and
+broadcast fastest-lap, sporting-regs `blueFlagCar`; no new eager module. Extraction was
+declined for a 142-file combined PR (orchestrator, 2026-11-20 12:59Z, option A).
+
+### PR #5296 (2026-11-19) (claude/audit-fix-hud-perf-covers): audit W22/W25/W32 fixes on eager scripts
+
+`(tree) eagerBytes` 8015286 → **8016511** (+1225). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. Measured on the
+sync merge c48f7b1e against tip dec94440, the growth is this PR's own net change to eager
+scripts: onboard +727 (REPEAT CONTROL REMINDERS keeps harvest and races), css-zoom +502
+(local-rect zoom product), race-entry-profile +473 (`bindGame` + `readbackCover`),
+tv-graphics +445 and broadcast +386 (fastest-lap banner), sporting-regs +180
+(`blueFlagCar` export), game +162, governor +112, loop-health +109,
+save-schema-registry +67; offset by hud −1081, announce-banner −391, hud-readouts −322,
+visor-optics −144. An earlier head had already trimmed the hud.js comment block
+(6bd07fa1: +2,693 → +1,225 B); the remaining added comments are short. Fragment:
+`ratchets.d/claude--audit-fix-hud-perf-covers.json`.
 ## 2026-11-19 — PR #5721 (claude/hunt4-fixes-5694): hunt #5694 season and replay fixes
 
 `(tree) eagerBytes` 8,015,286 → **8,017,013** (+1,727 B). Deliberate raise past the absorb; the
