@@ -14099,6 +14099,9 @@
       "committing": [
         "tests/unit/pit-lane.test.mjs"
       ],
+      "compoundDue": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
       "create": [
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -14231,6 +14234,7 @@
       ],
       "twoCompoundApplies": [
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/pit-lane.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs"
       ],
       "update": [
