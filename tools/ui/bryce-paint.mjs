@@ -2,7 +2,7 @@
 // @doc Owner-phone acceptance: PAINTED text/tap sizes, safe box, page scroll per window × UI SIZE; measure or check.
 // bryce-paint.mjs — the measuring half of tests/specs/bryce-phone-paint.spec.js (issue #5262).
 //
-//   node tools/ui/bryce-paint.mjs                                  # every cell: 3 windows × UI SIZE 70/109 × 7 screens
+//   node tools/ui/bryce-paint.mjs                                  # every cell: 3 landscape windows × UI SIZE 50/70/109 × 7 screens
 //   node tools/ui/bryce-paint.mjs --window standalone --ui-scale 70 --screens title,settings
 //   node tools/ui/bryce-paint.mjs --check                          # compare with tests/data/bryce-phone-paint.json; exit 1 on a difference
 //   node tools/ui/bryce-paint.mjs --write                          # record the measured counts as the ceilings (only ever lower one by hand or by this)
@@ -24,6 +24,8 @@ import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const CEILINGS_FILE = "tests/data/bryce-phone-paint.json";
+/** Landscape windows with recorded paint ceilings. Portrait remains available for exploratory measurements. */
+export const PAINT_WINDOWS = Object.freeze(["standalone", "safari", "w844"]);
 /** The screens the owner meets every session, menu screens first (the three in-race ones share one race build). */
 export const ACCEPT_SCREENS = Object.freeze(["title", "select", "garage", "settings", "hud", "pause", "results"]);
 const MENU = new Set(["title", "select", "garage", "settings"]);
@@ -31,12 +33,11 @@ const MENU = new Set(["title", "select", "garage", "settings"]);
 export const ACCEPT_ROOTS = Object.freeze({ title: "#overlay", select: "#select", garage: "#carsetup", settings: "#pmsettings", hud: "body", pause: "#pausemenu", results: "#results" });
 export const cellKey = (window, uiScale) => `${window}@${uiScale}`;
 
-// Landscape windows with recorded paint ceilings. Other device readings can be measured with --window.
-export const PAINT_WINDOWS = Object.freeze(["standalone", "safari", "w844"]);
 export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 50,70,109] [--screens title,select,garage,settings,hud,pause,results]
                                      [--profile live|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
   Painted sizes on Bryce's phone (tools/lib/bryce-phone.mjs + tools/lib/paint-floor.mjs): text >= 12 px, taps >= 44 px, nothing outside
   the safe box, no page scroll. --check compares with ${CEILINGS_FILE} (exit 1 on any difference); --write records the counts.
+  Pass --window portrait to measure the portrait viewport separately.
   Starts ONE browser (parent session only).`;
 export const KNOWN = ["--window", "--ui-scale", "--screens", "--profile", "--no-profile", "--check", "--write", "--json", "--verbose"];
 

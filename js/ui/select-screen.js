@@ -12,13 +12,13 @@
 const Menus = (function () {
   "use strict";
 
-function create(G) {
+function create(G, preparePickerTrack = () => G.scheduleFlybyTrack(true)) {
 Log.info("ui", "Menus.create");
 if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) GfxEscalation.noteCleanMenuBoot();
 // Stable helpers from the game.js closure.
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
-const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
+const { $, els, store, cssCol, fmtTime, ttBoard } = G;
 // The best-time star counts only laps of the circuit's CURRENT layout: a lap
 // saved before a layout revision (Kyalami's direction flip, revision 2) stays
 // stored but is a lap of a different circuit, so it is not shown as the record.
@@ -148,10 +148,8 @@ if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
 if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
-// Graphics context loss: GLX may reload with lighter settings, or game.js may
-// quit to the menu mid-start. Stash apex26.ctxLostNotice before either path;
-// consume it once here so the title explains the hitch instead of looking like
-// a silent kick to the menu.
+// At boot, only a persisted reset explains a reload. In-page recovery
+// calls showCtxLostNotice directly even if session storage is unavailable.
 const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
 const CTX_LOST_NEED_RELOAD_KEY = "apex26.ctxLostNeedReload";
 const CTX_LOST_EXHAUSTED_KEY = "apex26.ctxLostExhausted";
@@ -180,10 +178,10 @@ if (!ctxLostNotice) {
   dismiss.textContent = "DISMISS";
   dismiss.setAttribute("aria-expanded", "true");
   ctxLostNotice.append(title, detail, retry, dismiss);
-  document.body.appendChild(ctxLostNotice);
+  els.overlay.appendChild(ctxLostNotice);
   // Match #save-warning placement when overlays.css has no dedicated rule yet.
   Object.assign(ctxLostNotice.style, {
-    position: "fixed", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
+    position: "fixed", zoom: "normal", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
     transform: "translateX(-50%)", width: "min(48rem, calc(100vw - 16px))", display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "8px", padding: "8px",
     border: "1px solid rgba(255, 209, 128, 0.72)", borderRadius: "8px",
@@ -207,13 +205,14 @@ const hideCtxLostNotice = () => {
   }
   ctxLostSpoken = false;
 };
-const showCtxLostNotice = () => {
+const showCtxLostNotice = (onlyIfStashed = false) => {
+  if (!ctxLostNotice || G.state !== "menu") return;
   let pending = false;
   try {
     pending = sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1";
     if (pending) sessionStorage.removeItem(CTX_LOST_NOTICE_KEY);
-  } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
-  if (!pending || !ctxLostNotice || G.state !== "menu") return;
+  } catch (_) { /* no persisted notice */ }
+  if (onlyIfStashed && !pending) return;
   ctxLostNotice.hidden = false;
   let exhausted = false;
   try { exhausted = sessionStorage.getItem(CTX_LOST_EXHAUSTED_KEY) === "1"; } catch (_) { /* blocked storage */ }
@@ -272,7 +271,7 @@ const bindCtxLostNoticeOnMenuExit = () => {
   }
 };
 bindCtxLostNoticeOnMenuExit();
-showCtxLostNotice();
+showCtxLostNotice(true);
 
 /** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
 const restoreMenuAfterGraphicsReset = () => {
@@ -763,7 +762,7 @@ function trackFilterBar() {
     b.appendChild(extra);
     b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
     b.setAttribute("aria-pressed", selected ? "true" : "false");
-    b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
+    b.title = "Today's challenge (" + p.day + ", local date): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => {
       e.stopPropagation();
       trackQuery = "";
@@ -1021,7 +1020,7 @@ function buildSelect(opts) {
         // The still IS the preview — nothing is shown behind the sheet. But once
         // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
-        scheduleFlybyTrack(true);
+        preparePickerTrack();
       };
       els.selTracks.appendChild(row);
       return row;
@@ -1037,7 +1036,7 @@ function buildSelect(opts) {
     updateTrackPreview();
   }
   // Prepare the initial/current tile too, even when no tile is clicked.
-  if (!seasonComplete && !inPlace) scheduleFlybyTrack(true);
+  if (!seasonComplete && !inPlace) preparePickerTrack();
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the
@@ -1278,32 +1277,28 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
 /** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
-    button's content box (padded to the free band by fitPreviewMapBand, #5656). */
+    free band between the caption and stats (#5656). */
 function previewMapSlot(hero, sheet, map) {
   const compact = !!(sheet && sheet.dataset.density === "compact");
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
-  const btn = map && map.parentElement;
-  if (btn && btn.clientHeight > 0) {
-    fitPreviewMapBand(btn);
-    const bs = getComputedStyle(btn);
-    const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
-    if (room > 0) slotH = Math.min(slotH, room);
-  }
+  if (map && hero.clientHeight > 0) slotH = Math.min(slotH, fitPreviewMapBand(map, hero));
   return { slotW: hero.clientWidth * 0.62, slotH };
 }
-/** Pad the map button to the free band, centred; k = UI SIZE zoom. */
-function fitPreviewMapBand(btn) {
-  const br = btn.getBoundingClientRect();
-  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
-  const k = br.height / btn.offsetHeight;
+/** Position only the outline in the free band; the entire still remains tappable. */
+function fitPreviewMapBand(map, hero) {
+  const rect = hero.getBoundingClientRect();
+  if (!(rect.height > 0) || !(hero.offsetHeight > 0)) return 0;
+  const k = rect.height / hero.offsetHeight;
+  const top = rect.top + hero.clientTop * k;
+  const box = { top, bottom: top + hero.clientHeight * k, left: rect.left, right: rect.right };
   const over = [];
   for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
     if (e) over.push(e.getBoundingClientRect());
   }
-  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
-  btn.style.alignItems = "center";
-  btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
-  btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
+  const band = previewMapBand(box, over, Math.round(hero.clientHeight * k * 0.025));
+  map.style.setProperty("--map-band-top", band.top / k + "px");
+  map.style.setProperty("--map-band-bottom", band.bottom / k + "px");
+  return Math.max(0, hero.clientHeight - (band.top + band.bottom) / k);
 }
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
@@ -1719,7 +1714,9 @@ function previewMapBand(box, over, margin) {
     else bot = Math.min(bot, r.top);
   }
   const m = Math.max(0, +margin || 0);
-  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+  const height = box.bottom - box.top;
+  const insetTop = Math.min(height, top - box.top + m);
+  return { top: insetTop, bottom: Math.min(height - insetTop, box.bottom - bot + m) };
 }
 /** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {

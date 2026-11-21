@@ -55,8 +55,7 @@ const ShareCardData = (function () {
   }
   function obj(value) { return value && typeof value === "object" ? value : {}; }
 
-  // A race: the classified podium (a DNF/DSQ car in the top three is not on it,
-  // as ResultsStory.summary), then the player's row when they finished outside it.
+  // The classified podium, including late retirements, and the player if outside it.
   function fromRace(order, opts) {
     order = Array.isArray(order) ? order.filter((c) => c && typeof c === "object") : [];
     opts = obj(opts);
@@ -68,13 +67,20 @@ const ShareCardData = (function () {
     };
     const tint = typeof opts.color === "function" ? opts.color : () => null;
     const points = Array.isArray(opts.points) ? opts.points : null;
-    const value = (c, i) => status(c) || (points ? "+" + ((points[i] || 0) + (opts.fastestLap === c.driverId ? 1 : 0)) + " PTS" : "");
     const team = (c) => c.team && typeof c.team === "object" ? c.team.name : "";
-    const make = (c, i) => row(i + 1, c.code, c.name || team(c), tint(c), value(c, i), c.isPlayer);
     const rows = [];
-    order.slice(0, 3).forEach((c, i) => { if (!status(c)) rows.push(make(c, i)); });
-    const self = order.findIndex((c) => c.isPlayer);
-    if (self >= 0 && !rows.some((r) => r.you)) rows.push(make(order[self], self));
+    order.forEach((c, i) => {
+      if (i >= 3 && !c.isPlayer) return;
+      const reason = status(c);
+      const eligible = !reason || (reason === "DNF" && c.classified === true && !c.dsq);
+      if (!eligible && !c.isPlayer) return;
+      let value = reason || "";
+      if (eligible && points) {
+        const bonus = !reason && opts.fastestLap != null && opts.fastestLap === c.driverId ? 1 : 0;
+        value = (reason ? reason + " · " : "") + "+" + ((points[i] || 0) + bonus) + " PTS";
+      }
+      rows.push(row(i + 1, c.code, c.name || team(c), tint(c), value, c.isPlayer));
+    });
     const fl = order.find((c) => opts.fastestLap != null && c.driverId === opts.fastestLap);
     const model = {
       v: 1, kind: "race",

@@ -4015,6 +4015,17 @@ for (const info of [{ reason: "unknown" }, { reason: "out-of-memory" }]) {
   });
 }
 
+test("a stale timeout preserves the next queued capture", async () => {
+  const h = makeGpuHarness(); const gfx = await h.create();
+  const owner = {}, stale = {};
+  const pending = gfx.capturePixels(owner);
+  const rejection = assert.rejects(pending, /current timeout/);
+  gfx.cancelCapture("old timeout", stale);
+  await assert.rejects(gfx.capturePixels(), /already pending/);
+  gfx.cancelCapture("current timeout", owner);
+  await rejection;
+});
+
 test("queued capture settles at the JS-error strike cap", async () => {
   const h = makeGpuHarness(); const gfx = await h.create();
   const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
@@ -4151,7 +4162,7 @@ for (const fullPost of [false, true]) test(`capture submission releases readback
     assert.ok(a >= 0 && b > a, start);
     return source.slice(a, b);
   };
-  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels() {", "    // Destroy buffers AND textures") +
+  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels(owner) {", "    // Destroy buffers AND textures") +
     between(WGX_MAIN_SOURCE, "    // Before submission the encoded readback", "    //    (SSAO -> godray");
   const shadow = between(WGX_SHADOW_SOURCE, "    function _frameSubmitList(mainEnc) {", "    // Same-model dedupe.");
   const declaration = fullPost ? "      const _cap = _capEncode();" : "        const cap = _capEncode();";

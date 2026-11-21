@@ -584,6 +584,7 @@ const TLX = (function () {
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       let _softSubmittedGen = 0, _softShownGen = 0;
       let _softDarkRun = 0;   // consecutive near-black reads (#5699 row 15)
+      let _softDrop = 0; // #6041 clear-colour first soft read
       const _softPresentWaiters = [];
       // awaitSoftPresent(ms, "frame") on a headed canvas (GLX's M15 contract): no
       // preserveDrawingBuffer, so SAVE SCREENSHOT must read in the task that
@@ -4975,8 +4976,8 @@ const TLX = (function () {
           _gpuLastResize = { at: performance.now(), width: rw, height: rh };
           // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
           // canvas is present-sized while post RTs stay at W×H (render).
-          // Fixed: setSize rewrites canvas.width (a drawing-buffer reallocation) — only when it differs.
-          if (!fixedNow || !renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
+          // setSize rewrites both canvas dimensions even on a logical-only upscale step.
+          if (!renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
             renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
           }
           if (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) {
@@ -5138,9 +5139,8 @@ const TLX = (function () {
               _softImg = _displayCtx.createImageData(w, h);
             }
             const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
-            // A near-black read is held back (a warming RT), but a scene that IS black must present too: after
-            // three in a row it is shown, or awaitSoftPresent waited out its 15 s (#5699 row 15).
-            if (maxPx >= 8 || ++_softDarkRun >= 3) {
+            if (_softDrop > 0) _softDrop--; // #6041
+            else if (maxPx >= 8 || ++_softDarkRun >= 3) {
               _softDarkRun = 0;
               _displayCtx.putImageData(_softImg, 0, 0);
               _softShownGen = req.gen;
@@ -6280,7 +6280,7 @@ const TLX = (function () {
             _softPresentWaiters.push(waiter);
           });
         },
-        invalidateSoftPresent() { _cancelSoftBlits(); },
+        invalidateSoftPresent() { _cancelSoftBlits(); if (_softBlit) _softDrop = Math.max(_softDrop, 1); },
         softPresent() { return !!_softBlit; },
         // GLX output-target API (task 30). Real TLX impl is task 45.
         setOutputTarget: undefined,

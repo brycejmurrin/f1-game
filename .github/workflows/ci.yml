@@ -2852,6 +2852,14 @@ jobs:
           path: artifacts/test-results-*/junit.xml
           if-no-files-found: ignore
           retention-days: 7
+      - name: Arrangement journey screenshots
+        if: ${{ always() && contains(matrix.specs, 'appearance-orientation.spec.js') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: arrangement-evidence-${{ matrix.name }}-${{ strategy.job-index }}-${{ github.run_attempt }}
+          path: artifacts/test-results-*/**/arrangement-evidence/*.png
+          if-no-files-found: ignore
+          retention-days: 7
       # A CAP-KILLED LEG KEEPS ITS EVIDENCE TOO (R3-CI-HEALTH-6, 2026-10-10).
       # `failure()` alone skipped this on the two legs killed by their job cap
       # after `+ pass 101/104` / `+ pass 85/87` (ship 37996125261 selected-5,

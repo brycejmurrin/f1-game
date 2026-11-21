@@ -9,6 +9,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 const source = fs.readFileSync(new URL("../../js/ui/photo-studio.js", import.meta.url), "utf8").replace(/^const PhotoStudio/m, "var PhotoStudio");
+const bodySource = fs.readFileSync(new URL("../../js/ui/photo-studio-ui.js", import.meta.url), "utf8").replace(/^const PhotoStudioBody/m, "var PhotoStudioBody");
 // The light-store deps game.js passes to PhotoStudio.create, read from its one call site.
 const GAME_JS = gameSource();
 const GAME_CALL = GAME_JS.slice(GAME_JS.indexOf("PhotoStudio.create(G, {"), GAME_JS.indexOf("function openExperiencePhoto("));
@@ -56,10 +57,10 @@ function boot(options = {}) {
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
+    Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
-    NativeDownload: options.nativeDownload,
+    NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
       TUNE_DEFS: options.tuneDefs || [
@@ -68,7 +69,7 @@ function boot(options = {}) {
         { id: "sunElev", group: "SUN & MOON", label: "Sun elevation", min: -20, max: 90, step: 1 },
       ],
     },
-    LightStore: { reapply: () => { order.push("lt-reapply"); } },
+    LightStore: { reapply: () => { Object.assign(LT, ltProfiles.value["test|day|dry"]); order.push("lt-reapply"); } },
     DrivingLine: { shown: () => true, setPhoto: () => {} },
     GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; },
       // js/core/store.js rawSet/rawDel: false (never a throw) when the write fails.
@@ -77,7 +78,7 @@ function boot(options = {}) {
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
-  vm.runInContext(source, ctx);
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/photo-studio-ui.js") }); vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
   // LightStore.set's shape: the live LT plus whatever profiles object G._ltStore holds right now.
   const ltStore = { set: (id, v) => {
     ltWrites.push([id, v]); LT[id] = v;
@@ -308,15 +309,34 @@ test("#3656: a live view below native resolution captures at renderScale 1, then
   assert.equal(await b.api.capture(), false);
   assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5);
 });
-test("software presentation is awaited while raw pixels are captured before compositing", async () => {
-  const b = boot(); let present;
+test("valid raw pixels finish capture even while software presentation is pending", async () => {
+  const b = boot(); let rejectPresent;
   b.G.gfx.softPresent = () => true;
   b.G.gfx.invalidateSoftPresent = () => b.order.push("invalidate");
-  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((resolve) => { present = resolve; }); };
+  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((_, reject) => { rejectPresent = reject; }); };
   b.api.open(); const pending = b.api.capture();
   assert.deepEqual(b.order.slice(-4), ["invalidate", "wait", "draw", "read"]);
-  assert.equal(b.canvasOps.length, 0, "composition waits for the presentation result"); present(); await pending;
+  const early = await Promise.race([pending, new Promise((resolve) => setImmediate(() => resolve("pending")))]);
+  rejectPresent(new Error("2D blit timed out"));
+  assert.equal(await pending, true);
+  assert.equal(early, true);
+  assert.deepEqual(b.canvasOps[0], ["pixels", 123]);
   assert.equal(b.order.at(-1), "read");
+});
+test("failed raw readback waits for the software canvas before copying it", async () => {
+  const b = boot(), soft = b.dom.byId("game-soft");
+  let present;
+  soft.width = 160; soft.height = 90;
+  b.G.gfx.softPresent = () => true;
+  b.G.gfx.awaitSoftPresent = () => new Promise((resolve) => { present = resolve; });
+  b.G.gfx.capturePixels = () => Promise.reject(new Error("No readback target"));
+  b.api.open();
+  const pending = b.api.capture();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(b.canvasOps.length, 0);
+  present();
+  assert.equal(await pending, true);
+  assert.equal(b.canvasOps[0][0], "draw");
 });
 test("a backend without readback falls back to an immediate canvas copy", async () => {
   const b = boot(); b.G.canvas.width = 160; b.G.canvas.height = 90;
@@ -506,6 +526,17 @@ test("saving repairs a previously oversized library in the same transaction", as
   b.api.open(); await b.api.capture(); await b.api.savePhoto();
   assert.equal(idb.rows.size, 6); assert.equal(idb.writes, 1);
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-4", "old-5", "old-6", "old-7", "old-8"]);
+});
+test("a save after the device clock goes backward is committed and remains the newest photo", async () => {
+  const future = Date.now() + 60_000;
+  const idb = photoDb(seededPhotos(6).map((row) => ({ ...row, at: future + row.at })));
+  const b = boot({ indexedDB: idb });
+  b.api.open({ metadata: { title: "After clock adjustment" } });
+  await b.api.capture(); await b.api.savePhoto();
+  assert.equal(idb.rows.size, 6);
+  assert.equal(idb.rows.has("old-0"), false);
+  assert.equal((await b.api.album())[0].title, "After clock adjustment");
+  assert.equal(b.dom.byId("ps-message").textContent, "Saved to My Photos on this device.");
 });
 test("save remains busy and unannounced until the write transaction commits", async () => {
   const idb = photoDb(seededPhotos(6)), b = boot({ indexedDB: idb });
@@ -714,6 +745,51 @@ test("Photo Lighting clones the profile store, writes via the light store, and r
   assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
 });
 
+test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {
+  const original = { "test|day|dry": { exposureMul: 1 } };
+  const b = boot({ profiles: original });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-exposureMul"), exact = b.dom.byId("ps-lt-num-exposureMul");
+  const change = (value, valid = true) => {
+    exact.value = value;
+    exact.valueAsNumber = value === "" ? NaN : Number(value);
+    exact.validity = { valid }; // the mini DOM does not implement native range / step validation
+    exact.dispatchEvent({ type: "change" });
+  };
+  assert.equal(exact.type, "number");
+  assert.match(exact.getAttribute("aria-label"), /exposure/i);
+  assert.deepEqual([exact.min, exact.max, exact.step], [slider.min, slider.max, slider.step]);
+  exact.value = "1."; exact.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [], "typing an incomplete decimal does not edit the session");
+  change("1.35");
+  assert.equal(slider.value, "1.35");
+  assert.equal(b.dom.byId("ps-lt-v-exposureMul").textContent, "1.35");
+  for (const bad of ["", "3.5", "1.33"]) { change(bad, false); assert.equal(exact.value, "1.35"); }
+  slider.value = "1.55"; slider.dispatchEvent({ type: "input" });
+  assert.equal(exact.value, "1.55");
+  assert.deepEqual(b.ltWrites, [["exposureMul", 1.35], ["exposureMul", 1.55]]);
+  b.dom.byId("ps-lt-reset").click();
+  assert.equal(exact.value, "1"); assert.equal(slider.value, "1");
+  assert.equal(b.dom.byId("ps-lt-reset").disabled, true);
+  b.api.close(false);
+  change("2");
+  assert.equal(b.ltWrites.length, 2);
+  assert.equal(b.G._ltStore, original);
+});
+
+test("Photo Lighting locks both controls for desktop-only knobs on mobile", () => {
+  const b = boot({ mobile: true, LT: { carShadow: 1 }, tuneDefs: [
+    { id: "carShadow", label: "Car shadows", group: "Shadows", min: 0, max: 1, step: 1, desktopOnly: true },
+  ] });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-carShadow"), exact = b.dom.byId("ps-lt-num-carShadow");
+  assert.equal(slider.disabled, true);
+  assert.equal(exact.disabled, true);
+  assert.match(exact.getAttribute("aria-label"), /desktop only/i);
+  exact.value = "0"; exact.dispatchEvent({ type: "change" });
+  assert.deepEqual(b.ltWrites, []);
+});
+
 test("Photo Lighting stays out of the garage subject", () => {
   const b = boot({ profiles: { "*": { exposureMul: 1 } } });
   b.api.open({ source: "garage" });
@@ -865,9 +941,9 @@ test("#5743 P1: a borrowCar that throws hands FreeCam and photo mode back and op
 test("#5743 P3: a readback that never resolves times out to Capture failed, not busy, and frees the slot", async () => {
   const timers = [];
   const b = boot({ setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } });
-  let cancelled = null;
-  b.G.gfx.capturePixels = () => new Promise(() => {});
-  b.G.gfx.cancelCapture = (why) => { cancelled = why; };
+  let cancelled = null, readOwner;
+  b.G.gfx.capturePixels = (owner) => { readOwner = owner; return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (why, owner) => { assert.ok(owner); assert.equal(owner, readOwner); cancelled = why; };
   b.api.open();
   const pending = b.api.capture();
   assert.equal(b.api.state().busy, true);
@@ -879,4 +955,68 @@ test("#5743 P3: a readback that never resolves times out to Capture failed, not 
   assert.equal(b.api.state().captured, false);
   assert.equal(cancelled, "capture timed out");
   assert.equal(b.dom.byId("ps-message").textContent.split(":")[0], "Capture failed");
+});
+
+
+test("closing a capture releases its render scale before the next capture takes ownership", async () => {
+  const b = boot(), reads = [];
+  let scale = 0.5;
+  b.G.gfx.getRenderScale = () => scale;
+  b.G.gfx.setRenderScale = (value) => { scale = value; return true; };
+  b.G.gfx.capturePixels = () => new Promise((resolve) => reads.push(resolve));
+  const pixels = { width: 1, height: 1, data: new Uint8ClampedArray(4) };
+  b.api.open();
+  const first = b.api.capture();
+  b.api.close(false);
+  assert.equal(scale, 0.5);
+  b.G.gfx.setRenderScale(0.75);
+  b.api.open();
+  const second = b.api.capture();
+  reads[0](pixels);
+  assert.equal(await first, false);
+  assert.equal(scale, 1);
+  reads[1](pixels);
+  assert.equal(await second, true);
+  assert.equal(scale, 0.75);
+});
+
+test("a submitted read timing out after reopen leaves the next photo queued", async () => {
+  const timers = [], requests = [];
+  const b = boot({ setTimeout: (fn, ms) => { if (ms === 8000) timers.push(fn); return timers.length; } });
+  let queued;
+  b.G.gfx.capturePixels = (owner) => new Promise((resolve, reject) => {
+    queued = { owner, resolve, reject }; requests.push(queued);
+  });
+  b.G.gfx.cancelCapture = (why, owner) => {
+    if (queued && queued.owner === owner) { queued.reject(new Error(why)); queued = null; }
+  };
+  b.api.open();
+  const first = b.api.capture();
+  queued = null;   // WGX submitted this read, but its buffer has not mapped yet
+  b.api.close(false); b.api.open({ source: "garage" });
+  const second = b.api.capture();
+  timers[0]();
+  assert.equal(await first, false);
+  assert.equal(queued, requests[1], "the reopened studio still owns its queued GPU read");
+  queued.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await second, true);
+});
+
+// Mirrors tests/specs/photo-studio.spec.js's bare page (no Log, no ScriptLoader): the
+// stub must finish evaluating so PhotoStudio is defined (#4978 draft CI red).
+test("boot stub evaluates and create() works without Log or ScriptLoader", () => {
+  const ctx = vm.createContext({
+    Object, String, Math, Promise, JSON, Error,
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    window: { dispatchEvent: () => {} },
+    CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    GameStore: { store: { rawSet: () => true, rawDel: () => true, get: (_k, d) => d, set: () => true } },
+  });
+  ctx.window = ctx;
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
+  assert.equal(typeof ctx.PhotoStudio, "object");
+  assert.equal(typeof ctx.PhotoStudio.create, "function");
+  const api = ctx.PhotoStudio.create({ $: () => null, setTimeOfDay: () => "day", weather: () => "dry" }, { garage: {} });
+  assert.equal(api.state().open, false);
+  assert.equal(ctx.PhotoStudio.loaded(), false);
 });

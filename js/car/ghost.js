@@ -88,7 +88,7 @@ const Ghost = (function () {
     g.x = indices.map(i => g.x[i]);
     return true;
   }
-  function trimStore(store) {
+  function trimStore(store, detachTrace = false) {
     let json = JSON.stringify(store);
     if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
     let changed = false;
@@ -96,11 +96,8 @@ const Ghost = (function () {
       if (!valid(store[id])) { delete store[id]; changed = true; }
     }
     json = JSON.stringify(store);
-    const oldest = Object.keys(store).sort((a, b) => {
-      const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
-      const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
-      return at - bt;
-    });
+    const used = (g) => Number.isFinite(g && g._used) ? g._used : 0;
+    const oldest = Object.keys(store).sort((a, b) => used(store[a]) - used(store[b]));
     // Deduct each evicted entry’s serialized size, then verify the final serialized store.
     let size = byteLength(json);
     while (oldest.length > 1 && size > MAX_STORE_BYTES) {
@@ -113,6 +110,8 @@ const Ghost = (function () {
     }
     json = JSON.stringify(store);
     const last = oldest[0];
+    // A candidate deletion shares the surviving trace with the live cache until the write commits.
+    if (detachTrace && last) store[last] = { ...store[last] };
     while (last && byteLength(json) > MAX_STORE_BYTES && thinTrace(store[last])) {
       changed = true;
       json = JSON.stringify(store);
@@ -243,10 +242,12 @@ const Ghost = (function () {
   function record(t, s, x) {
     if (!rec) return;
     if (!Number.isFinite(t) || !Number.isFinite(s) || !Number.isFinite(x)) return;   // a NaN frame would become the stored best
+    // Period-advance (not lastSampleT=t): summed 1/60 steps undershoot 1/HZ in
+    // float and would otherwise skip to ~15 Hz (#5783 I4).
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
     if (rec.t.length >= MAX_SAMPLES || (rec.t.length && t - rec.t[0] > MAX_LAP_S)) { rec = null; return; }
     if (rec.s.length && s < rec.s[rec.s.length - 1]) return;
-    lastSampleT = t;
+    lastSampleT = rec.t.length ? lastSampleT + 1 / HZ : t;
     rec.t.push(round(t, 3));
     rec.s.push(round(s, 2));
     rec.x.push(round(x, 2));
@@ -384,19 +385,16 @@ const Ghost = (function () {
   }
 
   function clear(id) {
-    if (id == null) {
-      pending.clear();
-      saveStore({});
-      best = null;
-      return;
-    }
-    const store = loadStore();
-    const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
-    const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    const contextPrefix = id != null && !id.startsWith("v2:") ? "v2:" + id + ":" : null;
+    const matches = key => id == null || key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    const next = id == null ? {} : { ...loadStore() };
+    for (const key of Object.keys(next)) if (matches(key)) delete next[key];
+    trimStore(next, true);
+    if (!GameStore.store.write(STORE_KEY, next, { requireDurable: true }).durable) return false;
+    storeCache = next;
     for (const key of pending.keys()) if (matches(key)) pending.delete(key);
-    for (const key of Object.keys(store)) if (matches(key)) delete store[key];
-    saveStore(store);
-    if (storageId != null && matches(storageId)) best = null;
+    if (id == null || (storageId != null && matches(storageId))) best = null;
+    return true;
   }
   function speedAt(t) {
     if (!best || !Number.isFinite(t) || t < 0 || t > best.time) return null;

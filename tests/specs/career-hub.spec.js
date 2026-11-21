@@ -1,9 +1,10 @@
 // @ts-check
+import { CONTRACT_WINDOWS } from "../helpers/iphone15.mjs";
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
-import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
+import { readProfile } from "../../tools/lib/bryce-phone.mjs";
 
 test.describe.configure({ mode: "parallel" });
 
@@ -723,11 +724,6 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
 // painted px now (probe 2026-11-16, 0.7 | 1.09): foot 56 | 58.2; head 62.5 | 94.8; body 243.5 in A (218.5 normal).
 // the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
 const LEGACY_PROFILE = readProfile("legacy");
-const CONTRACT_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS.standalone.insets.bottom } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS["safari-short"].insets.bottom } },
-  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
-];
 for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — " + win.name, () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("ROOMY is clamped: compact, stacked, one scroller, the foot on screen", async ({ page }) => {

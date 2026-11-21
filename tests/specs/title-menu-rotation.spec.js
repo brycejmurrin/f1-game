@@ -136,12 +136,10 @@ for (const sz of [...PHONES, TABLET]) {
       expect(s.inert, "title must not stay inert after a bare rotation").toBe(false);
       if (sz.land.width === 844 && sz.land.height === 390) {
         // Live scene, then the still one (data-home-live removed): same compact fit, no word split.
-        for (const scene of ["live", "static"]) {
-          if (scene === "static") {
-            await page.evaluate(() => AppearanceStudio.setScene("static", "still"));
-            await page.waitForFunction(() => !document.documentElement.dataset.homeLive, null, { polling: 100, timeout: 10_000 });
-            await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-          }
+        for (const scene of ["photo", "static"]) {
+          await page.evaluate((scene) => AppearanceStudio.setScene(scene, "still"), scene);
+          await page.waitForFunction((scene) => document.documentElement.dataset.homeScene === scene, scene, { polling: 100, timeout: 10_000 });
+          await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
           const fit = await page.evaluate(() => {
             const mb = document.getElementById("menu-buttons");
             const play = ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice", "mb-garage"].map(id => {
@@ -250,8 +248,7 @@ test.describe("title rotation late-iOS size settle", () => {
    back. Chromium fires resize with the viewport change; the media-query path
    the Home Screen launch depends on is pinned by tests/unit/sheetshape-orientation.test.mjs. */
 test.describe("title rotation bryce-852x393 (insets, export)", () => {
-  const PORT = { width: 393, height: 852, insets: { top: 59, left: 0, bottom: 34, right: 0 } };
-  const LAND = { width: 852, height: 393, insets: BRYCE_WINDOWS.standalone.insets };
+  const { portrait: PORT, standalone: LAND } = BRYCE_WINDOWS;
   test.use({ viewport: { width: PORT.width, height: PORT.height }, hasTouch: true, isMobile: true });
 
   test("a portrait launch turned landscape fits like a landscape launch, and back", async ({ page }) => {

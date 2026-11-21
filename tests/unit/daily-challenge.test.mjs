@@ -262,6 +262,34 @@ test("the streak counts the player's local days: LA 3 pm then 6 pm the next day 
   }
 });
 
+test("an open challenge keeps its day across UTC and local midnight; the next challenge uses the new local day", () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    let now = "2026-11-20T23:59:59Z";
+    class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } }
+    const { d } = load({ Date: Clock });
+    const started = d.open();
+    assert.equal(started.day, "2026-11-20");
+    now = "2026-11-21T00:00:01Z";
+    assert.equal(d.dayKey(), started.day);
+    d.record(85);
+    now = "2026-11-21T08:00:01Z";
+    assert.equal(d.dayKey(), "2026-11-21");
+    d.record(80);
+    assert.equal(d.shareResult().day, started.day);
+    assert.equal(d.shareResult().best, 80);
+    assert.equal(d.today(), null);
+    d.stop();
+    assert.equal(d.open().day, "2026-11-21");
+    d.record(89);
+    assert.equal(d.shareResult().best, 89);
+    assert.equal(d.liveStreak(), 2);
+  } finally {
+    if (previousZone === undefined) delete process.env.TZ; else process.env.TZ = previousZone;
+  }
+});
+
 // #5887 (audit A6): a lap with the device clock a year ahead set streak.last to that day and pruned
 // the history before it; back on the real date, `day > last` never held again and the streak froze.
 test("a streak left by a clock set ahead moves again once the clock is back", () => {

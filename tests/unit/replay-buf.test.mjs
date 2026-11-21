@@ -453,7 +453,7 @@ async function bootSoloRaceForScrubAudio() {
     Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
       set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
   };
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); trapCreate(sb); } });
+  const g = await createGame({ carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { fa = installFakeAudio(sb); trapCreate(sb); } });   // sound ships off (#5977)
   const sb = g.sandbox;
   sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
   await vmSettle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
@@ -1030,16 +1030,73 @@ test("adjacentFrame's binary search matches a linear scan across a wrapped ring 
   }
 });
 
-test("a still scrub frame looks the dock up once and writes nothing; slider input is one apply per frame", () => {
+function replayDockFixture() {
   const writes = [];
-  const mk = (id) => new Proxy({ id, textContent: "", value: "", disabled: false, hidden: false, children: [], replaceChildren() {}, appendChild() {} },
+  const mk = (id) => new Proxy({ id, textContent: "", value: "", disabled: false, hidden: false, children: [],
+    replaceChildren() { this.children.length = 0; }, appendChild(child) { this.children.push(child); } },
     { set(o, k, v) { if (o[k] !== v) writes.push(id + "." + String(k)); o[k] = v; return true; } });
   const els = {}, lookups = [];
   const dock = { hidden: true, setAttribute() {}, appendChild() {}, querySelector: (sel) => (els[sel.slice(1)] ||= mk(sel.slice(1))) };
-  const doc = { body: { appendChild() {} }, createElement: () => dock,
+  const doc = { body: { appendChild() {} }, createElement: (tag) => tag === "option" ? {} : dock,
     getElementById: (id) => { lookups.push(id); return id === "pm-replay-dock" ? (dock.id ? dock : null) : id === "pm-replay" ? { hidden: true } : (els[id] ||= mk(id)); } };
   const frames = [];
   const R = boot(doc, { requestAnimationFrame: (f) => { frames.push(f); return frames.length; } });
+  return { R, els, frames, writes, lookups };
+}
+
+test("LAST only seeks a tag whose footage is still retained after the ring wraps", () => {
+  const { R, els } = replayDockFixture(), field = cars(1);
+  const api = R.create({ cars: field, paused: true, raceT: 30 });
+  for (let i = 0; i <= R.HZ * 30; i++) {
+    const t = i / R.HZ;
+    api.onTick(t, field, "race");
+    if (i === R.HZ) api.pushTag("contact", t, 0);
+  }
+  api.beginScrub();
+  const entry = api.status().scrubT;
+  assert.ok(api.window().t0 > api.lastTag().t);
+  assert.equal(els["pm-replay-last"].disabled, true);
+  assert.equal(api.jumpLastTag(), false);
+  assert.equal(api.status().scrubT, entry);
+  api.endScrub();
+  api.pushTag("contact", 27, 0);
+  api.beginScrub();
+  assert.equal(els["pm-replay-last"].disabled, false);
+  api.apply(23);
+  els["pm-replay-last"].onclick();
+  assert.equal(api.status().scrubT, 27);
+});
+
+test("a frame step or tagged moment after a pending slider seek keeps input order", () => {
+  const { R, els, frames } = replayDockFixture(), field = cars(1);
+  const api = R.create({ cars: field, paused: true, raceT: 4 });
+  for (let i = 0; i <= R.HZ * 4; i++) api.onTick(i / R.HZ, field, "race");
+  api.pushTag("contact", 3, 0);
+  api.beginScrub();
+  const scrub = (value) => els["pm-replay-scrub"].oninput({ target: { value } });
+  scrub("500");
+  els["pm-replay-next"].onclick();
+  frames.shift()();
+  assert.equal(api.status().scrubT, api.adjacentFrame(2, 1));
+  scrub("250");
+  els["pm-replay-last"].onclick();
+  frames.shift()();
+  assert.equal(api.status().scrubT, 3);
+  els["pm-replay-prev"].onclick();
+  scrub("500");
+  frames.shift()();
+  assert.equal(api.status().scrubT, 2);
+
+  scrub("750");
+  api.onRaceStart(field);
+  for (let i = 0; i <= R.HZ * 4; i++) api.onTick(i / R.HZ, field, "race");
+  api.beginScrub();
+  frames.shift()();
+  assert.equal(api.status().scrubT, 0, "a previous race's queued slider cannot seek the new race");
+});
+
+test("a still scrub frame looks the dock up once and writes nothing; slider input is one apply per frame", () => {
+  const { R, els, frames, writes, lookups } = replayDockFixture();
   const field = cars(1), G = { cars: field, paused: true, raceT: 4 }, api = R.create(G);
   for (let i = 0; i <= R.HZ * 4; i++) { field[0].px = i; api.sample(i / R.HZ, field); }
   assert.equal(api.beginScrub(), true);

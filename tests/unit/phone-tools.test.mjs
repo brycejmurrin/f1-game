@@ -47,6 +47,19 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.throws(() => brycePhone({ uiScale: 5 }), /uiScale/);
 });
 
+test("iPhone 15 keeps the full logical screen and native resolution when the viewport or capture DPR changes", () => {
+  for (const [window, width, height, viewportHeight] of [["portrait", 393, 852, 852], ["standalone", 852, 393, 393], ["safari", 852, 393, 368]]) {
+    for (const dpr of [1, 3]) {
+      const p = brycePhone({ window, dpr, profile: false });
+      assert.equal(p.model, "iPhone 15");
+      assert.deepEqual(p.contextOptions.screen, { width, height });
+      assert.deepEqual(p.contextOptions.viewport, { width, height: viewportHeight });
+      assert.deepEqual(p.nativeScreen, { width: width * 3, height: height * 3 });
+      assert.equal(p.contextOptions.deviceScaleFactor, dpr);
+    }
+  }
+});
+
 test("ownerStore splits the export into the json and raw lanes and drops unset keys", () => {
   const exp = { exportedAt: "t", device: { userAgent: "UA" }, settings: { a: { one: 1, two: "x", three: null }, b: { four: { k: 1 } } } };
   const o = ownerStore({ exportJson: exp, specSource: '{ k: "two", lane: "raw" }' });
@@ -57,10 +70,13 @@ test("ownerStore splits the export into the json and raw lanes and drops unset k
 
 test("mismatches: [] when the page reports the preset, one line per difference otherwise", () => {
   const p = brycePhone({ profile: "legacy" });
-  const got = { viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 20, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
+  const got = { screen: p.contextOptions.screen, viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 20, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
   assert.deepEqual(mismatches(brycePhone(), got), ["stored uiScale = null, seeded 70", "stored hudBtnScale = 245, seeded 143.25"],
     "the live profile seeds UI SIZE 70 and BUTTON SIZE 143.25");
   assert.deepEqual(mismatches(p, got), []);
+  const safari = brycePhone({ window: "safari", profile: "legacy" });
+  assert.deepEqual(mismatches(safari, { ...got, insets: safari.insets, viewport: safari.viewport, screen: safari.viewport }),
+    ["screen 852x368, wanted 852x393"], "a Safari toolbar reduces only the viewport");
   const bad = mismatches(p, { ...got, viewport: { width: 844, height: 390 }, insets: { top: 0, left: 0, bottom: 0, right: 0 }, stored: { hudBtnScale: "100" } });
   assert.equal(bad.length, 5, bad.join(" | "));
   assert.match(bad.join(" | "), /viewport 844x390, wanted 852x393/);
@@ -73,7 +89,7 @@ test("classifyShot: 2000x923 is the standalone window at 2.347 px per CSS px; ot
   assert.equal(classifyShot(2556, 1179).pxPerCss, 3);
   assert.equal(classifyShot(2556, 1104).window, "safari");
   assert.equal(classifyShot(2532, 1170).nearest, "standalone", "the 844x390 cell is not one of his windows");
-  assert.equal(classifyShot(923, 2000).orientation, "portrait");
+  assert.deepEqual(classifyShot(1179, 2556), { window: "portrait", orientation: "portrait", pxPerCss: 3, nearest: "portrait", aspectError: 0 });
   const crop43 = classifyShot(1600, 1200);
   assert.equal(crop43.window, null);
   assert.equal(crop43.pxPerCss, null);

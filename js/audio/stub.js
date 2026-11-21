@@ -120,8 +120,6 @@ var AudioPanel = {
         const next = true;
         // game.js sets AudioPanel._ensure = ensureAudio while the stub is resident.
         const ensure = AudioPanel._ensure;
-        // OFF needs no audio bundle (#5900).
-        if (!next) { setSound(false); return; }
         if (typeof ensure === "function") {
           ensure().then(() => {
             // The real panel bound over this button while the bundle loaded: hand the
@@ -134,12 +132,9 @@ var AudioPanel = {
         } else setSound(next);
       };
       els.soundbtn.onclick = stubClick;
-      // index.html's static label is SOUND ON; a saved SOUND OFF must show before the first gesture
-      // loads the real panel, or the button claims the opposite and its tap turns the sound ON.
-      if (G.soundOn === false) {
-        els.soundbtn.textContent = "SOUND OFF";
-        els.soundbtn.setAttribute("aria-pressed", "false");
-      }
+      // Reflect the restored master before the first gesture loads the real panel.
+      els.soundbtn.textContent = G.soundOn ? "SOUND ON" : "SOUND OFF";
+      els.soundbtn.setAttribute("aria-pressed", G.soundOn ? "true" : "false");
     }
     return { init: function () {}, _stub: true, setSound };
   },

@@ -171,7 +171,7 @@ function create(G) {
 Log.info("ui", "GameResults.create");
 // PIN COUNT FROM THE PANE (UI contract #5153 gap 12, PR D). The compact wide
 // sheet pins P1 P2 P3 and YOU as 44-painted-px rows (css/overlays.css PINNED
-// PODIUM); in the 852x283 stress fixture the pane is 3.3 rows tall, so
+// PODIUM); in the owner's Safari tab (852x283) the pane is 3.3 rows tall, so
 // four pins left nothing to scroll. data-pins on #results-table says how many
 // rows pin: 4 at >= 6.25 pane rows, 2 (P1 + YOU) at >= 4.25, else YOU alone,
 // with a quarter-row hysteresis so a zoom or inset flicker never toggles it; the
@@ -859,7 +859,10 @@ function buildTTResults() {
     // Arm-then-confirm (G.armConfirm): one tap deleted the PB ghost AND its medal (#5672).
     clrBtn.onclick = () => G.armConfirm(clrBtn, tr("results.clearGhostConfirm", null, "TAP AGAIN TO CLEAR"), () => {
       if (guestGhost) GhostShare.clearGuest();
-      else Ghost.clear(track.def.id);
+      else if (!Ghost.clear(track.def.id)) {
+        clrBtn.textContent = tr("results.clearGhostFailed", null, "GHOST KEPT — RETRY CLEAR");
+        return;
+      }
       const remaining = G.records.board(track.def.id);
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
       // The rebuild destroys this button: keep focus on its slot (js/ui/modal.js).

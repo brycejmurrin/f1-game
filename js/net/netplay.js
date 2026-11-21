@@ -821,33 +821,23 @@ const NetPlay = (function () {
       localCar = role === SpectatePolicy.SPECTATOR ? null
         : (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
-      // One profile today, an array when the room grows; Phase C only changes
-      // where the list comes from.
-      //
-      // `opts.peers` is built from the lobby's _peers map (filled from HELLO),
-      // so it starts empty until a HELLO arrives — a guest that walks straight
-      // into the garage, or whose HELLO is simply late, has a wide-open session
-      // and an empty peers list. `[] || fallback` kept that empty array instead
-      // of falling back, so joining was empty, remotes stayed empty, and
-      // start() bailed no_slot: measured on the guest-in-the-garage path
-      // (bahrain, 22 cars), race built then a full teardown on "Could not find
-      // a grid slot for both drivers".
-      //
-      // A profile only decides WHICH slot, and
-      // pickRemoteSlot(null) has always had the any-free-car arm for that — so
-      // an empty or profile-less join must still fall through to it rather
-      // than being read as "no peers".
-      const joining = ((opts.peers && opts.peers.length) ? opts.peers
-        : (opts.sessions && opts.sessions.length)
-          ? opts.sessions.map((e) => ({ profile: null, mods: null, kind: peerKind(e), id: e.id != null ? e.id : PEER_ONE }))
-          : [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }])
-        .filter((peer) => !SpectatePolicy.isSpectator(peer));
+      // Reserve named seats first, including guests whose HELLO was relayed by
+      // the host. A connected driver whose HELLO is late gets a remaining seat.
+      const joining = (opts.peers || []).slice();
+      for (const entry of opts.sessions || []) {
+        const id = entry.id != null ? entry.id : PEER_ONE;
+        if (!joining.some((peer) => (peer.id ?? PEER_ONE) === id)) {
+          joining.push({ id, kind: peerKind(entry) });
+        }
+      }
+      if (!joining.length) joining.push({ id: PEER_ONE, profile: peerProfile, mods: opts.peerMods });
       const hasSpectator = incoming.some((entry) => {
         const id = entry.id != null ? entry.id : PEER_ONE;
         return SpectatePolicy.isSpectator((opts.peers || []).find((peer) => peer.id === id) || entry);
       });
       peerCar.clear();
       for (const j of role === SpectatePolicy.SPECTATOR ? [] : joining) {
+        if (SpectatePolicy.isSpectator(j)) continue;
         const car = pickRemoteSlot(j.profile);
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
@@ -1208,6 +1198,10 @@ const NetPlay = (function () {
         const quiet = now - r.heardAt > (r.hostAi || r.everHeard ? STALE_MS : HOLD_MAX_MS);
         if (quiet !== r.stale) { if (quiet) goLocal(r); else goWire(r); }
         if (r.stale) continue;
+        // A retired car stays where retireCar / the LAP event parked it. Posing
+        // from a leftover aged packet (or a host that still relays — #4270) would
+        // only move a DNF the game already excludes from ranked/contact.
+        if (r.car.retired) continue;
         // Per-remote scratch (the ._smp precedent): poseRemote copies fields
         // out and pred is consumed below, so neither object escapes the tick.
         const st = r.interp.sample(now, r._smpSt || (r._smpSt = {}));
@@ -1260,7 +1254,9 @@ const NetPlay = (function () {
       // immediately on a pit/tyre phase change, and for each arriving epoch.
       if (role === "host" && G.track && G.track.def) for (const c of G.cars || []) {
         const wire = G.wireId(c);
-        if (c === localCar || wire < 0 || remotes.has(wire)) continue;
+        // Retired AI: the LAP retirement event is the last word (and peerArrived
+        // re-sends it above). A 1 Hz strategy refresh of a parked car is noise.
+        if (c === localCar || c.retired || wire < 0 || remotes.has(wire)) continue;
         let last = aiStrategyPhases.get(wire);
         const phase = !last || peerArrived || c.tyreStints !== last.stints
             || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
@@ -1311,6 +1307,11 @@ const NetPlay = (function () {
           }
           if (withAi) for (const c of G.cars || []) {
             if (c === localCar) continue;
+            // A retired/DNF AI is already parked on every peer via the LAP event
+            // (retireCar → reportLap). Relaying its frozen pose at 10 Hz wastes
+            // the aged datagram and kept posing a car updateCar will never drive
+            // again (#4270). Live AI and human remotes are unchanged.
+            if (c.retired) continue;
             const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
             if (id < 0 || r) continue;   // human owner poses are relayed above; never fallback motion
             relayPush(id, c, at);

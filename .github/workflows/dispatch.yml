@@ -19,7 +19,7 @@ name: Dispatch
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "34 * * * *"
   issues:
     types: [labeled, unlabeled, closed, reopened]
   # zizmor: ignore[dangerous-triggers] the comment body is never interpolated or run: dispatch.mjs reads it as data over REST, from the deploy branch's own checkout

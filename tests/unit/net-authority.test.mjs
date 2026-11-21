@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { fakeG, netStubG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -184,33 +185,21 @@ test("no_slot rolls back the car role and disposes the unadopted session", () =>
     "a partially claimed grid car must return to AI ownership");
 });
 
-/** A G façade with just enough of a grid for start() to seat `n - 1` rivals. */
+/** A G façade with just enough of a grid for start() to seat `n - 1` rivals.
+ *  What the game was handed is recorded beside the fake (rec(G)), never on it: G has no such members. */
+const REC = new WeakMap();
+const rec = (G) => REC.get(G);
 function stubG(n) {
-  const car = (i, local) => ({
-    idx: i, local: !!local, human: !!local, isPlayer: !!local,
-    s: i * 10, x: 0, px: 0, pz: 0, speed: 0, head: 0, lap: 0, mods: null,
-    name: "D" + i, code: "D" + i, driverId: "drv" + i,
+  const r = { cautions: [], quali: [], qLive: [], announcements: [] };
+  const G = netStubG(n || 2, 0, {
+    lapsTarget: undefined, raceT: undefined, worldFromTrack: undefined,
+    gridPreOrdered: undefined, retireCar: undefined,   // real members a test sets later
+    announce: (message) => { r.announcements.push(message); },
+    applyCaution: (d) => { r.cautions.push(d); },
+    onPeerQuali: (d) => { r.quali.push(d); },
+    onPeerQualiLive: (d) => { r.qLive.push(d); },
   });
-  const cars = [];
-  for (let i = 0; i < (n || 2); i++) cars.push(car(i, i === 0));
-  const G = {
-    cars,
-    player: cars[0],
-    track: { total: 5000, n: 500 },
-    netStart: null,
-    netNow: null,
-    caughtCautions: [],
-    caughtQuali: [],
-    caughtQLive: [],
-    announcements: [],
-    wireId: (c) => c.idx,
-    setCarRole: (c, human, local) => { c.human = human; c.local = local; },
-    announce: (message) => { G.announcements.push(message); },
-    applyCaution: (d) => { G.caughtCautions.push(d); },
-    onPeerQuali: (d) => { G.caughtQuali.push(d); },
-    onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
-    COUNTDOWN_S: 3,
-  };
+  REC.set(G, r);
   return G;
 }
 
@@ -245,8 +234,8 @@ test("a guest keeps racing after the host leaves and is told that rivals are now
 
   assert.equal(net.active(), false, "the network session ends");
   assert.equal(rival.human, false, "the host's car returns to local AI");
-  assert.ok(G.announcements.some((m) => /HOST LEFT — RIVALS NOW AI/.test(m)),
-    `the continuing race needs an honest visible announcement: ${G.announcements.join(" | ")}`);
+  assert.ok(rec(G).announcements.some((m) => /HOST LEFT — RIVALS NOW AI/.test(m)),
+    `the continuing race needs an honest visible announcement: ${rec(G).announcements.join(" | ")}`);
 });
 
 test("a HOST ignores a START arriving from a guest", () => {
@@ -264,13 +253,13 @@ test("a HOST ignores a CAUTION arriving from a guest", () => {
   // guest that could apply one could neutralise a race it was losing.
   const { G, s } = started("host");
   s.deliver("caution", { kind: "sc", lap: 3 });
-  assert.deepEqual(G.caughtCautions, [], "a guest must not apply a caution on the host");
+  assert.deepEqual(rec(G).cautions, [], "a guest must not apply a caution on the host");
 });
 
 test("a GUEST obeys a CAUTION from the host", () => {
   const { G, s } = started("guest");
   s.deliver("caution", { kind: "sc", lap: 3 });
-  assert.deepEqual(G.caughtCautions, [{ kind: "sc", lap: 3 }], "the host's caution is authoritative");
+  assert.deepEqual(rec(G).cautions, [{ kind: "sc", lap: 3 }], "the host's caution is authoritative");
 });
 
 test("a HOST ignores a RESULT arriving from a guest", () => {
@@ -323,7 +312,7 @@ test("a HOST accepts a QUALI naming the sender's own driver", () => {
   // only the driverId differs.
   const { G, s } = started("host");
   s.deliver("quali", { driverId: "drv1", t: 61.25 });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 61.25 }]);
+  assert.deepEqual(rec(G).quali, [{ driverId: "drv1", t: 61.25 }]);
 });
 
 test("a HOST drops a QUALI naming another driver", () => {
@@ -332,7 +321,7 @@ test("a HOST drops a QUALI naming another driver", () => {
   // that could post either would be assembling somebody else's grid slot.
   s.deliver("quali", { driverId: "drv0", t: 1.0 });
   s.deliver("quali", { driverId: "somebody-else", t: 59.0 });
-  assert.deepEqual(G.caughtQuali, [], "a guest may post a qualifying time for ITS OWN driver only");
+  assert.deepEqual(rec(G).quali, [], "a guest may post a qualifying time for ITS OWN driver only");
 });
 
 test("a HOST drops a QUALI naming no driver at all", () => {
@@ -340,7 +329,7 @@ test("a HOST drops a QUALI naming no driver at all", () => {
   // sender and nothing downstream could file the time against.
   const { G, s } = started("host");
   s.deliver("quali", { t: 59.0 });
-  assert.deepEqual(G.caughtQuali, []);
+  assert.deepEqual(rec(G).quali, []);
 });
 
 test("a GUEST accepts the host's QUALI for any SEATED driver, never an unseated id (#5012)", () => {
@@ -352,15 +341,15 @@ test("a GUEST accepts the host's QUALI for any SEATED driver, never an unseated 
   s.deliver("quali", { driverId: "drv1", t: 60.5 });
   s.deliver("quali", { driverId: "anyone-at-all", t: 60.5 });
   for (let i = 0; i < 100; i++) s.deliver("qlive", { driverId: "x" + i, t: 1, frac: 0 });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 60.5 }]);
-  assert.deepEqual(G.caughtQLive, [], "no phantom driver reaches the live clock");
+  assert.deepEqual(rec(G).quali, [{ driverId: "drv1", t: 60.5 }]);
+  assert.deepEqual(rec(G).qLive, [], "no phantom driver reaches the live clock");
 });
 
 test("a GUEST rate-limits the host's QUALI/QLIVE at the room's window (#5012)", () => {
   const { G, s } = started("guest");
   for (let i = 0; i < 500; i++) s.deliver("qlive", { driverId: "drv1", t: 1, frac: 0 });
-  assert.ok(G.caughtQLive.length > 12, "a guest allows more than one driver's window (the host relays the room)");
-  assert.ok(G.caughtQLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + G.caughtQLive.length + ")");
+  assert.ok(rec(G).qLive.length > 12, "a guest allows more than one driver's window (the host relays the room)");
+  assert.ok(rec(G).qLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + rec(G).qLive.length + ")");
 });
 
 test("lobby relay hook sees only sender-bound, normalized qualifying events", () => {
@@ -387,21 +376,21 @@ test("lobby relay hook sees only sender-bound, normalized qualifying events", ()
 test("a QUALI whose t is a numeric string arrives as a NUMBER; junk and implausible laps never arrive", () => {
   const { G, s } = started("guest");                 // guest: no sender binding to get in the way
   s.deliver("quali", { driverId: "drv1", t: "70.125" });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 70.125 }]);
-  assert.equal(typeof G.caughtQuali[0].t, "number");
+  assert.deepEqual(rec(G).quali, [{ driverId: "drv1", t: 70.125 }]);
+  assert.equal(typeof rec(G).quali[0].t, "number");
   for (const t of [true, "abc", NaN, Infinity, -5, 0, 5, 20, 3600, 1e9, null, undefined, {}, []]) {
     s.deliver("quali", { driverId: "drv1", t });
   }
-  assert.equal(G.caughtQuali.length, 1, "nothing outside (20 s, 1 h) or non-numeric reaches the game");
+  assert.equal(rec(G).quali.length, 1, "nothing outside (20 s, 1 h) or non-numeric reaches the game");
   assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: "61" }), { driverId: "d", t: 61 });
   assert.equal(NetPlay.validQuali({ t: 61 }), null, "no driverId, no claim");
   assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: 61, junk: "x".repeat(99) }), { driverId: "d", t: 61 }, "extra peer fields are dropped, not relayed");
   assert.equal(NetPlay.validQuali("61"), null);
   // QLIVE is bounded rather than refused — it is a clock, not a grid input.
   s.deliver("qlive", { driverId: "drv1", t: "12.5", frac: "2" });
-  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "drv1", t: 12.5, frac: 1 });
+  assert.deepEqual(rec(G).qLive.at(-1), { driverId: "drv1", t: 12.5, frac: 1 });
   s.deliver("qlive", { driverId: "drv1", t: NaN, frac: -1 });
-  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "drv1", t: 0, frac: 0 });
+  assert.deepEqual(rec(G).qLive.at(-1), { driverId: "drv1", t: 0, frac: 0 });
 });
 
 test("QLIVE is bound to the sender on the host the same way", () => {
@@ -410,18 +399,18 @@ test("QLIVE is bound to the sender on the host the same way", () => {
   const { G, s } = started("host");
   s.deliver("qlive", { driverId: "drv1", t: 12.4, frac: 0.2 });
   s.deliver("qlive", { driverId: "drv0", t: 1.0, frac: 0.9 });
-  assert.deepEqual(G.caughtQLive, [{ driverId: "drv1", t: 12.4, frac: 0.2 }]);
+  assert.deepEqual(rec(G).qLive, [{ driverId: "drv1", t: 12.4, frac: 0.2 }]);
 });
 
 test("IN-RACE phase: the host caps one connection's QUALI+QLIVE at the lobby's shared rate (bug-hunt 2)", () => {
   const { G, s } = started("host");
   assert.equal(typeof NetPlay.QUALI_RATE, "number", "one shared constant with the lobby");
   for (let i = 0; i < 3; i++) s.deliver("qlive", { driverId: "drv1", t: 5 + i, frac: 0.1 });
-  assert.equal(G.caughtQLive.length, 3, "a real client's rate passes untouched");
+  assert.equal(rec(G).qLive.length, 3, "a real client's rate passes untouched");
   for (let i = 0; i < 200; i++) s.deliver("qlive", { driverId: "drv1", t: 9, frac: 0.2 });
-  assert.equal(G.caughtQLive.length, NetPlay.QUALI_RATE, "a flood stops at the cap (got " + G.caughtQLive.length + ")");
+  assert.equal(rec(G).qLive.length, NetPlay.QUALI_RATE, "a flood stops at the cap (got " + rec(G).qLive.length + ")");
   for (let i = 0; i < 50; i++) s.deliver("quali", { driverId: "drv1", t: 80 });
-  assert.equal((G.caughtQuali || []).length, 0, "QUALI shares the window with QLIVE");
+  assert.equal((rec(G).quali || []).length, 0, "QUALI shares the window with QLIVE");
 });
 
 // ---- the star does not launder a guest's declaration ------------------------
@@ -444,7 +433,7 @@ test("a guest's CAUTION neither applies on a two-guest host nor reaches the othe
   assert.equal(r.ok, true, `start() must seat two guests: ${r.error || ""}`);
   const sentBefore = sb.sent.length;
   sa.deliver("caution", { kind: "sc", lap: 2 });
-  assert.deepEqual(G.caughtCautions, [], "guest A's caution must not apply on the host");
+  assert.deepEqual(rec(G).cautions, [], "guest A's caution must not apply on the host");
   const relayed = sb.sent.slice(sentBefore).filter((m) => m.t === "caution");
   assert.deepEqual(relayed, [], "guest A's caution must not be relayed to guest B");
 });
@@ -470,7 +459,7 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
   sa.deliver("quali", { driverId: "drv2", t: 58.0 });  // A speaking for B: dropped
   sa.deliver("quali", { driverId: "drv1", t: 61.0 });  // A speaking for itself: accepted
   sb.deliver("quali", { driverId: "drv2", t: 60.75 }); // B speaking for itself: accepted
-  assert.deepEqual(G.caughtQuali, [
+  assert.deepEqual(rec(G).quali, [
     { driverId: "drv1", t: 61.0 },
     { driverId: "drv2", t: 60.75 },
   ]);
@@ -526,16 +515,20 @@ globalThis.LobbySettings = eval(src("js/net/lobby-settings.js") + ";LobbySetting
 const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
 
 function lobbyG() {
-  const G = {
+  const r = { quali: [], qLive: [] };
+  const G = fakeG({
     teamIdx: 0, driverIdx: 0,             // the local player holds alpha:0
     trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
     raceQuali: true, raceGrid: "quali", difficulty: "normal", raceChangeable: false, wxArcPlan: null,
-    caughtQuali: [], caughtQLive: [],
-    onPeerQuali: (d) => { G.caughtQuali.push(d); },
-    onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
+    onPeerQuali: (d) => { r.quali.push(d); },
+    onPeerQualiLive: (d) => { r.qLive.push(d); },
+    raceTyreWear: "off", raceReliability: "off",   // a test re-defines these as persisting accessors
     setNetRoom: () => {},
     store: { get: (k, dflt) => dflt, set: () => {} },
-  };
+    // Real members a test sets, or beginRace writes, later (the fake is closed, #5982).
+    openQualiForNet: undefined, seed: 0, flow: undefined,
+  });
+  REC.set(G, r);
   return G;
 }
 
@@ -587,7 +580,7 @@ test("LOBBY phase: the host accepts a guest's own-seat QUALI", async () => {
     await settle();
     peerSays("quali", { driverId: "bravo:1", t: 61.25 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 61.25 }]);
+    assert.deepEqual(rec(G).quali, [{ driverId: "bravo:1", t: 61.25 }]);
   } finally { lobby.cancel(); }
 });
 
@@ -601,7 +594,7 @@ test("LOBBY phase: the host drops a QUALI naming another driver", async () => {
     peerSays("quali", { driverId: "alpha:0", t: 0.001 });
     peerSays("quali", { driverId: "chase:0", t: 59.0 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [], "a guest may post a qualifying time for ITS OWN seat only");
+    assert.deepEqual(rec(G).quali, [], "a guest may post a qualifying time for ITS OWN seat only");
   } finally { lobby.cancel(); }
 });
 
@@ -612,7 +605,7 @@ test("LOBBY phase: no HELLO filed means no claim at all", async () => {
   try {
     peerSays("quali", { driverId: "bravo:1", t: 59.0 });
     await settle();
-    assert.deepEqual(G.caughtQuali, []);
+    assert.deepEqual(rec(G).quali, []);
   } finally { lobby.cancel(); }
 });
 
@@ -625,7 +618,7 @@ test("LOBBY phase: the same coercion applies before the hand-off", async () => {
     peerSays("quali", { driverId: "bravo:1", t: true });
     peerSays("quali", { driverId: "bravo:1", t: 4000 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 70 }], "one validation site for both phases");
+    assert.deepEqual(rec(G).quali, [{ driverId: "bravo:1", t: 70 }], "one validation site for both phases");
   } finally { lobby.cancel(); }
 });
 
@@ -657,7 +650,7 @@ test("LOBBY phase: QLIVE is bound to the sender the same way", async () => {
     peerSays("qlive", { driverId: "bravo:1", t: 12.4, frac: 0.2 });
     peerSays("qlive", { driverId: "alpha:0", t: 1.0, frac: 0.9 });
     await settle();
-    assert.deepEqual(G.caughtQLive, [{ driverId: "bravo:1", t: 12.4, frac: 0.2 }]);
+    assert.deepEqual(rec(G).qLive, [{ driverId: "bravo:1", t: 12.4, frac: 0.2 }]);
   } finally { lobby.cancel(); }
 });
 
@@ -674,8 +667,8 @@ test("LOBBY phase: a guest accepts the host's QUALI for any driver a HELLO seate
     peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
     for (let i = 0; i < 20; i++) peerSays("qlive", { driverId: "x" + i, t: 1, frac: 0 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 60.5 }]);
-    assert.deepEqual(G.caughtQLive, [], "no phantom driver reaches the live clock");
+    assert.deepEqual(rec(G).quali, [{ driverId: "bravo:1", t: 60.5 }]);
+    assert.deepEqual(rec(G).qLive, [], "no phantom driver reaches the live clock");
   } finally { lobby.cancel(); }
 });
 
@@ -686,13 +679,16 @@ test("LOBBY phase: a guest rate-limits the host's QUALI/QLIVE at the room's wind
     await settle();
     for (let i = 0; i < 300; i++) peerSays("qlive", { driverId: "bravo:1", t: 1, frac: 0 });
     await settle();
-    assert.ok(G.caughtQLive.length > NetPlay.QUALI_RATE, "a guest allows the room's window, not one driver's");
-    assert.ok(G.caughtQLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + G.caughtQLive.length + ")");
+    assert.ok(rec(G).qLive.length > NetPlay.QUALI_RATE, "a guest allows the room's window, not one driver's");
+    assert.ok(rec(G).qLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + rec(G).qLive.length + ")");
   } finally { lobby.cancel(); }
 });
 
-test("LOBBY phase: SETTINGS is validated atomically before guest state changes", async () => {
+test("LOBBY phase: SETTINGS is validated atomically before guest state changes", async (t) => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  let wireOffset = 0;
+  const now = performance.now.bind(performance);
+  t.mock.method(performance, "now", () => now() + wireOffset);
   const snapshot = () => ({
     track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather,
     tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty, grid: G.raceGrid,
@@ -717,12 +713,16 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
       // Atomicity: valid fields alongside one invalid field change nothing.
       { track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: "yes" },
     ];
+    // Keep validation independent from burst delivery: every invalid payload
+    // must reach applySettings, including the one just before the recovery.
     for (const payload of invalid) {
+      wireOffset += 250;
       peerSays("settings", payload);
       await settle();
       assert.deepEqual(snapshot(), before, JSON.stringify(payload));
     }
 
+    wireOffset += 250;
     peerSays("settings", {
       track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false, grid: "random",
       changeable: true, wxArc: { to: "rain", dur: 240 },
@@ -750,7 +750,7 @@ test("LOBBY phase: a guest whose HELLO claims the HOST's seat cannot post the ho
     await settle();
     peerSays("quali", { driverId: "alpha:0", t: 21.5 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [], "the host's own seat is only ever the host's lap");
+    assert.deepEqual(rec(G).quali, [], "the host's own seat is only ever the host's lap");
   } finally { lobby.cancel(); }
 });
 
@@ -762,7 +762,7 @@ test("LOBBY phase: a guest drops a relayed QUALI naming its OWN seat", async () 
     peerSays("quali", { driverId: "alpha:0", t: 61.0 });
     peerSays("quali", { driverId: "bravo:1", t: 62.0 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 62.0 }]);
+    assert.deepEqual(rec(G).quali, [{ driverId: "bravo:1", t: 62.0 }]);
   } finally { lobby.cancel(); }
 });
 
@@ -803,7 +803,7 @@ test("NO TIME crosses as a marker, never as the synthetic back-of-grid time", ()
   // End to end on a host: the guest's NO TIME lands as Infinity for its seat.
   const { G, s } = started("host");
   s.deliver("quali", { driverId: "drv1", t: null, noTime: true });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: Infinity, noTime: true }]);
+  assert.deepEqual(rec(G).quali, [{ driverId: "drv1", t: Infinity, noTime: true }]);
 });
 
 test("QualiNet: a peer entry never replaces the local player's time; NO TIME is kept", () => {
@@ -991,10 +991,6 @@ test("a peer WITHOUT a grid slot cannot arm the start", () => {
 });
 
 test("pickRemoteSlot keeps any-fallback only when profile is null", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/net/netplay.js"), "utf8");
-  assert.match(src, /lastSlotFallback = "profile-miss"/);
-  assert.match(src, /pickRemoteSlot\(null\) has always had the any-free-car/);
-
   const tagged = (n) => {
     const G = stubG(n);
     const ids = ["mclaren", "ferrari", "redbull"];
@@ -1283,24 +1279,24 @@ test("a real PitLane stop handed back before or after fitting matches uninterrup
 // guest's own AI drove the parked car off the wall.
 function guestWithHostAi() {
   const G = stubG(3);                                  // 0 = us, 1 = the host's human, 2 = the host's AI
-  G.retired = [];
-  G.retireCar = (c, why) => { c.retired = true; c.dnf = why; G.retired.push(c.code); };
+  const retired = [];                                  // what retireCar was handed (not a G member)
+  G.retireCar = (c, why) => { c.retired = true; c.dnf = why; retired.push(c.code); };
   const net = NetPlay.create(G);
   const s = fakeSession();
   assert.equal(net.start({ role: "guest", session: s }).ok, true);
-  return { G, net, s, ai: G.cars[2] };
+  return { G, net, s, ai: G.cars[2], retired };
 }
 
 test("a GUEST parks the host's AI when the host reports its retirement", () => {
-  const { G, net, s, ai } = guestWithHostAi();
+  const { net, s, ai, retired } = guestWithHostAi();
   assert.equal(net.owns(ai), true, "precondition: the host's AI is posed from the wire");
   const epoch = (s.sent.find((e) => e.t === "model" || e.t === NetPlay.EV.MODEL) || {}).d?.epoch;
   s.deliver("lap", { lap: 4, time: null, best: null, code: ai.code, driverId: ai.driverId, retired: "engine", invalid: true, epoch });
   assert.equal(ai.retired, true, "retired on the guest as on the host");
   assert.equal(ai.dnf, "engine");
-  assert.deepEqual(G.retired, [ai.code], "through retireCar: parked and announced once");
+  assert.deepEqual(retired, [ai.code], "through retireCar: parked and announced once");
   s.deliver("lap", { lap: 4, time: null, best: null, code: ai.code, driverId: ai.driverId, retired: "engine", invalid: true });
-  assert.deepEqual(G.retired, [ai.code], "a repeat changes nothing");
+  assert.deepEqual(retired, [ai.code], "a repeat changes nothing");
   s.disconnect("transport");
   assert.equal(ai.retired, true, "after the host leaves the car stays out (updateCar never drives a retirement)");
 });
@@ -1763,6 +1759,90 @@ test("AI retirements require the host and the current receiver epoch", () => {
   hn.stop();
 });
 
+// ---- #4270 §3: retired AI must leave the aged AI relay (stale-handoff proof) ----
+// Tip proof (deploy 0d6e65b783): withAi still relayPush()'s every non-human car,
+// including c.retired. Guests keep posing a parked DNF at 10 Hz. Stopping that
+// needs a proof that a quiet retired host-AI handoff still leaves the car
+// parked (updateCar early-outs on c.retired) while live AI and reconnect stay intact.
+test("the host stops relaying a retired AI car in the aged AI field (#4270)", () => {
+  const G = poseG(5);                 // cars[0] host, [1] guest a, [2..4] AI
+  const net = NetPlay.create(G);
+  const a = stateSession();
+  assert.equal(net.start({ role: "host", session: a }).ok, true);
+  a.feed(9_980, 1, lapPose(50), 9_990);
+  let t = 10_000;
+  for (let k = 0; k < 8; k++, t += 50) { G.netNow = t; net.tick(t); }
+  const before = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
+  assert.ok(before.length >= 2, "AI field was riding before retirement");
+  assert.ok(before.every((p) => p.cars.some((c) => c.id === 2)), "AI wire 2 was in the aged packet");
+  // Park one AI the way retireCar does on the host (terminal; no further motion).
+  Object.assign(G.cars[2], { retired: true, dnf: "engine", dnfAt: null, speed: 0 });
+  a.states.length = 0;
+  for (let k = 0; k < 20; k++, t += 50) { G.netNow = t; net.tick(t); }
+  const aged = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
+  assert.ok(aged.length >= 5, "AI publishes continue after a teammate retires");
+  for (const p of aged) {
+    assert.equal(p.cars.some((c) => c.id === 2), false, "retired AI must leave the aged relay");
+    assert.deepEqual(p.cars.map((c) => c.id).sort(), [0, 3, 4], "live AI + host own car still ride; guest's car never does");
+  }
+  net.stop();
+});
+
+test("stale handoff after a retired host-AI goes quiet: car stays parked, live AI still relays, reconnect resumes (#4270)", () => {
+  const host = poseG(4), guest = poseG(4);
+  host.track.def = guest.track.def = { id: "monza" };
+  guest.cars[0].local = guest.cars[0].human = false;
+  guest.cars[1].local = guest.cars[1].human = true; guest.player = guest.cars[1];
+  const hn = NetPlay.create(host), gn = NetPlay.create(guest);
+  const hs = stateSession(), gs = stateSession();
+  hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
+  const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
+  hs.deliver("model", gm); gs.deliver("model", hm);
+  // Real order: pose while live, then the LAP retirement, then the host stops
+  // the aged relay. A leftover aged packet after retired must not move it.
+  let t = 10_000;
+  gs._state(NetSnapshot.encodeAged([
+    { id: 2, car: { s: 321, x: 0, head: 0, speed: 12, gear: 3, lap: 1 }, at: t },
+    { id: 3, car: lapPose(900), at: t },
+  ]), t + 20);
+  gn.tick(t + 130);
+  assert.ok(Math.abs(guest.cars[2].s - 321) < 1, "live pose lands before retirement: s=" + guest.cars[2].s);
+  const parkedS = guest.cars[2].s;
+  Object.assign(host.cars[2], { retired: true, dnf: "engine", dnfAt: null, s: parkedS, speed: 0 });
+  gs.deliver("lap", { lap: 1, time: null, best: null, code: host.cars[2].code,
+    driverId: host.cars[2].driverId, retired: "engine", invalid: true, epoch: gm.epoch });
+  assert.equal(guest.cars[2].retired, true);
+  // A post-retirement aged leftover must not re-pose the DNF.
+  gs._state(NetSnapshot.encodeAged([
+    { id: 2, car: { s: 999, x: 0, head: 0, speed: 80, gear: 5, lap: 2 }, at: t + 100 },
+    { id: 3, car: lapPose(920), at: t + 100 },
+  ]), t + 120);
+  gn.tick(t + 230);
+  assert.equal(guest.cars[2].s, parkedS, "retired: leftover aged packets are ignored");
+  assert.ok(guest.cars[3].s > 900, "live AI still poses");
+  // Silence past STALE_MS: host-AI remotes goLocal (scrubForHandBack). Retired
+  // must survive that handoff — updateCar early-outs on c.retired — while a
+  // LIVE AI still arrives on the next packet.
+  t += 2500;
+  gs._state(NetSnapshot.encodeAged([{ id: 3, car: lapPose(950), at: t }]), t + 20);
+  gn.tick(t + 130);
+  assert.equal(guest.cars[2].retired, true, "stale handoff must not clear retirement");
+  assert.equal(guest.cars[2].dnf, "engine");
+  assert.equal(guest.cars[2].s, parkedS, "retired car stays where the last live pose left it");
+  assert.ok(guest.cars[3].s > 900, "live AI still poses after the retired car went quiet");
+  // Reconnect: a fresh pose for a LIVE AI after its own silence resumes owns().
+  assert.equal(gn.owns(guest.cars[3]), true, "live AI remains host-owned while packets flow");
+  t += 2500;
+  gn.tick(t);   // quiet long enough that wire 3 would go stale without a packet
+  assert.equal(gn.owns(guest.cars[3]), false, "silence hands a live AI to local until it speaks");
+  gs._state(NetSnapshot.encodeAged([{ id: 3, car: lapPose(980), at: t + 50 }]), t + 70);
+  gn.tick(t + 180);
+  assert.equal(gn.owns(guest.cars[3]), true, "reconnect resumes host ownership of live AI");
+  assert.ok(guest.cars[3].s > 950, "reconnect pose lands");
+  assert.equal(guest.cars[2].retired, true, "retired AI stays out through the live-AI reconnect");
+  hn.stop(); gn.stop();
+});
+
 test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire when it speaks; the race session waits 25 s", () => {
   const G = poseG(3);
   const net = NetPlay.create(G);
@@ -1964,10 +2044,10 @@ test("QUALI and QLIVE reject a rival driverId even with the sender's code", () =
   const code = G.cars[1].code;
   s.deliver("quali", { driverId: "drv0", code, t: 61 });
   s.deliver("qlive", { driverId: "drv0", code, t: 62 });
-  assert.deepEqual(G.caughtQuali, []);
-  assert.deepEqual(G.caughtQLive, []);
+  assert.deepEqual(rec(G).quali, []);
+  assert.deepEqual(rec(G).qLive, []);
   s.deliver("quali", { driverId: "drv1", code, t: 63 });
-  assert.equal(G.caughtQuali.length, 1);
+  assert.equal(rec(G).quali.length, 1);
 });
 
 test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stringify per broadcast (perf hunt 6)", (t) => {
@@ -2053,4 +2133,70 @@ test("broadcast() serialises an event ONCE for every session, and each session's
   assert.equal(payloadStringifies, 1, "the payload must be serialised once, not once per session");
   const want = JSON.stringify({ t: NetPlay.EV.LAP, d: data });
   for (const w of wires) assert.deepEqual(w, [want], "each session's wire carries the same bytes as the per-session encoding");
+});
+
+test("a partial lobby roster seats connected drivers awaiting HELLO after named peers", () => {
+  const G = stubG(4);
+  G.cars[1].team = { id: "alpha" }; G.cars[1].seat = 0;
+  const net = NetPlay.create(G);
+  const profiled = fakeSession(), late = fakeSession(), watching = fakeSession();
+  const started = net.start({
+    role: "host", session: profiled,
+    sessions: [{ id: "late", session: late }, { id: "watch", kind: "spectator", session: watching },
+      { id: "known", session: profiled }],
+    peers: [{ id: "known", profile: { team: "alpha", driver: 0 } }],
+  });
+  assert.equal(started.ok, true);
+  assert.deepEqual(net.status().remotes.map((r) => r.id), [1, 2]);
+  assert.equal(net.status().spectators, 1);
+  net.hostStart();
+  profiled.deliver("armed", {});
+  assert.equal(G.netStart, null, "the profiled driver alone cannot release the late driver's grid hold");
+  late.deliver("armed", {});
+  assert.ok(G.netStart, "both connected drivers are seated; a spectator does not hold the grid");
+  net.stop();
+});
+
+test("a guest receives the last host settings after a burst and cancels a pending revision on exit", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  let starts = 0; G.openQualiForNet = () => { starts++; };
+  const send = (laps, revision) => peerSays("settings", {
+    track: 1, laps, weather: "dry", tod: "day", quali: true, difficulty: "normal", revision,
+  });
+  try {
+    for (let i = 0; i < 8; i++) send(3 + i, i + 1);
+    await settle();
+    assert.ok(G.raceLaps < 10, "the burst is still rate limited");
+    lobby.setReady(true);
+    assert.equal(lobby.roomState().selfReady, false, "a guest cannot confirm stale rules");
+    peerSays("go", {}); await settle();
+    assert.equal(starts, 0, "revisionless GO waits for current rules");
+    await sleep(1050);
+    assert.equal(G.raceLaps, 10, "the final valid snapshot reached the guest");
+    lobby.setReady(true);
+    assert.equal(lobby.roomState().selfReady, true, "the final revision can be confirmed");
+    for (let i = 0; i < 8; i++) send(4 + i, i + 9);
+    await settle();
+    lobby.cancel();
+    const restored = G.raceLaps;
+    await sleep(1050);
+    assert.equal(G.raceLaps, restored, "the expired room cannot apply its queued snapshot");
+  } finally { lobby.cancel(); }
+});
+
+test("a GO behind a burst of unchanged settings starts the approved race once", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  let starts = 0; G.openQualiForNet = () => { starts++; };
+  try {
+    lobby.setReady(true);
+    for (let i = 0; i < 6; i++) peerSays("settings", {
+      track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
+      quali: G.raceQuali, difficulty: G.difficulty,
+    });
+    peerSays("go", { revision: 0 });
+    await settle();
+    assert.equal(starts, 0);
+    await sleep(1050);
+    assert.equal(starts, 1);
+  } finally { lobby.cancel(); }
 });

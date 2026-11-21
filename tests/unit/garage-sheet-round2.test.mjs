@@ -22,7 +22,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 // `const X = (…)()` is script-scope in a VM: re-declare as var so the sandbox object sees it.
 const src = (f) => read(f).replace(/^const\b/gm, "var");
 
-function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [], persistence = {} } = {}) {
+function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [], persistence = {}, paintDisk } = {}) {
   const dom = makeDom();
   dom.document.createTextNode = (t) => { const e = dom.document.createElement("span"); e.textContent = t; return e; };
   const saved = [];
@@ -65,55 +65,120 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
     getLiveryId: () => fittedLivery, saveLiveryId: (_team, id) => { fittedLivery = id; }, getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => liveries,
     invalidateDecalTextures: null, teamIdx: sb.Teams.LIST.indexOf(team), driverIdx: 0, soundOn: false,
     careerOwned: () => owned, unlimitedBudget: unlimited, peerSeats: () => [],
-    teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
+    armConfirm: (_button, _label, action) => action(), teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
     livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
   };
   Object.assign(G, persistence);
+  let customLiv;
+  if (paintDisk) {
+    sb.localStorage = paintDisk;
+    run("js/career/save-migrate.js");
+    run("js/core/store.js");
+    sb.Liveries = { forTeam: () => [] };
+    run("js/car/custom-liveries.js");
+    customLiv = sb.CustomLiveries.create({ store: sb.GameStore.store });
+    Object.assign(G, { getLiveryId: customLiv.getLiveryId, saveLiveryId: customLiv.saveLiveryId,
+      getCustomLiveries: customLiv.getCustomLiveries, getLiveries: customLiv.getLiveries });
+  }
   vm.runInContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
-  const ui = sb.SetupUI.create(G);
+  const ui = sb.SetupUI.create(G, customLiv);
   return { dom, ui, G, sb, saved, parts, team };
 }
 
-test("SAVE & FIT keeps a refused draft open and retries without duplicating its paint", () => {
-  for (const failure of ["list-cached", "list-rejected", "fit"]) {
-    // Distinct session and serialized durable state: a cache hit is not a save.
-    let rows = [], disk = "[]", fitted = "default", diskFitted = fitted, fail = true, fitCalls = 0;
-    const h = harness({ tab: "livery", persistence: {
-      getCustomLiveries: () => rows, getLiveries: () => rows, getLiveryId: () => fitted,
-      setCustomLiveries: (_team, next) => {
-        if (fail && failure === "list-rejected") return false;
-        rows = next;
-        if (fail && failure === "list-cached") return false;
-        disk = JSON.stringify(next); return true;
-      },
-      saveLiveryId: (_team, id) => { fitCalls++; fitted = id; if (fail && failure === "fit") return false; diskFitted = id; return true; },
-    } });
-    // Model the browser's replacement semantics for this pane (mini-dom's
-    // textContent setter otherwise leaves retired controls discoverable).
+function paintFixture() {
+  const old = { id: "custom_original", name: "Original", c1: [1, 0, 0], c2: [0, 0, 1] };
+  const rows = "apex26.livery.custom.mercedes", fit = "apex26.livery.mercedes";
+  const disk = new Map([[rows, JSON.stringify([old])], [fit, JSON.stringify(old.id)]]);
+  const storage = { refuse: () => false, getItem: key => disk.get(key) ?? null, removeItem: key => disk.delete(key),
+    setItem(key, text) { if (this.refuse(key, text)) throw new Error("storage refused"); disk.set(key, text); } };
+  function open() {
+    const h = harness({ tab: "livery", paintDisk: storage });
     const pane = h.dom.byId("cs-options"); let text = "";
-    Object.defineProperty(pane, "textContent", { get: () => text, set(v) { text = v; for (const child of [...pane.children]) pane.removeChild(child); } });
-    h.ui.buildSetup(); pane.querySelector(".cs-liv-create").onclick();
-    const name = pane.querySelector(".cs-liv-ed-name"), save = pane.querySelector(".cs-liv-ed-save");
-    name.value = "Retry paint"; name.oninput();
-    const draft = h.G.livDraftOverride;
-    save.onclick();
-    assert.ok(pane.querySelector(".cs-liv-ed-save") === save, failure + ": same editor retained");
-    assert.ok(h.G.livDraftOverride === draft, "preview retained");
-    assert.equal(name.value, "Retry paint");
-    assert.equal(save.textContent, "RETRY SAVE & FIT");
-    assert.ok(pane.querySelectorAll('[role="status"]').some((el) => !el.hidden && /draft is still open/.test(el.textContent)));
-    assert.equal(diskFitted, "default", "refused fit never became durable");
-    if (failure !== "fit") { assert.equal(disk, "[]"); assert.equal(fitCalls, 0, "do not fit after a refused list write"); }
-    save.onclick();
-    assert.equal(rows.length, failure === "list-rejected" ? 0 : 1, "repeated failure does not accumulate candidates");
-    fail = false; save.onclick();
-    assert.equal(pane.querySelector(".cs-liv-ed-save"), null, "success closes the editor");
-    assert.equal(h.G.livDraftOverride, null);
-    const restored = JSON.parse(disk);
-    assert.equal(restored.length, 1, "fresh load sees exactly one saved paint");
-    assert.equal(restored[0].name, "Retry paint");
-    assert.equal(restored[0].id, diskFitted, "fresh load fits the saved identity");
+    Object.defineProperty(pane, "textContent", { get: () => text, set(v) { text = v; pane.replaceChildren(); } });
+    h.ui.buildSetup();
+    return { h, pane };
   }
+  return { open, old, storage, rows, fit };
+}
+
+for (const action of ["cancel", "retry"]) {
+  test(`editing a fitted livery keeps the original after a refused fit and ${action}`, () => {
+    const f = paintFixture(), { pane } = f.open();
+    pane.querySelector(".cs-liv-edit").onclick();
+    const name = pane.querySelector(".cs-liv-ed-name"), save = pane.querySelector(".cs-liv-ed-save");
+    name.value = "Edited"; name.oninput();
+    let fitRefused = false;
+    f.storage.refuse = key => { if (key === f.fit) fitRefused = true; return fitRefused; };
+    save.onclick();
+    assert.equal(save.textContent, "RETRY SAVE & FIT");
+    assert.equal(name.value, "Edited");
+    const fresh = () => f.open().h.G;
+    assert.equal(fresh().getLiveryId("mercedes"), f.old.id);
+    assert.ok(fresh().getCustomLiveries("mercedes").some(row => row.id === f.old.id && row.name === "Original"));
+    save.onclick();
+    assert.equal(fresh().getCustomLiveries("mercedes").length, 2, "repeated refusals retain at most one staged copy");
+    if (action === "cancel") {
+      pane.querySelector(".cs-liv-ed-cancel").onclick();
+      const g = fresh();
+      assert.ok(g.getCustomLiveries("mercedes").some(row => row.id === g.getLiveryId("mercedes") && row.name === "Original"));
+    } else {
+      f.storage.refuse = () => false; save.onclick();
+      const g = fresh(), rows = g.getCustomLiveries("mercedes");
+      assert.equal(rows.length, 1); assert.equal(rows[0].name, "Edited");
+      assert.equal(g.getLiveryId("mercedes"), rows[0].id); assert.notEqual(rows[0].id, f.old.id);
+    }
+  });
+}
+
+test("a refused first write retains a new draft without fitting it; retry saves exactly one copy", () => {
+  const f = paintFixture(), { pane } = f.open();
+  pane.querySelector(".cs-liv-create").onclick();
+  const name = pane.querySelector(".cs-liv-ed-name"), save = pane.querySelector(".cs-liv-ed-save");
+  name.value = "New"; name.oninput(); f.storage.refuse = key => key === f.rows;
+  save.onclick(); assert.equal(save.textContent, "RETRY SAVE & FIT");
+  const before = f.open().h.G;
+  assert.equal(before.getCustomLiveries("mercedes").length, 1); assert.equal(before.getLiveryId("mercedes"), f.old.id);
+  f.storage.refuse = () => false; save.onclick();
+  const after = f.open().h.G; assert.equal(after.getCustomLiveries("mercedes").length, 2);
+  assert.ok(after.getCustomLiveries("mercedes").some(row => row.id === after.getLiveryId("mercedes") && row.name === "New"));
+});
+
+test("a refused cleanup leaves two usable paints and the older copy can be removed", () => {
+  const f = paintFixture(), { h, pane } = f.open(); pane.querySelector(".cs-liv-edit").onclick();
+  const name = pane.querySelector(".cs-liv-ed-name"); name.value = "Edited"; name.oninput();
+  f.storage.refuse = (key, text) => key === f.rows && JSON.parse(text).length === 1;
+  pane.querySelector(".cs-liv-ed-save").onclick();
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /previous copy was kept/.test(el.textContent)));
+  const selected = h.G.getLiveryId("mercedes"); assert.notEqual(selected, f.old.id);
+  const removeOriginal = () => pane.querySelectorAll(".cs-liv-del").find(b => b.title && b.getAttribute("aria-label").includes("Original")).onclick();
+  removeOriginal();
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /Could not delete/.test(el.textContent)));
+  assert.equal(f.open().h.G.getCustomLiveries("mercedes").length, 2);
+  f.storage.refuse = () => false; removeOriginal();
+  const g = f.open().h.G; assert.equal(g.getLiveryId("mercedes"), selected);
+  assert.deepEqual(Array.from(g.getCustomLiveries("mercedes"), row => row.id), [selected]);
+});
+
+test("refusing to move selection off a deleted livery preserves the fitted row after reload", () => {
+  const f = paintFixture(), { pane } = f.open();
+  f.storage.refuse = key => key === f.fit;
+  pane.querySelector(".cs-liv-del").onclick();
+  const g = f.open().h.G;
+  assert.equal(g.getLiveryId("mercedes"), f.old.id);
+  assert.deepEqual(Array.from(g.getCustomLiveries("mercedes"), row => row.id), [f.old.id]);
+});
+
+test("fitting an existing paint after a storage refusal keeps the current selection until retry", () => {
+  const f = paintFixture(), other = { ...f.old, id: "custom_other", name: "Alternate" };
+  f.storage.setItem(f.rows, JSON.stringify([f.old, other]));
+  const { h, pane } = f.open();
+  const row = () => pane.querySelectorAll(".cs-liv").find(b => b.dataset.csLivery === other.id);
+  f.storage.refuse = key => key === f.fit; row().onclick();
+  assert.equal(h.G.getLiveryId("mercedes"), f.old.id);
+  assert.equal(f.open().h.G.getLiveryId("mercedes"), f.old.id);
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /Could not fit/.test(el.textContent)));
+  f.storage.refuse = () => false; row().onclick();
+  assert.equal(f.open().h.G.getLiveryId("mercedes"), other.id);
 });
 
 test("G2: an era ban never erases a fitted part from the career garage; a permanent lock still remaps", () => {

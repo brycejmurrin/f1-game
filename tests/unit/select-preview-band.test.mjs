@@ -64,3 +64,10 @@ test("no overlays, a missing list and a negative margin leave the whole still", 
   assert.deepEqual(band(still, undefined, -4), { top: 0, bottom: 0 });
   assert.deepEqual(band(still, [null, R(120, 140, 0, 200)], 3), { top: 3, bottom: 3 }, "an overlay outside the still is ignored");
 });
+
+test("overlapping caption and stats never pad the map door beyond a short still", () => {
+  const still = R(138, 253, 26, 826);
+  const caption = R(140, 201, 36, 636);
+  const stats = R(193, 251, 36, 816);
+  assert.deepEqual(band(still, [caption, stats], 3), { top: 66, bottom: 49 });
+});

@@ -18,7 +18,7 @@
 import { BRYCE_WINDOWS, OWNER_EXPORT, ownerStore } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
-const GEO = { name: "852x393-standalone", w: 852, h: 393, insets: BRYCE_WINDOWS.standalone.insets };
+const GEO = BRYCE_WINDOWS.standalone;
 
 /** His live export (tools/lib/bryce-phone.mjs `live`, the 2026-11-10 file) as the store keys a boot writes. */
 function liveStore() {
@@ -38,8 +38,8 @@ async function boot(page, geo, store) {
   await page.waitForFunction(() => window.__apex && window.__apex.race && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT_MS });
 }
 
-test.describe(`owner's live profile ${GEO.name}, the garage`, () => {
-  test.use({ viewport: { width: GEO.w, height: GEO.h }, hasTouch: true, isMobile: true });
+test.describe(`owner's live profile ${GEO.width}x${GEO.height}-standalone, the garage`, () => {
+  test.use({ viewport: { width: GEO.width, height: GEO.height }, hasTouch: true, isMobile: true });
 
   test("the garage overlay bar is no wider than the ACTIVE AERO chip needs", async ({ page }) => {
     test.setTimeout(240_000);

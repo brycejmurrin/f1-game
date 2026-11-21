@@ -85,6 +85,10 @@ for (const geo of GEOS) {
           const withContinue = await measure(page);
           const rows = {};
           for (const d of withContinue.m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
+          expect(Object.values(rows).slice(0, 2), "Career has the top row, with Continue and Daily below").toEqual([["mb-career"], ["mb-continue", "mb-daily"]]);
+          // offsetWidth excludes the Racing skin's skewed corners, and measures the full clickable tile.
+          const widths = await page.evaluate(() => ["mb-career", "menu-retention"].map(id => document.getElementById(id).offsetWidth));
+          expect(Math.abs(widths[0] - widths[1]), "Career spans the entire retention row").toBeLessThanOrEqual(1);
           expect(Object.values(rows).map((r) => r.length), `${geo.name} ${prof.name} rows ${JSON.stringify(rows)}`).toEqual(prof.name === "fresh" ? geo.freshRows : geo.rows);
           expect(judge(withContinue.m, { offsets: prof.offsets }), `${geo.name} ${prof.name} with CONTINUE`).toEqual([]);
           expect(judgeLabels(withContinue.m), `${geo.name} ${prof.name} with CONTINUE: no clipped label (#5378)`).toEqual([]);
@@ -292,6 +296,7 @@ test.describe("title layout controls 852x393-standalone", () => {
       await bootTitle(page);
       const base = await pieces(page);
       const lim = await page.evaluate((k) => TitleLayout.LIM[k], k);
+      const autoTick = await page.evaluate((id) => /** @type {HTMLInputElement} */ (document.getElementById(id)).min, `pm-tl-${part}-${k}`);
       const steps = [];
       for (let i = 0; i <= 10; i++) {
         const ask = Math.round(lim[0] + (lim[1] - lim[0]) * i / 10);
@@ -306,7 +311,8 @@ test.describe("title layout controls 852x393-standalone", () => {
       const line = steps.map((s) => `${s.ask}→${s.stored[part][k]}:${Math.round(s[part][dim] * 10) / 10}`).join(" ");
       for (let i = 0; i < steps.length; i++) {
         const s = steps[i], v = s.stored[part][k];
-        expect(s.thumb, `the thumb shows the stored value at ask ${s.ask} [${line}]`).toBe(String(v));
+        // WIDTH's first tick is AUTO (stored 0), drawn one below WIDTH_MIN (js/ui/title-layout.js, #5977 b60dca73).
+        expect(s.thumb, `the thumb shows the stored value at ask ${s.ask} [${line}]`).toBe(k === "width" && v === 0 ? autoTick : String(v));
         for (const other of Object.keys(PIECE)) {
           if (other === part) continue;
           // WIDTH moves the split between the doors and the brand, so the brand's own track narrows
@@ -456,7 +462,10 @@ for (const geo of LIVE_GEOS) {
       expect(Math.abs(boot.mb.rect.t - boot.ov.box.t), "his UP / DOWN holds the cluster at the top edge").toBeLessThanOrEqual(1);
 
       // The slider: low end = the floor, number = the painted size, the stored 60 untouched until he moves it.
-      expect(await slider(), "BUTTONS SIZE shows the painted size").toMatchObject({ min: "100", value: "100", text: "100%", stored: LIVE_TITLE.wide.btns });
+      // SIZE reads against this device's SHIPPED size (pctTxt, #5977): a phone ships BUTTONS SIZE 106 (PHONE_WIDE).
+      const shippedBtns = await page.evaluate(() => TitleLayout.normalize(null, "wide").btns.size);
+      const rel = (n) => Math.round(n * 10000 / shippedBtns) / 100 + "%";
+      expect(await slider(), "BUTTONS SIZE shows the painted size").toMatchObject({ min: "100", value: "100", text: rel(100), stored: LIVE_TITLE.wide.btns });
       const steps = [];
       for (const ask of [50, 100, 105, 110, 120, 130, 150, 200]) {
         await page.evaluate((ask) => {
@@ -472,7 +481,7 @@ for (const geo of LIVE_GEOS) {
       for (let i = 0; i < steps.length; i++) {
         const s = steps[i];
         expect(s.value, `the thumb shows the stored value at ask ${s.ask} [${line}]`).toBe(String(s.size));
-        expect(s.text, `the number is the painted size at ask ${s.ask} [${line}]`).toBe(`${s.size}%`);
+        expect(s.text, `the number is the painted size at ask ${s.ask} [${line}]`).toBe(rel(s.size));
         expect(s.size, `nothing under the floor is stored [${line}]`).toBeGreaterThanOrEqual(100);
         expect(s.floor, `44 px doors at ask ${s.ask} [${line}]`).toEqual([]);
         expect(s.bad, `inside the box, no scroll, at ask ${s.ask} [${line}]`).toEqual([]);

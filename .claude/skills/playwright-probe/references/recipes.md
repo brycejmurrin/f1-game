@@ -74,8 +74,8 @@ helped asset fetch; they are not the current harness.
    `race(id)` then
    `waitForFunction(t => __apex.info().track === t, id, { polling: 100, timeout: BOOT_MS })` then a
    ~1.6 s settle for the mesh build before probing/shooting.
-5. **Viewports**: in-race shots use **landscape** `{844,390}` (avoids the
-   `#rotate-device` overlay); DOM screens (menu/results) use a larger viewport.
+5. **Phone screenshots** use `openBrycePhone` from `tools/lib/bryce-phone.mjs`. Landscape is 852×393 CSS px at 3×
+   and keeps the race clear of the rotate overlay. Use the portrait preset for upright menu captures.
 6. **THE CAMERA LAGS — call `snapCam()` after `park()`/`jump()`.** The game camera
    eases toward its rig target exponentially, so after a teleport it spends a second
    or more *flying* to the car. Screenshot in that window and you get an empty

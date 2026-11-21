@@ -1,7 +1,7 @@
 // @ts-check
 // Production acceptance must cross the line and use real controls. Missing
 // ceremony support fails; no capability skip or debug-seek proves acceptance.
-import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
+import { CONTRACT_WINDOWS } from "../helpers/iphone15.mjs";
 import { test, expect, BOOT_MS, RACE_BUILD_MS } from "../helpers/fixtures.js";
 import { startCareer, goRacing } from "../helpers/career-boot.js";
 import fs from "node:fs";
@@ -379,17 +379,12 @@ test.describe("results-flow — desktop cooldown ownership", () => {
 
 // UI contract cells (#5153 gap 12, PR D; docs/notes/UI-CONTRACT-2026-11-06.md §3 rule 8 and §4.9; the numbers in
 // docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pinned podium's pin count comes from the pane, so the shortest window
-// still scrolls >= 2 rows of the classification. Windows A (the iOS Home Screen app), C (the Safari tab) and D (the spec
+// still scrolls >= 2 rows of the classification. Windows A (the iOS Home Screen app), C (the measured short Safari tab) and D (the spec
 // phone), seeded from Bryce's own export (TEXT large; it stores no UI SIZE, so a phone reads the shipped 70 %, #5358),
 // insets injected on :root as the shell does. #5580: at 0.7 the sheet has 515 own px in A and 534 in D, over the
 // generic --compact-at 380, so it went NORMAL there: two-line rows 73.7 / 74.4 painted px, YOU the only pin, 3.8 rows
 // in the pane. The short-touch gate in css/overlays.css holds it compact (probe 2026-11-16 at 0.7: 44 px rows; pins 4 / 1 / 4; 2.4-2.6 / 3.39 / 2.82 scrolling rows in A / C / D).
 const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
-const CONTRACT_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS.standalone.insets.bottom } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: BRYCE_WINDOWS["safari-short"].insets.bottom } },
-  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
-];
 for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells — " + win.name, () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("the pinned podium leaves >= 2 scrolling rows: pins from the pane, keyed on the sheet", async ({ page }) => {

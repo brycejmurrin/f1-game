@@ -18,6 +18,18 @@ import { gameSource } from "../helpers/game-source.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SPORTING = join(ROOT, "js/race/sporting-regs.js"), BAND = join(ROOT, "js/physics/ai-band.js");
 
+test("allocation probe distinguishes a warm no-op, retained objects and a collection inside the window", () => {
+  const idle = allocPerCall("() => {}");
+  assert.equal(idle.gcInside, false);
+  assert.equal(idle.bytesPerCall, 0);
+  const retained = allocPerCall("(() => { const out = new Array(20000); return i => { out[i] = { i }; }; })()");
+  assert.equal(retained.gcInside, false);
+  assert.ok(retained.bytesPerCall > 0);
+  // Warmup ends at i = 49, so only the measured loop forces this collection.
+  const collected = allocPerCall("i => { if (i === 100) gc(); }", { warm: 50 });
+  assert.equal(collected.gcInside, true);
+});
+
 test("SportingRegs pass watch: 0 B per tick on a 20-car field, caution on and off (was 201 B: Set#clear + re-grow)", () => {
   const r = allocPerCall(`(() => {
     const w = SportingRegs.createPassWatch(5), f = [];

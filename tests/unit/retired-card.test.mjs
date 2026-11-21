@@ -88,8 +88,19 @@ test("tickG reads the façade: a retired player in a solo race shows; a room or 
   const dom = fakeDom();
   const { RC } = load(dom);
   const G = { state: "race", session: "race", timeTrial: false, player: { retired: true, finished: false },
-    netPlay: { active: () => false }, realRace: { status: () => ({ active: false, watch: false }) } };
+    netPlay: { active: () => false }, realRace: { isWatch: () => false, status: () => assert.fail("a race tick must not format the field") } };
   RC.tickG(G); assert.equal(RC.shown, true);
   G.netPlay.active = () => true; RC.tickG(G); assert.equal(RC.shown, false);
-  G.netPlay.active = () => false; G.realRace.status = () => ({ watch: true }); RC.tickG(G); assert.equal(RC.shown, false);
+  G.netPlay.active = () => false; G.realRace.isWatch = () => true; RC.tickG(G); assert.equal(RC.shown, false);
+});
+
+test("ordinary racing leaves the retirement controls unmounted until needed", () => {
+  const dom = fakeDom();
+  const { RC } = load(dom);
+  const v = view({ player: { retired: false } });
+  RC.tick(v);
+  assert.equal(dom.nodes["retired-card"], undefined);
+  v.player.retired = true;
+  RC.tick(v);
+  assert.equal(dom.nodes["retired-card"].hidden, false);
 });

@@ -66,8 +66,12 @@ test("TLX WebGL2: Retry reloads after budget-exhausted race-entry ctx loss (back
   expect(stuck.lost).toBe(true);
   expect(stuck.detail).toMatch(/reload or pick another RENDERER/i);
 
+  const retry = page.locator("#ctx-lost-retry");
+  await retry.click({ trial: true });
+  await retry.focus();
+  await expect(retry).toBeFocused();
   const nav = page.waitForEvent("framenavigated", { timeout: 60_000 });
-  await page.locator("#ctx-lost-retry").click();
+  await page.keyboard.press("Enter");
   await nav;
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 

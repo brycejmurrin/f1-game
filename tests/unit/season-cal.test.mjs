@@ -998,6 +998,29 @@ test("a season with an unknown circuit races the stored round's circuit and is n
   assert.equal(whole.S.save(w).ok, true);
 });
 
+test("returning to the menu after a season finale preserves a calendar this build could not read whole", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  for (const futureRound of [true, false]) {
+    const trackIds = ["monza", "monaco"];
+    if (futureRound) trackIds.push("future-track");
+    const saved = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds } };
+    const g = await createGame({ carMeshes: false, storage: { season: saved } });
+    try {
+      const { G } = g, S = g.sandbox.SeasonCal;
+      G.flow = "season";
+      G.season = S.load();
+      assert.equal(S.award(G.season, field(2)), "race");
+      assert.equal(S.save(G.season).ok, !futureRound);
+      G.els.resNext.onclick();
+      assert.equal(G.els.results.dataset.resultsView, "champion");
+      G.els.resNext.onclick();
+      assert.equal(G.state, "menu");
+      const disk = JSON.parse(g.sandbox.localStorage.getItem("apex26.season"));
+      assert.deepEqual(disk, futureRound ? saved : null);
+    } finally { g.close(); }
+  }
+});
+
 test("a calendar shrunk by an unknown circuit keeps roundPts aligned with the remapped round", () => {
   // resume() re-read `round` as the known circuits raced but left roundPts on
   // the stored indexes: netPts (dropped scores) read the wrong rounds, and the

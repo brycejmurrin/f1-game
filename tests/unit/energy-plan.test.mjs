@@ -126,3 +126,13 @@ test("forecast (#1629): learns per-sector cost from a recorded lap, confidence g
   P.reset();
   assert.equal(P.forecast(1, 0, false).conf, 0);
 });
+
+// Mutation hunt 2026-11-20: conf (1-exp(-n/2)) → (1-exp(-n/20)) survived "confidence grows".
+// With identical samples sd→0, so conf = 1 - exp(-n/2). Four samples → 1 - e^-2.
+test("forecast confidence uses n/2 sample scale", () => {
+  const P = load();
+  for (let i = 0; i < 4; i++) assert.equal(P.learn(0, -0.10, false), true);
+  const conf = P.forecast(1, 0, false).rows[0].conf;
+  const want = 1 - Math.exp(-4 / 2);
+  assert.ok(Math.abs(conf - want) < 1e-12, `conf ${conf} vs n/2 scale ${want}`);
+});

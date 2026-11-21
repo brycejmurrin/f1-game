@@ -22,8 +22,7 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { exportStore } from "../helpers/title-fit.mjs";
 import { judgeNamed } from "../helpers/control-judge.mjs";
 
-const W = 852, H = 393;
-const INSETS = BRYCE_WINDOWS.standalone.insets;
+const { width: W, height: H, insets: INSETS } = BRYCE_WINDOWS.standalone;
 
 const TITLE = { "mb-race": { min: 24, safe: true }, "mb-career": { min: 24, safe: true }, "mb-garage": { min: 24, safe: true },
   "mb-practice": { min: 24, safe: true }, "mb-settings": { min: 24, safe: true } };

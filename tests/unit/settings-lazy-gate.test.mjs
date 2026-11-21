@@ -40,7 +40,13 @@ function boot(file, extra = {}, dom = {}) {
     ...extra,
   });
   ctx.globalThis = ctx; ctx.self = ctx;
-  for (const f of [file].flat()) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of [file].flat()) {
+    if (f === "js/ui/appearance-studio.js") {
+      const body = "js/ui/appearance-studio-ui.js";
+      vm.runInContext(read(body), ctx, { filename: absSrc(body) });
+    }
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  }
   const at = { lookups: lookups.slice(), listeners: docListeners.slice(), rows: rowCalls.slice() };
   for (const fn of dcl) fn();
   const atDcl = { lookups: lookups.slice(), listeners: docListeners.slice(), rows: rowCalls.slice() };

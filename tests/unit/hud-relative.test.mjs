@@ -118,6 +118,7 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   const G = { cars: [p, a], track: { total: L }, vTop: () => 90, cssCol: () => "rgb(255 0 0)", store: { rev: 1 } };
   R.tick(G, p);
   assert.equal(root.hidden, true, "opt-in: hidden while the toggle is off");
+  assert.equal(root.children.length, 0, "defer row creation while the box is disabled");
   on = true;
   const snap = JSON.stringify([p.s, p.prog, p.speed, a.s, a.prog, a.speed]);
   R.tick(G, p);
@@ -149,6 +150,15 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
     for (let i = 0; i < 60; i++) R.tick(G, p);
     assert.equal(rows[1].children[2].textContent, expected);
   }
+  on = false;
+  R.tick(G, p);
+  assert.equal(root.hidden, true);
+  on = true;
+  const selfRow = rows[2];
+  R.tick(G, p);
+  assert.equal(root.hidden, false);
+  assert.equal(root.children.length, R.ROWS);
+  assert.equal(root.children[2], selfRow, "reuse the rows on re-enable");
   G.timeTrial = true;
   R.tick(G, p);
   assert.equal(root.hidden, true, "no relative in a time trial");
