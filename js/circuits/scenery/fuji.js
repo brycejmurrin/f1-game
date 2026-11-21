@@ -164,7 +164,8 @@
       gantry(0.004, 7.6, STEEL);
       gantry(0.128, 7.4, STEEL);
       gantry(0.196, 7.4, STEEL);
-      gantry(0.232, 7.4, STEEL);
+      // The solid portal masts support this beam on both sides.
+      gantry(0.232, 7.4, STEEL, { spanSupports: false });
       for (const s of [0.040, 0.100, 0.180]) {
         billboard(K(s), -1, 30, 24, 11, [0.06, 0.07, 0.09], { style: "monopole" });
       }

@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["interlagos"] =
   function (api) {
-      const { K, out, MAT, seat, n, px, pz, pyMin, place, backdrop,
+      const { K, out, MAT, seat, track, n, px, pz, pyMin, place, backdrop,
               addBox, every, onTrack, hash, vadd, anchor, building, motorhome, tower, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, tree, palm, bush, hedge,
               addCyl, forestEdge, cityFront,
@@ -602,20 +602,19 @@
         const a = anchor(K(0.42), -1, 420);
         const LCX = a.c[0], LCZ = a.c[2];
         const RA = 150, RB = 180, C = 32;
+        // The ellipse crosses the terrain ribbon. Its uncovered cells sit on
+        // the rendered world floor and count toward the reservoir level too.
+        const basinY = (x, z) => terrainYAt(x, z) ?? track.surface.floorY;
         const ys = [];
         for (let x = LCX - RA; x < LCX + RA; x += C) {
           for (let z = LCZ - RB; z < LCZ + RB; z += C) {
             const mx = x + C / 2, mz = z + C / 2;
             if (((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2 > 1) continue;
-            const y = terrainYAt(mx, mz);
-            if (y == null || !isFinite(y)) continue;
-            ys.push(y);
+            ys.push(basinY(mx, mz));
           }
         }
         ys.sort((a, b) => a - b);
-        const waterY = ys.length
-          ? ys[Math.floor(ys.length * 0.25)] + 0.15
-          : pyMin + 0.08;
+        const waterY = ys[Math.floor(ys.length * 0.25)] + 0.15;
         let pin = null;
         for (let x = LCX - RA; x < LCX + RA; x += C) {
           for (let z = LCZ - RB; z < LCZ + RB; z += C) {
@@ -623,18 +622,14 @@
             const e = ((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2;
             if (e > 1 - hash(mx * 0.31 + mz * 0.17) * 0.18) continue;
             if (onTrack(mx, mz, 20)) continue;
-            let lo = 1e9, hi = -1e9, saw = false;
+            let lo = Infinity, hi = -Infinity;
             for (const fx of [0, 0.5, 1]) for (const fz of [0, 0.5, 1]) {
-              const y = terrainYAt(x + fx * C, z + fz * C);
-              if (y === null || !isFinite(y)) continue;
-              saw = true;
+              const y = basinY(x + fx * C, z + fz * C);
               if (y < lo) lo = y;
               if (y > hi) hi = y;
             }
-            if (saw) {
-              if (lo > waterY + 0.4) continue;      // dry bank
-              if (hi - lo > 3.5) continue;          // steep — would bury/float
-            }
+            if (lo > waterY + 0.4) continue;      // dry bank
+            if (hi - lo > 3.5) continue;          // steep — would bury/float
             const top = waterY + 0.04;
             const bot = waterY - 0.18;
             const cy = (top + bot) / 2;

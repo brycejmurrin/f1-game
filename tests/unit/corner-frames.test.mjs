@@ -100,3 +100,12 @@ test("corner-frames: a strong corner 15 m off its |k| peak still fails on the si
   const f = CF.kinkAt(flick, 500 / N, flick.curv);
   assert.equal(f && f.m, 0);
 });
+
+test("broad turn-anchored banks measure their own peak beside taller neighbours", () => {
+  // The combined Spa profile also contains the Les Combes and Fagnes banks.
+  // Searching it for the greatest lift attributed those peaks to T8/T10/T11.
+  for (const turn of [8, 10, 11]) {
+    const row = rows.find(r => r.stable === `spa|bank:turn${turn}`);
+    assert.ok(row && row.offsetM <= 2, `T${turn}: ${row?.detail}`);
+  }
+});

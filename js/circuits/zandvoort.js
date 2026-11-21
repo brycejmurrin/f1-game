@@ -49,15 +49,12 @@
     // the wrong corners — 19° on Scheivlak and 18° on Hunserug, both fast
     // sweeps, while Hugenholtz (28 m left hairpin) and Luyendyk (the final
     // corner) ran dead flat. Turn indices re-resolve through any future remap.
-    // Real angles per circuitzandvoort.nl: Hugenholtz is T3 ("after two turns
-    // that go right, the third corner goes left"), max 18°; Arie Luyendyk is
-    // T14, the last corner, 15-18° / 32% max gradient. T14 ships 18°: the
-    // circuit page and NOS 2021-09-03
-    // (https://nos.nl/collectie/13874/artikel/2396275) both give 18°; the 19°
-    // figures were rounded 2020 previews.
+    // Dromo's T3 section increases from 4.5° inside to 19° outside.
+    // https://studiodromo.it/portfolio/zandvoort/
+    // The circuit operator gives 18° for the final Arie Luyendyk corner.
     banked: true,
     bankZones: [
-      { turn: 3,  angleDeg: 18, widthM: 140 },  // Hugenholtz banked LEFT hairpin
+      { turn: 3,  insideAngleDeg: 4.5, angleDeg: 19, widthM: 140 },  // Hugenholtz banked LEFT hairpin
       { turn: 14, angleDeg: 18, widthM: 140 },  // Arie Luyendyk banked final RIGHT
       { turn: 1,  angleDeg: 4.0, widthM: 200 },  // Tarzan
       { turn: 8,  angleDeg: 3.0, widthM: 110 },  // T8 right after the Scheivlak descent (was turn 7 before the FIA renumber)

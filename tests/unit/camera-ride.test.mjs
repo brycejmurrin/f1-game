@@ -34,7 +34,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { loadElevationRig, makeElevationTrack } from "../helpers/camera-rig.mjs";
+import { loadElevationRig, makeElevationTrack, loadRig } from "../helpers/camera-rig.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
@@ -452,6 +452,39 @@ test("the cockpit viewmodel yaws with heading, not the road tangent", () => {
   assert.deepEqual(outF.map((n) => +n.toFixed(6)), [1, 0, 0],
     "+π/2 yawVis (nose right of the road) must rotate the viewmodel, not crab it");
   assert.deepEqual(outR.map((n) => +n.toFixed(6)), [0, 0, -1]);
+});
+
+test("the rear-facing rigs look downhill when the car is climbing", () => {
+  let lookBack = false;
+  const { cams, ctx } = loadRig({ Input: { lookingBack: () => lookBack } });
+  const grade = 0.15, track = makeElevationTrack((s) => s * grade);
+  const sample = ctx.Tracks.sample;
+  ctx.Tracks.sample = (tr, s, out) => {
+    sample(tr, s, out);
+    const norm = Math.hypot(1, grade);
+    out.t[1] = grade / norm; out.t[2] = 1 / norm;
+    return out;
+  };
+  for (const mode of ["rear", "reverse"]) {
+    const pitch = pitchOf(chaseAt(cams, track, 2000, mode));
+    assert.ok(pitch < -8 && pitch > -12, mode + " pitch " + pitch);
+  }
+  const cockpit = () => cams.vantage(track, "cockpit", 2000, 0, 0, 0, { att: {}, carPos: [0, 2000], carHead: 0 });
+  const forward = pitchOf(cockpit());
+  lookBack = true;
+  const backward = pitchOf(cockpit());
+  assert.ok(forward > 7 && backward < -8, "cockpit look-back follows the grade: " + forward + ", " + backward);
+});
+
+test("a banked cockpit keeps its transverse axis on the road and its seat at the eye", () => {
+  const cams = loadElevationRig();
+  const eye = [8, 3, -7], bank = 6 * Math.PI / 180;
+  const r = [], u = [], f = [], origin = [];
+  cams.cockpitViewmodelAxes([-1, 0, 0], [0, 0, 1], 0, eye, r, u, f, origin, -0.2, 0.8, bank);
+  assert.ok(Math.abs(r[1] - Math.sin(bank)) < 1e-6);
+  for (let i = 0; i < 3; i++) {
+    assert.ok(Math.abs(origin[i] + 0.8 * u[i] - 0.2 * f[i] - eye[i]) < 1e-6);
+  }
 });
 
 test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {

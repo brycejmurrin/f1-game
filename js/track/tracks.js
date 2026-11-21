@@ -146,9 +146,9 @@ const Tracks = (function () {
         if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
       }
     }
-    // Low-amplitude ripple (3 harmonics, whole cycles/lap for seam continuity);
-    // amp scales with relief (0.14–0.42 m cap); seeded off circuit id for ghosts.
-    if (def.undulate !== false) {
+    // Custom designs opt into this seeded ripple to preserve their road and ghosts.
+    // Shipped circuits use the surveyed or authored road heights above.
+    if (def.undulate === true) {
       let lo = Infinity, hi = -Infinity;
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
       const relief = hi - lo;

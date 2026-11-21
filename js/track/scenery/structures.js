@@ -510,7 +510,7 @@ const SceneryStructures = (function () {
         color: c,
         // A cantilever plants its own single mast above; the span's default
         // pair of legs would double it and grow one on the open side (#3280).
-        supports: st !== "cantilever",
+        supports: st !== "cantilever" && opts?.spanSupports !== false,
       });
       // One dark housing bar under the beam's centre: the five lamps
       // js/race/start-lights.js lights during the countdown sit proud of its

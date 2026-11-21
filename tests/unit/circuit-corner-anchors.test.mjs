@@ -240,3 +240,27 @@ test("Bahrain scenery landmarks track the current arc-length origin", () => {
     }
   }
 });
+
+test("Spa crossfall follows the measured Bruxelles hairpin and both Pouhon apexes", () => {
+  const { track } = circuit("spa");
+  // SPW 2021–22 0.5 m DTM. Projected bacinger vertices, signed angle measured
+  // across ±3 m of the road centre; positive means the right side is higher.
+  // Pin physical locations so adjusting the timing line cannot move the check.
+  for (const [x, z, measured] of [
+    [-301.3, -1031.9, -2.92], [-259.4, -990.5, -1.71], [-283.7, -938.0, -2.98],
+    [-301.3, -373.4, 2.37], [-214.0, -306.7, 1.97], [-83.5, -320.9, 2.74],
+  ]) {
+    let nearest = 0, distance = Infinity;
+    for (let k = 0; k < track.n; k++) {
+      const d = Math.hypot(track.px[k] - x, track.pz[k] - z);
+      if (d < distance) { nearest = k; distance = d; }
+    }
+    assert.ok(distance < 5, `survey station (${x}, ${z}) missed the road by ${distance} m`);
+    const s = nearest * track.total / track.n;
+    const rise = Tracks.banking(track, s, 3).dy - Tracks.banking(track, s, -3).dy;
+    const actual = Math.atan2(rise, 6) * 180 / Math.PI;
+    // Smooth authored bowls approximate an archived raster, including small
+    // direction and registration errors between its trace and the spline.
+    assert.ok(Math.abs(actual - measured) < 1.2, `at (${x}, ${z}): ${actual}° vs ${measured}°`);
+  }
+});

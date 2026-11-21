@@ -411,22 +411,7 @@ const MirrorPass = (function () {
       _P[0] = rp.world ? rp.x : _smp.p[0] + r[0] * cX;
       _P[2] = rp.world ? rp.z : _smp.p[2] + r[2] * cX;
       _P[1] = _smp.p[1] + (bank ? bank.dy : 0);
-      const yv = yawVisInterp(c), cy = Math.cos(yv), sy = Math.sin(yv);
-      for (let i = 0; i < 3; i++) {
-        _F[i] = t[i] * cy + r[i] * sy;
-        _R[i] = r[i] * cy - t[i] * sy;
-      }
-      _U[0] = _R[1] * _F[2] - _R[2] * _F[1];
-      _U[1] = _R[2] * _F[0] - _R[0] * _F[2];
-      _U[2] = _R[0] * _F[1] - _R[1] * _F[0];
-      if (bank && bank.roll) {
-        const cr = Math.cos(bank.roll), sr = Math.sin(bank.roll);
-        for (let i = 0; i < 3; i++) {
-          const rr = _R[i], u = _U[i];
-          _R[i] = rr * cr + u * sr;
-          _U[i] = u * cr - rr * sr;
-        }
-      }
+      M4.roadFrameAxes(r, t, yawVisInterp(c), bank ? bank.roll : 0, _R, _U, _F);
     }
 
     // Rivals within `reach` (QUALITY) of track arc and not ahead of the mirror eye:

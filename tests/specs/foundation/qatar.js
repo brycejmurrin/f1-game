@@ -68,29 +68,7 @@ export default function register() {
     );
 
     for (const [label, session] of [["night", night], ["day", day]]) {
-      // Qatar is flat by GRADIENT, not by total relief — 6.7 m, measured.
-      //
-      // This asserted < 0.25 m, which was written against a Lusail trace that was
-      // dead flat: the OSM centreline ships y = 0 at every node and no
-      // circuit-elevations.js is loaded, so the road really did measure 0.000 m.
-      // Two later changes both raise it, and neither is a defect:
-      //   • js/circuits/qatar.js authored an `elevations` profile on purpose
-      //     ("not the dead 0.0 m the trace shipped with") — three cosine bumps,
-      //     +3.5 / +5.5 / -1.0 m, giving exactly 6.500 m of long-wavelength relief.
-      //   • buildCenterline's shared `undulate` ripple adds ~0.199 m on top of
-      //     that, and runs on every circuit that does not opt out. It alone puts a
-      //     genuinely flat Qatar at 0.266 m, i.e. already over the old threshold.
-      // Measured headlessly (tools/track/verify-track.cjs harness): 6.699 m, and
-      // identical across two consecutive Tracks.build() calls — the day<->night
-      // rebuild adds nothing, so day and night are the same number.
-      //
-      // The old number's INTENT — "you are not driving Spa" — is the gradient, so
-      // assert that too rather than leave relief as the only proxy. Qatar's max
-      // |dy/ds| measures 2.19 %, against 15.30 % for Monaco and 22.30 % for Spa
-      // through the same probe, so 3.5 % separates a flat desert circuit from
-      // every circuit with real relief while leaving the ripple room to move.
-      // Lower bound too: the authored profile measures 6.699 m, a flattened track
-      // reads ~0.27 m (ripple only) and would pass the upper bound alone.
+      // The three authored hills give Lusail 6.5 m of long-wave relief.
       expect(session.elevationRange, `${label} Qatar keeps its authored desert relief`)
         .toBeGreaterThan(3);
       expect(session.elevationRange, `${label} Qatar relief stays desert-scale`)

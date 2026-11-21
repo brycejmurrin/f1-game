@@ -97,8 +97,8 @@ export default function register() {
         // Each corridor sample has to sit on the BANKED road surface, not on the
         // flat centreline plane. `y: node.y` made `overlaps.road` measure Spa's
         // own authored camber and nothing else: the road mesh lifts its outer
-        // edge by bankOffsetAt(), and Pouhon (frac 0.5648) and Stavelot (0.7576)
-        // are bankZones at 6 deg across a 16 m road, so at 0.6 x half-width the
+        // edge by bankOffsetAt(), and the original Pouhon and Stavelot zones
+        // were authored at 6 deg across a 16 m road, so at 0.6 x half-width the
         // tarmac legitimately stands 0.6 * 8 * tan(6 deg) = 0.505 m above the
         // centreline. The scan reported 0.525 (the extra 0.02 is nodeAt() snapping
         // frac to the nearest node, plus the mesh chording the elevation curve

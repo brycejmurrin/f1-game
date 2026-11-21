@@ -132,10 +132,8 @@ const CustomTracks = (function () {
     if (s0 == null || s1 == null || s0 === s1) return null;
     return { s0, s1, hw: dm(hw), ease: mil(num(z.ease, 0.005, 0.2, 0.025)) };
   };
-  // mesh.js reads `(angleDeg || 18)` and takes the camber SIDE from curvature:
-  // 0 would build 18° and a negative angle adverse camber, so [1, 30] only.
   const BANK = (z) => {
-    const f = frac(z.frac), angleDeg = num(z.angleDeg, 1, LIMITS.angleDeg, null), widthM = num(z.widthM, 20, 600, null);
+    const f = frac(z.frac), angleDeg = num(z.angleDeg, -LIMITS.angleDeg, LIMITS.angleDeg, null), widthM = num(z.widthM, 20, 600, null);
     return f == null || angleDeg == null || widthM == null ? null : { frac: f, angleDeg: q(angleDeg), widthM: Math.round(widthM) };
   };
 

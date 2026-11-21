@@ -55,8 +55,13 @@
     bankZones: [
       { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon
       { frac: 0.3685, angleDeg: 3.0, widthM: 80 },    // Les Combes
-      { frac: 0.4531, angleDeg: 4.0, widthM: 170 },   // Bruxelles
-      { frac: 0.5648, angleDeg: 6.0, widthM: 160 },   // Pouhon
+      // SPW 2021–22 LiDAR MNT (0.5 m), measured across the central 6 m of
+      // pavement. Bruxelles has about 2–3° inward crossfall. Pouhon carries
+      // roughly 2–3° through both left apexes and the link between them.
+      // https://geoportail.wallonie.be/catalogue/a004e570-99d6-4fe5-b83d-49b774409278.html
+      { turn: 8, angleDeg: 2.8, widthM: 470 },       // Bruxelles
+      { turn: 10, angleDeg: 2.6, widthM: 580 },      // Pouhon, first apex
+      { turn: 11, angleDeg: 2.7, widthM: 580 },      // Pouhon, second apex
       { frac: 0.6626, angleDeg: 3.5, widthM: 140 },   // Fagnes
       { frac: 0.7277, angleDeg: 3.5, widthM: 100 },   // Campus
       { frac: 0.7576, angleDeg: 6.0, widthM: 150 },   // Stavelot

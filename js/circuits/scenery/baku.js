@@ -598,7 +598,7 @@
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
           [0.51, 1, 36, 10, 10, 14],
-          [0.54, 1, 38, 12, 12, 12],
+          [0.54, 1, 48, 12, 12, 12], // The castle terrace at gap 28 extends to ~40 m behind the road edge.
           [0.56, 1, 30, 14,  8, 16],
         ];
         for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {

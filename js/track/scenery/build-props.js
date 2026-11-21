@@ -1727,8 +1727,13 @@ const TrackBuildProps = (function () {
           const a = anchor(k, side, 9);
           if (massBlocked(a.c, 9, 7, [a.r, a.u, a.t], 0.82)) { blockAt(k, side, 9 - 4.5, 3.5); placeSeq += 2; return; }
           const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54];
-          place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
-          place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
+          const height = 4 + hash(HK(k)) * 3;
+          place(k, side, 9, [9, height, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
+          // place() seats the centres vertically but tilts both boxes with
+          // the road. Leave clearance around the body's downhill face as
+          // well as across the independent placement jitter (up to 0.13 m).
+          const skirtLength = 7.3 + Math.abs(track.ty[k]) * height;
+          place(k, side, 9, [9.4, 1.0, skirtLength], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
         }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).

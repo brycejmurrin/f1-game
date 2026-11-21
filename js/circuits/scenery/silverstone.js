@@ -1390,7 +1390,7 @@
         bakedModel("k_tentlong", k(0.47), 1, 90, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.96), -1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.905), -1, 90, { scale: 2.4 });
-        bakedModel("k_tentlong", k(0.49), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), 1, 78, { scale: 2.4 });  // paddock tent behind the pit garages
         bakedModel("k_tentlong", k(0.62), 1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.1), 1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.49), -1, 60, { scale: 2.4 });

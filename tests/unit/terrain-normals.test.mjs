@@ -143,6 +143,33 @@ for (const id of BANKED) {
   });
 }
 
+test("Hugenholtz asphalt and paint coordinates follow the progressive bank across every lane", () => {
+  const Tracks = _ctx || (_ctx = buildContext());
+  const def = Tracks.LIST.find(d => d.id === "zandvoort"), tr = Tracks.buildCenterline(def);
+  const M = Tracks._vmContext.TrackMesh, road = M.buildRoad(tr);
+  const k = Math.round(def.turns[2] * tr.n), s = k * tr.total / tr.n;
+  const w = tr.hw[k], up = M.upOf(tr, k);
+  const point = x => [tr.px[k] + tr.rx[k] * x, tr.py[k] + tr.ry[k] * x + 0.02, tr.pz[k] + tr.rz[k] * x];
+  const nodes = [];
+  for (let v = 2; v <= 11; v++) {
+    const i = k * 14 + v, x = road.trk[3 * i + 1];
+    assert.equal(road.mat[i], Tracks._vmContext.TrackGeom.MAT.ASPHALT);
+    assert.equal(road.trk[3 * i + 2], w);
+    const base = point(x);
+    const height = up.reduce((h, u, j) => h + u * (road.pos[3 * i + j] - base[j]), 0);
+    nodes.push({ x, height });
+    assert.ok(Math.abs(height - Tracks.banking(tr, s, x).dy) < 1e-5);
+  }
+  assert.equal(nodes[0].x, -w);
+  assert.equal(nodes.at(-1).x, w);
+  for (let i = 1; i < nodes.length; i++) {
+    const a = nodes[i - 1], b = nodes[i], mid = (a.x + b.x) / 2;
+    assert.ok(b.x > a.x);
+    assert.ok(Math.abs((a.height + b.height) / 2 - Tracks.banking(tr, s, mid).dy) < 0.01);
+    assert.ok(Math.abs(Tracks.banking(tr, s, mid).roll - Tracks.bankAngle(tr, s, mid)) < 1e-8);
+  }
+});
+
 // The AI brake planner reads Tracks.bankAngle; the executor reads banking().
 // They must be one channel: on Zandvoort the planner saw 0 while the executor
 // applied a 19° bowl's grip.
@@ -188,9 +215,9 @@ test("Tracks.bankAngle does not call banking() (AI look hot path)", () => {
 // re-introduction is the regression this catches.
 test("updateCar bank grip does not re-read bankAngle", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const bankMu = src.indexOf("const bankMu = 1 + Math.sin(bankRoll)");
+  const bankMu = src.indexOf("const bankMu = Math.cos(bankRoll)");
   assert.ok(bankMu >= 0, "bankMu site present");
   const window = src.slice(Math.max(0, bankMu - 400), bankMu + 80);
-  assert.match(window, /bankPhys\s*\?\s*Math\.abs\(bankPhys\.roll\)/, "bankRoll from banking() scratch");
+  assert.match(window, /bankPhys\s*\?\s*bankPhys\.roll/, "bankRoll from banking() scratch");
   assert.doesNotMatch(window, /Tracks\.bankAngle\s*\(/, "no second bankAngle lookup next to bankMu");
 });

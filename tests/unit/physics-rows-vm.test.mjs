@@ -319,27 +319,62 @@ test("a straight reverse crawl with the wheel centred has no lateral response", 
 });
 
 // ---------------------------------------------------------------------------
-// Row 3 — js/game.js AI brake look-ahead: the bank the AI's brakeTarget sees is
-// |bank|, the same rule as the player's bankRoll. AI-only (a legitimate
-// curvature column); a signed/adverse bank must not cut the AI while it
-// boosts the player.
-// ---------------------------------------------------------------------------
-test("the AI look-ahead bank is |bank|, like the player's bankRoll", async () => {
+// Row 3 — direction of the road's crossfall matters for grip demand and drift.
+test("AI look-ahead keeps the sign of bank relative to turn direction", async () => {
   await startRace();
   const a = g.apex, T = g.sandbox.Tracks, AD = g.sandbox.AiDrive;
   const keepBank = T.bankAngle, keepGrip = AD.bankGrip;
   const seen = [];
   try {
-    T.bankAngle = () => -0.35;                     // an adverse (signed) bank everywhere
-    // The direct look window skips pushLook; bankGrip(|bank|) runs once per fresh node on either path.
+    T.bankAngle = (track, s) => -0.35 * Math.sign(T.curvature(track, s));
     AD.bankGrip = (b) => { seen.push(b); return keepGrip(b); };
-    a.jump(0.0, 50, 0);
+    for (const c of g.G.cars) c._lk = null;
+    a.jump(0, 50, 0);
     a.step(1 / 60, 1);
   } finally {
     T.bankAngle = keepBank; AD.bankGrip = keepGrip;
   }
-  assert.ok(seen.length > 0, "the AI look-ahead sampled the bank");
-  assert.ok(seen.every((b) => b === 0.35), `every sample is |bank| (min ${Math.min(...seen)})`);
+  assert.ok(seen.includes(-0.35), "adverse banks reach the speed planner");
+  assert.ok(seen.every(b => b <= 0), "a high inside edge never raises the corner speed budget");
+});
+
+test("mirroring crossfall reverses the player side force", async () => {
+  const sideSpeed = async roll => {
+    await startRace();
+    const a = g.apex, T = g.sandbox.Tracks, sample = T.banking;
+    try {
+      T.banking = (_track, _s, x, out = {}) => {
+        out.roll = roll; out.dy = x * Math.tan(roll); return out;
+      };
+      a.jump(0.02, 40, 0);
+      a.setInput({ steer: 0, throttle: false });
+      a.step(1 / 60, 1);
+      return g.G.player.vLat;
+    } finally { T.banking = sample; a.clearInput(); }
+  };
+  const left = await sideSpeed(0.1), flat = await sideSpeed(0), right = await sideSpeed(-0.1);
+  assert.ok(left < flat - 0.01 && right > flat + 0.01, `vLat left/flat/right: ${left}, ${flat}, ${right}`);
+});
+
+test("rising and falling lane edges produce opposite longitudinal gravity", async () => {
+  const laneSpeed = async edgeGrade => {
+    await startRace();
+    const a = g.apex, T = g.sandbox.Tracks, original = T.banking;
+    a.jump(0.02, 40, 2);
+    const start = g.G.player.s;
+    try {
+      T.banking = (_track, s, x, out = {}) => {
+        out.dy = x * (s - start) * edgeGrade;
+        out.roll = Math.atan((s - start) * edgeGrade);
+        return out;
+      };
+      a.setInput({ steer: 0, throttle: false });
+      a.step(1 / 60, 1);
+      return g.G.player.speed;
+    } finally { T.banking = original; a.clearInput(); }
+  };
+  const uphill = await laneSpeed(0.02), flat = await laneSpeed(0), downhill = await laneSpeed(-0.02);
+  assert.ok(uphill < flat && downhill > flat, `speed up/flat/down: ${uphill}, ${flat}, ${downhill}`);
 });
 
 // ---------------------------------------------------------------------------

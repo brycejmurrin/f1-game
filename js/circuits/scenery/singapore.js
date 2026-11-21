@@ -539,7 +539,7 @@
           }
           // Roof deck the disc sits on.
           addBox(stage, vadd(a.c, a.u, H + 0.9), [W + 2, 1.8, D + 2], STONE, b);
-          const dc = vadd(vadd(a.c, a.r, W * 0.30), a.u, H + 2.4);
+          const dc = vadd(vadd(a.c, a.r, W * 0.30), a.u, H + 1.8);
           addCyl(stage, dc, 5.0, 4.5, STONE, 10, b);
           addFrustum(stage, vadd(dc, a.u, 4.0), 12.5, 17.5, 3.2, STONE, 20, b);
           addCyl(stage, vadd(dc, a.u, 7.0), 17.8, 1.5, LITWIN, 20, b);

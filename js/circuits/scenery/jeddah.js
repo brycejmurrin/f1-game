@@ -800,8 +800,8 @@
           stage._mat = 0;
           addBox(stage, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);
           stage._mat = MAT.FABRIC;
-          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);
-          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 22), [0.4, 24, 44], GREEN, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 22), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
           stage._mat = 0;
         }, { required: true });
       }

@@ -761,10 +761,11 @@
           }
           prevTop = top; prevBot = bot;
         }
-        // Two main piers descending toward the water below the deck
+        // Main piers connect the underside of the deck to the riverbed.
         for (const off of [-half * 0.55, half * 0.55]) {
-          addBox(out, vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y * 0.4),
-            [6, DECK_Y * 0.8, 6], [0.48, 0.49, 0.52], jb);
+          const underside = vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y - 1.2);
+          foundation(out, { center: underside, size: [6, 6], top: underside[1],
+            ground: ja.c[1], basis: jb, col: [0.48, 0.49, 0.52] });
         }
       }
 

@@ -824,7 +824,18 @@ const SceneryPits = (function () {
           const c = atF(f, sd * (h + garage + lat), y, last.k);
           return [c[0] + f.t[0] * step, c[1] + f.t[1] * step, c[2] + f.t[2] * step];
         };
-        rawBox(out, off(7, 7), [12, 14, 12], SHELL, bs);
+        // The upper floor follows pit level; extend its walls into the terrain
+        // beneath the footprint where the ground falls away beyond the garages.
+        const base = off(7, 0);
+        let footing = 0;
+        for (const [r, t] of [[0, 0], [-6, -6], [-6, 6], [6, -6], [6, 6]]) {
+          const x = base[0] + bs[0][0] * r + f.t[0] * t;
+          const z = base[2] + bs[0][2] * r + f.t[2] * t;
+          const ground = Tracks.terrainY(track, x, z);
+          const floor = base[1] + bs[0][1] * r + f.t[1] * t;
+          if (ground != null) footing = Math.max(footing, (floor - ground) / f.u[1]);
+        }
+        rawBox(out, off(7, 7 - footing / 2), [12, 14 + footing, 12], SHELL, bs);
         rawBox(out, off(7 - 6.2, 11.5), [0.3, 3.0, 11], GLASS, bs);
         rawBox(out, off(7, 14.3), [13, 0.6, 13], ROOF, bs);
       }
