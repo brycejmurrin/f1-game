@@ -8617,6 +8617,9 @@
       ]
     },
     "js/garage/exterior.js": {
+      "appendLights": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "cancel": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -10375,6 +10378,7 @@
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-density.test.mjs",
@@ -10507,6 +10511,9 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "garageLamps": [
+        "tests/unit/light-store-cond-layer.test.mjs"
+      ],
       "liveEffects": [
         "tests/unit/lighting-rebuild.test.mjs"
       ],
@@ -10552,6 +10559,7 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/perf-try.test.mjs"
       ]
