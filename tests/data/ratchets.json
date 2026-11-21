@@ -10,19 +10,19 @@
       "lines": 2630
     },
     "js/agent/agentview.js": {
-      "lines": 2322
+      "lines": 2326
     },
     "js/agent/apex.js": {
-      "codeLines": 1697,
-      "lines": 2532
+      "codeLines": 1698,
+      "lines": 2534
     },
     "js/car/car3d.js": {
-      "lines": 2909
+      "lines": 2905
     },
     "js/game.js": {
-      "codeLines": 5415,
-      "gMembers": 297,
-      "lines": 9593,
+      "codeLines": 5418,
+      "gMembers": 298,
+      "lines": 9595,
       "topLets": 127
     },
     "js/net/lobby.js": {
@@ -32,7 +32,7 @@
       "lines": 2892
     },
     "js/track/tracks.js": {
-      "lines": 847
+      "lines": 848
     },
     "js/ui/hud.js": {
       "codeLines": 1446,
@@ -68,11 +68,11 @@
     },
     "eagerCodeBytes": {
       "absorb": 5000,
-      "ceiling": 3988186,
+      "ceiling": 3989027,
       "slack": 0
     },
     "eagerScripts": {
-      "ceiling": 310,
+      "ceiling": 306,
       "slack": 0
     },
     "implicitAsserts": {
