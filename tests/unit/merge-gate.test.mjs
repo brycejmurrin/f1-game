@@ -40,6 +40,24 @@ test("openVerdict: only an open, non-draft PR passes", () => {
   assert.equal(openVerdict(null).ok, false);
 });
 
+test("#6055: evaluate refuses a car boarded on an open train (cannot arm or merge alone)", () => {
+  const f = fakes();
+  // Manifest heads must be 40 hex chars (merge-train SHA); TIP's "t"×40 is not hex.
+  const base = "b".repeat(40);
+  const trainBody = `<!-- merge-train ${JSON.stringify({ base, cars: [{ pr: 7, head: HEAD, ref: "cursor/x" }] })} -->`;
+  const openPulls = [
+    { number: 90, state: "open", head: { ref: "train/20261120T1200-7", sha: "c".repeat(40) }, body: trainBody, labels: [{ name: "land" }, { name: "train" }] },
+    { number: 7, state: "open", head: { ref: "cursor/x", sha: HEAD }, body: f.pull.body, labels: [{ name: "land" }] },
+  ];
+  const v = evaluate({ pr: 7, ...f.deps, openPulls });
+  assert.equal(v.ok, false, "a boarded car must not pass the gate alone");
+  assert.equal(v.rows.open.ok, false);
+  assert.equal(v.rows.open.evidence, "car of open train #90: lands with the train, not alone");
+  // Nested car rows for the train itself still pass (forTrainCar).
+  const asCar = evaluate({ pr: 7, ...f.deps, openPulls, forTrainCar: true });
+  assert.equal(asCar.rows.open.ok, true, "trainGate's per-car trusted rows are not the alone-arm path");
+});
+
 test("holdVerdict: the `hold` label vetoes, in either API shape, case-insensitively", () => {
   assert.equal(HOLD_LABEL, "hold");
   assert.equal(holdVerdict([]).ok, true);
@@ -490,6 +508,8 @@ function fakes() {
   const compare = { status: "diverged", error: null }, compared = [];
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
+    // #6055: evaluate lists open PRs to see if this head is boarded on a train; fixtures have none.
+    if (p.startsWith("pulls?state=open")) return { json: [] };
     if (p.startsWith("actions/workflows/pages.yml/runs?branch=deploy-x&status=completed")) return { json: { workflow_runs: pages.runs } };
     if (p.startsWith(`actions/runs/${pages.runs[0]?.id}/jobs?filter=latest`)) return { json: { jobs: pages.jobs } };
     if (p === `compare/${pages.runs[0]?.head_sha}...${HEAD}` || p === `compare/${TIP}...${HEAD}`) { compared.push(p); return compare.error ? { error: compare.error } : { json: { status: compare.status } }; }
@@ -1072,7 +1092,7 @@ function runStep(script, env, files = {}) {
     `        [ -z "\${GH_MERGE_STDERR2:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR2" >&2; return "\${GH_MERGE_RC2:-0}";`,
     `      fi;`,
     `      [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
-    `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
+    `    *" pr list "*) case " \${args[*]} " in *" --label train "*) data=\${FAKE_TRAINS:-[]} ;; *) data=\${FAKE_LANDS:-[]} ;; esac ;;`,
         `    *"/statuses"*) src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
         `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
@@ -1645,6 +1665,34 @@ test("land.yml has no sync job, no SYNC_MAX, no sync input and no update-branch 
   assert.equal(r.out.sync, undefined, "resolve emits no sync list");
   const disp = (inputs) => ({ event_name: "workflow_dispatch", ref: `refs/heads/${DEPLOY_BRANCH}`, run_id: 9, event: { inputs } });
   assert.equal(ghExpr(LAND.concurrency.group, disp({ pr: "7" })), "land-7");
+});
+
+test("#6055: land.yml tip-moved resolve prefers an open train over its older cars (4-cap)", () => {
+  const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const hx = (c) => c.repeat(40);
+  const car = (n, created) => ({
+    number: n, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: hx(String(n % 10)), repo: { full_name: "o/r" } },
+    auto_merge: null, created_at: created, labels: [{ name: "land" }],
+  });
+  const cars = [1, 2, 3, 4, 5].map((n) => car(n, `2026-11-20T0${n}:00:00Z`));
+  const trainHead = hx("9");
+  const manifest = `<!-- merge-train ${JSON.stringify({ base: hx("b"), cars: cars.map((c) => ({ pr: c.number, head: c.head.sha, ref: `cursor/x-${c.number}` })) })} -->`;
+  const trainPr = {
+    number: 99, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: trainHead, repo: { full_name: "o/r" }, ref: "train/20261120T1200-1-2-3-4-5" },
+    auto_merge: null, created_at: "2026-11-20T12:00:00Z", labels: [{ name: "land" }, { name: "train" }], body: manifest,
+  };
+  const prs = Object.fromEntries([...cars, trainPr].map((p) => [p.number, p]));
+  const lands = [...cars, trainPr].map((p) => ({ number: p.number }));
+  const fakeTrains = [{ number: 99, body: manifest, headRefName: "train/20261120T1200-1-2-3-4-5" }];
+  const r = runStep(RESOLVE_RUN, {
+    EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null",
+    PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "",
+    FAKE_LANDS: JSON.stringify(lands), FAKE_PRS: JSON.stringify(prs), FAKE_TRAINS: JSON.stringify(fakeTrains), FAKE_STATUSES: "{}",
+  });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.deepEqual(JSON.parse(r.out.prs), [{ number: 99, head: trainHead }], "train is the only landable PR; its cars are notasked");
+  const notasked = JSON.parse(r.out.notasked);
+  assert.deepEqual(notasked.map((row) => row.why), Array(5).fill("car of an open train"));
 });
 
 // ---- 2026-10-30 landing gaps: edited body, draft + land, the stale-gate sweep, ship-pr --------------------------

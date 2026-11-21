@@ -93,7 +93,7 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
 import { runTipGate, tipView } from "./lib/tip-gate.mjs";
-import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain } from "./merge-train.mjs";
+import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain, boardedTrainOf } from "./merge-train.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -1041,7 +1041,7 @@ export function trainGate({ pr, pull, head, base, request, root = ROOT, owner = 
     manifest: trainManifest(pull.body), head, headRef: pull.head?.ref || "", tip: fetched.tip,
     verify: (a) => verifyTrain({ ...a, cwd: root }),
     carPull: (n) => request(`pulls/${n}`),
-    carGate: (n, h) => evaluate({ pr: n, sha: h, request, root, trusted: true, owner }),
+    carGate: (n, h) => evaluate({ pr: n, sha: h, request, root, trusted: true, owner, forTrainCar: true }),
   });
 }
 
@@ -1065,7 +1065,7 @@ export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
   return creditPriorCi({ cwd: root, head, base, ciOf });
 }
 
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit } = {}) {
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit, openPulls, forTrainCar = false } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -1076,6 +1076,17 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   rows.open = openVerdict(pull);
   const want = String(sha || "").toLowerCase();
   if (rows.open.ok && want && !(head.startsWith(want) || want.startsWith(head))) rows.open = row(false, `PR head is ${head.slice(0, 8)}, not the --sha ${want.slice(0, 8)} this run gated: a newer push gets its own run`);
+  // #6055: a car boarded on an open train must not pass (or arm) alone. Nested trainGate car rows set forTrainCar.
+  if (rows.open.ok && !forTrainCar && !String(pull.head?.ref || "").startsWith(TRAIN_PREFIX)) {
+    let pulls = openPulls;
+    if (pulls === undefined) {
+      const listed = listAll(`pulls?state=open&base=${encodeURIComponent(base)}`, request);
+      if (listed.error) return { error: `open PRs for train boarding: ${listed.error}` };
+      pulls = listed.rows;
+    }
+    const train = boardedTrainOf(pr, pulls);
+    if (train != null) rows.open = row(false, `car of open train #${train}: lands with the train, not alone`);
+  }
   // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).
   const ev = listAll(`issues/${pr}/events`, request, (j) => j, 10);
   if (ev.error) return { error: `events of PR #${pr}: ${ev.error}` };

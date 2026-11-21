@@ -307,6 +307,12 @@ jobs:
           rows='[]'
           notasked='[]'
           disarm='[]'
+          # #6055: cars boarded on an open train must not take a resolve slot or arm alone. Source of truth for the
+          # pick is tools/ci/merge-train.mjs `resolveLandable` / `openTrainCarIds` (unit-tested); resolve has no
+          # checkout, so the same rule is applied here with gh+jq. Sweep job untouched.
+          train_cars=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label train --limit 20 --json number,body,headRefName \
+            --jq '[.[] | select((.headRefName // "") | startswith("train/")) | .body // "" | capture("<!-- merge-train (?<j>\\{[^\\n]*\\}) -->")? | .j // empty | fromjson? | .cars[]?.pr // empty] | map(select(type == "number")) | unique' 2>/dev/null) || train_cars='[]'
+          [ -n "$train_cars" ] || train_cars='[]'
           for n in "${numbers[@]}"; do
             [ -n "$n" ] || continue
             pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
@@ -321,12 +327,15 @@ jobs:
             if has hold; then why="the \`hold\` label is set"
             elif [ "$draft" = true ]; then why="the PR is a draft"
             elif ! has land; then why="no \`land\` label"
+            elif ! has train && jq -e --argjson n "$n" 'index($n) != null' <<<"$train_cars" >/dev/null; then
+              why="car of an open train"
             fi
             # `land` on a DRAFT does nothing until the flip: post (below) says so on `gate` and once per head in a comment.
             dl=false; [ "$draft" = true ] && has land && ! has hold && dl=true
             if [ -z "$why" ]; then
               if [ "$paused" = true ] && [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
-              prio=1; has priority && prio=0
+              # train label first (prio -1), then priority (0), then oldest (1). Matches resolveLandable.
+              prio=1; has priority && prio=0; has train && prio=-1
               if [ "$train" = true ]; then
                 # A train re-gate skips a head whose `gate` is already failure: a PR refused on every train would
                 # otherwise hold a slot of the 4-PR slice for ever (WP-L3d). A push or a label flip re-gates it.
@@ -343,7 +352,7 @@ jobs:
               if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
             fi
           done
-          # `priority` first, then oldest; at most 4 gates per run (the rest wait for the next train).
+          # Open train first, then `priority`, then oldest; at most 4 gates per run (tools/ci/merge-train.mjs resolveLandable).
           prs=$(jq -c 'sort_by(.prio, .created, .number) | .[:4] | map({number, head})' <<<"$rows")
           landable=false; [ "$prs" != '[]' ] && landable=true
           {
