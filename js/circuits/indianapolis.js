@@ -66,7 +66,7 @@
     ],
     // F1 Turn 13 uses oval Turn 1 in reverse. The 2007 IMS media guide lists
     // 9 degrees 12 minutes in the turn. The traced quarter-turn runs from
-    // ~0.81 to ~0.91; its midpoint is not among the curvature-picked turns.
+    // ~0.81 to ~0.91; its midpoint sets the Turn 13 marker.
     // The cosine shoulders approximate the transitions to both level straights.
     bankZones: [
       { frac: 0.8644, angleDeg: 9.2, widthM: 740 },
@@ -76,10 +76,10 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
+    // turns: infield curvature peaks and the oval turn midpoint in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
     sectors: [0.326, 0.675],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1449, 0.1684, 0.2419, 0.2569, 0.2959, 0.3459, 0.3539, 0.3974, 0.4114, 0.5509, 0.5924, 0.6059, 0.6394],
+    turns: [0.1449, 0.1684, 0.1925, 0.2419, 0.2959, 0.3459, 0.3974, 0.5509, 0.5924, 0.6059, 0.6394, 0.7220, 0.8644],
     furniture: { tree: "broad", fol: [0.22, 0.42, 0.19], lamp: "post",  lc: [0.94, 0.96, 1.0] },  // clipped infield planting + service lighting
     kit: { marshal: "tower",     rail: "safer",       fence: "chainlink", tyre: "stack",   board: "tower",     gantry: "truss",      camera: "lattice",   hoarding: "double" },
     standSet: ["alu", "scaffold", "navy"],  // bare bleachers; navy nods to the blue seat bands

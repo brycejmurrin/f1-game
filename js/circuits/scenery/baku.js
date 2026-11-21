@@ -677,7 +677,7 @@
 
       {
         const k  = K(0.70);
-        const aH = anchor(k, 1, 78);   // Arena podium clears the T16 boulevard façades.
+        const aH = anchor(k, 1, 78);   // Set the podium back from the boulevard façades.
         const b  = [aH.r, aH.u, aH.t];
         // Podium base
         addBox(out, vadd(aH.c, aH.u, 1.8), [48, 3.6, 36], [0.28, 0.28, 0.32], b);

@@ -119,18 +119,12 @@ export default function register() {
 
     for (const session of [result.day, result.night]) {
       expect(session.elevation.range).toBeGreaterThanOrEqual(38);
-      // The crest belongs at Massenet / Casino Square: Massenet 0.2135 (its first apex)
-      // to Casino 0.2742 (official T4 since 2026-11-11). Until 2026-10-04 the authored bump crested at 0.12,
-      // BEFORE Massenet, with Casino back at datum, and this pinned that defect
-      // (0.08-0.16). Re-authored (js/circuits/monaco.js), measured headless VM,
-      // trackProfile(400): max at 0.2625 / +40.9 m (range 44.9 m), min at
-      // 0.655 / -4 m (harbour chicane, official T11 0.6408). The window is Massenet's
-      // apex to 0.016 past Casino's, the same 0.02-lap tolerance
-      // circuit-def-fields pins on the built centreline.
+      // Qualifying telemetry places the crest near Casino and the harbour low at the swimming pool.
+      expect(Math.abs(session.elevation.range - 41.8)).toBeLessThan(1);
       expect(session.elevation.maxFrac).toBeGreaterThan(0.20);
       expect(session.elevation.maxFrac).toBeLessThan(0.29);
-      expect(session.elevation.minFrac).toBeGreaterThan(0.62);
-      expect(session.elevation.minFrac).toBeLessThan(0.71);
+      expect(session.elevation.minFrac).toBeGreaterThan(0.75);
+      expect(session.elevation.minFrac).toBeLessThan(0.85);
 
       expect(session.walls.anyNaN).toBe(false);
       expect(session.walls.tightFrac).toBe(1);

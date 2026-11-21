@@ -334,7 +334,7 @@ test("AI look-ahead keeps the sign of bank relative to turn direction", async ()
   } finally {
     T.bankAngle = keepBank; AD.bankGrip = keepGrip;
   }
-  assert.ok(seen.includes(-0.35), "adverse banks reach the speed planner");
+  assert.equal(Math.min(...seen), -0.35, "adverse banks reach the speed planner");
   assert.ok(seen.every(b => b <= 0), "a high inside edge never raises the corner speed budget");
 });
 

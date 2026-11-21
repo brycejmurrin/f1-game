@@ -219,7 +219,7 @@ Modern 16-turn anticlockwise circuit, 43 m relief with Leeukop highest. Built re
 
 ### Indianapolis
 
-2000–07 clockwise F1 course includes the 9.2° oval turn. Built final bend now peaks at 9.2°, with 3.95° on entry and 5.37° on exit. DEM span 7 m versus 3.30 m built relief. Recenter and widen the final bank, seat parked cars on the local terrain, move the infield gravel apron and overlapping tyre wall to the outside of their right-hand bend. [Circuit evidence](https://doctorindy.com/wp-content/uploads/2019/06/2007_indy500_media_guide.pdf) · [API](https://api.open-meteo.com/v1/elevation?latitude=39.793155&longitude=-86.238851)
+2000–07 clockwise F1 course includes the 9.2° oval turn. The [period corner map](https://indymotorspeedway.com/sitebuilder/images/usgpmap5-600x328.jpg) places Turns 12 and 13 on the oval. Matched all 13 turn markers to the traced bends. The built final bend now peaks at 9.2°, with 3.95° on entry and 5.37° on exit. DEM span 7 m versus 3.30 m built relief. Recenter and widen the final bank, seat parked cars on the local terrain, move the infield gravel apron and overlapping tyre wall to the outside of their right-hand bend. [Circuit evidence](https://doctorindy.com/wp-content/uploads/2019/06/2007_indy500_media_guide.pdf) · [API](https://api.open-meteo.com/v1/elevation?latitude=39.793155&longitude=-86.238851)
 
 ### Buenos Aires
 
