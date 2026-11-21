@@ -256,11 +256,14 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
-  // G / loadingScreen are game.js IIFE-locals: game.js binds {state(), loadingPhase()}.
-  let game = null;
-  function bindGame(probe) { game = probe || null; }
+  // game.js hands in live getters (bindGame): its G and loadingScreen are function-scoped consts inside its IIFE,
+  // which a `typeof G` / `typeof loadingScreen` read from this script never sees (#5965).
+  let _game = { state: () => null, loadPhase: () => null };
+  function bindGame(hooks) {
+    _game = { state: hooks && hooks.state || (() => null), loadPhase: hooks && hooks.loadPhase || (() => null) };
+  }
   function gameState() {
-    try { return game && game.state ? game.state() : ""; } catch (_) { return ""; }   // mid-boot
+    try { return _game.state(); } catch (_) { return null; }   // mid-boot
   }
 
   /** The entry window, the countdown and the loading phases: the software-GL readback defer's cover
@@ -269,10 +272,9 @@ const RaceEntryProfile = (() => {
   function readbackCover() {
     if (armed) return true;
     if (gameState() === "count") return true;
-    try {
-      const ph = game && game.loadingPhase ? game.loadingPhase() : "";
-      if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
-    } catch (_) { /* loading screen mid-build */ }
+    let ph = null;
+    try { ph = _game.loadPhase(); } catch (_) { /* loading screen mid-build */ }
+    if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
     return false;
   }
 

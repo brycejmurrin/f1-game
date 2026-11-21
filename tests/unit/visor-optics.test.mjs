@@ -29,7 +29,7 @@ function ctx2d(calls) {
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "", G = undefined } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
   const live = { visor, helmet };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
@@ -56,6 +56,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
     CockpitOpts: { visor: () => live.visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
     ...(picker ? { RendererPicker: picker } : {}),
+    ...(G ? { G } : {}),
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
@@ -312,15 +313,14 @@ test("visor tick: falls back to camState + lightState without visorScene, and re
 test("visor tick: a Pages build WITHOUT the dev API (__apex null) still paints the glint from game.js's G", () => {
   // Perf hunt 9: readScene() returned null unless window.__apex existed, and only bindAgent (the LAZY_AGENT
   // inject) set visorScene — so a player's build never painted the helmet visor glint (0 paints in 30 ticks).
+  // #5964: that fix read `typeof G` by name, which a browser never satisfies (G is a function-scoped const in
+  // game.js's IIFE; this test used to put G on the VM global, which hid it). game.js now calls VisorOptics.bind(G).
   const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: DAY.fov, _lastFloodEmit: 0,
     frame: { sunDir: DAY.sunDir, sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, lights: null, tailStart: 0 } };
-  // game.js's `const G` lives inside its async IIFE: the page has NO global G, so this VM must not
-  // inject one (it did, and the bare `typeof G` read passed here while the deployed build painted nothing).
-  const { V, calls, ctx } = load({ apex: null });
-  assert.equal(typeof ctx.G, "undefined", "no global G, as on the page");
-  for (let i = 0; i < 30; i++) V.tick(1 / 60, true, 0, false);
-  assert.equal(V.stats().paints, 0, "nothing bound, no __apex: nothing to paint");
-  V.bindScene(G);   // what js/game.js does once its G exists
+  const { V, calls } = load({ apex: null, G });
+  for (let i = 0; i < 5; i++) V.tick(1 / 60, true, 0, false);
+  assert.equal(V.stats().paints, 0, "a G on the global scope alone is not read: only the bound façade is");
+  V.bind(G);
   for (let i = 0; i < 30; i++) V.tick(1 / 60, true, 0, false);
   const st = V.stats();
   assert.ok(st.paints > 0, `paints from G with no __apex (${st.paints})`);
@@ -588,3 +588,4 @@ test("#5018 visor projects through the lens the world was drawn with: the fitted
     `the glint rolls with the horizon (${rolled.x.toFixed(1)}, ${rolled.y.toFixed(1)})`);
   assert.equal(V.sceneFromG({ ...G, camRoll: 0.2 }).roll, 0.2);
 });
+

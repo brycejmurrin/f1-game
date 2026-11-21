@@ -592,7 +592,7 @@ test("stallHandoffCover reads game state and loading phase through bindGame, nev
   let state = "menu", phase = "", soft = false;
   const P = load({ PerfGov: { softwareRaster: () => soft } });
   assert.equal(P.stallHandoffCover(), false, "nothing bound, nothing armed: no cover");
-  P.bindGame({ state: () => state, loadingPhase: () => phase });
+  P.bindGame({ state: () => state, loadPhase: () => phase });
   state = "count";
   assert.equal(P.stallHandoffCover(), true, "the countdown is a handoff cover");
   state = "menu";

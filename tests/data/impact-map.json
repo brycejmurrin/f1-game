@@ -1999,9 +1999,6 @@
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
-      "setSession": [
-        "tests/unit/flyby-shots.test.mjs"
-      ],
       "shotAt": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/loading-card.test.mjs"
@@ -6039,6 +6036,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/photo-studio.test.mjs",
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -6216,17 +6214,6 @@
       ],
       "*": [
         "tests/unit/source-integrity.test.mjs"
-      ]
-    },
-    "js/data/flyby-overrides.js": {
-      "catalog": [
-        "tests/unit/flyby-shots.test.mjs"
-      ],
-      "patches": [
-        "tests/unit/flyby-shots.test.mjs"
-      ],
-      "resolve": [
-        "tests/unit/flyby-shots.test.mjs"
       ]
     },
     "js/data/garage-defaults.js": {
@@ -7538,7 +7525,7 @@
       ]
     },
     "js/fx/visor-optics.js": {
-      "bindScene": [
+      "bind": [
         "tests/unit/visor-optics.test.mjs"
       ],
       "blendMode": [
@@ -7965,7 +7952,6 @@
         "tests/unit/session-transcript.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
-        "tests/unit/visor-optics.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "renderPosOf": [
@@ -8124,7 +8110,6 @@
         "tests/unit/title-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs",
-        "tests/unit/visor-optics.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -8565,7 +8550,8 @@
       "*": [
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/preview-scenery-shift.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs"
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/scenery-region-warning.test.mjs"
       ]
     },
     "js/garage/exterior.js": {
@@ -11784,6 +11770,7 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "bindGame": [
+        "tests/unit/race-entry-cover.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "clearMenuEntrySession": [
@@ -11849,6 +11836,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "stallHandoffCover": [
+        "tests/unit/race-entry-cover.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "tickFrame": [
@@ -12790,11 +12778,18 @@
       "overlap": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "pitWallAim": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
+      "pitWallX": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
       "sweep": [
         "tests/unit/contact-geometry.test.mjs"
       ],
       "wallLimits": [
-        "tests/unit/collision-contact-vm.test.mjs"
+        "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/contact-geometry.test.mjs"
       ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
@@ -17861,6 +17856,9 @@
       "fromRaw": [
         "tests/unit/track-def-factory.test.mjs"
       ],
+      "realPoints": [
+        "tests/unit/circuit-def-fields.test.mjs"
+      ],
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hw-zones.test.mjs"
@@ -19876,6 +19874,19 @@
         "tests/unit/settings-tabs.test.mjs"
       ]
     },
+    "js/ui/progress-backup.js": {
+      "apply": [
+        "tests/unit/progress-backup.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "collect": [
+        "tests/unit/progress-backup.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "ghostOk": [
+        "tests/unit/progress-backup.test.mjs"
+      ]
+    },
     "js/ui/quali-sheet.js": {
       "build": [
         "tests/unit/quali-persist.test.mjs",
@@ -19954,6 +19965,7 @@
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ]
     },
@@ -20681,6 +20693,9 @@
       ],
       "repairDestinations": [
         "tests/unit/ctx-lost-menu-restore.test.mjs"
+      ],
+      "replayBootTap": [
+        "tests/unit/title-boot-tap.test.mjs"
       ],
       "*": [
         "tests/specs/boot-guard.spec.js",

@@ -138,7 +138,7 @@ function _writeWx(s) {
                                exposure: G.frame.exposure != null ? G.frame.exposure : 1.0 };
 }
 // The knobs that differ between the two ends, resolved once per fade: per frame
-// the walk visits only those (84 of 192 for dawn dry -> wet) by index, not the
+// the walk visits only those (84 of 191 for dawn dry -> wet) by index, not the
 // whole registry by id with an `in` probe each (R2-4, #3104). The LT[id] write
 // itself still boxes a heap number per moving knob: LT is the knob store.
 function _ltMoving(from, to) {
