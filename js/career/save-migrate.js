@@ -52,10 +52,10 @@ const SaveMigrate = (function () {
   // The ranges play can reach (docs/CAREER.md §Import ranges).
   const MONEY_MAX = 1e9;
   const SALARY_MAX = 1e5;
-  // career.js: bonusPtFor(tier 0), offer terms 1-3 seasons, BUDGET_UPGRADE.length.
-  const BONUS_MAX = 24, YEARS_MAX = 3, BUDGET_LVL_MAX = 3;
+  // career.js: bonusPtFor(tier 0), offer terms 1-3 seasons, BUDGET_UPGRADE.length;
+  // PAID_SPONSORS_MAX = CAL_MAX / min SPONSOR_KINDS.window.
+  const BONUS_MAX = 24, YEARS_MAX = 3, BUDGET_LVL_MAX = 3, PAID_SPONSORS_MAX = 16.;
   const salaryIn = (v) => clampTo(finiteNumber(v), 0, SALARY_MAX);
-
   // A sparse {key: number} map -> only the finite entries, clamped. Career
   // multiplies tdev into every AI car's pace and adds dev into every rating:
   // one "abc" or 1e308 there became NaN or an infinite lap time for the grid.
@@ -158,33 +158,22 @@ const SaveMigrate = (function () {
   // so a string or a negative in a row must not reach the arithmetic raw.
   // Owned here so migrateCareer's remapPoints and SeasonCal.resume() sanitise
   // the same way; season-cal.js delegates to these.
-  function roundMap(o) {
-    const out = {};
-    if (!o || typeof o !== "object") return out;
-    for (const k of Object.keys(o)) {
-      if (k === "__proto__" || !Array.isArray(o[k])) continue;
-      // Coerce digit strings the way scoreMap/numMap do: a JSON roundPts row
-      // that landed as "18" must keep 18 for netPts, not be zeroed (zeroing
-      // avoided "25"+0 concatenation only when the raw row reached netPts).
-      out[k] = o[k].map((v) => {
-        const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN;
-        return Number.isFinite(n) && n > 0 ? n : 0;
-      });
-    }
-    return out;
-  }
-  function finishMap(o) {
+  // Coerce digit strings the way scoreMap/numMap do: a JSON roundPts row that
+  // landed as "18" must keep 18 for netPts, not be zeroed.
+  function sparseNumRows(o, keep) {
     const out = {};
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
       if (k === "__proto__" || !Array.isArray(o[k])) continue;
       out[k] = o[k].map((v) => {
         const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN;
-        return Number.isInteger(n) && n > 0 ? n : 0;
+        return keep(n) ? n : 0;
       });
     }
     return out;
   }
+  function roundMap(o) { return sparseNumRows(o, (n) => Number.isFinite(n) && n > 0); }
+  function finishMap(o) { return sparseNumRows(o, (n) => Number.isInteger(n) && n > 0); }
 
   function seasonRoster() {
     const roster = [];
@@ -412,7 +401,9 @@ const SaveMigrate = (function () {
     if (picks && typeof picks === "object" && !Array.isArray(picks))
       for (const key of Object.keys(picks).slice(0, 1024))
         if (/^\d{4,8}:\d{1,3}$/.test(key) && (picks[key] === 0 || picks[key] === 1)) career.sponsorPicks[key] = picks[key];
-    career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    // Unique safe window ids — junk in paidSponsors permanently blocks settleSponsor.
+    const paidRaw = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    career.paidSponsors = [...new Set(paidRaw.filter((id) => Number.isSafeInteger(id) && id >= 0 && id < PAID_SPONSORS_MAX))].slice(0, PAID_SPONSORS_MAX);
     if (career.myTeamIdentity && typeof CareerTeamIdentity !== "undefined") career.myTeamIdentity = CareerTeamIdentity.sanitize(career.myTeamIdentity);
     const winter = career.winterReport;
     if (winter && typeof winter === "object" && Number.isInteger(winter.year)) {
@@ -447,6 +438,6 @@ const SaveMigrate = (function () {
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
-           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX }) };
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX, PAID_SPONSORS_MAX }) };
 })();
 Object.freeze(SaveMigrate);
