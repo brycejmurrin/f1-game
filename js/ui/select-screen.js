@@ -1283,7 +1283,7 @@ function previewMapSlot(hero, sheet, map) {
   let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
   const btn = map && map.parentElement;
   if (btn && btn.clientHeight > 0) {
-    fitPreviewMapBand(btn);
+    fitPreviewMapBand(btn, hero);
     const bs = getComputedStyle(btn);
     const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
     if (room > 0) slotH = Math.min(slotH, room);
@@ -1291,15 +1291,18 @@ function previewMapSlot(hero, sheet, map) {
   return { slotW: hero.clientWidth * 0.62, slotH };
 }
 /** Pad the map button to the free band, centred; k = UI SIZE zoom. */
-function fitPreviewMapBand(btn) {
-  const br = btn.getBoundingClientRect();
-  if (!(br.height > 0) || !(btn.offsetHeight > 0)) return;
-  const k = br.height / btn.offsetHeight;
+function fitPreviewMapBand(btn, hero) {
+  // Measure the still: the button's previous padding can outlive a resize.
+  const rect = hero.getBoundingClientRect();
+  if (!(rect.height > 0) || !(hero.offsetHeight > 0)) return;
+  const k = rect.height / hero.offsetHeight;
+  const top = rect.top + hero.clientTop * k;
+  const box = { top, bottom: top + hero.clientHeight * k, left: rect.left, right: rect.right };
   const over = [];
   for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
     if (e) over.push(e.getBoundingClientRect());
   }
-  const band = previewMapBand(br, over, Math.round(br.height * 0.025));
+  const band = previewMapBand(box, over, Math.round(hero.clientHeight * k * 0.025));
   btn.style.alignItems = "center";
   btn.style.paddingTop = (band.top / k).toFixed(2) + "px";
   btn.style.paddingBottom = (band.bottom / k).toFixed(2) + "px";
@@ -1718,7 +1721,9 @@ function previewMapBand(box, over, margin) {
     else bot = Math.min(bot, r.top);
   }
   const m = Math.max(0, +margin || 0);
-  return { top: top - box.top + m, bottom: box.bottom - bot + m };
+  const height = box.bottom - box.top;
+  const insetTop = Math.min(height, top - box.top + m);
+  return { top: insetTop, bottom: Math.min(height - insetTop, box.bottom - bot + m) };
 }
 /** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {
