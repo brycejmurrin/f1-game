@@ -22,6 +22,7 @@ import { fuzz, mutate, findBadLiveValues, findPollutedObjects, makeRng, HOSTILE_
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
@@ -95,6 +96,7 @@ function bootGhostShare(opts = {}) {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
+  seedHash32(ctx);
   vm.runInContext(read("js/car/ghost-share.js"), ctx, { filename: absSrc("js/car/ghost-share.js") });
   return sandbox.module.exports || vm.runInContext("GhostShare", ctx);
 }

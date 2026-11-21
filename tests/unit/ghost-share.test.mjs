@@ -13,6 +13,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";   // title-flow.js is not a game.js carve-out
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
@@ -63,6 +64,7 @@ function harness(opts = {}) {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
+  seedHash32(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/ghost-share.js"), "utf8"), ctx, {
     filename: absSrc("js/car/ghost-share.js"),
   });
