@@ -389,7 +389,11 @@ function create(G) {
         pendingImport = null;
         if (!armed) { armedDelete = id; build(); return; }
         armedDelete = "";
-        if (!Career.deleteSlot(s.flavour, s.i, revision).ok) { build(); return; }
+        const result = Career.deleteSlot(s.flavour, s.i, revision, { requireDurable: true });
+        if (!result.ok) {
+          announce(result.reason === "conflict" ? "CAREER CHANGED IN ANOTHER TAB — NOT DELETED" : "SAVE NOT DELETED");
+          build(); return;
+        }
         Career.load();
         G.refreshCareerButton();
         build();

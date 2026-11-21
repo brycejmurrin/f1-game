@@ -165,6 +165,8 @@ test("serialize is valid JSON, mirrored to storage after each sample, and re-ado
   assert.equal(r2.adopt(f.saved[f.saved.length - 1]), true);
   assert.equal(r2.count(), 2);
   assert.equal(r2.adopt("{not json"), false);
+  assert.equal(r2.adopt(JSON.stringify({ schema: PR.SCHEMA })), false);
+  assert.equal(r2.count(), 2, "a malformed mirror leaves the readable recording in place");
 });
 
 test("a long soak is capped, not unbounded", () => {
@@ -181,6 +183,15 @@ test("numericLeaves keeps numbers and booleans, flattens one level, drops string
   const PR = load();
   const o = PR.numericLeaves({ a: 1.234, b: "x", c: true, d: { e: 2, f: "y", g: { h: 3 } }, i: NaN });
   assert.deepEqual(JSON.parse(JSON.stringify(o)), { a: 1.23, c: true, "d.e": 2 });
+});
+
+test("a nested renderer census and a trailing scalar share the 80-field limit", () => {
+  const PR = load();
+  const textures = Object.fromEntries(Array.from({ length: 79 }, (_, i) => ["slot" + i, i]));
+  const fields = PR.numericLeaves({ active: true, textures, allocations: 175 });
+  assert.equal(Object.keys(fields).length, 80);
+  assert.equal(fields["textures.slot78"], 78);
+  assert.equal(Object.hasOwn(fields, "allocations"), false);
 });
 
 test("live readers never throw without the game and never touch the GPU timer", () => {

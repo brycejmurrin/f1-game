@@ -489,7 +489,9 @@ const PhonePadPage = (function () {
     // hosts the same code again; a bfcache return (pageshow) or the page in front
     // again re-dials it. A pairing still in progress is simply cancelled.
     function pageHide() {
-      const code = session ? liveCode : null;
+      // A suspended linked phone can already be waiting, backing off, or negotiating
+      // its automatic reconnect when pagehide follows the wire close.
+      const code = redial || (attempt?.opened || redialTimer || attempt?.isRedial ? liveCode : null);
       if (session && session.sendSuspend) session.sendSuspend();
       cancel();
       if (code && !deps.privateRelay()) { redial = code; say("Link paused — reconnecting when this page is back…", true); }
@@ -512,7 +514,7 @@ const PhonePadPage = (function () {
       const code = deps.normalise(codeIn);
       if (!deps.valid(code)) { say(deps.privateRelay() ? "That is not a private room token — copy the full 32-character token." : "That is not a room code — eight letters and numbers (six from an older version).", true); return { ok: false, error: "bad_code" }; }
       connecting = true;
-      const owner = attempt = { cancelled: false, transport: null };
+      const owner = attempt = { cancelled: false, transport: null, isRedial, opened: false };
       if (dom.connect) dom.connect.disabled = true;
       // The sensor prompt rides the CONNECT tap: iOS shows it only inside a gesture
       // (a re-dial is outside one, and its listener is still on from the first link).
@@ -526,12 +528,12 @@ const PhonePadPage = (function () {
         if (attempt !== owner) return { ok: false, error: "cancelled" };
         let transport = owner.transport = deps.rtc({ role: "guest", name: "pad" });
         if (!transport) { say("WebRTC is unavailable in this browser.", true); return { ok: false, error: "no_transport" }; }
-        let answered = null, opened = false;
+        let answered = null;
         const armDeadline = () => {
           clearConnectDeadline();
           connectDeadline = setTimeout(() => {
             connectDeadline = null;
-            if (attempt !== owner || opened) return;
+            if (attempt !== owner || owner.opened) return;
             cancel();
             say("The game is not offering that code any more — choose MAKE NEW CODE in its phone-controller settings, then CONNECT.", true);
           }, CONNECT_DEADLINE_MS);
@@ -627,7 +629,7 @@ const PhonePadPage = (function () {
           onOpen: () => {
             if (gen !== bindGen) return;
             listen.stopped = true;   // the link is up: no later offer is answered
-            opened = true; clearConnectDeadline();
+            owner.opened = true; liveCode = code; redialTries = 0; clearConnectDeadline();
             say("Connected — waiting for the game… If it asks, tap ALLOW on its screen.");
             if (dom.body && !surfaced) dom.body.classList.add("awaiting");
             if (opts.onOpen) opts.onOpen();
@@ -664,8 +666,6 @@ const PhonePadPage = (function () {
         return active;
         }
         if (attempt !== owner || !bind()) return { ok: false, error: "cancelled" };
-        redialTries = 0;   // a link is up: a later drop gets the full backoff again
-        liveCode = code;
         return { ok: true };
       } finally {
         if (attempt === owner) {

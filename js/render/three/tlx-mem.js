@@ -42,7 +42,10 @@
     let img = tex.image;
     if (Array.isArray(img)) img = img[0];
     if (img && img.image) img = img.image;
-    const w = (img && img.width) | 0 || (rt && rt.width) | 0, h = (img && img.height) | 0 || (rt && rt.height) | 0;
+    // TLX drops canvas sources to a 1×1 stand-in after upload and closes
+    // owned bitmaps on retirement. Neither action shrinks the pooled GPU texture.
+    const w = tex.__tlxPoolW || ((img && img.width) | 0) || ((rt && rt.width) | 0);
+    const h = tex.__tlxPoolH || ((img && img.height) | 0) || ((rt && rt.height) | 0);
     if (w <= 0 || h <= 0) return null;
     const volume = !!(tex.is3DTexture || tex.isData3DTexture);
     const layers = tex.isCubeTexture ? 6 : Math.max(1, (tex.isArrayTexture || tex.isDataArrayTexture || volume || (rt && rt.depth > 1)) ? ((img && img.depth) | 0 || (rt && rt.depth) | 0) : 1);

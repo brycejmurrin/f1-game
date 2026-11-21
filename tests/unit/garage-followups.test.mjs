@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { seedStore } from '../helpers/seed-store.mjs';
 import { absSrc } from "../helpers/abs-src.mjs";
 import { GAME_REL } from "../helpers/game-source.mjs";
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
@@ -496,8 +497,8 @@ test("restoring the camera after INSPECT puts the AERO button back with the flap
 
 test("one Escape with the CAMERA panel open over the paint editor closes the panel only (#5045)", () => {
   const game = read(GAME_REL);
-  const sheetFirst = game.indexOf("SetupUI.create(G)") < game.indexOf("SetupCamera.create(G");
-  assert.ok(game.includes("SetupUI.create(G)") && game.includes("SetupCamera.create(G"), "both modules are created by the entry file");
+  const sheetFirst = game.indexOf("SetupUI.create(G, customLiv)") < game.indexOf("SetupCamera.create(G");
+  assert.ok(game.includes("SetupUI.create(G, customLiv)") && game.includes("SetupCamera.create(G"), "both modules are created by the entry file");
   const panel = { hidden: false }, cancel = { clicks: 0, click() { this.clicks++; } }, listeners = [];
   const c = vm.createContext({
     $: (id) => (id === "cs-cam-panel" ? panel : null), G: { setupPreviewOn: true }, csLivCreating: true,
@@ -572,13 +573,26 @@ test("NOSE TIP wears the NOSE CAP colour when the livery sets one, else the acce
 });
 
 // #5879: attempt() writes the trial tune into the saved setup; a reload mid-comparison used to keep it for good.
-function reloadable(saved) {
+function reloadable(saved, opts = {}) {
   const dom = makeDom(), timers = [];
-  const store = { get: (k,d) => saved.has(k) ? structuredClone(saved.get(k)) : d, set(k,v) { saved.set(k, structuredClone(v)); return true; }, keyRevision: () => 0 };
-  const ctx = vm.createContext({ document: dom.document, GameStore:{store}, PhysicsConsts:{BB_REF:.56}, setTimeout: fn => timers.push(fn) });
+  const localStorage = {
+    get length() { return saved.size; }, key: i => [...saved.keys()][i],
+    getItem: k => saved.get(k) ?? null,
+    setItem(k, v) {
+      const other = [...saved].filter(([key]) => key !== k).reduce((n, [key, val]) => n + key.length + val.length, 0);
+      if (opts.refuse === k || other + k.length + v.length > opts.quota) {
+        throw Object.assign(new Error("Storage full"), { name: "QuotaExceededError" });
+      }
+      saved.set(k, v);
+      if (opts.committed) opts.committed(k);
+    },
+    removeItem: k => saved.delete(k),
+  };
+  const ctx = vm.createContext({ document: dom.document, localStorage, Career: opts.career, PhysicsConsts:{BB_REF:.56}, setTimeout: fn => timers.push(fn) });
+  seedStore(ctx);
   for (const file of ['setup-tune','setup-presets','setup-trials']) vm.runInContext(read('js/garage/'+file+'.js'),ctx,{filename:absSrc('js/garage/'+file+'.js')});
   timers.splice(0).forEach(fn => fn());
-  return { store, S: vm.runInContext('SetupTune',ctx), T: vm.runInContext('SetupTrials',ctx) };
+  return { dom, store: ctx.GameStore.store, S: vm.runInContext('SetupTune',ctx), T: vm.runInContext('SetupTrials',ctx) };
 }
 test('a reload mid-comparison restores the tuned setup, keeps a later hand edit, and cancel clears the record',()=>{
   for (const edited of [false, true]) {
@@ -596,4 +610,75 @@ test('a reload mid-comparison restores the tuned setup, keeps a later hand edit,
   h.T.create({teamId:'haas',store:h.store,baseline:h.S.get('haas'),candidate:h.S.get('haas'),launch:()=>new Promise(()=>{})});
   h.T.attempt('candidate'); assert.notEqual(h.store.get('setupTrialRecover', null), null); h.T.cancel();
   assert.equal(h.store.get('setupTrialRecover', null) ?? null, null, 'cancel clears the record');
+});
+
+test('setup comparison persists recovery before changing the sheet or launching from Garage', async () => {
+  const saved = new Map(), opts = { quota: 125 }, h = reloadable(saved, opts);
+  const baseline = h.S.get('haas'), candidate = h.S.set('haas', { arbF: 8 });
+  const host = h.dom.makeElement('div');
+  let starts = 0, between;
+  h.T.mount(host, { teamId: 'haas', store: h.store, baseline, candidateNow: () => candidate,
+    launch: async () => { starts++; return { ok: true, context: {} }; } });
+  const button = label => host.querySelectorAll('button').find(b => b.textContent === label);
+  button('BEGIN COMPARISON').onclick();
+  await button('RUN BASELINE').onclick();
+  assert.match(h.T.summary().reason, /storage/i);
+  assert.equal(starts, 0);
+  assert.equal(reloadable(saved).S.get('haas').arbF, 8);
+  opts.quota = 4096;
+  opts.committed = k => { if (k === 'apex26.setupTrialRecover') between = new Map(saved); };
+  opts.refuse = 'apex26.setup.haas';
+  await button('RUN BASELINE').onclick();
+  assert.equal(starts, 0, 'a refused sheet write cannot start the drill');
+  assert.equal(reloadable(between).S.get('haas').arbF, 8, 'interrupted after the journal, the sheet still belongs to the player');
+  opts.refuse = null;
+  button('RUN BASELINE').onclick();
+  assert.equal(starts, 1);
+  assert.equal(h.S.get('haas').arbF, baseline.arbF);
+  assert.equal(reloadable(saved).S.get('haas').arbF, 8, 'the committed trial sheet can now be recovered');
+});
+
+test('refused cancellation and boot restore keep the prior setup recoverable, including older journals', () => {
+  const saved = new Map(), opts = {}, h = reloadable(saved, opts);
+  const baseline = h.S.get('haas'), before = h.S.set('haas', { arbF: 8 });
+  h.T.create({ teamId: 'haas', store: h.store, baseline, candidate: before, launch: () => new Promise(() => {}) });
+  h.T.attempt('baseline');
+  const stamped = new Map(saved);
+  opts.refuse = 'apex26.setup.haas';
+  assert.equal(h.T.cancel(), false);
+  for (const legacy of [false, true]) {
+    const disk = new Map(saved);
+    if (legacy) {
+      disk.set('apex26.setup.haas', JSON.stringify(baseline));
+      disk.set('apex26.setupTrialRecover', JSON.stringify({ teamId: 'haas', key: 'setup.haas', before, owned: baseline }));
+    }
+    const blocked = reloadable(disk, opts);
+    assert.equal(blocked.S.get('haas').arbF, baseline.arbF);
+    assert.ok(disk.has('apex26.setupTrialRecover'));
+    assert.equal(blocked.T.create({ teamId: 'haas', store: blocked.store, baseline, candidate: before, launch() {} }), false);
+    assert.equal(reloadable(disk).S.get('haas').arbF, 8);
+    assert.equal(disk.has('apex26.setupTrialRecover'), false);
+  }
+  // An explicit same-value hand edit creates an ordinary sheet again.
+  stamped.set('apex26.setup.haas', JSON.stringify(baseline));
+  assert.equal(reloadable(stamped).S.get('haas').arbF, baseline.arbF);
+});
+
+test('a free-play, career slot or career seed switch keeps recovery with the trial that wrote the sheet', async () => {
+  for (const change of ['free-play to career', 'career slot', 'career seed']) {
+    let active = change !== 'free-play to career', slot = 1, seed = 101;
+    const opts = { career: { inCareer: () => active, slot: () => ({ flavour: 'gp', i: slot }), data: () => ({ team: 'haas', seed }) } };
+    const saved = new Map(), h = reloadable(saved, opts);
+    const baseline = h.S.get('haas'), before = h.S.set('haas', { arbF: 8 });
+    const start = () => h.T.create({ teamId: 'haas', store: h.store, baseline, candidate: before, launch: () => new Promise(() => {}) });
+    start();
+    h.T.attempt('baseline');
+    if (change === 'career seed') seed++; else if (change === 'career slot') slot++; else active = true;
+    h.T.cancel();
+    assert.ok(saved.has('apex26.setupTrialRecover'), change);
+    assert.equal(start(), false, 'another garage cannot replace the outstanding journal');
+    assert.equal(h.S.get('haas').arbF, baseline.arbF, 'another scoped setup is untouched');
+    active = change !== 'free-play to career'; slot = 1; seed = 101;
+    assert.equal(reloadable(saved, opts).S.get('haas').arbF, 8);
+  }
 });

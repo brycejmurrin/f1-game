@@ -286,7 +286,7 @@ const TitleMenu = (function () {
     if (continueBtn) continueBtn.onclick = () => {
       const hint = continueBtn._apexContinue;
       if (!hint || hint.kind === "career") { G.openCareer(); return; }
-      if (hint.kind === "daily") { G.openDailyPicker(); return; }
+      if (hint.kind === "daily") { G.openTimeTrialPicker({ kind: "daily" }); return; }
       if (hint.kind === "session" && hint.session) {
         // Stage the circuit picker only — never startRace (share-code / lastSession contract).
         if (G.daily && G.daily.stop) G.daily.stop();
@@ -305,7 +305,7 @@ const TitleMenu = (function () {
       }
     };
     const dailyBtn = $("mb-daily");
-    if (dailyBtn) dailyBtn.onclick = () => G.openDailyPicker();
+    if (dailyBtn) dailyBtn.onclick = () => G.openTimeTrialPicker({ kind: "daily" });
     // #5010: an installed app resumed on the title after midnight kept yesterday's DAILY door
     // while a tap opened today's plan. Repaint when the page comes back and the day has moved.
     let paintedDay = G.daily && G.daily.dayKey ? G.daily.dayKey() : null;

@@ -84,11 +84,14 @@ test("TT: the box holds for the decision, serves nothing, and offers END TIME TR
   const seen = creepToBox(a, 60 * 12);
   assert.equal(seen[seen.length - 1], "box", "reached the box: " + seen.slice(-3).join(","));
   const zz = pits.zoneOf();
-  assert.equal(p.pitT, zz.boxS + 4, "the stop plus TT_DECIDE_S (4 s) to decide");
+  const held = p.pitT;
+  assert.equal(held, zz.boxS + 4, "the stop plus TT_DECIDE_S (4 s) to decide");
   assert.equal(pits.canWork(p), true, "END TIME TRIAL is offered (the WORK ON CAR slot)");
   for (let i = 0; i < Math.ceil((zz.boxS + 4) * 60) + 2; i++) { a.setInput({ steer: 0, throttle: true }); a.step(1 / 60, 1); }
   a.clearInput();
   assert.equal(p.pitState, "out", "released after the hold");
+  const banner = g.sandbox.document.getElementById("announce-text").textContent;
+  assert.ok(banner.startsWith("STOP " + held.toFixed(1) + "s"), banner);
   assert.equal(pits.canWork(p), false, "no END TIME TRIAL once released");
   assert.equal(p.tyre && p.tyre.id, tyre, "no tyre service in a Time Trial");
   assert.equal(G.state, "race", "not stopping to end it keeps the run going");

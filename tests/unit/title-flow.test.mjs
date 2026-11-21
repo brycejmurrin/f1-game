@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/title-flow.js", import.meta.url), "utf8").replace(/^const TitleFlow/m, "var TitleFlow");
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -38,7 +39,7 @@ function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racin
     for (const { type, fn, capture } of captures) if (type === "click" && capture === true) fn(event);
     button.onclick?.();
   }
-  return { G, btns, listeners, log, api, hash, transitions, click };
+  return { G, btns, listeners, log, api, hash, transitions, click, ctx };
 }
 
 test("Settings/Help visits cancel pending VS success and failure even after BACK", async () => {
@@ -210,4 +211,48 @@ test("DAILY and TIME TRIAL both warm the selected circuit under the picker", () 
   assert.equal(daily.G.session, "tt");
   assert.equal(daily.log.dailySelect, 1);
   assert.equal(daily.log.flyby, 1, "daily warms the already-selected circuit");
+});
+
+test("a Daily result link stages its class for today and announces the plan the player receives", async () => {
+  const today = "2026-10-10";
+  for (const [day, cls, expectedMode] of [[today, "open", "open"], [today, "standard", "standard"],
+    [today, undefined, "standard"], ["2026-10-09", "open", "standard"]]) {
+    const h = boot();
+    await tick();   // let the initial empty-hash check finish before the hashchange
+    h.G.store = {};
+    Object.assign(h.ctx, { TextEncoder, TextDecoder, btoa, atob, URL });
+    vm.runInContext(fs.readFileSync(new URL("../../js/ui/share-code.js", import.meta.url), "utf8"), h.ctx, { filename: absSrc("js/ui/share-code.js") });
+    const code = vm.runInContext("ShareCode", h.ctx).encode("daily", { day, track: "monza", trackName: "Monza", class: cls });
+    assert.equal(code.ok, true);
+    h.ctx.location.hash = "#share=" + code.code;
+    h.ctx.location.href = "https://example.test/" + h.ctx.location.hash;
+    let selected;
+    h.G.daily.select = (date, mode) => { selected = { date, mode }; };
+    await h.api.consumeGhostHash();
+    assert.deepEqual(selected, { date: today, mode: expectedMode });
+    assert.equal(h.G.els.select.hidden, false);
+    assert.equal(h.log.announce.at(-1)[0], day === today ? "Daily challenge — MONZA." : "That daily challenge has ended — here is today's.");
+  }
+});
+
+test("an older lap link leaves the active Daily and stages the shared circuit in the free picker", async () => {
+  const h = boot();
+  await tick();
+  h.G.store = {};
+  h.ctx.Tracks.LIST.push({ id: "spa" });
+  Object.assign(h.ctx, { TextEncoder, TextDecoder, btoa, atob, URL });
+  vm.runInContext(fs.readFileSync(new URL("../../js/ui/share-code.js", import.meta.url), "utf8"), h.ctx, { filename: absSrc("js/ui/share-code.js") });
+  const code = vm.runInContext("ShareCode", h.ctx).encode("lap", { day: "2026-10-09", track: "spa", time: 100 });
+  assert.equal(code.ok, true);
+  h.ctx.location.hash = "#share=" + code.code;
+  h.ctx.location.href = "https://example.test/" + h.ctx.location.hash;
+  let dailyActive = true;
+  h.G.daily.stop = () => { dailyActive = false; };
+  await h.api.consumeGhostHash();
+  assert.equal(dailyActive, false);
+  assert.equal(h.log.dailySelect, 0);
+  assert.equal(h.G.session, "tt");
+  assert.equal(h.G.trackIdx, 1);
+  assert.equal(h.G.els.select.hidden, false);
+  assert.equal(h.log.flyby, 1);
 });

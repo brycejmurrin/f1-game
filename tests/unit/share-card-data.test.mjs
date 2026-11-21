@@ -94,6 +94,23 @@ test("fromRace keeps the classified podium and adds the player's row from outsid
   assert.ok(Object.isFrozen(model.rows) && Object.isFrozen(model.rows[0]));
 });
 
+test("a late retirement keeps its classified podium place and points on the exported card", () => {
+  const ctx = vm.createContext({});
+  const raceFile = absSrc("js/race/race-control.js");
+  vm.runInContext(fs.readFileSync(raceFile, "utf8"), ctx, { filename: absSrc("js/race/race-control.js") });
+  const control = vm.runInContext("RaceControl", ctx);
+  const winner = car("WIN", { lap: 11, finished: true });
+  const near = car("TWO", { lap: 10, retired: true, dnf: "engine" });
+  const early = car("YOU", { lap: 4, retired: true, dnf: "engine", isPlayer: true });
+  const order = control.classify([winner, near, early], [winner], [], [near, early]);
+  const data = load();
+  const model = data.fromRace(order, { points: POINTS, fastestLap: near.driverId });
+  assert.deepEqual(plain(model.rows.map((r) => [r.pos, r.code, r.value])), [
+    [1, "WIN", "+25 PTS"], [2, "TWO", "DNF · +18 PTS"], [3, "YOU", "DNF"],
+  ]);
+  assert.equal(data.fromRace(order).rows[1].value, "DNF");
+});
+
 test("fromRace drops a DNF/DSQ car from the podium and labels an out player row", () => {
   const data = load();
   const order = [car("AAA"), car("BBB", { dsq: "one dry compound" }), car("CCC"), car("DDD"),
