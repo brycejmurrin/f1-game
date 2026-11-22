@@ -6532,6 +6532,19 @@ test("TLX timer publishes one serial per fresh resolution, including identical d
   }
 });
 
+test("TLX WebGL timestamp snapshots release unavailable queries before the next batch", async () => {
+  const h = tlxTimerFixture(true);
+  h.timer(true); h.queue();
+  h.pool.queries[0].ready = false;
+  h.resolve();
+  h.queue(); // Three can reuse the index while its previous query object is still resolving.
+  await h.finish(4);
+  assert.equal(h.timer().samples, 0);
+  h.queue(); h.resolve(); await h.finish(5);
+  assert.equal(h.timer().samples, 1);
+  assert.equal(h.ms(), 5);
+});
+
 test("TLX ignores old epochs, inspector/lost-device completions and disjoint results", async () => {
   const h = tlxTimerFixture(true);
   h.timer(true); h.queue(); h.resolve(); h.timer(false); await h.finish(7.25);

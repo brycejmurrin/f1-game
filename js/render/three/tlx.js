@@ -1398,6 +1398,7 @@ const TLX = (function () {
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
+      const _gpuEndedQueries = [];   // Only the single in-flight WebGL resolution uses this snapshot.
       function resolveGpuTimer() {
         if (!_gpuTimerOn || _deviceLost || _gpuResolvePending) return;
         const epoch = _gpuTimerEpoch, be = renderer.backend;
@@ -1407,27 +1408,32 @@ const TLX = (function () {
         // that batch has exactly the same duration as the preceding one.
         if (!pool || pool.isDisposed || pool.pendingResolve || !pool.currentQueryIndex) return;
         const frames = pool.frames, gl = be.isWebGLBackend && be.gl;
-        const queries = [];
         if (gl) {
-          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") queries.push(pool.queries[i]);
-          if (!queries.length) return;
+          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") _gpuEndedQueries.push(pool.queries[i]);
+          if (!_gpuEndedQueries.length) return;
         }
         _gpuResolvePending = true;
+        readGpuTimestamp(epoch, pool, frames, gl);
+      }
+      async function readGpuTimestamp(epoch, pool, frames, gl) {
         try {
-          renderer.resolveTimestampsAsync("render").then(v => {
-            if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
-            // WebGL's pool also returns lastValue for interrupted queries.
-            // Require actual ready query objects and a non-disjoint clock.
-            if (gl && (gl.getParameter(pool.ext.GPU_DISJOINT_EXT) || queries.some(q => !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)))) {
-              _gpuMs = -1; _gpuSampleAt = -1; return;
-            }
-            if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
-            _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
-          }).catch((e) => {
-            // Per-frame call: note the first rejection only.
-            if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
-          }).finally(() => { _gpuResolvePending = false; });
-        } catch (_) { _gpuResolvePending = false; /* timing is optional */ }
+          const v = await renderer.resolveTimestampsAsync("render");
+          if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
+          // WebGL's pool also returns lastValue for interrupted queries.
+          if (gl) {
+            let valid = !gl.getParameter(pool.ext.GPU_DISJOINT_EXT);
+            for (let i = 0; valid && i < _gpuEndedQueries.length; i++)
+              valid = gl.getQueryParameter(_gpuEndedQueries[i], gl.QUERY_RESULT_AVAILABLE);
+            if (!valid) { _gpuMs = -1; _gpuSampleAt = -1; return; }
+          }
+          if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
+          _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
+        } catch (e) {
+          if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
+        } finally {
+          _gpuEndedQueries.length = 0;
+          _gpuResolvePending = false;
+        }
       }
       function _gpuSupported() {
         try {
