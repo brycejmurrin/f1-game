@@ -17552,6 +17552,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/tlx-mem.test.mjs",
         "tests/unit/validation-cli-check.test.mjs",
         "tests/unit/vm-debug-preload.test.mjs"
       ]
