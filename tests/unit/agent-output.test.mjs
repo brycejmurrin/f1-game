@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { createProcFdPool } from '../../tools/lib/proc-stat-reader.mjs';
-import { parseProcStat, spawnAgentProcess } from '../../tools/agent/process.mjs';
+import { parseProcStat, spawnAgentProcess, taskDescendants } from '../../tools/agent/process.mjs';
 import { fileURLToPath } from 'node:url';
 import { OUTPUT_LEVELS, ARTIFACT_TTL_MS, NATIVE_MAX, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/agent/output.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -476,10 +476,19 @@ async function waitFile(file) {
   }
   assert.fail(`child tree never reported readiness: ${last && last.message}`);
 }
-function treeCode(file, { ignore = true, naturalExit = false } = {}) {
+function treeCode(file, { ignore = true, naturalExit = false, exitOnInput = false } = {}) {
   const grandchild = `${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}setInterval(()=>{},1000)`;
-  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file + '.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file + '.tmp')},${JSON.stringify(file)});${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
+  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file + '.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file + '.tmp')},${JSON.stringify(file)});${exitOnInput ? "process.stdin.once('data',()=>process.exit(7))" : naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
 }
+test('Linux subtree discovery includes children of every thread and declines partial snapshots', () => {
+  const io = {
+    readdirSync: dir => ({ '/proc/4/task': ['4', '5'], '/proc/7/task': ['7'], '/proc/9/task': ['9'] })[dir],
+    readFileSync: file => ({ '/proc/4/task/4/children': '', '/proc/4/task/5/children': '7 ',
+      '/proc/7/task/7/children': '9 ', '/proc/9/task/9/children': '' })[file],
+  };
+  assert.deepEqual(taskDescendants(4, io), [4, 7, 9]);
+  assert.equal(taskDescendants(4, { ...io, readFileSync: () => { throw new Error('thread exited'); } }), null);
+});
 test('Linux proc stat parser preserves process identity with spaces and parentheses in comm', () => {
   const fields = ['S', '123', '456', ...Array(16).fill('ignored'), '18446744073709551615', ...Array(32).fill('tail')];
   for (const comm of ['node', 'worker name', '(nested) work)', 'line\nbreak']) {
@@ -516,8 +525,13 @@ test('explicit timeout escalates ignored signals and removes detached descendant
 });
 test('natural nonzero root exit cleans detached descendants and retains exit code', async (t) => {
   const root = fixture(t), ready = path.join(root, 'pids.json');
-  const run = spawnAgentProcess(process.execPath, ['-e', treeCode(ready, { naturalExit: true })], { cwd: root, stdio: 'ignore', killGraceMs: 100, cleanupOnExit: true });
+  const run = spawnAgentProcess(process.execPath, ['-e', treeCode(ready, { exitOnInput: true })], { cwd: root, stdio: ['pipe', 'ignore', 'ignore'], killGraceMs: 100, cleanupOnExit: true });
   const pids = await waitFile(ready);
+  t.after(() => { for (const pid of pids) if (pidAlive(pid)) process.kill(pid, 'SIGKILL'); });
+  // Give the parent's 50 ms sampler a turn while the relationship exists.
+  // A timer in the child can expire while the test runner is descheduled.
+  await wait(60);
+  run.child.stdin.end('exit');
   const outcome = await run.done;
   assert.equal(outcome.exitCode, 7);
   assert.equal(outcome.signal, null);

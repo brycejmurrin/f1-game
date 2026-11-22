@@ -30,10 +30,31 @@ function info(pid) {
     try { process.kill(pid, 0); return { state: '?', start: null }; } catch { return null; }
   }
 }
+// Linux exposes children per thread, including children spawned by non-leader
+// threads. If that interface is missing or changes during a walk, use the
+// process-table snapshot below. Some managed proc mounts omit children entirely.
+const hasTaskChildren = process.platform === 'linux' && fs.existsSync('/proc/thread-self/children');
+export function taskDescendants(root, io = fs) {
+  const seen = new Set([root]);
+  try {
+    for (const pid of seen) {
+      const task = `/proc/${pid}/task`;
+      for (const tid of io.readdirSync(task)) {
+        const children = io.readFileSync(`${task}/${tid}/children`, 'utf8').trim();
+        if (children) for (const id of children.split(/\s+/)) seen.add(Number(id));
+      }
+    }
+    return [...seen];
+  } catch { return null; }
+}
 function descendants(pid) {
   if (!pid) return [];
   const pids = [pid];
   if (process.platform === 'linux') {
+    if (hasTaskChildren) {
+      const tree = taskDescendants(pid);
+      if (tree) return tree;
+    }
     // Some managed /proc mounts omit task/*/children. Derive the same scoped
     // tree from numeric /proc entries, without launching a ps process per scan.
     const children = new Map();
@@ -80,7 +101,16 @@ export function spawnAgentProcess(command, args = [], { cwd, stdio = 'pipe', env
   const rootExited = new Promise((resolve) => { exitResolve = resolve; });
   const streamsClosed = new Promise((resolve) => { closeResolve = resolve; });
   const done = new Promise((resolve) => { doneResolve = resolve; });
-  function collect() { for (const pid of descendants(child.pid)) { const stamp = info(pid); if (stamp && !owned.has(pid)) owned.set(pid, stamp.start); } }
+  function collect() {
+    // Once the root has exited its children have been reparented. Retain the
+    // sampled identities for cleanup without walking a potentially reused PID.
+    if (exited) return;
+    for (const pid of descendants(child.pid)) {
+      if (owned.has(pid)) continue;
+      const stamp = info(pid);
+      if (stamp) owned.set(pid, stamp.start);
+    }
+  }
   function alive(pid) { const stamp = info(pid); return stamp && stamp.state !== 'Z' && stamp.state !== 'X' && (owned.get(pid) === null || owned.get(pid) === stamp.start); }
   function groupAlive() {
     if (!child.pid || process.platform === 'win32') return false;
