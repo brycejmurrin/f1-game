@@ -17082,9 +17082,6 @@
         "tests/unit/tlx-inst-root-3104.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
-      "_mul4Col": [
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "_poolShow": [
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
