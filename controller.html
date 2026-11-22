@@ -296,7 +296,7 @@
   .pedal.on:not(.feedback-off) { isolation: isolate; background: var(--hud-ink-dark); color: var(--hud-ink-light); }
   .pedal.on:not(.feedback-off)::after {
     content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
-    background: color-mix(in srgb, var(--touch-fill) 46%, var(--hud-ink-dark));
+    background: color-mix(in srgb, var(--touch-fill) var(--touch-brightness, 46%), var(--hud-ink-dark));
     opacity: var(--travel, 1);
   }
   .pedal.grip-cue.on:not(.feedback-off)::before { inset: .4rem 12% auto; height: .4rem; border: 0; }

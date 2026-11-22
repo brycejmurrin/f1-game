@@ -767,3 +767,21 @@ test("each touch arrow uses its own speed sensitivity for building lock, with in
   left.fire("pointerdown", px);
   check(Input.steer(0.05), -0.30); // no reduction at rest, even at strength 10
 });
+
+test("an instant Gas and a down-progressive Brake both ease upward from their own starts", () => {
+  const { sb, gas, brake, mid, btn } = bootDock();
+  sb.PedalTravel.setButtonProfile("gas", { direction: "up", start: 80, travel: 80 });
+  sb.PedalTravel.setButtonProfile("brake", { press: "progressive", direction: "down", start: 40, travel: 80 });
+  for (const [el, id, read, initial] of [
+    [gas, "btn-throttle", () => btn().throttleVal, 0.8],
+    [brake, "btn-brake", () => btn().brakeVal, 0.4],
+  ]) {
+    const point = mid(id);
+    el.fire("pointerdown", point);
+    assert.equal(read(), initial);
+    el.fire("pointermove", { clientX: point.clientX, clientY: point.clientY - 20 });
+    assert.ok(read() < initial);
+    el.fire("pointerup", point);
+    assert.equal(read(), 0);
+  }
+});

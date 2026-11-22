@@ -5,8 +5,8 @@ import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
-function boot() {
-  const dom = makeDom(), context = vm.createContext({ document: dom.document });
+function boot(globals = {}) {
+  const dom = makeDom(), context = vm.createContext({ document: dom.document, ...globals });
   for (const path of ["js/input/pedal-travel.js", "js/ui/touch-button-settings.js"]) {
     vm.runInContext(fs.readFileSync(absSrc(path), "utf8"), context, { filename: absSrc(path) });
   }
@@ -74,4 +74,90 @@ test("controller editor offers only the controls its caller supports", () => {
   const slide = dom.byId("touch-test-slide");
   assert.equal(slide.value, "inherit");
   assert.equal(slide.children[0].textContent, "STAY ON ORIGINAL PEDAL");
+});
+
+test("per-button direction, starting input, timed build and color round-trip through the editor", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("button", "brake"); choose("press", "progressive"); choose("direction", "down");
+  choose("start", "40"); choose("buildMs", "1000"); choose("brightness", "100");
+  const brake = model.buttonProfile("brake");
+  assert.equal(model.level(brake, model.advance(brake, 70, -45, 45)), 0.2);
+  assert.equal(model.level(brake, 0, 0.5), 0.7);
+  assert.equal(model.level(brake, 90), 1);
+  choose("button", "gas");
+  assert.equal(field("direction").value, "default");
+  assert.equal(field("start").value, "default");
+  choose("button", "brake");
+  assert.equal(field("brightness").value, "100");
+  assert.equal(field("buildMs").value, "1000");
+  choose("feedback", "off"); assert.equal(field("brightness").disabled, true);
+  host.querySelector("button").onclick();
+  assert.equal(field("brightness").value, "46");
+});
+
+test("a stationary timed hold advances by elapsed time and stops on release", () => {
+  const frames = [];
+  const { model } = boot({ performance: { now: () => 100 }, requestAnimationFrame: fn => frames.push(fn) });
+  const contact = { profile: { press: "progressive", start: 20, travel: 90, buildMs: 500 } };
+  const values = [];
+  let held = true;
+  model.buildOnHold(contact, () => held, v => values.push(v));
+  frames.shift()(225);
+  assert.equal(values[0], 0.4);
+  contact.advance = 45;
+  frames.shift()(350);
+  assert.equal(values[1], 1);
+  held = false;
+  frames.shift()(475);
+  assert.equal(frames.length, 0);
+  assert.equal(values.length, 2);
+});
+
+test("Boost keeps its own colors and accepts only the chosen touch gesture", () => {
+  const { host, dom, model, editor } = boot();
+  editor.mount(host);
+  const choose = (id, value) => {
+    const control = dom.byId("touch-test-" + id);
+    control.value = value; control.onchange();
+  };
+  choose("button", "boost");
+  choose("idleColor", "yellow"); choose("pressedColor", "white"); choose("activation", "hold");
+  const events = {}, style = {}, attrs = {};
+  let actions = 0;
+  const el = { style: { setProperty: (key, value) => { style[key] = value; }, removeProperty: key => delete style[key] },
+    setAttribute: (key, value) => { attrs[key] = value; }, removeAttribute: key => delete attrs[key],
+    getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 15, right: 15 }),
+    addEventListener: (key, handle) => { events[key] = handle; }, click: () => actions++ };
+  model.bindControl(el, "boost");
+  assert.equal(style["--touch-custom-idle"], "var(--gold)");
+  assert.equal(model.buttonOverrides("pause").activation, undefined);
+  const send = (type, time, x = 5, detail = 1) => {
+    let consumed = false;
+    events[type]({ timeStamp: time, detail, pointerId: 1, pointerType: "touch", clientX: x, clientY: 5,
+      preventDefault() {}, stopImmediatePropagation() { consumed = true; } });
+    return consumed;
+  };
+  send("pointerdown", 0); send("pointerup", 200);
+  send("pointerdown", 300); send("pointerup", 800, 30);
+  send("pointerdown", 900); send("pointercancel", 1400); send("pointerup", 1450);
+  assert.equal(actions, 0);
+  send("pointerdown", 1500); send("pointerup", 1950);
+  assert.equal(actions, 1);
+  assert.equal(send("click", 1951), true);
+  assert.equal(send("click", 1951, 5, 0), false);
+  choose("activation", "double");
+  send("pointerdown", 2100); send("pointerup", 2120);
+  send("pointerdown", 2600); send("pointerup", 2620);
+  assert.equal(actions, 1);
+  send("pointerdown", 2650); send("pointerup", 2700);
+  assert.equal(actions, 2);
+  choose("activation", "tap");
+  send("pointerdown", 2800); send("pointerup", 2820);
+  assert.equal(actions, 3);
+  host.querySelector("button").onclick();
+  assert.equal(send("pointerdown", 2900), false);
+  assert.equal(style["--touch-custom-idle"], undefined);
 });

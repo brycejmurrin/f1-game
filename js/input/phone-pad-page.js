@@ -172,6 +172,8 @@ const PhonePadPage = (function () {
       const anchors = new Map();   // Freeze the response and landing point for each contact.
       const levels = new Map();    // each contact keeps its own pedal travel
       if (travel) PedalTravel.watchButtonProfile(travel, profile => {
+        if (profile.brightness) el.style?.setProperty?.("--touch-brightness", profile.brightness + "%");
+        else el.style?.removeProperty?.("--touch-brightness");
         el.classList.toggle("feedback-off", !profile.feedback);
         if (travel !== "gas" && profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
         else el.removeAttribute?.("data-touch-response");
@@ -202,6 +204,13 @@ const PhonePadPage = (function () {
         pedalOwners.set(e.pointerId, target);
         levels.set(e.pointerId, cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0));
         paintLevel();
+        if (!transfer && profile.buildMs) {
+          const pointer = e.pointerId;
+          PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
+            levels.set(pointer, value);
+            paintLevel(false);
+          });
+        }
       };
       const down = (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -226,7 +235,10 @@ const PhonePadPage = (function () {
           value = Math.max(levels.get(e.pointerId), PedalTravel.arrive(dist));
           if (value >= 1) { c.cross = false; c.y = e.clientY; }
         } else if (c.transfer) value = PedalTravel.ease(c.y, e.clientY, c.profile.travel);
-        else value = PedalTravel.level(c.profile, c.profile.press === "progressive" ? dist : dy);
+        else {
+          c.advance = PedalTravel.advance(c.profile, e.clientX - c.x || 0, -dy || 0, dy);
+          value = PedalTravel.level(c.profile, c.advance, c.holdFraction);
+        }
         levels.set(e.pointerId, value); paintLevel(false);
       }
       const move = (e) => { if (travel) pedalOwners.get(e.pointerId)?.slide(e); };
@@ -318,6 +330,10 @@ const PhonePadPage = (function () {
         steer = last ? (last === "ArrowLeft" ? -1 : 1) : 0; push();
       });
       dom.steer.addEventListener("blur", () => release());
+    }
+    for (const id of PedalTravel.phoneButtons) {
+      const target = id === "look" ? dom.lookBack : id === "calib" ? dom.center : dom.buttons?.[id] || dom[id];
+      for (const el of (Array.isArray(target) ? target : [target])) PedalTravel.bindControl(el, id);
     }
     hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, "gas");
     hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, "brake");
@@ -921,7 +937,7 @@ const PhonePadPage = (function () {
     function show(on) {
       if (dom.sheet) dom.sheet.hidden = !on;
       if (on && dom.responses && typeof TouchButtonSettings !== "undefined") {
-        TouchButtonSettings.mount(dom.responses, ["gas", "brake"], { standalone: true });
+        TouchButtonSettings.mount(dom.responses, PedalTravel.phoneButtons, { standalone: true });
       }
       (on ? dom.done : dom.open)?.focus?.();
     }

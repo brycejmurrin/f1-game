@@ -10063,6 +10063,17 @@
       ]
     },
     "js/input/pedal-travel.js": {
+      "advance": [
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "bindControl": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "buildOnHold": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "buttonOverrides": [
         "tests/unit/touch-button-settings.test.mjs"
       ],
@@ -10075,26 +10086,30 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "level": [
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
       ],
       "setButtonProfile": [
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
-      "*": [
-        "tests/unit/a11y-pwa-pass.test.mjs",
-        "tests/unit/camera-defaults.test.mjs",
+      "tick": [
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/photomode-hold.test.mjs"
+      ],
+      "*": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/pad-haptics.test.mjs",
         "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
-        "tests/unit/photomode-hold.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"

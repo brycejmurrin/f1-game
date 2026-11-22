@@ -25,15 +25,53 @@ const PedalTravel = (function () {
 
   const KEY = "touchButtonProfiles";
   const BUTTONS = ["left", "right", "gas", "brake"];
+  const raceButtons = Object.freeze({ left: "btn-steer-left", right: "btn-steer-right", gas: "btn-throttle", brake: "btn-brake",
+    boost: "btn-boost", overtake: "btn-ot", aero: "btn-aero", shiftUp: "shift-up", shiftDown: "shift-down",
+    camera: "btn-cam", pause: "pausebtn", showHud: "hud-restore" });
+  const phoneButtons = Object.freeze(["gas", "brake", "shiftUp", "shiftDown", "boost", "overtake", "aero",
+    "camera", "pause", "radio", "recover", "look", "calib", "navSelect", "navBack"]);
+  const allButtons = new Set([...Object.keys(raceButtons), ...phoneButtons]);
+  const colors = Object.freeze({ red: "--red", green: "--faster", blue: "--zone", purple: "--sec-best", orange: "--spark", yellow: "--gold", white: "--hud-ink-light" });
   const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 
-  // A freshly stamped button has full travel. Progressive starts at the light end
-  // and the caller supplies signed travel in the direction that increases input.
-  function level(profile, advancePx) {
-    if (profile.press === "progressive") {
-      return MIN + (1 - MIN) * Math.min(1, Math.max(0, advancePx) / profile.travel);
+  function startPercent(profile) {
+    return profile.start ?? (profile.press === "progressive" ? 12 : 100);
+  }
+
+  function advance(profile, dx, dy, instantAxis) {
+    switch (profile.direction) {
+      case "up": return -dy;
+      case "down": return dy;
+      case "left": return -dx;
+      case "right": return dx;
+      default: return profile.press === "progressive" ? Math.hypot(dx, dy) : instantAxis;
     }
-    return ease(0, -advancePx, profile.travel);
+  }
+
+  function level(profile, advancePx, holdFraction = 0) {
+    const start = startPercent(profile) / 100;
+    const resting = start + (1 - start) * holdFraction;
+    if (profile.press === "progressive") {
+      if (!profile.direction) advancePx = Math.max(0, advancePx);
+      const span = advancePx < 0 ? start : 1 - start;
+      return Math.max(0, Math.min(1, resting + span * advancePx / profile.travel));
+    }
+    return Math.max(Math.min(start, MIN), resting - Math.max(0, advancePx - DEAD_PX) / profile.travel);
+  }
+
+  // Only a configured direct hold needs frames. Identity checks also handle
+  // capture transfers, focus loss and pointer IDs reused before the next frame.
+  function buildOnHold(contact, active, update) {
+    const duration = contact.profile.buildMs;
+    if (!duration || startPercent(contact.profile) === 100) return;
+    const began = performance.now();
+    function tick(now) {
+      if (!active()) return;
+      contact.holdFraction = Math.min(1, Math.max(0, now - began) / duration);
+      update(level(contact.profile, contact.advance || 0, contact.holdFraction));
+      if (contact.holdFraction < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
   }
 
   // Store only differences from shipped behavior. An absent slide follows the
@@ -41,6 +79,13 @@ const PedalTravel = (function () {
   function overrides(id, value) {
     const out = {};
     if (!object(value)) return out;
+    for (const field of ["idleColor", "pressedColor"]) {
+      if (Object.hasOwn(colors, value[field])) out[field] = value[field];
+    }
+    if (!BUTTONS.includes(id)) {
+      if (id !== "look" && ["tap", "hold", "double"].includes(value.activation)) out.activation = value.activation;
+      return out;
+    }
     if (value.press === "progressive") out.press = value.press;
     if (Number.isFinite(value.travel)) {
       const travel = Math.max(40, Math.min(160, Math.round(value.travel)));
@@ -48,6 +93,10 @@ const PedalTravel = (function () {
     }
     if ((id === "left" || id === "right") && Number.isFinite(value.adaptive))
       out.adaptive = Math.max(1, Math.min(10, Math.round(value.adaptive)));
+    if (["up", "down", "left", "right"].includes(value.direction)) out.direction = value.direction;
+    if (Number.isFinite(value.start)) out.start = Math.max(0, Math.min(100, Math.round(value.start)));
+    if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
+    if ([25, 70, 100].includes(value.brightness)) out.brightness = value.brightness;
     if (value.feedback === false) out.feedback = false;
     if ((id === "gas" || id === "brake") && (value.slide === "instant" || value.slide === "ease")) out.slide = value.slide;
     return out;
@@ -57,7 +106,7 @@ const PedalTravel = (function () {
     if (value === null) return null;
     if (!object(value) || value.v !== 1 || !object(value.buttons)) return undefined;
     const buttons = {};
-    for (const id of BUTTONS) {
+    for (const id of allButtons) {
       const clean = overrides(id, value.buttons[id]);
       if (Object.keys(clean).length) buttons[id] = clean;
     }
@@ -75,7 +124,7 @@ const PedalTravel = (function () {
   const saved = () => store() ? store().get(KEY, null) : memory;
   function buttonOverrides(id) {
     const raw = saved();
-    return overrides(id, BUTTONS.includes(id) && raw && raw.v === 1 && raw.buttons && raw.buttons[id]);
+    return overrides(id, allButtons.has(id) && raw && raw.v === 1 && raw.buttons && raw.buttons[id]);
   }
   function buttonProfile(id, globalSlide) {
     const pedal = id === "gas" || id === "brake";
@@ -92,7 +141,7 @@ const PedalTravel = (function () {
     return () => memoryListeners.delete(refresh);
   }
   function setButtonProfile(id, patch) {
-    if (!BUTTONS.includes(id)) return;
+    if (!allButtons.has(id)) return;
     const buttons = normalizeProfiles(saved())?.buttons || {};
     const clean = overrides(id, patch === null ? null : { ...buttons[id], ...patch });
     if (Object.keys(clean).length) buttons[id] = clean;
@@ -104,7 +153,53 @@ const PedalTravel = (function () {
     return buttonProfile(id);
   }
 
-  return { DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, normalizeProfiles, buttonOverrides, buttonProfile,
+  function bindControl(el, id) {
+    if (!el || !allButtons.has(id)) return;
+    let mode, pointer = null, began = 0, previous = -Infinity, touchClick = false;
+    watchButtonProfile(id, profile => {
+      for (const [field, attribute] of [["idleColor", "idle"], ["pressedColor", "pressed"]]) {
+        const color = profile[field], name = "--touch-custom-" + attribute;
+        if (color) {
+          el.style?.setProperty?.(name, "var(" + colors[color] + ")");
+          el.setAttribute("data-custom-" + attribute, "");
+        } else {
+          el.style?.removeProperty?.(name);
+          el.removeAttribute?.("data-custom-" + attribute);
+        }
+      }
+      if (mode !== profile.activation) { mode = profile.activation; pointer = null; previous = -Infinity; }
+    });
+    if (BUTTONS.includes(id) || id === "look") return;
+    const consume = e => { e.preventDefault(); e.stopImmediatePropagation(); };
+    el.addEventListener("pointerdown", e => {
+      touchClick = e.pointerType === "touch" && !!mode;
+      if (!touchClick) return;
+      consume(e);
+      if (pointer !== null || el.disabled || el.getAttribute?.("aria-disabled") === "true") return;
+      pointer = e.pointerId; began = e.timeStamp;
+      try { el.setPointerCapture(pointer); } catch (_) { /* implicit touch capture still delivers a lift */ }
+    }, true);
+    el.addEventListener("pointerup", e => {
+      if (!mode || e.pointerType !== "touch") return;
+      consume(e);
+      if (pointer !== e.pointerId) return;
+      pointer = null;
+      const r = el.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom ||
+          el.disabled || el.hidden || el.getAttribute?.("aria-disabled") === "true") { previous = -Infinity; return; }
+      const elapsed = e.timeStamp - began;
+      const fire = mode === "tap" || (mode === "hold" ? elapsed >= 450 : elapsed < 350 && e.timeStamp - previous <= 350);
+      previous = !fire && elapsed < 350 ? e.timeStamp : -Infinity;
+      if (fire) el.click();
+    }, true);
+    const cancel = e => { if (e.pointerId === pointer) { pointer = null; previous = -Infinity; } };
+    el.addEventListener("pointercancel", cancel, true);
+    el.addEventListener("lostpointercapture", cancel, true);
+    el.addEventListener("click", e => { if (touchClick && e.detail > 0) consume(e); }, true);
+    el.addEventListener("contextmenu", e => { if (touchClick && mode) consume(e); }, true);
+  }
+
+  return { raceButtons, phoneButtons, colors, bindControl, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile,
     watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);

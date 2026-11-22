@@ -152,7 +152,7 @@
 }
 .touchbtn[data-touch-feedback="on"]::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
-  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) 46%, var(--hud-ink-dark));
+  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) var(--touch-brightness, 46%), var(--hud-ink-dark));
   opacity: var(--touch-level);
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue]::before {

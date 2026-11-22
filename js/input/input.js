@@ -1409,7 +1409,7 @@ const Input = (function () {
   // Explicit touch response must reach the wheel even with ADAPTIVE BUTTONS off.
   const arrowSpeedMix = profile => profile?.adaptive == null ? undefined : (profile.adaptive - 1) / 9;
   function steerButtonCommand(travel, profile) {
-    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX) return travel;
+    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX || profile.direction || profile.start != null) return travel;
     return 1 + (travel - 1) * adaptiveMix;
   }
   const holdButtons = InputHoldButtons.create({
@@ -2307,6 +2307,7 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
+    for (const [key, id] of Object.entries(PedalTravel.raceButtons)) PedalTravel.bindControl(document.getElementById(id), key);
     wireHold("btn-throttle", function (v) {
       // Toggle on the DOWN edge only: the matching up-edge must not undo it, and
       // holdReleaseAll()'s apply(false) must not either — that path CLEARS the
