@@ -172,6 +172,9 @@ const SPEC = [
   { k: "flybyShots", lane: "json", group: "camera", def: null, src: "js/camera/flyby-panel.js FLYBY SHOT EDITOR (null = shipped shots)" },
   { k: "ldCard", lane: "json", group: "camera", def: null, src: "js/ui/loading-screen.js loading card {scale, x, y} (null = shipped)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
+  { k: "helmetEye", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.helmetEye", oneOf: ["standard", "tucked", "upright"] },
+  { k: "helmetShake", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.helmetShake", oneOf: ["normal", "soft", "off"] },
+  { k: "helmetVisorShape", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.visorShape", oneOf: ["standard", "panoramic", "slit"] },
   { k: "helmetVisor", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visor", oneOf: ["off", "clear", "smoke"] },
   { k: "helmetVisorColor", lane: "raw", group: "camera", def: "amber", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose"] },
   { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "medium", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["light", "medium", "strong"] },

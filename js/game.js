@@ -7404,7 +7404,7 @@ function render(dt) {
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the OFFSET, not the trauma
       // (cues keyed to it stay timed); CamTune.shakeOffset also applies COMFORT › HEAD BOB. SCOPE: every
       // race camera (docs/notes/CAMERA-FEEL.md). Real-time noise, fps-independent; onboard it stays in the tub.
-      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(feel.shake, comfort), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
+      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(feel.shake, comfort) * CockpitOpts.shakeScale(mode), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
     }
     // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
     // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
@@ -7413,7 +7413,7 @@ function render(dt) {
         && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
           : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
       const spV = clamp(player.speed / vTop(), 0, 1);
-      const vAmp = CamTune.buzzAmp(spV, player.deploying, comfort, _buzzWet);
+      const vAmp = CamTune.buzzAmp(spV, player.deploying, comfort, _buzzWet) * CockpitOpts.shakeScale(mode);
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
         const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;

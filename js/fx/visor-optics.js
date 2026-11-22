@@ -70,9 +70,9 @@ const VisorOptics = (function () {
   /** The eye-port box for a viewport: a shallow, wide slot — a helmet's proportions on every aspect (a tall phone
    *  gets a slot across the middle, not a tall oval). The brow band above is thicker than the chin band below,
    *  as the visor's top frame and tear-offs are what a driver's-eye camera sees first. Returns px. */
-  function portBox(w, h) {
+  function portBox(w, h, shape = "standard") {
     const pw = w * 0.975;
-    const ph = Math.min(h * 0.80, pw * 0.62);
+    const ph = Math.min(h * 0.80, pw * 0.62) * (shape === "slit" ? 0.76 : shape === "panoramic" ? 1.13 : 1);
     const cx = w / 2, cy = h * 0.52;
     return { x0: cx - pw / 2, y0: cy - ph / 2, x1: cx + pw / 2, y1: cy + ph / 2, pw, ph };
   }
@@ -81,11 +81,11 @@ const VisorOptics = (function () {
    *  Shape, from the references (Bell HP77 front view, the Driver's Eye POV frames): a letterbox slot — a near-
    *  straight brow with a slight arch (highest over the nose), straight temples, and rounded corners only, the
    *  lower pair larger where the cheek pads sit. Nothing oval. */
-  function portPath(w, h, inset = 0) {
-    const b = portBox(w, h);
+  function portPath(w, h, inset = 0, shape = "standard") {
+    const b = portBox(w, h, shape);
     const x0 = b.x0 + inset, x1 = b.x1 - inset, y0 = b.y0 + inset, y1 = b.y1 - inset;
     const pw = x1 - x0, ph = y1 - y0;
-    const rt = ph * 0.30, rb = ph * 0.42, arch = ph * 0.06;   // top corner radius, bottom corner radius, brow apex rise
+    const rt = ph * (shape === "slit" ? 0.16 : 0.30), rb = ph * 0.42, arch = ph * 0.06;   // top corner radius, bottom corner radius, brow apex rise
     const K = 0.55;                                            // Bézier circle constant
     const P = (x, y) => r2(x) + "," + r2(y);
     return "M" + P(x0 + rt, y0 + arch)
@@ -103,9 +103,9 @@ const VisorOptics = (function () {
   /** The port as a CSS background image: the bezel (near-black, slightly translucent) with the port cut out, a
    *  sharp-ish edge that falls off softly inside the rim, lighter cheek pads in the lower periphery, and the
    *  TINTED visor's colour laid over the clear area. Returns a `url("data:image/svg+xml,…")` string. */
-  function portImage(w, h, { tint = null, tintAlpha = 0 } = {}) {
+  function portImage(w, h, { tint = null, tintAlpha = 0, shape = "standard" } = {}) {
     const W = Math.max(1, Math.round(w)), H = Math.max(1, Math.round(h));
-    const b = portBox(W, H);
+    const b = portBox(W, H, shape);
     const sharp = Math.max(1.2, W * 0.004), soft = Math.max(4, W * 0.02);
     const frame = "M-400,-400H" + (W + 400) + "V" + (H + 400) + "H-400Z";
     const bezel = "#07070c";
@@ -118,9 +118,9 @@ const VisorOptics = (function () {
       + "</defs>"
       + (tint && tintAlpha > 0 ? '<rect width="100%" height="100%" fill="rgb(' + tint.join(",") + ')" fill-opacity="' + r2(tintAlpha) + '"/>' : "")
       // the soft inner falloff: a slightly smaller port, blurred wide, at half strength
-      + '<path fill="' + bezel + '" fill-opacity="0.55" fill-rule="evenodd" filter="url(#w)" d="' + frame + portPath(W, H, soft * 0.9) + '"/>'
+      + '<path fill="' + bezel + '" fill-opacity="0.55" fill-rule="evenodd" filter="url(#w)" d="' + frame + portPath(W, H, soft * 0.9, shape) + '"/>'
       // the bezel with the true edge, blurred just enough to anti-alias into a soft line
-      + '<path fill="' + bezel + '" fill-opacity="0.93" fill-rule="evenodd" filter="url(#s)" d="' + frame + portPath(W, H, 0) + '"/>'
+      + '<path fill="' + bezel + '" fill-opacity="0.93" fill-rule="evenodd" filter="url(#s)" d="' + frame + portPath(W, H, 0, shape) + '"/>'
       // cheek pads: a hint of the lighter padding fabric in both lower corners of the bezel
       + '<ellipse cx="' + Math.round(b.x0 + b.pw * 0.02) + '" cy="' + padY + '" rx="' + padR + '" ry="' + Math.round(padR * 0.55) + '" fill="#2a2a30" fill-opacity="0.28" filter="url(#p)"/>'
       + '<ellipse cx="' + Math.round(b.x1 - b.pw * 0.02) + '" cy="' + padY + '" rx="' + padR + '" ry="' + Math.round(padR * 0.55) + '" fill="#2a2a30" fill-opacity="0.28" filter="url(#p)"/>'
@@ -426,7 +426,7 @@ const VisorOptics = (function () {
     return _cv;
   }
 
-  let _viewport = null;
+  let _viewport = null, _shape = "standard";
   function _size(newCanvas = false) {
     if (typeof window === "undefined") return false;
     // The layout viewport (ICB) the fixed 100% layer is laid out in, not inner*: a Home Screen landscape launch can hold
@@ -440,6 +440,13 @@ const VisorOptics = (function () {
     const box = bw > 0 && bh > 0;
     const w = Math.max(1, box ? bw : window.innerWidth | 0), h = Math.max(1, box ? bh : window.innerHeight | 0);
     const lightW = Math.ceil(w / 2), lightH = Math.ceil(h / 2);
+    const shape = _opt("visorShape", "standard");
+    if (shape !== _shape) {
+      _shape = shape;
+      _portKey = "";
+      _bendW = 0;
+      newCanvas = true;
+    }
     if (!newCanvas && w === _w && h === _h && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
     _w = w; _h = h;
     if (_cv) {
@@ -451,7 +458,7 @@ const VisorOptics = (function () {
     // The sheen and the fringe are stroked INSIDE the port edge (inset paths), where the glass is clear; on the
     // edge itself the bezel's falloff would swallow them.
     const base = Math.min(w, h);
-    _paths = typeof Path2D === "function" ? { edge: new Path2D(portPath(w, h, 0)), rim: new Path2D(portPath(w, h, base * 0.03)), out: new Path2D(portPath(w, h, base * 0.006)), inn: new Path2D(portPath(w, h, base * 0.014)) } : null;
+    _paths = typeof Path2D === "function" ? { edge: new Path2D(portPath(w, h, 0, _shape)), rim: new Path2D(portPath(w, h, base * 0.03, _shape)), out: new Path2D(portPath(w, h, base * 0.006, _shape)), inn: new Path2D(portPath(w, h, base * 0.014, _shape)) } : null;
     return true;
   }
 
@@ -488,7 +495,7 @@ const VisorOptics = (function () {
     }
     const tinted = visor === "smoke";
     _lens = tinted ? tintRGB(color) : null;
-    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: _lens, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
+    document.body.style.setProperty("--visor-port", portImage(_w, _h, { shape: _shape, tint: _lens, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
     document.body.setAttribute("data-visor-port", "1");
   }
 
@@ -509,8 +516,8 @@ const VisorOptics = (function () {
     // Rasterise the port at map resolution, then blur it into a soft inside/outside field F.
     g.fillStyle = "#000"; g.fillRect(0, 0, N, N);
     g.save(); g.scale(N / _w, N / _h); g.fillStyle = "#fff";
-    if (typeof Path2D === "function") g.fill(new Path2D(portPath(_w, _h, 0)));
-    else g.fillRect(_w * 0.03, _h * 0.08, _w * 0.94, _h * 0.84);
+    if (typeof Path2D === "function") g.fill(new Path2D(portPath(_w, _h, 0, _shape)));
+    else { const b = portBox(_w, _h, _shape); g.fillRect(b.x0, b.y0, b.pw, b.ph); }
     g.restore();
     const src = g.getImageData(0, 0, N, N).data, F = new Float32Array(N * N), T = new Float32Array(N * N);
     for (let i = 0; i < N * N; i++) F[i] = src[i * 4] / 255;

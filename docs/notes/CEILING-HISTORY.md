@@ -1,5 +1,11 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-22 — Helmet camera controls (codex/helmet-camera-controls)
+
+`(tree) eagerCodeBytes` 3962979 → **3965668** (+2689). The camera needs the saved eye position and vibration scale while driving.
+The visor shares its opening geometry across the bezel, reflections and refraction map. The settings panel and camera-settings export describe the same three choices.
+Fragment: `ratchets.d/codex--helmet-camera-controls.json`.
+
 ## 2026-11-20 — PR #6017 (claude/port-cleanroom-46-53-5973): clean-room fix 45, the two-dry-compound rule in HOW TO PLAY
 
 `(tree) shellNodes` 2321 → **2323** (+2). Deliberate raise past the absorb, on Bryce's `ratchet-raise` (decision issue

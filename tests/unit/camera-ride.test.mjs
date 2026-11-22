@@ -34,7 +34,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { loadElevationRig, makeElevationTrack } from "../helpers/camera-rig.mjs";
+import { loadRig, loadElevationRig, makeElevationTrack } from "../helpers/camera-rig.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
@@ -83,6 +83,21 @@ const HILL = (s) => (Math.abs(s - 1200) < 340 ? 15 * (1 + Math.cos(Math.PI * (s 
 const RIPPLE = (s) => 0.037 * Math.sin(s * 2 * Math.PI / 30)
                     + 0.075 * Math.sin(s * 2 * Math.PI / 68 + 1.1)
                     + 0.112 * Math.sin(s * 2 * Math.PI / 110 + 2.3);
+
+test("helmet eye position survives reduced motion and leaves the cockpit seat alone", () => {
+  let pose = "standard";
+  const { cams } = loadRig({ CockpitOpts: { helmetEye: () => pose, layout: () => ({ eyeF: -0.2, eyeU: 0.82 }), turnChaseLead: () => 0 } });
+  const track = makeElevationTrack(() => 0);
+  const eye = mode => [...cams.vantage(track, mode, 200, 0, 60, 0, { carPos: [0, 200], att: {}, reduceMotion: true }).eye];
+  const stock = eye("helmet"), cockpit = eye("cockpit");
+  pose = "tucked";
+  const low = eye("helmet");
+  pose = "upright";
+  const high = eye("helmet");
+  assert.ok(low[1] < stock[1] && low[2] > stock[2]);
+  assert.ok(high[1] > stock[1] && high[2] < stock[2]);
+  assert.deepEqual(eye("cockpit"), cockpit);
+});
 
 test("flat road: the chase rig frames exactly as its constants say", () => {
   const track = makeElevationTrack(() => 7.5);

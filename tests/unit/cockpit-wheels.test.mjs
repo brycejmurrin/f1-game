@@ -55,6 +55,18 @@ function loadMesh(extra = {}, gfxExtra = {}) {
   return { CarMesh: ctx.CarMesh, made, freed, draws };
 }
 
+test("helmet camera preferences survive reload and only scale helmet vibration", () => {
+  const { opts, store } = loadOpts();
+  opts.setHelmetEye("upright");
+  opts.setHelmetShake("soft");
+  opts.setVisorShape("panoramic");
+  const saved = loadOpts(Object.fromEntries(store)).opts;
+  assert.deepEqual([saved.helmetEye(), saved.shakeScale("helmet"), saved.visorShape()], ["upright", 0.4, "panoramic"]);
+  saved.setHelmetShake("off");
+  assert.equal(saved.shakeScale("helmet"), 0);
+  assert.equal(saved.shakeScale("cockpit"), 1);
+});
+
 test("helmet visor is opt-in, survives reload and validates stored and shot choices", () => {
   const { opts, store } = loadOpts({});
   assert.equal(opts.visor(), "off");

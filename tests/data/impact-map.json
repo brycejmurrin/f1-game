@@ -1544,6 +1544,9 @@
       "haloSize": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "helmetEye": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "interior": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
@@ -1576,6 +1579,12 @@
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setHelmetEye": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setHelmetShake": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "setInterior": [
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
@@ -1603,6 +1612,9 @@
       "setVisorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisorShape": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "setWheel": [
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
@@ -1623,6 +1635,9 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "visorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorShape": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "wheel": [
