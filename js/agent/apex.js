@@ -2,7 +2,7 @@
 const ApexApi = (function () {
   "use strict";
 
-function create(G) {
+function create(G, restoreFreePlaySelection) {
 // race()/tt() hand back a descriptor that is ALSO awaitable. startRace() awaits
 // ensureScenery() — the scenery closure is LAZY_SCENERY and Tracks.build is
 // synchronous — so an unawaited start lets the hook claim success while the
@@ -16,6 +16,7 @@ function create(G) {
 // RACE ORDER and the SLIP BUDGET live in agentview.js (loaded first, LAZY_AGENT)
 // so obs()/physState() and world() cannot drift apart (#2172).
 const raceOrder = (cars) => AgentView.raceOrder(cars);
+const trackIndex = (ref) => typeof ref === "number" ? ref : Tracks.LIST.findIndex(t => t.id === ref);
 const finiteOrNil = (v) => v === undefined || v === null || (typeof v === "number" && isFinite(v));
 // update(NaN) wrote NaN into every car, and an infinite n never returned.
 const stepArgs = (dt, n) => [Number.isFinite(dt) && dt >= 0 ? dt : 1 / 60, Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1];
@@ -1022,12 +1023,12 @@ const api = {
   // "quali", opened qualifying instead of the grid, and read as "did not reach
   // the grid". Absent leaves the rule alone; an unknown name is ignored.
   race(trackRef, timeOfDay, weather, opts) {
-    const i = typeof trackRef === "number"
-      ? trackRef
-      : Tracks.LIST.findIndex((t) => t.id === trackRef);
-    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
-    G.trackIdx = i;
+    const i = trackIndex(trackRef);
+    if (!Tracks.LIST[i]) return false;
+    const leavingCareer = G.flow === "career";
     G.seasonMode = false;
+    if (leavingCareer) restoreFreePlaySelection();
+    G.trackIdx = i;   // the requested circuit overrides the restored free-play circuit
     G.timeTrial = false;
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
@@ -1047,10 +1048,8 @@ const api = {
   // without race() await this first — same gate as ensureScenery / startRace.
   ensureCircuit: (idx) => (G.ensureCircuit ? G.ensureCircuit(idx) : Promise.resolve()),
   tt(trackRef, timeOfDay) {
-    const i = typeof trackRef === "number"
-      ? trackRef
-      : Tracks.LIST.findIndex((t) => t.id === trackRef);
-    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    const i = trackIndex(trackRef);
+    if (!Tracks.LIST[i]) return false;
     G.trackIdx = i;
     G.seasonMode = false;
     G.timeTrial = true;

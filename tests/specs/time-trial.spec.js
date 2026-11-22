@@ -286,6 +286,25 @@ test.describe("Time Trial — mode flags", () => {
   });
 });
 
+test("opening a shared lap stages a plausible rival and refuses an impossible one", async ({ page }) => {
+  // Legacy uncompressed links omit the optional hash. Both links cover Monza;
+  // only the claimed time and corresponding timestamps change.
+  function monzaLink(time) {
+    const fractions = Array.from({ length: 11 }, (_, i) => i / 10);
+    const body = { v: 1, kind: "ghost", track: "monza", time,
+      t: fractions.map(f => f * time), s: fractions.map(f => Math.round(f * 5793)), x: fractions.map(() => 0) };
+    return "ghost=APXG1.p." + Buffer.from(JSON.stringify(body)).toString("base64url");
+  }
+  await page.goto("/#" + monzaLink(10));
+  await expect(page).toHaveURL(url => !url.hash, { timeout: BOOT_MS });
+  await expect(page.locator("#mb-tt")).toBeVisible();
+  expect(await page.evaluate(() => GhostShare.guest())).toBeNull();
+
+  await page.evaluate(hash => { location.hash = hash; }, monzaLink(100));
+  await expect(page.locator("#select")).toBeVisible();
+  expect(await page.evaluate(() => GhostShare.hasGuest("monza") && GhostShare.guest()?.ghost.time)).toBe(100);
+});
+
 test.describe("Time Trial — daily picker flow", () => {
   test.use({ viewport: LANDSCAPE });
 
@@ -519,7 +538,8 @@ test.describe("Time Trial — results panel", () => {
     // A synthetic 80 s lap at 20 Hz becomes the stored best (Ghost is a page global).
     await page.evaluate(() => {
       Ghost.startLap();
-      for (let i = 0; i <= 1600; i++) Ghost.record(i / 20, i * 2.5, 0);
+      const length = window.__apex.info().total;
+      for (let i = 0; i <= 1600; i++) Ghost.record(i / 20, length * i / 1600, 0);
       Ghost.finishLap(80, null);
     });
     await page.evaluate(() => window.__apex.finishRace());
