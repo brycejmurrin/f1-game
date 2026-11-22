@@ -6179,6 +6179,38 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   assert.equal(_gpuMs, -1);
 });
 
+test("TLX updates only the sampled cube face and preserves its world projection", async () => {
+  const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
+  const envRT = new THREE.CubeRenderTarget(1);
+  const _envOptOut = false, _envGaveUp = false, lit = {}, ensureEnvCam = () => {}, ENV_CULL_M = 300;
+  const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
+  const _envVPArr = new Float32Array(16), _envInvArr = new Float32Array(16);
+  let _envActive, _envFrame, _envSvVP, _envSvEye, _envSvCull, _envBegins = 0, envCubeCam;
+  const begin = eval("(function(face, eye, frame){" + fnBody(code("js/render/three/tlx.js"), "envFaceBegin") + "})");
+  for (const system of [THREE.WebGLCoordinateSystem, THREE.WebGPUCoordinateSystem]) {
+    envCubeCam = new THREE.CubeCamera(0.4, 900, envRT);
+    const reference = new THREE.CubeCamera(0.4, 900, envRT);
+    for (const cube of [envCubeCam, reference]) {
+      cube.coordinateSystem = system;
+      cube.updateCoordinateSystem();
+    }
+    for (const face of [0, 5, 3, 1, 4, 2]) {
+      const eye = [face + 12.5, face - 4, face * 0.75];
+      reference.position.fromArray(eye);
+      reference.updateMatrixWorld(true);
+      const camera = reference.children[face];
+      const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      const before = envCubeCam.children.map(child => child.matrixWorld.clone());
+      const frame = { viewProj: new Float32Array(16) };
+      const inv = begin(face, eye, frame);
+      assert.deepEqual(frame.viewProj, Float32Array.from(vp.elements));
+      assert.deepEqual(inv, Float32Array.from(vp.invert().elements));
+      for (let i = 0; i < 6; i++) if (i !== face) assert.deepEqual(envCubeCam.children[i].matrixWorld, before[i]);
+    }
+  }
+  envRT.dispose();
+});
+
 test("TLX cube readback selects all six faces of attachment zero", async () => {
   const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });

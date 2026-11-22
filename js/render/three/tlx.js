@@ -5853,9 +5853,10 @@ const TLX = (function () {
           if (!envCubeCam) return null;
           _envActive = true;
           envCubeCam.position.set(eye[0], eye[1], eye[2]);
-          envCubeCam.updateMatrixWorld(true);
           const faceCam = envCubeCam.children[face & 7];
           if (!faceCam) { _envActive = false; return null; }
+          // A probe submits one face. Refresh its parent and view, leaving the other five cameras alone.
+          faceCam.updateWorldMatrix(true, false);
           // invViewProj for THIS face -> the sky node's ray reconstruction.
           _envVP.multiplyMatrices(faceCam.projectionMatrix, faceCam.matrixWorldInverse);
           _envInvVP.copy(_envVP).invert();
