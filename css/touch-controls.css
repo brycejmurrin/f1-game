@@ -133,24 +133,36 @@
    (it shares the :active rules); "off" puts the one it left back to idle. */
 #btn-throttle[data-slid="off"]:active, #btn-brake[data-slid="off"]:active { background: var(--idle); opacity: var(--btn-a); box-shadow: none; }
 
-/* The dock uses static positioning; containment anchors the edge indicators to
-   the held button without changing its slot or pointer hit area. */
-.touchbtn[data-touch-feedback="on"] { contain: layout; }
-.touchbtn[data-touch-feedback="on"]::after,
-.touchbtn[data-touch-feedback="on"][data-grip-cue]::before {
-  content: ""; position: absolute; pointer-events: none; inset-inline: 22%;
-  border-radius: var(--r-pill); box-shadow: 0 0 0 1px var(--carbon);
+/* Containment anchors the face to static dock buttons and keeps its negative
+   paint layer behind labels but above the button background. */
+.touchbtn:is([data-touch-feedback="on"], [data-touch-response]) { contain: layout; }
+/* Three ascending bars identify progressive travel before the thumb lands.
+   An active grip warning takes the same slot above the label. */
+.touchbtn[data-touch-response="progressive"]:not([data-grip-cue], [aria-pressed])::before {
+  content: ""; position: absolute; pointer-events: none; top: 10%; left: 50%;
+  width: 14px; height: 7px; transform: translateX(-50%); background: var(--hud-ink-light);
+  clip-path: polygon(0 100%, 0 65%, 26% 65%, 26% 100%, 37% 100%, 37% 32%, 63% 32%, 63% 100%, 74% 100%, 74% 0, 100% 0, 100% 100%);
+}
+#btn-throttle { --touch-fill: var(--faster); }
+#btn-brake { --touch-fill: var(--slower); }
+/* Keep the button silhouette and its label fixed. Only the full-face highlight
+   changes opacity; a light press stays dim and full travel is brightest. */
+:is(#btn-steer-left, #btn-steer-right, #btn-throttle, #btn-brake)[data-touch-feedback="on"]:not([aria-pressed]) {
+  background: var(--hud-ink-dark); color: var(--hud-ink-light);
 }
 .touchbtn[data-touch-feedback="on"]::after {
-  bottom: 12%; height: max(6%, 2px);
-  background: linear-gradient(to right, var(--hud-ink-light) calc(var(--touch-level) * 100%), var(--carbon) 0);
+  content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) 46%, var(--hud-ink-dark));
+  opacity: var(--touch-level);
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue]::before {
+  content: ""; position: absolute; pointer-events: none; inset-inline: 22%;
+  border-radius: var(--r-pill); box-shadow: 0 0 0 1px var(--hud-ink-dark);
   top: 12%; height: max(13%, 4px);
-  background: repeating-linear-gradient(120deg, var(--hud-ink-light) 0 15%, var(--carbon) 15% 30%);
+  background: repeating-linear-gradient(120deg, var(--hud-ink-light) 0 15%, var(--hud-ink-dark) 15% 30%);
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue="lock"]::before {
-  background: linear-gradient(to bottom, var(--hud-ink-light) 32%, var(--carbon) 32% 68%, var(--hud-ink-light) 68%);
+  background: linear-gradient(to bottom, var(--hud-ink-light) 32%, var(--hud-ink-dark) 32% 68%, var(--hud-ink-light) 68%);
 }
 
 /* Latch uses the persistent illuminated GAS button for its binary command. */

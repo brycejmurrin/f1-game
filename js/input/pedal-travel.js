@@ -70,6 +70,7 @@ const PedalTravel = (function () {
   // Both entry points load GameStore; keep a session value for isolated input
   // consumers that run without the persistence module.
   let memory = null;
+  const memoryListeners = new Set();
   const store = () => typeof GameStore !== "undefined" ? GameStore.store : null;
   const saved = () => store() ? store().get(KEY, null) : memory;
   function buttonOverrides(id) {
@@ -81,6 +82,15 @@ const PedalTravel = (function () {
     const slide = pedal && (globalSlide ?? store()?.get("pedalSlide", "instant"));
     return { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
   }
+  function watchButtonProfile(id, callback) {
+    const refresh = () => callback(buttonProfile(id));
+    refresh();
+    if (store()?.subscribe) return store().subscribe(change => {
+      if (change.key === KEY || change.key === null) refresh();
+    });
+    memoryListeners.add(refresh);
+    return () => memoryListeners.delete(refresh);
+  }
   function setButtonProfile(id, patch) {
     if (!BUTTONS.includes(id)) return;
     const buttons = normalizeProfiles(saved())?.buttons || {};
@@ -90,10 +100,11 @@ const PedalTravel = (function () {
     const value = Object.keys(buttons).length ? { v: 1, buttons } : undefined;
     if (store()) store().set(KEY, value);
     else memory = value;
+    if (!store()?.subscribe) for (const refresh of memoryListeners) refresh();
     return buttonProfile(id);
   }
 
   return { DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, normalizeProfiles, buttonOverrides, buttonProfile,
-    setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
+    watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);

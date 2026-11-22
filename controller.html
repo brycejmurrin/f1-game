@@ -283,13 +283,21 @@
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
   .pedal::before { content: ""; position: absolute; inset: 14px; border-radius: 18px; border: 1px dashed var(--card-line); }
-  .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
+  .pedal[data-touch-response="progressive"]:not(.grip-cue.on)::before {
+    inset: 10% auto auto 50%; width: 14px; height: 7px; transform: translateX(-50%);
+    border: 0; border-radius: 0; background: var(--text); pointer-events: none;
+    clip-path: polygon(0 100%, 0 65%, 26% 65%, 26% 100%, 37% 100%, 37% 32%, 63% 32%, 63% 100%, 74% 100%, 74% 0, 100% 0, 100% 100%);
+  }
+  body.throttle-auto #gas[data-touch-response]::before { display: none; }
   .pedal.on { color: var(--text); }
-  /* --travel: the pedal's live level (phone-pad.js hold): full on the touch, easing as the thumb slides up. */
-  #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: var(--ok); }
-  #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: var(--bad); }
-  .pedal.on:not(.feedback-off)::after { inset-inline: auto 0; width: .45rem; }
-  .pedal.feedback-off.on::after { display: none; }
+  #gas.on { --touch-fill: var(--ok); border-color: var(--ok); }
+  #brake.on { --touch-fill: var(--bad); border-color: var(--bad); }
+  .pedal.on:not(.feedback-off) { isolation: isolate; background: var(--hud-ink-dark); color: var(--hud-ink-light); }
+  .pedal.on:not(.feedback-off)::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+    background: color-mix(in srgb, var(--touch-fill) 46%, var(--hud-ink-dark));
+    opacity: var(--travel, 1);
+  }
   .pedal.grip-cue.on:not(.feedback-off)::before { inset: .4rem 12% auto; height: .4rem; border: 0; }
   #gas.grip-cue.on:not(.feedback-off)::before { background: repeating-linear-gradient(125deg, currentColor 0 .2rem, transparent .2rem .4rem); }
   #brake.grip-cue.on:not(.feedback-off)::before { border-block: .15rem solid currentColor; border-radius: 0; }
