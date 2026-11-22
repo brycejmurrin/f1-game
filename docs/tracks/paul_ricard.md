@@ -14,11 +14,9 @@ Hard white Provençal light, bleached limestone, thin dry scrub. Enormous areas 
 - Built: white `[0.94, 0.94, 0.92]`, mill aluminium `[0.76, 0.78, 0.80]`, apron concrete `[0.60, 0.60, 0.59]`
 
 ## 3. Elevation
-The flattest circuit in this set by some way — Le Castellet is a graded plateau. Vary ground-box tops by ≤1 unit.
-- s≈0.30: +3 m, barely perceptible.
-- s≈0.66: −3.5 m down the second half of the Mistral towards Signes.
-- s≈0.88: +2.5 m back to the pit straight.
-- Nothing else. Character here comes from width, paint and emptiness, not relief.
+The GP circuit crosses a rolling plateau. At the 202 original trace vertices, France’s IGN RGE ALTI terrain model ranges from 412.16 to 441.98 m above sea level. The start vertex is 426.44 m. The built lap reaches its low point at racing fraction 0.264, then climbs along the Mistral to a crest at 0.657. Maximum modelled local grades are +6.73% and −6.56%.
+
+The third ordinate of each path point is its IGN height minus 426.44 m. To reproduce the profile, query the elevation endpoint with the ordered longitudes and latitudes from the open GeoJSON ring and resource `ign_rge_alti_wld`. These heights describe centreline terrain. The corner banking is authored separately. [IGN elevation service](https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json) · [Source route](https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/fr-1969.geojson)
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

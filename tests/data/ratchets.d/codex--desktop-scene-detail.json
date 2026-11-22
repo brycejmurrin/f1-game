@@ -1,0 +1,21 @@
+{
+  "files": {
+    "js/agent/apex.js": {
+      "codeLines": 1,
+      "lines": 1
+    },
+    "js/game.js": {
+      "codeLines": 20,
+      "lines": 20
+    },
+    "js/render/glx/glx.js": {
+      "lines": 3
+    }
+  },
+  "tree": {
+    "assertPins": 3,
+    "assertPinsAll": 4,
+    "eagerCodeBytes": 9134,
+    "vmSrcLoads": 4
+  }
+}

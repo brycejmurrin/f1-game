@@ -60,6 +60,8 @@
         if (s > 0.52 && s < 0.90) return;
         const h = hash(k * 31);
         if (h < 0.40) return;
+        // Keep tree crowns off the Estoril grandstand roof.
+        if (h >= 0.5 && s >= 0.148 && s <= 0.20) return;
         tree(k, h < 0.5 ? -1 : 1, 12 + h * 10, 11 + h * 7, h < 0.5 ? LEAF_D : LEAF);
       });
       every(48, (k) => {
@@ -72,8 +74,10 @@
       });
       // Field hedges banding the outfield. One long run per side; the old
       // three-run layout left consecutive segments coplanar with themselves.
-      hedge(0.12, 0.28, -1, 36, 3.1, [0.16, 0.34, 0.17]);
-      hedge(0.64, 0.82, -1, 38, 3.4, [0.17, 0.35, 0.18]);
+      hedge(0.128, 0.28, -1, 36, 3.1, [0.16, 0.34, 0.17]);
+      // Leave a break at Imola where the inside offset folds across itself.
+      hedge(0.64, 0.75, -1, 38, 3.4, [0.17, 0.35, 0.18]);
+      hedge(0.78, 0.82, -1, 38, 3.4, [0.17, 0.35, 0.18]);
       // Right-side field edge as spaced bushes (avoids hedge self-coplanar).
       along(0.36, 0.50, 10, (k) => {
         bush(k, 1, 40 + hash(k) * 4, [0.15, 0.33, 0.16]);

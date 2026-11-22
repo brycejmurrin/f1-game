@@ -61,7 +61,7 @@
     // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
     sectors: [0.314, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
     turns: [0.0661, 0.1112, 0.1577, 0.1766, 0.1933, 0.2326, 0.2587, 0.2892, 0.3052, 0.3438, 0.4157, 0.6330, 0.6737, 0.6911, 0.7260, 0.7653, 0.7827, 0.8009, 0.8634, 0.9179],
-    furniture: { tree: "acacia", fol: [0.32, 0.39, 0.18], lamp: "none" },  // dry Texas live oak
+    furniture: { tree: "acacia", sparse: true, fol: [0.32, 0.39, 0.18], lamp: "none" },  // dry Texas live oak
     kit: { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "sandstone", "alu"],  // T1 bleachers are real bleacher() now
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

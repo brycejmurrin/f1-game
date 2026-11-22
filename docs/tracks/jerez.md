@@ -14,7 +14,7 @@ Bleached. Earth is pale ochre, vegetation olive-grey, and the light is hard and 
 
 ## 3. Elevation
 
-Gentle, with a noticeable climb to the Dry Sack hairpin (Curva Dani Pedrosa since 2019) and a fall through the final sector.
+The Spanish national mapping agency’s 5 m terrain grid places Michelin (Turn 2) about 7 m above Turn 4. The road rises again to Sito Pons (Turn 5) before descending toward Dani Pedrosa (Turn 6). The built lap spans about 19 m. [IGN elevation service](https://servicios.idee.es/wcs-inspire/mdt?service=WCS&version=2.0.1&request=DescribeCoverage&coverageId=Elevacion4258_5)
 
 ## 4. Landmarks & surroundings by lap position
 

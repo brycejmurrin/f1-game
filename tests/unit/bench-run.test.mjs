@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -228,4 +229,25 @@ test("bench-run: with room the plan is saved before the leg pins its renderer, a
   assert.equal(plan.legs[0].state, "booting");
   assert.equal(r.ls.get("apex26.gfxBackend"), "three");
   assert.equal(r.ls.get("apex26.tlxForceGL"), "0", "first QUICK PATHS leg is WebGPU");
+});
+
+test("Graphics opens the real Benchmark dialog for arrangement without running a test", () => {
+  const dom = makeDom(), doc = dom.document, timers = new Map(), edits = [], writes = [];
+  const panel = dom.byId("pm-panel-graphics"), dialog = dom.byId("bench");
+  const header = doc.createElement("header");
+  header.className = "sheet-head"; dialog.appendChild(header); dialog.ownerDocument = doc;
+  dialog.appendChild(dom.byId("bench-body")); dialog.appendChild(dom.byId("bench-back"));
+  doc.getElementById = id => doc.querySelector("#" + id);
+  const ctx = vm.createContext({document:doc, setTimeout(fn, ms){timers.set(ms,fn);},
+    SettingsNav:{arrangeScreen(id){edits.push(id);}},
+    GameStore:{store:{raw(){return null;}, rawSet(...args){writes.push(args);}}}});
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/editor-workspace.js"), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+  vm.runInContext(SRC + "\nBenchRun.create({});",ctx, { filename: absSrc("js/perf/bench-run.js") });
+  timers.get(400)();
+  panel.querySelector("#pm-bench-open").click();
+  assert.equal(dialog.hidden,false);
+  assert.ok(dialog.querySelector('[aria-label="Test"]'));
+  const door = header.querySelector("button"); door.onclick();
+  assert.deepEqual(edits,["bench"]);
+  assert.deepEqual(writes,[]);
 });

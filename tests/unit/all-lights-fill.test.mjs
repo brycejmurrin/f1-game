@@ -243,10 +243,11 @@ test("the flicker-only re-tint is held for 50 ms of wall clock; a scale or sourc
 });
 
 // The REAL FrameLights over a fake clock, for the tests that drive setFrameLights.
-function loadReal(clock) {
+function loadReal(clock, globals = {}) {
   const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array, Float32Array, WeakRef,
     performance: { now: () => clock.now }, Number };
+  Object.assign(sb, globals);
   sb.window = sb;
   sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
   sb.Tracks = { sample(t, s, o) { return o; } };
@@ -274,6 +275,49 @@ test("frame.lampSetGen moves with the lamp set and its scale, never with the fli
   assert.notEqual(g1, g0, "a scale change moves it");
   track._lights = B;
   assert.notEqual(run([0.8, 0.8, 0.8]), g1, "a new lamp set moves it");
+});
+
+test("hot front discs use two bounded moving slots with solo, painted and emitting traffic", () => {
+  let thermal = true;
+  const { FL, LT } = loadReal({ now: 1000 }, { WheelState: { enabled: () => true, thermalEnabled: () => thermal } });
+  const wheels = [{ x: -0.8, y: 0.34, z: 1.7, front: true }, { x: 0.8, y: 0.34, z: 1.7, front: true },
+    { x: -0.8, y: 0.34, z: -1.6, front: false }];
+  const pose = (_player, m) => { m.fill(0); m[1] = 1; m[4] = -1; m[10] = 1; m[12] = 10; m[13] = 3; m[14] = 4; return m; };
+  const player = { s: 0, brakeTF: 1000, brakeHeat: 0 };
+  const track = { total: 8000, _lights: makeSet(90, 0) };
+  const run = (traffic, emit, enabled = 1, mobile = false) => {
+    LT.tailLightEmit = emit;
+    const frame = { time: 0, brakeSpillEnabled: enabled };
+    FL.setFrameLights(frame, track, traffic, [0, 2, 0], 1, [0, 0, 1], mobile);
+    FL.appendCarTailLights(frame, track, traffic, player, mobile, pose, wheels);
+    return frame;
+  };
+  for (const traffic of [[], [{ s: 10, x: 0 }]]) for (const emit of [0, 1]) {
+    const f = run(traffic, emit);
+    assert.equal(f.brakeSpillCount, 2);
+    assert.equal(f.tailCount, 2 + traffic.length * emit);
+    assert.equal(f.tailStart + f.tailCount, f.lights.length / 15);
+    assert.ok(f.lights.length / 15 <= 48);
+    for (let j = 0; j < 2; j++) {
+      const at = f.lights.length - 30 + j * 15;
+      assert.deepEqual(Array.from(f.lights.slice(at, at + 7)), [9.66, 3 + wheels[j].x, 5.7, 4, 0.76, 0.1, 2.6]);
+      assert.deepEqual(Array.from(f.lights.slice(at + 13, at + 15)), [0, 0]);
+    }
+  }
+  player.brakeTF = 600;
+  const cold = run([], 0);
+  assert.equal(cold.brakeSpillCount, 0);
+  assert.equal(cold.lights.length, run([], 0, 0).lights.length);
+  player.brakeTF = 1000;
+  assert.equal(run([], 0, 1, true).brakeSpillCount, 0);
+  thermal = false;
+  assert.equal(run([], 0).brakeSpillCount, 0);
+  player.brakeHeat = 1;
+  track._lights = [];
+  const solo = run([], 0, 0.25);
+  assert.equal(solo.lights.length, 30);
+  assert.equal(solo.lights[3], 1);
+  assert.equal(solo.tailStart, 0);
 });
 
 // Folded from frame-lights-tail-budget (#1965): the two cases the tests above do

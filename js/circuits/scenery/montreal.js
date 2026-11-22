@@ -130,18 +130,24 @@
       // Right verge: park lawns from Senna S through the Casino complex
       for (let i = 0; i < 14; i++) {
         if ([4, 9, 11, 12].includes(i)) continue; // nearby foldbacks own this ground
-        groundPatch(K(0.08 + i * 0.058), 1, 9, [42, 0.35, 40], GRASS,
+        // The hairpin return comes within 19 m of this verge at the southern end.
+        groundPatch(K(0.08 + i * 0.058), 1, 9, [i === 10 ? 9 : 42, 0.35, 40], GRASS,
           { id: `montreal-park-lawn-r-${i}`, samples: 6 });
       }
       // Left verge: island interior from basin entry to back straight
       for (let i = 0; i < 10; i++) {
-        groundPatch(K(0.10 + i * 0.068), -1, 9, [40, 0.35, 38], GRASS,
+        // The Jean-Doré beach and its service path occupy the outer verge here.
+        const lawnWidth = i === 8 || i === 9 ? 24 : 40;
+        groundPatch(K(0.10 + i * 0.068), -1, 9, [lawnWidth, 0.35, 38], GRASS,
           { id: `montreal-park-lawn-l-${i}`, samples: 6 });
       }
 
       // Continuous low clipped hedge / treeline ribbon framing the verges
-      hedge(0.13, 0.19,  1, 9, 1.6, HEDGE);
-      hedge(0.38, 0.50,  1, 9, 1.4, HEDGE);   // mid-island right verge
+      // Leave openings inside the chicanes where successive hedge blocks overlap.
+      hedge(0.13, 0.162, 1, 9, 1.6, HEDGE);
+      hedge(0.175, 0.19, 1, 9, 1.6, HEDGE);
+      hedge(0.38, 0.46, 1, 9, 1.4, HEDGE);
+      hedge(0.468, 0.50, 1, 9, 1.4, HEDGE);
       hedge(0.62, 0.69, -1, 9, 1.6, HEDGE);
       hedge(0.73, 0.78, -1, 9, 1.6, HEDGE);
       hedge(0.78, 0.885, 1, 9, 1.6, HEDGE);
@@ -155,7 +161,8 @@
       grandstandEx(0.02,  1,  8, 120, null, null,
         { livery: "teal", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
-      grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
+      // Keep the full seating rake on the approach to T1, before the ground rises.
+      grandstandEx(0.055, 1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
       grandstandEx(0.96, -1, 11,  80, null, null, { livery: "teal", roof: "cantilever", endWalls: true });
 
       // Start/finish gantry spanning the main straight + a second timing arch
@@ -482,6 +489,8 @@
               const hv = hash(kk * 31 + r * 13 + c * 7);
               const p = vadd(vadd(a0.c, a0.r, r * 11), a0.t, (c - 1.5) * 11);
               if (onTrack(p[0], p[2], 14)) continue;
+              const gy = groundUnder(p[0], p[2]);
+              if (gy != null) p[1] = gy;
               // Gravel walk under and around each parterre.
               addBox(out, vadd(p, a0.u, 0.22), [10.4, 0.44, 10.4], GRAVEL, b);
               // Clipped green edging, then the massed colour inside it.
@@ -518,6 +527,7 @@
         }
         for (let i = 0; i < 8; i++) {
           const sf = 0.20 + i * 0.075;
+          if (i === 1) continue; // casino plinth occupies this shed site
           if (sf > 0.57 && sf < 0.64) continue; // foldback keep-out: the two legs run <35 m apart over 0.585-0.655
           const side = (i % 2) ? 1 : -1;
           const gap = 55 + hash(i * 13) * 28;
@@ -761,10 +771,11 @@
           }
           prevTop = top; prevBot = bot;
         }
-        // Two main piers descending toward the water below the deck
+        // Main piers connect the underside of the deck to the riverbed.
         for (const off of [-half * 0.55, half * 0.55]) {
-          addBox(out, vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y * 0.4),
-            [6, DECK_Y * 0.8, 6], [0.48, 0.49, 0.52], jb);
+          const underside = vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y - 1.2);
+          foundation(out, { center: underside, size: [6, 6], top: underside[1],
+            ground: ja.c[1], basis: jb, col: [0.48, 0.49, 0.52] });
         }
       }
 
@@ -994,8 +1005,8 @@
       grandstandEx(0.65, -1, 18, 80, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
 
-      // Short grounded open bank over the −1 m elevation dip at s≈0.72
-      // (elevations[2]); its bottom row meets the island shelf. A tube stand
+      // Short open bank on the Casino Straight. Its bottom row meets
+      // the island shelf. A tube stand
       // (awning + sparse legs) here is an 18 / 10.5 m unsupported cluster.
       {
         const a = anchor(K(0.74), -1, 16);

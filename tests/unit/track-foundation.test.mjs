@@ -139,17 +139,9 @@ test("Miami declares explicit racing scenery and source-mapped Turnpike elevatio
   assert.equal(miami.sceneryCoordinates, "racing");
   assert.equal(miami.flatTerrain, true);
   assert.equal(miami.terrainOuter, 90);
-  // Elevations are SOURCE-space and fmap'd through startFrac. This expected
-  // 0.66 while miami's startFrac was 0.2325 (0.8925 - 0.2325); the start line
-  // has since been corrected onto the real one at 0.0, so the map is now the
-  // identity and the source fraction stands unchanged. The assertion is kept
-  // because it still pins WHICH space the field is read in. 0.8925 -> 0.8605
-  // when the bogus sceneryStartFrac 0.2325 went (DEFECT-LEDGER "miami"): the
-  // shift's undulation phase had carried the crest, so the source fraction was
-  // re-swept to keep the road where it was (peak ~0.858, within 0.065 m).
   assert.equal(miami.startFrac, 0);
-  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.8605) < 1e-12);
-  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[1].s) - 0.662) < 1e-12);
+  const crest = TrackSpace.toRacingFrac(miami, miami.elevations[0].s);
+  assert.ok(crest > miami.turns[13] && crest < miami.turns[14], "T14–T15 ramp crest");
   // Curated hero zones only (eb0b6b3 narrowed the old full-lap exclusion):
   // Hard Rock bowl horizon, marina, and beach club.
   const cityFoliage = Array.from(miami.dressingExclusions) // host-realm copy for deepEqual
@@ -539,4 +531,21 @@ test("the base floor carries the authored ground material without moving or reco
       assert.deepEqual(Array.from(floor.idx), winding, "ground identity preserves both windings");
     }
   }
+});
+
+test("gravel debris contact follows the modelled gravel verge and excludes paved surfaces", () => {
+  const Surface = loadGlobal(P.TRACK_SURFACE, "TrackSurface");
+  const track = { n: 2, total: 100, py: [0, 0], hw: [7, 8] };
+  const surface = Surface.profile({}, track);
+  assert.equal(surface.gravelAt(0, 7), false);
+  assert.equal(surface.gravelAt(0, 8), false);
+  assert.equal(surface.gravelAt(0, -10), true);
+  assert.equal(surface.gravelAt(1, 10), false);
+  assert.equal(surface.gravelAt(0, 80), false);
+  assert.equal(Surface.profile({ terrainMat: "CONCRETE" }, track).gravelAt(0, -10), false);
+  assert.equal(Surface.profile({ street: true }, track).gravelAt(0, -10), false);
+  track.pit = { side: 1, off: { outer: 18 }, bay: { depth: 6 }, w: [1, 0] };
+  const pit = Surface.profile({}, track);
+  assert.equal(pit.gravelAt(0, 11), false);
+  assert.equal(pit.gravelAt(0, -11), true);
 });

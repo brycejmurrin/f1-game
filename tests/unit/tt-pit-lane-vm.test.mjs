@@ -4,9 +4,8 @@
  * A Time Trial forces tyre wear off, and PitLane.enabled() needs wear on, so the
  * lane never opened: no limiter, no cue, no box. Now the LANE (laneOpen) opens in
  * a TT while strategy, service and the compound rule stay on enabled(). The box
- * holds the car TT_DECIDE_S longer and offers END TIME TRIAL (canWork, the WORK
- * ON CAR slot); confirming ends the session in the TT results (the pit drive-in
- * runs first in a browser; the VM is automation, which hands back at once).
+ * holds the car TT_DECIDE_S longer and offers both pit actions. Work resumes the same run; ending opens the garage
+ * with the completed lap sheet one tap away.
  *
  * Run: node --test tests/unit/tt-pit-lane-vm.test.mjs   (~10 s, one boot)
  */
@@ -78,7 +77,7 @@ test("TT: the lane opens — armed, the limiter caps the car and the HUD lane cu
   assert.ok(p.speed <= pits.limit() + 1e-6, `the limiter holds (${p.speed.toFixed(2)} <= ${pits.limit().toFixed(2)} m/s)`);
 });
 
-test("TT: the box holds for the decision, serves nothing, and offers END TIME TRIAL; driving out keeps the run", async () => {
+test("TT: the box holds for the decision, serves nothing, and offers END SESSION; driving out keeps the run", async () => {
   const a = await freshTT();
   const G = g.G, p = G.player, pits = G.pits, tyre = p.tyre && p.tyre.id;
   const seen = creepToBox(a, 60 * 12);
@@ -86,25 +85,46 @@ test("TT: the box holds for the decision, serves nothing, and offers END TIME TR
   const zz = pits.zoneOf();
   const held = p.pitT;
   assert.equal(held, zz.boxS + 4, "the stop plus TT_DECIDE_S (4 s) to decide");
-  assert.equal(pits.canWork(p), true, "END TIME TRIAL is offered (the WORK ON CAR slot)");
+  assert.equal(pits.canWork(p), true, "pit actions are available");
   for (let i = 0; i < Math.ceil((zz.boxS + 4) * 60) + 2; i++) { a.setInput({ steer: 0, throttle: true }); a.step(1 / 60, 1); }
   a.clearInput();
   assert.equal(p.pitState, "out", "released after the hold");
   const banner = g.sandbox.document.getElementById("announce-text").textContent;
   assert.ok(banner.startsWith("STOP " + held.toFixed(1) + "s"), banner);
-  assert.equal(pits.canWork(p), false, "no END TIME TRIAL once released");
+  G.refreshHud(true);
+  assert.equal(G.els.workBtn.hidden, true);
+  assert.equal(G.els.endSessionBtn.hidden, true, "both pit actions disappear after release");
+  assert.equal(pits.canWork(p), false, "no END SESSION once released");
   assert.equal(p.tyre && p.tyre.id, tyre, "no tyre service in a Time Trial");
   assert.equal(G.state, "race", "not stopping to end it keeps the run going");
   assert.equal(G.timeTrial, true);
 });
 
-test("TT: END TIME TRIAL from the box ends the session in the TT results", async () => {
+test("TT: END SESSION is visible in the box and returns to the garage before results", async () => {
   const a = await freshTT();
   const G = g.G, p = G.player;
   const seen = creepToBox(a, 60 * 12);
   assert.equal(seen[seen.length - 1], "box", "reached the box");
-  const btn = g.sandbox.document.getElementById("hud-work");
+  const btn = g.sandbox.document.getElementById("hud-end-session");
   assert.ok(btn && typeof btn.onclick === "function", "the HUD slot is wired");
+  G.refreshHud(true);
+  assert.equal(btn.hidden, false);
+  assert.equal(G.els.workBtn.hidden, false, "both choices are available at this stop");
+  G.els.workBtn.onclick();
+  const box = g.sandbox.document;
+  assert.equal(G.paused, true);
+  assert.equal(box.getElementById("cs-done").textContent, "RETURN TO TIME TRIAL");
+  box.getElementById("cs-arrival-skip").onclick();
+  const held = p.pitT, team = p.team.id;
+  G.saveTeamParts(team, { ...G.getTeamParts(team), engine: "sprint" });
+  box.getElementById("cs-done").onclick();
+  box.getElementById("cs-done").onclick();
+  assert.equal(G.paused, false);
+  assert.equal(G.state, "race");
+  assert.equal(G.getTeamParts(team).engine, "sprint");
+  assert.equal(p.pitT, held + G.pits.workS, "the same stop charges for changed parts");
+  G.refreshHud(true);
+  assert.equal(btn.hidden, false, "ending is still available on return to the box");
   btn.onclick();
   const doc = g.sandbox.document;
   assert.equal(doc.getElementById("carsetup").hidden, false, "the pit drive-in plays in the garage");
@@ -112,6 +132,10 @@ test("TT: END TIME TRIAL from the box ends the session in the TT results", async
   assert.equal(G.state, "race", "the session ends when the drive-in hands back, not before");
   doc.getElementById("cs-done").onclick();   // SKIP / DONE during the drive-in: the same hand-back as its end
   for (let i = 0; i < 4 && G.state !== "results"; i++) { g.flushTimers(); g.step(1); }
+  assert.equal(doc.getElementById("carsetup").hidden, false, "the finished session stays in the garage");
+  assert.equal(doc.getElementById("results").hidden, true);
+  assert.equal(doc.getElementById("cs-done").textContent, "VIEW RESULTS");
+  doc.getElementById("cs-done").onclick();
   assert.equal(doc.getElementById("carsetup").hidden, true, "the garage closed");
   assert.equal(G.state, "results", "the session ended");
   assert.equal(g.sandbox.document.getElementById("results").hidden, false, "the TT results sheet is up");

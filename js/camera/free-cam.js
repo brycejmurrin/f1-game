@@ -184,6 +184,7 @@ if (root) {
   const foot = mk("div", { className: "sheet-foot balanced-row" }, close ? [close] : []);
   inner.appendChild(foot);
   root.appendChild(inner);
+  if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, E["fc-head"]);
 }
 
 function paint() {

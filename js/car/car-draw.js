@@ -418,15 +418,28 @@ const CarDraw = (function () {
     }
 
     // ONE procedural body for every rival past FieldLod tier 2 (~120 m, ±10 %
-    // hysteresis on c._lodTier). Team livery stays on the planted wheels; the
-    // mesh is neutral grey so we never pay a Car3D.build per seat at range.
+    // hysteresis on c._lodTier). All palettes use this one procedural build.
+    // With distant livery colours off, every car shares the same neutral GPU mesh.
     // FAR BODY (`far` true, FieldLod.farBody: past ~250 m, 1-3 px tall): the same body clustered down to
     // FAR_BODY_TRIS (CarGeometry.decimate). The clustering costs ~130 ms, so it runs once in an idle
     // callback after the full shared body exists; until it lands a far rival draws the full shared body.
     const FAR_BODY_TRIS = 1500;
     let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
-    let _sharedRivalEpoch = 0;
+    const _farWheels = { F: null, R: null };
+    function getFarWheels() {
+      if (_farWheels.F && _farWheels.R) return _farWheels;
+      // Retain each successful upload if the other axle needs a retry.
+      try {
+        if (!_farWheels.F) _farWheels.F = G.gfx.createMesh(Car3D.buildFarWheel(0.32));
+        if (!_farWheels.R) _farWheels.R = G.gfx.createMesh(Car3D.buildFarWheel(0.38));
+      } catch (e) { Log.warn("gfx", "far wheel upload failed", e); return null; }
+      return _farWheels.F && _farWheels.R ? _farWheels : null;
+    }
+    let _sharedRivalEpoch = 0, _rivalPalettes = null;
     function freeSharedRivalBodies() {
+      if (_rivalPalettes) { _rivalPalettes.clear(); _rivalPalettes = null; }
+      freeWheelPair(_farWheels);
+      _farWheels.F = _farWheels.R = null;
       _sharedRivalEpoch++; // queued idle work belongs to the old cache generation
       const near = _sharedRivalBody, far = _farRivalBody;
       _sharedRivalBody = _farRivalBody = _sharedRivalGeom = null;
@@ -442,7 +455,10 @@ const CarDraw = (function () {
       const geom = _sharedRivalGeom;
       _farRivalKick = true;
       let mesh = null;
-      try { mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS)); }
+      try {
+        const far = CarGeometry.decimate(geom, FAR_BODY_TRIS);
+        mesh = _rivalPalettes ? _rivalPalettes.neutral(far, true) : G.gfx.createMesh(far);
+      }
       catch (e) { Log.warn("gfx", "far rival body failed", e); }
       if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody) {
         if (mesh && G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
@@ -451,26 +467,31 @@ const CarDraw = (function () {
       if (mesh) { _farRivalBody = mesh; if (_sharedRivalGeom === geom) _sharedRivalGeom = null; }
       else _farRivalKick = false; // a failed upload can retry on the next far draw
     }
-    function sharedRivalBodyMesh(far) {
+    function sharedRivalBodyMesh(far, car) {
       if (carModelBuf) return null;
       if (!_sharedRivalBody) {
         const team = Teams.LIST[0];
         const setup = Parts.getFactorySetup(team);
-        const geom = Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], {
+        if (typeof CarHero !== "undefined" && GfxQuality.feature("rivalLiveryLod")) {
+          _rivalPalettes = CarHero.rivalPalettes(G.gfx, putBoundedMesh);
+        }
+        const grey = [0.72, 0.72, 0.72];
+        const geom = Car3D.build(_rivalPalettes ? [1, 0, 0] : grey, _rivalPalettes ? [0, 1, 0] : grey, {
           field: true, silhouette: true, noDriver: true, noWheels: true, livery: {}, smooth: false,
           parts: Parts.getVisualTiers(setup, team),
         });
-        _sharedRivalBody = G.gfx.createMesh(geom);
+        _sharedRivalBody = _rivalPalettes ? _rivalPalettes.neutral(geom, false) : G.gfx.createMesh(geom);
         _sharedRivalGeom = geom;
       }
-      if (far && _farRivalBody) return _farRivalBody;
-      if (far && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
+      if (far && !_farRivalBody && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
         _farRivalKick = true;
         const epoch = _sharedRivalEpoch;
         const make = () => buildFarRivalBody(epoch);
         if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 2000 }); else setTimeout(make, 0);
       }
-      return _sharedRivalBody;
+      const useFar = !!(far && _farRivalBody);
+      if (car && _rivalPalettes) return _rivalPalettes.painted(useFar, livOf(paintTeam(car)));
+      return useFar ? _farRivalBody : _sharedRivalBody;
     }
     function farRivalBodyReady() { return !!_farRivalBody; }
 
@@ -1157,6 +1178,7 @@ const CarDraw = (function () {
         // crosses flapsM / farBody after green. Team-less ":sh" in the warm census.
         try {
           sharedRivalBodyMesh(false);
+          if (FieldLod.on && !carModelBuf) getFarWheels();
           if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
             buildFarRivalBody(_sharedRivalEpoch);
           }
@@ -1516,11 +1538,11 @@ const CarDraw = (function () {
     // player sees. null in every other view: the exterior silhouette casts.
     // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
     const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
-    function cockpitCaster(c, smp, yv, out) {
+    function cockpitCaster(c, smp, yv, out, bankRoll) {
       const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
       if (id !== "cockpit" && id !== "helmet" && id !== "visor") return null;
       const seat = id === "visor" ? "visor" : "cockpit";
-      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat));
+      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat), bankRoll);
       out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
       out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
       out[8] = _ckF[0]; out[9] = _ckF[1]; out[10] = _ckF[2]; out[11] = 0;
@@ -1632,7 +1654,8 @@ const CarDraw = (function () {
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
           for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
           if (c.isPlayer) continue;
-          d(_sharedRivalBody, co); d(_farRivalBody, co);
+          if (_sharedRivalBody) d(sharedRivalBodyMesh(false, c), co);
+          if (_farRivalBody) d(sharedRivalBodyMesh(true, c), co);
           d(teamBodyMesh(c.team, c), paint);
           const aSt = teamDecalState(pt, false, c.visualSetup, c.visStamp);
           for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(pt, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
@@ -1816,18 +1839,22 @@ const CarDraw = (function () {
         if (m.RFixed) G.gfx.freeMesh(m.RFixed);
       }
     }
-    function getPlayerWheelMeshes(team) {
+    function getPlayerWheelMeshes(car) {
+      const team = car.team;
+      const showWear = typeof GfxQuality !== "undefined" && GfxQuality.feature("tyreWearVisual");
+      const frontWear = showWear ? Number((car.tyreWearF ?? car.tyreWear) >= .5) + (car.flatSpot >= .18 ? 2 : 0) : 0;
+      const rearWear = showWear && (car.tyreWearR ?? car.tyreWear) >= .5 ? 1 : 0;
       // livery wheel tints (rimTint / caliperTint) join the key: "" when unset, so today's key is unchanged
       const wt = CarWheels.tints(team && deps.resolveLivery(team));
-      const pd = carDetail().player, key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key + (pd ? ":d" + pd : "");
+      const pd = carDetail().player, key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key + (pd ? ":d" + pd : "") + (frontWear || rearWear ? ":w" + (frontWear + 4 * rearWear) : "");
       return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
         const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
         const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
         const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
         const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd, frontWear);
         const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd, rearWear);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1950,7 +1977,8 @@ const CarDraw = (function () {
     // camera would emit twice). All views read the same frame's private phases;
     // dt controls spin blur only, never the phase.
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {
-      const wm = c.isPlayer ? getPlayerWheelMeshes(c.team) : getFieldWheelMeshes(c.team, c);
+      const far = !c.isPlayer && !bare && FieldLod.farWheels(c) ? getFarWheels() : null;
+      const wm = far || (c.isPlayer ? getPlayerWheelMeshes(c) : getFieldWheelMeshes(c.team, c));
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.
       const phase = _wheelPhases.get(c);

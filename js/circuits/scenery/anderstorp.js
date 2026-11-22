@@ -4,19 +4,19 @@
    Scandinavian Raceway — a working airfield in the Smaland pine forest.
    Brief: docs/tracks/anderstorp.md. Numbered blocks below map to its §4 rows:
 
-     0  palette + lap-position helpers (§2 northern light, §3 DEAD FLAT)
+     0  palette + lap-position helpers (§2 northern light, §3 elevation)
      1  forest shell + armco shell, runway corridor cut out   (§4 0.020/0.150/0.245, §5)
      2  start/finish complex                                   (§4 0.005 +1)
      3  pit-straight outside: colonnade pine + hoarding        (§4 0.020 -1)
      4  Turn 1: grey sand, tyres, camera tower                 (§4 0.045 -1)
      5  infield paddock: corrugated rank + sheds (motorhomes removed) (§4 0.095 +1)
      6  pine right up to the armco                             (§4 0.150 -1)
-     7  Turns 2-3 Sodra Kurvan: mown infield, low hill         (§4 0.185 +1)
+     7  Turns 2-3:             mown infield, low hill         (§4 0.185 +1)
      8  back into the trees: flag/timing hut                   (§4 0.245 -1)
      9  Turn 4 Opel Kurvan: hoarding, tyres, low hill          (§4 0.330 -1)
     10  infield scrub between the loops                        (§4 0.400 +1)
     11  Turn 5: long constant radius                           (§4 0.480 -1)
-    12  Turn 6 — ONTO THE RUNWAY, the corridor opens           (§4 0.556 +1, §6)
+    12  Turn 6 — Sodra, onto the runway, the corridor opens           (§4 0.556 +1, §6)
     13  airfield apron: hangars, flying club, parked aircraft  (§4 0.640 +1)
     14  runway far side: mown grass to a distant treeline      (§4 0.740 -1)
     15  end of the apron: sheds, concrete gives way            (§4 0.820 +1)
@@ -121,7 +121,7 @@
       const FOOT_SPAN = [
         [0.955, 0.982, -1, 20, 38.4],   // block 17 terrace (T8 outside)
         [0.900, 0.925, -1, 26, 36.0],   // block 17 spectatorHill
-        [0.172, 0.212,  1, 28, 38.0],   // block 7 spectatorHill (Sodra)
+        [0.172, 0.212,  1, 28, 38.0],   // block 7 spectatorHill
         // The engine's generic pit-straight bank + shell (build-props.js,
         // nodes 0-24 on -1): from the run-off edge it stands at 9.73-20.2 m,
         // where a start-line bush grew through its risers (#5998).
@@ -511,7 +511,7 @@
       bush(K(0.166), -1, 9, BUSH);
 
       // ---------------------------------------------------------------- 7.
-      // 0.185 +1 — TURNS 2-3, SODRA KURVAN. The south loop opens out: mown
+      // 0.185 +1 — TURNS 2-3. The loop opens out: mown
       // grass infield and a low bank (a metre or two — this site is FLAT).
       // The public side of the circuit: a commentary hut, a refreshment
       // shed, campers parked on the grass behind the bank.
@@ -530,7 +530,7 @@
       // runway leg's edge where the lap folds back (clip @0.809 vs roadside pine).
       building(K(0.222), 1, 30, 8, 3.8, 12, { col: TIMBER });  // refreshments
       building(K(0.204), 1, 62, 7, 4.0, 10, { col: FALU_D });
-      // Campers omitted — clipped the Sodra pine scatter (clip @0.224).
+      // Campers omitted — clipped the nearby pine scatter (clip @0.224).
       fence(0.166, 0.234, 1, 40, 1.8, [0.58, 0.60, 0.58]);
       for (let i = 0; i < 14; i++) {   // scattered pine closing the south loop
         const s = 0.168 + i * 0.0052;
@@ -655,7 +655,7 @@
       forestEdge(0.440, 0.545, -1, 20, { col: PINE, spacing: 12 });
 
       // --------------------------------------------------------------- 12.
-      // 0.556 +1 — TURN 6, ONTO THE RUNWAY. The identifying feature of the
+      // 0.556 +1 — TURN 6, SODRA KURVAN, ONTO THE RUNWAY. The identifying feature of the
       // circuit: the surface widens, a concrete apron spreads to the infield
       // with faded edge markings, and the armco steps back (block 1). The
       // apron is laid as one long run of concrete groundPatch so the corridor
@@ -867,9 +867,9 @@
       // Grass patches stay OUTSIDE the Flight Straight apron window (APR1
       // ends 0.830) so they do not co-plane with runway slabs.
       // Gap 31: anchor gaps run from the road EDGE and the runway is now 3.5 m
-      // wider each side, so 34 would put the roof cap 3.5 m closer to the Sodra leg.
+      // wider each side, so 34 would put the roof cap 3.5 m closer to the adjacent leg.
       building(K(0.820), 1, 28, 12, 7.5, 24, { col: CORR_BLUE });
-      // Gap 32, not 38: further out it crossed onto the Sodra leg's roadside
+      // Gap 32, not 38: further out it crossed onto the adjacent leg's roadside
       // pine (clip @0.224), the lap folding back across the infield.
       building(K(0.802), 1, 28.5, 9, 5.0, 14, { col: CORR_RUST });   // was 32; the edge moved out 3.5 m
       building(K(0.842), 1, 40, 7, 4.2, 10, { col: TIMBER });

@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "silverstone",
+    revision: 2, // measured longitudinal profile changes comparable lap times
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.2 m off centreline at the Wing; vertex 0 is the OLD National pit straight, 1.3 km away.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -54,11 +55,16 @@
     ],
     // British overcast (ATM.britishOvercast) — pale grey-blue sky, lush grass, soft fog.
     pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.26, 0.36, 0.21], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
-    // Source-trace fractions; built centreline peaks +7.04 m at racing s≈0.269 and dips -7.13 m at s≈0.703 (trackProfile, 2026-10-15; the old 0.12/0.55 note was wrong).
+    // Closed-loop fit to OpenF1 2024 British qualifying car Z, session 9554:
+    // fastest completed laps for Russell, Hamilton and Norris, interpolated by
+    // distance and combined by median. F1 reports 11.3 m relief and a drop
+    // from Stowe to Vale. These 36 overlapping cosine knots are source-frame
+    // heights about the lap mean. https://api.openf1.org/v1/laps?session_key=9554&driver_number=63
     elevations: [
-      { s: 0.7669, halfM: 420, rise: 7 },
-      { s: 0.1969, halfM: 480, rise: -7 },
-    ],
+      1.16, 1.06, 1.75, 2.91, 1.05, 1.62, 1.76, -0.63, 0.07, -0.8, -0.77, -2.51,
+      -1.24, 1.73, -2.27, -3.04, -1.9, -3.59, -3.64, -2.36, -1.03, -0.5, 0.86, 1.22,
+      1.73, 1.77, 1.62, 1.6, 1.94, 1.03, -0.62, 1.07, -0.44, -0.7, -0.03, 0.13,
+    ].map((rise, j) => ({ s: j / 36, halfM: 324.76, rise })),
     bankZones: [
       { frac: 0.6536, angleDeg: 4.0, widthM: 110 },   // Loop
       { frac: 0.8391, angleDeg: 3.5, widthM: 190 },   // Luffield

@@ -1,7 +1,7 @@
 /* Live touch layout toolbar, loaded on the first edit. */
 const DockToolbar = (() => {
   "use strict";
-  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, getShape, setShape, record, close }) {
+  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
     const { $ } = G;
     const { sizeStep, SHAPES } = DockLayout;
     const labels = {
@@ -17,6 +17,31 @@ const DockToolbar = (() => {
     const byId = new Map(controls.filter(Boolean).map(node => [node.id, node]));
     let target = "all", shown = null;
     let editBar = null, doneBtn = null, toolsButton = null, expanded = false, visible = false;
+    let initial, current;
+    const history = [];
+    const scaleKeys = ["hudScale", "hudBtnScale", "hudBotKeep"];
+    const snapshot = () => ({ layout: readLayout(), shape: getShape(), scales: Object.fromEntries(scaleKeys.map(key => [key, G.store?.get(key, null)])) });
+    const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    function remember() {
+      const next = snapshot();
+      if (equal(next, current)) return;
+      history.push(current);
+      if (history.length > 50) history.shift();
+      current = next;
+    }
+    function restore(state) {
+      restoreLayout(state.layout);
+      if (state.shape !== getShape()) setShape(state.shape);
+      const scale = state.scales;
+      const changed = scaleKeys.filter(key => !equal(G.store?.get(key, null), scale[key]));
+      if (changed.includes("hudScale")) G.store?.set("hudScale", scale.hudScale);
+      if (changed.includes("hudBtnScale")) G.store?.set("hudBtnScale", scale.hudBtnScale);
+      if (changed.includes("hudBotKeep")) G.store?.set("hudBotKeep", scale.hudBotKeep);
+      if (changed.length) refreshScale();
+      current = state;
+      G.refreshHud?.(true);
+      paintBar();
+    }
     function targetButtons() { return targets[target] || (labels[target] ? [target] : []); }
     function stepSize(dir) {
       if (target !== "all") {
@@ -36,6 +61,7 @@ const DockToolbar = (() => {
       // then re-run the slider's paint so its "fits N%" reads the fresh cap.
       if (G.refreshHud) G.refreshHud(true);
       el.dispatchEvent(new Event("input", { bubbles: true }));
+      remember();
       paintBar();
     }
     function paintBar() {
@@ -53,6 +79,9 @@ const DockToolbar = (() => {
       if (Array.from(options).some(option => option.value === target && option.hidden)) target = "all";
       const ids = targetButtons();
       for (const k of ["smaller", "size", "bigger", "shape", "target"]) field(k).hidden = !expanded;
+      field("undo").hidden = !expanded;
+      field("undo").disabled = !history.length;
+      field("cancel").hidden = !expanded;
       field("gap").hidden = !expanded || target !== "steer";
       field("layout").hidden = !expanded || target !== "drive";
       field("reset").hidden = !expanded || target === "all";
@@ -68,10 +97,21 @@ const DockToolbar = (() => {
         const values = ids.map(id => scheme.controls?.[id]?.[key] || fallback);
         return values.every(value => value === values[0]) ? values[0] : null;
       };
+      for (const axis of ["width", "height"]) {
+        const selector = field(axis);
+        selector.hidden = !expanded || !ids.length;
+        const pct = same(axis, 100);
+        const value = pct == null ? "" : String(pct);
+        if (selector.options && !Array.from(selector.options).some(option => option.value === value)) {
+          const option = document.createElement("option");
+          option.value = value; option.textContent = axis + " " + pct + "%"; selector.appendChild(option);
+        }
+        selector.value = value;
+      }
       const size = same("size", 100), buttonShape = same("shape", "auto");
       const out = $("pm-btnscale-v");
       field("size").textContent = target === "all" ? "SIZE " + (out?.textContent || "") : size == null ? "Mixed sizes" : size + "%";
-      field("shape").textContent = "Shape: " + (target === "all" ? getShape() : buttonShape === "auto" ? "Default" : buttonShape || "Mixed");
+      field("shape").value = target === "all" ? getShape() : buttonShape || "";
       for (const id of Object.keys(labels)) {
         const el = byId.get(id);
         if (el && visible && ids.includes(id)) el.setAttribute("data-dock-selected", "");
@@ -104,9 +144,9 @@ const DockToolbar = (() => {
         const sel = document.createElement("select");
         sel.dataset.k = key;
         sel.setAttribute("aria-label", aria);
-        for (const [value, text] of choices) {
+        for (const [value, text, disabled = false] of choices) {
           const option = document.createElement("option");
-          option.value = value; option.textContent = text; sel.appendChild(option);
+          option.value = value; option.textContent = text; option.disabled = disabled; sel.appendChild(option);
         }
         sel.onchange = () => change(sel.value);
         editBar.appendChild(sel);
@@ -118,10 +158,21 @@ const DockToolbar = (() => {
         if (value === "") delete getScheme().gap; else getScheme().gap = Number(value);
         commitLayout();
       });
-      select("layout", "Driving button layout", [["", "Layout: Auto"], ["pedal-row", "Pedals side by side"], ["tap-row", "Actions side by side"], ["stack", "Two rows"]], value => {
+      select("layout", "Driving button layout", DockLayout.DRIVE_LAYOUTS, value => {
         if (value) getScheme().layout = value; else delete getScheme().layout;
         commitLayout();
       });
+      for (const axis of ["width", "height"]) {
+        const label = axis === "width" ? "Width" : "Height";
+        const choices = [50, 60, 70, 75, 80, 90, 100, 110, 120, 125, 130, 140, 150, 160, 175];
+        select(axis, label + " of selected buttons", [["", label + " mixed"], ...choices.map(v => [String(v), label + " " + v + "%"])], value => {
+          if (!value) { paintBar(); return; }
+          for (const id of targetButtons()) record(id)[axis] = Number(value);
+          commitLayout();
+        });
+      }
+      mk("undo", "Undo", "Undo last touch layout edit", () => { if (history.length) restore(history.pop()); });
+      mk("cancel", "Cancel", "Discard touch layout edits", () => close(false));
       mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
       // The readout is text, not a control: a disabled button paints see-through
       // over the timing tower (measured 844x390), so it is an opaque span.
@@ -130,12 +181,10 @@ const DockToolbar = (() => {
       size.setAttribute("aria-live", "polite");
       editBar.appendChild(size);
       mk("bigger", "+", "Bigger buttons", () => stepSize(1));
-      mk("shape", "SHAPE", "Next button shape", () => {
-        const ids = targetButtons();
-        const current = target === "all" ? getShape() : getScheme().controls?.[ids[0]]?.shape || "auto";
-        const next = SHAPES[(SHAPES.findIndex(([s]) => s === current) + 1) % SHAPES.length][0];
-        if (target === "all") return setShape(next);
-        for (const id of ids) record(id).shape = next;
+      const shapes = [["", "Mixed shapes", true], ...SHAPES.map(([value, label]) => [value, "Shape · " + label.toLowerCase()])];
+      select("shape", "Button shape", shapes, value => {
+        if (target === "all") { setShape(value); remember(); paintBar(); return; }
+        for (const id of targetButtons()) record(id).shape = value;
         commitLayout();
       });
       mk("reset", "Reset selection", "", () => {
@@ -178,13 +227,91 @@ const DockToolbar = (() => {
       if (was.settings && settings) settings.hidden = false;
       if (was.pause && pause) pause.hidden = false;
     }
+    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
+    let fitRaf = 0;
+    function fitNow() {
+      fitRaf = 0;
+      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
+    }
+    function paintDrag(pad) {
+      repaintDock({ pad, fit: false });
+      if (fitRaf) return;
+      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
+      else fitNow();
+    }
+    let drag = null;
+    function onPointerDown(e) {
+      if (!visible) return;
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const left = $("dock-left"), right = $("dock-right");
+      const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
+      if (!side) return;
+      // The press is the drag's, not the button's: preventDefault alone let
+      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
+      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
+      // before the target, so stopping here means the button never sees it.
+      e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (drag || e.isPrimary === false) return;
+      const scheme = getScheme();
+      const hit = t.closest(".touchbtn")?.id;
+      const pad = measurePad(docks()), before = scheme[side];
+      drag = {
+        side, hit, buttons: buttonDrag(hit, side, pad), before, moved: false,
+        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
+        scheme, pid: e.pointerId, pad,
+      };
+      try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+    }
+    function onPointerMove(e) {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const pad = drag.pad;
+      const sx = inboard(drag.side);
+      const dx = ((e.clientX - drag.startX) / pad.w) * sx;
+      const dy = -((e.clientY - drag.startY) / pad.h);
+      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
+      drag.moved = true;
+      if (drag.buttons) drag.buttons.move(dx, dy);
+      else drag.scheme[drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
+      paintDrag(pad);
+    }
+    function onPointerUp(e) {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const finished = drag;
+      drag = null;
+      if (finished.moved) { remember(); paintBar(); }
+      else pick(finished.hit, true);
+      fitNow();
+    }
+    function cancelDrag(e) {
+      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
+      if (drag.buttons) drag.buttons.cancel();
+      else drag.scheme[drag.side] = drag.before;
+      drag = null;
+      repaintDock();
+    }
     function show(on, restore) {
+      if (!on) drag = null;
       visible = on;
-      if (on) { target = "all"; expanded = false; ensureDone(); hideDialogs(); }
+      if (on) { initial = current = snapshot(); history.length = 0; target = "all"; expanded = false; ensureDone(); hideDialogs(); }
       else if (restore === false) shown = null;
       else restoreDialogs();
       if (editBar) { editBar.hidden = !on; paintBar(); }
       if (on) toolsButton?.focus?.({ preventScroll: true });
+      const btn = $("pm-dock-reposition");
+      if (btn) {
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.textContent = on ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
+        if (!on && restore !== false && btn.focus) btn.focus();
+      }
+      if (!on) {
+        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
+        if (fitRaf) {
+          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
+          fitRaf = 0;
+        }
+      }
     }
     function pick(id, expand) {
       if (!labels[id]) return;
@@ -222,7 +349,13 @@ const DockToolbar = (() => {
         },
       };
     }
+    if (typeof window !== "undefined") window.addEventListener?.("blur", cancelDrag);
     if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("pointerdown", onPointerDown, true);
+      document.addEventListener("pointermove", onPointerMove, true);
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", cancelDrag, true);
+      document.addEventListener("lostpointercapture", cancelDrag, true);
       document.addEventListener("click", e => {
         if (!visible) return;
         const id = e.target.closest?.(".touchbtn")?.id;
@@ -231,10 +364,24 @@ const DockToolbar = (() => {
         // Keyboard / assistive activation selects; a pointer's tap or drag was handled on release.
         if (e.detail === 0) pick(id, true);
       }, true);
+      // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
+      // What still ends it: ANY of them being opened by someone else (the pause
+      // button, a key, QUIT), because a capture-phase drag left live would slide
+      // the dock under the thumb on every throttle/steer press in the race.
+      const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
+      if (watched.length && typeof MutationObserver !== "undefined") {
+        const mo = new MutationObserver(() => {
+          // Async: by the time this runs our own hide has settled (both hidden), so
+          // "something is visible" can only mean someone else opened it.
+          if (visible && watched.some((e) => !e.hidden)) close(false, false);
+        });
+        for (const e of watched) mo.observe(e, { attributes: true, attributeFilter: ["hidden"] });
+      }
+
       document.addEventListener("keydown", (e) => {
         if (!visible) return;
         if (e.key === "Escape") {
-          e.preventDefault(); e.stopPropagation(); close();
+          e.preventDefault(); e.stopPropagation(); close(false);
           return;
         }
         const el = e.target?.closest?.(".touchbtn");
@@ -254,7 +401,8 @@ const DockToolbar = (() => {
         commitLayout();
       }, true);
     }
-    return { show, paint: paintBar, pick, buttonDrag };
+    return { show, paint: paintBar, cancelDrag, dragging: () => !!drag, remember, cancel: () => restore(initial),
+      shapeChanged: () => getShape() !== initial.shape, layoutChanged: () => !equal(readLayout(), initial.layout) };
   }
   return Object.freeze({ create });
 })();

@@ -860,7 +860,7 @@
       }
       // Gap was 8 m — day orbit @ 0.50 sat inside this orange mass (#3366).
       stand(0.50,  1, 22, 24, { livery: "orange" });                   // Mid-circuit flex stand
-      stand(0.875, 1, 18, 24, { livery: "orange", endWalls: true }); // 130R exit crowd
+      stand(0.8764, 1, 18, 24, { livery: "orange", endWalls: true }); // 130R exit terrace, where the end panel clears the rear shell
 
       openBank(0.205, 1, 20, 22, { rows: 9, rise: 0.70, setback: 0.92,
         frameCol: [0.58, 0.60, 0.64], plankCol: [0.66, 0.67, 0.70], density: 0.72 });

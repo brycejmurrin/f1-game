@@ -97,6 +97,35 @@ for (const touch of [false, true]) {
   const landscape = touch ? { width: 852, height: 393 } : { width: 1728, height: 1117 };
   test.describe("Arrange a live screen with " + (touch ? "touch" : "mouse and keyboard"), () => {
     test.use({ viewport: landscape, hasTouch: touch, deviceScaleFactor: 1, reducedMotion: "reduce" });
+    test("Pause from Appearance edits the real card and returns to the picker", async ({ page }) => {
+      const activate = locator => touch ? locator.tap() : locator.click();
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+      await activate(page.locator("#mb-settings"));
+      await activate(page.locator("#pm-open-appearance"));
+      await activate(page.getByRole("group", { name: "Preview screen" }).getByRole("button", { name: "PAUSE", exact: true }));
+      const go = page.getByRole("button", { name: "Arrange Pause", exact: true });
+      const editor = page.locator('#screen-arranger[data-editing-screen="pausemenu"]');
+      const card = page.locator("#pausemenu");
+      for (const save of [false, true]) {
+        await activate(go);
+        await expect(editor).toBeVisible();
+        await expect(card.locator("#pm-quit")).toBeVisible();
+        await expect(card).toHaveJSProperty("inert", true);
+        await editor.getByLabel("Region").selectOption("tools");
+        await activate(editor.getByRole("button", { name: "Controls", exact: true }));
+        await activate(editor.getByRole("button", { name: "Right", exact: true }));
+        if (save) await activate(editor.getByRole("button", { name: "Apply", exact: true }));
+        else await page.keyboard.press("Escape");
+        await expect(editor).toHaveCount(0);
+        await expect(card).toBeHidden();
+        await expect(card).toHaveJSProperty("inert", false);
+        await expect(go).toBeFocused();
+        const offset = await page.evaluate(() => window.ScreenPlacement.read("pausemenu").tools?.x);
+        expect(offset).toBe(save ? 1 : undefined);
+      }
+    });
+
     test("save title and Career independently through rotation, theme change, reload and reset", async ({ page, browser }, testInfo) => {
       test.setTimeout(180000);
       const activate = locator => touch ? locator.tap() : locator.click();
@@ -213,3 +242,126 @@ for (const touch of [false, true]) {
     });
   });
 }
+
+test("Race Settings previews and saves a single button's width, height and text independently", async ({ page, browser }, testInfo) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const editor = page.locator("#screen-arranger");
+  const adjust = name => editor.getByRole("button", { name, exact: true }).click();
+  // The primary button is skewed. Its transformed bounds widen when its height
+  // grows, even at a fixed layout width. Inspect the laid-out button itself.
+  const geometry = locator => locator.evaluate(el => ({
+    width: el.offsetWidth, height: el.offsetHeight, font: parseFloat(getComputedStyle(el).fontSize),
+  }));
+  const start = page.locator("#rs-go");
+  const capture = async stage => {
+    const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
+    const name = [stage, browser.browserType().name(), browser.version(), "1280x800-landscape-mouse", build].join("-");
+    await testInfo.attach(name, { body: await page.screenshot(), contentType: "image/png" });
+  };
+  const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.screenPlacement"))?.screens?.["race-settings"]);
+  async function openFromHome() {
+    await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+    await page.locator("#mb-settings").click();
+    await page.locator("#pm-open-appearance").click();
+    await page.getByLabel("Screen to arrange").selectOption("race-settings");
+    await page.locator(".arrange-route").click();
+    await page.locator("#sel-go").click();
+    await editor.getByLabel("Region").selectOption("start");
+    await adjust("Controls");
+  }
+
+  await page.goto("/");
+  await openFromHome();
+  const initial = await geometry(start);
+  await capture("race-settings-shipped");
+  const backFont = (await geometry(page.locator("#rs-cancel"))).font;
+  await editor.getByLabel("Adjustment").selectOption({ label: "Coarse" });
+  await adjust("Button width +");
+  const wider = await geometry(start);
+  expect(wider.width).toBeGreaterThan(initial.width);
+  expect(wider.font).toBe(initial.font);
+  await adjust("Button height +");
+  const taller = await geometry(start);
+  expect(taller.height).toBeGreaterThan(wider.height);
+  expect(taller.width).toBeCloseTo(wider.width, 0);
+  expect(taller.font).toBe(initial.font);
+  await adjust("Text size +");
+  const edited = await geometry(start);
+  expect(edited.font).toBeGreaterThan(initial.font);
+  await capture("race-settings-customized");
+  expect((await geometry(page.locator("#rs-cancel"))).font).toBe(backFont);
+  expect(await saved()).toBeUndefined();
+  await adjust("Apply");
+  const stored = await saved();
+  expect(stored.landscape.start.textSize).toBeGreaterThan(1);
+  expect(stored.landscape.start.buttonWidth).toBeGreaterThan(0);
+  expect(stored.landscape.start.buttonHeight).toBeGreaterThanOrEqual(44);
+  expect(stored.portrait).toBeUndefined();
+
+  await page.reload();
+  await openFromHome();
+  expect(await geometry(start)).toEqual(edited);
+  await adjust("Reset region");
+  expect(await geometry(start)).toEqual(initial);
+  await adjust("Cancel");
+  expect(await geometry(start)).toEqual(edited);
+  expect(await saved()).toEqual(stored);
+
+  // Change a real fold while the race controls are live, then edit that state.
+  await page.locator("#rs-fold-field-sum").click();
+  await page.locator("#race-settings").getByRole("button", { name: "Arrange again" }).click();
+  await editor.getByLabel("Region").selectOption("diff-next");
+  const difficulty = await page.locator("#rs-diff-sel").inputValue();
+  await adjust("Controls");
+  await adjust("Button height +");
+  await adjust("Apply");
+  expect(await page.locator("#rs-diff-sel").inputValue()).toBe(difficulty);
+  expect((await saved()).landscape["diff-next"].buttonHeight).toBeGreaterThanOrEqual(44);
+  expect((await saved()).landscape["diff-prev"]).toBeUndefined();
+});
+
+test("Garage animation tuner edits its window on first visit at the measured phone size", async ({ browser, baseURL }, testInfo) => {
+  const { context, page } = await openBrycePhone(browser, { window: "standalone", profile: false });
+  try {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(baseURL || "/");
+    await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-visual").tap();
+    const advanced = page.locator("#pm-visual-tuners");
+    if (!(await advanced.evaluate(el => el.open))) await advanced.locator("summary").tap();
+    await page.locator("#pm-garrival").tap();
+    const sheet = page.locator("#garrival-inner");
+    const width = () => sheet.evaluate(el => el.getBoundingClientRect().width);
+    const launch = page.locator('#garrival [data-arrange-screen="garrival"]').first();
+    const editor = page.locator('#screen-arranger[data-editing-screen="garrival"]');
+    const action = name => editor.getByRole("button", { name, exact: true }).tap();
+    const shipped = await width();
+    const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
+    const capture = async state => {
+      const name = ["garage-arrival", state, browser.version(), "852x393-DPR3-touch", build].join("-");
+      await testInfo.attach(name, { body: await page.screenshot(), contentType: "image/png" });
+    };
+    await capture("shipped");
+    await launch.tap();
+    await editor.getByLabel("Region", { exact: true }).selectOption("window");
+    await action("Controls");
+    await action("Width −");
+    await action("Left");
+    await action("Controls");
+    const preview = await width();
+    expect(preview).toBeLessThan(shipped);
+    await capture("preview");
+    await action("Apply");
+    expect(await width()).toBe(preview);
+    await launch.tap();
+    await editor.getByLabel("Region", { exact: true }).selectOption("window");
+    await action("Controls");
+    await action("Reset region");
+    await action("Apply");
+    expect(await width()).toBe(shipped);
+  } finally {
+    await context.close();
+  }
+});

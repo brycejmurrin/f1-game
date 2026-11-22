@@ -6,6 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "buenos_aires",
+    revision: 2,
     classic: true,
     // Upstream ar-1952 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -38,9 +39,11 @@
       grass:         [0.24, 0.46, 0.21],
       sunDir:        [0.40, 0.72, 0.30],
     },
+    // Buenos Aires municipal metre contours cross the 6-S route at 16 stations.
+    // Two shallow valleys lead to the first right-hander and the infield bend.
     elevations: [
-      { s: 0.30, halfM: 340, rise: 2.2 },
-      { s: 0.66, halfM: 320, rise: -2.0 },
+      { s: 0.0894, halfM: 461, rise: -3.41 },
+      { s: 0.3580, halfM: 651, rise: -4.30 },
     ],
     hwZones: [
       { s0: 0.185, s1: 0.230, hw: 6.3, ease: 0.012 },
@@ -60,7 +63,8 @@
     // researched real turn count. No researched sectors — consumers fall back to thirds.
     sectors: [0.378, 0.686],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0890, 0.1030, 0.1945, 0.2050, 0.2610, 0.3530, 0.5545, 0.5640, 0.5985, 0.6195, 0.6580, 0.7450, 0.7585, 0.7790, 0.8600, 0.8675, 0.8810, 0.8885],
-    furniture: { tree: "plane", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
+    // Single roadside trees complement the two hand-planted avenues without overlapping crowns.
+    furniture: { tree: "plane", sparse: true, fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
     kit: { marshal: "cabin",     rail: "cable",       fence: "palisade",  tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "scaffold", "pastel"],  // 1950s mass concrete + temporary tube
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

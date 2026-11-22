@@ -68,7 +68,7 @@ test("indexed look windows preserve every brake decision and repeated-addition d
   let seed = 83;
   const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
   for (let run = 0; run < 600; run++) {
-    const n = run % 65, ks = new Float64Array(n), mus = new Float64Array(n);
+    const n = run % 65, ks = new Float64Array(n), mus = new Float64Array(n), banks = new Float64Array(n);
     const firstD = rnd() * 4.3, step = 1.7 + rnd() * 6.1;
     const ctx = { traits: [mid, ace, rook][run % 3], latMax: 22, brake: 8 + rnd() * 20,
       grip: 0.4 + rnd(), pace: 0.4 + rnd(), vmax: 92, diffCorner: 0.5 + rnd() * 0.5,
@@ -76,13 +76,13 @@ test("indexed look windows preserve every brake decision and repeated-addition d
       blockerGap: rnd() * 22, blockerSpeed: rnd() * 80, roomL: rnd() * 5, roomR: rnd() * 5 };
     A.beginLook();
     for (let i = 0, d = firstD; i < n; i++, d += step) {
-      ks[i] = (rnd() - 0.5) * 0.06; mus[i] = A.bankGrip(rnd() * 0.3);
-      A.pushLook(d, ks[i], 0, mus[i]);
+      ks[i] = (rnd() - 0.5) * 0.06; banks[i] = (rnd() - 0.5) * 0.6; mus[i] = A.bankGrip(banks[i]);
+      A.pushLook(d, ks[i], banks[i], mus[i]);
     }
     const pooled = { ...A.brakeDecision({ ...ctx, samples: A.endLook() }) };
-    const indexed = A.lookWindow(ks, mus, n, firstD, step);
+    const indexed = A.lookWindow(ks, mus, n, firstD, step, banks);
     assert.deepEqual({ ...A.brakeDecision({ ...ctx, samples: indexed }) }, pooled, `window ${run}, ${n} nodes`);
-    assert.equal(A.lookWindow(ks, mus, n, firstD, step), indexed, "window storage is reused");
+    assert.equal(A.lookWindow(ks, mus, n, firstD, step, banks), indexed, "window storage is reused");
   }
 });
 
@@ -106,7 +106,7 @@ test("brakeTarget: a cached bank grip and the distance-term skip change no resul
     // The reference: every sample solved, no skip (the loop before B-F4).
     let ref = Infinity;
     for (const s of rows) {
-      const vC = A.cornerSpeed(Math.max(Math.abs(s.k), 1e-5), 22 * (1 + Math.sin(s.bank) * 0.8) * ctx.grip, 1, 92) * mid.skill;
+      const vC = A.cornerSpeed(Math.max(Math.abs(s.k), 1e-5), 22 * Math.cos(s.bank) * ctx.grip, 1, 92, 9 * Math.sin(s.bank)) * mid.skill;
       const e = vC * vC + 2 * ctx.brake * 0.85 * Math.max(s.d, 1);
       if (e >= 0 && e < ref) ref = e;
     }
@@ -119,6 +119,12 @@ test("brakeTarget: a cached bank grip and the distance-term skip change no resul
   assert.equal(A.bankGrip(NaN), 1);
   assert.ok(Number.isFinite(A.cornerSpeed(0.05, NaN, 1, 72)));
   assert.equal(A.cornerSpeed(0.05, NaN, 1, 72), A.cornerSpeed(0.05, 0, 1, 72));
+});
+
+test("a bank contributes signed gravity to the corner speed limit", () => {
+  const limit = bank => A.brakeTarget({ traits: mid, samples: [{ d: 1, k: 0.03, bank }], gravity: 9 });
+  assert.ok(limit(0.12) > limit(0));
+  assert.ok(limit(-0.12) < limit(0));
 });
 
 test("awareness shortens the stuck dig-out threshold", () => {
@@ -399,7 +405,7 @@ test("brake planner carries the public corner envelope across consecutive pace s
   for (const pace of [undefined, 0.05, 0.5, 1, 2, 0.5]) {
     for (const vmax of [undefined, 1, 72, 120]) {
       const sample = { d: 4, k: 0.03, bank: 0.2 };
-      const corner = A.cornerSpeed(sample.k, 22 * (1 + Math.sin(sample.bank) * 0.8), pace, vmax) * mid.skill;
+      const corner = A.cornerSpeed(sample.k, 22 * Math.cos(sample.bank), pace, vmax, 9 * Math.sin(sample.bank)) * mid.skill;
       const expected = Math.sqrt(corner * corner + 2 * 22 * 0.85 * sample.d);
       assert.equal(A.brakeTarget({ traits: mid, samples: [sample], latMax: 22, brake: 22, pace, vmax }), expected);
     }

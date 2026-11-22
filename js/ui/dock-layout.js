@@ -9,6 +9,11 @@ const DockLayout = (function () {
   // on the painted control sizes, home positions, safe insets and handedness.
   const MAX = 1;
   const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero", "shift-up", "shift-down"];
+  const DRIVE_LAYOUTS = Object.freeze([
+    ["", "Layout: Auto"], ["pedal-row", "Pedals side by side"], ["gas-left", "Gas left of Brake"],
+    ["gas-above", "Gas above Brake"], ["tap-row", "Actions side by side"],
+    ["action-grid", "Compact action grid"], ["stack", "Two rows"],
+  ]);
   const ZERO = Object.freeze({ x: 0, y: 0 });
 
   function clamp01(n, lo, hi) {
@@ -26,7 +31,10 @@ const DockLayout = (function () {
 
   // Auto follows the shipped corner style and is stored as null.
   const SHAPE_KEY = "hudBtnShape";
-  const SHAPES = Object.freeze([["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"]]);
+  const SHAPES = Object.freeze([
+    ["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"],
+    ["arch", "ARCH"], ["shield", "SHIELD"], ["paddle-left", "LEFT PADDLE"], ["paddle-right", "RIGHT PADDLE"], ["leaf", "LEAF"],
+  ]);
   function shapeOf(v) { return SHAPES.some((s) => s[0] === v) ? v : "auto"; }
   function applyShape(v) {
     const s = shapeOf(v);
@@ -50,12 +58,14 @@ const DockLayout = (function () {
       out[s] = emptyScheme();
       if (!src || typeof src !== "object") continue;
       if (Number.isFinite(src.gap)) out[s].gap = clamp01(src.gap, 0, 80);
-      if (["pedal-row", "tap-row", "stack"].includes(src.layout)) out[s].layout = src.layout;
+      if (src.layout && DRIVE_LAYOUTS.some(([id]) => id === src.layout)) out[s].layout = src.layout;
       for (const id of CONTROL_IDS) {
         const values = src.controls?.[id];
         if (!values || typeof values !== "object") continue;
         const control = {};
-        if (Number.isFinite(values.size) && values.size !== 100) control.size = clamp01(values.size, 50, 175);
+        for (const key of ["size", "width", "height"]) {
+          if (Number.isFinite(values[key]) && values[key] !== 100) control[key] = clamp01(values[key], 50, 175);
+        }
         const shape = shapeOf(values.shape);
         if (shape !== "auto") control.shape = shape;
         for (const axis of ["x", "y"]) {
@@ -213,13 +223,12 @@ const DockLayout = (function () {
     if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
   }
 
-  function create(G) {
+  function create(G, uiScale) {
     Log.info("ui", "DockLayout.create");
     const { $, store } = G;
     let toolbar = null, pending = null;
     let bag = load(store);
     let editing = false;
-    let drag = null;   // { side, startX, startY, orig }
 
     function schemeOf() {
       const m = (G.getSteerMode && G.getSteerMode()) || "buttons";
@@ -228,23 +237,11 @@ const DockLayout = (function () {
     function docks() {
       return { L: $("dock-left"), R: $("dock-right") };
     }
-    function paint() { apply(schemeOf(), bag, docks()); }
-    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
-    let fitRaf = 0;
-    function fitNow() {
-      fitRaf = 0;
-      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
-    }
-    function paintDrag(pad) {
-      apply(schemeOf(), bag, docks(), { pad, fit: false });
-      if (fitRaf) return;
-      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
-      else fitNow();
-    }
+    function paint(options) { apply(schemeOf(), bag, docks(), options); }
     let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
     function setShape(v) {
       shape = applyShape(v);
-      if (store && store.set) store.set(SHAPE_KEY, shape === "auto" ? null : shape);
+      if (!editing && store && store.set) store.set(SHAPE_KEY, shape === "auto" ? null : shape);
       if (typeof SettingRow !== "undefined" && SettingRow.paint && $("pm-btnshape")) SettingRow.paint("pm-btnshape", shape, SHAPES);
       toolbar?.paint();
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
@@ -256,18 +253,22 @@ const DockLayout = (function () {
       return scheme.controls[id] ||= {};
     }
     function commitLayout() {
-      save(store, bag);
+      if (editing) toolbar.remember();
+      else save(store, bag);
       paint();
       G.refreshHud?.(true);
       toolbar?.paint();
     }
     // restore=false when something else opened a dialog while we were editing:
     // stacking SETTINGS back on top of it would show two.
-    function setEditing(on, restore) {
+    function setEditing(on, restore, accept = restore !== false) {
       if (on && !toolbar) {
         if (typeof DockToolbar !== "undefined") {
           toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
-            docks, measurePad, inboard, boundedControlXY, getShape: () => shape, setShape, record, close: () => setEditing(false) });
+            docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock: paint, getShape: () => shape, setShape, record,
+            refreshScale: () => { uiScale?.applyHudScale(); uiScale?.applyBtnScale(); },
+            readLayout: () => normalize(bag), restoreLayout: value => { bag = normalize(value); paint(); },
+            close: (accept, restore = true) => setEditing(false, restore, accept) });
         } else {
           if (pending || typeof ScriptLoader === "undefined") return;
           const door = $("pm-dock-reposition"), origin = [$("pmsettings"), $("pausemenu")].find(el => el && !el.hidden);
@@ -288,27 +289,18 @@ const DockLayout = (function () {
       }
       if (!on && pending) { pending = null; $("pm-dock-reposition")?.removeAttribute("aria-busy"); }
       const was = editing;
+      if (was && !on) {
+        if (accept) {
+          if (toolbar.shapeChanged()) store?.set?.(SHAPE_KEY, shape === "auto" ? null : shape);
+          if (toolbar.layoutChanged()) save(store, bag);
+        } else toolbar.cancel();
+      }
       editing = !!on;
       if (typeof document !== "undefined") {
         if (editing) document.body.setAttribute("data-dock-edit", "1");
         else document.body.removeAttribute("data-dock-edit");
       }
       if (editing !== was) toolbar?.show(editing, restore);
-      const btn = $("pm-dock-reposition");
-      if (btn) {
-        btn.setAttribute("aria-pressed", editing ? "true" : "false");
-        btn.textContent = editing ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
-        if (was && !editing && restore !== false && btn.focus) btn.focus();
-      }
-      if (!editing) {
-        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
-        if (fitRaf) {
-          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
-          fitRaf = 0;
-        }
-        if (drag) save(store, bag); // a drag cut short by DONE/Escape keeps its move
-        drag = null;
-      }
       paint();
     }
 
@@ -326,7 +318,7 @@ const DockLayout = (function () {
       const tip = document.createElement("p");
       tip.className = "adv-help";
       tip.id = "pm-dock-reposition-help";
-      tip.textContent = "Drag a group, or tap a button to edit it on its own. In Size & shape, choose Steering buttons for arrow spacing or Driving buttons for layout. Select Gas + Brake or Race actions to move, size and shape that set together. Individual sizes are relative to Button Size. With a button focused, arrow keys move it 2 px. Hold Shift for 16 px. Reset Dock Layout restores the current steering mode.";
+      tip.textContent = "Drag a group, or tap a button to edit it on its own. In Size & shape, choose Steering buttons for arrow spacing or Driving buttons for layout. Select Gas + Brake or Race actions to move, size and shape that set together. Width and Height change the footprint independently. Size scales the whole control. Undo reverses one edit, Cancel restores this session, and Done keeps it. With a button focused, arrow keys move it 2 px. Hold Shift for 16 px. Reset Dock Layout restores the current steering mode.";
       const reset = document.createElement("button");
       reset.id = "pm-dock-reset";
       reset.type = "button";
@@ -380,84 +372,11 @@ const DockLayout = (function () {
       if (G.announce) G.announce("Dock layout reset for " + s.toUpperCase(), 2, "coach");
     };
 
-    function onPointerDown(e) {
-      if (!editing) return;
-      const t = e.target;
-      if (!t || !t.closest) return;
-      const left = $("dock-left"), right = $("dock-right");
-      const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
-      if (!side) return;
-      // The press is the drag's, not the button's: preventDefault alone let
-      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
-      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
-      // before the target, so stopping here means the button never sees it.
-      e.preventDefault();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-      if (drag || e.isPrimary === false) return;
-      const s = schemeOf();
-      const hit = t.closest(".touchbtn")?.id;
-      const pad = measurePad(docks()), before = bag[s][side];
-      drag = {
-        side, hit, buttons: toolbar.buttonDrag(hit, side, pad), before, moved: false,
-        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
-        scheme: s, pid: e.pointerId, pad,
-      };
-      try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
-    }
-    function onPointerMove(e) {
-      if (!drag || e.pointerId !== drag.pid) return;
-      const pad = drag.pad;
-      const sx = inboard(drag.side);
-      const dx = ((e.clientX - drag.startX) / pad.w) * sx;
-      const dy = -((e.clientY - drag.startY) / pad.h);
-      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
-      drag.moved = true;
-      if (drag.buttons) drag.buttons.move(dx, dy);
-      else bag[drag.scheme][drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
-      paintDrag(pad);
-    }
-    function onPointerUp(e) {
-      if (!drag || e.pointerId !== drag.pid) return;
-      const finished = drag;
-      drag = null;
-      if (finished.moved) save(store, bag);
-      else toolbar.pick(finished.hit, true);
-      fitNow();
-    }
-    function cancelDrag(e) {
-      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
-      if (drag.buttons) drag.buttons.cancel();
-      else bag[drag.scheme][drag.side] = drag.before;
-      drag = null;
-      paint();
-    }
-    function viewportChanged() { if (drag) cancelDrag(); else paint(); }
-    if (typeof document !== "undefined") {
-      document.addEventListener("pointerdown", onPointerDown, true);
-      document.addEventListener("pointermove", onPointerMove, true);
-      document.addEventListener("pointerup", onPointerUp, true);
-      document.addEventListener("pointercancel", cancelDrag, true);
-      document.addEventListener("lostpointercapture", cancelDrag, true);
-      // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
-      // What still ends it: ANY of them being opened by someone else (the pause
-      // button, a key, QUIT), because a capture-phase drag left live would slide
-      // the dock under the thumb on every throttle/steer press in the race.
-      const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
-      if (watched.length && typeof MutationObserver !== "undefined") {
-        const mo = new MutationObserver(() => {
-          // Async: by the time this runs our own hide has settled (both hidden), so
-          // "something is visible" can only mean someone else opened it.
-          if (editing && watched.some((e) => !e.hidden)) setEditing(false, false);
-        });
-        for (const e of watched) mo.observe(e, { attributes: true, attributeFilter: ["hidden"] });
-      }
-
-    }
+    function viewportChanged() { if (toolbar?.dragging()) toolbar.cancelDrag(); else paint(); }
     // apply() bakes the fractions into PIXELS of the pad at paint time, so a
     // rotation must repaint: a portrait offset kept its pixels in landscape and
     // pushed the dock off the top (the header promises relative placement).
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("blur", cancelDrag);
       window.addEventListener("resize", viewportChanged, { passive: true });
       window.addEventListener("orientationchange", viewportChanged, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
@@ -473,7 +392,7 @@ const DockLayout = (function () {
     }
     // The offset divides by the dock's zoom, which changes at race start with no resize.
     if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => { if (!drag) paint(); });
+      const ro = new ResizeObserver(() => { if (!toolbar?.dragging()) paint(); });
       const d = docks();
       for (const side of SIDES) if (d[side]) ro.observe(d[side]);
     }
@@ -489,7 +408,7 @@ const DockLayout = (function () {
         }
         const hit = (k) => k === "steerMode" || k === KEY;
         if (hit(change.key) || change.keys?.some(hit)) {
-          cancelDrag();
+          toolbar?.cancelDrag();
           bag = load(store);
           paint();
           toolbar?.paint();
@@ -534,6 +453,10 @@ const DockLayout = (function () {
     for (const el of document.querySelectorAll(".dock-grp .touchbtn")) {
       const control = scheme.controls?.[el.id];
       prop(el, "--control-scale", control?.size ? String(control.size / 100) : "");
+      for (const axis of ["width", "height"]) {
+        prop(el, "--control-" + axis, control?.[axis] ? String(control[axis] / 100) : "");
+      }
+      attr(el, "data-control-dimensions", control?.width || control?.height ? "" : null);
       attr(el, "data-control-size", control?.size ? "" : null);
       attr(el, "data-control-shape", control?.shape || null);
     }
@@ -582,7 +505,7 @@ const DockLayout = (function () {
   }
 
   return Object.freeze({
-    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, arrangeDoor,
+    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, DRIVE_LAYOUTS, arrangeDoor,
     clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create, shapeOf, applyShape, sizeStep,
   });
 })();

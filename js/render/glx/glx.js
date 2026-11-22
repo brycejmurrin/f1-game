@@ -184,6 +184,7 @@ const GLXBackend = (function () {
   let frameLights = null;
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
+  let frameBrakeSpillStart = Infinity;
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
   // PER-CHUNK ROAD: 1 when the road (surfaceId 16) may take per-chunk lamp sets
   // too (game.js frame.roadChunkLamps; GLXChunked reads F.roadChunkLamps).
@@ -1601,7 +1602,7 @@ const GLXBackend = (function () {
     // redirects begin() to the probe FBO; leaving it set because the texture
     // went away mid-cycle is the same brick as above, one frame later.
     _envActive = false;
-    if (!gl || !envTex) return;
+    if (!gl || !envTex) return false;
     envFacesMask |= 1 << face;
     // Unbind the probe FBO FIRST. generateMipmap below must NOT run while envTex
     // is still the COLOR_ATTACHMENT0 of the bound framebuffer — that read/write
@@ -1726,6 +1727,7 @@ const GLXBackend = (function () {
     // per-chunk sets and setting their cap via capFor.
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
+    frameBrakeSpillStart = frameLights && frame.brakeSpillCount ? frameLights.length - frame.brakeSpillCount * 15 : Infinity;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
@@ -2046,7 +2048,8 @@ const GLXBackend = (function () {
       L4[i4 + 4] = src[o + 3]; L4[i4 + 5] = src[o + 4]; L4[i4 + 6] = src[o + 5]; L4[i4 + 7] = src[o + 12];
       L4[i4 + 8] = src[o + 7]; L4[i4 + 9] = src[o + 8]; L4[i4 + 10] = src[o + 9]; L4[i4 + 11] = src[o + 10];
       L4[i4 + 12] = src[o + 11]; L4[i4 + 14] = 0; L4[i4 + 15] = 0;   // lane 13 = LIVE-ONLY (not in the lamp bake):
-      L4[i4 + 13] = fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
+      L4[i4 + 13] = src === frameLights && o >= frameBrakeSpillStart ? 1 :
+        fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
     }
     gl.uniform4fv(litU["uLight[0]"], L4, 0, nL * 16);
   }
@@ -2833,6 +2836,7 @@ const GLXBackend = (function () {
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
     drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
+    get envProbeOptOut() { return _envDisabled; },
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.

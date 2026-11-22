@@ -596,13 +596,13 @@ test("audio() at the title answers no_audio, and carState() holds only finite nu
   assert.equal(bad.length, 0, JSON.stringify(bad));
 });
 
-// bankingDeg is the PEAK roll over the corner window: sampled once at the
-// detector's apex, Zandvoort's 18° zones read T3 9.9° and T14 −2.1° (#5712).
-test("Zandvoort's two 18° bank zones report their peak", async () => {
+// bankingDeg reports the peak centreline roll over the corner window (#5712).
+// Hugenholtz varies from 4.5° inside to 19° outside; the centreline has their mean gradient.
+test("Zandvoort's progressive T3 and uniform T14 report their peak centreline bank", async () => {
   await load("zandvoort", 0.03, 60);
   const cs = g.apex.trackInfo({ what: "corners" }).corners;
   const at = (t) => cs.find((c) => c.turn === t);
-  assert.equal(at("T3").bankingDeg, 18);
+  assert.equal(at("T3").bankingDeg, 11.9);
   assert.equal(at("T14").bankingDeg, -18);
 });
 

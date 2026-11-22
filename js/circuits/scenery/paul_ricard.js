@@ -10,7 +10,7 @@
         pine, tree, bush, ridge, building, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, modelGroup, prop,
-        cameraTower, sponsorHoarding, signBoard, terrainYAt, recordBarrier,
+        cameraTower, sponsorHoarding, signBoard, groundUnder, terrainYAt, recordBarrier,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
@@ -67,16 +67,25 @@
       // footprint-guarded and follows the (very slight) plateau relief. The
       // white cross-lines are the Blue Zone's lane markings, which is what
       // stops all that blue reading as a swimming pool from the air.
+      // Join the last apron to the first. A four-node step on a 1,453-node lap
+      // otherwise emits another full tile only one node before the start.
+      const apronStep = Math.max(1, Math.round(15 / ds));
+      const apronStations = Math.floor(n / apronStep);
+      const closingStep = apronStep + n % apronStep;
       for (const side of [-1, 1]) {
-        let i = 0;
-        along(0.0, 1.0, 15, (k, spacing) => {
-          const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
+        for (let i = 0; i < apronStations; i++) {
+          const k = i * apronStep;
+          const atSeam = i === 0 || i === apronStations - 1;
+          const seg = ds * (atSeam ? closingStep : apronStep) * 1.05;
           // ONE colour per band: the old i&1 colour flip chequered the Blue Zone
           // into lilac/blue plates. (drape still alternates its own 0.12 m
           // residue per cell, which keeps overlapped faces off one plane.)
           // Draped, not runoffApron'd: one box at one anchor height across a
           // 30 m band put 203 + 144 + 113 of these wholly under the plateau.
-          const ph = { phase: i };
+          // An odd station count gives both seam tiles the same phase. Put the
+          // closing tile halfway between the two normal drape height levels.
+          const closesOddRun = i === apronStations - 1 && apronStations % 2 === 1;
+          const ph = { phase: i, res: closesOddRun ? 0.06 : 0 };
           drape(k, side, 2.5, [9, 0.16, seg], BLUE, ph);
           drape(k, side, 11.5, [30, 0.14, seg], BLUE_D, ph);
           drape(k, side, 41.5, [26, 0.12, seg], RED, ph);
@@ -85,8 +94,7 @@
           // A second lane-line further out, offset in phase, so the Blue Zone
           // reads as a marked run-off surface and never as open water.
           if (i % 3 === 1) drape(k, side, 48, [20, 0.10, 0.9], LINE, { res: 0.09, line: true });
-          i++;
-        });
+        }
       }
 
       const openRunoff = (s) =>
@@ -221,13 +229,12 @@
         building(K(0.944 + i * 0.013), -1, 40, 30, 9, 15,
           { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        // From 0.94: on the right, 0.90-0.94 is the inside of the Tour hairpin.
-        if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
-        // Gap bumped 58→66: at 58 eight motorhomes sat 0.04 m under grade.
-        motorhome(k, -1, 66 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
-      });
+      // The end of the paddock beside the pit exit has enough level ground for a row of team vehicles.
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.017 + i * 0.003);
+        const h = hash(k * 71 + 31);
+        motorhome(k, -1, 105, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+      }
       broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
 
@@ -585,6 +592,23 @@
       cameraTower(K(0.910), -1, 70, { h: 17 });
 
       {
+        const fieldGround = (x, z) => Tracks.terrainY(api.track, x, z) ?? groundUnder(x, z);
+        // Follow the grade between the two ends of each planting strip.
+        const plantRow = (a, offset, length, width, height, color) => {
+          const ends = [-0.5, 0.5].map((sign) => {
+            const p = vadd(a.c, a.t, offset + sign * length);
+            p[1] = fieldGround(p[0], p[2]);
+            return p;
+          });
+          const [lo, hi] = ends;
+          const delta = hi.map((v, i) => v - lo[i]);
+          const span = Math.hypot(...delta);
+          const forward = delta.map((v) => v / span);
+          const right = api.norm([forward[2], 0, -forward[0]]);
+          const up = api.cross(forward, right);
+          const center = lo.map((v, i) => (v + hi[i]) / 2);
+          addBox(out, vadd(center, up, height / 2), [width, height, span], color, [right, up, forward]);
+        };
         const VINE = [0.26, 0.36, 0.20], VINE_D = [0.21, 0.30, 0.17];
         const LAV = [0.44, 0.38, 0.62], LAV_D = [0.36, 0.31, 0.54];
         const SOIL = [0.72, 0.66, 0.52];
@@ -622,33 +646,17 @@
             if (onTrack(a.c[0], a.c[2], 4)) continue;
             const alt = (r & 1);
             if (kind === 0) {
-              // Single vine row at the anchor — segmented offsets were reading
-              // terrainYAt on a different skirt and burying prims 5+ m deep.
-              addBox(out, vadd(a.c, a.u, 1.05), [0.85, 1.5, 112],
-                alt ? VINE : VINE_D, b);
-              // TRAP B (docs/SCENERY-API.md §2): the posts walk up to
-              // 54 m along the tangent from a.c's single ground sample —
-              // reusing that height stranded them up to ~2 m in the air on
-              // this rolling plateau. Re-seat each post on the ground
-              // actually under it; clamp to ±2.5 m of the row anchor so a
-              // far sample cannot drop a post under the plateau.
+              for (const t of [-28, 28]) plantRow(a, t, 56, 0.85, 1.5, alt ? VINE : VINE_D);
+              // Posts can be 54 m from the row centre and cross a different slope.
               for (const t of [-54, -18, 18, 54]) {
                 const pbase = vadd(a.c, a.t, t);
-                const py_ = terrainYAt(pbase[0], pbase[2]);
-                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
+                pbase[1] = fieldGround(pbase[0], pbase[2]);
                 addCyl(out, vadd(pbase, a.u, 0.1), 0.07, 2.0,
                   [0.52, 0.44, 0.32], 4, b);
               }
             } else {
               // Lavender: two mid-length segments (was four — props-tris budget).
-              for (const t of [-22, 22]) {
-                const pbase = vadd(a.c, a.t, t);
-                const py_ = terrainYAt(pbase[0], pbase[2]);
-                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
-                else pbase[1] = a.c[1];
-                addBox(out, vadd(pbase, a.u, 0.75), [1.9, 1.25, 40],
-                  alt ? LAV : LAV_D, b);
-              }
+              for (const t of [-22, 22]) plantRow(a, t, 40, 1.9, 1.25, alt ? LAV : LAV_D);
             }
           }
         }

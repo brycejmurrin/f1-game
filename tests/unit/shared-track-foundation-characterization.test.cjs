@@ -135,6 +135,12 @@ test("startFrac and reverse transform source control points and authored fractio
   let transformed = 0;
   for (const raw of ctx.TrackDefs) {
     const built = Tracks.LIST.find((def) => def.id === raw.id);
+    const surveyed = ctx.CircuitElevations[raw.id]?.length > 0;
+    if (surveyed) {
+      assert.equal(built.elevations, null, `${raw.id}: surveyed heights replace authored elevation bumps`);
+      assert.ok(built.points.some(point => point[1] !== built.points[0][1]),
+        `${raw.id}: surveyed heights reach the built control points`);
+    }
     const phi = wrap(raw.startFrac || 0);
     // Elevation and bridge anchors are remapped against the AUTHORING origin,
     // not the start line — a def that carries `sceneryStartFrac` is declaring
@@ -166,11 +172,14 @@ test("startFrac and reverse transform source control points and authored fractio
     const mapDressing = raw.reverse
       ? (fraction) => wrap(phiAuthor - fraction)
       : (fraction) => wrap(fraction - phiAuthor);
-    for (const key of ["bridges", "elevations"]) {
+    for (const key of surveyed ? ["bridges"] : ["bridges", "elevations"]) {
       if (!raw[key]) continue;
       assert.ok(built[key], `${raw.id}: built def lost ${key}`);
       raw[key].forEach((entry, i) => {
-        assert.ok(Math.abs(built[key][i].s - mapDressing(entry.s)) <= 1e-12, `${raw.id} ${key}[${i}]`);
+        const actual = built[key][i].s;
+        const delta = Math.abs(actual - mapDressing(entry.s));
+        // Modulo rounding can place the same station on either side of the start line.
+        assert.ok(actual >= 0 && actual < 1 && Math.min(delta, 1 - delta) <= 1e-12, `${raw.id} ${key}[${i}]`);
       });
     }
     if (raw.hwZones && built.hwZones) raw.hwZones.forEach((zone, i) => {

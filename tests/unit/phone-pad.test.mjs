@@ -31,6 +31,7 @@ const NetIce = load("js/net/ice.js", "NetIce");             // transport calls N
 const NetTransport = globalThis.NetTransport = load("js/net/transport.js", "NetTransport");
 const TiltRoll = globalThis.TiltRoll = load("js/input/tilt-roll.js", "TiltRoll");
 globalThis.PedalTravel = load("js/input/pedal-travel.js", "PedalTravel");
+globalThis.TouchButtonActions = load("js/input/touch-button-actions.js", "TouchButtonActions");
 globalThis.PhonePadCodec = load("js/input/phone-pad-codec.js", "PhonePadCodec");
 globalThis.PhonePadPage = load("js/input/phone-pad-page.js", "PhonePadPage");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");
@@ -703,12 +704,14 @@ test("phone pedals use the selected response independently, and carry it across 
     PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
     assert.equal(dom.gas.attrs["data-touch-response"], undefined, "progressive Gas leaves the idle face clear");
     assert.equal(dom.brake.attrs["data-touch-response"], undefined);
-    PedalTravel.setButtonProfile("gas", { feedback: false });
+    PedalTravel.setButtonProfile("gas", { feedback: false, slideCurve: "fine" });
     assert.equal(dom.gas.attrs["data-touch-response"], undefined);
     PedalTravel.setButtonProfile("brake", { slide: "ease" });
     gas("pointerdown", 120, 100);
     assert.equal(ctl.state().thr, PedalTravel.MIN);
     assert.ok(dom.gas.classes.has("feedback-off"));
+    gas("pointermove", 132, 116);
+    assert.ok(Math.abs(ctl.state().thr - 0.34) < 1e-10, "half of the slide distance builds a quarter of the remaining throttle");
     gas("pointermove", 144, 132);
     assert.equal(ctl.state().thr, 1, "40 pixels diagonally gives full throttle");
     gas("pointermove", 120, 100);
@@ -1759,7 +1762,7 @@ function wakePad(over = {}, extra = {}) {
   if (extra.location) sb.location = extra.location;
   if (extra.sensor) { sb.DeviceOrientationEvent = {}; sb.TiltRoll = TiltRoll; }
   const ctx = vm.createContext(sb);
-  for (const f of ["js/input/pedal-travel.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
+  for (const f of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const P = vm.runInContext("PhonePad", ctx);
   const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl(), ...(extra.codeIn ? { codeIn: fakeEl() } : {}) };
@@ -2185,9 +2188,15 @@ test("menu stick survives WebKit capture transfer but releases when hidden", () 
   const timers = fakeTimers();
   let ctl;
   try {
+    // Arrange Scale 200%: visual width 100px, local width 50px.
+    dom.stick.offsetWidth = 50;
     ctl = PhonePad.pad(dom, { timers });
     dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
     assert.equal(timers.pending(), 1);
+    assert.equal(dom.nub.style.transform, "translate(13.8px,0.0px)", "the nub paints at 55% of the visual radius");
+    for (const fn of winListeners.resize || []) fn();
+    assert.equal(timers.pending(), 0, "rotation invalidates the cached stick box and stops held navigation");
+    dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
     dom.gas.dispatch("pointerdown", { pointerId: 22, pointerType: "touch", clientY: 200 });
     dom.stick.dispatch("lostpointercapture", { pointerId: 21 });
     assert.equal(timers.pending(), 1, "another finger stealing capture does not end the held direction");
@@ -2921,4 +2930,27 @@ test("host(): decision B — the first phone on a code this screen just minted s
   assert.equal(old.ctl.state().phase, "confirming", "a code past the fresh window is asked");
   assert.equal(o.asks.length, 1);
   old.ctl.cancel();
+});
+
+test("paired absolute brake uses its full physical length and releases immediately", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  let boundsReads = 0;
+  dom.brake.getBoundingClientRect = () => {
+    boundsReads++; return { left: 80, top: 20, right: 180, bottom: 220, width: 100, height: 200 };
+  };
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "bottom", press: "instant", buildMs: 500, slideCurve: "quick" });
+    ctl = PhonePad.pad(dom);
+    const sample = (type, y) => dom.brake.dispatch(type, { pointerId: 9, clientX: 110, clientY: y });
+    sample("pointerdown", 70);
+    assert.equal(ctl.state().brk, 0.25);
+    for (const [y, level] of [[120, 0.5], [170, 0.75], [220, 1], [0, 0], [120, 0.5]]) {
+      sample("pointermove", y);
+      assert.equal(ctl.state().brk, level);
+    }
+    assert.equal(boundsReads, 1);
+    sample("pointerup", 120);
+    assert.equal(ctl.state().brk, 0);
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
 });

@@ -1,0 +1,54 @@
+@layer overlays {
+/* Opt-in driver colors take precedence over the race and controller themes.
+   The idle rim leaves status and energy fills visible. */
+[data-custom-idle] { border-color: var(--touch-custom-idle) !important; }
+[data-custom-pressed]:is(:active, [data-slid="on"], .on) {
+  border-color: var(--touch-custom-pressed) !important;
+  --touch-fill: var(--touch-custom-pressed) !important;
+}
+[data-custom-pressed]:is(:active, [data-slid="on"], .on):not(:focus-visible) {
+  outline: 3px solid var(--touch-custom-pressed);
+}
+/* Analog controls already paint a variable-strength fill. */
+[data-custom-pressed]:is(:active, .on):not(
+  [data-custom-pressed="left"], [data-custom-pressed="right"],
+  [data-custom-pressed="gas"], [data-custom-pressed="brake"]
+) {
+  background-image: linear-gradient(color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent), color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent)) !important;
+}
+/* A double line identifies the high-pressure edge before the thumb lands. */
+[data-touch-edge="top"] { border-top: 4px double currentColor !important; }
+[data-touch-edge="bottom"] { border-bottom: 4px double currentColor !important; }
+[data-touch-edge="left"] { border-left: 4px double currentColor !important; }
+[data-touch-edge="right"] { border-right: 4px double currentColor !important; }
+/* The ring's center stays at touchdown while the steering input turns the rim and spokes. */
+#drag-anchor[data-steering-guide="wheel"] {
+  width: 88px; height: 88px; margin: 0; translate: -50% -50%; box-sizing: border-box;
+  border: 4px solid var(--hud-ink-light); color: var(--hud-ink-light);
+  background: radial-gradient(circle at center, currentColor 0 13%, transparent 14%),
+    conic-gradient(transparent 0 82deg, currentColor 83deg 97deg, transparent 98deg 172deg,
+      currentColor 173deg 187deg, transparent 188deg 262deg, currentColor 263deg 277deg, transparent 278deg);
+  transform: rotate(var(--drag-turn, 0deg));
+}
+#drag-anchor[data-steering-guide="wheel"]::after {
+  content: ""; position: absolute; top: -4px; left: 50%; width: 8px; height: 11px;
+  transform: translateX(-50%); border-radius: var(--r-xs); background: var(--gold);
+}
+#drag-anchor[data-steering-guide="wheel"] > span { display: none; }
+/* Quarter-travel ticks sit inside the captured control, clear of its label.
+   The longer center tick marks half pressure in either direction. */
+[data-touch-edge] { contain: layout; }
+[data-pedal-ticks] {
+  position: absolute; inset: 0; pointer-events: none;
+  --tick: linear-gradient(currentColor, currentColor);
+  background: var(--tick) 8% 25% / 10% 2px no-repeat,
+              var(--tick) 8% 50% / 16% 2px no-repeat,
+              var(--tick) 8% 75% / 10% 2px no-repeat;
+}
+:is([data-touch-edge="left"], [data-touch-edge="right"]) > [data-pedal-ticks] {
+  background: var(--tick) 25% 84% / 2px 10% no-repeat,
+              var(--tick) 50% 84% / 2px 16% no-repeat,
+              var(--tick) 75% 84% / 2px 10% no-repeat;
+}
+[aria-pressed] > [data-pedal-ticks] { display: none; }
+}

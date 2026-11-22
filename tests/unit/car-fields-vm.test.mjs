@@ -394,7 +394,8 @@ const CTX_ENTRY = { _aiBr: ["brakeDecision", 0], _aiLane: ["adaptLane", 1], _aiB
 function gameTwins(g) {
   const out = {};
   for (const m of gameSource().matchAll(/^const (\w+) = CarFields\.warmDoubles\((\{.*\}), (\[[^\]]*\])\);/gm))
-    out[m[1]] = { twin: vm.runInContext("(" + m[2] + ")", g.ctx), keys: JSON.parse(m[3]) };
+    // Match the GRAVITY_SLOPE binding inside game.js's IIFE when evaluating the brake context.
+    out[m[1]] = { twin: vm.runInContext(`(({ GRAVITY_SLOPE }) => (${m[2]}))(PhysicsConsts)`, g.ctx), keys: JSON.parse(m[3]) };
   return out;
 }
 

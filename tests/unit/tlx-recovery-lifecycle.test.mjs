@@ -109,6 +109,7 @@ for (const initialFailure of [true, false]) {
     const target = () => ({ tagOn: () => true, resize() {}, hdrOk: () => true });
     const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} }, THREE, TSL,
       post: initialFailure ? null : target(), fx: {}, lit: null, renderer: { setMRT() {} },
+      garageProbeRequested: false, _gfxx: () => false,
       shadowSys: null, envRT: null, matMaps: null, lampGrid: null, _sharedUniforms: true, _liteGpu: true, isMobile: false, isWebGPU: () => false, ENV_SIZE: 64,
       _warmPending: null, W: 640, H: 360, presentW: 640, presentH: 360, performance: { now: () => 100 },
       buildPost() { builds++; return target(); } });

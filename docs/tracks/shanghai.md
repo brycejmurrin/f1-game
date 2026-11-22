@@ -27,15 +27,15 @@ yellow signage. Marshland greens around the perimeter.
 - Grass/marsh green: `[0.34, 0.45, 0.28]`
 
 ## 3. Elevation
-Flat by F1 standards, but not literally level: the reclaimed marsh site is
-engineered with ~6.7 m of long-wavelength relief, all under ~1.7% grade. A
-subtle rise on the Turn 1–2 climb and exit of Turn 6 ("winds uphill"); the real
-feature is a broad crest on the back straight (`js/circuits/shanghai.js`'s
-`elevations` anchors it at s≈0.45, 6.5 m — kept there rather than moved to the
-T1-2 bump to avoid a prop-interpenetration clash with the skyline towers).
-Model this as three long, gentle cosine bumps, not a flat plane with two dents.
-**Do not add knife-edge elevation jolts.** Residual `_sceneryShift` ≈ 0.09
-(frame debt — probe before touching `sceneryStartFrac`).
+Formula 1 places Shanghai’s high point at Turn 2 and its low point on the long
+back straight, with 7.4 m between them. The FIA media kit lists maximum grades
+of 3% uphill and 8% downhill. [Formula 1 topography](https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc)
+and [FIA 2026 event media kit](https://www.fia.com/sites/default/files/media_kit-formula_1_heineken_chinese_grand_prix_2026.pdf).
+
+The built lap has 6.50 m of relief and reaches 1.70% grade in each direction.
+Its highest point is at racing fraction 0.389, between Turns 8 and 9. Moving
+the high point to Turn 2 requires work on nearby scenery supports. A trial
+7.4 m crest there left 97 primitives unsupported in the ground audit.
 
 ## 4. Landmarks & Surroundings by Lap Position
 | s | Side | Distance | Box-model description |

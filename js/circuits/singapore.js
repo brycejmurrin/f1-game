@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "singapore",
+    revision: 2,
     pit: { mode: "street", side: -1 },   // the pit complex (TrackPit): the STREET one, left of the main straight by the permanent Pit Building; 80 km/h since 2025 (lane widened 1 m, FIA raised it from 60 — autosport.com/f1/news/how-faster-pitlane-speeds-could-spice-up-f1-singapore-gp/10763990/), the default
     name: "SINGAPORE",
     // Start/finish line. Snapped to the real one: coord 6.8 m off centreline; = trace vertex 0.
@@ -68,6 +69,8 @@
       { kinds: ["city", "foliage"], s0: 0.00, s1: 0.20, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.48, s1: 0.88, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
+      // The 44 m scaffold stand occupies this stretch of street frontage.
+      { kind: "city", s0: 0.323, s1: 0.337, side: -1 },
       { kind: "lamps", s0: 0, s1: 1 },
     ],
     // The redundant-layer cut above still left night at 1,006,947 — over even
@@ -104,17 +107,26 @@
       grass:        [0.25, 0.25, 0.27],
       runoff:       [0.30, 0.30, 0.31],
     },
+    // Singapore 2024 qualifying, OpenF1 session 9602. Norris lap 15, checked
+    // against Verstappen lap 11. Source fractions run against the racing lap.
     elevations: [
-      { s: 0.9000, halfM: 120, rise: -2.5 },
-      { s: 0.3800, halfM: 120, rise: 2.5 },
-    ],
+      0, 0, 0, 0, 0, 0, 0.1, 0, -0.1, -0.1,
+      -0.3, -0.3, -0.2, -0.1, 0.2, 0.1, 0.3, 0.3, 0.4, 0.5,
+      0.6, 1.1, 0.9, 0.4, 0, 0.1, 0.4, 0.7, 1.4, 2.1,
+      4, 3.9, 4.1, 4, 4.1, 3.9, 2.5, 1.9, 1.8, 0.9,
+      0.7, 1.3, 1.4, 1.6, 1.6, 1.6, 1.5, 1.5, 1.4, 1.6,
+      1.3, 0.9, 0.7, 0.7, 0.6, 0.5, 0.5, 0.3, 0.2, 0.2,
+      0.2, 0.3, 0, 0, 0, 0, 0.1, 0, 0, -0.1,
+      0.1, 0.2, -0.2, -1.1, -0.7, -0.5, -0.4, -0.1, -0.1, -0.1,
+    ].map((rise, i) => ({ s: i / 80, halfM: 61.33, rise })),
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
       { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // racing arc 0.378-0.429 FIA T8-T9
       { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // racing arc 0.846-0.874 bridge link
       { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // racing arc 0.692-0.716 Esplanade
       { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // racing arc 0.578-0.601 final corners
     ],
-    // Flat city tarmac — crown only, 2.5-3°. Nothing here is banked.
+    // These zones tilt the whole road cross-section. Their 2.5–3° angles
+    // are modelling estimates for Marina Bay’s street corners.
     bankZones: [
       { frac: 0.1043, angleDeg: 3.0, widthM: 100 },
       { frac: 0.3562, angleDeg: 3.0, widthM: 130 },

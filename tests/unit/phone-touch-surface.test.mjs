@@ -839,9 +839,16 @@ test("#5236: every typeable field's iOS focus floor is 16 PAINTED px, and no bar
 
 test("#5215: sheet titles and foot buttons floor on the TEXT SIZE ladder, never a fixed px", () => {
   const rules = cssRules(read("css/components.css"));
-  assert.equal(decl(rules, ".sheet-head h2", "font-size"), "clamp(var(--fs-2), calc(3.6 * var(--vhz)), 24px)");
-  assert.equal(decl(rules, '.sheet[data-density="compact"] .sheet-head h2', "font-size"), "clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px)");
-  assert.equal(decl(rules, ".sheet-foot .bigbtn", "font-size"), "clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px)");
+  // A menu region can scale the fluid size and cap. Its floor still comes
+  // from the player's text ladder. An unset region keeps all three defaults.
+  for (const [selector, floor, preferred, cap] of [
+    [".sheet-head h2", "--fs-2", 3.6, 24],
+    ['.sheet[data-density="compact"] .sheet-head h2', "--fs-micro", 3, 18],
+    [".sheet-foot .bigbtn", "--fs-micro", 3.6, 20],
+  ]) {
+    const font = decl(rules, selector, "font-size");
+    assert.equal(font, `clamp(var(${floor}), calc(${preferred} * var(--vhz) * var(--arrange-text-size, 1)), calc(${cap}px * var(--arrange-text-size, 1)))`);
+  }
   // The default rung keeps today's 15 / 14 px floors (no change for a player on TEXT SIZE default).
   const tokens = read("css/tokens.css");
   assert.match(tokens, /--fs-micro: 14px;/); assert.match(tokens, /--fs-2: 15px;/);

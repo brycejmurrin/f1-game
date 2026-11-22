@@ -29,13 +29,11 @@ export default function register() {
             const sample = profile[Math.round(frac * profile.length) % profile.length];
             return { x: node.x, z: node.z, dir: sample.k > 0 ? "L" : "R" };
           }),
-          // Corrected profile (#878, SRTM-fitted, 2026-10-04): La Source falls to
-          // the Eau Rouge valley floor at 0.1405 (y -26.6), then Raidillon and
-          // the Kemmel straight climb to the Les Combes summit at 0.3633
-          // (y 52.3): 78.8 m (headless VM), so the >75 climb below is kept,
-          // measured valley-to-summit instead of the old misplaced
-          // La Source-exit climb (probes 0.0325 / 0.1125).
-          eauRouge: window.__apex.nodeAt(0.1405).y,
+          // SPW LiDAR gives 13.3 m then 10.2 m of rise between these
+          // physical stations. Measuring each leg catches a late climb.
+          eauRouge: window.__apex.nodeAt(0.1331).y,
+          raidillon: window.__apex.nodeAt(0.1491).y,
+          crestApproach: window.__apex.nodeAt(0.1631).y,
           kemmel: window.__apex.nodeAt(0.3633).y,
           maxUp: Math.max(...profile.map((p) => p.slope)),
         };
@@ -44,8 +42,12 @@ export default function register() {
       expect(elevation.range).toBeGreaterThanOrEqual(100);
       expect(elevation.range).toBeLessThanOrEqual(104);
       expect(elevation.kemmel - elevation.eauRouge).toBeGreaterThan(75);
-      expect(elevation.maxUp).toBeGreaterThan(0.17);
-      expect(elevation.maxUp).toBeLessThan(0.23);
+      expect(Math.abs(elevation.raidillon - elevation.eauRouge - 13.3)).toBeLessThan(1.5);
+      expect(Math.abs(elevation.crestApproach - elevation.raidillon - 10.2)).toBeLessThan(1.5);
+      // The engine returns the unit tangent's vertical component. Compare
+      // dy/horizontal distance to the 15.77% peak from 8 m survey intervals.
+      const grade = elevation.maxUp / Math.sqrt(1 - elevation.maxUp ** 2);
+      expect(Math.abs(grade - 0.1577)).toBeLessThan(0.012);
       // Physical bend stations matched to F1's 2025 numbered map, in game
       // coordinates. This catches duplicate peaks and the missing Eau Rouge /
       // Blanchimont identities; it does not certify GPS or absolute dimensions.
@@ -97,8 +99,8 @@ export default function register() {
         // Each corridor sample has to sit on the BANKED road surface, not on the
         // flat centreline plane. `y: node.y` made `overlaps.road` measure Spa's
         // own authored camber and nothing else: the road mesh lifts its outer
-        // edge by bankOffsetAt(), and Pouhon (frac 0.5648) and Stavelot (0.7576)
-        // are bankZones at 6 deg across a 16 m road, so at 0.6 x half-width the
+        // edge by bankOffsetAt(), and the original Pouhon and Stavelot zones
+        // were authored at 6 deg across a 16 m road, so at 0.6 x half-width the
         // tarmac legitimately stands 0.6 * 8 * tan(6 deg) = 0.505 m above the
         // centreline. The scan reported 0.525 (the extra 0.02 is nodeAt() snapping
         // frac to the nearest node, plus the mesh chording the elevation curve

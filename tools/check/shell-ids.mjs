@@ -59,6 +59,7 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "pm-look-popups": "ScreenLooks.build creates each appearance fold from its screen ID when Appearance opens. The shared popup picker focuses this fold.",
   "as-master": "AudioPanel builds the MASTER SOUND row with SettingRow.build above the MUSIC & SOUND folds (#5584; the shell's node count is a shrink-only ratchet); its one read goes through SettingRow.paint, which is null-guarded",
   "ga-shots-row": "GarageArrival buildRows() makes the GARAGE ENTER & LEAVE camera / shot-length / after-race rows from its tables (the shell's node count is a shrink-only ratchet); every read in bindSettings is null-guarded",
   "ga-slowmo": "GarageArrival buildRows(), same table and the same null-guarded reads",
@@ -88,7 +89,6 @@ export const RUNTIME_IDS = {
   "ga-pit-out": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
   "ga-crew-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-result": "GarageArrival buildRows(), same table and the same null-guarded reads",
-  "ga-preview-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-race": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "pm-btnshape":      "DockLayout.create builds the BUTTON SHAPE row with SettingRow.build under BUTTON OPACITY (shell node count is a shrink-only ratchet); its lookups are null-guarded",
   "as-slang":         "audio/panel.js builds the SPOKEN LANGUAGE row with SettingRow.build after RADIO SOUND (the shell's node count is a shrink-only ratchet); its paint/wire reads are null-guarded",
