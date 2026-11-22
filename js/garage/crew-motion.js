@@ -34,12 +34,14 @@ const GarageCrewMotion = (function () {
   // The parts are GarageCrewDraw.body's lofts (tools/gen/blender/crew-body.py), in
   // the frames part() places: the fore carries the glove and fist past the wrist.
   function create(gfx, c1, c2, helmet) {
-    const mesh = {}, add = (name, data) => { mesh[name] = gfx.createMesh(data); };
-    for (const name of ["torso", "upper", "fore", "thigh", "shin", "boot"]) add(name, GarageCrewDraw.body.build(acc(), name, c1, c2));
-    const a = acc(); helmet(a, [0, 0, 0], c1, c2); add("head", a);
-    // Scratch buffers reused every frame: matrices, sampled channels, IK outputs.
-    return { mesh, m: new Float32Array(16), pm: new Float32Array(16), parent: null, walk: new Float32Array(8), signal: new Float32Array(8),
-      joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
+    return GarageCrewDraw.uploadMeshes(gfx, upload => {
+      const mesh = {}, add = (name, data) => { mesh[name] = upload(data); };
+      for (const name of ["torso", "upper", "fore", "thigh", "shin", "boot"]) add(name, GarageCrewDraw.body.build(acc(), name, c1, c2));
+      const a = acc(); helmet(a, [0, 0, 0], c1, c2); add("head", a);
+      // Scratch buffers reused every frame: matrices, sampled channels, IK outputs.
+      return { mesh, m: new Float32Array(16), pm: new Float32Array(16), parent: null, walk: new Float32Array(8), signal: new Float32Array(8),
+        joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
+    });
   }
   function free(rig, gfx) {
     if (!rig) return 0;

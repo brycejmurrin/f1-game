@@ -32,16 +32,42 @@ const FieldLod = (function () {
   let on = true;
   let reach = 1, rk2 = 1;   // desktop ULTRA: every cut sits 2x further out
 
+  let adaptive = false, modelK2 = 1, sampleMs = 0, goodMs = 0;
   // Off when the stored value is 0 / "0" / false; anything else (unset) is on.
   function init(store) {
     let v = 1;
     try { v = store && store.get ? store.get("fieldLod", 1) : 1; } catch (_) { v = 1; }
     on = !(v === 0 || v === "0" || v === false);
     try { const preset = GfxQuality.detail() > 0; reach = (GfxQuality.option ? GfxQuality.option("rivalLod", preset) : preset) ? 2 : 1; } catch (_) { reach = 1; }
+    adaptive = typeof GfxQuality !== "undefined" && !!GfxQuality.feature?.("adaptiveModels")
+      && !(typeof GLX !== "undefined" && GLX.isMobile) && GfxQuality.option?.("rivalLod", true) === true;
+    modelK2 = 1; sampleMs = goodMs = 0;
     rk2 = 1 / (reach * reach);
     return on;
   }
   function setEnabled(v) { on = !!v; }
+  // Only main-view models earn extra reach. Shadows, mirrors and effects keep their own budgets.
+  // Evaluate twice a second, require four seconds of spare capacity to promote, and withdraw
+  // on the first overloaded sample. The per-car lens thresholds below still have their own hysteresis.
+  function updateModelBudget(dtMs, height, gov) {
+    if (!adaptive || !on || !(dtMs > 0)) return;
+    if (dtMs > 100) { modelK2 = 1; goodMs = sampleMs = 0; return; }
+    sampleMs += dtMs;
+    if (sampleMs < 500) return;
+    const elapsed = sampleMs;
+    sampleMs = 0;
+    const frame = gov.fpsEMA(), floor = gov.floorMs(), gpu = gov.gpuMs();
+    const budget = Math.min(1000 / 60, floor);
+    if (!(budget > 0) || gov.autoTier() || gov.extrasShed() || height <= 720 ||
+        frame > budget + 2.3 || gpu > budget * 0.9) {
+      goodMs = 0; modelK2 = 1; return;
+    }
+    if (frame <= budget + 0.6 && (gpu < 0 || gpu <= budget * 0.7)) goodMs += elapsed;
+    else goodMs = 0;
+    // At equal field of view a car occupies twice as many vertical pixels at 1440p as at 720p.
+    // Cap the extra reach at 1.5× so a 4K view cannot draw the entire field at near detail.
+    if (goodMs >= 4000 || modelK2 < 1) modelK2 = 1 / Math.min(1.5, height / 720) ** 2;
+  }
   // Camera distance² of a car at world `p` from `eye`; the player is always 0.
   function d2(p, eye, isPlayer) {
     if (isPlayer) return 0;
@@ -77,7 +103,7 @@ const FieldLod = (function () {
   // metres when fovY is given.
   function tier(dist2, fovY, car) {
     if (!on) return 0;
-    const d2 = dist2 * lensK2(fovY);
+    const d2 = dist2 * lensK2(fovY) * modelK2;
     const prev = car ? car._lodTier : undefined, sticky = prev === 0 || prev === 1 || prev === 2;
     const t = crossed(d2, T.NO_DECAL_M, prev === 2, sticky) ? 2
       : crossed(d2, T.WHEEL_EXTRAS_M, prev >= 1, sticky) ? 1 : 0;
@@ -90,12 +116,14 @@ const FieldLod = (function () {
   const _farOf = new WeakMap();   // car -> last far verdict
   function farBody(dist2, fovY, car) {
     if (!on) return false;
-    const d2 = dist2 * lensK2(fovY), was = car ? _farOf.get(car) === true : false;
+    const d2 = dist2 * lensK2(fovY) * modelK2, was = car ? _farOf.get(car) === true : false;
     const far = car ? crossed(d2, T.FAR_BODY_M, was, _farOf.has(car)) : d2 > sq(T.FAR_BODY_M);
     if (car) _farOf.set(car, far);
     return far;
   }
-  function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
+  // Share the main camera's hysteretic body decision with its wheel draw.
+  function farWheels(car) { return on && car._lodTier === 2 && _farOf.get(car) === true; }
+  function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) * modelK2 > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M * reach : T.LEGACY_FLAPS_M; }
   // lensK2 carries rk2 (the ULTRA reach), so flame / shadow scale by both.
   function flame(dist2, fovY) { return !on || dist2 * lensK2(fovY) < sq(T.FLAME_M); }
@@ -135,6 +163,6 @@ const FieldLod = (function () {
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
-  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
+  return { T, init, setEnabled, updateModelBudget, get on() { return on; }, d2, lensK2, tier, farBody, farWheels, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
 })();
 Object.freeze(FieldLod);

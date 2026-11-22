@@ -532,3 +532,20 @@ test("the base floor carries the authored ground material without moving or reco
     }
   }
 });
+
+test("gravel debris contact follows the modelled gravel verge and excludes paved surfaces", () => {
+  const Surface = loadGlobal(P.TRACK_SURFACE, "TrackSurface");
+  const track = { n: 2, total: 100, py: [0, 0], hw: [7, 8] };
+  const surface = Surface.profile({}, track);
+  assert.equal(surface.gravelAt(0, 7), false);
+  assert.equal(surface.gravelAt(0, 8), false);
+  assert.equal(surface.gravelAt(0, -10), true);
+  assert.equal(surface.gravelAt(1, 10), false);
+  assert.equal(surface.gravelAt(0, 80), false);
+  assert.equal(Surface.profile({ terrainMat: "CONCRETE" }, track).gravelAt(0, -10), false);
+  assert.equal(Surface.profile({ street: true }, track).gravelAt(0, -10), false);
+  track.pit = { side: 1, off: { outer: 18 }, bay: { depth: 6 }, w: [1, 0] };
+  const pit = Surface.profile({}, track);
+  assert.equal(pit.gravelAt(0, 11), false);
+  assert.equal(pit.gravelAt(0, -11), true);
+});

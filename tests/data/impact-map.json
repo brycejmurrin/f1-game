@@ -1646,7 +1646,8 @@
         "tests/unit/cockpit-preview.test.mjs"
       ],
       "draw": [
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/livery-wheels.test.mjs"
       ],
       "mount": [
         "tests/unit/cockpit-preview.test.mjs"
@@ -1660,7 +1661,6 @@
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/shell-ids.test.mjs"
       ]
     },
@@ -2809,6 +2809,8 @@
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "drawPlayerWheels": [
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "farRivalBodyReady": [
@@ -2942,7 +2944,6 @@
         "tests/specs/quali.spec.js",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
@@ -2975,7 +2976,8 @@
         "tests/unit/car-detail-tiers.test.mjs"
       ],
       "build": [
-        "tests/unit/car-detail-tiers.test.mjs"
+        "tests/unit/car-detail-tiers.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "refine": [
         "tests/unit/car-detail-tiers.test.mjs"
@@ -3237,6 +3239,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
       "phaseStep": [
@@ -3502,6 +3505,9 @@
         "tests/unit/tlx-csm-lampx.test.mjs"
       ],
       "tier": [
+        "tests/unit/field-lod.test.mjs"
+      ],
+      "updateModelBudget": [
         "tests/unit/field-lod.test.mjs"
       ],
       "wheelsLite": [
@@ -5787,6 +5793,7 @@
         "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
@@ -6802,7 +6809,8 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "thumb": [
-        "tests/unit/designer-canvas.test.mjs"
+        "tests/unit/designer-canvas.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "view": [
         "tests/unit/designer-canvas.test.mjs",
@@ -7108,6 +7116,9 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "toggleHeat": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
+      "toggleStartFrom": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "trackOfTheDay": [
@@ -7447,7 +7458,8 @@
       ],
       "capacity": [
         "tests/unit/car-fx.test.mjs",
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "clear": [
         "tests/unit/car-fx.test.mjs",
@@ -7482,6 +7494,9 @@
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
+      "gravel": [
+        "tests/unit/particles-dirty.test.mjs"
+      ],
       "init": [
         "tests/unit/car-fx.test.mjs",
         "tests/unit/droplets-spray.test.mjs",
@@ -7500,6 +7515,9 @@
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
+      ],
+      "rainCurtain": [
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "rainSeed": [
         "tests/unit/particles-dirty.test.mjs",
@@ -8570,6 +8588,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "samplePose": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs"
       ],
       "spinRadians": [
@@ -10064,6 +10083,14 @@
       ]
     },
     "js/input/pedal-travel.js": {
+      "advance": [
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "buildOnHold": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "buttonOverrides": [
         "tests/unit/touch-button-settings.test.mjs"
       ],
@@ -10071,31 +10098,39 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/touch-button-settings.test.mjs"
       ],
+      "contactProfile": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "ease": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "level": [
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
       ],
       "setButtonProfile": [
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/settings-export.test.mjs",
-        "tests/unit/throttle-latch.test.mjs"
+        "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
       ],
-      "*": [
-        "tests/unit/a11y-pwa-pass.test.mjs",
-        "tests/unit/camera-defaults.test.mjs",
+      "tick": [
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/photomode-hold.test.mjs"
+      ],
+      "*": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/pad-haptics.test.mjs",
         "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
-        "tests/unit/photomode-hold.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -10303,6 +10338,16 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
+      ]
+    },
+    "js/input/touch-button-actions.js": {
+      "bindControl": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs"
       ]
     },
     "js/lighting/atmosphere.js": {
@@ -11242,7 +11287,8 @@
       ],
       "start": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/net-qr.test.mjs"
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs"
       ],
       "stop": [
         "tests/unit/async-lifecycle.test.mjs",
@@ -11902,6 +11948,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "detail": [
+        "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
@@ -11939,6 +11986,9 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs"
       ],
+      "needsBundle": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
       "setCinema": [
         "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
@@ -11951,6 +12001,9 @@
         "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/tier-record.test.mjs",
         "tests/unit/tsl-gi.test.mjs"
+      ],
+      "supportsOption": [
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
@@ -16271,6 +16324,9 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
+      "makeFrustumPlanes": [
+        "tests/unit/particles-dirty.test.mjs"
+      ],
       "radialCulled": [
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
@@ -16712,10 +16768,12 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "depthBegin": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "depthEnd": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "discardAttachments": [
         "tests/unit/tlx-hunt4b.test.mjs"
@@ -17115,7 +17173,8 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "_restoreEnvFrame": [
-        "tests/unit/tlx-hunt-5699.test.mjs"
+        "tests/unit/tlx-hunt-5699.test.mjs",
+        "tests/unit/tlx-mat-detail.test.mjs"
       ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -17176,6 +17235,9 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "captureGarageFace": [
+        "tests/unit/tlx-mat-detail.test.mjs"
+      ],
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
@@ -17223,6 +17285,9 @@
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs"
+      ],
+      "cullPassInstances": [
+        "tests/unit/tlx-cull-shadow-pack.test.mjs"
       ],
       "detectSoftwareGL": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -17781,7 +17846,8 @@
         "tests/unit/tsl-gi.test.mjs"
       ],
       "*": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ]
     },
     "js/render/three/tsl-lit.js": {
@@ -17831,6 +17897,7 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mat-detail.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
       "*": [

@@ -152,7 +152,7 @@
 }
 .touchbtn[data-touch-feedback="on"]::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
-  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) 46%, var(--hud-ink-dark));
+  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) var(--touch-brightness, 46%), var(--hud-ink-dark));
   opacity: var(--touch-level);
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue]::before {
@@ -163,6 +163,17 @@
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue="lock"]::before {
   background: linear-gradient(to bottom, var(--hud-ink-light) 32%, var(--hud-ink-dark) 32% 68%, var(--hud-ink-light) 68%);
+}
+
+/* Leave the grip cue visible when wheelspin or lock-up needs the same space. */
+.touchbtn[data-touch-indicator="percent"][data-touch-feedback]:not([data-grip-cue], [aria-pressed])::before {
+  counter-reset: pressure calc(100 * var(--touch-level, 0));
+  content: counter(pressure) "%"; position: absolute; inset: auto 0 5%; width: auto; height: auto;
+  transform: none; clip-path: none; background: none; text-align: center;
+  font-size: var(--fs-micro); line-height: 1; pointer-events: none;
+}
+.touchbtn[data-touch-indicator="bar"][data-touch-feedback]::after {
+  opacity: 1; transform-origin: bottom; transform: scaleY(var(--touch-level));
 }
 
 /* Latch uses the persistent illuminated GAS button for its binary command. */
@@ -1006,8 +1017,8 @@ body.hud-hidden #hud > :not(#hud-dock),
    with the HUD off left the pit crew waiting for a button nobody could see.
    The cluster box itself goes unless that button is showing (menu-survey 42
    measures it hidden), so the only box left under HIDE HUD is a live button. */
-body.hud-hidden #hud-dock > .hud-bottom:not(:has(> #hud-work:not([hidden]))) { display: none !important; }
-body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-work) { display: none !important; }
+body.hud-hidden #hud-dock > .hud-bottom:not(:has(> #hud-pit-actions > button:not([hidden]))) { display: none !important; }
+body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-pit-actions) { display: none !important; }
 body.hud-hidden #lights,
 body.hud-hidden #announce,
 body.hud-hidden #campicker,

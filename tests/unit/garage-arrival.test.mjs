@@ -93,6 +93,7 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
   const { $ } = harness();
   let saved = null;
   const read = Arrival.bindSettings($, { get: () => saved, set: (_, value) => { saved = value; } });
+  $('ga-edit-moment').value = 'pitIn'; $('ga-edit-moment').onchange();
   $('ga-speed').value = '2'; $('ga-speed').onchange();
   $('ga-angle').value = 'right'; $('ga-angle').onchange();
   $('ga-fov').value = '70'; $('ga-fov').onchange();
@@ -102,7 +103,8 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
   assert.equal(arrival.state.active, false);
   $('ga-enabled').checked = false; $('ga-enabled').onchange();
   arrival.start(); assert.equal(arrival.state.active, false);
-  $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().speed, 1);
+  $('ga-reset').onclick(); assert.equal(read().enabled, false); assert.equal(read().speed, 1);
+  $('ga-enabled').checked = true; $('ga-enabled').onchange();
   arrival.start(); assert.equal(arrival.state.active, true);
   assert.equal(Arrival.settings({ speed: Infinity, fov: -100, angle: 'outside' }).fov, 40);
   assert.equal(Arrival.settings({ speed: Infinity }).speed, 1);
@@ -412,14 +414,41 @@ test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-ou
   const calls = [];
   Arrival.bindSettings($, { get: () => null, set() {} }, { preview: (dir, b) => { calls.push(dir); if (dir) return true; const was = playing; playing = false; return was; } });
   $('garrival').hidden = false;
-  $('ga-preview-in').onclick(); $('ga-preview-out').onclick(); $('ga-preview-home').onclick();
-  assert.deepEqual(calls, ['in', 'out', 'home']);
+  $('ga-preview-out').onclick(); $('ga-preview-in').onclick(); $('ga-preview-pit-exit').onclick(); $('ga-preview-home').onclick();
+  assert.deepEqual(calls, ['out', 'in', 'pitExit', 'home']);
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, false, 'DONE mid-playback stops it, the panel stays');
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, true, 'the next DONE closes the tool');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW PIT STOP<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW RACE START<\/button>/);
+  assert.deepEqual([...shell.matchAll(/<button id="ga-preview-[^"]+" type="button">PREVIEW ([^<]+)<\/button>/g)].map(m => m[1]),
+    ['RACE START', 'PIT ENTRY', 'PIT EXIT', 'RACE END']);
+});
+
+test('Pit exit uses the pit release pose and pace, including after editing or switching previews', () => {
+  const h = previewHarness();
+  h.c.GarageDepartureWheels = { samplePose(p) { p.raceCamera = true; } };
+  h.start('out');
+  const race = h.step(.05);
+  assert.equal(race.raceCamera, true);
+  const t = h.playing().t;
+  h.fn('previewEdit')(true);
+  h.start('pitExit');
+  h.fn('refreshPreview')();
+  const exit = h.step(.05);
+  assert.equal(exit.raceCamera, undefined);
+  assert.equal(h.playing().dir, 'out');
+  assert.equal(h.playing().t, t * Arrival.PIT_EXIT_RATE);
+  h.fn('previewEdit')(true);
+  h.start('out');
+  assert.equal(h.step(.05).raceCamera, true);
+  assert.equal(h.playing().t, t);
+  h.fn('previewEdit')(true);
+  h.start('home');
+  const home = h.step(.05);
+  const expected = Arrival.poseHome(h.playing().t, h.playing().cfg);
+  assert.equal(home.raceCamera, undefined);
+  assert.deepEqual([home.x, home.z, home.yaw], [expected.x, expected.z, expected.yaw]);
 });
 
 test('a circuit already raced opens RACE! on the garage: its programs are not warmed a second time', () => {
@@ -515,7 +544,7 @@ test('handheld sway: centimetres, both shots, and off when calm', () => {
   for (const fn of [Arrival.pose, Arrival.poseOut]) {
     let max = 0;
     for (let t = 0; t < 8; t += 0.05) {
-      const live = fn(t, cfg, false), calm = fn(t, cfg, true);
+      const live = fn(t, cfg, false), calm = fn(t, { ...cfg, sway: 0 }, false);
       max = Math.max(max, Math.hypot(live.eye[0] - calm.eye[0], live.eye[1] - calm.eye[1]));
       assert.equal(live.eye[2], calm.eye[2], 'never toward or away from the car');
       assert.ok(Math.abs(live.aim[0] - calm.aim[0]) < 0.05 && Math.abs(live.aim[1] - calm.aim[1]) < 0.05);
@@ -1132,7 +1161,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     _poseAt: null, _audioParamStep: true, _carWarm: { busy: false }, _studio: null,
     _menuGate: { warm: 0, garageWarm: 0 }, _softEl: null, canvas: { style: {} },
     loadingScreen: { phase: () => '', lowerWaitPlate: noop, active: () => false },
-    gfx: { warming: () => false, resize: noop },
+    gfx: { warming: () => false, resize: noop }, FieldLod: { updateModelBudget: noop },
     uiExperience: { renderHome: () => false, trackActive: () => false },
     UiExperience: { resumeHolding: () => false }, PerfGov: { tick: noop }, PerfSpans: { begin: noop, end: noop },
     mirrorPass: { preparing: () => false, cancelPreparation: noop },
@@ -1258,7 +1287,7 @@ test('entry and departure crew choices save independently and fall back safely f
   $('ga-crew-out').value = 'none'; $('ga-crew-out').onchange();
   assert.equal(read().enterCrew, 'welcome'); assert.equal(Arrival.poseOut(2, read(), true).crew, 'none');
   assert.equal(Arrival.settings({ enterCrew: 'unknown', leaveCrew: 3 }).leaveCrew, 'mix');
-  $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().enterCrew, 'mix');
+  $('ga-reset').onclick(); assert.equal(read().enterCrew, 'mix');
 });
 
 
@@ -1561,7 +1590,6 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   assert.deepEqual($('ga-light-home').children.map((o) => o.value).slice(0, 2), ['auto', 'asset']);
   for (const id of ['ga-move', 'ga-sway', 'ga-zoom', 'ga-swell']) assert.equal($(id).tagName, 'SELECT', id);
   for (const id of ['ga-captions', 'ga-bars']) assert.equal($(id).type, 'checkbox', id);
-  assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview-in', 'ga-preview-out', 'ga-preview-home', 'ga-reset'], 'PREVIEW AFTER RACE joins the other previews');
   assert.equal(rows.querySelector('label[for="ga-carspeed"]').textContent, 'CAR SPEED');
 });
 test('endRace notes the result; the next non-pit garage visit plays it once (gated, never for the harness)', () => {
@@ -1595,7 +1623,7 @@ test('CAMERA MOVE, HANDHELD and FINAL SHOT ZOOM shape each shot; reduce motion a
   assert.ok(dist(at({ move: 'push', sway: 0 }, T.door - 0.01)) < dist(still(T.door - 0.01)) - 1, 'PUSH IN ends shot 1 a metre-plus closer');
   assert.ok(Math.abs(dist(at({ move: 'push', sway: 0 }, 0.001)) - dist(still(0.001))) < 0.01, 'and starts where STILL does');
   assert.ok(dist(at({ move: 'pull', sway: 0 }, 0.001)) < dist(still(0.001)) - 1, 'PULL OUT starts close');
-  const d0 = at({ move: 'drift', sway: 0 }, T.door + 0.01), d1 = at({ move: 'drift', sway: 0 }, s2 - 0.01);
+  const d0 = at({ move: 'drift', sway: 0 }, T.door + 1), d1 = at({ move: 'drift', sway: 0 }, s2 - 0.01);
   assert.ok(Math.hypot(d1.eye[0] - d0.eye[0], d1.eye[2] - d0.eye[2]) > 0.6, 'DRIFT crosses the shot');
   assert.deepEqual([...at({ move: 'push', sway: 0 }, T.door - 0.01, true).eye], [...Arrival.CAMS.high], 'reduce motion: no move');
   assert.deepEqual([...at({ sway: 0 }, 3.3).eye], [...Arrival.CAMS.high], 'HANDHELD OFF holds the eye still');
@@ -1959,14 +1987,14 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
   assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
   assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT', 'RAIN READY', 'HERITAGE', 'QUALIFYING']);
   $('ga-style-cinema').onclick();
-  assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
+  assert.deepEqual([saved.profiles.raceStart.angle, saved.profiles.raceStart.bars, saved.profiles.raceStart.captions], ['crane', true, false]);
   assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
   $('ga-style-broadcast').onclick();
-  assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
+  assert.deepEqual([saved.profiles.raceStart.angle, saved.profiles.raceStart.light, saved.profiles.raceStart.cue], ['director', 'broadcast', 'lightsup']);
   assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
   const more = ['rainready', 'heritage', 'qualify'].map((id) => {
     $('ga-style-' + id).onclick();
-    return [id, saved.angle, saved.light];
+    return [id, saved.profiles.raceStart.angle, saved.profiles.raceStart.light];
   });
   assert.deepEqual(more, [['rainready', 'door', 'rain'], ['heritage', 'low', 'goldenhour'], ['qualify', 'high', 'night']]);
 });
@@ -2060,7 +2088,7 @@ test('EACH MOMENT: every show has its own switch, PLAY ANIMATIONS still stops al
   saved = { afterRace: false }; assert.deepEqual(all(), [true, true, false]);
   saved = { raceStart: false }; assert.deepEqual(all(), [true, true, true], 'RACE START is the drive-out, not this player');
 });
-test('EACH MOMENT: the tuner binds the four switches and RESET turns them all back on', () => {
+test('EACH MOMENT: sequence reset preserves the four playback switches', () => {
   const { $ } = harness();
   let saved = null;
   const read = Arrival.bindSettings($, { get: () => saved, set: (_, v) => { saved = v; } });
@@ -2071,7 +2099,7 @@ test('EACH MOMENT: the tuner binds the four switches and RESET turns them all ba
   }
   assert.equal(read().enabled, true, 'the master is untouched');
   $('ga-reset').onclick();
-  assert.deepEqual([read().raceStart, read().pitIn, read().pitOut, read().afterRace], [true, true, true, true]);
+  assert.deepEqual([read().raceStart, read().pitIn, read().pitOut, read().afterRace], [false, false, false, false]);
 });
 test('EACH MOMENT: PIT OUT plays unless its own switch or the master is off, and hands back once either way', () => {
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
@@ -2114,4 +2142,39 @@ test('#5660: the tuner rows are lazy (arrival-rows.js): absent at bind, the open
   assert.equal(panel.hidden, false, 'and the panel opens');
   $('ga-pit-out').checked = false; $('ga-pit-out').onchange();
   assert.equal(A.settings(saved).pitOut, false, 'a late-built row is bound');
+});
+
+test('garage profiles inherit legacy settings, save independently and reset only the selected animation', () => {
+  const { $ } = harness();
+  let saved = { angle: 'left', fov: 55, pitOut: false };
+  const store = { get: () => saved, set: (_, value) => { saved = value; } };
+  const read = Arrival.bindSettings($, store);
+  const select = moment => { $('ga-edit-moment').value = moment; $('ga-edit-moment').onchange(); };
+  const moments = ['raceStart', 'pitIn', 'pitOut', 'afterRace'];
+  moments.forEach((moment, i) => {
+    select(moment);
+    assert.equal(read().fov, 55);
+    $('ga-fov').value = String(60 + i); $('ga-fov').onchange();
+  });
+  const reopened = Arrival.bindSettings($, store);
+  assert.deepEqual(moments.map(moment => reopened(moment).fov), [60, 61, 62, 63]);
+  select('pitOut'); $('ga-reset').onclick();
+  assert.deepEqual(moments.map(moment => reopened(moment).fov), [60, 61, 54, 63]);
+  assert.equal(reopened('raceStart').pitOut, false);
+  const live = Arrival.create($, () => false, reopened);
+  live.start(); assert.equal(live.state.fov, 61);
+  live.start({ home: { result: 'finish' } }); assert.equal(live.state.fov, 63);
+});
+
+test('custom garage shots cross every shutter and camera boundary continuously, including on seek', () => {
+  const cfg = Arrival.settings({ angle: 'custom', shots: ['left', 'right', 'high'], hold: .3, enterCrew: 'none', leaveCrew: 'none', homeCrew: 'none' });
+  for (const dir of ['in', 'home', 'out']) {
+    const T = Arrival.timeline(cfg, dir), pose = Arrival.poseFor(dir);
+    const times = dir === 'out' ? [T.door, T.door + T.hold, T.door + T.hold + 6 / T.v + T.accel / 2] : [T.door, T.door + T.lane + T.pause];
+    for (const t of times) {
+      const after = pose(t + .001, cfg), before = pose(t - .001, cfg);
+      for (const k of ['eye', 'aim']) assert.ok(Math.hypot(...after[k].map((v, i) => v - before[k][i])) < .05, dir + ' ' + k);
+      assert.deepEqual(pose(t + .001, cfg).eye, after.eye);
+    }
+  }
 });

@@ -112,7 +112,7 @@ const SPEC = [
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = factory size: phone 143.25, tablet 125, fine pointer 100; displayed as 100%)" },
   { k: "hudBotKeep", lane: "json", group: "display", def: null, src: "js/ui/scale.js gear row kept on BUTTON SIZE moves (null = none)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
-  { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
+  { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square", "arch", "shield", "paddle-left", "paddle-right", "leaf"] },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
   { k: "motion", lane: "json", group: "a11y", def: null, src: "js/ui/title-fx.js REDUCE MOTION (null/auto = follow OS; reduce=ON; off; legacy on → auto)", oneOf: ["auto", "reduce", "off", "on"] },
   { k: "focusRing", lane: "json", group: "a11y", def: "high", src: "js/ui/a11y-opts.js KEYBOARD FOCUS", oneOf: ["standard", "high"] },
@@ -220,6 +220,7 @@ const SPEC = [
   // PER-DEVICE STEERING (js/input/steer-tuning.js). Each defaults to the notch
   // that reproduces exactly what shipped, so an absent key is a no-op.
   { k: "tiltCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
+  { k: "touchSteeringGuide", lane: "json", group: "driving", def: "ring", oneOf: ["ring", "wheel"], src: "js/input/touch-button-actions.js (touch steering guide)" },
   { k: "touchCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "padCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "touchRange", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js touchRangeFromSlider (0.12 of the long edge at 5)" },

@@ -146,12 +146,20 @@ test("a driver can tune Gas and Left independently, reload, and reset only Gas",
     await page.locator("#pm-touch-response").tap();
   };
   await openControls();
+  const guide = page.locator("#pm-touch-steering-guide-sel");
+  await expect(guide).toHaveValue("ring");
+  await guide.selectOption("wheel");
   const form = page.locator("#pm-touch-response-fields");
   const button = form.locator('[data-field="button"]');
   const press = form.locator('[data-field="press"]');
   const travel = form.locator('[data-field="travel"]');
   await button.selectOption("gas");
   await press.selectOption("progressive");
+  const edge = form.locator('[data-field="fullEdge"]');
+  const indicator = form.locator('[data-field="indicator"]');
+  await edge.selectOption("right");
+  await indicator.selectOption("percent");
+  await expect(form.locator('[data-field="start"]')).toBeDisabled();
   await travel.focus();
   await travel.press("Home");
   await expect(travel).toHaveValue("40");
@@ -162,10 +170,15 @@ test("a driver can tune Gas and Left independently, reload, and reset only Gas",
 
   await page.reload();
   await openControls();
+  await expect(guide).toHaveValue("wheel");
   await button.selectOption("gas");
   await expect(press).toHaveValue("progressive");
   await expect(travel).toHaveValue("40");
+  await expect(edge).toHaveValue("right");
+  await expect(indicator).toHaveValue("percent");
   await form.locator('[data-field="reset"]').tap();
+  await expect(edge).toHaveValue("fixed");
+  await expect(indicator).toHaveValue("color");
   await expect(press).toHaveValue("instant");
   await expect(travel).toHaveValue("90");
   await button.selectOption("left");

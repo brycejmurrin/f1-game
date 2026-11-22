@@ -34,6 +34,7 @@
     const { uniform, vec2, min, screenUV, screenCoordinate } = TSL;
     const layouts = new WeakMap();   // texture -> { lw, lh, pw, ph }
     const wrappers = [];
+    let layoutDirty = false;
 
     /** An output-size slot: a pass sets the logical size of the target it draws. */
     function view() {
@@ -61,7 +62,10 @@
         get value() { return node.value; },
         // Lazy post blocks bind their targets after the frame's sync().
         // Update this slot now so its first draw uses the new logical rect.
-        set value(t) { node.value = t; syncWrapper(w); },
+        set value(t) {
+          if (node.value === t && !layoutDirty) return;
+          node.value = t; syncWrapper(w);
+        },
       };
       wrappers.push(w);
       syncWrapper(w);
@@ -71,6 +75,8 @@
     function layout(t, lw, lh, pw, ph) {
       if (!t) return;
       const L = layouts.get(t);
+      if (L && L.lw === lw && L.lh === lh && L.pw === pw && L.ph === ph) return;
+      layoutDirty = true;
       if (L) { L.lw = lw; L.lh = lh; L.pw = pw; L.ph = ph; } else layouts.set(t, { lw, lh, pw, ph });
     }
     function layoutOf(t) { return (t && layouts.get(t)) || null; }
@@ -88,6 +94,8 @@
 
     /** Refresh layouts changed without a texture rebind. */
     function sync() {
+      if (!layoutDirty) return;
+      layoutDirty = false;
       for (let i = 0; i < wrappers.length; i++) syncWrapper(wrappers[i]);
     }
 

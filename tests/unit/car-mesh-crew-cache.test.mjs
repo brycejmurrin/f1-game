@@ -121,6 +121,32 @@ test("colour keys: a hit per array, the same mesh for an equal new array, a rebu
   assert.equal(CarMesh.getCrewMesh(col), CarMesh.getCrewMesh([0.1, 0.2, 0.3]));
 });
 
+test("the double-sided compound stripe draws each of its 18 sectors once", () => {
+  const { CarMesh } = load();
+  const { idx } = CarMesh.getCompoundRing([1, 0, 0]).d;
+  const faces = new Set();
+  for (let i = 0; i < idx.length; i += 3) {
+    faces.add(Array.from(idx.slice(i, i + 3)).sort((a, b) => a - b).join(","));
+  }
+  assert.equal(faces.size, 36);
+  assert.equal(idx.length / 3, faces.size);
+});
+
+test("far wheels keep the full rolling radius and the two original axle widths", () => {
+  const { Car3D } = loadParts();
+  for (const width of [0.32, 0.38]) {
+    const mesh = Car3D.buildFarWheel(width);
+    let minX = Infinity, maxX = -Infinity, radius = 0;
+    for (let i = 0; i < mesh.pos.length; i += 3) {
+      minX = Math.min(minX, mesh.pos[i]); maxX = Math.max(maxX, mesh.pos[i]);
+      radius = Math.max(radius, Math.hypot(mesh.pos[i + 1], mesh.pos[i + 2]));
+    }
+    assert.ok(Math.abs(radius - 0.34) < 1e-6);
+    assert.ok(Math.abs(maxX - minX - width) < 1e-6);
+    assert.ok(mesh.idx.length / 3 <= 100);
+  }
+});
+
 // Compound sidewall stripes used to share the crew kit's colour key helper but
 // NOT its FIFO cap — a tyre-parts edit session kept every band colour's GPU
 // buffers for the page's life (same defect getCrewMesh already fixed).
