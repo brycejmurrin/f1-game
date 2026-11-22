@@ -318,15 +318,15 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(node, /NEEDED: \$\{\{ matrix\.needed \}\}/, "matrix.needed reaches the suites step through env");
   assert.match(node, /if \[ "\$NEEDED" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
-  const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(driving, /^    needs: \[select\]$/m);
-  assert.match(driving, /needs\.select\.outputs\.driving == 'true'/);
-  assert.match(driving, /^    if: .*inputs\.concurrency_key == ''/m, "driving-model skips on the Pages call (decision D2)");
-  // No plumbing job is left in front of the fast tier: every job that used to
-  // wait on `reuse-draft` asks the question itself, as a step.
   const jobs = parseYAML(ciWorkflow).jobs;
+  const driving = jobs["driving-model"];
+  assert.deepEqual(driving.needs, ["select"]);
+  const traces = driving.steps.find((step) => step.name === "Characterization traces");
+  assert.ok(traces, "the routed driving job must execute its characterization");
+  assert.equal(traces.if, undefined, "draft reuse cannot skip characterization");
+  // The draft, ready and Pages routing expressions are exercised in ci-ship-filter-geometry.
   for (const id of ["reuse-draft", "unit-plan", "ship-filter", "renderer-filter", "xr-filter"]) assert.ok(!jobs[id], `${id} is a step now, not a job`);
-  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts", "driving-model"]) {
+  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
     assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read", checks: "read" }, `${id} needs actions:read for the runs lookup and checks:read for the draft run's guards record`);

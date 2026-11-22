@@ -295,8 +295,8 @@ export function pushTargets(text, current) {
 /**
  * Does a push to `branch` start a CI run? The deploy branch's push starts
  * pages.yml (the train, which calls ci.yml); ci.yml runs on pull_request
- * otherwise, for every open PR — a draft gets the fast tier plus one selected
- * shard, a ready PR the full tier (2026-11-03: no label or body-line opt-in).
+ * otherwise, for every open PR — a draft gets the fast tier,
+ * a ready PR the full tier (2026-11-03: no label or body-line opt-in).
  * `ci` is null when the lookup failed.
  */
 export function pushStartsCi(branch, request = api) {

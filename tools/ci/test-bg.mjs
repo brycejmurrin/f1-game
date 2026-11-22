@@ -5,8 +5,8 @@
  * test-bg.mjs — run ONE Playwright spec in the background and hand back a log to tail.
  *
  * Agents do not run browser tests locally (AGENTS.md rule 5); this tool exists for a Bryce-attended single spec.
- * CI runs the tiers: every PR push gets the change-aware `selected` legs (one 5-min shard on a draft, the
- * 10-min budget once ready) and `node tools/ci/remote-group.mjs <group>` runs a whole group on the pushed
+ * CI defers automatic browser tests until a browser-relevant PR is ready for review.
+ * On a draft, `node tools/ci/remote-group.mjs <group>` runs a whole group on the pushed
  * branch. Group mode (`test-bg.mjs <group>`, `--parallel`, `--wait <groups>`, `--sweep`, `--last-failed`) went
  * on 2026-11-03 with the 4-core local-run practice it served
  * (docs/plans/2026-11-03-agent-surface-reset.md §4.2).

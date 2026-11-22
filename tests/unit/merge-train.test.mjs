@@ -115,12 +115,12 @@ test("trainHistory bisects: a red train of n caps the next at floor(n/2); a lone
   assert.equal(trainHistory([{ cars: [1, 2, 3, 4, 5].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, 2);
   assert.equal(trainHistory([{ cars: [1, 2].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, 1);
   const h = trainHistory([
+    { cars: [car(1)], outcome: "red", closed: "2026-11-18T11:30:00Z" }, // updated after the stale train closed
     { cars: [car(3)], outcome: "stale", closed: "2026-11-18T11:50:00Z" },
-    { cars: [car(1)], outcome: "red", closed: "2026-11-18T11:30:00Z" },
     { cars: [1, 2].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" },
     { cars: [car(9)], outcome: "red", closed: "2026-11-16T11:00:00Z" },
   ], { now });
-  assert.deepEqual(h, { cap: 1, exclude: new Set([`1@${sha("1")}`]) }, "stale is skipped; a red older than 24 h does not count");
+  assert.deepEqual(h, { cap: TRAIN_MAX, exclude: new Set([`1@${sha("1")}`]) }, "a newer stale train resets capacity but keeps an unexpired single-head failure excluded");
   assert.equal(trainHistory([{ cars: [car(1)], outcome: "merged", closed: "2026-11-18T11:55:00Z" }, { cars: [1, 2].map(car), outcome: "red", closed: "2026-11-18T11:00:00Z" }], { now }).cap, TRAIN_MAX, "a merged train resets the cap");
 });
 

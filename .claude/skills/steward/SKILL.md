@@ -58,7 +58,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
    --pr`: it opens a READY PR without the template body.
 3. Add `lane:<host>` (the one-label recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
-   draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
+   draft push gets the fast tier on CI. Selected browser jobs start when the PR is ready and its diff needs them.
 
 ## Push
 
