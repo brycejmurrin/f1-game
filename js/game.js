@@ -6818,7 +6818,7 @@ const _wmWaterWet = { roughness: 0.16, specular: 0.85, metalness: 0.05 };
 const _wmWaterDry = { roughness: 0.10, specular: 0.92, metalness: 0.05 };
 const _wmGateWet = { roughness: 0.32, metalness: 0.35, specular: 0.65 };
 const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
-function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
+function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe, viewPlanes) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
   // so the huge plane stays flat and recedes into fog.
@@ -6915,7 +6915,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     const _pb = track.meshes.propBatches;
     // mirrorLite skips batches; mirrorFreezeInstanced reuses last mirror mats+colours (main pass would overwrite at ~30 Hz) — not under gfx.instPerPass (TLX: the mirror has its own instance buffers).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
-      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
+      const planes = viewPlanes || (gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null);
       const pp = !!gfx.instPerPass, freeze = !pp && !!frame.mirrorFreezeInstanced, rec = !pp && frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
@@ -7770,7 +7770,10 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, false);
+  // Main-view props and rival cars share these planes. The mirror has already drawn with its own view.
+  const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
+    ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
+  drawWorldMeshes(frame, night, wet, _floodEmit, false, false, _carCullPlanes);
   gfx.drawSky(frameSky);
   // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
   // …and the entrance lamps go GREEN over their steady red once you are called
@@ -7806,8 +7809,6 @@ function render(dt) {
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
   { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
-  const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
-    ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
   // Glossy automotive paint is identical for every car this frame (depends only
   // on wet/night), and carPaintMat returns a shared scratch — so compute it ONCE
   // instead of 22× per frame. Wet adds a water film (sharper highlights).
