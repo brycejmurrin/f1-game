@@ -123,6 +123,7 @@ var RaceCeremony = (function () {
       return h;
     }
     function endBeats() {
+      if (phase === "cooldown" && deps?.cooldownControls) deps.cooldownControls(false);
       if (cool) cool.reset();
       const h = typeof document !== "undefined" ? document.getElementById("ceremony-cooldown") : null;
       if (h) h.hidden = true;
@@ -140,6 +141,7 @@ var RaceCeremony = (function () {
         const h = cooldownHost();
         if (cool.start({ force: true }) && h) {
           h.hidden = false;
+          if (cool.driveAllowed() && deps?.cooldownControls) deps.cooldownControls(true);
           const b = cool.mountSkip(h, () => skip());
           if (b) b.style.pointerEvents = "auto";
         }
