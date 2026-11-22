@@ -108,7 +108,7 @@ function chooseSamples(b, count) {
   b.dom.dispatch(row, { type: "change" });
 }
 
-for (const count of [8, 32]) test(count + "-sample capture freezes the camera and averages distinct subpixel renders", async () => {
+for (const count of [8, 32]) test(`${count}-sample capture freezes the camera and averages distinct subpixel renders`, async () => {
   const positions = [], views = [];
   const b = boot({
     setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },

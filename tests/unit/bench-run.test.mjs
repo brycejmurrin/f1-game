@@ -282,8 +282,8 @@ test("graphics check times 30 FPS draws on a 120 Hz display while the advanced r
       RendererPicker: { liveThreeApi: () => "webgpu" },
     });
     for (const module of ["render-rate", "gpu-test-run"]) {
-      const file = join(ROOT, "js/perf", module + ".js");
-      vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: file });
+      const source = "js/perf/" + module + ".js";
+      vm.runInContext(readFileSync(absSrc(source), "utf8"), ctx, { filename: absSrc(source) });
     }
     const rate = vm.runInContext("RenderRate", ctx);
     rate.setMode("30");

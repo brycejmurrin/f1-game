@@ -373,7 +373,7 @@ test("R9: drawParticles wraps the producer's Float32Array (no per-frame copy), r
 
 test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once per renderer, not per present()", () => {
   const CH = read("js/render/three/tlx-chunked.js");
-  const cull = fnSource(CH, "function cull(mesh, vp, eye, cullDist, fog) {");
+  const cull = fnSource(CH, "function cull(");
   assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
   assert.match(cull, /_visList\[n\+\+\] = ch;/);
   assert.match(fnSource(CH, "function free(mesh, freedGeos) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");

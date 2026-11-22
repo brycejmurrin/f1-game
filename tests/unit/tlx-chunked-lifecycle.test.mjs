@@ -343,8 +343,8 @@ test("rear-view road bounds retain crossing triangles and shrink submissions wit
   const mesh = { chunks: S.roadRanges(pos, idx, 4, 1) };
   const coarse = mesh.chunks.map(({ sections, ...chunk }) => chunk);
   assert.deepEqual(plain(coarse), plain(S.splitRanges(pos, idx, 4)));
-  const filename = absSrc("js/render/shared/frustum.js");
-  const frustum = vm.runInNewContext(fs.readFileSync(filename, "utf8") + "; Frustum", {}, { filename });
+  const source = "js/render/shared/frustum.js";
+  const frustum = vm.runInNewContext(fs.readFileSync(absSrc(source), "utf8") + "; Frustum", {}, { filename: absSrc(source) });
   const sys = factory([], frustum), vp = Float32Array.of(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
   function ranges(refine, distance = 0) {
     const n = sys.cull(mesh, vp, [0, 0, 0], distance, null, refine);
