@@ -7,12 +7,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/settings-tabs.js", import.meta.url), "utf8").replace(/^const SettingsNav/m, "var SettingsNav");
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-function boot({ ensure, stub = true, onSelect = () => {} }) {
+function boot({ ensure, stub = true, onSelect = () => {}, prepare = () => {} }) {
   const dom = makeDom();
   const audio = dom.byId("audioset"); audio.hidden = true;
   dom.byId("pm-audio"); dom.byId("pm-settings-index"); dom.byId("dlg-settings");
@@ -22,6 +23,7 @@ function boot({ ensure, stub = true, onSelect = () => {} }) {
     LiveRegion: { say: (text, kind) => said.push([text, kind]) },
     AudioPanel: { _ensure: () => { calls.ensure++; return ensure(GameAudio); } } });
   vm.runInContext(source, ctx);
+  prepare(dom);
   const nav = ctx.SettingsNav.create(null, onSelect);
   return { nav, dom, audio, calls, ctx, said };
 }
@@ -43,7 +45,7 @@ test("Controls loads only its touch form, mounts before search focuses it, and r
   assert.equal(nav.current(), "controls");
   assert.equal(dom.byId("pm-touch-offline").hidden, false);
   nav.show("home", false);
-  nav.show("controls", false, () => { visits.push("search target"); });
+  ctx.SettingsNav.show("controls", false, () => { visits.push("search target"); });
   await tick();
   assert.deepEqual(visits, ["mounted", "search target"]);
   assert.equal(dom.byId("pm-touch-offline").hidden, true);
@@ -206,6 +208,90 @@ test("frozen route metadata owns titles, panels, doors and default hierarchy", (
     assert.equal(dom.byId("dlg-settings").textContent, api.breadcrumb(id));
     if (route.door) assert.equal(typeof route.door().onclick, "function");
   }
+});
+
+test("each settings route exposes independent controls and retains their storage IDs on a companion page", () => {
+  const { ctx } = boot({ ensure: () => true });
+  const registrySource = fs.readFileSync(new URL("../../js/ui/screen-regions.js", import.meta.url), "utf8");
+  ctx.document.readyState = "loading";
+  vm.runInContext(registrySource, ctx, { filename: absSrc("js/ui/screen-regions.js") });
+  const companion = { window: {} };
+  vm.runInNewContext(registrySource, companion, { filename: absSrc("js/ui/screen-regions.js") });
+  for (const [page, route] of Object.entries(ctx.SettingsNav.routes)) {
+    if (page === "home") continue;
+    const key = "pm-panel-" + page;
+    const main = ctx.window.ScreenRegions[key];
+    const other = companion.window.ScreenRegions[key];
+    assert.equal(main.root, "#" + route.panel().id);
+    assert.equal(main.label, "Settings › " + route.title);
+    assert.ok(Object.keys(main.regions).length > 1, page + " needs a target within the page");
+    assert.equal(other.root, main.root);
+    assert.deepEqual(Object.keys(other.regions), Object.keys(main.regions));
+  }
+});
+
+test("the shipped Settings index groups every door under a task heading", () => {
+  const shell = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const doors = /<nav id="pm-settings-index"[^>]*>([\s\S]*?)<\/nav>/.exec(shell)[1];
+  const { dom } = boot({ ensure: () => true, prepare(dom) {
+    const index = dom.byId("pm-settings-index");
+    for (const [, attributes] of doors.matchAll(/<button\b([^>]+)>/g)) {
+      const id = /\bid="([^"]+)"/.exec(attributes)[1];
+      const door = dom.makeElement("button", id);
+      const category = /data-settings-category="([^"]+)"/.exec(attributes)?.[1];
+      if (category) {
+        door.dataset.settingsCategory = category;
+        door.setAttribute("data-settings-category", category);
+      }
+      index.appendChild(door);
+    }
+  } });
+  const groups = {};
+  let current;
+  for (const el of dom.byId("pm-settings-index").children) {
+    if (el.tagName === "H3") current = groups[el.textContent] = [];
+    else current.push(el.id);
+  }
+  assert.deepEqual(groups, {
+    "Controls and driving": ["pm-open-controls", "pm-open-driving"],
+    "Display and sound": ["pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-graphics", "pm-open-visual"],
+    "Player and data": ["pm-open-progress", "pm-open-files", "pm-open-credits"]
+  });
+});
+
+test("the in-flow Arrange action edits the current page without adding to its back stack", async () => {
+  const { ctx, dom, nav } = boot({ ensure: () => true, stub: false, prepare(dom) {
+    const footer = dom.makeElement("div");
+    dom.byId("pmsettings").appendChild(footer);
+    footer.appendChild(dom.byId("pm-settings-close"));
+  } });
+  const arrange = dom.byId("pm-settings-close").parentElement.querySelector("#pm-arrange-current");
+  const calls = [];
+  ctx.window.ScreenArranger = { open: (id, trigger) => { calls.push(id); assert.equal(trigger, arrange); return true; } };
+  for (const page of Object.keys(ctx.SettingsNav.routes)) {
+    nav.show(page);
+    await arrange.onclick();
+    assert.equal(calls.at(-1), page === "home" ? "pmsettings" : "pm-panel-" + page);
+    assert.equal(nav.current(), page);
+  }
+  nav.show("home");
+  dom.byId("pm-open-controls").onclick();
+  await arrange.onclick();
+  assert.equal(nav.back(), false);
+  assert.equal(nav.current(), "home");
+  // A previous request completing after Back must never open another editor.
+  delete ctx.window.ScreenArranger;
+  ctx.LayoutPresets = {};
+  let loaded;
+  ctx.ScriptLoader = { create: () => ({ load: () => new Promise(resolve => { loaded = resolve; }) }) };
+  nav.show("controls");
+  const opening = arrange.onclick();
+  await tick();
+  nav.show("home");
+  ctx.window.ScreenArranger = { open: () => assert.fail("a stale route opened its editor") };
+  loaded(true);
+  await opening;
+  assert.equal(arrange.disabled, false);
 });
 
 test("a cross-link returns through nested pages with each launcher's focus and scroll", () => {

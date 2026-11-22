@@ -165,7 +165,7 @@ const SPEC = [
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudElements", lane: "json", group: "hud", def: () => typeof HudElements !== "undefined" ? HudElements.defaults() : {}, src: "js/ui/hud-elements.js phone and desktop visibility defaults", perDevice: true, whole: true },
-  { k: "hudLayout", lane: "json", group: "hud", def: null, deviceBound: true, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements in saved layouts use automatic placement)" },
+  { k: "hudLayout", lane: "json", group: "hud", def: null, deviceBound: true, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}} with optional width/minHeight in viewport shares and textSize in percent on text panels; offsets are finite and size positive finite, without visual bounds. Missing elements in saved layouts use automatic placement)" },
   { k: "hudColors", lane: "json", group: "hud", def: null, src: "js/ui/hud-layout.js per-element colors" },
   { k: "hudMirror", lane: "json", group: "hud", def: "auto", src: "js/render/shared/mirror-pass.js", oneOf: ["auto", "on", "off"] },
   { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
@@ -384,7 +384,7 @@ function normalizePlacement(raw, registry) {
   if (raw === null) return null;
   if (!raw || raw.v !== 1 || !isObj(raw.screens)) return undefined;
   const screens = {}, validId = id => /^[a-z][a-z0-9-]{0,63}$/i.test(id) && !(id in Object.prototype);
-  const bounds = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [.5, 2] };
+  const bounds = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], diameter: [5, 100], scale: [.5, 2], textSize: [.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104], formWidth: [10, 100], cornerRadius: [0, 40], rowGap: [0, 48], columnGap: [0, 48] };
   for (const id of Object.keys(raw.screens).slice(0, 128)) {
     if (!validId(id) || !isObj(raw.screens[id]) || (registry && !Object.hasOwn(registry, id))) continue;
     for (const orientation of ["portrait", "landscape"]) {
@@ -398,10 +398,15 @@ function normalizePlacement(raw, registry) {
         for (const [key, [lo, hi]] of Object.entries(bounds)) {
           const value = map[region][key];
           if (!Number.isFinite(value) || definitions?.[region][key] === false) continue;
-          if ((key === "x" || key === "y") && value === 0 || key === "scale" && value === 1) continue;
+          if (key === "diameter" && !(definitions ? definitions[region].diameter :
+            id === "menupad" && region === "pad" || id === "photo-controls" && (region === "move" || region === "look"))) continue;
+          if ((key === "x" || key === "y") && value === 0 || (key === "scale" || key === "textSize") && value === 1) continue;
           const cap = key === "width" ? definitions?.[region].maxWidth : key === "height" ? definitions?.[region].maxHeight : hi;
           fields[key] = Math.round(Math.min(cap || hi, Math.max(lo, value)) * 1000) / 1000;
         }
+        if (fields.diameter) { delete fields.width; delete fields.height; }
+        const align = map[region].textAlign;
+        if (definitions?.[region].textAlign !== false && ["start", "center", "end"].includes(align)) fields.textAlign = align;
         if (Object.keys(fields).length) ((screens[id] ||= {})[orientation] ||= {})[region] = fields;
       }
     }

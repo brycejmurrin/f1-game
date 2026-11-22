@@ -147,10 +147,12 @@ function editor(pieceId = "piece", options = {}) {
       return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 };
     }
     get offsetWidth() {
+      if (this.id === pieceId) return options.rect?.width || 20;
       if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
       return Math.min(options.toolbarSize ? options.toolbarSize(ids).width : 320, parseFloat(this.style.maxWidth) || Infinity);
     }
     get offsetHeight() {
+      if (this.id === pieceId) return options.rect?.height || 20;
       if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
       return Math.min(options.toolbarSize ? options.toolbarSize(ids).height : 52, parseFloat(this.style.maxHeight) || Infinity);
     }
@@ -203,7 +205,7 @@ function editor(pieceId = "piece", options = {}) {
   const viewport = { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
   const policy = visibilityPolicy(elements, preferences, rows, { window: viewport, root: {},
     getComputedStyle: () => ({ getPropertyValue: key => options.insets?.[key] || '0px' }) });
-  Object.assign(layout, { colors: policy.colors, relativeSize: policy.relativeSize, LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
+  Object.assign(layout, { cardSizing: policy.cardSizing, colors: policy.colors, relativeSize: policy.relativeSize, LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
     screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   const ctx = { document: doc, window: viewport,
@@ -803,4 +805,24 @@ test("HUD Undo restores layout and a partially visible tower; Escape discards pe
   assert.equal(e.stats.saves, 0);
   assert.deepEqual([...e.on], ["delta", "speed"]);
   assert.equal(e.get("tower").s, 100);
+});
+
+
+test("HUD panel metric selection changes only the chosen dimension and keeps tools collapsible", () => {
+  const e = editor("rel", {width: 800, height: 400, rect: {left: 20, top: 25, width: 160, height: 40}});
+  e.api.setEditing(true);
+  const button = name => e.ids.get("hud-arrange-" + name);
+  const metric = button("metric");
+  assert.equal(metric.hidden, true);
+  button("move").onclick();
+  assert.equal(metric.hidden, false);
+  for (const [key, result] of [["width", 21], ["minHeight", 11], ["textSize", 105]]) {
+    metric.value = key;
+    metric.onchange();
+    button("larger").onclick();
+    assert.equal(e.get("rel")[key], result);
+  }
+  assert.deepEqual(e.get("rel"), {x:0, y:0, s:100, width:21, minHeight:11, textSize:105});
+  button("move").onclick();
+  assert.equal(metric.hidden, true);
 });

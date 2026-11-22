@@ -10214,6 +10214,9 @@
       "paintHud": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "readWheelBackup": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
       "redialNow": [
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -10224,6 +10227,9 @@
       "setSteeringMode": [
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "sizeBy": [
+        "tests/unit/phone-input-improvements.test.mjs"
       ],
       "*": [
         "tests/unit/save-schema-registry.test.mjs"
@@ -19223,6 +19229,9 @@
       "attach": [
         "tests/unit/appearance-studio.test.mjs"
       ],
+      "button": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
       "deleteProfile": [
         "tests/unit/appearance-studio.test.mjs"
       ],
@@ -19553,11 +19562,24 @@
       ]
     },
     "js/ui/editor-workspace.js": {
+      "arrangeDoor": [
+        "tests/unit/editor-workspace.test.mjs"
+      ],
       "attach": [
         "tests/unit/editor-workspace.test.mjs"
       ],
+      "init": [
+        "tests/unit/editor-workspace.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
       "setPreview": [
         "tests/unit/editor-workspace.test.mjs"
+      ],
+      "*": [
+        "tests/unit/bench-run.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/cockpit-preview.test.mjs",
+        "tests/unit/photo-studio.test.mjs"
       ]
     },
     "js/ui/experience.js": {
@@ -19739,6 +19761,10 @@
         "tests/unit/layout-presets.test.mjs"
       ],
       "finish": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "hiddenReason": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "options": [
@@ -20965,11 +20991,15 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
-        "tests/unit/screen-looks.test.mjs"
+        "tests/unit/screen-looks.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ],
       "build": [
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/screen-looks.test.mjs",
+        "tests/unit/title-layout.test.mjs"
+      ],
+      "changed": [
         "tests/unit/title-layout.test.mjs"
       ],
       "endPeek": [
@@ -21036,9 +21066,22 @@
       ]
     },
     "js/ui/screen-regions.js": {
+      "bind": [
+        "tests/unit/settings-tabs.test.mjs"
+      ],
+      "refresh": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "screen": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
       "*": [
         "tests/unit/layout-presets.test.mjs",
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
+        "tests/unit/screen-looks.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ]
     },
     "js/ui/scroll-fade.js": {
@@ -21538,6 +21581,9 @@
       ]
     },
     "js/ui/title-fx.js": {
+      "apply": [
+        "tests/unit/title-layout.test.mjs"
+      ],
       "choice": [
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/title-fx.test.mjs"
@@ -21569,14 +21615,14 @@
       ],
       "*": [
         "tests/unit/hud-feel.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs",
-        "tests/unit/title-layout.test.mjs"
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/title-layout.js": {
       "apply": [
         "tests/unit/layout-presets.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs"
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ],
       "build": [
         "tests/unit/appearance-opts.test.mjs",

@@ -1363,6 +1363,8 @@ test('PREVIEW transport: pause holds, scrub holds the end, LOOP replays, EDIT re
   h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
   const fn = h.fn;
   assert.equal(h.start('in'), true);
+  for (const handle of h.keys) handle({ key: 'Escape', target: { closest: () => ({}) } });
+  assert.ok(h.playing(), 'Escape in Arrange leaves the current garage preview running');
   h.step(0.1); h.step(0.1);
   fn('previewPause')(true);
   const held = h.playing().t;

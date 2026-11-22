@@ -395,3 +395,53 @@ test("Two tabs atomically retain six durable photos after concurrent saves", asy
     }
   } finally { await other.close(); }
 });
+
+test("Photo Studio sizes the actual movement and look sticks independently", async ({ page }, info) => {
+  await boot(page);
+  await page.evaluate(async () => {
+    __apex.headless(true);
+    await __apex.race("monza");
+    __apex.go();
+  });
+  await clickLive(page, "pausebtn");
+  await clickLive(page, "pm-photo");
+  const launch = page.locator('#photo-studio [data-arrange-screen="photo-controls"]');
+  const editor = page.locator('#screen-arranger[data-editing-screen="photo-controls"]');
+  const region = editor.getByLabel("Region", { exact: true });
+  const diameter = (id) => page.locator(id).evaluate(el => el.getBoundingClientRect().width);
+  const move = () => diameter("#pc-move");
+  const look = () => diameter("#pc-look");
+  const action = name => editor.getByRole("button", { name, exact: true }).tap();
+  await expect(launch).toBeVisible();
+  const shippedMove = await move(), shippedLook = await look();
+  await launch.tap();
+  await region.selectOption("move");
+  await action("Controls");
+  await editor.getByRole("button", { name: /Diameter.*\+/i }).tap();
+  const wider = await move();
+  expect(wider).toBeGreaterThan(shippedMove);
+  expect(await look()).toBeCloseTo(shippedLook, 1);
+  await region.selectOption("look");
+  await editor.getByRole("button", { name: /Diameter.*[−-]/i }).tap();
+  const narrower = await look();
+  expect(narrower).toBeLessThan(shippedLook);
+  await action("Apply");
+  await expect(launch).toHaveText("Arrange camera sticks");
+  expect(await move()).toBeCloseTo(wider, 1);
+  expect(await look()).toBeCloseTo(narrower, 1);
+  for (const id of ["pc-move", "pc-look"]) {
+    expect(await page.locator("#" + id).evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return Math.abs(r.height - r.width) < 0.1 &&
+        el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    })).toBe(true);
+  }
+  await evidence(page, info, "photo-studio-custom-sticks");
+  await launch.tap();
+  await region.selectOption("move");
+  await action("Controls");
+  await action("Reset region");
+  await action("Apply");
+  expect(await move()).toBeCloseTo(shippedMove, 1);
+  expect(await look()).toBeCloseTo(narrower, 1);
+});

@@ -248,7 +248,7 @@ test("store.subscribe on steerMode reloads that scheme's offsets", () => {
 // create() itself, in a context that records its window/document listeners
 // and the settings MutationObserver, so the two lifecycle edges are testable.
 function bootCreate(opts = {}) {
-  const winL = {}, docL = {}, observers = [];
+  const winL = {}, docL = {}, observers = new Map();
   const settings = { hidden: false };
   const pause = { hidden: true };
   const els = { "dock-left": dockEl(), "dock-right": dockEl(), pmsettings: settings, pausemenu: pause };
@@ -268,20 +268,21 @@ function bootCreate(opts = {}) {
       },
       addEventListener(t, fn) { docL[t] = fn; },
     },
-    MutationObserver: function (cb) { observers.push(cb); this.observe = () => {}; },
+    MutationObserver: function (cb) { this.observe = target => observers.set(target, cb); },
     getComputedStyle() { ctx.gcsCalls = (ctx.gcsCalls || 0) + 1; return { getPropertyValue() { return "0"; } }; },
   };
   if (!opts.lazyToolbar) installToolbar(ctx);
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
   const bag = ctx.DockLayout.normalize({});
   bag.buttons.L = { x: 0, y: 0.35 };
+  const persisted = { ...opts.scalePrefs, dockLayout: opts.saved || bag };
   const sets = [];
   const listeners = [];
   let mode = "buttons";
-  const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set(k, v) { sets.push([k, v]); } };
+  const store = { get(k, d) { return k in persisted ? persisted[k] : d; }, set(k, v) { persisted[k] = v; sets.push([k, v]); } };
   if (opts.subscribe) store.subscribe = (fn) => { listeners.push(fn); return () => {}; };
-  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode });
-  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, setMode: (m) => { mode = m; } };
+  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode }, opts.scaleUi);
+  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, store, setMode: (m) => { mode = m; } };
 }
 
 test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
@@ -371,6 +372,56 @@ test("independent Gas and Brake edits retain the other settings when a button is
   assert.equal(api.bag().tilt.controls, undefined);
 });
 
+test("dock Done persists independent dimensions, Undo reverses reset and Cancel preserves the saved layout", () => {
+  const saved = { buttons: { controls: { "btn-throttle": { size: 120 }, "btn-brake": { shape: "square" } } } };
+  const { api, made, sets } = bootCreate({ saved });
+  api.setEditing(true);
+  const field = key => made[0].querySelector("[data-k=" + key + "]");
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("shape", "arch");
+  assert.equal(api.shape(), "arch");
+  assert.equal(field("undo").disabled, false);
+  field("undo").onclick();
+  assert.equal(api.shape(), "auto");
+  choose("target", "btn-throttle");
+  choose("width", "125"); choose("height", "75");
+  assert.equal(sets.length, 0);
+  field("reset").onclick();
+  assert.equal(api.bag().buttons.controls["btn-throttle"], undefined);
+  field("undo").onclick();
+  assert.deepEqual({ ...api.bag().buttons.controls["btn-throttle"] }, { size: 120, width: 125, height: 75 });
+  field("done").onclick();
+  const record = sets.find(([key]) => key === "dockLayout")[1];
+  const reloaded = bootCreate({ saved: record });
+  assert.equal(reloaded.api.bag().buttons.controls["btn-throttle"].height, 75);
+  api.setEditing(true);
+  choose("target", "btn-throttle"); choose("height", "175"); field("reset").onclick();
+  field("cancel").onclick();
+  assert.equal(api.editing(), false);
+  assert.deepEqual({ ...api.bag().buttons.controls["btn-throttle"] }, { size: 120, width: 125, height: 75 });
+  assert.equal(api.bag().buttons.controls["btn-brake"].shape, "square");
+  assert.equal(sets.length, 1);
+});
+
+test("global size Undo restores adaptive preferences and repaints the shared scale owner", () => {
+  let repaints = 0;
+  const { api, ctx, els, made, store } = bootCreate({ scalePrefs: { hudScale: 105 },
+    scaleUi: { applyHudScale() { repaints++; }, applyBtnScale() { repaints++; } } });
+  ctx.Event = class {};
+  els["pm-btnscale"] = { value: "100", dispatchEvent() {
+    store.set("hudBtnScale", Number(this.value)); store.set("hudBotKeep", { hud: 105, bot: 91 });
+  } };
+  api.setEditing(true);
+  const field = key => made[0].querySelector("[data-k=" + key + "]");
+  field("bigger").onclick();
+  assert.equal(store.get("hudBtnScale", null), 110);
+  field("undo").onclick();
+  assert.equal(store.get("hudBtnScale", null), null);
+  assert.equal(store.get("hudBotKeep", null), null);
+  assert.equal(store.get("hudScale", null), 105);
+  assert.equal(repaints, 2);
+});
+
 test("driving layouts survive saving and reset independently of the other steering schemes", () => {
   const { api, made, sets, setMode } = bootCreate();
   api.setEditing(true);
@@ -381,14 +432,18 @@ test("driving layouts survive saving and reset independently of the other steeri
     setMode(scheme);
     choose("layout", layout);
   }
+  assert.equal(sets.length, 0);
+  field("done").onclick();
   const restored = () => DL.load(memStore({ dockLayout: sets.at(-1)[1] }));
   assert.equal(restored().buttons.layout, "gas-left");
   assert.equal(restored().tilt.layout, "gas-above");
   assert.equal(restored().touch.layout, "action-grid");
-  field("reset").onclick();
+  api.setEditing(true); choose("target", "drive");
+  field("reset").onclick(); field("done").onclick();
   assert.equal(restored().touch.layout, undefined);
   assert.equal(restored().buttons.layout, "gas-left");
-  choose("layout", "action-grid"); choose("layout", "");
+  api.setEditing(true); choose("target", "drive");
+  choose("layout", "action-grid"); choose("layout", ""); field("done").onclick();
   assert.equal(restored().touch.layout, undefined);
 });
 
@@ -539,10 +594,10 @@ test("a REPOSITION drag that starts on GAS never reaches the button: the throttl
 test("an external open of SETTINGS or PAUSED ends REPOSITION without stacking dialogs", () => {
   const { api, observers, settings, pause, bodyAttrs } = bootCreate();
   api.setEditing(true);
-  observers[0]();   // our own hide settled: nothing visible, still editing
+  observers.get(settings)();   // our own hide settled: nothing visible, still editing
   assert.equal(api.editing(), true);
   pause.hidden = false;   // the pause button
-  observers[0]();
+  observers.get(pause)();
   assert.equal(api.editing(), false);
   assert.equal(bodyAttrs["data-dock-edit"], undefined);
   assert.equal(settings.hidden, true, "settings is not re-shown over the pause card");

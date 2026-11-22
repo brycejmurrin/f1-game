@@ -56,6 +56,19 @@ test("query params: captions-only, row count and scale clamp; anything else fall
   assert.equal(hidesRows, true, "rows past ?rows= stay hidden");
 });
 
+test("Arrange broadcast paints every editable region with a fixed frame without subscribing to another tab", () => {
+  const dom = makeDom(), { root } = overlayRoot(dom);
+  const doc = dom.document;
+  const query = doc.querySelector.bind(doc);
+  doc.querySelector = selector => selector === 'main#overlay[role="region"]' ? root : query(selector);
+  load({ document: doc, clearTimeout() {}, setTimeout() { return 1; }, location: { search: "?arrange=broadcast" },
+    OverlayBridge: { subscribe() { throw new Error("unexpected live subscription"); } } });
+  for (const selector of [".ov-tower", ".ov-battle", ".ov-sectors", ".ov-caption"]) {
+    assert.equal(root.querySelector(selector).hidden, false, selector);
+  }
+  assert.equal(root.querySelector(".ov-caption").querySelector("span").textContent, "That was a decisive move.");
+});
+
 test("#5885: the tower fits the whole 22-car field, the player's P22 row included", () => {
   const dom = makeDom();
   const { Render, Feed } = load({ document: dom.document });

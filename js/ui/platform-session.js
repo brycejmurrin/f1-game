@@ -325,10 +325,10 @@ Input.init(canvas, { onPause: () => {
   // a UiLayers entry (anyOpen() also keeps Escape from pausing). KeyP / pad
   // Start still land here and must not open pause over the card — that left a
   // stuck #pausemenu after the plate cleared.
-  if (typeof UiLayers !== "undefined") {
-    const loadingTop = UiLayers.top();
-    if (loadingTop && loadingTop.id === "loading") return;
-  }
+  const top = typeof UiLayers !== "undefined" ? UiLayers.top() : null;
+  if (top?.id === "loading") return;
+  // P / gamepad Start cancels an arrangement before touching race state.
+  if (top?.id === "screen-arranger") { document.getElementById("screen-arranger-cancel")?.click(); return; }
   // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
   // press there has to close the help sheet, not the menu underneath it (which
   // would leave the help sheet floating over the race with no way back). Reached
@@ -344,12 +344,9 @@ Input.init(canvas, { onPause: () => {
   // Escape does (js/ui/modal.js), so the tool closes back to the pause menu.
   // ONLY those three: the lighting and camera tuners, the flyby and photo mode
   // are closed by setPaused(false) itself, so there the key resumes as before.
-  if (G.paused && typeof UiLayers !== "undefined") {
-    const top = UiLayers.top();
-    if (top && (top.id === "garrival" || top.id === "photo-studio" || top.id === "spotifypanel")) {
-      const door = top.dataset && top.dataset.escClose ? document.getElementById(top.dataset.escClose) : null;
-      if (door) { door.click(); return; }
-    }
+  if (G.paused && top && (top.id === "garrival" || top.id === "photo-studio" || top.id === "spotifypanel")) {
+    const door = top.dataset && top.dataset.escClose ? document.getElementById(top.dataset.escClose) : null;
+    if (door) { door.click(); return; }
   }
   if (G.paused && els.pmsettings && !els.pmsettings.hidden) {
     if (settingsBack()) closeSettings();

@@ -170,12 +170,17 @@ test("RESULTS top-10 and the CHAMPION panel rank by countback, like STANDINGS", 
 
   // The STANDINGS sheet — already on rank().
   h.api.buildStandings();
+  const rankingKinds = parent => parent.children.filter(child => child.getAttribute("data-results-part") === "ranking")
+    .map(child => child.getAttribute("data-ranking"));
+  assert.deepEqual(rankingKinds(h.dom.byId("standings-body")), ["drivers", "constructors"],
+    "arrangement can target each rebuilt standings table independently of its translated label");
   const standings = rowsOf(h.dom.byId("standings-body")).slice(0, 2).map(nameOf);
   assert.equal(standings[0], "BBB  Bravo");
 
   // The RESULTS sheet's "DRIVERS — AFTER ROUND" list must agree with it.
   h.api.buildResults(cars.slice());
   const table = h.els.resultsTable;
+  assert.deepEqual(rankingKinds(table), ["race", "drivers", "constructors"]);
   const drivers = rowsOf(table).slice(cars.length, cars.length + 2).map(nameOf);
   assert.deepEqual(drivers, ["BBB  Bravo", "AAA  Alpha"], "results-sheet top-10 uses countback");
   assert.equal(h.els.resNext.textContent, "NEXT ROUND");
@@ -787,8 +792,8 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-skip-results", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-credits"],
-    "SETTINGS has the eleven top-level doors in task order (ABOUT & CREDITS last)");
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-files", "pm-open-credits"],
+    "SETTINGS has the eleven top-level doors in category order (ABOUT & CREDITS last)");
   assert.doesNotMatch(settingsIndex, /id="pm-advanced"/);
   assert.match(html, /id="pm-panel-controls"[\s\S]*id="pm-advanced"[^>]*>ADVANCED INPUT &amp; HANDLING/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
