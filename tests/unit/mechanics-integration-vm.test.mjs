@@ -83,6 +83,29 @@ test("a race can be armed for practice, which unlocks checkpoints and spoils the
   assert.equal(g.G.coach.mark(),true,"checkpoints follow the practice flag, not the session type");
 });
 
+test("quitting releases practice worlds and leaves the trace available for review", async () => {
+  await g.race("monza");
+  g.apex.go();
+  const { G } = g, coach = G.coach;
+  assert.equal(coach.armPractice(), true);
+  assert.equal(coach.mark(), true);
+  g.step(90);
+  assert.equal(coach.rewindReady(), true);
+  const trace = coach.trace();
+  assert.ok(trace.length > 0);
+  G.quitToMenu();
+  assert.equal(G.state, "menu");
+  assert.deepEqual(coach.trace(), trace);
+  // Reopen just the eligibility gate. A race start would reset the coach and
+  // mask any checkpoint or rewind samples the menu still held.
+  try {
+    G.state = "race"; G.practice = true;
+    assert.equal(coach.canPractice(), true);
+    assert.equal(coach.rewindReady(), false);
+    assert.equal(coach.retry(), false);
+  } finally { G.practice = false; G.state = "menu"; }
+});
+
 test("the START drill can be set where it says to: on the grid, before the lights",async()=>{
   // Not g.race(): that presses go(). startRace() leaves the field on the grid.
   g.G.daily.stop();g.G.timeTrial=false;g.G.practice=false;await g.G.startRace();g.apex.headless(true);

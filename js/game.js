@@ -4413,7 +4413,7 @@ function quitToMenu() {
   els.overlay.hidden = false;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
-  practiceMode = false;
+  practiceMode = false; coach.releasePracticeWorlds();
   Particles.rainShow(false); Particles.clear(); Droplets.clear();
   if (soundOn) GameAudio.startMusic(-1);
   consumeGhostHash();
