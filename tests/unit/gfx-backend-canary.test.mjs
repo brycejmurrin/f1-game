@@ -6178,6 +6178,7 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
 test("TLX updates only the sampled cube face and preserves its world projection", async () => {
   const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const envRT = new THREE.CubeRenderTarget(1);
+  const raceProbeOff = false, leaveGarageProbe = () => {};
   const _envOptOut = false, _envGaveUp = false, lit = {}, ensureEnvCam = () => {}, ENV_CULL_M = 300;
   const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
   const _envVPArr = new Float32Array(16), _envInvArr = new Float32Array(16);
