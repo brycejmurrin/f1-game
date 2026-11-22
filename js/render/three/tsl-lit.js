@@ -1198,7 +1198,7 @@
      * tests: tests/unit/tlx-mat-detail.test.mjs). */
     const MAT_DETAIL = !!(MAT_MAPS && matAlbedoNode && ctx.detail && ctx.detail.matDetail);
     const MD_DETAIL_FREQ = 4.7, MD_DETAIL_AMT = 0.35, MD_POM_STEPS = 6, MD_POM_DEPTH = 0.045, MD_HEX_GAIN = 3;
-    const mdHex = (mid) => mid.equal(8.0).or(mid.equal(9.0)).or(mid.equal(11.0)).or(mid.equal(16.0));
+    const mdHex = (mid) => ctx.detail.hexTiling === false ? float(0).equal(1) : mid.equal(8.0).or(mid.equal(9.0)).or(mid.equal(11.0)).or(mid.equal(16.0));
     // Triangle grid (Mikkelsen's TriangleGrid): barycentric weights (sum 1) and the three lattice vertices.
     const mdHexGrid = (uv) => {
       const st = uv.mul(2.0 * Math.sqrt(3.0));
@@ -1227,7 +1227,7 @@
     const mdLive = (mid) => U.matTexMix.greaterThan(0.001).and(matTexInPack(mid)).and(matTexScaleOf(mid).greaterThan(0.0));
 
     // Parallax offset (world metres on xz) for gravel near the camera; vec2(0) everywhere else.
-    const mdPomOffset = MAT_DETAIL && matNormalNode ? Fn(([mid, wpIn, Vin, vd, nGeoIn, dpx, dpy]) => {
+    const mdPomOffset = MAT_DETAIL && ctx.detail.gravelRelief !== false && matNormalNode ? Fn(([mid, wpIn, Vin, vd, nGeoIn, dpx, dpy]) => {
       const off = vec2(0.0).toVar();
       const wp = vec3(wpIn).toVar();
       const V = vec3(Vin).toVar();
@@ -1272,6 +1272,11 @@
         const d = vec3(0.0).toVar();
         const dOf = (t) => t.xy.sub(0.5).mul(2.0);
         If(wall, () => {
+          if (ctx.detail.wallBlend === false) {
+            const slope = dOf(mdTap(matNormalNode, pUV, pGx, pGy, layer));
+            d.assign(Tp.mul(slope.x).add(Bp.mul(slope.y)));
+            return;
+          }
           const bw = mdBiW(nGeo);
           const da = dOf(mdTap(matNormalNode, vec2(wp.z, wp.y).div(sc), vec2(dpx.z, dpx.y).div(sc), vec2(dpy.z, dpy.y).div(sc), layer));
           const db = dOf(mdTap(matNormalNode, vec2(wp.x, wp.y).div(sc), vec2(dpx.x, dpx.y).div(sc), vec2(dpy.x, dpy.y).div(sc), layer));
@@ -1289,7 +1294,7 @@
         });
         // c. detail normal: the same layer at a finer tile, fading out between 6 and 15 m.
         const df = clamp(vd.sub(6.0).div(9.0).oneMinus(), 0.0, 1.0).toVar();
-        If(df.greaterThan(0.005), () => {
+        if (ctx.detail.detailNormal !== false) If(df.greaterThan(0.005), () => {
           const dt = dOf(mdTap(matNormalNode, pUV.mul(MD_DETAIL_FREQ), pGx.mul(MD_DETAIL_FREQ), pGy.mul(MD_DETAIL_FREQ), layer));
           d.addAssign(Tp.mul(dt.x).add(Bp.mul(dt.y)).mul(df.mul(MD_DETAIL_AMT)));
         });
@@ -1310,6 +1315,12 @@
         const layer = int(matTexLayer(mid));
         const t = vec4(0.5).toVar();
         If(matWallLike(matTexLayer(mid)), () => {
+          if (ctx.detail.wallBlend === false) {
+            const xMajor = abs(nrmIn.x).greaterThan(abs(nrmIn.z));
+            const uv = (v) => vec2(select(xMajor, v.z, v.x), v.y).div(sc);
+            t.assign(mdTap(matAlbedoNode, uv(wp), uv(dpx), uv(dpy), layer));
+            return;
+          }
           const bw = mdBiW(normalize(vec3(nrmIn)));
           const ta = mdTap(matAlbedoNode, vec2(wp.z, wp.y).div(sc), vec2(dpx.z, dpx.y).div(sc), vec2(dpy.z, dpy.y).div(sc), layer);
           const tb = mdTap(matAlbedoNode, vec2(wp.x, wp.y).div(sc), vec2(dpx.x, dpx.y).div(sc), vec2(dpy.x, dpy.y).div(sc), layer);

@@ -20,7 +20,7 @@ const CarGeometry = (function () {
   // GfxQuality is absent (node tests: the ReferenceError is caught) or throws. heroOn: the EXTREME hero pass,
   // player only, and only with CarHero resident.
   function detailFor(isPlayer) {
-    try { return GfxQuality.feature("meshHi") ? Math.min(isPlayer ? 2 : 1, clampDetail(GfxQuality.detail())) : 0; } catch (_) { return 0; }
+    try { return GfxQuality.feature("meshHi") ? Math.min(isPlayer ? 2 : 1, clampDetail(Math.max(1, GfxQuality.detail(), isPlayer && heroOn() ? 2 : 0))) : 0; } catch (_) { return 0; }
   }
   function heroOn() {
     try { return HX() && !!GfxQuality.feature("heroCar"); } catch (_) { return false; }
